@@ -1,46 +1,48 @@
-# Getting Started with Create React App
+# 🎵 Mooza — музыкальная социальная сеть нового поколения
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+Добро пожаловать в **Mooza** — современную платформу для музыкантов, продюсеров, исполнителей и всех, кто живёт музыкой!
 
-## Available Scripts
+![Mooza Banner](https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1200&q=80)
 
-In the project directory, you can run:
+## 🚀 О Mooza
 
-### `npm start`
+**Mooza** — это музыкальная соцсеть, где каждый может:
+- Найти единомышленников и собрать команду мечты
+- Делиться творчеством, получать обратную связь и вдохновение
+- Быстро фильтровать людей по интересам, жанрам, ролям и навыкам
+- Создавать посты, обсуждать идеи, находить коллаборации
+- Оформить свой профиль в современном стиле
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+## 🌟 Ключевые возможности
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+- **Современный дизайн**: тёмная тема, плавные анимации, адаптивность, быстрый интерфейс
+- **Гибкая система интересов**: дерево категорий, подкатегорий и тегов, облако популярных интересов, ручной и быстрый выбор
+- **Расширенный поиск**: фильтрация по интересам, жанрам, ролям, совпадениям, поиск по тегам и категориям
+- **Карточки пользователей**: красивые профили, быстрые действия (добавить в друзья, избранное), подсветка совпадающих интересов
+- **Посты и лента**: делитесь новостями, треками, ищите участников, обсуждайте идеи, редактируйте и удаляйте свои посты
+- **Профиль музыканта**: только ваши реальные интересы, соцсети (VK, YouTube, Telegram), город, био, стиль
+- **Привязка соцсетей**: добавьте ссылки на свои VK, YouTube, Telegram — чтобы вас легко нашли
+- **Рекомендации**: Mooza подскажет, с кем у вас больше всего общих интересов
+- **Адаптивность**: удобно на смартфоне, планшете и десктопе
 
-### `npm test`
+## 🎸 Для кого Mooza?
+- Музыканты всех жанров и уровней
+- Вокалисты, инструменталисты, битмейкеры, саунд-продюсеры
+- Те, кто ищет группу, коллаборацию или просто музыкальное общение
+- Организаторы, менеджеры, промоутеры
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## 🛠️ Как начать?
+1. Зарегистрируйтесь и настройте профиль: укажите интересы, город, соцсети
+2. Используйте фильтры и поиск для поиска музыкантов и команд
+3. Добавляйте в друзья, отмечайте избранных, пишите посты
+4. Делитесь творчеством, ищите единомышленников, вдохновляйтесь!
 
-### `npm run build`
+## 💡 Почему Mooza?
+- Уникальная система интересов и фильтрации
+- Максимум функций для музыкантов, минимум лишнего
+- Современный стиль и удобство
+- Открыто для идей и развития — присоединяйтесь к комьюнити!
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+---
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
+> **Mooza** — здесь рождается музыка и новые творческие связи. Присоединяйся!

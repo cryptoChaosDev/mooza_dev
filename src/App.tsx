@@ -11,6 +11,9 @@ interface UserProfile {
   interests: string[];
   city?: string;
   socials?: string[];
+  vkId?: string;
+  youtubeId?: string;
+  telegramId?: string;
 }
 
 // Получение пользователя из Telegram WebApp API (заглушка)
@@ -254,26 +257,39 @@ function Search({ profile, users, friends, favorites, onAddFriend, onRemoveFrien
   const [showOnlyMatches, setShowOnlyMatches] = useState(false);
   // Новый фильтр: выбранные теги через InterestSelector
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [interestMode, setInterestMode] = useState<'popular' | 'manual' | 'mine'>('popular');
 
   // --- Фильтрация пользователей ---
   const getProfileMatchCount = (user: UserProfile) => user.interests.filter(tag => profile.interests.includes(tag)).length;
-  const matchedUsers = users
-    .map(u => ({ ...u, matchCount: getProfileMatchCount(u) }))
-    .filter(u => {
-      if (selectedTags.length > 0) {
-        if (showOnlyMatches) {
-          // Только те, у кого есть все выбранные теги
-          return selectedTags.every(tag => u.interests.includes(tag));
+  let matchedUsers: (UserProfile & { matchCount: number })[] = [];
+  if (interestMode === 'mine') {
+    if (profile.interests && profile.interests.length > 0) {
+      matchedUsers = users
+        .map(u => ({ ...u, matchCount: getProfileMatchCount(u) }))
+        .filter(u => u.interests.some(tag => profile.interests.includes(tag)))
+        .sort((a, b) => b.matchCount - a.matchCount);
+    } else {
+      matchedUsers = [];
+    }
+  } else {
+    matchedUsers = users
+      .map(u => ({ ...u, matchCount: getProfileMatchCount(u) }))
+      .filter(u => {
+        if (selectedTags.length > 0) {
+          if (showOnlyMatches) {
+            // Только те, у кого есть все выбранные теги
+            return selectedTags.every(tag => u.interests.includes(tag));
+          } else {
+            // Те, у кого есть хотя бы один выбранный тег
+            return u.interests.some(tag => selectedTags.includes(tag));
+          }
         } else {
-          // Те, у кого есть хотя бы один выбранный тег
-          return u.interests.some(tag => selectedTags.includes(tag));
+          // Нет выбранных тегов — фильтруем по совпадению с интересами профиля
+          return !showOnlyMatches || u.matchCount > 0;
         }
-      } else {
-        // Нет выбранных тегов — фильтруем по совпадению с интересами профиля
-        return !showOnlyMatches || u.matchCount > 0;
-      }
-    })
-    .sort((a, b) => b.matchCount - a.matchCount);
+      })
+      .sort((a, b) => b.matchCount - a.matchCount);
+  }
 
   // --- UI фильтра ---
   return (
@@ -281,7 +297,12 @@ function Search({ profile, users, friends, favorites, onAddFriend, onRemoveFrien
       <div className="w-full max-w-md flex flex-col gap-4">
         {/* --- Новый фильтр интересов через InterestSelector --- */}
         <div className="flex flex-col gap-2 mb-2 animate-fade-in">
-          <InterestSelector selected={selectedTags} onChange={setSelectedTags} />
+          <InterestSelector
+            selected={selectedTags}
+            onChange={setSelectedTags}
+            profileInterests={profile.interests}
+            onModeChange={setInterestMode}
+          />
           <label className="flex items-center gap-2 cursor-pointer text-sm mt-2">
             <input type="checkbox" checked={showOnlyMatches} onChange={e => setShowOnlyMatches(e.target.checked)} />
             Только совпадающие
@@ -717,6 +738,7 @@ function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLik
             <InterestSelector
               selected={newPost.tags}
               onChange={tags => setNewPost(prev => ({ ...prev, tags }))}
+              profileInterests={profile.interests}
             />
             <div className="flex items-center gap-3 mt-2">
               <label className="cursor-pointer p-2 rounded-full bg-dark-bg/60 hover:bg-dark-accent/10 transition-colors shadow text-dark-accent" title="Прикрепить изображение">
@@ -818,6 +840,7 @@ function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLik
               <InterestSelector
                 selected={editPostData.tags}
                 onChange={tags => setEditPostData(prev => ({ ...prev, tags }))}
+                profileInterests={profile.interests}
               />
             </div>
             <div className="flex gap-2 mt-2">
@@ -852,7 +875,13 @@ function Profile({ profile, setProfile, allPosts, onCreatePost, onUpdatePost, on
   onLikePost: (id: number) => void,
 }) {
   const [editOpen, setEditOpen] = useState(false);
-  const [editData, setEditData] = useState<UserProfile>({ ...profile, city: profile.city || "", socials: profile.socials || [""] });
+  const [editData, setEditData] = useState<UserProfile>({
+    ...profile,
+    city: profile.city || "",
+    vkId: profile.vkId || "",
+    youtubeId: profile.youtubeId || "",
+    telegramId: profile.telegramId || "",
+  });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [newPost, setNewPost] = useState<{ content: string; tags: string[]; attachment: File | null }>({ content: "", tags: [], attachment: null });
   const [showTagSelect, setShowTagSelect] = useState(false);
@@ -974,6 +1003,7 @@ function Profile({ profile, setProfile, allPosts, onCreatePost, onUpdatePost, on
             <InterestSelector
               selected={newPost.tags}
               onChange={tags => setNewPost(prev => ({ ...prev, tags }))}
+              profileInterests={profile.interests}
             />
             <div className="flex items-center gap-3 mt-2">
               <label className="cursor-pointer p-2 rounded-full bg-dark-bg/60 hover:bg-dark-accent/10 transition-colors shadow text-dark-accent" title="Прикрепить изображение">
@@ -1046,7 +1076,7 @@ function Profile({ profile, setProfile, allPosts, onCreatePost, onUpdatePost, on
       {editOpen && (
         <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in"
           style={{ paddingTop: 60, paddingBottom: 60 }}>
-          <div className="bg-dark-card rounded-3xl shadow-2xl w-full max-w-md p-8 relative animate-fade-in flex flex-col items-center gap-6"
+          <div className="bg-dark-card shadow-2xl w-full max-w-md p-8 relative animate-fade-in flex flex-col items-center gap-6"
             style={{
               fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif',
               maxHeight: 'calc(100vh - 120px)',
@@ -1068,27 +1098,74 @@ function Profile({ profile, setProfile, allPosts, onCreatePost, onUpdatePost, on
               <label className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
                 <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
                 <input className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.city || ''} onChange={e => setEditData({ ...editData, city: e.target.value })} placeholder="Город" maxLength={40} autoComplete="address-level2" />
+                <button
+                  type="button"
+                  className="ml-2 px-2 py-1 rounded bg-dark-accent text-white text-xs font-medium hover:bg-blue-500/80 transition-colors"
+                  title="Определить по геолокации"
+                  onClick={async () => {
+                    if (!navigator.geolocation) {
+                      alert('Геолокация не поддерживается вашим браузером');
+                      return;
+                    }
+                    navigator.geolocation.getCurrentPosition(async (pos) => {
+                      const { latitude, longitude } = pos.coords;
+                      try {
+                        const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ru`);
+                        const data = await resp.json();
+                        const city = data.address.city || data.address.town || data.address.village || data.address.settlement || data.address.state || '';
+                        if (city) {
+                          setEditData(prev => ({ ...prev, city }));
+                        } else {
+                          alert('Не удалось определить город по координатам');
+                        }
+                      } catch {
+                        alert('Ошибка при определении города');
+                      }
+                    }, (err) => {
+                      alert('Не удалось получить геолокацию: ' + err.message);
+                    });
+                  }}
+                >
+                  Определить по геолокации
+                </button>
               </label>
               <label className="flex items-start gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
                 <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 4h16v16H4V4zm2 2v12h12V6H6zm2 2h8v8H8V8z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
-                <textarea className="flex-1 bg-transparent outline-none text-base text-dark-text resize-none" value={editData.bio} onChange={e => setEditData({ ...editData, bio: e.target.value })} placeholder="О себе" rows={3} maxLength={120} />
+                <textarea className="flex-1 bg-transparent outline-none text-base text-dark-text resize-none" value={editData.bio} onChange={e => setEditData({ ...editData, bio: e.target.value })} placeholder="Короткое био пользователя, интересы и стиль музыки" rows={3} maxLength={120} />
               </label>
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-dark-muted mb-1">Интересы</span>
-                <InterestSelector selected={editData.interests} onChange={interests => setEditData(prev => ({ ...prev, interests }))} />
+                <InterestSelector selected={editData.interests} onChange={interests => setEditData(prev => ({ ...prev, interests }))} disableMineMode={true} />
               </div>
               <div className="flex flex-col gap-2 mt-2">
                 <span className="text-xs text-dark-muted mb-1">Соцсети</span>
-                {Array.isArray(editData.socials) && editData.socials.length > 0 ? editData.socials : [''].map((link, idx) => (
-                  <div key={idx} className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner">
-                    <span className="text-xl">
-                      {link.includes('vk.com') ? '🟦' : link.includes('t.me') ? '✈️' : link.includes('instagram.com') ? '📸' : '🔗'}
-                    </span>
-                    <input className="flex-1 bg-transparent outline-none text-base text-dark-text" value={link} onChange={e => setEditData({ ...editData, socials: Array.isArray(editData.socials) && editData.socials.length > 0 ? editData.socials.map((l, i) => i === idx ? e.target.value : l) : [e.target.value] })} placeholder="https://t.me/username" maxLength={80} />
-                    <button className="text-red-500 text-lg px-2" onClick={() => setEditData({ ...editData, socials: Array.isArray(editData.socials) && editData.socials.length > 0 ? editData.socials.filter((_, i) => i !== idx) : [] })} disabled={Array.isArray(editData.socials) && editData.socials.length === 1} title="Удалить ссылку">&times;</button>
-                  </div>
-                ))}
-                <button className="mt-1 px-3 py-1 rounded-full bg-dark-accent text-white text-xs font-medium hover:bg-dark-accent/10 transition-colors self-start" onClick={() => setEditData({ ...editData, socials: [...(editData.socials || []), ''] })} type="button">+ Добавить соцсеть</button>
+                {/* VK */}
+                <SocialLinkEdit
+                  label="VK"
+                  icon="🟦"
+                  value={editData.vkId || ""}
+                  onChange={vkId => setEditData(prev => ({ ...prev, vkId }))}
+                  placeholder="vk id"
+                  statusText="VK — авторизация через vk.id"
+                />
+                {/* YouTube */}
+                <SocialLinkEdit
+                  label="YouTube"
+                  icon="▶️"
+                  value={editData.youtubeId || ""}
+                  onChange={youtubeId => setEditData(prev => ({ ...prev, youtubeId }))}
+                  placeholder="YouTube id"
+                  statusText="YouTube — авторизация через YouTube"
+                />
+                {/* Telegram */}
+                <SocialLinkEdit
+                  label="Telegram"
+                  icon="✈️"
+                  value={editData.telegramId || ""}
+                  onChange={telegramId => setEditData(prev => ({ ...prev, telegramId }))}
+                  placeholder="Telegram id"
+                  statusText="Telegram — авторизация через telegram id"
+                />
               </div>
             </div>
             <div className="flex gap-4 mt-4 w-full">
@@ -1115,6 +1192,7 @@ function Profile({ profile, setProfile, allPosts, onCreatePost, onUpdatePost, on
               <InterestSelector
                 selected={editPostData.tags}
                 onChange={tags => setEditPostData(prev => ({ ...prev, tags }))}
+                profileInterests={profile.interests}
               />
             </div>
             <div className="flex gap-2 mt-2">
@@ -1249,9 +1327,13 @@ function App() {
   const tgUser = getTelegramUser();
   const [profile, setProfile] = useState<UserProfile>({
     avatarUrl: tgUser.avatarUrl,
-    name: tgUser.name || "Имя пользователя",
-    bio: "Короткое био пользователя, интересы и стиль музыки",
+    name: "Mooza_admin",
+    bio: "",
     interests: [],
+    city: "Москва",
+    vkId: "",
+    youtubeId: "",
+    telegramId: "",
   });
 
   // Используем MOCK_USERS для тестирования фильтра
@@ -1478,4 +1560,33 @@ function UserPageWrapper({ allUsers, allPosts, onBack, friends, favorites, onAdd
     onLikePost={handleLike} 
     currentUserName={currentUserName} 
   />;
+}
+
+function SocialLinkEdit({ label, icon, value, onChange, placeholder, statusText }: { label: string, icon: string, value: string, onChange: (v: string) => void, placeholder: string, statusText: string }) {
+  const [editing, setEditing] = React.useState(false);
+  const [input, setInput] = React.useState(value || "");
+  React.useEffect(() => { setInput(value || ""); }, [value]);
+
+  if (value && !editing) {
+    return (
+      <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner">
+        <span className="text-xl">{icon}</span>
+        <a href={value} target="_blank" rel="noopener noreferrer" className="flex-1 text-blue-400 underline text-sm truncate">{value}</a>
+        <button className="text-red-500 text-xs px-2" onClick={() => onChange("")} title="Отвязать"><span style={{fontSize: '1.2em'}}>✖</span></button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner">
+      <span className="text-xl">{icon}</span>
+      <input
+        className="flex-1 bg-transparent outline-none text-base text-dark-text"
+        value={input}
+        onChange={e => setInput(e.target.value)}
+        placeholder={placeholder}
+        maxLength={80}
+      />
+      <button className="text-blue-500 text-xs px-2" onClick={() => { if (input.trim()) { onChange(input.trim()); setEditing(false); } }} title="Сохранить"><span style={{fontSize: '1.2em'}}>💾</span></button>
+    </div>
+  );
 }
