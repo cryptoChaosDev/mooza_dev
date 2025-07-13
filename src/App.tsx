@@ -159,7 +159,7 @@ function AppBar() {
     <header className="fixed top-0 left-0 right-0 h-16 z-50 bg-dark-card border-b border-dark-bg/40 flex items-center justify-center px-4 shadow-none">
       <div className="absolute left-0 top-0 h-full flex items-center pl-4" style={{width: 48}}></div>
       <div className="flex-1 flex justify-center items-center">
-        <span className="text-2xl font-bold text-dark-text select-none" style={{fontFamily: 'Pacifico, cursive', letterSpacing: '0.04em'}}>Mooza</span>
+        <span className="text-2xl font-bold text-dark-text select-none cursor-pointer hover:text-dark-accent transition-colors" style={{fontFamily: 'Pacifico, cursive', letterSpacing: '0.04em'}} onClick={() => navigate("/")}>Mooza</span>
       </div>
       <div className="absolute right-0 top-0 h-full flex items-center pr-2">
         <button
@@ -325,7 +325,7 @@ function Search({ profile, users, friends, favorites, onAddFriend, onRemoveFrien
         </div>
         {sortedUsers.length === 0 && <div className="text-dark-muted empty-state">Нет подходящих пользователей</div>}
         {sortedUsers.map(user => (
-          <div key={user.name} className="bg-dark-card rounded-2xl shadow-card p-4 flex flex-col gap-2 mb-3 animate-fade-in animate-scale-in">
+          <div key={user.userId} className="bg-dark-card rounded-2xl shadow-card p-4 flex flex-col gap-2 mb-3 animate-fade-in animate-scale-in">
             <div className="flex items-center gap-3 mb-1">
               <div className="w-10 h-10 rounded-full bg-dark-bg/80 flex items-center justify-center text-2xl border border-dark-bg/40 overflow-hidden cursor-pointer" onClick={() => onUserClick({ ...profile, name: user.name, avatarUrl: user.avatarUrl })}>
                 {user.avatarUrl ? (
@@ -336,19 +336,19 @@ function Search({ profile, users, friends, favorites, onAddFriend, onRemoveFrien
               </div>
               <div className="font-semibold text-dark-text text-base cursor-pointer hover:underline truncate flex-1" onClick={() => onUserClick({ ...profile, name: user.name, avatarUrl: user.avatarUrl })}>{user.name}</div>
               <div className="flex gap-2 ml-2">
-                {friends.includes(user.name) ? (
-                  <button title="Удалить из друзей" className="p-2 rounded-full bg-dark-bg/60 text-dark-accent hover:bg-dark-accent/10 transition-colors" onClick={() => onRemoveFriend(user.name)}>
+                {friends.includes(user.userId) ? (
+                  <button title="Удалить из друзей" className="p-2 rounded-full bg-dark-bg/60 text-dark-accent hover:bg-dark-accent/10 transition-colors" onClick={() => onRemoveFriend(user.userId)}>
                     <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="#ef4444" strokeWidth="1.5"/></svg>
                   </button>
                 ) : (
-                  <button title="Добавить в друзья" className="p-2 rounded-full bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white transition-colors" onClick={() => onAddFriend(user.name)}>
+                  <button title="Добавить в друзья" className="p-2 rounded-full bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white transition-colors" onClick={() => onAddFriend(user.userId)}>
                     <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5" stroke="currentColor" strokeWidth="1.5"/></svg>
                   </button>
                 )}
                 <button
-                  title={favorites.includes(user.name) ? "Убрать из избранного" : "В избранное"}
-                  className={`p-2 rounded-full transition-colors ${favorites.includes(user.name) ? 'bg-yellow-400 text-white' : 'bg-dark-bg/60 text-yellow-400 hover:bg-yellow-400 hover:text-white'}`}
-                  onClick={() => onToggleFavorite(user.name)}
+                  title={favorites.includes(user.userId) ? "Убрать из избранного" : "В избранное"}
+                  className={`p-2 rounded-full transition-colors ${favorites.includes(user.userId) ? 'bg-yellow-400 text-white' : 'bg-dark-bg/60 text-yellow-400 hover:bg-yellow-400 hover:text-white'}`}
+                  onClick={() => onToggleFavorite(user.userId)}
                 >
                   <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" stroke="currentColor" strokeWidth="1.5"/></svg>
                 </button>
@@ -475,7 +475,7 @@ function Friends({ profile, friends, favorites, users, onUserClick, onAddFriend,
               <div className="text-dark-muted text-center py-8">Нет подходящих рекомендаций</div>
             )}
             {sortedRecommended.map((user) => (
-              <div key={user.name} className="bg-dark-card rounded-2xl shadow-card p-4 flex flex-col gap-2 mb-3 animate-fade-in animate-scale-in">
+              <div key={user.userId} className="bg-dark-card rounded-2xl shadow-card p-4 flex flex-col gap-2 mb-3 animate-fade-in animate-scale-in">
                 <div className="flex items-center gap-3 mb-1">
                   <div className="w-10 h-10 rounded-full bg-dark-bg/80 flex items-center justify-center text-2xl border border-dark-bg/40 overflow-hidden cursor-pointer" onClick={() => onUserClick(user)}>
                     {user.avatarUrl ? (
@@ -486,15 +486,15 @@ function Friends({ profile, friends, favorites, users, onUserClick, onAddFriend,
                   </div>
                   <div className="font-semibold text-dark-text text-base cursor-pointer hover:underline truncate flex-1" onClick={() => onUserClick(user)}>{user.name}</div>
                   <div className="flex gap-2 ml-2">
-                    <button title="Добавить в друзья" className="p-2 rounded-full bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white transition-colors" onClick={() => onAddFriend(user.name)}>
+                    <button title="Добавить в друзья" className="p-2 rounded-full bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white transition-colors" onClick={() => onAddFriend(user.userId)}>
                       <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5" stroke="currentColor" strokeWidth="1.5"/></svg>
                     </button>
                     <button
-                      title={favorites.includes(user.name) ? "Убрать из избранного" : "В избранное"}
-                      className={`p-2 rounded-full transition-colors ${favorites.includes(user.name) ? 'bg-yellow-400 text-white' : 'bg-dark-bg/60 text-yellow-400 hover:bg-yellow-400 hover:text-white'}`}
-                      onClick={() => onToggleFavorite(user.name)}
+                      title={favorites.includes(user.userId) ? "Убрать из избранного" : "В избранное"}
+                      className={`p-2 rounded-full transition-colors ${favorites.includes(user.userId) ? 'bg-yellow-400 text-white' : 'bg-dark-bg/60 text-yellow-400 hover:bg-yellow-400 hover:text-white'}`}
+                      onClick={() => onToggleFavorite(user.userId)}
                     >
-                      <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" stroke="currentColor" strokeWidth="1.5" fill={favorites.includes(user.name) ? '#fbbf24' : 'none'} /></svg>
+                      <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" stroke="currentColor" strokeWidth="1.5" fill={favorites.includes(user.userId) ? '#fbbf24' : 'none'} /></svg>
                     </button>
                   </div>
                 </div>
@@ -526,7 +526,7 @@ function Friends({ profile, friends, favorites, users, onUserClick, onAddFriend,
               </div>
             )}
             {sortedUsers.map((user) => (
-              <div key={user.name} className="bg-dark-card rounded-2xl shadow-card p-4 flex flex-col gap-2 mb-3 animate-fade-in animate-scale-in">
+              <div key={user.userId} className="bg-dark-card rounded-2xl shadow-card p-4 flex flex-col gap-2 mb-3 animate-fade-in animate-scale-in">
                 <div className="flex items-center gap-3 mb-1">
                   <div className="w-10 h-10 rounded-full bg-dark-bg/80 flex items-center justify-center text-2xl border border-dark-bg/40 overflow-hidden cursor-pointer" onClick={() => onUserClick(user)}>
                     {user.avatarUrl ? (
@@ -537,21 +537,21 @@ function Friends({ profile, friends, favorites, users, onUserClick, onAddFriend,
                   </div>
                   <div className="font-semibold text-dark-text text-base cursor-pointer hover:underline truncate flex-1" onClick={() => onUserClick(user)}>{user.name}</div>
                   <div className="flex gap-2 ml-2">
-                    {friends.includes(user.name) ? (
-                      <button title="Удалить из друзей" className="p-2 rounded-full bg-dark-bg/60 text-dark-accent hover:bg-dark-accent/10 transition-colors" onClick={() => onRemoveFriend(user.name)}>
+                    {friends.includes(user.userId) ? (
+                      <button title="Удалить из друзей" className="p-2 rounded-full bg-dark-bg/60 text-dark-accent hover:bg-dark-accent/10 transition-colors" onClick={() => onRemoveFriend(user.userId)}>
                         <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="#ef4444" strokeWidth="1.5"/></svg>
                       </button>
                     ) : (
-                      <button title="Добавить в друзья" className="p-2 rounded-full bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white transition-colors" onClick={() => onAddFriend(user.name)}>
+                      <button title="Добавить в друзья" className="p-2 rounded-full bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white transition-colors" onClick={() => onAddFriend(user.userId)}>
                         <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5" stroke="currentColor" strokeWidth="1.5"/></svg>
                       </button>
                     )}
                     <button
-                      title={favorites.includes(user.name) ? "Убрать из избранного" : "В избранное"}
-                      className={`p-2 rounded-full transition-colors ${favorites.includes(user.name) ? 'bg-yellow-400 text-white' : 'bg-dark-bg/60 text-yellow-400 hover:bg-yellow-400 hover:text-white'}`}
-                      onClick={() => onToggleFavorite(user.name)}
+                      title={favorites.includes(user.userId) ? "Убрать из избранного" : "В избранное"}
+                      className={`p-2 rounded-full transition-colors ${favorites.includes(user.userId) ? 'bg-yellow-400 text-white' : 'bg-dark-bg/60 text-yellow-400 hover:bg-yellow-400 hover:text-white'}`}
+                      onClick={() => onToggleFavorite(user.userId)}
                     >
-                      <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" stroke="currentColor" strokeWidth="1.5" fill={favorites.includes(user.name) ? '#fbbf24' : 'none'} /></svg>
+                      <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" stroke="currentColor" strokeWidth="1.5" fill={favorites.includes(user.userId) ? '#fbbf24' : 'none'} /></svg>
                     </button>
                   </div>
                 </div>
@@ -1643,9 +1643,9 @@ function UserPageWrapper({ allUsers, allPosts, onBack, friends, favorites, onAdd
   onBack: () => void,
   friends: string[],
   favorites: string[],
-  onAddFriend: (name: string) => void,
-  onRemoveFriend: (name: string) => void,
-  onToggleFavorite: (name: string) => void,
+  onAddFriend: (userId: string) => void,
+  onRemoveFriend: (userId: string) => void,
+  onToggleFavorite: (userId: string) => void,
   onLikeUserPost: (id: number) => void,
   currentUserName: string,
 }) {
@@ -1653,11 +1653,11 @@ function UserPageWrapper({ allUsers, allPosts, onBack, friends, favorites, onAdd
   const user = allUsers.find(u => u.userId === userId);
   const posts = user ? allPosts.filter(p => p.userId === user.userId) : [];
   if (!user) return <div className="text-center text-dark-muted pt-24">Пользователь не найден</div>;
-  const isFriend = friends.includes(user.name);
-  const isFavorite = favorites.includes(user.name);
-  const handleAdd = () => onAddFriend(user.name);
-  const handleRemove = () => onRemoveFriend(user.name);
-  const handleToggleFav = () => onToggleFavorite(user.name);
+  const isFriend = friends.includes(user.userId);
+  const isFavorite = favorites.includes(user.userId);
+  const handleAdd = () => onAddFriend(user.userId);
+  const handleRemove = () => onRemoveFriend(user.userId);
+  const handleToggleFav = () => onToggleFavorite(user.userId);
   const handleLike = (id: number) => onLikeUserPost(id);
   return <UserPage 
     user={user} 
