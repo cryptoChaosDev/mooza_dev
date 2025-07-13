@@ -1185,7 +1185,7 @@ function getRandomSocials(name: string) {
   const shuffled = MOCK_SOCIALS.sort(() => 0.5 - Math.random());
   return shuffled.slice(0, count).map(fn => fn(name));
 }
-export const MOCK_USERS: UserProfile[] = Array.from({ length: 70 }).map((_, i) => {
+export const MOCK_USERS: UserProfile[] = Array.from({ length: 100 }).map((_, i) => {
   const name = MOCK_NAMES[i % MOCK_NAMES.length] + (i >= MOCK_NAMES.length ? ` #${i+1}` : "");
   return {
     name,
