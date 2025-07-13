@@ -18,14 +18,13 @@ export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, on
   const catObj = INTEREST_CATEGORIES.find(c => c.category === category);
   const subObj = catObj?.subcategories.find(s => s.name === subcategory);
 
-  // --- Популярные интересы (топ-10) ---
-  const popularTags = useMemo(() => {
+  // --- Популярные интересы (топ-10, с частотами) ---
+  const popularTagsWithCounts = useMemo(() => {
     const tagCounts: Record<string, number> = {};
     MOCK_USERS.forEach((u: { interests: string[] }) => u.interests.forEach((tag: string) => { tagCounts[tag] = (tagCounts[tag] || 0) + 1; }));
     return Object.entries(tagCounts)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([tag]) => tag);
+      .slice(0, 10);
   }, []);
 
   // --- Рекомендации (топ-5, которых нет у пользователя, но есть у похожих) ---
@@ -91,21 +90,38 @@ export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, on
 
   return (
     <div className="flex flex-col gap-3 w-full">
-      {/* Популярные интересы */}
-      {popularTags.length > 0 && (
+      {/* Популярные интересы — облако тегов (строгое) */}
+      {popularTagsWithCounts.length > 0 && (
         <div className="mb-1">
           <div className="text-xs text-dark-muted mb-1 font-semibold">Популярные интересы</div>
-          <div className="flex flex-wrap gap-2">
-            {popularTags.map(tag => (
-              <button
-                key={tag}
-                className={`px-3 py-1 rounded-full text-xs font-medium border-none shadow-sm bg-gradient-to-r from-yellow-400 to-pink-400 text-white hover:scale-105 transition-all animate-fade-in ${selected.includes(tag) ? 'opacity-50 pointer-events-none' : ''}`}
-                onClick={() => handleQuickAdd(tag)}
-                type="button"
-              >
-                {getInterestPath(tag)}
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-2 items-baseline min-h-[40px]">
+            {popularTagsWithCounts.map(([tag, count], i) => {
+              let size = 'text-base';
+              if (i === 0) size = 'text-2xl font-bold';
+              else if (i < 3) size = 'text-xl font-semibold';
+              else if (i < 6) size = 'text-lg';
+              else size = 'text-base';
+              return (
+                <button
+                  key={tag}
+                  className={`px-3 py-1 rounded-full border-none shadow-sm bg-gradient-to-r from-yellow-400 to-pink-400 text-white hover:scale-110 hover:z-10 transition-all animate-fade-in ${size} ${selected.includes(tag) ? 'opacity-50 pointer-events-none' : ''}`}
+                  style={{
+                    marginTop: 0,
+                    marginBottom: 0,
+                    transform: 'none',
+                  }}
+                  onClick={() => handleQuickAdd(tag)}
+                  type="button"
+                  title={`Используется у ${count} пользователей`}
+                >
+                  {getInterestPath(tag)}
+                  <span className="ml-2 flex items-center gap-1 text-xs text-white/80">
+                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" className="inline align-middle"><path d="M12 12c2.5 0 4.5-2 4.5-4.5S14.5 3 12 3 7.5 5 7.5 7.5 9.5 12 12 12Zm0 0c-3.5 0-6.5 2.5-6.5 5.5V21h13v-3.5c0-3-3-5.5-6.5-5.5Z" stroke="currentColor" strokeWidth="1.5"/></svg>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
