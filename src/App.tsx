@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, createContext, useContext } from "r
 import { HashRouter as Router, Routes, Route, NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
 import { InterestSelector } from "./InterestSelector";
 import { INTEREST_CATEGORIES } from "./categories";
+import { WelcomePage } from "./Welcome";
 
 // Тип профиля пользователя
 interface UserProfile {
@@ -1276,75 +1277,60 @@ export const MOCK_USERS: UserProfile[] = Array.from({ length: 100 }).map((_, i) 
 });
 // --- Моковые посты ---
 const MOCK_POSTS: Post[] = [
-  {
-    id: 1,
-    author: MOCK_USERS[0].name,
-    avatarUrl: MOCK_USERS[0].avatarUrl,
-    content: "Ищу барабанщика для jam-сессий!",
-    tags: MOCK_USERS[0].interests.slice(0, 3),
-    liked: false,
-    favorite: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 2,
-    author: MOCK_USERS[1].name,
-    avatarUrl: MOCK_USERS[1].avatarUrl,
-    content: "Записываю каверы на клавишах, ищу вокалиста!",
-    tags: MOCK_USERS[1].interests.slice(0, 3),
-    liked: false,
-    favorite: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 3,
-    author: MOCK_USERS[2].name,
-    avatarUrl: MOCK_USERS[2].avatarUrl,
-    content: "Давайте соберёмся на квартирник!",
-    tags: MOCK_USERS[2].interests.slice(0, 3),
-    liked: false,
-    favorite: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: 4,
-    author: MOCK_USERS[3].name,
-    avatarUrl: MOCK_USERS[3].avatarUrl,
-    content: "В пятницу джемим блюз в баре! Присоединяйтесь!",
-    tags: MOCK_USERS[3].interests.slice(0, 3),
-    liked: false,
-    favorite: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
+  // Примеры постов разных пользователей
+  ...Array.from({ length: 30 }).map((_, i) => {
+    const user = MOCK_USERS[i % MOCK_USERS.length];
+    const texts = [
+      "Ищу музыкантов для совместных репетиций!",
+      "Записываю каверы, ищу вокалиста!",
+      "Давайте соберёмся на квартирник!",
+      "В пятницу джемим блюз в баре! Присоединяйтесь!",
+      "Ищу басиста для новой группы.",
+      "Готовлю новый альбом, ищу саунд-продюсера.",
+      "Кто хочет поиграть джаз на выходных?",
+      "Нужен барабанщик для live-сета.",
+      "Пишу электронную музыку, ищу вокал.",
+      "Давайте устроим jam-session в парке!",
+      "Ищу единомышленников для записи EP.",
+      "Кто хочет снять клип на песню?",
+      "Ищу клавишника для кавер-группы.",
+      "Готовлюсь к концерту, ищу подтанцовку!",
+      "Нужен совет по сведению трека.",
+      "Кто хочет вместе поэкспериментировать с жанрами?",
+      "Ищу группу для выступлений на фестивале.",
+      "Пишу аранжировки, ищу вокалистку.",
+      "Давайте обменяемся демками!",
+      "Кто хочет записать совместный трек?",
+    ];
+    return {
+      id: i + 1,
+      author: user.name,
+      avatarUrl: user.avatarUrl,
+      content: texts[i % texts.length],
+      tags: user.interests.slice(0, 3),
+      liked: false,
+      favorite: false,
+      createdAt: new Date(Date.now() - Math.random() * 1000 * 60 * 60 * 24 * 30).toISOString(),
+      updatedAt: new Date(Date.now() - Math.random() * 1000 * 60 * 60 * 24 * 30).toISOString(),
+    };
+  })
 ];
 
 function App() {
   // Получаем пользователя Telegram (или дефолт)
   const tgUser = getTelegramUser();
-  const [profile, setProfile] = useState<UserProfile>({
-    avatarUrl: tgUser.avatarUrl,
-    name: "Mooza_admin",
-    bio: "",
-    interests: [],
-    city: "Москва",
-    vkId: "",
-    youtubeId: "",
-    telegramId: "",
-  });
+  const [showWelcome, setShowWelcome] = useState(true);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
 
-  // Используем MOCK_USERS для тестирования фильтра
+  // ВСЕ остальные хуки — сюда, до любого return!
   const [allUsers, setAllUsers] = useState<UserProfile[]>(MOCK_USERS);
   const [allPosts, setAllPosts] = useState<Post[]>(MOCK_POSTS);
   const [friends, setFriends] = useState<string[]>([MOCK_USERS[0].name, MOCK_USERS[1].name]);
   const [favorites, setFavorites] = useState<string[]>([MOCK_USERS[2].name]);
   const [userCard, setUserCard] = useState<{ user: UserProfile, posts: Post[] } | null>(null);
+  const navigate = useNavigate();
 
   // ... handleUserClick ...
-  const navigate = useNavigate();
   const handleUserClick = (user: UserProfile) => {
     navigate(`/user/${encodeURIComponent(user.name)}`);
   };
@@ -1359,8 +1345,8 @@ function App() {
     setAllPosts(prev => [
       {
         id: Date.now(),
-        author: profile.name,
-        avatarUrl: profile.avatarUrl,
+        author: profile!.name,
+        avatarUrl: profile!.avatarUrl,
         content,
         tags,
         liked: false,
@@ -1383,15 +1369,19 @@ function App() {
     setAllPosts(prev => prev.map(p => p.id === id ? { ...p, liked: !p.liked } : p));
   };
 
+  if (showWelcome) {
+    return <WelcomePage onFinish={p => { setProfile({ ...p, interests: p.interests || [] }); setShowWelcome(false); }} />;
+  }
+
   return (
     <>
       <AppBar />
       <Layout>
         <Routes>
-          <Route path="/" element={<HomeFeed profile={profile} allPosts={allPosts} friends={friends} onUserClick={handleUserClick} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} />} />
-          <Route path="/search" element={<Search profile={profile} users={allUsers} friends={friends} favorites={favorites} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onToggleFavorite={handleToggleFavorite} onUserClick={handleUserClick} />} />
-          <Route path="/friends" element={<Friends profile={profile} friends={friends} favorites={favorites} users={allUsers} onUserClick={handleUserClick} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onToggleFavorite={handleToggleFavorite} />} />
-          <Route path="/profile" element={<Profile profile={profile} setProfile={setProfile} allPosts={allPosts} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} />} />
+          <Route path="/" element={<HomeFeed profile={profile!} allPosts={allPosts} friends={friends} onUserClick={handleUserClick} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} />} />
+          <Route path="/search" element={<Search profile={profile!} users={allUsers} friends={friends} favorites={favorites} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onToggleFavorite={handleToggleFavorite} onUserClick={handleUserClick} />} />
+          <Route path="/friends" element={<Friends profile={profile!} friends={friends} favorites={favorites} users={allUsers} onUserClick={handleUserClick} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onToggleFavorite={handleToggleFavorite} />} />
+          <Route path="/profile" element={<Profile profile={profile!} setProfile={setProfile} allPosts={allPosts} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} />} />
           <Route path="/user/:userName" element={<UserPageWrapper 
             allUsers={allUsers} 
             allPosts={allPosts} 
@@ -1402,7 +1392,7 @@ function App() {
             onRemoveFriend={handleRemoveFriend}
             onToggleFavorite={handleToggleFavorite}
             onLikeUserPost={handleLikeUserPost}
-            currentUserName={profile.name}
+            currentUserName={profile!.name}
           />} />
         </Routes>
       </Layout>
