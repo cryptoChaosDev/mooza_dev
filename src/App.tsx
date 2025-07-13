@@ -6,10 +6,12 @@ import { WelcomePage } from "./Welcome";
 
 // Тип профиля пользователя
 interface UserProfile {
+  userId: string;
   avatarUrl?: string;
   name: string;
   bio: string;
   interests: string[];
+  country?: string;
   city?: string;
   socials?: string[];
   vkId?: string;
@@ -76,25 +78,27 @@ function SectionContainer({ children }: { children: React.ReactNode }) {
 }
 
 // --- PostCard ---
-function PostCard({ post, isOwn, onEdit, onDelete, onLike, onUserClick }: {
+function PostCard({ post, users, isOwn, onEdit, onDelete, onLike, onUserClick }: {
   post: Post,
+  users: UserProfile[],
   isOwn?: boolean,
   onEdit?: () => void,
   onDelete?: () => void,
   onLike?: () => void,
   onUserClick?: () => void,
 }) {
+  const user = users.find(u => u.userId === post.userId);
   return (
     <div className="bg-dark-card rounded-3xl shadow-card p-6 flex flex-col gap-6 relative border border-dark-bg/40 font-sans animate-fade-in animate-scale-in mb-4">
       <div className="flex items-center gap-4 mb-2">
         <div className="w-12 h-12 rounded-full bg-dark-bg/80 flex items-center justify-center text-2xl border border-dark-bg/40 overflow-hidden">
-          {post.avatarUrl ? (
-            <img src={post.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
+          {user?.avatarUrl ? (
+            <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
           ) : (
             <span role="img" aria-label="avatar">👤</span>
           )}
         </div>
-        <div className="font-semibold text-dark-text text-base cursor-pointer hover:underline truncate" onClick={onUserClick}>{post.author}</div>
+        <div className="font-semibold text-dark-text text-base cursor-pointer hover:underline truncate" onClick={onUserClick}>{user?.name || post.author}</div>
         <div className="flex gap-2 ml-auto">
           {isOwn && onEdit && (
             <button className="flex items-center gap-1 text-xs bg-accent-gradient text-white shadow-btn px-3 py-1 font-medium hover:opacity-90 active:scale-95 transition-all" onClick={onEdit}>
@@ -256,11 +260,10 @@ function Search({ profile, users, friends, favorites, onAddFriend, onRemoveFrien
   onUserClick: (user: UserProfile) => void,
 }) {
   const [showOnlyMatches, setShowOnlyMatches] = useState(false);
-  // Новый фильтр: выбранные теги через InterestSelector
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [interestMode, setInterestMode] = useState<'popular' | 'manual' | 'mine'>('popular');
+  const [sortBy, setSortBy] = useState<'name' | 'city' | 'country' | 'match'>('match');
 
-  // --- Фильтрация пользователей ---
   const getProfileMatchCount = (user: UserProfile) => user.interests.filter(tag => profile.interests.includes(tag)).length;
   let matchedUsers: (UserProfile & { matchCount: number })[] = [];
   if (interestMode === 'mine') {
@@ -278,25 +281,27 @@ function Search({ profile, users, friends, favorites, onAddFriend, onRemoveFrien
       .filter(u => {
         if (selectedTags.length > 0) {
           if (showOnlyMatches) {
-            // Только те, у кого есть все выбранные теги
             return selectedTags.every(tag => u.interests.includes(tag));
           } else {
-            // Те, у кого есть хотя бы один выбранный тег
             return u.interests.some(tag => selectedTags.includes(tag));
           }
         } else {
-          // Нет выбранных тегов — фильтруем по совпадению с интересами профиля
           return !showOnlyMatches || u.matchCount > 0;
         }
       })
       .sort((a, b) => b.matchCount - a.matchCount);
   }
+  const sortedUsers = [...matchedUsers].sort((a, b) => {
+    if (sortBy === 'name') return a.name.localeCompare(b.name, 'ru');
+    if (sortBy === 'city') return (a.city || '').localeCompare(b.city || '', 'ru');
+    if (sortBy === 'country') return (a.country || '').localeCompare(b.country || '', 'ru');
+    if (sortBy === 'match') return b.matchCount - a.matchCount;
+    return 0;
+  });
 
-  // --- UI фильтра ---
   return (
     <main className="p-4 sm:p-6 pt-20 text-center text-dark-text min-h-[100dvh] bg-dark-bg flex flex-col items-center text-base sm:text-lg w-full flex-1" style={{ paddingBottom: 'calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px))' }}>
       <div className="w-full max-w-md flex flex-col gap-4">
-        {/* --- Новый фильтр интересов через InterestSelector --- */}
         <div className="flex flex-col gap-2 mb-2 animate-fade-in">
           <InterestSelector
             selected={selectedTags}
@@ -308,10 +313,18 @@ function Search({ profile, users, friends, favorites, onAddFriend, onRemoveFrien
             <input type="checkbox" checked={showOnlyMatches} onChange={e => setShowOnlyMatches(e.target.checked)} />
             Только совпадающие
           </label>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs text-dark-muted">Сортировать:</span>
+            <select className="px-2 py-1 rounded bg-dark-bg/60 text-dark-text text-xs" value={sortBy} onChange={e => setSortBy(e.target.value as any)}>
+              <option value="match">По совпадению интересов</option>
+              <option value="name">По имени</option>
+              <option value="city">По городу</option>
+              <option value="country">По стране</option>
+            </select>
+          </div>
         </div>
-        {/* --- Конец фильтра --- */}
-        {matchedUsers.length === 0 && <div className="text-dark-muted empty-state">Нет подходящих пользователей</div>}
-        {matchedUsers.map(user => (
+        {sortedUsers.length === 0 && <div className="text-dark-muted empty-state">Нет подходящих пользователей</div>}
+        {sortedUsers.map(user => (
           <div key={user.name} className="bg-dark-card rounded-2xl shadow-card p-4 flex flex-col gap-2 mb-3 animate-fade-in animate-scale-in">
             <div className="flex items-center gap-3 mb-1">
               <div className="w-10 h-10 rounded-full bg-dark-bg/80 flex items-center justify-center text-2xl border border-dark-bg/40 overflow-hidden cursor-pointer" onClick={() => onUserClick({ ...profile, name: user.name, avatarUrl: user.avatarUrl })}>
@@ -322,7 +335,6 @@ function Search({ profile, users, friends, favorites, onAddFriend, onRemoveFrien
                 )}
               </div>
               <div className="font-semibold text-dark-text text-base cursor-pointer hover:underline truncate flex-1" onClick={() => onUserClick({ ...profile, name: user.name, avatarUrl: user.avatarUrl })}>{user.name}</div>
-              {/* --- Кнопки добавить в друзья/избранное --- */}
               <div className="flex gap-2 ml-2">
                 {friends.includes(user.name) ? (
                   <button title="Удалить из друзей" className="p-2 rounded-full bg-dark-bg/60 text-dark-accent hover:bg-dark-accent/10 transition-colors" onClick={() => onRemoveFriend(user.name)}>
@@ -342,10 +354,8 @@ function Search({ profile, users, friends, favorites, onAddFriend, onRemoveFrien
                 </button>
               </div>
             </div>
-            {/* Интересы пользователя */}
             <div className="flex flex-wrap gap-2 mt-1">
               {user.interests.map((tag, i) => {
-                // Если выбран фильтр — подсвечивать совпадающие с фильтром, иначе с интересами профиля
                 const isMatch = selectedTags.length > 0
                   ? selectedTags.includes(tag)
                   : profile.interests && profile.interests.includes(tag);
@@ -377,7 +387,6 @@ function Friends({ profile, friends, favorites, users, onUserClick, onAddFriend,
   onRemoveFriend: (name: string) => void,
   onToggleFavorite: (name: string) => void,
 }) {
-  // --- Современные фильтры ---
   const [search, setSearch] = useState("");
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
   const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([]);
@@ -385,8 +394,8 @@ function Friends({ profile, friends, favorites, users, onUserClick, onAddFriend,
   const [subcategoryDropdownOpen, setSubcategoryDropdownOpen] = useState(false);
   const [tagSearch, setTagSearch] = useState("");
   const [view, setView] = useState<'friends' | 'favorites' | 'recommended'>("friends");
+  const [sortBy, setSortBy] = useState<'name' | 'city' | 'country' | 'match'>('name');
 
-  // --- Получаем список тегов для фильтра ---
   let filterTags: string[] = [];
   if (selectedCategories.length > 0) {
     INTEREST_CATEGORIES.forEach(cat => {
@@ -404,14 +413,12 @@ function Friends({ profile, friends, favorites, users, onUserClick, onAddFriend,
     });
   }
 
-  // --- Фильтрация пользователей ---
   let filteredUsers = users.filter(u =>
     (!search || u.name.toLowerCase().includes(search.toLowerCase())) &&
     (filterTags.length === 0 || u.interests.some(tag => filterTags.includes(tag))) &&
-    ((view === 'friends' && friends.includes(u.name)) || (view === 'favorites' && favorites.includes(u.name)))
+    ((view === 'friends' && friends.includes(u.userId)) || (view === 'favorites' && favorites.includes(u.userId)))
   );
 
-  // --- Рекомендованные пользователи ---
   let recommendedUsers: UserProfile[] = [];
   if (view === 'recommended') {
     recommendedUsers = users
@@ -421,31 +428,53 @@ function Friends({ profile, friends, favorites, users, onUserClick, onAddFriend,
       .sort((a, b) => b.matchCount - a.matchCount);
   }
 
-  // Сортировка: сначала друзья/избранные
-  const sortedUsers = [...filteredUsers];
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    if (sortBy === 'name') return a.name.localeCompare(b.name, 'ru');
+    if (sortBy === 'city') return (a.city || '').localeCompare(b.city || '', 'ru');
+    if (sortBy === 'country') return (a.country || '').localeCompare(b.country || '', 'ru');
+    if (sortBy === 'match') {
+      const aMatch = a.interests.filter(tag => profile.interests.includes(tag)).length;
+      const bMatch = b.interests.filter(tag => profile.interests.includes(tag)).length;
+      return bMatch - aMatch;
+    }
+    return 0;
+  });
+  const sortedRecommended = recommendedUsers
+    .map(u => ({ ...u, matchCount: u.interests.filter(tag => profile.interests.includes(tag)).length }))
+    .sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name, 'ru');
+      if (sortBy === 'city') return (a.city || '').localeCompare(b.city || '', 'ru');
+      if (sortBy === 'country') return (a.country || '').localeCompare(b.country || '', 'ru');
+      if (sortBy === 'match') return b.matchCount - a.matchCount;
+      return 0;
+    });
 
-  // --- UI ---
   return (
     <main className="p-4 sm:p-6 pt-20 min-h-[100dvh] bg-dark-bg flex flex-col items-center font-sans animate-fade-in transition-all duration-300 w-full flex-1" style={{ paddingBottom: 'calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px))' }}>
       <section className="w-full max-w-md flex flex-col gap-6">
-        {/* --- Фильтры --- */}
         <div className="flex flex-col gap-2 animate-fade-in mb-2">
-          {/* ...категории, подкатегории, поиск по имени... */}
           <div className="flex gap-2 mb-2">
             <button className={`px-4 py-1 rounded-full text-xs font-semibold border-none transition-all ${view === 'friends' ? 'bg-dark-accent text-white' : 'bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white'} shadow-sm active:scale-95`} onClick={() => setView('friends')}>Друзья</button>
             <button className={`px-4 py-1 rounded-full text-xs font-semibold border-none transition-all ${view === 'favorites' ? 'bg-yellow-400 text-white' : 'bg-dark-bg/60 text-dark-muted hover:bg-yellow-400 hover:text-white'} shadow-sm active:scale-95`} onClick={() => setView('favorites')}>Избранные</button>
             <button className={`px-4 py-1 rounded-full text-xs font-semibold border-none transition-all ${view === 'recommended' ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white' : 'bg-dark-bg/60 text-dark-muted hover:bg-blue-500/20 hover:text-blue-500'} shadow-sm active:scale-95`} onClick={() => setView('recommended')}>Рекомендованные</button>
           </div>
-          {/* ...чипы фильтров, сброс... */}
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-xs text-dark-muted">Сортировать:</span>
+            <select className="px-2 py-1 rounded bg-dark-bg/60 text-dark-text text-xs" value={sortBy} onChange={e => setSortBy(e.target.value as any)}>
+              <option value="name">По имени</option>
+              <option value="city">По городу</option>
+              <option value="country">По стране</option>
+              <option value="match">По совпадению интересов</option>
+            </select>
+          </div>
         </div>
-        {/* --- Список пользователей --- */}
         {view === 'recommended' ? (
           <>
             <div className="text-2xl font-bold mb-4 text-dark-text pl-2">Рекомендованные друзья</div>
-            {recommendedUsers.length === 0 && (
+            {sortedRecommended.length === 0 && (
               <div className="text-dark-muted text-center py-8">Нет подходящих рекомендаций</div>
             )}
-            {recommendedUsers.map((user) => (
+            {sortedRecommended.map((user) => (
               <div key={user.name} className="bg-dark-card rounded-2xl shadow-card p-4 flex flex-col gap-2 mb-3 animate-fade-in animate-scale-in">
                 <div className="flex items-center gap-3 mb-1">
                   <div className="w-10 h-10 rounded-full bg-dark-bg/80 flex items-center justify-center text-2xl border border-dark-bg/40 overflow-hidden cursor-pointer" onClick={() => onUserClick(user)}>
@@ -456,7 +485,6 @@ function Friends({ profile, friends, favorites, users, onUserClick, onAddFriend,
                     )}
                   </div>
                   <div className="font-semibold text-dark-text text-base cursor-pointer hover:underline truncate flex-1" onClick={() => onUserClick(user)}>{user.name}</div>
-                  {/* --- Кнопки добавить в друзья/избранное --- */}
                   <div className="flex gap-2 ml-2">
                     <button title="Добавить в друзья" className="p-2 rounded-full bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white transition-colors" onClick={() => onAddFriend(user.name)}>
                       <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5" stroke="currentColor" strokeWidth="1.5"/></svg>
@@ -508,7 +536,6 @@ function Friends({ profile, friends, favorites, users, onUserClick, onAddFriend,
                     )}
                   </div>
                   <div className="font-semibold text-dark-text text-base cursor-pointer hover:underline truncate flex-1" onClick={() => onUserClick(user)}>{user.name}</div>
-                  {/* --- Кнопки добавить в друзья/избранное --- */}
                   <div className="flex gap-2 ml-2">
                     {friends.includes(user.name) ? (
                       <button title="Удалить из друзей" className="p-2 rounded-full bg-dark-bg/60 text-dark-accent hover:bg-dark-accent/10 transition-colors" onClick={() => onRemoveFriend(user.name)}>
@@ -556,6 +583,7 @@ const POPULAR_TAGS = [
 
 interface Post {
   id: number;
+  userId: string;
   author: string;
   avatarUrl?: string;
   content: string;
@@ -608,7 +636,7 @@ function UserCard({ user, posts, isFriend, isFavorite, onAddFriend, onRemoveFrie
           </div>
           <div className="flex flex-col items-center gap-1">
             <div className="font-bold text-2xl sm:text-3xl text-dark-text text-center break-words">{user.name}</div>
-            {user.city && <div className="text-blue-700 text-xs font-medium">{user.city}</div>}
+            {(user.country || user.city) && <div className="text-blue-700 text-xs font-medium">{[user.country, user.city].filter(Boolean).join(', ')}</div>}
             <div className="text-dark-muted text-base text-center max-w-xs whitespace-pre-line break-words">{user.bio}</div>
           </div>
           {/* Кнопки действий */}
@@ -654,7 +682,7 @@ function UserCard({ user, posts, isFriend, isFavorite, onAddFriend, onRemoveFrie
           <div className="flex flex-col gap-4 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
             {posts.length === 0 && <div className="text-dark-muted text-center">Нет постов</div>}
             {posts.map((post) => (
-              <PostCard key={post.id} post={post} />
+              <PostCard key={post.id} post={post} users={[user]} />
             ))}
           </div>
         </div>
@@ -685,7 +713,7 @@ function ConfirmModal({ text, onConfirm, onCancel }: { text: string, onConfirm: 
 }
 
 // --- HomeFeed ---
-function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLikePost, onCreatePost, onUpdatePost }: {
+function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLikePost, onCreatePost, onUpdatePost, users }: {
   profile: UserProfile,
   allPosts: Post[],
   friends: string[],
@@ -694,16 +722,30 @@ function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLik
   onLikePost: (id: number) => void,
   onCreatePost: (content: string, tags: string[], attachmentUrl?: string) => void,
   onUpdatePost: (id: number, content: string, tags: string[]) => void,
+  users: UserProfile[],
 }) {
   const navigate = useNavigate();
   const [newPost, setNewPost] = useState<{ content: string; tags: string[]; attachment: File | null }>({ content: "", tags: [], attachment: null });
   const [deletePostId, setDeletePostId] = useState<number | null>(null);
-  const filteredPosts = allPosts.filter((post) => friends.includes(post.author) || post.author === profile.name);
+  const [sortBy, setSortBy] = useState<'date' | 'author'>('date');
+  const filteredPosts = allPosts.filter((post) => friends.includes(post.userId) || post.userId === profile.userId);
+  const sortedPosts = [...filteredPosts].sort((a, b) => {
+    if (sortBy === 'date') return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    if (sortBy === 'author') {
+      const userA = users.find(u => u.userId === a.userId);
+      const userB = users.find(u => u.userId === b.userId);
+      return (userA?.name || '').localeCompare(userB?.name || '', 'ru');
+    }
+    return 0;
+  });
+
+  const toast = useToast();
   const handleCreatePost = () => {
     if (!newPost.content.trim() || newPost.tags.length === 0) return;
     const attachmentUrl = newPost.attachment ? URL.createObjectURL(newPost.attachment) : undefined;
     onCreatePost(newPost.content, newPost.tags, attachmentUrl);
     setNewPost({ content: "", tags: [], attachment: null });
+    toast("Пост опубликован!");
   };
 
   const [editPost, setEditPost] = useState<Post | null>(null);
@@ -715,6 +757,13 @@ function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLik
       <section className="w-full max-w-md mb-6">
         <div className="flex justify-between items-center mb-2">
           <div className="text-lg font-bold text-dark-text">Лента друзей</div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-dark-muted">Сортировать:</span>
+            <select className="px-2 py-1 rounded bg-dark-bg/60 text-dark-text text-xs" value={sortBy} onChange={e => setSortBy(e.target.value as any)}>
+              <option value="date">Сначала новые</option>
+              <option value="author">По автору</option>
+            </select>
+          </div>
           <button
             className={`p-2 rounded-full bg-dark-bg/60 text-dark-accent hover:bg-dark-accent/10 transition-colors shadow focus:outline-none ml-2 ${showCreate ? 'rotate-45' : ''}`}
             title={showCreate ? 'Скрыть создание поста' : 'Создать пост'}
@@ -766,56 +815,58 @@ function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLik
             </div>
           </div>
         )}
-        {/* Лента постов */}
         <div className="flex flex-col gap-4">
-          {filteredPosts.length === 0 && (
+          {sortedPosts.length === 0 && (
             <div className="text-center text-dark-muted py-8">Нет постов по вашим интересам</div>
           )}
-          {filteredPosts.map((post) => (
-            <div key={post.id} className="relative bg-dark-card rounded-2xl shadow p-4 flex flex-col gap-2">
-              <div className="flex items-center gap-3 mb-1">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center text-2xl border-2 border-white overflow-hidden">
-                  {post.avatarUrl ? (
-                    <img src={post.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
-                  ) : (
-                    <span role="img" aria-label="avatar">👤</span>
+          {sortedPosts.map((post) => {
+            const user = users.find(u => u.userId === post.userId);
+            return (
+              <div key={post.id} className="relative bg-dark-card rounded-2xl shadow p-4 flex flex-col gap-2">
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center text-2xl border-2 border-white overflow-hidden">
+                    {user?.avatarUrl || post.avatarUrl ? (
+                      <img src={user?.avatarUrl || post.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
+                    ) : (
+                      <span role="img" aria-label="avatar">👤</span>
+                    )}
+                  </div>
+                  <div className="font-medium text-dark-text text-sm cursor-pointer hover:underline" onClick={() => onUserClick(user || { ...profile, name: post.author, avatarUrl: post.avatarUrl })}>{user?.name || post.author}</div>
+                  {post.userId === profile.userId && (
+                    <button title="Редактировать пост" className="p-2 rounded-full bg-dark-bg/60 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors ml-2" onClick={() => { setEditPost(post); setEditPostData({ content: post.content, tags: post.tags }); }}>
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#3b82f6" strokeWidth="1.5"/></svg>
+                    </button>
                   )}
                 </div>
-                <div className="font-medium text-dark-text text-sm cursor-pointer hover:underline" onClick={() => onUserClick({ ...profile, name: post.author, avatarUrl: post.avatarUrl })}>{post.author}</div>
-                {post.author === profile.name && (
-                  <button title="Редактировать пост" className="p-2 rounded-full bg-dark-bg/60 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors ml-2" onClick={() => { setEditPost(post); setEditPostData({ content: post.content, tags: post.tags }); }}>
-                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#3b82f6" strokeWidth="1.5"/></svg>
-                  </button>
+                <div className="text-dark-text text-base mb-1 whitespace-pre-line">{post.content}</div>
+                <div style={{position: 'absolute', right: 16, bottom: 12}} className="flex gap-2 text-xs text-dark-muted">
+                  <span><span role="img" aria-label="created">🕒</span> {new Date(post.createdAt).toLocaleString()}</span>
+                  {post.updatedAt !== post.createdAt && <span><span role="img" aria-label="edited">✏️</span> {new Date(post.updatedAt).toLocaleString()}</span>}
+                </div>
+                {post.attachmentUrl && (
+                  <img src={post.attachmentUrl} alt="attachment" className="max-h-60 rounded-xl object-contain mb-2" />
                 )}
-              </div>
-              <div className="text-dark-text text-base mb-1 whitespace-pre-line">{post.content}</div>
-              <div style={{position: 'absolute', right: 16, bottom: 12}} className="flex gap-2 text-xs text-dark-muted">
-                <span><span role="img" aria-label="created">🕒</span> {new Date(post.createdAt).toLocaleString()}</span>
-                {post.updatedAt !== post.createdAt && <span><span role="img" aria-label="edited">✏️</span> {new Date(post.updatedAt).toLocaleString()}</span>}
-              </div>
-              {post.attachmentUrl && (
-                <img src={post.attachmentUrl} alt="attachment" className="max-h-60 rounded-xl object-contain mb-2" />
-              )}
-              <div className="flex flex-wrap gap-2 mb-1">
-                {post.tags.map((tag, i) => (
-                  <span key={i} className="px-2 py-0.5 bg-dark-bg/60 text-blue-700 rounded-full text-xs font-medium">{getInterestPath(tag)}</span>
-                ))}
-              </div>
-              <div className="flex gap-4 mt-1">
-                <button title={post.liked ? "Убрать лайк" : "Лайкнуть"} className={`p-2 rounded-full transition-colors ${post.liked ? 'bg-red-500 text-white' : 'bg-dark-bg/60 text-red-500 hover:bg-red-500 hover:text-white'}`} onClick={() => onLikePost(post.id)}>
-                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.5-9-9.5C1.5 8.5 3.5 5 7 5c2.5 0 3.5 2 5 2s2.5-2 5-2c3.5 0 5.5 3.5 4 6.5C18.5 15.5 12 21 12 21Z" stroke="currentColor" strokeWidth="1.5" fill={post.liked ? '#ef4444' : 'none'} /></svg>
-                </button>
-                <button title={post.favorite ? "Убрать из избранного" : "В избранное"} className={`p-2 rounded-full transition-colors ${post.favorite ? 'bg-yellow-400 text-white' : 'bg-dark-bg/60 text-yellow-400 hover:bg-yellow-400 hover:text-white'}`} onClick={() => onLikePost(post.id)}>
-                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" stroke="currentColor" strokeWidth="1.5" fill={post.favorite ? '#fbbf24' : 'none'} /></svg>
-                </button>
-                {post.author === profile.name && (
-                  <button title="Удалить пост" className="p-2 rounded-full bg-dark-bg/60 text-red-500 hover:bg-red-500 hover:text-white transition-colors ml-2" onClick={() => setDeletePostId(post.id)}>
-                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="#ef4444" strokeWidth="1.5"/></svg>
+                <div className="flex flex-wrap gap-2 mb-1">
+                  {post.tags.map((tag, i) => (
+                    <span key={i} className="px-2 py-0.5 bg-dark-bg/60 text-blue-700 rounded-full text-xs font-medium">{getInterestPath(tag)}</span>
+                  ))}
+                </div>
+                <div className="flex gap-4 mt-1">
+                  <button title={post.liked ? "Убрать лайк" : "Лайкнуть"} className={`p-2 rounded-full transition-colors ${post.liked ? 'bg-red-500 text-white' : 'bg-dark-bg/60 text-red-500 hover:bg-red-500 hover:text-white'}`} onClick={() => onLikePost(post.id)}>
+                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.5-9-9.5C1.5 8.5 3.5 5 7 5c2.5 0 3.5 2 5 2s2.5-2 5-2c3.5 0 5.5 3.5 4 6.5C18.5 15.5 12 21 12 21Z" stroke="currentColor" strokeWidth="1.5" fill={post.liked ? '#ef4444' : 'none'} /></svg>
                   </button>
-                )}
+                  <button title={post.favorite ? "Убрать из избранного" : "В избранное"} className={`p-2 rounded-full transition-colors ${post.favorite ? 'bg-yellow-400 text-white' : 'bg-dark-bg/60 text-yellow-400 hover:bg-yellow-400 hover:text-white'}`} onClick={() => onLikePost(post.id)}>
+                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" stroke="currentColor" strokeWidth="1.5" fill={post.favorite ? '#fbbf24' : 'none'} /></svg>
+                  </button>
+                  {post.userId === profile.userId && (
+                    <button title="Удалить пост" className="p-2 rounded-full bg-dark-bg/60 text-red-500 hover:bg-red-500 hover:text-white transition-colors ml-2" onClick={() => setDeletePostId(post.id)}>
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="#ef4444" strokeWidth="1.5"/></svg>
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
       {deletePostId !== null && (
@@ -866,14 +917,17 @@ function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLik
   );
 }
 
-function Profile({ profile, setProfile, allPosts, onCreatePost, onUpdatePost, onDeletePost, onLikePost }: {
+function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onUpdatePost, onDeletePost, onLikePost, users, setAllUsers }: {
   profile: UserProfile,
   setProfile: (p: UserProfile) => void,
   allPosts: Post[],
+  setAllPosts: React.Dispatch<React.SetStateAction<Post[]>>,
   onCreatePost: (content: string, tags: string[], attachmentUrl?: string) => void,
   onUpdatePost: (id: number, content: string, tags: string[]) => void,
   onDeletePost: (id: number) => void,
   onLikePost: (id: number) => void,
+  users: UserProfile[],
+  setAllUsers: React.Dispatch<React.SetStateAction<UserProfile[]>>,
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const [editData, setEditData] = useState<UserProfile>({
@@ -891,6 +945,8 @@ function Profile({ profile, setProfile, allPosts, onCreatePost, onUpdatePost, on
   const [deletePostId, setDeletePostId] = useState<number | null>(null);
   const saveTimeout = useRef<NodeJS.Timeout | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [sortBy, setSortBy] = useState<'date' | 'author'>('date');
+  const toast = useToast();
   useEffect(() => {
     if (!editOpen) return;
     if (saveTimeout.current) clearTimeout(saveTimeout.current);
@@ -916,11 +972,24 @@ function Profile({ profile, setProfile, allPosts, onCreatePost, onUpdatePost, on
     if (avatarFile) {
       avatarUrl = URL.createObjectURL(avatarFile);
     }
+    // Обновляем avatarUrl и name во всех постах пользователя по userId
+    setAllPosts(prev => prev.map(post =>
+      post.userId === profile.userId
+        ? { ...post, avatarUrl, author: editData.name }
+        : post
+    ));
     setProfile({ ...editData, avatarUrl });
+    // Обновляем профиль пользователя в allUsers
+    setAllUsers(prev => prev.map(u =>
+      u.userId === profile.userId
+        ? { ...editData, avatarUrl }
+        : u
+    ));
     setEditOpen(false);
+    toast("Профиль обновлён!");
   };
-  // Посты пользователя
-  const userPosts = allPosts.filter((p) => p.author === profile.name);
+  // Посты пользователя по userId
+  const userPosts = allPosts.filter((p) => p.userId === profile.userId);
   // Создание поста
   const handleCreatePost = () => {
     if (!newPost.content.trim() || newPost.tags.length === 0) return;
@@ -960,7 +1029,7 @@ function Profile({ profile, setProfile, allPosts, onCreatePost, onUpdatePost, on
           <div className="flex items-center justify-center gap-2 w-full">
             <div className="font-bold text-2xl sm:text-3xl text-dark-text text-center break-words flex-1" style={{fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif'}}>{profile.name}</div>
           </div>
-          {profile.city && <div className="text-blue-700 text-xs font-medium">{profile.city}</div>}
+          {(profile.country || profile.city) && <div className="text-blue-700 text-xs font-medium">{[profile.country, profile.city].filter(Boolean).join(', ')}</div>}
           <div className="text-dark-muted text-base text-center max-w-xs whitespace-pre-line break-words mb-2">{profile.bio}</div>
           <div className="flex flex-wrap gap-2 mt-2 justify-center">
             {profile.interests.filter(Boolean).map((interest, i) => (
@@ -980,6 +1049,13 @@ function Profile({ profile, setProfile, allPosts, onCreatePost, onUpdatePost, on
         </div>
         <div className="flex justify-between items-center mt-6 mb-2">
           <div className="text-lg font-bold text-dark-text">Мои посты</div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-dark-muted">Сортировать:</span>
+            <select className="px-2 py-1 rounded bg-dark-bg/60 text-dark-text text-xs" value={sortBy} onChange={e => setSortBy(e.target.value as any)}>
+              <option value="date">Сначала новые</option>
+              <option value="author">По автору</option>
+            </select>
+          </div>
           <button
             className={`p-2 rounded-full bg-dark-bg/60 text-dark-accent hover:bg-dark-accent/10 transition-colors shadow focus:outline-none ml-2 ${showCreate ? 'rotate-45' : ''}`}
             title={showCreate ? 'Скрыть создание поста' : 'Создать пост'}
@@ -1032,6 +1108,13 @@ function Profile({ profile, setProfile, allPosts, onCreatePost, onUpdatePost, on
           </div>
         )}
         <div className="flex flex-col gap-3 mt-4">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="text-xs text-dark-muted">Сортировать:</span>
+            <select className="px-2 py-1 rounded bg-dark-bg/60 text-dark-text text-xs" value={sortBy} onChange={e => setSortBy(e.target.value as any)}>
+              <option value="date">Сначала новые</option>
+              <option value="author">По автору</option>
+            </select>
+          </div>
           {userPosts.length === 0 && <div className="text-dark-muted text-center">У вас пока нет постов</div>}
           {userPosts.map((post) => (
             <div key={post.id} className="relative bg-dark-card rounded-2xl shadow p-4 flex flex-col gap-2 animate-fade-in animate-scale-in">
@@ -1092,54 +1175,71 @@ function Profile({ profile, setProfile, allPosts, onCreatePost, onUpdatePost, on
               </label>
             </div>
             <div className="w-full flex flex-col gap-3">
-              <label className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
-                <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
-                <input className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.name} onChange={e => setEditData({ ...editData, name: e.target.value })} placeholder="Имя и фамилия" maxLength={40} autoComplete="name" />
-              </label>
-              <label className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
-                <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
-                <input className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.city || ''} onChange={e => setEditData({ ...editData, city: e.target.value })} placeholder="Город" maxLength={40} autoComplete="address-level2" />
-                <button
-                  type="button"
-                  className="ml-2 px-2 py-1 rounded bg-dark-accent text-white text-xs font-medium hover:bg-blue-500/80 transition-colors"
-                  title="Определить по геолокации"
-                  onClick={async () => {
-                    if (!navigator.geolocation) {
-                      alert('Геолокация не поддерживается вашим браузером');
-                      return;
-                    }
-                    navigator.geolocation.getCurrentPosition(async (pos) => {
-                      const { latitude, longitude } = pos.coords;
-                      try {
-                        const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ru`);
-                        const data = await resp.json();
-                        const city = data.address.city || data.address.town || data.address.village || data.address.settlement || data.address.state || '';
-                        if (city) {
-                          setEditData(prev => ({ ...prev, city }));
-                        } else {
-                          alert('Не удалось определить город по координатам');
-                        }
-                      } catch {
-                        alert('Ошибка при определении города');
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-name">Имя и фамилия</label>
+                <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
+                  <input id="profile-name" className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.name} onChange={e => setEditData({ ...editData, name: e.target.value })} placeholder="Имя и фамилия" maxLength={40} autoComplete="name" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-country">Страна</label>
+                <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
+                  <input id="profile-country" className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.country || ''} onChange={e => setEditData({ ...editData, country: e.target.value })} placeholder="Страна" maxLength={40} autoComplete="country" />
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-city">Город</label>
+                <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
+                  <input id="profile-city" className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.city || ''} onChange={e => setEditData({ ...editData, city: e.target.value })} placeholder="Город" maxLength={40} autoComplete="address-level2" />
+                  <button
+                    type="button"
+                    className="ml-2 p-2 rounded-full bg-dark-accent text-white text-lg shadow hover:bg-blue-500/80 transition-colors flex items-center justify-center"
+                    title="Определить по геолокации"
+                    onClick={async () => {
+                      if (!navigator.geolocation) {
+                        alert('Геолокация не поддерживается вашим браузером');
+                        return;
                       }
-                    }, (err) => {
-                      alert('Не удалось получить геолокацию: ' + err.message);
-                    });
-                  }}
-                >
-                  Определить по геолокации
-                </button>
-              </label>
-              <label className="flex items-start gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
-                <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 4h16v16H4V4zm2 2v12h12V6H6zm2 2h8v8H8V8z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
-                <textarea className="flex-1 bg-transparent outline-none text-base text-dark-text resize-none" value={editData.bio} onChange={e => setEditData({ ...editData, bio: e.target.value })} placeholder="Короткое био пользователя, интересы и стиль музыки" rows={3} maxLength={120} />
-              </label>
-              <div className="flex flex-col gap-1">
-                <span className="text-xs text-dark-muted mb-1">Интересы</span>
+                      navigator.geolocation.getCurrentPosition(async (pos) => {
+                        const { latitude, longitude } = pos.coords;
+                        try {
+                          const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ru`);
+                          const data = await resp.json();
+                          const city = data.address.city || data.address.town || data.address.village || data.address.settlement || data.address.state || '';
+                          const country = data.address.country || '';
+                          if (city || country) {
+                            setEditData(prev => ({ ...prev, city, country }));
+                          } else {
+                            alert('Не удалось определить город/страну по координатам');
+                          }
+                        } catch {
+                          alert('Ошибка при определении города');
+                        }
+                      }, (err) => {
+                        alert('Не удалось получить геолокацию: ' + err.message);
+                      });
+                    }}
+                  >
+                    <span role="img" aria-label="Геолокация">📍</span>
+                  </button>
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-bio">О себе</label>
+                <div className="flex items-start gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 4h16v16H4V4zm2 2v12h12V6H6zm2 2h8v8H8V8z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
+                  <textarea id="profile-bio" className="flex-1 bg-transparent outline-none text-base text-dark-text resize-none" value={editData.bio} onChange={e => setEditData({ ...editData, bio: e.target.value })} placeholder="Короткое био пользователя, интересы и стиль музыки" rows={3} maxLength={120} />
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-xs text-dark-muted font-semibold mb-1">Интересы</label>
                 <InterestSelector selected={editData.interests} onChange={interests => setEditData(prev => ({ ...prev, interests }))} disableMineMode={true} />
               </div>
               <div className="flex flex-col gap-2 mt-2">
-                <span className="text-xs text-dark-muted mb-1">Соцсети</span>
+                <label className="text-xs text-dark-muted font-semibold mb-1">Соцсети</label>
                 {/* VK */}
                 <SocialLinkEdit
                   label="VK"
@@ -1267,6 +1367,7 @@ function getRandomSocials(name: string) {
 export const MOCK_USERS: UserProfile[] = Array.from({ length: 100 }).map((_, i) => {
   const name = MOCK_NAMES[i % MOCK_NAMES.length] + (i >= MOCK_NAMES.length ? ` #${i+1}` : "");
   return {
+    userId: `user_${i+1}_${Math.random().toString(36).slice(2, 10)}`,
     name,
     bio: getRandomFromArray(MOCK_BIOS, 1)[0],
     interests: getRandomInterests(),
@@ -1277,7 +1378,6 @@ export const MOCK_USERS: UserProfile[] = Array.from({ length: 100 }).map((_, i) 
 });
 // --- Моковые посты ---
 const MOCK_POSTS: Post[] = [
-  // Примеры постов разных пользователей
   ...Array.from({ length: 30 }).map((_, i) => {
     const user = MOCK_USERS[i % MOCK_USERS.length];
     const texts = [
@@ -1304,6 +1404,7 @@ const MOCK_POSTS: Post[] = [
     ];
     return {
       id: i + 1,
+      userId: user.userId,
       author: user.name,
       avatarUrl: user.avatarUrl,
       content: texts[i % texts.length],
@@ -1316,6 +1417,25 @@ const MOCK_POSTS: Post[] = [
   })
 ];
 
+// Toast context и компонент
+const ToastContext = createContext<(msg: string) => void>(() => {});
+function ToastProvider({ children }: { children: React.ReactNode }) {
+  const [toast, setToast] = useState<string | null>(null);
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 2000);
+  };
+  return (
+    <ToastContext.Provider value={showToast}>
+      {children}
+      {toast && <div className="toast animate-fade-in animate-scale-in">{toast}</div>}
+    </ToastContext.Provider>
+  );
+}
+function useToast() {
+  return useContext(ToastContext);
+}
+
 function App() {
   // Получаем пользователя Telegram (или дефолт)
   const tgUser = getTelegramUser();
@@ -1325,19 +1445,19 @@ function App() {
   // ВСЕ остальные хуки — сюда, до любого return!
   const [allUsers, setAllUsers] = useState<UserProfile[]>(MOCK_USERS);
   const [allPosts, setAllPosts] = useState<Post[]>(MOCK_POSTS);
-  const [friends, setFriends] = useState<string[]>([MOCK_USERS[0].name, MOCK_USERS[1].name]);
-  const [favorites, setFavorites] = useState<string[]>([MOCK_USERS[2].name]);
+  const [friends, setFriends] = useState<string[]>([MOCK_USERS[0].userId, MOCK_USERS[1].userId]);
+  const [favorites, setFavorites] = useState<string[]>([MOCK_USERS[2].userId]);
   const [userCard, setUserCard] = useState<{ user: UserProfile, posts: Post[] } | null>(null);
   const navigate = useNavigate();
 
   // ... handleUserClick ...
   const handleUserClick = (user: UserProfile) => {
-    navigate(`/user/${encodeURIComponent(user.name)}`);
+    navigate(`/user/${encodeURIComponent(user.userId)}`);
   };
   // ... handleAddFriend, handleRemoveFriend, handleToggleFavorite ...
-  const handleAddFriend = (name: string) => setFriends((prev) => [...prev, name]);
-  const handleRemoveFriend = (name: string) => setFriends((prev) => prev.filter((n) => n !== name));
-  const handleToggleFavorite = (name: string) => setFavorites((prev) => prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]);
+  const handleAddFriend = (userId: string) => setFriends((prev) => [...prev, userId]);
+  const handleRemoveFriend = (userId: string) => setFriends((prev) => prev.filter((id) => id !== userId));
+  const handleToggleFavorite = (userId: string) => setFavorites((prev) => prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]);
 
   // Добавляю функции для редактирования, удаления, лайка поста
   const handleCreateUserPost = (content: string, tags: string[], attachmentUrl?: string) => {
@@ -1345,6 +1465,7 @@ function App() {
     setAllPosts(prev => [
       {
         id: Date.now(),
+        userId: profile!.userId,
         author: profile!.name,
         avatarUrl: profile!.avatarUrl,
         content,
@@ -1374,14 +1495,14 @@ function App() {
   }
 
   return (
-    <>
+    <ToastProvider>
       <AppBar />
       <Layout>
         <Routes>
-          <Route path="/" element={<HomeFeed profile={profile!} allPosts={allPosts} friends={friends} onUserClick={handleUserClick} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} />} />
+          <Route path="/" element={<HomeFeed profile={profile!} allPosts={allPosts} friends={friends} onUserClick={handleUserClick} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} users={allUsers} />} />
           <Route path="/search" element={<Search profile={profile!} users={allUsers} friends={friends} favorites={favorites} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onToggleFavorite={handleToggleFavorite} onUserClick={handleUserClick} />} />
           <Route path="/friends" element={<Friends profile={profile!} friends={friends} favorites={favorites} users={allUsers} onUserClick={handleUserClick} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onToggleFavorite={handleToggleFavorite} />} />
-          <Route path="/profile" element={<Profile profile={profile!} setProfile={setProfile} allPosts={allPosts} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} />} />
+          <Route path="/profile" element={<Profile profile={profile!} setProfile={setProfile} allPosts={allPosts} setAllPosts={setAllPosts} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} users={allUsers} setAllUsers={setAllUsers} />} />
           <Route path="/user/:userName" element={<UserPageWrapper 
             allUsers={allUsers} 
             allPosts={allPosts} 
@@ -1397,7 +1518,7 @@ function App() {
         </Routes>
       </Layout>
       <TabBar />
-    </>
+    </ToastProvider>
   );
 }
 
@@ -1457,7 +1578,7 @@ function UserPage({ user, posts, onBack, isFriend, isFavorite, onAddFriend, onRe
           <div className="flex items-center justify-center gap-2 w-full">
             <div className="font-bold text-2xl sm:text-3xl text-dark-text text-center break-words flex-1" style={{fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif'}}>{user.name}</div>
           </div>
-          {user.city && <div className="text-blue-700 text-xs font-medium">{user.city}</div>}
+          {(user.country || user.city) && <div className="text-blue-700 text-xs font-medium">{[user.country, user.city].filter(Boolean).join(', ')}</div>}
           <div className="text-dark-muted text-base text-center max-w-xs whitespace-pre-line break-words mb-2">{user.bio}</div>
           <div className="flex flex-wrap gap-2 mt-2 justify-center">
             {user.interests.filter(Boolean).map((interest, i) => (
@@ -1528,9 +1649,9 @@ function UserPageWrapper({ allUsers, allPosts, onBack, friends, favorites, onAdd
   onLikeUserPost: (id: number) => void,
   currentUserName: string,
 }) {
-  const { userName } = useParams();
-  const user = allUsers.find(u => u.name === userName);
-  const posts = allPosts.filter(p => p.author === userName);
+  const { userName: userId } = useParams();
+  const user = allUsers.find(u => u.userId === userId);
+  const posts = user ? allPosts.filter(p => p.userId === user.userId) : [];
   if (!user) return <div className="text-center text-dark-muted pt-24">Пользователь не найден</div>;
   const isFriend = friends.includes(user.name);
   const isFavorite = favorites.includes(user.name);
@@ -1557,10 +1678,18 @@ function SocialLinkEdit({ label, icon, value, onChange, placeholder, statusText 
   const [input, setInput] = React.useState(value || "");
   React.useEffect(() => { setInput(value || ""); }, [value]);
 
+  // Новые иконки
+  const iconMap: Record<string, string> = {
+    'VK': 'https://cdn-icons-png.flaticon.com/512/145/145813.png',
+    'YouTube': 'https://img.freepik.com/premium-vector/youtube-color-icons_1209566-1.jpg?semt=ais_hybrid&w=740',
+    'Telegram': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRDLYyCJGt0wCZw8Ap-9m9mNzAlgQN30blEkg&s',
+  };
+  const iconUrl = iconMap[label] || '';
+
   if (value && !editing) {
     return (
       <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner">
-        <span className="text-xl">{icon}</span>
+        {iconUrl ? <img src={iconUrl} alt={label} className="w-6 h-6 rounded-full object-cover" /> : <span className="text-xl">{icon}</span>}
         <a href={value} target="_blank" rel="noopener noreferrer" className="flex-1 text-blue-400 underline text-sm truncate">{value}</a>
         <button className="text-red-500 text-xs px-2" onClick={() => onChange("")} title="Отвязать"><span style={{fontSize: '1.2em'}}>✖</span></button>
       </div>
@@ -1568,7 +1697,7 @@ function SocialLinkEdit({ label, icon, value, onChange, placeholder, statusText 
   }
   return (
     <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner">
-      <span className="text-xl">{icon}</span>
+      {iconUrl ? <img src={iconUrl} alt={label} className="w-6 h-6 rounded-full object-cover" /> : <span className="text-xl">{icon}</span>}
       <input
         className="flex-1 bg-transparent outline-none text-base text-dark-text"
         value={input}

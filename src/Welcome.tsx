@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { InterestSelector } from "./InterestSelector";
 
-function SocialLinkEdit({ label, icon, value, onChange, placeholder }: { label: string, icon: string, value: string, onChange: (v: string) => void, placeholder: string }) {
+function SocialLinkEdit({ label, icon, value, onChange, placeholder }: { label: string, icon: React.ReactNode, value: string, onChange: (v: string) => void, placeholder: string }) {
   const [input, setInput] = useState(value || "");
   React.useEffect(() => { setInput(value || ""); }, [value]);
   if (value) {
@@ -32,6 +32,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
   const [step, setStep] = useState(0);
   const [profile, setProfile] = useState({
     name: "",
+    country: "",
     city: "",
     vk: "",
     youtube: "",
@@ -49,6 +50,16 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
   const next = () => setStep(s => Math.min(s + 1, steps.length - 1));
   const prev = () => setStep(s => Math.max(s - 1, 0));
   // --- UI ---
+  // SVG-иконки соцсетей
+  const VKIcon = (
+    <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#2787F5"/><text x="7" y="16" fontSize="10" fill="#fff">VK</text></svg>
+  );
+  const TGIcon = (
+    <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#229ED9"/><text x="5" y="16" fontSize="10" fill="#fff">TG</text></svg>
+  );
+  const YTIcon = (
+    <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" fill="#FF0000"/><polygon points="10,8 16,12 10,16" fill="#fff"/></svg>
+  );
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-dark-bg via-dark-card to-dark-bg/80 animate-fade-in" style={{minHeight: '100dvh'}}>
       <div className="w-full max-w-md bg-dark-card rounded-2xl shadow-2xl p-8 flex flex-col gap-8 animate-fade-in animate-scale-in">
@@ -144,6 +155,14 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
             <div className="text-dark-muted text-xs text-center mb-2">Или заполните данные вручную</div>
             <input
               className="px-4 py-3 rounded-xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base"
+              placeholder="Страна"
+              value={profile.country}
+              onChange={e => setProfile(p => ({ ...p, country: e.target.value }))}
+              maxLength={40}
+              autoComplete="country"
+            />
+            <input
+              className="px-4 py-3 rounded-xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base"
               placeholder="Имя и фамилия"
               value={profile.name}
               onChange={e => setProfile(p => ({ ...p, name: e.target.value }))}
@@ -174,10 +193,11 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
                       const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ru`);
                       const data = await resp.json();
                       const city = data.address.city || data.address.town || data.address.village || data.address.settlement || data.address.state || '';
-                      if (city) {
-                        setProfile(prev => ({ ...prev, city }));
+                      const country = data.address.country || '';
+                      if (city || country) {
+                        setProfile(prev => ({ ...prev, city, country }));
                       } else {
-                        alert('Не удалось определить город по координатам');
+                        alert('Не удалось определить город/страну по координатам');
                       }
                     } catch {
                       alert('Ошибка при определении города');
@@ -191,7 +211,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
               </button>
             </div>
             <div className="flex gap-2 mt-2">
-              <button className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold shadow active:scale-95 transition-transform text-lg" onClick={next} disabled={!profile.name || !profile.city}>Далее</button>
+              <button className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold shadow active:scale-95 transition-transform text-lg" onClick={next} disabled={!profile.name || !profile.city || !profile.country}>Далее</button>
               <button className="flex-1 py-3 rounded-xl bg-dark-bg/60 text-dark-muted font-semibold shadow active:scale-95 transition-transform text-lg" onClick={prev}>Назад</button>
             </div>
           </div>
@@ -210,9 +230,9 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
         {step === 3 && (
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="text-xl font-bold text-dark-text mb-2">Привяжите соцсети</div>
-            <SocialLinkEdit label="VK" icon="🟦" value={profile.vk} onChange={vk => setProfile(p => ({ ...p, vk }))} placeholder="Ссылка на VK" />
-            <SocialLinkEdit label="YouTube" icon="▶️" value={profile.youtube} onChange={youtube => setProfile(p => ({ ...p, youtube }))} placeholder="Ссылка на YouTube" />
-            <SocialLinkEdit label="Telegram" icon="✈️" value={profile.telegram} onChange={telegram => setProfile(p => ({ ...p, telegram }))} placeholder="Ссылка на Telegram" />
+            <SocialLinkEdit label="VK" icon={VKIcon} value={profile.vk} onChange={vk => setProfile(p => ({ ...p, vk }))} placeholder="Ссылка на VK" />
+            <SocialLinkEdit label="YouTube" icon={YTIcon} value={profile.youtube} onChange={youtube => setProfile(p => ({ ...p, youtube }))} placeholder="Ссылка на YouTube" />
+            <SocialLinkEdit label="Telegram" icon={TGIcon} value={profile.telegram} onChange={telegram => setProfile(p => ({ ...p, telegram }))} placeholder="Ссылка на Telegram" />
             <div className="flex gap-2 mt-2">
               <button className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold shadow active:scale-95 transition-transform text-lg" onClick={next}>Далее</button>
               <button className="flex-1 py-3 rounded-xl bg-dark-bg/60 text-dark-muted font-semibold shadow active:scale-95 transition-transform text-lg" onClick={prev}>Назад</button>
