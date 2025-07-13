@@ -1,13 +1,195 @@
-body {
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  background: #181A20 !important;
+  min-height: 0;
+  width: 100vw;
+  overflow-x: hidden;
   margin: 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  padding: 0;
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+:root {
+  --tabbar-height: 64px;
+}
+@media (max-width: 600px) {
+  :root {
+    --tabbar-height: 56px;
+  }
+}
+body {
+  position: relative;
+}
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  width: 100vw;
+  overflow-x: hidden;
+  margin: 0;
+  padding: 0;
 }
 
-code {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
-    monospace;
+/* Плавные переходы для всех элементов */
+* {
+  transition: background 0.3s, color 0.3s, border-color 0.3s;
+}
+
+/* Анимации */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes scale-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+.animate-fade-in {
+  animation: fade-in 0.4s cubic-bezier(0.4,0,0.2,1);
+}
+.animate-scale-in {
+  animation: scale-in 0.4s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* Мягкие тени */
+.shadow-card {
+  box-shadow: 0 4px 24px 0 rgba(0,0,0,0.18), 0 1.5px 4px 0 rgba(0,0,0,0.10);
+}
+.shadow-btn {
+  box-shadow: 0 2px 8px 0 rgba(79,140,255,0.10);
+}
+
+/* Градиентные акценты */
+.bg-accent-gradient {
+  background: linear-gradient(90deg, #4F8CFF 0%, #7F5CFF 100%);
+}
+.text-accent-gradient {
+  background: linear-gradient(90deg, #4F8CFF 0%, #7F5CFF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Современные инпуты и кнопки */
+input, textarea {
+  border-radius: 1rem;
+  background: #23262F;
+  color: #F4F4F7;
+  border: none;
+  padding: 1rem 1.2rem;
+  font-size: 1rem;
+  transition: box-shadow 0.2s, background 0.2s;
+  box-shadow: 0 1.5px 4px 0 rgba(0,0,0,0.10);
+}
+input:focus, textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px #4F8CFF;
+  background: #23262F;
+}
+button {
+  border-radius: 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  transition: box-shadow 0.2s, background 0.2s, transform 0.1s;
+  box-shadow: 0 2px 8px 0 rgba(79,140,255,0.10);
+}
+button:active {
+  transform: scale(0.97);
+}
+
+/* Плавные transitions для всего */
+* {
+  transition: background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+/* Градиентная рамка для аватарки */
+.avatar-gradient {
+  background: linear-gradient(135deg, #4F8CFF 0%, #7F5CFF 100%);
+  padding: 3px;
+  border-radius: 9999px;
+  display: inline-block;
+}
+.avatar-inner {
+  background: #23262F;
+  border-radius: 9999px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Анимация иконок TabBar */
+.tabbar-icon {
+  transition: transform 0.18s cubic-bezier(0.4,0,0.2,1), color 0.18s;
+}
+.tabbar-icon-active {
+  transform: scale(1.18);
+  filter: drop-shadow(0 2px 8px #4F8CFF44);
+  color: #4F8CFF;
+}
+
+/* Toast-уведомления */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 5.5rem;
+  transform: translateX(-50%);
+  background: #23262F;
+  color: #F4F4F7;
+  border-radius: 1rem;
+  padding: 1rem 2rem;
+  font-size: 1rem;
+  box-shadow: 0 4px 24px 0 rgba(0,0,0,0.18);
+  z-index: 1000;
+  animation: fade-in 0.4s, scale-in 0.4s;
+}
+
+/* Skeleton-загрузка */
+.skeleton {
+  background: linear-gradient(90deg, #23262F 25%, #292B36 50%, #23262F 75%);
+  background-size: 200% 100%;
+  animation: skeleton-loading 1.2s infinite linear;
+  border-radius: 1rem;
+}
+@keyframes skeleton-loading {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Пустое состояние */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #A1A1AA;
+  font-size: 1.1rem;
+  gap: 1rem;
+  min-height: 180px;
+}
+.empty-state-illustration {
+  width: 64px;
+  height: 64px;
+  opacity: 0.7;
+}
+
+/* Соцсети-иконки */
+.social-icon {
+  width: 2.2rem;
+  height: 2.2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: #23262F;
+  color: #4F8CFF;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
+  margin: 0 0.2rem;
+}
+.social-icon:hover {
+  background: #4F8CFF;
+  color: #fff;
+  box-shadow: 0 2px 8px #4F8CFF44;
 }
