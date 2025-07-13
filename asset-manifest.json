@@ -1,0 +1,15 @@
+{
+  "files": {
+    "main.css": "/mooza_dev/static/css/main.d6d4a811.css",
+    "main.js": "/mooza_dev/static/js/main.ac1ec6e5.js",
+    "static/js/453.5b5ab2b4.chunk.js": "/mooza_dev/static/js/453.5b5ab2b4.chunk.js",
+    "index.html": "/mooza_dev/index.html",
+    "main.d6d4a811.css.map": "/mooza_dev/static/css/main.d6d4a811.css.map",
+    "main.ac1ec6e5.js.map": "/mooza_dev/static/js/main.ac1ec6e5.js.map",
+    "453.5b5ab2b4.chunk.js.map": "/mooza_dev/static/js/453.5b5ab2b4.chunk.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.d6d4a811.css",
+    "static/js/main.ac1ec6e5.js"
+  ]
+}
