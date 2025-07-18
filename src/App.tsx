@@ -560,7 +560,28 @@ function UserCard({ user, posts, isFriend, isFavorite, onAddFriend, onRemoveFrie
           <div className="flex flex-col gap-4 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
             {posts.length === 0 && <div className="text-dark-muted text-center">Нет постов</div>}
             {posts.map((post) => (
-              <PostCard key={post.id} post={post} users={[user]} />
+              <div key={post.id} className="relative bg-dark-card rounded-2xl shadow p-4 flex flex-col gap-2 animate-fade-in animate-scale-in">
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center text-2xl border-2 border-white overflow-hidden">
+                    {post.avatarUrl ? (
+                      <img src={post.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
+                    ) : (
+                      <span role="img" aria-label="avatar">👤</span>
+                    )}
+                  </div>
+                  <div className="font-medium text-dark-text text-sm cursor-pointer hover:underline">{post.author}</div>
+                  <div className="text-xs text-dark-muted ml-auto">{new Date(post.createdAt).toLocaleDateString()}</div>
+                </div>
+                <div className="text-dark-text text-base mb-1 whitespace-pre-line">{post.content}</div>
+                {post.attachmentUrl && (
+                  <img src={post.attachmentUrl} alt="attachment" className="max-h-60 rounded-xl object-contain mb-2" />
+                )}
+                <div className="flex flex-wrap gap-2 mb-1">
+                  {post.tags.map((tag, i) => (
+                    <span key={i} className="px-2 py-0.5 bg-dark-bg/60 text-blue-700 rounded-full text-xs font-medium">{getInterestPath(tag)}</span>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -708,11 +729,18 @@ function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLik
                       <span role="img" aria-label="avatar">👤</span>
                     )}
                   </div>
-                  <div className="font-medium text-dark-text text-sm cursor-pointer hover:underline" onClick={() => onUserClick(user || { ...profile, name: post.author, avatarUrl: post.avatarUrl })}>{user?.name || post.author}</div>
+                  <div className="font-medium text-dark-text text-sm cursor-pointer hover:underline">{post.author}</div>
+                  <div className="text-xs text-dark-muted ml-auto">{new Date(post.createdAt).toLocaleDateString()}</div>
+                  {/* Кнопки редактирования/удаления только для своих постов */}
                   {post.userId === profile.userId && (
-                    <button title="Редактировать пост" className="p-2 rounded-full bg-dark-bg/60 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors ml-2" onClick={() => { setEditPost(post); setEditPostData({ content: post.content, tags: post.tags }); }}>
-                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#3b82f6" strokeWidth="1.5"/></svg>
-                    </button>
+                    <>
+                      <button title="Редактировать пост" className="p-2 rounded-full bg-dark-bg/60 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors ml-2" onClick={() => { setEditPost(post); setEditPostData({ content: post.content, tags: post.tags }); }}>
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#3b82f6" strokeWidth="1.5"/></svg>
+                      </button>
+                      <button title="Удалить пост" className="p-2 rounded-full bg-dark-bg/60 text-red-500 hover:bg-red-500 hover:text-white transition-colors ml-2" onClick={() => onDeletePost(post.id)}>
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="#ef4444" strokeWidth="1.5"/></svg>
+                      </button>
+                    </>
                   )}
                 </div>
                 <div className="text-dark-text text-base mb-1 whitespace-pre-line">{post.content}</div>
@@ -793,7 +821,7 @@ function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLik
   );
 }
 
-function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onUpdatePost, onDeletePost, onLikePost, users, setAllUsers }: {
+function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onUpdatePost, onDeletePost, onLikePost, users, setAllUsers, friends, favorites }: {
   profile: UserProfile,
   setProfile: (p: UserProfile) => void,
   allPosts: Post[],
@@ -804,6 +832,8 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
   onLikePost: (id: number) => void,
   users: UserProfile[],
   setAllUsers: React.Dispatch<React.SetStateAction<UserProfile[]>>,
+  friends: string[],
+  favorites: string[],
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const [editData, setEditData] = useState<UserProfile>({
@@ -815,47 +845,28 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
   });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [newPost, setNewPost] = useState<{ content: string; tags: string[]; attachment: File | null }>({ content: "", tags: [], attachment: null });
-  const [showTagSelect, setShowTagSelect] = useState(false);
-  const [editPost, setEditPost] = useState<Post | null>(null);
-  const [editPostData, setEditPostData] = useState({ content: "", tags: [] as string[] });
-  const [deletePostId, setDeletePostId] = useState<number | null>(null);
-  const saveTimeout = useRef<NodeJS.Timeout | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [sortBy, setSortBy] = useState<'date' | 'author'>('date');
+  const [editPost, setEditPost] = useState<Post | null>(null);
+  const [editPostData, setEditPostData] = useState<{ content: string; tags: string[] }>({ content: '', tags: [] });
   const toast = useToast();
-  useEffect(() => {
-    if (!editOpen) return;
-    if (saveTimeout.current) clearTimeout(saveTimeout.current);
-    saveTimeout.current = setTimeout(() => {
-      setProfile(editData);
-    }, 1000);
-    return () => { if (saveTimeout.current) clearTimeout(saveTimeout.current); };
-  }, [editData, editOpen]);
-  const toggleInterest = (tag: string) => {
-    setEditData((prev) =>
-      prev.interests.includes(tag)
-        ? { ...prev, interests: prev.interests.filter((t) => t !== tag) }
-        : { ...prev, interests: [...prev.interests, tag] }
-    );
-  };
-  const handleEdit = () => {
-    setEditData(profile);
-    setAvatarFile(null);
-    setEditOpen(true);
-  };
+  const userPosts = allPosts.filter((p) => p.userId === profile.userId);
+
+  // Счетчики друзей и избранных
+  const friendsCount = friends.length;
+  const favoritesCount = favorites.length;
+
+  // Сохранение профиля (редактирование)
   const handleSave = () => {
     let avatarUrl = editData.avatarUrl;
     if (avatarFile) {
       avatarUrl = URL.createObjectURL(avatarFile);
     }
-    // Обновляем avatarUrl и name во всех постах пользователя по userId
     setAllPosts(prev => prev.map(post =>
       post.userId === profile.userId
         ? { ...post, avatarUrl, author: editData.name }
         : post
     ));
     setProfile({ ...editData, avatarUrl });
-    // Обновляем профиль пользователя в allUsers
     setAllUsers(prev => prev.map(u =>
       u.userId === profile.userId
         ? { ...editData, avatarUrl }
@@ -864,88 +875,74 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
     setEditOpen(false);
     toast("Профиль обновлён!");
   };
-  // Посты пользователя по userId
-  const userPosts = allPosts.filter((p) => p.userId === profile.userId);
+
   // Создание поста
   const handleCreatePost = () => {
     if (!newPost.content.trim() || newPost.tags.length === 0) return;
     const attachmentUrl = newPost.attachment ? URL.createObjectURL(newPost.attachment) : undefined;
     onCreatePost(newPost.content, newPost.tags, attachmentUrl);
     setNewPost({ content: "", tags: [], attachment: null });
-    setShowTagSelect(false);
+    setShowCreate(false);
   };
-  // Редактирование поста
-  const handleEditPost = (post: Post) => {
-    setEditPost(post);
-    setEditPostData({ content: post.content, tags: post.tags });
-  };
-  const handleSaveEditPost = () => {
-    if (editPost && editPostData.content.trim() && editPostData.tags.length > 0) {
-      onUpdatePost(editPost.id, editPostData.content, editPostData.tags);
-      setEditPost(null);
-    }
-  };
+
   return (
     <main className="flex flex-col items-center min-h-[100dvh] pt-20 bg-dark-bg w-full flex-1" style={{ paddingBottom: 'calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px))' }}>
-      <section className="w-full max-w-md mb-6">
-        <div className="bg-dark-card dark:bg-dark-card rounded-2xl shadow-xl p-6 flex flex-col items-center gap-3 animate-fade-in animate-scale-in">
-          <div className="avatar-gradient mx-auto mt-2 mb-2">
-            <div className="avatar-inner w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg flex items-center justify-center">
+      <section className="w-full max-w-md flex flex-col gap-4 animate-fade-in">
+        {/* Аватар, имя, счетчики */}
+        <div className="flex flex-col items-center gap-2 mt-2 mb-2">
+          <div className="relative w-28 h-28 mx-auto mb-2">
+            <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-lg bg-dark-bg/80 flex items-center justify-center">
               {profile.avatarUrl ? (
                 <img src={profile.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
               ) : (
                 <span role="img" aria-label="avatar" className="text-5xl">👤</span>
               )}
             </div>
+            <button className="absolute bottom-2 right-2 bg-dark-accent p-2 rounded-full shadow hover:scale-110 transition cursor-pointer" title="Редактировать профиль" onClick={() => setEditOpen(true)}>
+              <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#fff" strokeWidth="1.5"/></svg>
+            </button>
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-accent-gradient text-white font-semibold shadow-btn hover:opacity-90 active:scale-95 transition-all text-base rounded-xl mx-auto mb-2 animate-fade-in animate-scale-in" onClick={handleEdit}>
-            <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#fff" strokeWidth="1.5"/></svg>
-            Редактировать профиль
-          </button>
-          <div className="flex items-center justify-center gap-2 w-full">
-            <div className="font-bold text-2xl sm:text-3xl text-dark-text text-center break-words flex-1" style={{fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif'}}>{profile.name}</div>
+          <div className="flex flex-col items-center gap-1 w-full">
+            <div className="font-bold text-2xl sm:text-3xl text-dark-text text-center break-words">{profile.name}</div>
+            {(profile.country || profile.city) && <div className="text-blue-700 text-xs font-medium">{[profile.country, profile.city].filter(Boolean).join(', ')}</div>}
+            <div className="flex gap-4 mt-2 mb-1 justify-center">
+              <div className="flex flex-col items-center">
+                <span className="font-bold text-lg text-dark-text">{friendsCount}</span>
+                <span className="text-xs text-dark-muted">Друзья</span>
+              </div>
+              <div className="flex flex-col items-center">
+                <span className="font-bold text-lg text-dark-text">{favoritesCount}</span>
+                <span className="text-xs text-dark-muted">Избранные</span>
+              </div>
+            </div>
+            <div className="text-dark-muted text-base text-center max-w-xs whitespace-pre-line break-words">{profile.bio}</div>
           </div>
-          {(profile.country || profile.city) && <div className="text-blue-700 text-xs font-medium">{[profile.country, profile.city].filter(Boolean).join(', ')}</div>}
-          <div className="text-dark-muted text-base text-center max-w-xs whitespace-pre-line break-words mb-2">{profile.bio}</div>
-          <div className="flex flex-wrap gap-2 mt-2 justify-center">
-            {profile.interests.filter(Boolean).map((interest, i) => (
-              <span key={i} className="px-3 py-1 rounded-full text-xs font-medium border-none transition-all shadow-sm focus:outline-none bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white">{getInterestPath(interest)}</span>
+        </div>
+        {/* Интересы */}
+        <div className="flex flex-wrap gap-2 justify-center mt-2">
+          {profile.interests.filter(Boolean).map((interest, i) => (
+            <span key={i} className="px-3 py-1 rounded-full text-xs font-medium border-none transition-all shadow-sm focus:outline-none bg-gradient-to-r from-blue-500 to-cyan-400 text-white">{getInterestPath(interest)}</span>
+          ))}
+        </div>
+        {/* Соцсети */}
+        {profile.socials && profile.socials.filter(Boolean).length > 0 && (
+          <div className="flex flex-wrap gap-3 mt-2 justify-center">
+            {profile.socials?.filter(Boolean).map((link, i) => (
+              <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-dark-bg/60 hover:bg-dark-accent/10 transition-colors shadow text-dark-text" title={link} tabIndex={0}>
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/></svg>
+              </a>
             ))}
           </div>
-          {profile.socials && profile.socials.filter(Boolean).length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2 justify-center">
-              {profile.socials?.filter(Boolean).map((link, i) => (
-                <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-dark-bg/60 hover:bg-dark-accent/10 transition-colors shadow text-dark-text" title={link} tabIndex={0}>
-                  {/* Можно вставить SVG-иконку соцсети по ссылке */}
-                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/></svg>
-                </a>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="flex justify-between items-center mt-6 mb-2">
-          <div className="text-lg font-bold text-dark-text">Мои посты</div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-dark-muted">Сортировать:</span>
-            <select className="px-2 py-1 rounded bg-dark-bg/60 text-dark-text text-xs" value={sortBy} onChange={e => setSortBy(e.target.value as any)}>
-              <option value="date">Сначала новые</option>
-              <option value="author">По автору</option>
-            </select>
-          </div>
-          <button
-            className={`p-2 rounded-full bg-dark-bg/60 text-dark-accent hover:bg-dark-accent/10 transition-colors shadow focus:outline-none ml-2 ${showCreate ? 'rotate-45' : ''}`}
-            title={showCreate ? 'Скрыть создание поста' : 'Создать пост'}
-            onClick={() => setShowCreate(v => !v)}
-            aria-label={showCreate ? 'Скрыть создание поста' : 'Создать пост'}
-          >
-            <svg width="24" height="24" fill="none" viewBox="0 0 24 24">
-              <rect x="5" y="3" width="14" height="18" rx="3" stroke="currentColor" strokeWidth="1.5"/>
-              <path d="M8 7h8M8 11h8M8 15h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
+        )}
+        {/* Кнопка создать пост */}
+        <div className="flex justify-end mt-4">
+          <button className="p-3 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:opacity-90 active:scale-95 transition-all" title="Создать пост" onClick={() => setShowCreate(v => !v)}>
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5" stroke="#fff" strokeWidth="1.5"/></svg>
           </button>
         </div>
+        {/* Форма создания поста */}
         {showCreate && (
-          <div className="bg-dark-card dark:bg-dark-card rounded-2xl shadow-lg p-4 mb-4 flex flex-col gap-4 animate-fade-in animate-scale-in">
+          <div className="bg-dark-card rounded-2xl shadow-lg p-4 mb-4 flex flex-col gap-4 animate-fade-in animate-scale-in">
             <textarea
               className="w-full border-none rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none bg-dark-bg/60 text-dark-text shadow-inner mb-2"
               rows={2}
@@ -982,219 +979,169 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
             </div>
           </div>
         )}
-        <div className="flex flex-col gap-3 mt-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs text-dark-muted">Сортировать:</span>
-            <select className="px-2 py-1 rounded bg-dark-bg/60 text-dark-text text-xs" value={sortBy} onChange={e => setSortBy(e.target.value as any)}>
-              <option value="date">Сначала новые</option>
-              <option value="author">По автору</option>
-            </select>
-          </div>
-          {userPosts.length === 0 && <div className="text-dark-muted text-center">У вас пока нет постов</div>}
-          {userPosts.map((post) => (
-            <div key={post.id} className="relative bg-dark-card rounded-2xl shadow p-4 flex flex-col gap-2 animate-fade-in animate-scale-in">
-              <div className="flex items-center gap-3 mb-1">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center text-2xl border-2 border-white overflow-hidden">
-                  {post.avatarUrl ? (
-                    <img src={post.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
-                  ) : (
-                    <span role="img" aria-label="avatar">👤</span>
+        {/* Лента постов */}
+        <div className="mt-6">
+          <div className="text-lg font-bold text-dark-text mb-2">Посты</div>
+          <div className="flex flex-col gap-4">
+            {userPosts.length === 0 && <div className="text-dark-muted text-center">У вас пока нет постов</div>}
+            {userPosts.map((post) => (
+              <div key={post.id} className="bg-dark-card rounded-2xl shadow p-4 flex flex-col gap-2 animate-fade-in animate-scale-in">
+                <div className="flex items-center gap-3 mb-1">
+                  <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center text-2xl border-2 border-white overflow-hidden">
+                    {post.avatarUrl ? (
+                      <img src={post.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
+                    ) : (
+                      <span role="img" aria-label="avatar">👤</span>
+                    )}
+                  </div>
+                  <div className="font-medium text-dark-text text-sm cursor-pointer hover:underline">{post.author}</div>
+                  <div className="text-xs text-dark-muted ml-auto">{new Date(post.createdAt).toLocaleDateString()}</div>
+                  {/* Кнопки редактирования/удаления только для своих постов */}
+                  {post.userId === profile.userId && (
+                    <>
+                      <button title="Редактировать пост" className="p-2 rounded-full bg-dark-bg/60 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors ml-2" onClick={() => { setEditPost(post); setEditPostData({ content: post.content, tags: post.tags }); }}>
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#3b82f6" strokeWidth="1.5"/></svg>
+                      </button>
+                      <button title="Удалить пост" className="p-2 rounded-full bg-dark-bg/60 text-red-500 hover:bg-red-500 hover:text-white transition-colors ml-2" onClick={() => onDeletePost(post.id)}>
+                        <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="#ef4444" strokeWidth="1.5"/></svg>
+                      </button>
+                    </>
                   )}
                 </div>
-                <div className="font-medium text-dark-text text-sm cursor-pointer hover:underline">{post.author}</div>
-                <button title="Редактировать пост" className="p-2 rounded-full bg-dark-bg/60 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors ml-2" onClick={() => handleEditPost(post)}>
-                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#3b82f6" strokeWidth="1.5"/></svg>
-                </button>
-                <button title="Удалить пост" className="p-2 rounded-full bg-dark-bg/60 text-red-500 hover:bg-red-500 hover:text-white transition-colors ml-2" onClick={() => setDeletePostId(post.id)}>
-                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="#ef4444" strokeWidth="1.5"/></svg>
-                </button>
-              </div>
-              <div className="text-dark-text text-base mb-1 whitespace-pre-line">{post.content}</div>
-              <div style={{position: 'absolute', right: 16, bottom: 12}} className="flex gap-2 text-xs text-dark-muted">
-                <span><span role="img" aria-label="created">🕒</span> {new Date(post.createdAt).toLocaleString()}</span>
-                {post.updatedAt !== post.createdAt && <span><span role="img" aria-label="edited">✏️</span> {new Date(post.updatedAt).toLocaleString()}</span>}
-              </div>
-              {post.attachmentUrl && (
-                <img src={post.attachmentUrl} alt="attachment" className="max-h-60 rounded-xl object-contain mb-2" />
-              )}
-              <div className="flex flex-wrap gap-2 mb-1">
-                {post.tags.map((tag, i) => (
-                  <span key={i} className="px-2 py-0.5 bg-dark-bg/60 text-blue-700 rounded-full text-xs font-medium">{getInterestPath(tag)}</span>
-                ))}
-              </div>
-              <div className="flex gap-4 mt-1">
-                <button title={post.liked ? "Убрать лайк" : "Лайкнуть"} className={`p-2 rounded-full transition-colors ${post.liked ? 'bg-red-500 text-white' : 'bg-dark-bg/60 text-red-500 hover:bg-red-500 hover:text-white'}`} onClick={() => onLikePost(post.id)}>
-                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.5-9-9.5C1.5 8.5 3.5 5 7 5c2.5 0 3.5 2 5 2s2.5-2 5-2c3.5 0 5.5 3.5 4 6.5C18.5 15.5 12 21 12 21Z" stroke="currentColor" strokeWidth="1.5" fill={post.liked ? '#ef4444' : 'none'} /></svg>
-                </button>
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-      {/* Модальное окно редактирования */}
-      {editOpen && (
-        <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in"
-          style={{ paddingTop: 60, paddingBottom: 60 }}>
-          <div className="bg-dark-card shadow-2xl w-full max-w-md p-8 relative animate-fade-in flex flex-col items-center gap-6"
-            style={{
-              fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif',
-              maxHeight: 'calc(100vh - 120px)',
-              overflowY: 'auto'
-            }}>
-            <button className="absolute top-4 right-4 text-3xl text-dark-muted hover:text-dark-text transition active:scale-110" onClick={() => setEditOpen(false)}>&times;</button>
-            <div className="relative mb-2">
-              <img src={avatarFile ? URL.createObjectURL(avatarFile) : (editData.avatarUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(editData.name || 'Профиль'))} alt="avatar" className="w-28 h-28 rounded-full object-cover border-4 border-white shadow-lg bg-dark-bg/80" />
-              <label className="absolute bottom-2 right-2 bg-dark-accent p-2 rounded-full shadow hover:scale-110 transition cursor-pointer" title="Сменить аватар">
-                <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#fff" strokeWidth="1.5"/></svg>
-                <input type="file" accept="image/*" className="hidden" onChange={e => setAvatarFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
-              </label>
-            </div>
-            <div className="w-full flex flex-col gap-3">
-              <div className="flex flex-col gap-2">
-                <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-name">Имя и фамилия</label>
-                <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
-                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
-                  <input id="profile-name" className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.name} onChange={e => setEditData({ ...editData, name: e.target.value })} placeholder="Имя и фамилия" maxLength={40} autoComplete="name" />
+                <div className="text-dark-text text-base mb-1 whitespace-pre-line">{post.content}</div>
+                {post.attachmentUrl && (
+                  <img src={post.attachmentUrl} alt="attachment" className="max-h-60 rounded-xl object-contain mb-2" />
+                )}
+                <div className="flex flex-wrap gap-2 mb-1">
+                  {post.tags.map((tag, i) => (
+                    <span key={i} className="px-2 py-0.5 bg-dark-bg/60 text-blue-700 rounded-full text-xs font-medium">{getInterestPath(tag)}</span>
+                  ))}
                 </div>
               </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-country">Страна</label>
-                <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
-                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
-                  <input id="profile-country" className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.country || ''} onChange={e => setEditData({ ...editData, country: e.target.value })} placeholder="Страна" maxLength={40} autoComplete="country" />
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-city">Город</label>
-                <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
-                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
-                  <input id="profile-city" className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.city || ''} onChange={e => setEditData({ ...editData, city: e.target.value })} placeholder="Город" maxLength={40} autoComplete="address-level2" />
-                  <button
-                    type="button"
-                    className="ml-2 p-2 rounded-full bg-dark-accent text-white text-lg shadow hover:bg-blue-500/80 transition-colors flex items-center justify-center"
-                    title="Определить по геолокации"
-                    onClick={async () => {
-                      if (!navigator.geolocation) {
-                        alert('Геолокация не поддерживается вашим браузером');
-                        return;
-                      }
-                      navigator.geolocation.getCurrentPosition(async (pos) => {
-                        const { latitude, longitude } = pos.coords;
-                        try {
-                          const resp = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=ru`);
-                          const data = await resp.json();
-                          const city = data.address.city || data.address.town || data.address.village || data.address.settlement || data.address.state || '';
-                          const country = data.address.country || '';
-                          if (city || country) {
-                            setEditData(prev => ({ ...prev, city, country }));
-                          } else {
-                            alert('Не удалось определить город/страну по координатам');
-                          }
-                        } catch {
-                          alert('Ошибка при определении города');
-                        }
-                      }, (err) => {
-                        alert('Не удалось получить геолокацию: ' + err.message);
-                      });
-                    }}
-                  >
-                    <span role="img" aria-label="Геолокация">📍</span>
-                  </button>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-bio">О себе</label>
-                <div className="flex items-start gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
-                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 4h16v16H4V4zm2 2v12h12V6H6zm2 2h8v8H8V8z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
-                  <textarea id="profile-bio" className="flex-1 bg-transparent outline-none text-base text-dark-text resize-none" value={editData.bio} onChange={e => setEditData({ ...editData, bio: e.target.value })} placeholder="Короткое био пользователя, интересы и стиль музыки" rows={3} maxLength={120} />
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-xs text-dark-muted font-semibold mb-1">Интересы</label>
-                <InterestSelector selected={editData.interests} onChange={interests => setEditData(prev => ({ ...prev, interests }))} />
-              </div>
-              <div className="flex flex-col gap-2 mt-2">
-                <label className="text-xs text-dark-muted font-semibold mb-1">Соцсети</label>
-                {/* VK */}
-                <SocialLinkEdit
-                  label="VK"
-                  icon="🟦"
-                  value={editData.vkId || ""}
-                  onChange={vkId => setEditData(prev => ({ ...prev, vkId }))}
-                  placeholder="vk id"
-                  statusText="VK — авторизация через vk.id"
-                />
-                {/* YouTube */}
-                <SocialLinkEdit
-                  label="YouTube"
-                  icon="▶️"
-                  value={editData.youtubeId || ""}
-                  onChange={youtubeId => setEditData(prev => ({ ...prev, youtubeId }))}
-                  placeholder="YouTube id"
-                  statusText="YouTube — авторизация через YouTube"
-                />
-                {/* Telegram */}
-                <SocialLinkEdit
-                  label="Telegram"
-                  icon="✈️"
-                  value={editData.telegramId || ""}
-                  onChange={telegramId => setEditData(prev => ({ ...prev, telegramId }))}
-                  placeholder="Telegram id"
-                  statusText="Telegram — авторизация через telegram id"
-                />
-              </div>
-            </div>
-            <div className="flex gap-4 mt-4 w-full">
-              <button className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold shadow active:scale-95 transition-transform text-lg" onClick={handleSave}>Сохранить</button>
-              <button className="flex-1 py-3 rounded-xl bg-dark-bg/60 text-dark-muted font-semibold shadow active:scale-95 transition-transform text-lg" onClick={() => setEditOpen(false)}>Отмена</button>
-            </div>
+            ))}
           </div>
         </div>
-      )}
-      {/* Модалка редактирования поста */}
-      {editPost && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="bg-dark-card dark:bg-dark-card rounded-2xl shadow-2xl p-6 w-[90vw] max-w-md flex flex-col gap-4 animate-fade-in animate-scale-in">
-            <div className="text-lg font-bold mb-2 text-dark-text">Редактировать пост</div>
-            <textarea
-              className="w-full border-none rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none bg-dark-bg/60 text-dark-text shadow-inner"
-              rows={2}
-              placeholder="Текст поста"
-              value={editPostData.content}
-              onChange={e => setEditPostData({ ...editPostData, content: e.target.value })}
-            />
-            <div>
-              <div className="text-sm text-dark-muted mb-1">Теги:</div>
-              <InterestSelector
-                selected={editPostData.tags}
-                onChange={tags => setEditPostData(prev => ({ ...prev, tags }))}
+        {/* Модальное окно редактирования поста */}
+        {editPost && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+            <div className="bg-dark-card dark:bg-dark-card rounded-2xl shadow-2xl p-6 w-[90vw] max-w-md flex flex-col gap-4 animate-fade-in animate-scale-in">
+              <div className="text-lg font-bold mb-2 text-dark-text">Редактировать пост</div>
+              <textarea
+                className="w-full border-none rounded-xl px-4 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none bg-dark-bg/60 text-dark-text shadow-inner"
+                rows={2}
+                placeholder="Текст поста"
+                value={editPostData.content}
+                onChange={e => setEditPostData({ ...editPostData, content: e.target.value })}
               />
-            </div>
-            <div className="flex gap-2 mt-2">
-              <button
-                className="flex-1 py-2 rounded-xl bg-dark-accent text-white font-semibold shadow active:scale-95 transition-transform"
-                onClick={() => { onUpdatePost(editPost.id, editPostData.content, editPostData.tags); setEditPost(null); }}
-                disabled={!editPostData.content.trim() || editPostData.tags.length === 0}
-              >
-                Сохранить
-              </button>
-              <button
-                className="flex-1 py-2 rounded-xl bg-dark-bg/60 text-dark-muted font-semibold shadow active:scale-95 transition-transform"
-                onClick={() => setEditPost(null)}
-              >
-                Отмена
-              </button>
+              <div>
+                <div className="text-sm text-dark-muted mb-1">Теги:</div>
+                <InterestSelector
+                  selected={editPostData.tags}
+                  onChange={tags => setEditPostData(prev => ({ ...prev, tags }))}
+                />
+              </div>
+              <div className="flex gap-2 mt-2">
+                <button
+                  className="flex-1 py-2 rounded-xl bg-dark-accent text-white font-semibold shadow active:scale-95 transition-transform"
+                  onClick={() => { onUpdatePost(editPost.id, editPostData.content, editPostData.tags); setEditPost(null); }}
+                  disabled={!editPostData.content.trim() || editPostData.tags.length === 0}
+                >
+                  Сохранить
+                </button>
+                <button
+                  className="flex-1 py-2 rounded-xl bg-dark-bg/60 text-dark-muted font-semibold shadow active:scale-95 transition-transform"
+                  onClick={() => setEditPost(null)}
+                >
+                  Отмена
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-      {deletePostId !== null && (
-        <ConfirmModal
-          text="Вы уверены, что хотите удалить этот пост?"
-          onConfirm={() => { onDeletePost(deletePostId); setDeletePostId(null); }}
-          onCancel={() => setDeletePostId(null)}
-        />
-      )}
+        )}
+        {/* Модальное окно редактирования профиля */}
+        {editOpen && (
+          <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in" style={{ paddingTop: 60, paddingBottom: 60 }}>
+            <div className="bg-dark-card shadow-2xl w-full max-w-md p-8 relative animate-fade-in flex flex-col items-center gap-6" style={{ maxHeight: 'calc(100vh - 120px)', overflowY: 'auto' }}>
+              <button className="absolute top-4 right-4 text-3xl text-dark-muted hover:text-dark-text transition active:scale-110" onClick={() => setEditOpen(false)}>&times;</button>
+              <div className="relative mb-2">
+                <img src={avatarFile ? URL.createObjectURL(avatarFile) : (editData.avatarUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(editData.name || 'Профиль'))} alt="avatar" className="w-28 h-28 rounded-full object-cover border-4 border-white shadow-lg bg-dark-bg/80" />
+                <label className="absolute bottom-2 right-2 bg-dark-accent p-2 rounded-full shadow hover:scale-110 transition cursor-pointer" title="Сменить аватар">
+                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#fff" strokeWidth="1.5"/></svg>
+                  <input type="file" accept="image/*" className="hidden" onChange={e => setAvatarFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
+                </label>
+              </div>
+              <div className="w-full flex flex-col gap-3">
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-name">Имя и фамилия</label>
+                  <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
+                    <input id="profile-name" className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.name} onChange={e => setEditData({ ...editData, name: e.target.value })} placeholder="Имя и фамилия" maxLength={40} autoComplete="name" />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-country">Страна</label>
+                  <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
+                    <input id="profile-country" className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.country || ''} onChange={e => setEditData({ ...editData, country: e.target.value })} placeholder="Страна" maxLength={40} autoComplete="country" />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-city">Город</label>
+                  <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
+                    <input id="profile-city" className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.city || ''} onChange={e => setEditData({ ...editData, city: e.target.value })} placeholder="Город" maxLength={40} autoComplete="address-level2" />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-bio">О себе</label>
+                  <div className="flex items-start gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 4h16v16H4V4zm2 2v12h12V6H6zm2 2h8v8H8V8z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
+                    <textarea id="profile-bio" className="flex-1 bg-transparent outline-none text-base text-dark-text resize-none" value={editData.bio} onChange={e => setEditData({ ...editData, bio: e.target.value })} placeholder="Короткое био пользователя, интересы и стиль музыки" rows={3} maxLength={120} />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-dark-muted font-semibold mb-1">Интересы</label>
+                  <InterestSelector selected={editData.interests} onChange={interests => setEditData(prev => ({ ...prev, interests }))} />
+                </div>
+                <div className="flex flex-col gap-2 mt-2">
+                  <label className="text-xs text-dark-muted font-semibold mb-1">Соцсети</label>
+                  {/* VK */}
+                  <SocialLinkEdit
+                    label="VK"
+                    icon="🟦"
+                    value={editData.vkId || ""}
+                    onChange={vkId => setEditData(prev => ({ ...prev, vkId }))}
+                    placeholder="vk id"
+                    statusText="VK — авторизация через vk.id"
+                  />
+                  {/* YouTube */}
+                  <SocialLinkEdit
+                    label="YouTube"
+                    icon="▶️"
+                    value={editData.youtubeId || ""}
+                    onChange={youtubeId => setEditData(prev => ({ ...prev, youtubeId }))}
+                    placeholder="YouTube id"
+                    statusText="YouTube — авторизация через YouTube"
+                  />
+                  {/* Telegram */}
+                  <SocialLinkEdit
+                    label="Telegram"
+                    icon="✈️"
+                    value={editData.telegramId || ""}
+                    onChange={telegramId => setEditData(prev => ({ ...prev, telegramId }))}
+                    placeholder="Telegram id"
+                    statusText="Telegram — авторизация через telegram id"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-4 mt-4 w-full">
+                <button className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold shadow active:scale-95 transition-transform text-lg" onClick={handleSave}>Сохранить</button>
+                <button className="flex-1 py-3 rounded-xl bg-dark-bg/60 text-dark-muted font-semibold shadow active:scale-95 transition-transform text-lg" onClick={() => setEditOpen(false)}>Отмена</button>
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
     </main>
   );
 }
@@ -1376,7 +1323,7 @@ function App() {
           <Route path="/" element={<HomeFeed profile={profile!} allPosts={allPosts} friends={friends} onUserClick={handleUserClick} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} users={allUsers} />} />
           <Route path="/search" element={<Search profile={profile!} users={allUsers} friends={friends} favorites={favorites} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onToggleFavorite={handleToggleFavorite} onUserClick={handleUserClick} />} />
           <Route path="/friends" element={<Friends profile={profile!} friends={friends} users={allUsers} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onUserClick={handleUserClick} />} />
-          <Route path="/profile" element={<Profile profile={profile!} setProfile={setProfile} allPosts={allPosts} setAllPosts={setAllPosts} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} users={allUsers} setAllUsers={setAllUsers} />} />
+          <Route path="/profile" element={<Profile profile={profile!} setProfile={setProfile} allPosts={allPosts} setAllPosts={setAllPosts} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} users={allUsers} setAllUsers={setAllUsers} friends={friends} favorites={favorites} />} />
           <Route path="/user/:userName" element={<UserPageWrapper 
             allUsers={allUsers} 
             allPosts={allPosts} 
@@ -1483,12 +1430,9 @@ function UserPage({ user, posts, onBack, isFriend, isFavorite, onAddFriend, onRe
                   )}
                 </div>
                 <div className="font-medium text-dark-text text-sm cursor-pointer hover:underline">{post.author}</div>
+                <div className="text-xs text-dark-muted ml-auto">{new Date(post.createdAt).toLocaleDateString()}</div>
               </div>
               <div className="text-dark-text text-base mb-1 whitespace-pre-line">{post.content}</div>
-              <div style={{position: 'absolute', right: 16, bottom: 12}} className="flex gap-2 text-xs text-dark-muted">
-                <span><span role="img" aria-label="created">🕒</span> {new Date(post.createdAt).toLocaleString()}</span>
-                {post.updatedAt !== post.createdAt && <span><span role="img" aria-label="edited">✏️</span> {new Date(post.updatedAt).toLocaleString()}</span>}
-              </div>
               {post.attachmentUrl && (
                 <img src={post.attachmentUrl} alt="attachment" className="max-h-60 rounded-xl object-contain mb-2" />
               )}
@@ -1496,11 +1440,6 @@ function UserPage({ user, posts, onBack, isFriend, isFavorite, onAddFriend, onRe
                 {post.tags.map((tag, i) => (
                   <span key={i} className="px-2 py-0.5 bg-dark-bg/60 text-blue-700 rounded-full text-xs font-medium">{getInterestPath(tag)}</span>
                 ))}
-              </div>
-              <div className="flex gap-4 mt-1">
-                <button title={post.liked ? "Убрать лайк" : "Лайкнуть"} className={`p-2 rounded-full transition-colors ${post.liked ? 'bg-red-500 text-white' : 'bg-dark-bg/60 text-red-500 hover:bg-red-500 hover:text-white'}`} onClick={() => onLikePost(post.id)}>
-                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.5-9-9.5C1.5 8.5 3.5 5 7 5c2.5 0 3.5 2 5 2s2.5-2 5-2c3.5 0 5.5 3.5 4 6.5C18.5 15.5 12 21 12 21Z" stroke="currentColor" strokeWidth="1.5" fill={post.liked ? '#ef4444' : 'none'} /></svg>
-                </button>
               </div>
             </div>
           ))}
