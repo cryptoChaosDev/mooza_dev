@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { INTEREST_CATEGORIES } from "./categories";
+import "./scrollbar.css";
 
 interface InterestSelectorProps {
   selected: string[];
