@@ -92,7 +92,7 @@ function PostCard({ post, users, isOwn, onEdit, onDelete, onLike, onUserClick }:
   onEdit?: () => void,
   onDelete?: () => void,
   onLike?: () => void,
-  onUserClick?: () => void,
+  onUserClick?: (user: UserProfile) => void,
 }) {
   const user = users.find(u => u.userId === post.userId);
   return (
@@ -105,7 +105,7 @@ function PostCard({ post, users, isOwn, onEdit, onDelete, onLike, onUserClick }:
             <span role="img" aria-label="avatar">👤</span>
           )}
         </div>
-        <div className="font-semibold text-dark-text text-base cursor-pointer hover:underline truncate" onClick={onUserClick}>{user?.name || post.author}</div>
+        <div className="font-semibold text-dark-text text-base cursor-pointer hover:underline truncate" onClick={() => user && onUserClick && onUserClick(user)}>{user?.name || post.author}</div>
         <div className="flex gap-2 ml-auto">
           {isOwn && onEdit && (
             <button className="flex items-center gap-1 text-xs bg-accent-gradient text-white shadow-btn px-3 py-1 font-medium hover:opacity-90 active:scale-95 transition-all" onClick={onEdit}>
@@ -121,8 +121,8 @@ function PostCard({ post, users, isOwn, onEdit, onDelete, onLike, onUserClick }:
       </div>
       <div className="text-dark-text text-lg mb-1 whitespace-pre-line leading-relaxed font-normal">{post.content}</div>
       <div style={{position: 'absolute', right: 16, bottom: 12}} className="flex gap-2 text-xs text-dark-muted">
-        <span><span role="img" aria-label="created">🕒</span> {new Date(post.createdAt).toLocaleString()}</span>
-        {post.updatedAt !== post.createdAt && <span><span role="img" aria-label="edited">✏️</span> {new Date(post.updatedAt).toLocaleString()}</span>}
+        <span><span role="img" aria-label="created">🕒</span> {formatPostDate(post.createdAt)}</span>
+        {post.updatedAt !== post.createdAt && <span><span role="img" aria-label="edited">✏️</span> {formatPostDate(post.updatedAt)}</span>}
       </div>
       {post.attachmentUrl && (
         <img src={post.attachmentUrl} alt="attachment" className="max-h-60 rounded-xl object-contain mb-2 animate-fade-in animate-scale-in" />
@@ -614,7 +614,7 @@ function UserCard({ user, posts, isFriend, isFavorite, onAddFriend, onRemoveFrie
                     )}
                   </div>
                   <div className="font-medium text-dark-text text-sm cursor-pointer hover:underline">{post.author}</div>
-                  <div className="text-xs text-dark-muted ml-auto">{new Date(post.createdAt).toLocaleDateString()}</div>
+                  <div className="text-xs text-dark-muted ml-auto">{formatPostDate(post.createdAt)}</div>
                 </div>
                 <div className="text-dark-text text-base mb-1 whitespace-pre-line">{post.content}</div>
                 {post.attachmentUrl && (
@@ -773,8 +773,14 @@ function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLik
                       <span role="img" aria-label="avatar">👤</span>
                     )}
                   </div>
-                  <div className="font-medium text-dark-text text-sm cursor-pointer hover:underline">{post.author}</div>
-                  <div className="text-xs text-dark-muted ml-auto">{new Date(post.createdAt).toLocaleDateString()}</div>
+                  <div className="font-medium text-dark-text text-sm cursor-pointer hover:underline" onClick={() => {
+                    const u = users.find(u => u.userId === post.userId);
+                    if (u) onUserClick(u);
+                  }}>{(() => {
+                    const u = users.find(u => u.userId === post.userId);
+                    return u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : post.author;
+                  })()}</div>
+                  <div className="text-xs text-dark-muted ml-auto">{formatPostDate(post.createdAt)}</div>
                   {/* Кнопки редактирования/удаления только для своих постов */}
                   {post.userId === profile.userId && (
                     <>
@@ -789,8 +795,8 @@ function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLik
                 </div>
                 <div className="text-dark-text text-base mb-1 whitespace-pre-line">{post.content}</div>
                 <div style={{position: 'absolute', right: 16, bottom: 12}} className="flex gap-2 text-xs text-dark-muted">
-                  <span><span role="img" aria-label="created">🕒</span> {new Date(post.createdAt).toLocaleString()}</span>
-                  {post.updatedAt !== post.createdAt && <span><span role="img" aria-label="edited">✏️</span> {new Date(post.updatedAt).toLocaleString()}</span>}
+                  <span><span role="img" aria-label="created">🕒</span> {formatPostDate(post.createdAt)}</span>
+                  {post.updatedAt !== post.createdAt && <span><span role="img" aria-label="edited">✏️</span> {formatPostDate(post.updatedAt)}</span>}
                 </div>
                 {post.attachmentUrl && (
                   <img src={post.attachmentUrl} alt="attachment" className="max-h-60 rounded-xl object-contain mb-2" />
@@ -865,7 +871,106 @@ function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLik
   );
 }
 
-function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onUpdatePost, onDeletePost, onLikePost, users, setAllUsers, friends, favorites }: {
+// Новый универсальный компонент для отображения профиля
+function ProfileView({ profile, editable, onEdit }: { profile: UserProfile, editable?: boolean, onEdit?: () => void }) {
+  // Собираем массив соцсетей: сначала из socials, если пусто — из vkId/youtubeId/telegramId
+  let socialLinks: { url: string; label: string }[] = [];
+  if (profile.socials && profile.socials.length > 0) {
+    socialLinks = profile.socials.filter(Boolean).map(url => ({ url, label: url }));
+  }
+  if (profile.vkId) socialLinks.push({ url: profile.vkId.startsWith('http') ? profile.vkId : `https://vk.com/${profile.vkId}`, label: 'VK' });
+  if (profile.youtubeId) socialLinks.push({ url: profile.youtubeId.startsWith('http') ? profile.youtubeId : `https://youtube.com/@${profile.youtubeId}`, label: 'YouTube' });
+  if (profile.telegramId) socialLinks.push({ url: profile.telegramId.startsWith('http') ? profile.telegramId : `https://t.me/${profile.telegramId}`, label: 'Telegram' });
+
+  return (
+    <div className="flex flex-col items-center gap-4 w-full max-w-md px-2 py-6">
+      {/* Аватар и имя + кнопка редактирования */}
+      <div className="flex flex-col items-center gap-1 w-full relative">
+        <div className="relative w-28 h-28 mb-2 mx-auto">
+          <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-lg bg-dark-bg/80 flex items-center justify-center">
+            {profile.avatarUrl ? (
+              <img src={profile.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
+            ) : (
+              <span role="img" aria-label="avatar" className="text-5xl">👤</span>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center justify-center w-full mt-2">
+          <div className="font-bold text-2xl sm:text-3xl text-dark-text text-center break-words leading-tight flex-1 text-center">{profile.firstName} {profile.lastName}</div>
+          {editable && (
+            <button
+              className="ml-2 p-2 rounded-full bg-dark-bg/60 hover:bg-dark-accent/10 text-dark-accent transition-colors shadow focus:outline-none"
+              title="Редактировать профиль"
+              onClick={onEdit}
+              style={{height: 40, width: 40, minWidth: 40, minHeight: 40}}
+            >
+              <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#3b82f6" strokeWidth="1.5"/></svg>
+            </button>
+          )}
+        </div>
+        {(profile.city || profile.country) && (
+          <div className="text-blue-700 text-sm">{[profile.city, profile.country].filter(Boolean).join(', ')}</div>
+        )}
+      </div>
+      {/* О себе */}
+      {profile.bio && (
+        <div className="w-full mt-4">
+          <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">О себе</div>
+          <div className="text-base text-dark-text text-center whitespace-pre-line font-normal mb-2">{profile.bio}</div>
+        </div>
+      )}
+      {/* Место работы */}
+      {profile.workPlace && (
+        <div className="w-full mt-2">
+          <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Место работы</div>
+          <div className="text-dark-muted text-sm text-center mb-2">{profile.workPlace}</div>
+        </div>
+      )}
+      {/* Навыки */}
+      {profile.skills?.length > 0 && (
+        <div className="w-full mt-2">
+          <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Навыки</div>
+          <div className="flex flex-wrap gap-2 justify-center">
+            {profile.skills.map((skill, i) => (
+              <span key={i} className="px-3 py-1 rounded-full text-xs font-medium border-none shadow-sm bg-gradient-to-r from-blue-500 to-cyan-400 text-white">{getInterestPath(skill)}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Интересы */}
+      {profile.interests?.length > 0 && (
+        <div className="w-full mt-2">
+          <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Интересы</div>
+          <div className="flex flex-wrap gap-2 justify-center">
+            {profile.interests.map((interest, i) => (
+              <span key={i} className="px-3 py-1 rounded-full text-xs font-medium border-none shadow-sm bg-cyan-100 text-cyan-800">{getInterestPath(interest)}</span>
+            ))}
+          </div>
+        </div>
+      )}
+      {/* Портфолио */}
+      {profile.portfolio && (profile.portfolio.text || profile.portfolio.fileUrl) && (
+        <div className="w-full mt-2 flex flex-col items-center">
+          <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Портфолио</div>
+          {profile.portfolio.text && <div className="text-dark-text text-sm text-center whitespace-pre-line mb-1">{profile.portfolio.text}</div>}
+          {profile.portfolio.fileUrl && (
+            <a href={profile.portfolio.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline text-xs">Скачать вложение</a>
+          )}
+        </div>
+      )}
+      {/* Контакты */}
+      {(profile.phone || profile.email) && (
+        <div className="w-full mt-2 flex flex-col items-center">
+          <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Контакты</div>
+          {profile.phone && <div className="text-dark-text text-sm">📞 <a href={`tel:${profile.phone}`} className="text-blue-500 underline">{profile.phone}</a></div>}
+          {profile.email && <div className="text-dark-text text-sm">✉️ <a href={`mailto:${profile.email}`} className="text-blue-500 underline">{profile.email}</a></div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onUpdatePost, onDeletePost, onLikePost, users, setAllUsers, friends, favorites, onUserClick }: {
   profile: UserProfile,
   setProfile: (p: UserProfile) => void,
   allPosts: Post[],
@@ -878,6 +983,7 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
   setAllUsers: React.Dispatch<React.SetStateAction<UserProfile[]>>,
   friends: string[],
   favorites: string[],
+  onUserClick: (user: UserProfile) => void,
 }) {
   const [editOpen, setEditOpen] = useState(false);
   const [editData, setEditData] = useState<UserProfile>({
@@ -988,15 +1094,6 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
     return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#888"/></svg>;
   };
 
-  // Собираем массив соцсетей: сначала из socials, если пусто — из vkId/youtubeId/telegramId
-  let socialLinks: { url: string; label: string }[] = [];
-  if (profile.socials && profile.socials.length > 0) {
-    socialLinks = profile.socials.filter(Boolean).map(url => ({ url, label: url }));
-  }
-  if (profile.vkId) socialLinks.push({ url: profile.vkId.startsWith('http') ? profile.vkId : `https://vk.com/${profile.vkId}`, label: 'VK' });
-  if (profile.youtubeId) socialLinks.push({ url: profile.youtubeId.startsWith('http') ? profile.youtubeId : `https://youtube.com/@${profile.youtubeId}`, label: 'YouTube' });
-  if (profile.telegramId) socialLinks.push({ url: profile.telegramId.startsWith('http') ? profile.telegramId : `https://t.me/${profile.telegramId}`, label: 'Telegram' });
-
   // --- Валидация полей ---
   function validateField(field: string, value: any) {
     switch (field) {
@@ -1059,94 +1156,7 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
     <main className="flex flex-col items-center min-h-[100dvh] pt-20 bg-dark-bg w-full flex-1" style={{ paddingBottom: 'calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px))' }}>
       <section className="w-full max-w-md flex flex-col gap-4 animate-fade-in">
         {/* Минималистичный профиль Mooza */}
-        <div className="flex flex-col items-center gap-4 w-full max-w-md px-2 py-6">
-          {/* Аватар и имя + кнопка редактирования */}
-          <div className="flex flex-col items-center gap-1 w-full relative">
-            <div className="relative w-28 h-28 mb-2 mx-auto">
-              <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-lg bg-dark-bg/80 flex items-center justify-center">
-                {profile.avatarUrl ? (
-                  <img src={profile.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
-                ) : (
-                  <span role="img" aria-label="avatar" className="text-5xl">👤</span>
-                )}
-              </div>
-            </div>
-            <div className="flex items-center justify-center w-full mt-2">
-              <div className="font-bold text-2xl sm:text-3xl text-dark-text text-center break-words leading-tight flex-1">{profile.firstName} {profile.lastName}</div>
-              <button
-                className="ml-2 p-2 rounded-full bg-dark-bg/60 hover:bg-dark-accent/10 text-dark-accent transition-colors shadow focus:outline-none"
-                title="Редактировать профиль"
-                onClick={() => setEditOpen(true)}
-                style={{height: 40, width: 40, minWidth: 40, minHeight: 40}}
-              >
-                <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#3b82f6" strokeWidth="1.5"/></svg>
-              </button>
-            </div>
-            {(profile.city || profile.country) && (
-              <div className="text-blue-700 text-sm">{[profile.city, profile.country].filter(Boolean).join(', ')}</div>
-            )}
-          </div>
-
-          {/* О себе */}
-          {profile.bio && (
-            <div className="w-full mt-4">
-              <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">О себе</div>
-              <div className="text-base text-dark-text text-center whitespace-pre-line font-normal mb-2">{profile.bio}</div>
-            </div>
-          )}
-
-          {/* Место работы */}
-          {profile.workPlace && (
-            <div className="w-full mt-2">
-              <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Место работы</div>
-              <div className="text-dark-muted text-sm text-center mb-2">{profile.workPlace}</div>
-            </div>
-          )}
-
-          {/* Навыки */}
-          {profile.skills?.length > 0 && (
-            <div className="w-full mt-2">
-              <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Навыки</div>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {profile.skills.map((skill, i) => (
-                  <span key={i} className="px-3 py-1 rounded-full text-xs font-medium border-none shadow-sm bg-gradient-to-r from-blue-500 to-cyan-400 text-white">{getInterestPath(skill)}</span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Интересы */}
-          {profile.interests?.length > 0 && (
-            <div className="w-full mt-2">
-              <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Интересы</div>
-              <div className="flex flex-wrap gap-2 justify-center">
-                {profile.interests.map((interest, i) => (
-                  <span key={i} className="px-3 py-1 rounded-full text-xs font-medium border-none shadow-sm bg-cyan-100 text-cyan-800">{getInterestPath(interest)}</span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Портфолио */}
-          {profile.portfolio && (profile.portfolio.text || profile.portfolio.fileUrl) && (
-            <div className="w-full mt-2 flex flex-col items-center">
-              <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Портфолио</div>
-              {profile.portfolio.text && <div className="text-dark-text text-sm text-center whitespace-pre-line mb-1">{profile.portfolio.text}</div>}
-              {profile.portfolio.fileUrl && (
-                <a href={profile.portfolio.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline text-xs">Скачать вложение</a>
-              )}
-            </div>
-          )}
-
-          {/* Контакты */}
-          {(profile.phone || profile.email) && (
-            <div className="w-full mt-2 flex flex-col items-center">
-              <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Контакты</div>
-              {profile.phone && <div className="text-dark-text text-sm">📞 <a href={`tel:${profile.phone}`} className="text-blue-500 underline">{profile.phone}</a></div>}
-              {profile.email && <div className="text-dark-text text-sm">✉️ <a href={`mailto:${profile.email}`} className="text-blue-500 underline">{profile.email}</a></div>}
-            </div>
-          )}
-        </div>
+        <ProfileView profile={profile} editable onEdit={() => setEditOpen(true)} />
         {/* Кнопка создать пост */}
         <div className="flex justify-end mt-4">
           <button className="p-3 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:opacity-90 active:scale-95 transition-all" title="Создать пост" onClick={() => setShowCreate(v => !v)}>
@@ -1207,8 +1217,14 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
                       <span role="img" aria-label="avatar">👤</span>
                     )}
                   </div>
-                  <div className="font-medium text-dark-text text-sm cursor-pointer hover:underline">{post.author}</div>
-                  <div className="text-xs text-dark-muted ml-auto">{new Date(post.createdAt).toLocaleDateString()}</div>
+                  <div className="font-medium text-dark-text text-sm cursor-pointer hover:underline" onClick={() => {
+                    const u = users.find(u => u.userId === post.userId);
+                    if (u) onUserClick(u);
+                  }}>{(() => {
+                    const u = users.find(u => u.userId === post.userId);
+                    return u ? `${u.firstName || ''} ${u.lastName || ''}`.trim() : post.author;
+                  })()}</div>
+                  <div className="text-xs text-dark-muted ml-auto">{formatPostDate(post.createdAt)}</div>
                   {/* Кнопки редактирования/удаления только для своих постов */}
                   {post.userId === profile.userId && (
                     <>
@@ -1641,7 +1657,7 @@ function App() {
       {
         id: Date.now(),
         userId: profile!.userId,
-        author: profile!.name,
+        author: `${profile!.firstName} ${profile!.lastName}`.trim(),
         avatarUrl: profile!.avatarUrl,
         content,
         tags,
@@ -1686,7 +1702,7 @@ function App() {
           <Route path="/" element={<HomeFeed profile={profile!} allPosts={allPosts} friends={friends} onUserClick={handleUserClick} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} users={allUsers} />} />
           <Route path="/search" element={<Search profile={profile!} users={allUsers} friends={friends} favorites={favorites} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onToggleFavorite={handleToggleFavorite} onUserClick={handleUserClick} />} />
           <Route path="/friends" element={<Friends profile={profile!} friends={friends} users={allUsers} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onUserClick={handleUserClick} />} />
-          <Route path="/profile" element={<Profile profile={profile!} setProfile={setProfile} allPosts={allPosts} setAllPosts={setAllPosts} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} users={allUsers} setAllUsers={setAllUsers} friends={friends} favorites={favorites} />} />
+          <Route path="/profile" element={<Profile profile={profile!} setProfile={setProfile} allPosts={allPosts} setAllPosts={setAllPosts} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} users={allUsers} setAllUsers={setAllUsers} friends={friends} favorites={favorites} onUserClick={handleUserClick} />} />
           <Route path="/user/:userName" element={<UserPageWrapper 
             allUsers={allUsers} 
             allPosts={allPosts} 
@@ -1749,38 +1765,10 @@ function UserPage({ user, posts, onBack, isFriend, isFavorite, onAddFriend, onRe
           <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
           Назад
         </button>
-        <div className="bg-dark-card dark:bg-dark-card rounded-2xl shadow-xl p-6 flex flex-col items-center gap-3 animate-fade-in animate-scale-in">
-          <div className="avatar-gradient mx-auto mt-2 mb-2">
-            <div className="avatar-inner w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg flex items-center justify-center">
-              {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
-              ) : (
-                <span role="img" aria-label="avatar" className="text-5xl">👤</span>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center justify-center gap-2 w-full">
-            <div className="font-bold text-2xl sm:text-3xl text-dark-text text-center break-words flex-1" style={{fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif'}}>{user.name}</div>
-          </div>
-          {(user.country || user.city) && <div className="text-blue-700 text-xs font-medium">{[user.country, user.city].filter(Boolean).join(', ')}</div>}
-          <div className="text-dark-muted text-base text-center max-w-xs whitespace-pre-line break-words mb-2">{user.bio}</div>
-          <div className="flex flex-wrap gap-2 mt-2 justify-center">
-            {user.interests.filter(Boolean).map((interest, i) => (
-              <span key={i} className="px-3 py-1 rounded-full text-xs font-medium border-none transition-all shadow-sm focus:outline-none bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white">{getInterestPath(interest)}</span>
-            ))}
-          </div>
-          {user.socials && user.socials.filter(Boolean).length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-2 justify-center">
-              {user.socials?.filter(Boolean).map((link, i) => (
-                <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-dark-bg/60 hover:bg-dark-accent/10 transition-colors shadow text-dark-text" title={link} tabIndex={0}>
-                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/></svg>
-                </a>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="flex flex-col gap-3 mt-4">
-          <div className="font-semibold text-base mb-2 text-dark-text pl-2">Посты пользователя</div>
+        <ProfileView profile={user} />
+        {/* Посты пользователя */}
+        <div className="font-semibold text-lg mb-2 text-dark-text pl-2">Посты пользователя</div>
+        <div className="flex flex-col gap-4 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
           {posts.length === 0 && <div className="text-dark-muted text-center">Нет постов</div>}
           {posts.map((post) => (
             <div key={post.id} className="relative bg-dark-card rounded-2xl shadow p-4 flex flex-col gap-2 animate-fade-in animate-scale-in">
@@ -1793,7 +1781,7 @@ function UserPage({ user, posts, onBack, isFriend, isFavorite, onAddFriend, onRe
                   )}
                 </div>
                 <div className="font-medium text-dark-text text-sm cursor-pointer hover:underline">{post.author}</div>
-                <div className="text-xs text-dark-muted ml-auto">{new Date(post.createdAt).toLocaleDateString()}</div>
+                <div className="text-xs text-dark-muted ml-auto">{formatPostDate(post.createdAt)}</div>
               </div>
               <div className="text-dark-text text-base mb-1 whitespace-pre-line">{post.content}</div>
               {post.attachmentUrl && (
@@ -1865,5 +1853,24 @@ function SocialLinkEdit({ label, icon, value, onChange, placeholder, statusText 
       )}
     </div>
   );
+}
+
+// Функция форматирования даты поста (разместить сразу после импортов)
+function formatPostDate(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  const time = `${hours}:${minutes}`;
+  const isToday = date.toDateString() === now.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = date.toDateString() === yesterday.toDateString();
+  if (isToday) return `Сегодня в ${time}`;
+  if (isYesterday) return `Вчера в ${time}`;
+  // Формат: 5 июня в 12:00
+  const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+  return `${date.getDate()} ${months[date.getMonth()]} в ${time}`;
 }
 
