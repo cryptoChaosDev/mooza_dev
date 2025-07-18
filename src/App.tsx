@@ -363,201 +363,93 @@ function Search({ profile, users, friends, favorites, onAddFriend, onRemoveFrien
     </main>
   );
 }
-function Friends({ profile, friends, favorites, users, onUserClick, onAddFriend, onRemoveFriend, onToggleFavorite }: {
+function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, onUserClick }: {
   profile: UserProfile,
   friends: string[],
-  favorites: string[],
   users: UserProfile[],
+  onAddFriend: (userId: string) => void,
+  onRemoveFriend: (userId: string) => void,
   onUserClick: (user: UserProfile) => void,
-  onAddFriend: (name: string) => void,
-  onRemoveFriend: (name: string) => void,
-  onToggleFavorite: (name: string) => void,
 }) {
-  const [search, setSearch] = useState("");
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([]);
-  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
-  const [subcategoryDropdownOpen, setSubcategoryDropdownOpen] = useState(false);
-  const [tagSearch, setTagSearch] = useState("");
-  const [view, setView] = useState<'friends' | 'favorites' | 'recommended'>("friends");
-  const [sortBy, setSortBy] = useState<'name' | 'city' | 'country' | 'match'>('name');
-
-  let filterTags: string[] = [];
-  if (selectedCategories.length > 0) {
-    INTEREST_CATEGORIES.forEach(cat => {
-      if (selectedCategories.includes(cat.category)) {
-        if (selectedSubcategories.length > 0) {
-          cat.subcategories.forEach(sub => {
-            if (selectedSubcategories.includes(sub.name)) {
-              filterTags.push(...sub.tags);
-            }
-          });
-        } else {
-          filterTags.push(...cat.subcategories.flatMap(s => s.tags));
-        }
-      }
-    });
-  }
-
-  let filteredUsers = users.filter(u =>
-    (!search || u.name.toLowerCase().includes(search.toLowerCase())) &&
-    (filterTags.length === 0 || u.interests.some(tag => filterTags.includes(tag))) &&
-    ((view === 'friends' && friends.includes(u.userId)) || (view === 'favorites' && favorites.includes(u.userId)))
-  );
-
-  let recommendedUsers: UserProfile[] = [];
-  if (view === 'recommended') {
-    recommendedUsers = users
-      .filter(u => !friends.includes(u.name) && !favorites.includes(u.name) && u.name !== profile.name)
-      .map(u => ({ ...u, matchCount: u.interests.filter(tag => profile.interests.includes(tag)).length }))
-      .filter(u => u.matchCount > 0)
-      .sort((a, b) => b.matchCount - a.matchCount);
-  }
-
-  const sortedUsers = [...filteredUsers].sort((a, b) => {
-    if (sortBy === 'name') return a.name.localeCompare(b.name, 'ru');
-    if (sortBy === 'city') return (a.city || '').localeCompare(b.city || '', 'ru');
-    if (sortBy === 'country') return (a.country || '').localeCompare(b.country || '', 'ru');
-    if (sortBy === 'match') {
-      const aMatch = a.interests.filter(tag => profile.interests.includes(tag)).length;
-      const bMatch = b.interests.filter(tag => profile.interests.includes(tag)).length;
-      return bMatch - aMatch;
-    }
-    return 0;
-  });
-  const sortedRecommended = recommendedUsers
+  // Кандидаты в друзья по совпадению интересов (не в друзьях)
+  const candidates = users
+    .filter(u => u.userId !== profile.userId && !friends.includes(u.userId))
     .map(u => ({ ...u, matchCount: u.interests.filter(tag => profile.interests.includes(tag)).length }))
-    .sort((a, b) => {
-      if (sortBy === 'name') return a.name.localeCompare(b.name, 'ru');
-      if (sortBy === 'city') return (a.city || '').localeCompare(b.city || '', 'ru');
-      if (sortBy === 'country') return (a.country || '').localeCompare(b.country || '', 'ru');
-      if (sortBy === 'match') return b.matchCount - a.matchCount;
-      return 0;
-    });
+    .filter(u => u.matchCount > 0)
+    .sort((a, b) => b.matchCount - a.matchCount);
+  const [hidden, setHidden] = useState<string[]>([]);
+  const nextCandidate = candidates.find(u => !hidden.includes(u.userId));
+
+  // Список друзей
+  const friendList = users.filter(u => friends.includes(u.userId));
 
   return (
     <main className="p-4 sm:p-6 pt-20 min-h-[100dvh] bg-dark-bg flex flex-col items-center font-sans animate-fade-in transition-all duration-300 w-full flex-1" style={{ paddingBottom: 'calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px))' }}>
       <section className="w-full max-w-md flex flex-col gap-6">
-        <div className="flex flex-col gap-2 animate-fade-in mb-2">
-          <div className="flex gap-2 mb-2">
-            <button className={`px-4 py-1 rounded-full text-xs font-semibold border-none transition-all ${view === 'friends' ? 'bg-dark-accent text-white' : 'bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white'} shadow-sm active:scale-95`} onClick={() => setView('friends')}>Друзья</button>
-            <button className={`px-4 py-1 rounded-full text-xs font-semibold border-none transition-all ${view === 'favorites' ? 'bg-yellow-400 text-white' : 'bg-dark-bg/60 text-dark-muted hover:bg-yellow-400 hover:text-white'} shadow-sm active:scale-95`} onClick={() => setView('favorites')}>Избранные</button>
-            <button className={`px-4 py-1 rounded-full text-xs font-semibold border-none transition-all ${view === 'recommended' ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white' : 'bg-dark-bg/60 text-dark-muted hover:bg-blue-500/20 hover:text-blue-500'} shadow-sm active:scale-95`} onClick={() => setView('recommended')}>Рекомендованные</button>
+        {/* Верхний блок — рекомендация друга */}
+        {nextCandidate && (
+          <div className="bg-dark-card rounded-2xl shadow-card p-4 flex items-center gap-4 animate-fade-in animate-scale-in border border-dark-bg/40 cursor-pointer hover:bg-dark-bg/80 transition group" onClick={e => {
+            if ((e.target as HTMLElement).closest('button')) return;
+            onUserClick(nextCandidate);
+          }}>
+            <div className="w-14 h-14 rounded-full bg-dark-bg/80 flex items-center justify-center text-2xl border border-dark-bg/40 overflow-hidden">
+              {nextCandidate.avatarUrl ? (
+                <img src={nextCandidate.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
+              ) : (
+                <span role="img" aria-label="avatar">👤</span>
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-dark-text text-base truncate">{nextCandidate.name}</div>
+              <div className="text-xs text-dark-muted truncate">Совпадений: {nextCandidate.matchCount}</div>
+              <div className="flex flex-wrap gap-1 mt-1">
+                {nextCandidate.interests.filter(tag => profile.interests.includes(tag)).map(tag => (
+                  <span key={tag} className="px-2 py-0.5 rounded-full text-xs font-medium bg-gradient-to-r from-blue-500 to-cyan-400 text-white border-none shadow-sm animate-fade-in">
+                    {getInterestPath(tag)}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 items-end ml-2">
+              <button className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:opacity-90 active:scale-95 transition-all" title="Добавить в друзья" onClick={e => { e.stopPropagation(); onAddFriend(nextCandidate.userId); }}>
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5" stroke="currentColor" strokeWidth="1.5"/></svg>
+              </button>
+              <button className="p-2 rounded-full bg-dark-bg/60 text-dark-muted shadow hover:bg-dark-accent/10 hover:text-dark-accent active:scale-95 transition-all" title="Скрыть" onClick={e => { e.stopPropagation(); setHidden(h => [...h, nextCandidate.userId]); }}>
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="1.5"/></svg>
+              </button>
+              <button className="p-2 rounded-full bg-dark-bg/60 text-dark-accent shadow hover:bg-blue-500/10 hover:text-blue-500 active:scale-95 transition-all" title="Написать" onClick={e => e.stopPropagation()}>
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M4 20l16-8-16-8v6h12v4H4v6z" stroke="currentColor" strokeWidth="1.5"/></svg>
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-xs text-dark-muted">Сортировать:</span>
-            <select className="px-2 py-1 rounded bg-dark-bg/60 text-dark-text text-xs" value={sortBy} onChange={e => setSortBy(e.target.value as any)}>
-              <option value="name">По имени</option>
-              <option value="city">По городу</option>
-              <option value="country">По стране</option>
-              <option value="match">По совпадению интересов</option>
-            </select>
-          </div>
-        </div>
-        {view === 'recommended' ? (
-          <>
-            <div className="text-2xl font-bold mb-4 text-dark-text pl-2">Рекомендованные друзья</div>
-            {sortedRecommended.length === 0 && (
-              <div className="text-dark-muted text-center py-8">Нет подходящих рекомендаций</div>
-            )}
-            {sortedRecommended.map((user) => (
-              <div key={user.userId} className="bg-dark-card rounded-2xl shadow-card p-4 flex flex-col gap-2 mb-3 animate-fade-in animate-scale-in">
-                <div className="flex items-center gap-3 mb-1">
-                  <div className="w-10 h-10 rounded-full bg-dark-bg/80 flex items-center justify-center text-2xl border border-dark-bg/40 overflow-hidden cursor-pointer" onClick={() => onUserClick(user)}>
-                    {user.avatarUrl ? (
-                      <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
-                    ) : (
-                      <span role="img" aria-label="avatar">👤</span>
-                    )}
-                  </div>
-                  <div className="font-semibold text-dark-text text-base cursor-pointer hover:underline truncate flex-1" onClick={() => onUserClick(user)}>{user.name}</div>
-                  <div className="flex gap-2 ml-2">
-                    <button title="Добавить в друзья" className="p-2 rounded-full bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white transition-colors" onClick={() => onAddFriend(user.userId)}>
-                      <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5" stroke="currentColor" strokeWidth="1.5"/></svg>
-                    </button>
-                    <button
-                      title={favorites.includes(user.userId) ? "Убрать из избранного" : "В избранное"}
-                      className={`p-2 rounded-full transition-colors ${favorites.includes(user.userId) ? 'bg-yellow-400 text-white' : 'bg-dark-bg/60 text-yellow-400 hover:bg-yellow-400 hover:text-white'}`}
-                      onClick={() => onToggleFavorite(user.userId)}
-                    >
-                      <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" stroke="currentColor" strokeWidth="1.5" fill={favorites.includes(user.userId) ? '#fbbf24' : 'none'} /></svg>
-                    </button>
-                  </div>
-                </div>
-                <div className="text-dark-muted text-sm truncate mb-1">{user.bio}</div>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {user.interests.map((tag, i) => {
-                    const isMatch = profile.interests && profile.interests.includes(tag);
-                    return (
-                      <span
-                        key={i}
-                        className={`px-3 py-0.5 rounded-full text-xs font-medium border-none transition-all shadow-sm focus:outline-none animate-fade-in
-                          ${isMatch ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white scale-105' : 'bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white'}`}
-                      >
-                        {getInterestPath(tag)}
-                        {isMatch && <span className="ml-1">★</span>}
-                      </span>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </>
-        ) : (
-          <>
-            <div className="text-2xl font-bold mb-4 text-dark-text pl-2">{view === 'friends' ? 'Мои друзья' : 'Избранные пользователи'}</div>
-            {sortedUsers.length === 0 && (
-              <div className="text-dark-muted text-center py-8">
-                {view === 'friends' ? 'У вас пока нет друзей' : 'В избранном пока никого нет'}
-              </div>
-            )}
-            {sortedUsers.map((user) => (
-              <div key={user.userId} className="bg-dark-card rounded-2xl shadow-card p-4 flex flex-col gap-2 mb-3 animate-fade-in animate-scale-in">
-                <div className="flex items-center gap-3 mb-1">
-                  <div className="w-10 h-10 rounded-full bg-dark-bg/80 flex items-center justify-center text-2xl border border-dark-bg/40 overflow-hidden cursor-pointer" onClick={() => onUserClick(user)}>
-                    {user.avatarUrl ? (
-                      <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
-                    ) : (
-                      <span role="img" aria-label="avatar">👤</span>
-                    )}
-                  </div>
-                  <div className="font-semibold text-dark-text text-base cursor-pointer hover:underline truncate flex-1" onClick={() => onUserClick(user)}>{user.name}</div>
-                  <div className="flex gap-2 ml-2">
-                    {friends.includes(user.userId) ? (
-                      <button title="Удалить из друзей" className="p-2 rounded-full bg-dark-bg/60 text-dark-accent hover:bg-dark-accent/10 transition-colors" onClick={() => onRemoveFriend(user.userId)}>
-                        <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="#ef4444" strokeWidth="1.5"/></svg>
-                      </button>
-                    ) : (
-                      <button title="Добавить в друзья" className="p-2 rounded-full bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white transition-colors" onClick={() => onAddFriend(user.userId)}>
-                        <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5" stroke="currentColor" strokeWidth="1.5"/></svg>
-                      </button>
-                    )}
-                    <button
-                      title={favorites.includes(user.userId) ? "Убрать из избранного" : "В избранное"}
-                      className={`p-2 rounded-full transition-colors ${favorites.includes(user.userId) ? 'bg-yellow-400 text-white' : 'bg-dark-bg/60 text-yellow-400 hover:bg-yellow-400 hover:text-white'}`}
-                      onClick={() => onToggleFavorite(user.userId)}
-                    >
-                      <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" stroke="currentColor" strokeWidth="1.5" fill={favorites.includes(user.userId) ? '#fbbf24' : 'none'} /></svg>
-                    </button>
-                  </div>
-                </div>
-                <div className="text-dark-muted text-sm truncate mb-1">{user.bio}</div>
-                <div className="flex flex-wrap gap-2 mt-1">
-                  {user.interests.map((tag, i) => (
-                    <span
-                      key={i}
-                      className={`px-3 py-0.5 rounded-full text-xs font-medium border-none transition-all shadow-sm focus:outline-none animate-fade-in
-                        ${profile.interests && profile.interests.includes(tag) ? 'bg-dark-accent text-white' : 'bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white'}`}
-                    >
-                      {getInterestPath(tag)}
-                      {profile.interests && profile.interests.includes(tag) && <span className="ml-1">★</span>}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </>
         )}
+        {/* Нижний блок — список друзей */}
+        <div className="flex flex-col gap-3">
+          <div className="text-lg font-bold text-dark-text mb-2">Мои друзья</div>
+          {friendList.length === 0 && <div className="text-dark-muted text-center py-8">У вас пока нет друзей</div>}
+          {friendList.map(user => (
+            <div key={user.userId} className="bg-dark-card rounded-2xl shadow-card p-3 flex items-center gap-4 border border-dark-bg/40 animate-fade-in animate-scale-in cursor-pointer hover:bg-dark-bg/80 transition" onClick={() => onUserClick(user)}>
+              <div className="w-12 h-12 rounded-full bg-dark-bg/80 flex items-center justify-center text-2xl border border-dark-bg/40 overflow-hidden">
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
+                ) : (
+                  <span role="img" aria-label="avatar">👤</span>
+                )}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-dark-text text-base truncate">{user.name}</div>
+              </div>
+              <div className="flex gap-2 items-center ml-2">
+                <button className="p-2 rounded-full bg-dark-bg/60 text-dark-accent shadow hover:bg-blue-500/10 hover:text-blue-500 active:scale-95 transition-all" title="Написать" onClick={e => e.stopPropagation()}>
+                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M4 20l16-8-16-8v6h12v4H4v6z" stroke="currentColor" strokeWidth="1.5"/></svg>
+                </button>
+                <button className="p-2 rounded-full bg-dark-bg/60 text-red-400 shadow hover:bg-red-500/10 hover:text-red-500 active:scale-95 transition-all" title="Удалить" onClick={e => { e.stopPropagation(); onRemoveFriend(user.userId); }}>
+                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12ZM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4Z" stroke="currentColor" strokeWidth="1.5"/></svg>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
     </main>
   );
@@ -1483,7 +1375,7 @@ function App() {
         <Routes>
           <Route path="/" element={<HomeFeed profile={profile!} allPosts={allPosts} friends={friends} onUserClick={handleUserClick} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} users={allUsers} />} />
           <Route path="/search" element={<Search profile={profile!} users={allUsers} friends={friends} favorites={favorites} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onToggleFavorite={handleToggleFavorite} onUserClick={handleUserClick} />} />
-          <Route path="/friends" element={<Friends profile={profile!} friends={friends} favorites={favorites} users={allUsers} onUserClick={handleUserClick} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onToggleFavorite={handleToggleFavorite} />} />
+          <Route path="/friends" element={<Friends profile={profile!} friends={friends} users={allUsers} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onUserClick={handleUserClick} />} />
           <Route path="/profile" element={<Profile profile={profile!} setProfile={setProfile} allPosts={allPosts} setAllPosts={setAllPosts} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} users={allUsers} setAllUsers={setAllUsers} />} />
           <Route path="/user/:userName" element={<UserPageWrapper 
             allUsers={allUsers} 
