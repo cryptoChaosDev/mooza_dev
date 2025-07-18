@@ -261,36 +261,24 @@ function Search({ profile, users, friends, favorites, onAddFriend, onRemoveFrien
 }) {
   const [showOnlyMatches, setShowOnlyMatches] = useState(false);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [interestMode, setInterestMode] = useState<'popular' | 'manual' | 'mine'>('popular');
   const [sortBy, setSortBy] = useState<'name' | 'city' | 'country' | 'match'>('match');
 
   const getProfileMatchCount = (user: UserProfile) => user.interests.filter(tag => profile.interests.includes(tag)).length;
   let matchedUsers: (UserProfile & { matchCount: number })[] = [];
-  if (interestMode === 'mine') {
-    if (profile.interests && profile.interests.length > 0) {
-      matchedUsers = users
-        .map(u => ({ ...u, matchCount: getProfileMatchCount(u) }))
-        .filter(u => u.interests.some(tag => profile.interests.includes(tag)))
-        .sort((a, b) => b.matchCount - a.matchCount);
-    } else {
-      matchedUsers = [];
-    }
-  } else {
-    matchedUsers = users
-      .map(u => ({ ...u, matchCount: getProfileMatchCount(u) }))
-      .filter(u => {
-        if (selectedTags.length > 0) {
-          if (showOnlyMatches) {
-            return selectedTags.every(tag => u.interests.includes(tag));
-          } else {
-            return u.interests.some(tag => selectedTags.includes(tag));
-          }
+  matchedUsers = users
+    .map(u => ({ ...u, matchCount: getProfileMatchCount(u) }))
+    .filter(u => {
+      if (selectedTags.length > 0) {
+        if (showOnlyMatches) {
+          return selectedTags.every(tag => u.interests.includes(tag));
         } else {
-          return !showOnlyMatches || u.matchCount > 0;
+          return u.interests.some(tag => selectedTags.includes(tag));
         }
-      })
-      .sort((a, b) => b.matchCount - a.matchCount);
-  }
+      } else {
+        return !showOnlyMatches || u.matchCount > 0;
+      }
+    })
+    .sort((a, b) => b.matchCount - a.matchCount);
   const sortedUsers = [...matchedUsers].sort((a, b) => {
     if (sortBy === 'name') return a.name.localeCompare(b.name, 'ru');
     if (sortBy === 'city') return (a.city || '').localeCompare(b.city || '', 'ru');
@@ -306,8 +294,6 @@ function Search({ profile, users, friends, favorites, onAddFriend, onRemoveFrien
           <InterestSelector
             selected={selectedTags}
             onChange={setSelectedTags}
-            profileInterests={profile.interests}
-            onModeChange={setInterestMode}
           />
           <label className="flex items-center gap-2 cursor-pointer text-sm mt-2">
             <input type="checkbox" checked={showOnlyMatches} onChange={e => setShowOnlyMatches(e.target.checked)} />
@@ -788,7 +774,6 @@ function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLik
             <InterestSelector
               selected={newPost.tags}
               onChange={tags => setNewPost(prev => ({ ...prev, tags }))}
-              profileInterests={profile.interests}
             />
             <div className="flex items-center gap-3 mt-2">
               <label className="cursor-pointer p-2 rounded-full bg-dark-bg/60 hover:bg-dark-accent/10 transition-colors shadow text-dark-accent" title="Прикрепить изображение">
@@ -892,7 +877,6 @@ function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLik
               <InterestSelector
                 selected={editPostData.tags}
                 onChange={tags => setEditPostData(prev => ({ ...prev, tags }))}
-                profileInterests={profile.interests}
               />
             </div>
             <div className="flex gap-2 mt-2">
@@ -1080,7 +1064,6 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
             <InterestSelector
               selected={newPost.tags}
               onChange={tags => setNewPost(prev => ({ ...prev, tags }))}
-              profileInterests={profile.interests}
             />
             <div className="flex items-center gap-3 mt-2">
               <label className="cursor-pointer p-2 rounded-full bg-dark-bg/60 hover:bg-dark-accent/10 transition-colors shadow text-dark-accent" title="Прикрепить изображение">
@@ -1236,7 +1219,7 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
               </div>
               <div className="flex flex-col gap-2">
                 <label className="text-xs text-dark-muted font-semibold mb-1">Интересы</label>
-                <InterestSelector selected={editData.interests} onChange={interests => setEditData(prev => ({ ...prev, interests }))} disableMineMode={true} />
+                <InterestSelector selected={editData.interests} onChange={interests => setEditData(prev => ({ ...prev, interests }))} />
               </div>
               <div className="flex flex-col gap-2 mt-2">
                 <label className="text-xs text-dark-muted font-semibold mb-1">Соцсети</label>
@@ -1293,7 +1276,6 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
               <InterestSelector
                 selected={editPostData.tags}
                 onChange={tags => setEditPostData(prev => ({ ...prev, tags }))}
-                profileInterests={profile.interests}
               />
             </div>
             <div className="flex gap-2 mt-2">

@@ -220,7 +220,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="text-xl font-bold text-dark-text mb-2">Выберите интересы <span className="text-pink-400">*</span></div>
             <div className="text-dark-muted text-sm mb-2">На основе интересов Mooza подбирает для вас лучших собеседников и рекомендации. Выберите хотя бы 3 интереса!</div>
-            <InterestSelector selected={profile.interests} onChange={interests => setProfile(p => ({ ...p, interests }))} profileInterests={[]} disableMineMode={true} />
+            <InterestSelector selected={profile.interests} onChange={interests => setProfile(p => ({ ...p, interests }))} />
             <div className="flex gap-2 mt-2">
               <button className="flex-1 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold shadow active:scale-95 transition-transform text-lg" onClick={next} disabled={profile.interests.length < 3}>Далее</button>
               <button className="flex-1 py-3 rounded-xl bg-dark-bg/60 text-dark-muted font-semibold shadow active:scale-95 transition-transform text-lg" onClick={prev}>Назад</button>
