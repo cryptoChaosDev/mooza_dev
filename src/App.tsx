@@ -8,15 +8,22 @@ import { WelcomePage } from "./Welcome";
 interface UserProfile {
   userId: string;
   avatarUrl?: string;
-  name: string;
+  firstName: string;
+  lastName: string;
+  name: string; // для обратной совместимости, можно склеивать firstName + lastName
   bio: string;
+  workPlace?: string;
+  skills: string[];
   interests: string[];
-  country?: string;
-  city?: string;
+  portfolio?: { text: string; fileUrl?: string };
+  phone?: string;
+  email?: string;
   socials?: string[];
   vkId?: string;
   youtubeId?: string;
   telegramId?: string;
+  city?: string;
+  country?: string;
 }
 
 // Получение пользователя из Telegram WebApp API (заглушка)
@@ -311,51 +318,87 @@ function Search({ profile, users, friends, favorites, onAddFriend, onRemoveFrien
         </div>
         {sortedUsers.length === 0 && <div className="text-dark-muted empty-state">Нет подходящих пользователей</div>}
         {sortedUsers.map(user => (
-          <div key={user.userId} className="bg-dark-card rounded-2xl shadow-card p-4 flex flex-col gap-2 mb-3 animate-fade-in animate-scale-in">
-            <div className="flex items-center gap-3 mb-1">
-              <div className="w-10 h-10 rounded-full bg-dark-bg/80 flex items-center justify-center text-2xl border border-dark-bg/40 overflow-hidden cursor-pointer" onClick={() => onUserClick({ ...profile, name: user.name, avatarUrl: user.avatarUrl })}>
-                {user.avatarUrl ? (
-                  <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
-                ) : (
-                  <span role="img" aria-label="avatar">👤</span>
-                )}
+          <div key={user.userId} className="bg-dark-card rounded-2xl shadow-card p-4 flex flex-col gap-4 mb-3 animate-fade-in animate-scale-in">
+            <div className="flex flex-col items-center gap-1 w-full relative">
+              <div className="relative w-20 h-20 mb-2 mx-auto">
+                <div className="w-20 h-20 rounded-full overflow-hidden border-4 border-white shadow-lg bg-dark-bg/80 flex items-center justify-center">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
+                  ) : (
+                    <span role="img" aria-label="avatar" className="text-4xl">👤</span>
+                  )}
+                </div>
               </div>
-              <div className="font-semibold text-dark-text text-base cursor-pointer hover:underline truncate flex-1" onClick={() => onUserClick({ ...profile, name: user.name, avatarUrl: user.avatarUrl })}>{user.name}</div>
-              <div className="flex gap-2 ml-2">
-                {friends.includes(user.userId) ? (
-                  <button title="Удалить из друзей" className="p-2 rounded-full bg-dark-bg/60 text-dark-accent hover:bg-dark-accent/10 transition-colors" onClick={() => onRemoveFriend(user.userId)}>
-                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="#ef4444" strokeWidth="1.5"/></svg>
-                  </button>
-                ) : (
-                  <button title="Добавить в друзья" className="p-2 rounded-full bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white transition-colors" onClick={() => onAddFriend(user.userId)}>
-                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5" stroke="currentColor" strokeWidth="1.5"/></svg>
-                  </button>
-                )}
-                <button
-                  title={favorites.includes(user.userId) ? "Убрать из избранного" : "В избранное"}
-                  className={`p-2 rounded-full transition-colors ${favorites.includes(user.userId) ? 'bg-yellow-400 text-white' : 'bg-dark-bg/60 text-yellow-400 hover:bg-yellow-400 hover:text-white'}`}
-                  onClick={() => onToggleFavorite(user.userId)}
-                >
-                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" stroke="currentColor" strokeWidth="1.5"/></svg>
-                </button>
-              </div>
+              <div className="font-bold text-xl text-dark-text text-center break-words leading-tight flex-1">{user.firstName} {user.lastName}</div>
+              {(user.city || user.country) && (
+                <div className="text-blue-700 text-xs">{[user.city, user.country].filter(Boolean).join(', ')}</div>
+              )}
             </div>
-            <div className="flex flex-wrap gap-2 mt-1">
-              {user.interests.map((tag, i) => {
-                const isMatch = selectedTags.length > 0
-                  ? selectedTags.includes(tag)
-                  : profile.interests && profile.interests.includes(tag);
-                return (
-                  <span
-                    key={i}
-                    className={`px-3 py-0.5 rounded-full text-xs font-medium border-none transition-all shadow-sm focus:outline-none animate-fade-in
-                      ${isMatch ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white scale-105' : 'bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white'}`}
-                  >
-                    {getInterestPath(tag)}
-                    {isMatch && <span className="ml-1">★</span>}
-                  </span>
-                );
-              })}
+            {user.bio && (
+              <div className="w-full mt-2">
+                <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">О себе</div>
+                <div className="text-base text-dark-text text-center whitespace-pre-line font-normal mb-2">{user.bio}</div>
+              </div>
+            )}
+            {user.workPlace && (
+              <div className="w-full mt-1">
+                <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Место работы</div>
+                <div className="text-dark-muted text-sm text-center mb-2">{user.workPlace}</div>
+              </div>
+            )}
+            {user.skills?.length > 0 && (
+              <div className="w-full mt-1">
+                <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Навыки</div>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {user.skills.map((skill, i) => (
+                    <span key={i} className="px-3 py-1 rounded-full text-xs font-medium border-none shadow-sm bg-gradient-to-r from-blue-500 to-cyan-400 text-white">{getInterestPath(skill)}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {user.interests?.length > 0 && (
+              <div className="w-full mt-1">
+                <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Интересы</div>
+                <div className="flex flex-wrap gap-2 justify-center">
+                  {user.interests.map((interest, i) => (
+                    <span key={i} className="px-3 py-1 rounded-full text-xs font-medium border-none shadow-sm bg-cyan-100 text-cyan-800">{getInterestPath(interest)}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {user.portfolio && (user.portfolio.text || user.portfolio.fileUrl) && (
+              <div className="w-full mt-1 flex flex-col items-center">
+                <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Портфолио</div>
+                {user.portfolio.text && <div className="text-dark-text text-sm text-center whitespace-pre-line mb-1">{user.portfolio.text}</div>}
+                {user.portfolio.fileUrl && (
+                  <a href={user.portfolio.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline text-xs">Скачать вложение</a>
+                )}
+              </div>
+            )}
+            {(user.phone || user.email) && (
+              <div className="w-full mt-1 flex flex-col items-center">
+                <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Контакты</div>
+                {user.phone && <div className="text-dark-text text-sm">📞 <a href={`tel:${user.phone}`} className="text-blue-500 underline">{user.phone}</a></div>}
+                {user.email && <div className="text-dark-text text-sm">✉️ <a href={`mailto:${user.email}`} className="text-blue-500 underline">{user.email}</a></div>}
+              </div>
+            )}
+            <div className="flex gap-2 mt-2 justify-center">
+              {friends.includes(user.userId) ? (
+                <button title="Удалить из друзей" className="p-2 rounded-full bg-dark-bg/60 text-dark-accent hover:bg-dark-accent/10 transition-colors" onClick={() => onRemoveFriend(user.userId)}>
+                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="#ef4444" strokeWidth="1.5"/></svg>
+                </button>
+              ) : (
+                <button title="Добавить в друзья" className="p-2 rounded-full bg-dark-bg/60 text-dark-muted hover:bg-dark-accent hover:text-white transition-colors" onClick={() => onAddFriend(user.userId)}>
+                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5" stroke="currentColor" strokeWidth="1.5"/></svg>
+                </button>
+              )}
+              <button
+                title={favorites.includes(user.userId) ? "Убрать из избранного" : "В избранное"}
+                className={`p-2 rounded-full transition-colors ${favorites.includes(user.userId) ? 'bg-yellow-400 text-white' : 'bg-dark-bg/60 text-yellow-400 hover:bg-yellow-400 hover:text-white'}`}
+                onClick={() => onToggleFavorite(user.userId)}
+              >
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" stroke="currentColor" strokeWidth="1.5"/></svg>
+              </button>
             </div>
           </div>
         ))}
@@ -491,6 +534,7 @@ function UserCard({ user, posts, isFriend, isFavorite, onAddFriend, onRemoveFrie
     if (url.includes('vk.com')) return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#2787F5"/><text x="7" y="16" fontSize="10" fill="#fff">VK</text></svg>;
     if (url.includes('t.me')) return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#229ED9"/><text x="5" y="16" fontSize="10" fill="#fff">TG</text></svg>;
     if (url.includes('instagram.com')) return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#E1306C"/><text x="3" y="16" fontSize="10" fill="#fff">IG</text></svg>;
+    if (url.includes('youtube.com')) return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#FF0000"/><text x="3" y="16" fontSize="10" fill="#fff">YT</text></svg>;
     return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#888"/></svg>;
   };
   return (
@@ -838,10 +882,22 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
   const [editOpen, setEditOpen] = useState(false);
   const [editData, setEditData] = useState<UserProfile>({
     ...profile,
-    city: profile.city || "",
-    vkId: profile.vkId || "",
-    youtubeId: profile.youtubeId || "",
-    telegramId: profile.telegramId || "",
+    firstName: profile.firstName || '',
+    lastName: profile.lastName || '',
+    name: profile.name || '',
+    bio: profile.bio || '',
+    workPlace: profile.workPlace || '',
+    skills: profile.skills || [],
+    interests: profile.interests || [],
+    portfolio: profile.portfolio ? { text: profile.portfolio.text || '', fileUrl: profile.portfolio.fileUrl } : { text: '', fileUrl: undefined },
+    phone: profile.phone || '',
+    email: profile.email || '',
+    socials: profile.socials || [],
+    vkId: profile.vkId || '',
+    youtubeId: profile.youtubeId || '',
+    telegramId: profile.telegramId || '',
+    city: profile.city || '',
+    country: profile.country || '',
   });
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [newPost, setNewPost] = useState<{ content: string; tags: string[]; attachment: File | null }>({ content: "", tags: [], attachment: null });
@@ -850,6 +906,18 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
   const [editPostData, setEditPostData] = useState<{ content: string; tags: string[] }>({ content: '', tags: [] });
   const toast = useToast();
   const userPosts = allPosts.filter((p) => p.userId === profile.userId);
+  const [errors, setErrors] = useState<any>({});
+  // --- Соцсети: локальные состояния для input ---
+  const [vkInput, setVkInput] = useState(editData.vkId || '');
+  const [ytInput, setYtInput] = useState(editData.youtubeId || '');
+  const [tgInput, setTgInput] = useState(editData.telegramId || '');
+  React.useEffect(() => {
+    if (editOpen) {
+      setVkInput(editData.vkId || '');
+      setYtInput(editData.youtubeId || '');
+      setTgInput(editData.telegramId || '');
+    }
+  }, [editOpen]);
 
   // Счетчики друзей и избранных
   const friendsCount = friends.length;
@@ -861,15 +929,22 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
     if (avatarFile) {
       avatarUrl = URL.createObjectURL(avatarFile);
     }
+    const newData = {
+      ...editData,
+      avatarUrl,
+      vkId: vkInput.trim(),
+      youtubeId: ytInput.trim(),
+      telegramId: tgInput.trim(),
+    };
     setAllPosts(prev => prev.map(post =>
       post.userId === profile.userId
-        ? { ...post, avatarUrl, author: editData.name }
+        ? { ...post, avatarUrl, author: newData.name }
         : post
     ));
-    setProfile({ ...editData, avatarUrl });
+    setProfile(newData);
     setAllUsers(prev => prev.map(u =>
       u.userId === profile.userId
-        ? { ...editData, avatarUrl }
+        ? newData
         : u
     ));
     setEditOpen(false);
@@ -885,55 +960,193 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
     setShowCreate(false);
   };
 
+  // Section-компонент для Mooza-профиля с возможностью сворачивания
+  const CollapsibleSection: React.FC<{ title: string; children: React.ReactNode; defaultOpen?: boolean }> = ({ title, children, defaultOpen = false }) => {
+    const [open, setOpen] = useState(defaultOpen);
+    return (
+      <div className="w-full flex flex-col gap-2 border-t border-dark-bg/20 pt-4">
+        <button
+          className="flex items-center justify-between w-full text-base font-semibold text-dark-text mb-1 pl-1 focus:outline-none select-none"
+          onClick={() => setOpen(o => !o)}
+          type="button"
+          aria-expanded={open}
+        >
+          <span>{title}</span>
+          <span className={`ml-2 transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+        </button>
+        {open && <div>{children}</div>}
+      </div>
+    );
+  };
+
+  // Функция для Mooza-иконок соцсетей
+  const getSocialIcon = (url: string) => {
+    if (url.includes('vk.com')) return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#2787F5"/><text x="7" y="16" fontSize="10" fill="#fff">VK</text></svg>;
+    if (url.includes('t.me')) return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#229ED9"/><text x="5" y="16" fontSize="10" fill="#fff">TG</text></svg>;
+    if (url.includes('instagram.com')) return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#E1306C"/><text x="3" y="16" fontSize="10" fill="#fff">IG</text></svg>;
+    if (url.includes('youtube.com')) return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#FF0000"/><text x="3" y="16" fontSize="10" fill="#fff">YT</text></svg>;
+    return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#888"/></svg>;
+  };
+
+  // Собираем массив соцсетей: сначала из socials, если пусто — из vkId/youtubeId/telegramId
+  let socialLinks: { url: string; label: string }[] = [];
+  if (profile.socials && profile.socials.length > 0) {
+    socialLinks = profile.socials.filter(Boolean).map(url => ({ url, label: url }));
+  }
+  if (profile.vkId) socialLinks.push({ url: profile.vkId.startsWith('http') ? profile.vkId : `https://vk.com/${profile.vkId}`, label: 'VK' });
+  if (profile.youtubeId) socialLinks.push({ url: profile.youtubeId.startsWith('http') ? profile.youtubeId : `https://youtube.com/@${profile.youtubeId}`, label: 'YouTube' });
+  if (profile.telegramId) socialLinks.push({ url: profile.telegramId.startsWith('http') ? profile.telegramId : `https://t.me/${profile.telegramId}`, label: 'Telegram' });
+
+  // --- Валидация полей ---
+  function validateField(field: string, value: any) {
+    switch (field) {
+      case 'firstName':
+      case 'lastName':
+        if (!value) return 'Обязательное поле';
+        if (!/^[А-Яа-яA-Za-z\- ]{2,}$/.test(value)) return 'Только буквы, минимум 2 символа';
+        return '';
+      case 'country':
+      case 'city':
+        if (!value) return 'Обязательное поле';
+        if (value.length < 2) return 'Минимум 2 символа';
+        return '';
+      case 'skills':
+        if (!value || value.length < 1) return 'Выберите хотя бы 1 навык';
+        return '';
+      case 'interests':
+        if (!value || value.length < 3) return 'Выберите хотя бы 3 интереса';
+        return '';
+      case 'portfolioText':
+        if (value.length > 500) return 'Максимум 500 символов';
+        return '';
+      case 'phone':
+        if (!value) return 'Обязательное поле';
+        if (!/^\+7 \(\d{3}\) \d{3}-\d{2}-\d{2}$/.test(value)) return 'Формат: +7 (XXX) XXX-XX-XX';
+        return '';
+      case 'email':
+        if (!value) return 'Обязательное поле';
+        if (!/^\S+@\S+\.\S+$/.test(value)) return 'Некорректный email';
+        return '';
+      case 'vkId':
+      case 'youtubeId':
+      case 'telegramId':
+        if (value && !/^https?:\/\//.test(value)) return 'Введите ссылку, начиная с https://';
+        return '';
+      default:
+        return '';
+    }
+  }
+
+  // --- Прогресс заполнения ---
+  const fieldsToCheck = [
+    { key: 'firstName', value: editData.firstName },
+    { key: 'lastName', value: editData.lastName },
+    { key: 'country', value: editData.country },
+    { key: 'city', value: editData.city },
+    { key: 'skills', value: editData.skills },
+    { key: 'interests', value: editData.interests },
+    { key: 'portfolioText', value: editData.portfolio?.text || '' },
+    { key: 'phone', value: editData.phone },
+    { key: 'email', value: editData.email },
+  ];
+  let validCount = 0;
+  fieldsToCheck.forEach(f => {
+    if (!validateField(f.key, f.value)) validCount++;
+  });
+  const progress = Math.round((validCount / fieldsToCheck.length) * 100);
+
   return (
     <main className="flex flex-col items-center min-h-[100dvh] pt-20 bg-dark-bg w-full flex-1" style={{ paddingBottom: 'calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px))' }}>
       <section className="w-full max-w-md flex flex-col gap-4 animate-fade-in">
-        {/* Аватар, имя, счетчики */}
-        <div className="flex flex-col items-center gap-2 mt-2 mb-2">
-          <div className="relative w-28 h-28 mx-auto mb-2">
-            <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-lg bg-dark-bg/80 flex items-center justify-center">
-              {profile.avatarUrl ? (
-                <img src={profile.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
-              ) : (
-                <span role="img" aria-label="avatar" className="text-5xl">👤</span>
+        {/* Минималистичный профиль Mooza */}
+        <div className="flex flex-col items-center gap-4 w-full max-w-md px-2 py-6">
+          {/* Аватар и имя + кнопка редактирования */}
+          <div className="flex flex-col items-center gap-1 w-full relative">
+            <div className="relative w-28 h-28 mb-2 mx-auto">
+              <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-lg bg-dark-bg/80 flex items-center justify-center">
+                {profile.avatarUrl ? (
+                  <img src={profile.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
+                ) : (
+                  <span role="img" aria-label="avatar" className="text-5xl">👤</span>
+                )}
+              </div>
+            </div>
+            <div className="flex items-center justify-center w-full mt-2">
+              <div className="font-bold text-2xl sm:text-3xl text-dark-text text-center break-words leading-tight flex-1">{profile.firstName} {profile.lastName}</div>
+              <button
+                className="ml-2 p-2 rounded-full bg-dark-bg/60 hover:bg-dark-accent/10 text-dark-accent transition-colors shadow focus:outline-none"
+                title="Редактировать профиль"
+                onClick={() => setEditOpen(true)}
+                style={{height: 40, width: 40, minWidth: 40, minHeight: 40}}
+              >
+                <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#3b82f6" strokeWidth="1.5"/></svg>
+              </button>
+            </div>
+            {(profile.city || profile.country) && (
+              <div className="text-blue-700 text-sm">{[profile.city, profile.country].filter(Boolean).join(', ')}</div>
+            )}
+          </div>
+
+          {/* О себе */}
+          {profile.bio && (
+            <div className="w-full mt-4">
+              <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">О себе</div>
+              <div className="text-base text-dark-text text-center whitespace-pre-line font-normal mb-2">{profile.bio}</div>
+            </div>
+          )}
+
+          {/* Место работы */}
+          {profile.workPlace && (
+            <div className="w-full mt-2">
+              <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Место работы</div>
+              <div className="text-dark-muted text-sm text-center mb-2">{profile.workPlace}</div>
+            </div>
+          )}
+
+          {/* Навыки */}
+          {profile.skills?.length > 0 && (
+            <div className="w-full mt-2">
+              <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Навыки</div>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {profile.skills.map((skill, i) => (
+                  <span key={i} className="px-3 py-1 rounded-full text-xs font-medium border-none shadow-sm bg-gradient-to-r from-blue-500 to-cyan-400 text-white">{getInterestPath(skill)}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Интересы */}
+          {profile.interests?.length > 0 && (
+            <div className="w-full mt-2">
+              <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Интересы</div>
+              <div className="flex flex-wrap gap-2 justify-center">
+                {profile.interests.map((interest, i) => (
+                  <span key={i} className="px-3 py-1 rounded-full text-xs font-medium border-none shadow-sm bg-cyan-100 text-cyan-800">{getInterestPath(interest)}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Портфолио */}
+          {profile.portfolio && (profile.portfolio.text || profile.portfolio.fileUrl) && (
+            <div className="w-full mt-2 flex flex-col items-center">
+              <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Портфолио</div>
+              {profile.portfolio.text && <div className="text-dark-text text-sm text-center whitespace-pre-line mb-1">{profile.portfolio.text}</div>}
+              {profile.portfolio.fileUrl && (
+                <a href={profile.portfolio.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline text-xs">Скачать вложение</a>
               )}
             </div>
-            <button className="absolute bottom-2 right-2 bg-dark-accent p-2 rounded-full shadow hover:scale-110 transition cursor-pointer" title="Редактировать профиль" onClick={() => setEditOpen(true)}>
-              <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#fff" strokeWidth="1.5"/></svg>
-            </button>
-          </div>
-          <div className="flex flex-col items-center gap-1 w-full">
-            <div className="font-bold text-2xl sm:text-3xl text-dark-text text-center break-words">{profile.name}</div>
-            {(profile.country || profile.city) && <div className="text-blue-700 text-xs font-medium">{[profile.country, profile.city].filter(Boolean).join(', ')}</div>}
-            <div className="flex gap-4 mt-2 mb-1 justify-center">
-              <div className="flex flex-col items-center">
-                <span className="font-bold text-lg text-dark-text">{friendsCount}</span>
-                <span className="text-xs text-dark-muted">Друзья</span>
-              </div>
-              <div className="flex flex-col items-center">
-                <span className="font-bold text-lg text-dark-text">{favoritesCount}</span>
-                <span className="text-xs text-dark-muted">Избранные</span>
-              </div>
+          )}
+
+          {/* Контакты */}
+          {(profile.phone || profile.email) && (
+            <div className="w-full mt-2 flex flex-col items-center">
+              <div className="text-xs font-semibold text-dark-muted mb-1 uppercase tracking-wider">Контакты</div>
+              {profile.phone && <div className="text-dark-text text-sm">📞 <a href={`tel:${profile.phone}`} className="text-blue-500 underline">{profile.phone}</a></div>}
+              {profile.email && <div className="text-dark-text text-sm">✉️ <a href={`mailto:${profile.email}`} className="text-blue-500 underline">{profile.email}</a></div>}
             </div>
-            <div className="text-dark-muted text-base text-center max-w-xs whitespace-pre-line break-words">{profile.bio}</div>
-          </div>
+          )}
         </div>
-        {/* Интересы */}
-        <div className="flex flex-wrap gap-2 justify-center mt-2">
-          {profile.interests.filter(Boolean).map((interest, i) => (
-            <span key={i} className="px-3 py-1 rounded-full text-xs font-medium border-none transition-all shadow-sm focus:outline-none bg-gradient-to-r from-blue-500 to-cyan-400 text-white">{getInterestPath(interest)}</span>
-          ))}
-        </div>
-        {/* Соцсети */}
-        {profile.socials && profile.socials.filter(Boolean).length > 0 && (
-          <div className="flex flex-wrap gap-3 mt-2 justify-center">
-            {profile.socials?.filter(Boolean).map((link, i) => (
-              <a key={i} href={link} target="_blank" rel="noopener noreferrer" className="p-2 rounded-full bg-dark-bg/60 hover:bg-dark-accent/10 transition-colors shadow text-dark-text" title={link} tabIndex={0}>
-                <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2"/></svg>
-              </a>
-            ))}
-          </div>
-        )}
         {/* Кнопка создать пост */}
         <div className="flex justify-end mt-4">
           <button className="p-3 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:opacity-90 active:scale-95 transition-all" title="Создать пост" onClick={() => setShowCreate(v => !v)}>
@@ -1060,48 +1273,158 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
         )}
         {/* Модальное окно редактирования профиля */}
         {editOpen && (
-          <div className="fixed inset-0 z-100 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in" style={{ paddingTop: 60, paddingBottom: 60 }}>
-            <div className="bg-dark-card shadow-2xl w-full max-w-md p-8 relative animate-fade-in flex flex-col items-center gap-6" style={{ maxHeight: 'calc(100vh - 120px)', overflowY: 'auto' }}>
-              <button className="absolute top-4 right-4 text-3xl text-dark-muted hover:text-dark-text transition active:scale-110" onClick={() => setEditOpen(false)}>&times;</button>
-              <div className="relative mb-2">
-                <img src={avatarFile ? URL.createObjectURL(avatarFile) : (editData.avatarUrl || 'https://ui-avatars.com/api/?name=' + encodeURIComponent(editData.name || 'Профиль'))} alt="avatar" className="w-28 h-28 rounded-full object-cover border-4 border-white shadow-lg bg-dark-bg/80" />
-                <label className="absolute bottom-2 right-2 bg-dark-accent p-2 rounded-full shadow hover:scale-110 transition cursor-pointer" title="Сменить аватар">
-                  <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#fff" strokeWidth="1.5"/></svg>
-                  <input type="file" accept="image/*" className="hidden" onChange={e => setAvatarFile(e.target.files && e.target.files[0] ? e.target.files[0] : null)} />
-                </label>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-dark-bg/80">
+            <div className="w-full max-w-md bg-dark-card rounded-2xl shadow-2xl p-8 flex flex-col gap-8 animate-fade-in animate-scale-in relative overflow-y-auto max-h-[90vh]">
+              {/* Прогресс-бар */}
+              <div className="w-full flex flex-col items-center gap-2 mb-2">
+                <div className="w-full h-3 bg-dark-bg/30 rounded-full overflow-hidden">
+                  <div className="h-3 bg-gradient-to-r from-blue-400 to-pink-400 transition-all" style={{ width: `${progress}%` }}></div>
+                </div>
+                <div className="text-xs text-dark-muted mt-1">Профиль заполнен на {progress}%</div>
               </div>
+              {/* Аватар и кнопка смены */}
+              <div className="flex flex-col items-center gap-2 mb-4">
+                <div className="relative w-28 h-28 mb-2">
+                  <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-lg bg-dark-bg/80 flex items-center justify-center">
+                    {avatarFile ? (
+                      <img src={URL.createObjectURL(avatarFile)} alt="avatar" className="w-full h-full object-cover rounded-full" />
+                    ) : editData.avatarUrl ? (
+                      <img src={editData.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
+                    ) : (
+                      <span role="img" aria-label="avatar" className="text-5xl">👤</span>
+                    )}
+                  </div>
+                  <label className="absolute bottom-2 right-2 bg-dark-accent p-2 rounded-full shadow hover:scale-110 transition cursor-pointer" title="Сменить аватар">
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#fff" strokeWidth="1.5"/></svg>
+                    <input type="file" accept="image/jpeg,image/png,image/jpg" className="hidden" onChange={e => {
+                      const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+                      if (file && file.size > 3 * 1024 * 1024) {
+                        alert('Максимальный размер файла 3 МБ');
+                        return;
+                      }
+                      if (file && !['image/jpeg','image/png','image/jpg'].includes(file.type)) {
+                        alert('Только JPG, JPEG или PNG');
+                        return;
+                      }
+                      setAvatarFile(file);
+                    }} />
+                  </label>
+                </div>
+                <div className="text-xs text-dark-muted">JPG, PNG, до 3 МБ</div>
+              </div>
+              {/* Форма профиля */}
               <div className="w-full flex flex-col gap-3">
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-name">Имя и фамилия</label>
-                  <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
-                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
-                    <input id="profile-name" className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.name} onChange={e => setEditData({ ...editData, name: e.target.value })} placeholder="Имя и фамилия" maxLength={40} autoComplete="name" />
-                  </div>
+                  <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-firstName">Имя</label>
+                  <input id="profile-firstName" className={`flex-1 bg-transparent outline-none text-base text-dark-text ${errors.firstName ? 'border border-red-500' : ''}`} value={editData.firstName} onChange={e => {
+                    setEditData({ ...editData, firstName: e.target.value });
+                    setErrors((err: any) => ({ ...err, firstName: validateField('firstName', e.target.value) }));
+                  }} placeholder="Имя" maxLength={40} autoComplete="given-name" />
+                  {errors.firstName && <div className="text-xs text-red-500 -mt-2">{errors.firstName}</div>}
+                  <div className="text-dark-muted text-xs">Только буквы, минимум 2 символа</div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-lastName">Фамилия</label>
+                  <input id="profile-lastName" className={`flex-1 bg-transparent outline-none text-base text-dark-text ${errors.lastName ? 'border border-red-500' : ''}`} value={editData.lastName} onChange={e => {
+                    setEditData({ ...editData, lastName: e.target.value });
+                    setErrors((err: any) => ({ ...err, lastName: validateField('lastName', e.target.value) }));
+                  }} placeholder="Фамилия" maxLength={40} autoComplete="family-name" />
+                  {errors.lastName && <div className="text-xs text-red-500 -mt-2">{errors.lastName}</div>}
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-country">Страна</label>
-                  <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
-                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
-                    <input id="profile-country" className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.country || ''} onChange={e => setEditData({ ...editData, country: e.target.value })} placeholder="Страна" maxLength={40} autoComplete="country" />
-                  </div>
+                  <input id="profile-country" className={`flex-1 bg-transparent outline-none text-base text-dark-text ${errors.country ? 'border border-red-500' : ''}`} value={editData.country || ''} disabled placeholder="Страна (авто)" maxLength={40} autoComplete="country" />
+                  {errors.country && <div className="text-xs text-red-500 -mt-2">{errors.country}</div>}
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-city">Город</label>
-                  <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
-                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
-                    <input id="profile-city" className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.city || ''} onChange={e => setEditData({ ...editData, city: e.target.value })} placeholder="Город" maxLength={40} autoComplete="address-level2" />
-                  </div>
+                  <input id="profile-city" className={`flex-1 bg-transparent outline-none text-base text-dark-text ${errors.city ? 'border border-red-500' : ''}`} value={editData.city || ''} disabled placeholder="Город (авто)" maxLength={40} autoComplete="address-level2" />
+                  {errors.city && <div className="text-xs text-red-500 -mt-2">{errors.city}</div>}
                 </div>
                 <div className="flex flex-col gap-2">
-                  <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-bio">О себе</label>
-                  <div className="flex items-start gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner focus-within:ring-2 focus-within:ring-blue-400">
-                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 4h16v16H4V4zm2 2v12h12V6H6zm2 2h8v8H8V8z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
-                    <textarea id="profile-bio" className="flex-1 bg-transparent outline-none text-base text-dark-text resize-none" value={editData.bio} onChange={e => setEditData({ ...editData, bio: e.target.value })} placeholder="Короткое био пользователя, интересы и стиль музыки" rows={3} maxLength={120} />
-                  </div>
+                  <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-workPlace">Место работы</label>
+                  <input id="profile-workPlace" className="flex-1 bg-transparent outline-none text-base text-dark-text" value={editData.workPlace || ''} onChange={e => setEditData({ ...editData, workPlace: e.target.value })} placeholder="Место работы" maxLength={60} />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-dark-muted font-semibold mb-1">Навыки</label>
+                  <InterestSelector selected={editData.skills || []} onChange={skills => {
+                    setEditData(prev => ({ ...prev, skills }));
+                    setErrors((err: any) => ({ ...err, skills: validateField('skills', skills) }));
+                  }} />
+                  {errors.skills && <div className="text-xs text-red-500 -mt-2">{errors.skills}</div>}
+                  <div className="text-dark-muted text-xs">Выберите хотя бы 1 навык</div>
                 </div>
                 <div className="flex flex-col gap-2">
                   <label className="text-xs text-dark-muted font-semibold mb-1">Интересы</label>
-                  <InterestSelector selected={editData.interests} onChange={interests => setEditData(prev => ({ ...prev, interests }))} />
+                  <InterestSelector selected={editData.interests || []} onChange={interests => {
+                    setEditData(prev => ({ ...prev, interests }));
+                    setErrors((err: any) => ({ ...err, interests: validateField('interests', interests) }));
+                  }} />
+                  {errors.interests && <div className="text-xs text-red-500 -mt-2">{errors.interests}</div>}
+                  <div className="text-dark-muted text-xs">Выберите хотя бы 3 интереса</div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-portfolio">Резюме / портфолио</label>
+                  <textarea id="profile-portfolio" className={`flex-1 bg-transparent outline-none text-base text-dark-text resize-none ${errors.portfolioText ? 'border border-red-500' : ''}`} value={editData.portfolio?.text || ''} onChange={e => {
+                    setEditData({ ...editData, portfolio: { ...editData.portfolio, text: e.target.value } });
+                    setErrors((err: any) => ({ ...err, portfolioText: validateField('portfolioText', e.target.value) }));
+                  }} placeholder="Резюме, достижения, ссылки..." rows={3} maxLength={500} />
+                  {errors.portfolioText && <div className="text-xs text-red-500 -mt-2">{errors.portfolioText}</div>}
+                  <div className="text-dark-muted text-xs">Максимум 500 символов. Можно прикрепить файл (JPG, PNG, PDF, до 3 МБ).</div>
+                  <div className="flex items-center gap-3 mt-2">
+                    <label className="inline-flex items-center gap-2 cursor-pointer p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:opacity-90 transition-colors" title="Добавить вложение">
+                      <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
+                        <path d="M16.5 13.5V7a4.5 4.5 0 0 0-9 0v8a6 6 0 0 0 12 0V9.5" stroke="currentColor" strokeWidth="1.5"/>
+                        <circle cx="12" cy="17" r="1.5" fill="currentColor"/>
+                      </svg>
+                      <input type="file" accept="image/jpeg,image/png,application/pdf" onChange={e => {
+                        const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+                        if (file && file.size > 3 * 1024 * 1024) {
+                          alert('Максимальный размер файла 3 МБ');
+                          return;
+                        }
+                        if (file && !['image/jpeg','image/png','application/pdf'].includes(file.type)) {
+                          alert('Только JPG, PNG или PDF');
+                          return;
+                        }
+                        if (file) {
+                          const url = URL.createObjectURL(file);
+                          setEditData(prev => ({
+                            ...prev,
+                            portfolio: { fileUrl: url, text: prev.portfolio?.text || '' }
+                          }));
+                        }
+                      }} className="hidden" />
+                    </label>
+                    {editData.portfolio?.fileUrl && (
+                      <a href={editData.portfolio.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline text-xs mt-1">Скачать вложение</a>
+                    )}
+                  </div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-phone">Телефон</label>
+                  <input id="profile-phone" className={`flex-1 bg-transparent outline-none text-base text-dark-text ${errors.phone ? 'border border-red-500' : ''}`} value={editData.phone || ''} onChange={e => {
+                    let val = e.target.value.replace(/\D/g, '');
+                    if (val.length > 11) val = val.slice(0, 11);
+                    let formatted = '+7';
+                    if (val.length > 1) formatted += ' (' + val.slice(1, 4);
+                    if (val.length >= 4) formatted += ') ' + val.slice(4, 7);
+                    if (val.length >= 7) formatted += '-' + val.slice(7, 9);
+                    if (val.length >= 9) formatted += '-' + val.slice(9, 11);
+                    setEditData({ ...editData, phone: formatted });
+                    setErrors((err: any) => ({ ...err, phone: validateField('phone', formatted) }));
+                  }} placeholder="+7 (___) ___-__-__" maxLength={18} />
+                  {errors.phone && <div className="text-xs text-red-500 -mt-2">{errors.phone}</div>}
+                  <div className="text-dark-muted text-xs">Формат: +7 (XXX) XXX-XX-XX</div>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-dark-muted font-semibold mb-1" htmlFor="profile-email">Email</label>
+                  <input id="profile-email" className={`flex-1 bg-transparent outline-none text-base text-dark-text ${errors.email ? 'border border-red-500' : ''}`} value={editData.email || ''} onChange={e => {
+                    setEditData({ ...editData, email: e.target.value });
+                    setErrors((err: any) => ({ ...err, email: validateField('email', e.target.value) }));
+                  }} placeholder="Email" maxLength={60} type="email" autoComplete="email" />
+                  {errors.email && <div className="text-xs text-red-500 -mt-2">{errors.email}</div>}
+                  <div className="text-dark-muted text-xs">Введите корректный email</div>
                 </div>
                 <div className="flex flex-col gap-2 mt-2">
                   <label className="text-xs text-dark-muted font-semibold mb-1">Соцсети</label>
@@ -1109,29 +1432,35 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
                   <SocialLinkEdit
                     label="VK"
                     icon="🟦"
-                    value={editData.vkId || ""}
-                    onChange={vkId => setEditData(prev => ({ ...prev, vkId }))}
-                    placeholder="vk id"
-                    statusText="VK — авторизация через vk.id"
+                    value={vkInput}
+                    onChange={setVkInput}
+                    placeholder="https://vk.com/username"
+                    statusText="Введите ссылку на профиль, начиная с https://"
                   />
+                  {errors.vkId && <div className="text-xs text-red-500 -mt-2">{errors.vkId}</div>}
+                  <div className="text-dark-muted text-xs">Введите ссылку на профиль, начиная с https://</div>
                   {/* YouTube */}
                   <SocialLinkEdit
                     label="YouTube"
-                    icon="▶️"
-                    value={editData.youtubeId || ""}
-                    onChange={youtubeId => setEditData(prev => ({ ...prev, youtubeId }))}
-                    placeholder="YouTube id"
-                    statusText="YouTube — авторизация через YouTube"
+                    icon="🔴"
+                    value={ytInput}
+                    onChange={setYtInput}
+                    placeholder="https://youtube.com/@username"
+                    statusText="Введите ссылку на профиль, начиная с https://"
                   />
+                  {errors.youtubeId && <div className="text-xs text-red-500 -mt-2">{errors.youtubeId}</div>}
+                  <div className="text-dark-muted text-xs">Введите ссылку на профиль, начиная с https://</div>
                   {/* Telegram */}
                   <SocialLinkEdit
                     label="Telegram"
-                    icon="✈️"
-                    value={editData.telegramId || ""}
-                    onChange={telegramId => setEditData(prev => ({ ...prev, telegramId }))}
-                    placeholder="Telegram id"
-                    statusText="Telegram — авторизация через telegram id"
+                    icon="💬"
+                    value={tgInput}
+                    onChange={setTgInput}
+                    placeholder="https://t.me/username"
+                    statusText="Введите ссылку на профиль, начиная с https://"
                   />
+                  {errors.telegramId && <div className="text-xs text-red-500 -mt-2">{errors.telegramId}</div>}
+                  <div className="text-dark-muted text-xs">Введите ссылку на профиль, начиная с https://</div>
                 </div>
               </div>
               <div className="flex gap-4 mt-4 w-full">
@@ -1147,30 +1476,35 @@ function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onU
 }
 
 // --- Генерация моковых пользователей ---
-function getRandomFromArray<T>(arr: T[], count: number) {
-  const shuffled = arr.slice().sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, count);
-}
+const MOCK_WORKPLACES = [
+  "Mooza Studio", "SoundLab", "MusicHub", "JamSpace", "BeatFactory", "GrooveRoom", "HarmonyWorks", "StudioX", "LiveSound", "CreativeLab"
+];
+const MOCK_PORTFOLIO_FILES = [
+  undefined,
+  "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf",
+  "https://upload.wikimedia.org/wikipedia/commons/4/47/PNG_transparency_demonstration_1.png"
+];
 const MOCK_NAMES = [
   "Алексей Иванов", "Мария Петрова", "Денис Смирнов", "Ольга Сидорова", "Иван Кузнецов", "Екатерина Орлова", "Павел Волков", "Светлана Морозова", "Дмитрий Фёдоров", "Анна Васильева", "Владимир Попов", "Елена Соколова", "Сергей Лебедев", "Татьяна Козлова", "Артём Новиков", "Наталья Павлова", "Игорь Михайлов", "Юлия Романова", "Максим Захаров", "Виктория Баранова", "Григорий Киселёв", "Алиса Громова", "Валерий Соловьёв", "Полина Белова", "Роман Гаврилов", "Вера Корнилова", "Евгений Ефимов", "Дарья Крылова", "Никита Соловьёв", "Кристина Кузьмина", "Василиса Котова", "Михаил Грачёв", "Анастасия Климова", "Виталий Кузьмин", "Маргарита Ковалева", "Глеб Сидоров", "Лидия Киселёва", "Андрей Козлов", "София Фролова", "Вячеслав Белов", "Елизавета Громова", "Аркадий Орлов", "Диана Кузнецова", "Пётр Соловьёв", "Алёна Морозова", "Владислав Фёдоров", "Оксана Лебедева", "Даниил Попов", "Евгения Павлова", "Станислав Иванов"
 ];
 const MOCK_BIOS = [
   "Люблю музыку и новые знакомства!", "Ищу единомышленников для совместных проектов.", "Пишу песни и играю на гитаре.", "Открыт для коллабораций.", "Музыка — моя жизнь.", "Экспериментирую с жанрами.", "Готов к новым музыкальным открытиям!", "Ищу группу для выступлений.", "Обожаю живые концерты.", "Пишу аранжировки и свожу треки."
 ];
-function getAllTags() {
-  return INTEREST_CATEGORIES.flatMap(cat => cat.subcategories.flatMap(sub => sub.tags));
+const MOCK_CITIES = [
+  "Москва", "Санкт-Петербург", "Казань", "Екатеринбург", "Новосибирск", "Самара", "Воронеж", "Краснодар", "Уфа", "Пермь", "Ростов-на-Дону", "Челябинск", "Нижний Новгород", "Омск", "Волгоград", "Томск", "Тула", "Калуга", "Сочи", "Ярославль"
+];
+function getRandomFromArray<T>(arr: T[], count: number) {
+  const shuffled = arr.slice().sort(() => 0.5 - Math.random());
+  return shuffled.slice(0, count);
 }
 function getRandomInterests() {
-  const allTags = getAllTags();
+  const allTags = INTEREST_CATEGORIES.flatMap(cat => cat.subcategories.flatMap(sub => sub.tags));
   return getRandomFromArray(allTags, 3 + Math.floor(Math.random() * 4)); // 3-6 интересов
 }
 function getRandomAvatar(name: string) {
   // Используем https://ui-avatars.com/ для генерации аватарок
   return `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff&size=128`;
 }
-const MOCK_CITIES = [
-  "Москва", "Санкт-Петербург", "Казань", "Екатеринбург", "Новосибирск", "Самара", "Воронеж", "Краснодар", "Уфа", "Пермь", "Ростов-на-Дону", "Челябинск", "Нижний Новгород", "Омск", "Волгоград", "Томск", "Тула", "Калуга", "Сочи", "Ярославль"
-];
 const MOCK_SOCIALS = [
   (name: string) => `https://vk.com/${name.replace(/\s/g, '').toLowerCase()}`,
   (name: string) => `https://t.me/${name.split(' ')[0].toLowerCase()}`,
@@ -1187,13 +1521,33 @@ function getRandomSocials(name: string) {
 }
 export const MOCK_USERS: UserProfile[] = Array.from({ length: 100 }).map((_, i) => {
   const name = MOCK_NAMES[i % MOCK_NAMES.length] + (i >= MOCK_NAMES.length ? ` #${i+1}` : "");
+  const [firstName, ...lastNameArr] = name.split(" ");
+  const lastName = lastNameArr.join(" ") || "";
+  const city = getRandomFromArray(MOCK_CITIES, 1)[0];
+  const country = "Россия";
+  const workPlace = getRandomFromArray(MOCK_WORKPLACES, 1)[0];
+  const skills = getRandomInterests();
+  const interests = getRandomInterests();
+  const bio = getRandomFromArray(MOCK_BIOS, 1)[0] + (Math.random() > 0.5 ? "\nЛюбимый город: " + city : "");
+  const phone = `+7 (9${Math.floor(10 + Math.random()*89)}) ${Math.floor(100+Math.random()*900)}-${Math.floor(10+Math.random()*90)}-${Math.floor(10+Math.random()*90)}`;
+  const email = `user${i+1}@mooza.ru`;
+  const portfolioText = `Портфолио пользователя ${name}. Достижения, проекты, ссылки.`;
+  const fileUrl = getRandomFromArray(MOCK_PORTFOLIO_FILES, 1)[0];
   return {
     userId: `user_${i+1}_${Math.random().toString(36).slice(2, 10)}`,
+    firstName,
+    lastName,
     name,
-    bio: getRandomFromArray(MOCK_BIOS, 1)[0],
-    interests: getRandomInterests(),
+    bio,
+    workPlace,
+    skills,
+    interests,
+    portfolio: { text: portfolioText, fileUrl },
+    phone,
+    email,
     avatarUrl: getRandomAvatar(name),
-    city: getRandomFromArray(MOCK_CITIES, 1)[0],
+    city,
+    country,
     socials: getRandomSocials(name),
   };
 });
@@ -1312,7 +1666,16 @@ function App() {
   };
 
   if (showWelcome) {
-    return <WelcomePage onFinish={p => { setProfile({ ...p, interests: p.interests || [] }); setShowWelcome(false); }} />;
+    return <WelcomePage onFinish={p => {
+      setProfile({
+        ...p,
+        vkId: p.vk,
+        youtubeId: p.youtube,
+        telegramId: p.telegram,
+        interests: p.interests || [],
+      });
+      setShowWelcome(false);
+    }} />;
   }
 
   return (
@@ -1487,38 +1850,20 @@ function UserPageWrapper({ allUsers, allPosts, onBack, friends, favorites, onAdd
 }
 
 function SocialLinkEdit({ label, icon, value, onChange, placeholder, statusText }: { label: string, icon: string, value: string, onChange: (v: string) => void, placeholder: string, statusText: string }) {
-  const [editing, setEditing] = React.useState(false);
-  const [input, setInput] = React.useState(value || "");
-  React.useEffect(() => { setInput(value || ""); }, [value]);
-
-  // Новые иконки
-  const iconMap: Record<string, string> = {
-    'VK': 'https://cdn-icons-png.flaticon.com/512/145/145813.png',
-    'YouTube': 'https://img.freepik.com/premium-vector/youtube-color-icons_1209566-1.jpg?semt=ais_hybrid&w=740',
-    'Telegram': 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRDLYyCJGt0wCZw8Ap-9m9mNzAlgQN30blEkg&s',
-  };
-  const iconUrl = iconMap[label] || '';
-
-  if (value && !editing) {
-    return (
-      <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner">
-        {iconUrl ? <img src={iconUrl} alt={label} className="w-6 h-6 rounded-full object-cover" /> : <span className="text-xl">{icon}</span>}
-        <a href={value} target="_blank" rel="noopener noreferrer" className="flex-1 text-blue-400 underline text-sm truncate">{value}</a>
-        <button className="text-red-500 text-xs px-2" onClick={() => onChange("")} title="Отвязать"><span style={{fontSize: '1.2em'}}>✖</span></button>
-      </div>
-    );
-  }
   return (
     <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner">
-      {iconUrl ? <img src={iconUrl} alt={label} className="w-6 h-6 rounded-full object-cover" /> : <span className="text-xl">{icon}</span>}
+      <span className="text-xl">{icon}</span>
       <input
         className="flex-1 bg-transparent outline-none text-base text-dark-text"
-        value={input}
-        onChange={e => setInput(e.target.value)}
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
         placeholder={placeholder}
         maxLength={80}
       />
-      <button className="text-blue-500 text-xs px-2" onClick={() => { if (input.trim()) { onChange(input.trim()); setEditing(false); } }} title="Сохранить"><span style={{fontSize: '1.2em'}}>💾</span></button>
+      {value && (
+        <button className="text-red-500 text-xs px-2" onClick={() => onChange("")} title="Отвязать"><span style={{fontSize: '1.2em'}}>✖</span></button>
+      )}
     </div>
   );
 }
+
