@@ -139,6 +139,7 @@ function AppBar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  
   useEffect(() => {
     if (!menuOpen) return;
     const handler = (e: MouseEvent) => {
@@ -149,30 +150,50 @@ function AppBar() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [menuOpen]);
+  
   return (
-    <header className="fixed top-0 left-0 right-0 h-16 z-50 bg-dark-card border-b border-dark-bg/40 flex items-center justify-center px-4 shadow-none">
-      <div className="absolute left-0 top-0 h-full flex items-center pl-4" style={{width: 48}}></div>
-      <div className="flex-1 flex justify-center items-center">
-        <span className="text-2xl font-bold text-dark-text select-none cursor-pointer hover:text-dark-accent transition-colors" style={{fontFamily: 'Pacifico, cursive', letterSpacing: '0.04em'}} onClick={() => navigate("/")}>Mooza</span>
-      </div>
-      <div className="absolute right-0 top-0 h-full flex items-center pr-2">
-        <button
-          className="w-10 h-10 flex items-center justify-center rounded-full hover:bg-dark-bg/40 transition-colors text-dark-text"
-          onClick={() => setMenuOpen((v) => !v)}
+    <header 
+      className="fixed top-0 left-0 right-0 z-50 bg-dark-card border-b border-dark-bg/40 flex items-center justify-between px-4"
+      style={{
+        height: 'var(--header-height)',
+        boxShadow: '0 2px 20px rgba(0,0,0,0.15)',
+      }}
+    >
+      <div className="flex items-center flex-1">
+        <span 
+          className="text-xl font-bold text-dark-text select-none cursor-pointer hover:text-dark-accent transition-colors" 
+          style={{fontFamily: 'Pacifico, cursive', letterSpacing: '0.04em'}} 
+          onClick={() => navigate("/")}
         >
-          <svg width="28" height="28" fill="none" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
+          Mooza
+        </span>
+      </div>
+      
+      <div className="relative" ref={menuRef}>
+        <button
+          className="touch-target rounded-full hover:bg-dark-bg/40 transition-colors text-dark-text"
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-label="Меню"
+        >
+          <svg width="24" height="24" fill="none" viewBox="0 0 24 24">
+            <path d="M4 6h16M4 12h16M4 18h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
+          </svg>
         </button>
+        
         {menuOpen && (
-          <div ref={menuRef} className="absolute top-full right-0 mt-2 w-64 bg-dark-card rounded-2xl shadow-2xl py-4 px-2 flex flex-col gap-2 animate-fade-in scale-95 animate-scale-in z-50 border border-dark-bg/40 transition-all duration-300 max-h-[60vh] overflow-y-auto pointer-events-auto">
+          <div className="absolute top-full right-0 mt-2 w-64 bg-dark-card rounded-xl shadow-2xl py-2 flex flex-col animate-fade-in animate-scale-in z-50 border border-dark-bg/40">
             <button
-              className="w-full flex items-center gap-3 text-left px-6 py-3 text-lg text-dark-text hover:bg-dark-bg/40 rounded-xl transition-all font-semibold"
+              className="w-full flex items-center gap-3 text-left px-4 py-3 text-base text-dark-text hover:bg-dark-bg/40 transition-all font-medium"
               onClick={() => { setMenuOpen(false); navigate('/profile'); }}
             >
-              <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" stroke="#4F8CFF" strokeWidth="1.5"/><path d="M4 20c0-2.21 3.582-4 8-4s8 1.79 8 4" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
+                <circle cx="12" cy="8" r="4" stroke="#4F8CFF" strokeWidth="1.5"/>
+                <path d="M4 20c0-2.21 3.582-4 8-4s8 1.79 8 4" stroke="#4F8CFF" strokeWidth="1.5"/>
+              </svg>
               Профиль
             </button>
             <button
-              className="w-full flex items-center gap-3 text-left px-6 py-3 text-lg text-red-400 hover:bg-red-500/10 rounded-xl transition-all font-semibold"
+              className="w-full flex items-center gap-3 text-left px-4 py-3 text-base text-red-400 hover:bg-red-500/10 transition-all font-medium"
               onClick={() => {
                 setMenuOpen(false);
                 // @ts-ignore
@@ -180,7 +201,9 @@ function AppBar() {
                 else alert('Закрытие доступно только в Telegram WebApp');
               }}
             >
-              <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="#ef4444" strokeWidth="1.5"/></svg>
+              <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
+                <path d="M6 18L18 6M6 6l12 12" stroke="#ef4444" strokeWidth="1.5"/>
+              </svg>
               Выйти
             </button>
           </div>
@@ -193,38 +216,53 @@ function AppBar() {
 function TabBar() {
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 bg-dark-card border-t border-dark-bg/40 w-screen h-16 flex items-center justify-around px-0 sm:px-2"
+      className="fixed inset-x-0 bottom-0 z-50 bg-dark-card border-t border-dark-bg/40 w-full"
       style={{
-        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-        boxShadow: 'none',
+        height: 'var(--tabbar-height)',
+        paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
+        boxShadow: '0 -2px 20px rgba(0,0,0,0.15)',
       }}
     >
-      {navItems.map((item) => (
-        <NavLink
-          key={item.to}
-          to={item.to}
-          className={({ isActive }) =>
-            `flex flex-col items-center justify-center gap-0.5 transition-all duration-200 relative w-1/4 min-w-0 py-1 ${isActive ? 'text-dark-accent' : 'text-dark-muted'}`
-          }
-        >
-          <span className="flex flex-col items-center w-full">
-            <span className="tabbar-icon flex items-center justify-center rounded-full" style={{padding: 8}}>
-              {item.icon}
-            </span>
-            <span className="text-[11px] mt-0.5 font-medium tracking-wide select-none w-full text-center">
-              {item.label}
-            </span>
-          </span>
-        </NavLink>
-      ))}
+      <div className="flex items-center justify-around h-full px-2">
+        {navItems.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            className={({ isActive }) =>
+              `flex flex-col items-center justify-center gap-1 transition-all duration-200 relative flex-1 py-2 ${isActive ? 'text-dark-accent' : 'text-dark-muted'}`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <span className="touch-target">
+                  <span className={`transition-transform duration-200 ${isActive ? 'scale-110' : ''}`}>
+                    {item.icon}
+                  </span>
+                </span>
+                <span className="text-xs font-medium tracking-wide select-none text-center leading-tight">
+                  {item.label}
+                </span>
+              </>
+            )}
+          </NavLink>
+        ))}
+      </div>
     </nav>
   );
 }
 
 function Layout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex-1 min-h-0 pt-4 pb-16 w-full max-w-md mx-auto px-2 sm:px-4 flex flex-col">
-      {children}
+    <div 
+      className="flex-1 w-full overflow-hidden"
+      style={{
+        paddingTop: 'var(--header-height)',
+        paddingBottom: 'var(--tabbar-height)',
+      }}
+    >
+      <div className="mobile-container h-full overflow-y-auto">
+        {children}
+      </div>
     </div>
   );
 }
