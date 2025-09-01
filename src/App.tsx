@@ -1874,22 +1874,70 @@ function SocialLinkEdit({ label, icon, value, onChange, placeholder, statusText 
   );
 }
 
-// Функция форматирования даты поста (разместить сразу после импортов)
+// Функция форматирования даты поста с относительным временем
 function formatPostDate(dateString: string): string {
   const date = new Date(dateString);
   const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  const diffWeeks = Math.floor(diffDays / 7);
+  const diffMonths = Math.floor(diffDays / 30);
+  
   const pad = (n: number) => n.toString().padStart(2, '0');
   const hours = pad(date.getHours());
   const minutes = pad(date.getMinutes());
   const time = `${hours}:${minutes}`;
+  
+  // Если меньше 1 минуты назад
+  if (diffMinutes < 1) return 'только что';
+  
+  // Если меньше часа назад
+  if (diffMinutes < 60) {
+    if (diffMinutes === 1) return '1 минуту назад';
+    if (diffMinutes < 5) return `${diffMinutes} минуты назад`;
+    return `${diffMinutes} минут назад`;
+  }
+  
+  // Если меньше суток назад
+  if (diffHours < 24) {
+    if (diffHours === 1) return '1 час назад';
+    if (diffHours < 5) return `${diffHours} часа назад`;
+    return `${diffHours} часов назад`;
+  }
+  
+  // Проверяем, сегодня ли это
   const isToday = date.toDateString() === now.toDateString();
+  if (isToday) return `сегодня в ${time}`;
+  
+  // Проверяем, вчера ли это
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
   const isYesterday = date.toDateString() === yesterday.toDateString();
-  if (isToday) return `Сегодня в ${time}`;
-  if (isYesterday) return `Вчера в ${time}`;
-  // Формат: 5 июня в 12:00
-  const months = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
-  return `${date.getDate()} ${months[date.getMonth()]} в ${time}`;
+  if (isYesterday) return `вчера в ${time}`;
+  
+  // Если меньше недели назад
+  if (diffDays < 7) {
+    if (diffDays === 1) return '1 день назад';
+    return `${diffDays} дня назад`;
+  }
+  
+  // Если меньше месяца назад
+  if (diffWeeks < 4) {
+    if (diffWeeks === 1) return '1 неделю назад';
+    return `${diffWeeks} недели назад`;
+  }
+  
+  // Если меньше года назад
+  if (diffMonths < 12) {
+    if (diffMonths === 1) return '1 месяц назад';
+    if (diffMonths < 5) return `${diffMonths} месяца назад`;
+    return `${diffMonths} месяцев назад`;
+  }
+  
+  // Для старых постов показываем дату
+  const months = ['янв','фев','мар','апр','май','июн','июл','авг','сен','окт','ноя','дек'];
+  return `${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
 }
 
