@@ -2,6 +2,7 @@
   "name": "mooza_dev",
   "version": "0.1.0",
   "private": true,
+  "homepage": "https://cryptoChaosDev.github.io/mooza_dev",
   "dependencies": {
     "@testing-library/dom": "^10.4.0",
     "@testing-library/jest-dom": "^6.6.3",
