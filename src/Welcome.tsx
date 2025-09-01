@@ -58,7 +58,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
       setYtInput(profile.youtube || '');
       setTgInput(profile.telegram || '');
     }
-  }, [step]);
+  }, [step, profile.vk, profile.youtube, profile.telegram]);
 
   // --- Валидация полей ---
   function validateField(field: string, value: any) {
@@ -492,40 +492,4 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
   );
 }
 
-function InviteStep({ onFinish }: { onFinish: () => void }) {
-  const [invited, setInvited] = React.useState(false);
-  const [skipped, setSkipped] = React.useState(false);
-  return (
-    <div className="flex flex-col items-center gap-8 animate-fade-in">
-      <div className="text-2xl font-bold text-dark-text mb-2">Почти готово!</div>
-      <div className="text-dark-muted text-center text-base mb-2 max-w-md">
-        Пригласите друзей из своих контактов и получите <span className="text-dark-accent font-semibold">бонус: +10 Mooзиков</span> за каждого приглашённого!<br/>
-        Это поможет быстрее найти единомышленников и сделать Mooza ещё интереснее.
-      </div>
-      {!invited && !skipped && (
-        <>
-          <button
-            className="px-6 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-pink-400 text-white font-semibold shadow active:scale-95 transition-all text-lg"
-            onClick={() => { alert('Импорт контактов доступен только в мобильном приложении или при интеграции.'); setInvited(true); }}
-          >
-            Пригласить из контактов
-          </button>
-          <button
-            className="px-6 py-3 rounded-xl bg-dark-bg/60 text-dark-muted font-semibold shadow active:scale-95 transition-all text-lg mt-2"
-            onClick={() => setSkipped(true)}
-          >
-            Пропустить
-          </button>
-        </>
-      )}
-      {(invited || skipped) && (
-        <button
-          className="px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-bold shadow-lg text-xl active:scale-95 transition-all animate-fade-in animate-scale-in mt-2"
-          onClick={onFinish}
-        >
-          Завершить
-        </button>
-      )}
-    </div>
-  );
-} 
+ 

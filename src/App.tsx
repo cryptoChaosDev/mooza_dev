@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, createContext, useContext } from "react";
-import { HashRouter as Router, Routes, Route, NavLink, useLocation, useNavigate, useParams } from "react-router-dom";
+import { HashRouter as Router, Routes, Route, NavLink, useNavigate, useParams } from "react-router-dom";
 import { InterestSelector } from "./InterestSelector";
 import { INTEREST_CATEGORIES } from "./categories";
 import { WelcomePage } from "./Welcome";
@@ -70,19 +70,6 @@ const navItems = [
     ),
   },
 ];
-
-// --- Theme Context ---
-const ThemeContext = createContext<{ theme: string; toggle: () => void }>({ theme: "light", toggle: () => {} });
-function useTheme() { return useContext(ThemeContext); }
-
-// --- SectionContainer ---
-function SectionContainer({ children }: { children: React.ReactNode }) {
-  return (
-    <section className="w-full max-w-md mx-auto flex flex-col gap-8 px-4 sm:px-0 bg-dark-card dark:bg-dark-card py-2 font-sans" style={{fontFamily: 'Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif'}}>
-      {children}
-    </section>
-  );
-}
 
 // --- PostCard ---
 function PostCard({ post, users, isOwn, onEdit, onDelete, onLike, onUserClick }: {
@@ -216,20 +203,18 @@ function TabBar() {
         <NavLink
           key={item.to}
           to={item.to}
-          className={({ isActive }: { isActive: boolean }) =>
+          className={({ isActive }) =>
             `flex flex-col items-center justify-center gap-0.5 transition-all duration-200 relative w-1/4 min-w-0 py-1 ${isActive ? 'text-dark-accent' : 'text-dark-muted'}`
           }
         >
-          {({ isActive }: { isActive: boolean }) => (
-            <span className="flex flex-col items-center w-full">
-              <span className={`tabbar-icon ${isActive ? 'tabbar-icon-active' : ''} flex items-center justify-center rounded-full`} style={{padding: isActive ? 8 : 0}}>
-                {item.icon}
-              </span>
-              <span className="text-[11px] mt-0.5 font-medium tracking-wide select-none w-full text-center">
-                {item.label}
-              </span>
+          <span className="flex flex-col items-center w-full">
+            <span className="tabbar-icon flex items-center justify-center rounded-full" style={{padding: 8}}>
+              {item.icon}
             </span>
-          )}
+            <span className="text-[11px] mt-0.5 font-medium tracking-wide select-none w-full text-center">
+              {item.label}
+            </span>
+          </span>
         </NavLink>
       ))}
     </nav>
@@ -497,10 +482,6 @@ function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, onUserC
     </main>
   );
 }
-
-const POPULAR_TAGS = [
-  "Гитара", "Бас", "Барабаны", "Вокал", "Клавиши", "Скрипка", "Саксофон", "Флейта", "Рок", "Поп", "Джаз", "Блюз", "Электроника", "Импровизация", "Каверы", "Авторская музыка", "Сведение", "Продюсирование"
-];
 
 interface Post {
   id: number;
