@@ -6,15 +6,15 @@ function SocialLinkEdit({ label, icon, value, onChange, placeholder }: { label: 
   React.useEffect(() => { setInput(value || ""); }, [value]);
   if (value) {
     return (
-      <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner">
+      <div className="flex items-center gap-3 bg-dark-bg/60 rounded-2xl px-4 py-3 shadow-inner">
         <span className="text-xl">{icon}</span>
-        <a href={value} target="_blank" rel="noopener noreferrer" className="flex-1 text-blue-400 underline text-sm truncate">{value}</a>
-        <button className="text-red-500 text-xs px-2" onClick={() => onChange("")} title="Отвязать"><span style={{fontSize: '1.2em'}}>✖</span></button>
+        <a href={value} target="_blank" rel="noopener noreferrer" className="flex-1 text-blue-400 underline text-sm truncate hover:text-blue-300">{value}</a>
+        <button className="text-red-500 text-xs px-2 hover:scale-110 transition-transform" onClick={() => onChange("")} title="Отвязать"><span style={{fontSize: '1.2em'}}>✖</span></button>
       </div>
     );
   }
   return (
-    <div className="flex items-center gap-2 bg-dark-bg/60 rounded-xl px-3 py-2 shadow-inner">
+    <div className="flex items-center gap-3 bg-dark-bg/60 rounded-2xl px-4 py-3 shadow-inner">
       <span className="text-xl">{icon}</span>
       <input
         className="flex-1 bg-transparent outline-none text-base text-dark-text"
@@ -147,55 +147,112 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
     <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><rect x="2" y="2" width="20" height="20" rx="5" fill="#FF0000"/><polygon points="10,8 16,12 10,16" fill="#fff"/></svg>
   );
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-dark-bg via-dark-card to-dark-bg/80 animate-fade-in" style={{minHeight: '100dvh'}}>
-      <div className="w-full max-w-md bg-dark-card rounded-2xl shadow-2xl p-8 flex flex-col gap-8 animate-fade-in animate-scale-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-dark-bg via-dark-card to-dark-bg/80 animate-fade-in" style={{minHeight: '100dvh', maxWidth: '100vw', overflowX: 'hidden'}}>
+      <div className="w-full max-w-md bg-dark-card rounded-3xl shadow-2xl p-6 flex flex-col gap-6 animate-fade-in animate-scale-in sm:p-8 sm:gap-8" style={{maxWidth: 'calc(100vw - 2rem)'}}>
         {/* Прогресс-бар */}
-        <div className="w-full flex flex-col items-center gap-2 mb-2">
+        <div className="w-full flex flex-col items-center gap-3 mb-2">
           <div className="w-full h-3 bg-dark-bg/30 rounded-full overflow-hidden">
-            <div className="h-3 bg-gradient-to-r from-blue-400 to-pink-400 transition-all" style={{ width: `${progress}%` }}></div>
+            <div className="h-3 bg-gradient-to-r from-blue-500 to-cyan-400 transition-all rounded-full" style={{ width: `${progress}%` }}></div>
           </div>
-          <div className="text-xs text-dark-muted mt-1">Профиль заполнен на {progress}%</div>
+          <div className="text-sm text-dark-muted font-semibold">Профиль заполнен на {progress}%</div>
         </div>
         {/* Шаги */}
         <div className="flex flex-col items-center gap-2">
           <div className="w-full flex items-center gap-2 mb-4">
             {steps.map((t, i) => (
-              <div key={i} className={`flex-1 h-2 rounded-full transition-all ${i <= step ? 'bg-gradient-to-r from-blue-400 to-pink-400' : 'bg-dark-bg/40'}`}></div>
+              <div key={i} className={`flex-1 h-2 rounded-full transition-all ${i <= step ? 'bg-gradient-to-r from-blue-500 to-cyan-400' : 'bg-dark-bg/40'}`}></div>
             ))}
           </div>
         </div>
         {step === 0 && (
-          <div className="flex flex-col items-center gap-8 animate-fade-in">
-            <span className="text-5xl font-bold mb-2 select-none" style={{fontFamily: 'Pacifico, cursive', letterSpacing: '0.04em', background: 'linear-gradient(90deg,#4F8CFF,#38BDF8,#f472b6 80%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', display: 'inline-block'}}>Mooza</span>
-            <span className="text-lg text-dark-accent font-semibold tracking-wide mt-6 animate-fade-in" style={{letterSpacing: '0.03em'}}>Музыкальная соцсеть нового поколения</span>
-            <span className="block text-[80px] md:text-[100px] select-none animate-bounce-slow" role="img" aria-label="music">🎸🎤🎧</span>
-            <div className="text-dark-muted text-center text-base mb-4 max-w-md animate-fade-in z-10">
-              <span className="font-semibold text-dark-accent">Mooza</span> — это место, где музыканты, продюсеры и меломаны находят единомышленников, создают коллаборации и вдохновляются друг другом.<br/>
-              <span className="text-dark-accent">Создайте свой музыкальный профиль и начните знакомство с сообществом!</span>
+          <div className="flex flex-col items-center gap-6 animate-fade-in sm:gap-8">
+            <div className="relative">
+              <span className="text-4xl font-bold mb-2 select-none sm:text-5xl" style={{fontFamily: 'Pacifico, cursive', letterSpacing: '0.04em', background: 'linear-gradient(90deg,#4F8CFF,#38BDF8,#f472b6 80%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', display: 'inline-block'}}>Mooza</span>
+              <div className="absolute -top-2 -right-6 text-2xl animate-pulse sm:-right-8 sm:text-2xl">✨</div>
             </div>
-            <button className="px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-500 to-pink-400 text-white font-bold shadow-lg text-xl active:scale-95 transition-all animate-fade-in animate-scale-in mt-2 z-10" onClick={next} style={{letterSpacing: '0.04em'}}>Начать</button>
+            
+            <div className="flex justify-center w-full mb-2 sm:mb-4">
+              <div className="text-6xl select-none animate-bounce-slow sm:text-7xl" role="img" aria-label="music">🎸🎤🎧</div>
+            </div>
+            
+            <div className="bg-gradient-to-r from-blue-500/10 to-cyan-400/10 rounded-2xl p-5 border border-blue-500/20 w-full sm:p-6">
+              <div className="grid grid-cols-3 gap-3 mb-4 sm:gap-4 sm:mb-6">
+                <div className="flex flex-col items-center">
+                  <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center mb-2 sm:w-14 sm:h-14 sm:mb-3">
+                    <svg width="24" height="24" fill="none" viewBox="0 0 24 24" className="sm:w-28 sm:h-28">
+                      <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" stroke="#38BDF8" strokeWidth="1.5"/>
+                      <path d="M12 22c4-2 8-6 8-10a8 8 0 1 0-16 0c0 4 4 8 8 10Z" stroke="#38BDF8" strokeWidth="1.5"/>
+                    </svg>
+                  </div>
+                  <span className="text-xs text-dark-text text-center font-medium sm:text-sm">Сообщество</span>
+                </div>
+                
+                <div className="flex flex-col items-center">
+                  <div className="w-12 h-12 rounded-full bg-cyan-400/20 flex items-center justify-center mb-2 sm:w-14 sm:h-14 sm:mb-3">
+                    <svg width="24" height="24" fill="none" viewBox="0 0 24 24" className="sm:w-28 sm:h-28">
+                      <path d="M12 15V9M9 12h6M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" stroke="#4F8CFF" strokeWidth="1.5"/>
+                    </svg>
+                  </div>
+                  <span className="text-xs text-dark-text text-center font-medium sm:text-sm">Коллаборации</span>
+                </div>
+                
+                <div className="flex flex-col items-center">
+                  <div className="w-12 h-12 rounded-full bg-pink-500/20 flex items-center justify-center mb-2 sm:w-14 sm:h-14 sm:mb-3">
+                    <svg width="24" height="24" fill="none" viewBox="0 0 24 24" className="sm:w-28 sm:h-28">
+                      <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" stroke="#f472b6" strokeWidth="1.5"/>
+                      <path d="m8 12 2 2 4-4" stroke="#f472b6" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </div>
+                  <span className="text-xs text-dark-text text-center font-medium sm:text-sm">Рост</span>
+                </div>
+              </div>
+              
+              <div className="text-dark-muted text-center text-xs mb-2 sm:text-sm sm:mb-4">
+                Найди единомышленников. Создай коллаборации. Развивайся.
+              </div>
+            </div>
+            
+            <div className="flex flex-col items-center gap-4 w-full">
+              <button className="w-full px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-bold shadow-lg text-lg active:scale-95 transition-all animate-fade-in animate-scale-in hover:scale-105 flex items-center justify-center gap-2 sm:px-8 sm:py-4 sm:text-xl" onClick={next} style={{letterSpacing: '0.04em'}}>
+                Начать регистрацию
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24" className="sm:w-24 sm:h-24">
+                  <path d="M9 5l7 7-7 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            </div>
+            
+            <div className="flex gap-6 mt-2 sm:gap-8">
+              <div className="flex flex-col items-center">
+                <div className="text-lg font-bold text-dark-text sm:text-xl">10K+</div>
+                <div className="text-xs text-dark-muted">Пользователей</div>
+              </div>
+              <div className="flex flex-col items-center">
+                <div className="text-lg font-bold text-dark-text sm:text-xl">5K+</div>
+                <div className="text-xs text-dark-muted">Коллабораций</div>
+              </div>
+            </div>
           </div>
         )}
         {step === 1 && (
           <div className="flex flex-col items-center gap-8 animate-fade-in">
             <div className="text-xl font-bold text-dark-text mb-2">Загрузите аватар</div>
             <div className="relative w-28 h-28 mb-2">
-              <div className="w-28 h-28 rounded-full overflow-hidden border-4 border-white shadow-lg bg-dark-bg/80 flex items-center justify-center">
+              <div className="w-28 h-28 rounded-2xl overflow-hidden border-4 border-white shadow-2xl bg-dark-bg/80 flex items-center justify-center">
                 {avatarFile ? (
-                  <img src={URL.createObjectURL(avatarFile)} alt="avatar" className="w-full h-full object-cover rounded-full" />
+                  <img src={URL.createObjectURL(avatarFile)} alt="avatar" className="w-full h-full object-cover rounded-2xl" />
                 ) : profile.avatarUrl ? (
-                  <img src={profile.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
+                  <img src={profile.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-2xl" />
                 ) : (
                   <span role="img" aria-label="avatar" className="text-5xl">👤</span>
                 )}
                 {/* Иконка камеры для загрузки */}
-                <label className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/20 hover:bg-black/30 transition" title="Загрузить аватар">
+                <label className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/20 hover:bg-black/30 transition hover:scale-105" title="Загрузить аватар">
                   <svg width="44" height="44" fill="none" viewBox="0 0 24 24">
                     <circle cx="12" cy="12" r="11" fill="url(#moozagrad)"/>
                     <defs>
                       <linearGradient id="moozagrad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
                         <stop stopColor="#4F8CFF"/>
-                        <stop offset="1" stopColor="#f472b6"/>
+                        <stop offset="1" stopColor="#38BDF8"/>
                       </linearGradient>
                     </defs>
                     <path d="M8 12.5a4 4 0 1 0 8 0 4 4 0 0 0-8 0Zm8-4V7a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v1.5" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
@@ -217,7 +274,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
                 {/* Крестик для удаления аватара */}
                 {(avatarFile || profile.avatarUrl) && (
                   <button
-                    className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 shadow transition"
+                    className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 shadow transition hover:scale-110"
                     style={{zIndex: 2}}
                     onClick={() => { setAvatarFile(null); setProfile(p => ({ ...p, avatarUrl: undefined })); }}
                     title="Удалить аватар"
@@ -233,7 +290,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
               <button onClick={prev} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Назад">
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
-              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-pink-400 to-blue-400 text-white shadow hover:scale-110 transition" title="Далее">
+              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Далее">
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
             </div>
@@ -242,12 +299,12 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
         {step === 2 && (
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="text-xl font-bold text-dark-text mb-2">Как вас зовут?</div>
-            <input className={`px-4 py-3 rounded-xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.firstName ? 'border border-red-500' : ''}`} placeholder="Имя" value={profile.firstName} onChange={e => {
+            <input className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.firstName ? 'border border-red-500' : ''}`} placeholder="Имя" value={profile.firstName} onChange={e => {
               setProfile(p => ({ ...p, firstName: e.target.value }));
               setErrors((err: any) => ({ ...err, firstName: validateField('firstName', e.target.value) }));
             }} maxLength={40} autoFocus />
             {errors.firstName && <div className="text-xs text-red-500 -mt-2">{errors.firstName}</div>}
-            <input className={`px-4 py-3 rounded-xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.lastName ? 'border border-red-500' : ''}`} placeholder="Фамилия" value={profile.lastName} onChange={e => {
+            <input className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.lastName ? 'border border-red-500' : ''}`} placeholder="Фамилия" value={profile.lastName} onChange={e => {
               setProfile(p => ({ ...p, lastName: e.target.value }));
               setErrors((err: any) => ({ ...err, lastName: validateField('lastName', e.target.value) }));
             }} maxLength={40} />
@@ -258,7 +315,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
               <button onClick={prev} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Назад">
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
-              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-pink-400 to-blue-400 text-white shadow hover:scale-110 transition" title="Далее" disabled={!!validateField('firstName', profile.firstName) || !!validateField('lastName', profile.lastName)}>
+              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Далее" disabled={!!validateField('firstName', profile.firstName) || !!validateField('lastName', profile.lastName)}>
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
             </div>
@@ -267,18 +324,18 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
         {step === 3 && (
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="text-xl font-bold text-dark-text mb-2">Где вы живёте?</div>
-            <input className={`px-4 py-3 rounded-xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.country ? 'border border-red-500' : ''}`} placeholder="Страна" value={profile.country} onChange={e => {
+            <input className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.country ? 'border border-red-500' : ''}`} placeholder="Страна" value={profile.country} onChange={e => {
               setProfile(p => ({ ...p, country: e.target.value }));
               setErrors((err: any) => ({ ...err, country: validateField('country', e.target.value) }));
             }} maxLength={40} autoComplete="country" />
             {errors.country && <div className="text-xs text-red-500 -mt-2">{errors.country}</div>}
             <div className="flex gap-2">
-              <input className={`flex-1 px-4 py-3 rounded-xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.city ? 'border border-red-500' : ''}`} placeholder="Город" value={profile.city} onChange={e => {
+              <input className={`flex-1 px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.city ? 'border border-red-500' : ''}`} placeholder="Город" value={profile.city} onChange={e => {
                 setProfile(p => ({ ...p, city: e.target.value }));
                 setErrors((err: any) => ({ ...err, city: validateField('city', e.target.value) }));
               }} maxLength={40} />
               <button
-                className="px-3 py-2 rounded-xl bg-dark-accent text-white font-semibold shadow active:scale-95 transition-all text-sm"
+                className="px-3 py-2 rounded-2xl bg-dark-accent text-white font-semibold shadow active:scale-95 transition-all text-sm hover:scale-105"
                 style={{minWidth: 0}}
                 type="button"
                 title="Определить по геолокации"
@@ -320,7 +377,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
               <button onClick={prev} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Назад">
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
-              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-pink-400 to-blue-400 text-white shadow hover:scale-110 transition" title="Далее" disabled={!!validateField('country', profile.country) || !!validateField('city', profile.city)}>
+              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Далее" disabled={!!validateField('country', profile.country) || !!validateField('city', profile.city)}>
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
             </div>
@@ -329,13 +386,13 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
         {step === 4 && (
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="text-xl font-bold text-dark-text mb-2">Место работы</div>
-            <input className="px-4 py-3 rounded-xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base" placeholder="Место работы" value={profile.workPlace} onChange={e => setProfile(p => ({ ...p, workPlace: e.target.value }))} maxLength={60} />
+            <input className="px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base" placeholder="Место работы" value={profile.workPlace} onChange={e => setProfile(p => ({ ...p, workPlace: e.target.value }))} maxLength={60} />
             {/* Стрелки навигации */}
             <div className="flex items-center justify-center gap-8 mt-2">
               <button onClick={prev} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Назад">
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
-              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-pink-400 to-blue-400 text-white shadow hover:scale-110 transition" title="Далее">
+              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Далее">
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
             </div>
@@ -355,7 +412,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
               <button onClick={prev} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Назад">
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
-              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-pink-400 to-blue-400 text-white shadow hover:scale-110 transition" title="Далее" disabled={!!validateField('skills', profile.skills)}>
+              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Далее" disabled={!!validateField('skills', profile.skills)}>
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
             </div>
@@ -375,7 +432,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
               <button onClick={prev} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Назад">
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
-              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-pink-400 to-blue-400 text-white shadow hover:scale-110 transition" title="Далее" disabled={!!validateField('interests', profile.interests)}>
+              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Далее" disabled={!!validateField('interests', profile.interests)}>
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
             </div>
@@ -384,14 +441,14 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
         {step === 7 && (
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="text-xl font-bold text-dark-text mb-2">Резюме / портфолио</div>
-            <textarea className={`px-4 py-3 rounded-xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base resize-none ${errors.portfolioText ? 'border border-red-500' : ''}`} placeholder="Расскажите о себе, опыте, достижениях, прикрепите ссылку или файл..." value={profile.portfolio.text} onChange={e => {
+            <textarea className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base resize-none ${errors.portfolioText ? 'border border-red-500' : ''}`} placeholder="Расскажите о себе, опыте, достижениях, прикрепите ссылку или файл..." value={profile.portfolio.text} onChange={e => {
               setProfile(p => ({ ...p, portfolio: { ...p.portfolio, text: e.target.value } }));
               setErrors((err: any) => ({ ...err, portfolioText: validateField('portfolioText', e.target.value) }));
             }} rows={3} maxLength={500} />
             {errors.portfolioText && <div className="text-xs text-red-500 -mt-2">{errors.portfolioText}</div>}
             <div className="text-dark-muted text-xs">Максимум 500 символов. Можно прикрепить файл (JPG, PNG, PDF, до 3 МБ).</div>
             {/* Кнопка добавления вложения */}
-            <label className="inline-flex items-center gap-2 cursor-pointer p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:opacity-90 transition-colors self-start" title="Добавить вложение">
+            <label className="inline-flex items-center gap-2 cursor-pointer p-2 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:opacity-90 transition-colors self-start hover:scale-105" title="Добавить вложение">
               <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
                 <path d="M16.5 13.5V7a4.5 4.5 0 0 0-9 0v8a6 6 0 0 0 12 0V9.5" stroke="currentColor" strokeWidth="1.5"/>
                 <circle cx="12" cy="17" r="1.5" fill="currentColor"/>
@@ -413,14 +470,14 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
               }} className="hidden" />
             </label>
             {profile.portfolio.fileUrl && (
-              <a href={profile.portfolio.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline text-xs mt-1">Скачать вложение</a>
+              <a href={profile.portfolio.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline text-xs mt-1 hover:text-blue-400">Скачать вложение</a>
             )}
             {/* Стрелки навигации */}
             <div className="flex items-center justify-center gap-8 mt-2">
               <button onClick={prev} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Назад">
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
-              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-pink-400 to-blue-400 text-white shadow hover:scale-110 transition" title="Далее">
+              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Далее">
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
             </div>
@@ -429,7 +486,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
         {step === 8 && (
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="text-xl font-bold text-dark-text mb-2">Контактная информация</div>
-            <input className={`px-4 py-3 rounded-xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.phone ? 'border border-red-500' : ''}`} placeholder="Телефон (+7 ...)" value={profile.phone} onChange={e => {
+            <input className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.phone ? 'border border-red-500' : ''}`} placeholder="Телефон (+7 ...)" value={profile.phone} onChange={e => {
               let val = e.target.value.replace(/\D/g, '');
               if (val.length > 11) val = val.slice(0, 11);
               let formatted = '+7';
@@ -442,7 +499,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
             }} maxLength={18} />
             {errors.phone && <div className="text-xs text-red-500 -mt-2">{errors.phone}</div>}
             <div className="text-dark-muted text-xs">Формат: +7 (XXX) XXX-XX-XX</div>
-            <input className={`px-4 py-3 rounded-xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.email ? 'border border-red-500' : ''}`} placeholder="Email" value={profile.email} onChange={e => {
+            <input className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.email ? 'border border-red-500' : ''}`} placeholder="Email" value={profile.email} onChange={e => {
               setProfile(p => ({ ...p, email: e.target.value }));
               setErrors((err: any) => ({ ...err, email: validateField('email', e.target.value) }));
             }} maxLength={60} type="email" autoComplete="email" />
@@ -453,7 +510,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
               <button onClick={prev} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Назад">
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
-              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-pink-400 to-blue-400 text-white shadow hover:scale-110 transition" title="Далее" disabled={!!validateField('phone', profile.phone) || !!validateField('email', profile.email)}>
+              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Далее" disabled={!!validateField('phone', profile.phone) || !!validateField('email', profile.email)}>
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
             </div>
@@ -474,7 +531,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
               <button onClick={prev} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Назад">
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
-              <button onClick={() => { setProfile(p => ({ ...p, vk: vkInput.trim(), youtube: ytInput.trim(), telegram: tgInput.trim() })); next(); }} className="p-2 rounded-full bg-gradient-to-r from-pink-400 to-blue-400 text-white shadow hover:scale-110 transition" title="Далее" disabled={!!errors.vk || !!errors.youtube || !!errors.telegram}>
+              <button onClick={() => { setProfile(p => ({ ...p, vk: vkInput.trim(), youtube: ytInput.trim(), telegram: tgInput.trim() })); next(); }} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Далее" disabled={!!errors.vk || !!errors.youtube || !!errors.telegram}>
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
             </div>
@@ -484,12 +541,10 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
           <div className="flex flex-col gap-6 items-center animate-fade-in">
             <div className="text-2xl font-bold text-dark-text mb-2">Профиль готов!</div>
             <div className="text-dark-muted text-center text-base mb-4 max-w-md animate-fade-in z-10">Теперь вы можете пользоваться всеми возможностями Mooza.<br/>Проверьте данные и начните знакомство с сообществом!</div>
-            <button className="px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-500 to-pink-400 text-white font-bold shadow-lg text-xl active:scale-95 transition-all animate-fade-in animate-scale-in mt-2 z-10" onClick={() => onFinish({ ...profile, vk: vkInput.trim(), youtube: ytInput.trim(), telegram: tgInput.trim(), vkId: vkInput.trim(), youtubeId: ytInput.trim(), telegramId: tgInput.trim() })} style={{letterSpacing: '0.04em'}}>В профиль</button>
+            <button className="px-8 py-4 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-bold shadow-lg text-xl active:scale-95 transition-all animate-fade-in animate-scale-in mt-2 z-10 hover:scale-105" onClick={() => onFinish({ ...profile, vk: vkInput.trim(), youtube: ytInput.trim(), telegram: tgInput.trim(), vkId: vkInput.trim(), youtubeId: ytInput.trim(), telegramId: tgInput.trim() })} style={{letterSpacing: '0.04em'}}>В профиль</button>
           </div>
         )}
       </div>
     </div>
   );
 }
-
- 

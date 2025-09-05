@@ -19,10 +19,11 @@ export function AppBar() {
   
   return (
     <header 
-      className="fixed top-0 left-0 right-0 z-50 bg-dark-card border-b border-dark-bg/40 flex items-center justify-between px-4"
+      className="fixed top-0 left-0 right-0 z-50 bg-dark-card border-b border-dark-bg/40 flex items-center justify-between px-4 overflow-x-hidden"
       style={{
         height: 'var(--header-height)',
         boxShadow: '0 2px 20px rgba(0,0,0,0.15)',
+        maxWidth: '100vw',
       }}
     >
       <div className="flex items-center flex-1">

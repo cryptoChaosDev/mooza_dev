@@ -11,7 +11,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={showToast}>
       {children}
-      {toast && <div className="toast animate-fade-in animate-scale-in">{toast}</div>}
+      {toast && <div className="toast animate-fade-in animate-scale-in overflow-x-hidden">{toast}</div>}
     </ToastContext.Provider>
   );
 }

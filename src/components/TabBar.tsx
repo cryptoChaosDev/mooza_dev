@@ -35,11 +35,12 @@ const navItems = [
 export function TabBar() {
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 bg-dark-card border-t border-dark-bg/40 w-full"
+      className="fixed inset-x-0 bottom-0 z-50 bg-dark-card border-t border-dark-bg/40 w-full overflow-x-hidden"
       style={{
         height: 'var(--tabbar-height)',
         paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
         boxShadow: '0 -2px 20px rgba(0,0,0,0.15)',
+        maxWidth: '100vw',
       }}
     >
       <div className="flex items-center justify-around h-full px-2">

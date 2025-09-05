@@ -46,7 +46,7 @@ const Dropdown: React.FC<{
         <span className={`ml-2 text-dark-accent text-lg transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
       </button>
       {open && (
-        <div className="absolute z-30 left-0 right-0 mt-2 bg-dark-card rounded-2xl shadow-xl border border-dark-bg/40 max-h-60 overflow-y-auto animate-fade-in animate-scale-in custom-scrollbar">
+        <div className="absolute z-30 left-0 right-0 mt-2 bg-dark-card rounded-2xl shadow-xl border border-dark-bg/40 max-h-60 overflow-y-auto overflow-x-hidden animate-fade-in animate-scale-in custom-scrollbar">
           {options.length === 0 && (
             <div className="px-4 py-3 text-dark-muted text-sm">Нет вариантов</div>
           )}
@@ -108,7 +108,7 @@ export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, on
   };
 
   return (
-    <div className="flex flex-col gap-4 w-full animate-fade-in">
+    <div className="flex flex-col gap-4 w-full animate-fade-in overflow-x-hidden">
       {/* Выбранные фильтры и сброс */}
       <div className="flex flex-wrap gap-2 items-center mb-1">
         {selected.length > 0 && (
@@ -171,4 +171,4 @@ export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, on
       )}
     </div>
   );
-}; 
+};

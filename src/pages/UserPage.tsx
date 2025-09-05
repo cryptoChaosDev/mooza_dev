@@ -20,8 +20,8 @@ interface UserPageProps {
 
 export function UserPage({ user, posts, onBack, isFriend, isFavorite, onAddFriend, onRemoveFriend, onToggleFavorite, onLikePost, currentUserName }: UserPageProps) {
   return (
-    <main className="flex flex-col items-center min-h-[100dvh] pt-20 bg-dark-bg w-full flex-1" style={{ paddingBottom: 'calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px))' }}>
-      <section className="w-full max-w-md mb-6">
+    <main className="flex flex-col items-center min-h-[100dvh] pt-20 bg-dark-bg w-full flex-1 overflow-x-hidden" style={{ paddingBottom: 'calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px))' }}>
+      <section className="w-full max-w-md mb-6 overflow-x-hidden">
         <button className="mb-4 flex items-center gap-2 text-dark-accent hover:underline text-base font-semibold" onClick={onBack}>
           <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
           Назад
@@ -29,7 +29,7 @@ export function UserPage({ user, posts, onBack, isFriend, isFavorite, onAddFrien
         <ProfileView profile={user} />
         {/* Посты пользователя */}
         <div className="font-semibold text-lg mb-2 text-dark-text pl-2">Посты пользователя</div>
-        <div className="flex flex-col gap-4 max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+        <div className="flex flex-col gap-4 max-h-56 overflow-y-auto overflow-x-hidden pr-1 custom-scrollbar">
           {posts.length === 0 && <div className="text-dark-muted text-center">Нет постов</div>}
           {posts.map((post) => (
             <div key={post.id} className="relative bg-dark-card rounded-2xl shadow p-4 flex flex-col gap-2 animate-fade-in animate-scale-in">
