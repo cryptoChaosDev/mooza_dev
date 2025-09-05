@@ -46,7 +46,7 @@ const Dropdown: React.FC<{
         <span className={`ml-2 text-dark-accent text-lg transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
       </button>
       {open && (
-        <div className="absolute z-30 left-0 right-0 mt-2 bg-dark-card rounded-2xl shadow-xl border border-dark-bg/40 max-h-60 overflow-y-auto overflow-x-hidden animate-fade-in animate-scale-in custom-scrollbar">
+        <div className="absolute z-50 left-0 right-0 mt-2 bg-dark-card rounded-2xl shadow-xl border border-dark-bg/40 max-h-[70vh] overflow-y-auto overflow-x-hidden animate-fade-in animate-scale-in custom-scrollbar">
           {options.length === 0 && (
             <div className="px-4 py-3 text-dark-muted text-sm">Нет вариантов</div>
           )}
@@ -83,6 +83,16 @@ export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, on
       setTag("");
     }
   };
+
+  // Automatically add tag when it's selected
+  useEffect(() => {
+    if (tag && !selected.includes(tag)) {
+      const timer = setTimeout(() => {
+        handleAddTag();
+      }, 300); // Small delay to allow for UI feedback
+      return () => clearTimeout(timer);
+    }
+  }, [tag]);
 
   const handleRemove = (t: string) => {
     onChange(selected.filter(s => s !== t));
@@ -159,15 +169,11 @@ export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, on
         open={openTag}
         onOpenChange={setOpenTag}
       />
-      {/* Кнопка добавить */}
-      {tag && (
-        <button
-          className="mt-2 px-4 py-2 rounded-xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold shadow hover:opacity-90 active:scale-95 transition-all w-fit mx-auto disabled:opacity-50 disabled:cursor-not-allowed animate-fade-in"
-          onClick={handleAddTag}
-          type="button"
-        >
-          Добавить
-        </button>
+      {/* Кнопка добавить - теперь скрыта, так как выбор автоматический */}
+      {tag && !selected.includes(tag) && (
+        <div className="mt-2 text-center text-xs text-dark-accent animate-fade-in">
+          Тег будет добавлен автоматически
+        </div>
       )}
     </div>
   );
