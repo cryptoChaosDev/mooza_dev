@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/mooza_dev/static/css/main.3ed4ac0e.css",
+    "main.css": "/mooza_dev/static/css/main.9e05138f.css",
     "main.js": "/mooza_dev/static/js/main.bc013096.js",
     "static/js/453.5b5ab2b4.chunk.js": "/mooza_dev/static/js/453.5b5ab2b4.chunk.js",
     "index.html": "/mooza_dev/index.html",
-    "main.3ed4ac0e.css.map": "/mooza_dev/static/css/main.3ed4ac0e.css.map",
+    "main.9e05138f.css.map": "/mooza_dev/static/css/main.9e05138f.css.map",
     "main.bc013096.js.map": "/mooza_dev/static/js/main.bc013096.js.map",
     "453.5b5ab2b4.chunk.js.map": "/mooza_dev/static/js/453.5b5ab2b4.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.3ed4ac0e.css",
+    "static/css/main.9e05138f.css",
     "static/js/main.bc013096.js"
   ]
 }
