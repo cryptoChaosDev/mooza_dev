@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { apiMe, getProfile, updateProfile } from "./api";
 import { HashRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
 import { WelcomePage } from "./Welcome";
 import { UserProfile, Post } from "./types";
@@ -10,6 +11,7 @@ import { HomeFeed } from "./pages/HomeFeed";
 import { Search } from "./pages/Search";
 import { Friends } from "./pages/Friends";
 import { Profile } from "./pages/Profile";
+import { SkillsInterests } from "./pages/SkillsInterests";
 import { ToastProvider } from "./contexts/ToastContext";
 import { UserPageWrapper } from "./pages/UserPageWrapper";
 
@@ -49,6 +51,44 @@ function App() {
   const tgUser = getTelegramUser();
   const [showWelcome, setShowWelcome] = useState(true);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+
+  // Load profile from API if token exists
+  React.useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    (async () => {
+      try {
+        const me = await apiMe(token);
+        const { id, email, phone } = me;
+        const { profile: p } = await getProfile(token);
+        if (p) {
+          const hydrated: UserProfile = {
+            userId: String(id),
+            firstName: p.firstName,
+            lastName: p.lastName,
+            name: `${p.firstName} ${p.lastName}`.trim(),
+            bio: p.bio || '',
+            workPlace: p.workPlace || '',
+            skills: p.skills || [],
+            interests: p.interests || [],
+            portfolio: p.portfolio || { text: '' },
+            phone: phone,
+            email: email,
+            vkId: '', youtubeId: '', telegramId: '',
+            city: p.city || '',
+            country: p.country || '',
+            avatarUrl: p.avatarUrl || undefined,
+          };
+          setProfile(hydrated);
+          setShowWelcome(false);
+        } else {
+          setShowWelcome(true);
+        }
+      } catch {
+        // invalid token
+      }
+    })();
+  }, []);
 
   // ВСЕ остальные хуки — сюда, до любого return!
   const [allUsers, setAllUsers] = useState<UserProfile[]>(MOCK_USERS);
@@ -99,15 +139,58 @@ function App() {
   };
 
   if (showWelcome) {
-    return <WelcomePage onFinish={p => {
-      setProfile({
-        ...p,
-        vkId: p.vk,
-        youtubeId: p.youtube,
-        telegramId: p.telegram,
-        interests: p.interests || [],
-      });
-      setShowWelcome(false);
+    return <WelcomePage onFinish={async p => {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+      
+      try {
+        // Save profile data to server
+        const result = await updateProfile(token, {
+          firstName: p.firstName,
+          lastName: p.lastName,
+          avatarUrl: p.avatarUrl,
+          bio: p.bio || '',
+          workPlace: p.workPlace || '',
+          skills: p.skills || [],
+          interests: p.interests || [],
+          portfolio: p.portfolio || null,
+          city: p.city || '',
+          country: p.country || '',
+        });
+
+        if (result && result.profile) {
+          // Get fresh profile data from server to ensure consistency
+          const { profile: freshProfile } = await getProfile(token);
+          if (freshProfile) {
+            const { id, email, phone } = await apiMe(token);
+            // Update local state with fresh data from server
+            const newProfile: UserProfile = {
+              userId: String(id),
+              firstName: freshProfile.firstName,
+              lastName: freshProfile.lastName,
+              name: `${freshProfile.firstName} ${freshProfile.lastName}`.trim(),
+              bio: freshProfile.bio || '',
+              workPlace: freshProfile.workPlace || '',
+              skills: freshProfile.skills || [],
+              interests: freshProfile.interests || [],
+              portfolio: freshProfile.portfolio || { text: '' },
+              phone: phone,
+              email: email,
+              vkId: p.vk || '',
+              youtubeId: p.youtube || '',
+              telegramId: p.telegram || '',
+              city: freshProfile.city || '',
+              country: freshProfile.country || '',
+              avatarUrl: freshProfile.avatarUrl || undefined,
+            };
+            setProfile(newProfile);
+            setShowWelcome(false);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to save profile:', error);
+        // Could show error toast here
+      }
     }} />;
   }
 
@@ -120,6 +203,7 @@ function App() {
           <Route path="/search" element={<Search profile={profile!} users={allUsers} friends={friends} favorites={favorites} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onToggleFavorite={handleToggleFavorite} onUserClick={handleUserClick} />} />
           <Route path="/friends" element={<Friends profile={profile!} friends={friends} users={allUsers} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onUserClick={handleUserClick} />} />
           <Route path="/profile" element={<Profile profile={profile!} setProfile={setProfile} allPosts={allPosts} setAllPosts={setAllPosts} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} users={allUsers} setAllUsers={setAllUsers} friends={friends} favorites={favorites} onUserClick={handleUserClick} />} />
+          <Route path="/skills" element={<SkillsInterests profile={profile!} setProfile={setProfile} />} />
           <Route path="/user/:userName" element={<UserPageWrapper 
             allUsers={allUsers} 
             allPosts={allPosts} 

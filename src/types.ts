@@ -9,7 +9,12 @@ export interface UserProfile {
   workPlace?: string;
   skills: string[];
   interests: string[];
-  portfolio?: { text: string; fileUrl?: string };
+  portfolio?: { 
+    text: string; 
+    fileUrl?: string;
+    fileName?: string;
+    fileType?: string;
+  };
   phone?: string;
   email?: string;
   socials?: string[];

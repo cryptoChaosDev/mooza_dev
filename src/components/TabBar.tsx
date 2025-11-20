@@ -24,6 +24,13 @@ const navItems = [
     ),
   },
   {
+    to: "/skills",
+    label: "Навыки",
+    icon: (
+      <svg width="26" height="26" fill="none" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
+    ),
+  },
+  {
     to: "/profile",
     label: "Профиль",
     icon: (

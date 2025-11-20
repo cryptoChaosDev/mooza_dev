@@ -1,5 +1,5 @@
 import React from "react";
-import { getInterestPath } from "../utils";
+// getInterestPath removed — skills/interests are managed on a separate page
 import { UserProfile } from "../types";
 
 // Современный компонент для отображения профиля
@@ -99,33 +99,7 @@ export function ProfileView({ profile, editable, onEdit }: { profile: UserProfil
         </div>
       )}
       
-      {/* Навыки */}
-      {profile.skills?.length > 0 && (
-        <div className="w-full">
-          <div className="text-sm font-semibold text-dark-muted mb-3 uppercase tracking-wider text-center">Навыки</div>
-          <div className="flex flex-wrap gap-2 justify-center">
-            {profile.skills.map((skill, i) => (
-              <span key={i} className="px-4 py-2 rounded-2xl text-sm font-medium bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-md">
-                {getInterestPath(skill)}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-      
-      {/* Интересы */}
-      {profile.interests?.length > 0 && (
-        <div className="w-full">
-          <div className="text-sm font-semibold text-dark-muted mb-3 uppercase tracking-wider text-center">Интересы</div>
-          <div className="flex flex-wrap gap-2 justify-center">
-            {profile.interests.map((interest, i) => (
-              <span key={i} className="px-4 py-2 rounded-2xl text-sm font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-400/30 shadow-sm">
-                {getInterestPath(interest)}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Навыки и интересы теперь управляются на отдельной странице */}
       
       {/* Портфолио */}
       {profile.portfolio && (profile.portfolio.text || profile.portfolio.fileUrl) && (

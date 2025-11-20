@@ -71,6 +71,7 @@ export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, on
   const [tag, setTag] = useState<string>("");
   const [openSub, setOpenSub] = useState(false);
   const [openTag, setOpenTag] = useState(false);
+  const [query, setQuery] = useState("");
 
   const catObj = INTEREST_CATEGORIES.find(c => c.category === category);
   const subObj = catObj?.subcategories.find(s => s.name === subcategory);
@@ -119,6 +120,33 @@ export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, on
 
   return (
     <div className="flex flex-col gap-4 w-full animate-fade-in overflow-x-hidden">
+      {/* Быстрый поиск и выбор тегов */}
+      <div className="flex flex-col gap-2">
+        <input
+          className="px-4 py-3 rounded-2xl bg-dark-bg/70 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base"
+          placeholder="Поиск интересов (например, Рок, Джаз, Техно)"
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+        />
+        <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto custom-scrollbar">
+          {Array.from(new Set(
+            INTEREST_CATEGORIES.flatMap(c => c.subcategories.flatMap(s => s.tags))
+          ))
+            .filter(t => t.toLowerCase().includes(query.trim().toLowerCase()))
+            .slice(0, 60)
+            .map(t => (
+              <button
+                key={t}
+                type="button"
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${selected.includes(t) ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white' : 'bg-dark-bg/60 text-dark-text hover:bg-dark-bg/80'}`}
+                onClick={() => selected.includes(t) ? onChange(selected.filter(x => x !== t)) : onChange([...selected, t])}
+                title={t}
+              >
+                {t}
+              </button>
+            ))}
+        </div>
+      </div>
       {/* Выбранные фильтры и сброс */}
       <div className="flex flex-wrap gap-2 items-center mb-1">
         {selected.length > 0 && (

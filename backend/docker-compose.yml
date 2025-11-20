@@ -1,0 +1,17 @@
+version: "3.8"
+services:
+  api:
+    build: .
+    ports:
+      - "4000:4000"
+    environment:
+      - DATABASE_URL=file:/app/prisma/dev.db
+      - PORT=4000
+      - JWT_SECRET=${JWT_SECRET:-change-me}
+      - NODE_ENV=production
+    volumes:
+      - api_data:/app/prisma
+    command: ["node", "dist/index.js"]
+volumes:
+  api_data:
+

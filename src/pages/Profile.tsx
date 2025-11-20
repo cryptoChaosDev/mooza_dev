@@ -4,8 +4,7 @@ import { InterestSelector } from "../InterestSelector";
 import { formatPostDate, getInterestPath } from "../utils";
 import { Post, UserProfile } from "../types";
 import { useToast } from "../contexts/ToastContext";
-import { SocialLinkEdit } from "../components/SocialLinkEdit";
-
+import { updateProfile } from "../api";
 export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onUpdatePost, onDeletePost, onLikePost, users, setAllUsers, friends, favorites, onUserClick }: {
   profile: UserProfile,
   setProfile: (p: UserProfile) => void,
@@ -49,48 +48,84 @@ export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePo
   const toast = useToast();
   const userPosts = allPosts.filter((p) => p.userId === profile.userId);
   const [errors, setErrors] = useState<any>({});
-  // --- Соцсети: локальные состояния для input ---
-  const [vkInput, setVkInput] = useState(editData.vkId || '');
-  const [ytInput, setYtInput] = useState(editData.youtubeId || '');
-  const [tgInput, setTgInput] = useState(editData.telegramId || '');
-  React.useEffect(() => {
-    if (editOpen) {
-      setVkInput(editData.vkId || '');
-      setYtInput(editData.youtubeId || '');
-      setTgInput(editData.telegramId || '');
-    }
-  }, [editOpen]);
 
   // Счетчики друзей и избранных
   const friendsCount = friends.length;
   const favoritesCount = favorites.length;
 
   // Сохранение профиля (редактирование)
-  const handleSave = () => {
+  const handleSave = async () => {
     let avatarUrl = editData.avatarUrl;
     if (avatarFile) {
-      avatarUrl = URL.createObjectURL(avatarFile);
+      // Persistable Base64 data URL for backend storage (blob: URL is not persistent)
+      const toDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      try {
+        avatarUrl = await toDataUrl(avatarFile);
+      } catch {}
     }
-    const newData = {
-      ...editData,
-      avatarUrl,
-      vkId: vkInput.trim(),
-      youtubeId: ytInput.trim(),
-      telegramId: tgInput.trim(),
-    };
-    setAllPosts(prev => prev.map(post =>
-      post.userId === profile.userId
-        ? { ...post, avatarUrl, author: newData.name }
-        : post
-    ));
-    setProfile(newData);
-    setAllUsers(prev => prev.map(u =>
-      u.userId === profile.userId
-        ? newData
-        : u
-    ));
-    setEditOpen(false);
-    toast("Профиль обновлён!");
+    
+    const token = localStorage.getItem('token');
+    if (!token) {
+      toast("Ошибка авторизации");
+      return;
+    }
+
+    try {
+      // Отправляем данные на сервер
+      const payload = {
+        firstName: editData.firstName,
+        lastName: editData.lastName,
+        avatarUrl: avatarUrl,
+        bio: editData.bio,
+        workPlace: editData.workPlace,
+        portfolio: editData.portfolio || null,
+        phone: editData.phone,
+        email: editData.email,
+        city: editData.city,
+        country: editData.country,
+      };
+      
+      const response = await updateProfile(token, payload);
+      
+      if (response && response.profile) {
+        // Обновляем локальное состояние данными с сервера
+        const newData = {
+          ...editData,
+          ...response.profile,
+          avatarUrl: response.profile.avatarUrl || avatarUrl,
+        };
+
+        // Обновляем посты с новым аватаром и именем
+        setAllPosts(prev => prev.map(post =>
+          post.userId === profile.userId
+            ? { ...post, avatarUrl: newData.avatarUrl, author: `${newData.firstName} ${newData.lastName}`.trim() }
+            : post
+        ));
+
+        // Обновляем профиль
+        setProfile(newData);
+
+        // Обновляем список пользователей
+        setAllUsers(prev => prev.map(u =>
+          u.userId === profile.userId
+            ? newData
+            : u
+        ));
+
+        setEditOpen(false);
+        toast("Профиль успешно обновлён!");
+      } else {
+        throw new Error("Некорректный ответ сервера");
+      }
+    } catch (error) {
+      console.error("Ошибка при сохранении профиля:", error);
+      toast("Ошибка при сохранении профиля. Попробуйте еще раз.");
+    }
   };
 
   // Создание поста
@@ -126,18 +161,14 @@ export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePo
         if (!value) return 'Обязательное поле';
         if (value.length < 2) return 'Минимум 2 символа';
         return '';
-      case 'skills':
-        if (!value || value.length < 1) return 'Выберите хотя бы 1 навык';
-        return '';
-      case 'interests':
-        if (!value || value.length < 3) return 'Выберите хотя бы 3 интереса';
-        return '';
+      // skills/interests moved to separate page — no validation here
       case 'portfolioText':
         if (value.length > 500) return 'Максимум 500 символов';
         return '';
       case 'phone':
         if (!value) return 'Обязательное поле';
-        if (!/^\+7 \(\d{3}\) \d{3}-\d{2}-\d{2}$/.test(value)) return 'Формат: +7 (XXX) XXX-XX-XX';
+        // Разрешаем маску +7 (XXX) XXX-XX-XX ИЛИ E.164 +7XXXXXXXXXX (10-15 цифр)
+        if (!/^(\+\d{10,15}|\+7 \(\d{3}\) \d{3}-\d{2}-\d{2})$/.test(value)) return 'Формат: +7 (XXX) XXX-XX-XX либо +7XXXXXXXXXX';
         return '';
       case 'email':
         if (!value) return 'Обязательное поле';
@@ -159,8 +190,6 @@ export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePo
     { key: 'lastName', value: editData.lastName },
     { key: 'country', value: editData.country },
     { key: 'city', value: editData.city },
-    { key: 'skills', value: editData.skills },
-    { key: 'interests', value: editData.interests },
     { key: 'portfolioText', value: editData.portfolio?.text || '' },
     { key: 'phone', value: editData.phone },
     { key: 'email', value: editData.email },
@@ -418,15 +447,34 @@ export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePo
                       <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#fff" strokeWidth="1.5"/></svg>
                       <input type="file" accept="image/jpeg,image/png,image/jpg" className="hidden" onChange={e => {
                         const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-                        if (file && file.size > 3 * 1024 * 1024) {
-                          alert('Максимальный размер файла 3 МБ');
+                        if (!file) return;
+
+                        // Проверка размера файла (максимум 5 МБ)
+                        if (file.size > 5 * 1024 * 1024) {
+                          toast("Размер файла не должен превышать 5 МБ");
                           return;
                         }
-                        if (file && !['image/jpeg','image/png','image/jpg'].includes(file.type)) {
-                          alert('Только JPG, JPEG или PNG');
+
+                        // Проверка типа файла
+                        if (!['image/jpeg','image/png','image/jpg'].includes(file.type)) {
+                          toast("Поддерживаются только изображения в формате JPG, JPEG или PNG");
                           return;
                         }
-                        setAvatarFile(file);
+
+                        // Создаем временный элемент img для проверки размеров изображения
+                        const img = new Image();
+                        img.onload = function() {
+                          // Проверяем размеры изображения
+                          if (img.width > 2048 || img.height > 2048) {
+                            toast("Максимальный размер изображения 2048x2048 пикселей");
+                            return;
+                          }
+                          setAvatarFile(file);
+                        };
+                        img.onerror = function() {
+                          toast("Ошибка при загрузке изображения");
+                        };
+                        img.src = URL.createObjectURL(file);
                       }} />
                     </label>
                   </div>
@@ -530,37 +578,7 @@ export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePo
                       />
                     </div>
                   </div>
-                  
-                  {/* Навыки и интересы */}
-                  <div className="flex flex-col gap-5">
-                    <h3 className="text-lg font-semibold text-dark-text border-b border-dark-bg/30 pb-3">Навыки и интересы</h3>
-                    
-                    <div className="flex flex-col gap-5">
-                      <div className="flex flex-col gap-3">
-                        <div className="text-sm text-dark-muted font-semibold">Навыки</div>
-                        <InterestSelector 
-                          selected={editData.skills || []} 
-                          onChange={skills => {
-                            setEditData(prev => ({ ...prev, skills }));
-                            setErrors((err: any) => ({ ...err, skills: validateField('skills', skills) }));
-                          }} 
-                        />
-                        {errors.skills && <div className="text-sm text-red-500">{errors.skills}</div>}
-                      </div>
-                      
-                      <div className="flex flex-col gap-3">
-                        <div className="text-sm text-dark-muted font-semibold">Интересы</div>
-                        <InterestSelector 
-                          selected={editData.interests || []} 
-                          onChange={interests => {
-                            setEditData(prev => ({ ...prev, interests }));
-                            setErrors((err: any) => ({ ...err, interests: validateField('interests', interests) }));
-                          }} 
-                        />
-                        {errors.interests && <div className="text-sm text-red-500">{errors.interests}</div>}
-                      </div>
-                    </div>
-                  </div>
+                  {/* Навыки и интересы теперь управляются на отдельной странице */}
                   
                   {/* Портфолио */}
                   <div className="flex flex-col gap-5">
@@ -589,30 +607,115 @@ export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePo
                           <span className="text-sm">Прикрепить файл</span>
                           <input 
                             type="file" 
-                            accept="image/jpeg,image/png,application/pdf" 
-                            onChange={e => {
+                            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" 
+                            onChange={async (e) => {
                               const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-                              if (file && file.size > 3 * 1024 * 1024) {
-                                alert('Максимальный размер файла 3 МБ');
+                              if (!file) return;
+
+                              // Проверка размера файла (15 МБ)
+                              if (file.size > 15 * 1024 * 1024) {
+                                toast("Максимальный размер файла 15 МБ");
                                 return;
                               }
-                              if (file && !['image/jpeg','image/png','application/pdf'].includes(file.type)) {
-                                alert('Только JPG, PNG или PDF');
+
+                              // Проверка типа файла
+                              const allowedTypes = [
+                                'application/pdf',
+                                'application/msword',
+                                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                              ];
+                              if (!allowedTypes.includes(file.type)) {
+                                toast("Поддерживаются только файлы DOC, DOCX и PDF");
                                 return;
                               }
-                              if (file) {
-                                const url = URL.createObjectURL(file);
-                                setEditData(prev => ({
-                                  ...prev,
-                                  portfolio: { fileUrl: url, text: prev.portfolio?.text || '' }
-                                }));
+
+                              try {
+                                const formData = new FormData();
+                                formData.append('file', file);
+
+                                const token = localStorage.getItem('token');
+                                if (!token) {
+                                  toast("Ошибка авторизации");
+                                  return;
+                                }
+
+                                const response = await fetch('http://localhost:4000/profile/me/portfolio-file', {
+                                  method: 'POST',
+                                  headers: {
+                                    'Authorization': `Bearer ${token}`
+                                  },
+                                  body: formData
+                                });
+
+                                if (!response.ok) {
+                                  throw new Error('Ошибка загрузки файла');
+                                }
+
+                                const result = await response.json();
+                                if (result.success) {
+                                  setEditData(prev => ({
+                                    ...prev,
+                                    portfolio: { 
+                                      text: prev.portfolio?.text || '',
+                                      fileUrl: prev.portfolio?.fileUrl,
+                                      fileName: file.name,
+                                      fileType: file.type
+                                    }
+                                  }));
+                                  toast("Файл успешно загружен");
+                                }
+                              } catch (error) {
+                                console.error('Error uploading file:', error);
+                                toast("Ошибка при загрузке файла");
                               }
                             }} 
                             className="hidden" 
                           />
                         </label>
-                        {editData.portfolio?.fileUrl && (
-                          <a href={editData.portfolio.fileUrl} target="_blank" rel="noopener noreferrer" className="text-blue-500 underline text-sm">Скачать вложение</a>
+                        {editData.portfolio?.fileName && (
+                          <div className="flex items-center gap-3">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-blue-500">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <a 
+                              href={`http://localhost:4000/profile/me/portfolio-file`}
+                              className="text-blue-500 hover:text-blue-600 underline text-sm truncate max-w-[200px]"
+                              download
+                              onClick={async (e) => {
+                                e.preventDefault();
+                                try {
+                                  const token = localStorage.getItem('token');
+                                  if (!token) {
+                                    toast("Ошибка авторизации");
+                                    return;
+                                  }
+
+                                  const response = await fetch('http://localhost:4000/profile/me/portfolio-file', {
+                                    headers: {
+                                      'Authorization': `Bearer ${token}`
+                                    }
+                                  });
+
+                                  if (!response.ok) throw new Error('Ошибка загрузки файла');
+
+                                  const blob = await response.blob();
+                                  const url = window.URL.createObjectURL(blob);
+                                  const a = document.createElement('a');
+                                  a.href = url;
+                                  a.download = editData.portfolio?.fileName || 'download';
+                                  document.body.appendChild(a);
+                                  a.click();
+                                  window.URL.revokeObjectURL(url);
+                                  document.body.removeChild(a);
+                                } catch (error) {
+                                  console.error('Error downloading file:', error);
+                                  toast("Ошибка при скачивании файла");
+                                }
+                              }}
+                            >
+                              {editData.portfolio?.fileName || 'Скачать файл'}
+                            </a>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -665,42 +768,6 @@ export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePo
                       </div>
                     </div>
                   </div>
-                  
-                  {/* Социальные сети */}
-                  <div className="flex flex-col gap-5">
-                    <h3 className="text-lg font-semibold text-dark-text border-b border-dark-bg/30 pb-3">Социальные сети</h3>
-                    
-                    <div className="flex flex-col gap-4">
-                      <SocialLinkEdit
-                        label="VK"
-                        icon="🟦"
-                        value={vkInput}
-                        onChange={setVkInput}
-                        placeholder="https://vk.com/username"
-                        statusText=""
-                      />
-                      {errors.vkId && <div className="text-sm text-red-500">{errors.vkId}</div>}
-                      
-                      <SocialLinkEdit
-                        label="YouTube"
-                        icon="🔴"
-                        value={ytInput}
-                        onChange={setYtInput}
-                        placeholder="https://youtube.com/@username"
-                        statusText=""
-                      />
-                      <SocialLinkEdit
-                        label="Telegram"
-                        icon="🟩"
-                        value={tgInput}
-                        onChange={setTgInput}
-                        placeholder="https://t.me/username"
-                        statusText=""
-                      />
-                      {errors.youtubeId && <div className="text-sm text-red-500">{errors.youtubeId}</div>}
-                      {errors.telegramId && <div className="text-sm text-red-500">{errors.telegramId}</div>}
-                    </div>
-                  </div>
                 </div>
                 
                 {/* Кнопка сохранить */}
@@ -714,14 +781,11 @@ export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePo
                       newErrors.lastName = validateField('lastName', editData.lastName);
                       newErrors.country = validateField('country', editData.country);
                       newErrors.city = validateField('city', editData.city);
-                      newErrors.skills = validateField('skills', editData.skills);
-                      newErrors.interests = validateField('interests', editData.interests);
+                      // skills/interests are edited on the separate /skills page
                       newErrors.portfolioText = validateField('portfolioText', editData.portfolio?.text || '');
                       newErrors.phone = validateField('phone', editData.phone);
                       newErrors.email = validateField('email', editData.email);
-                      newErrors.vkId = validateField('vkId', vkInput);
-                      newErrors.youtubeId = validateField('youtubeId', ytInput);
-                      newErrors.telegramId = validateField('telegramId', tgInput);
+
                       
                       setErrors(newErrors);
                       

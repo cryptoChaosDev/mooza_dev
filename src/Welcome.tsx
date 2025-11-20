@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { apiLogin, apiRegister } from "./api";
 import { InterestSelector } from "./InterestSelector";
 
 function SocialLinkEdit({ label, icon, value, onChange, placeholder }: { label: string, icon: React.ReactNode, value: string, onChange: (v: string) => void, placeholder: string }) {
@@ -46,6 +47,35 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
     avatarUrl: undefined as string | undefined,
   });
   const [errors, setErrors] = useState<any>({});
+  const [showLogin, setShowLogin] = useState(false);
+  const [loginPending, setLoginPending] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPhone, setLoginPhone] = useState("");
+  const [loginUsePhone, setLoginUsePhone] = useState(false);
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState<string | null>(null);
+  // Регистрация (аккаунт): email/phone + password + name (имя берём как firstName + lastName)
+  const [usePhone, setUsePhone] = useState(false);
+  const [regEmail, setRegEmail] = useState("");
+  const [regPhone, setRegPhone] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [regPending, setRegPending] = useState(false);
+  const [regError, setRegError] = useState<string | null>(null);
+  const phoneDigits = regPhone.replace(/\D/g, '');
+  const validFirst = !validateField('firstName', profile.firstName);
+  const validLast = !validateField('lastName', profile.lastName);
+  const validEmail = !validateField('email', regEmail);
+  const validPhone = phoneDigits.length >= 10;
+  const validPassword = regPassword.length >= 6;
+
+  // Helpers
+  const normalizePhone = (value: string) => {
+    const digits = value.replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.startsWith('8')) return '+7' + digits.slice(1);
+    if (digits.startsWith('7')) return '+7' + digits.slice(1);
+    return '+' + digits;
+  };
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   // --- Соцсети: локальные состояния для input ---
   const [vkInput, setVkInput] = useState('');
@@ -122,15 +152,14 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
 
   const steps = [
     'Приветствие',
+    'Создание аккаунта',
     'Аватар',
-    'Имя и фамилия',
     'Город и страна',
     'Место работы',
     'Навыки',
     'Интересы',
     'Портфолио',
     'Контакты',
-    'Соцсети',
     'Готово',
   ];
   const next = () => setStep(s => Math.min(s + 1, steps.length - 1));
@@ -212,14 +241,96 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
               </div>
             </div>
             
-            <div className="flex flex-col items-center gap-4 w-full">
+            <div className="flex flex-col items-center gap-3 w-full">
               <button className="w-full px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-bold shadow-lg text-lg active:scale-95 transition-all animate-fade-in animate-scale-in hover:scale-105 flex items-center justify-center gap-2 sm:px-8 sm:py-4 sm:text-xl" onClick={next} style={{letterSpacing: '0.04em'}}>
                 Начать регистрацию
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24" className="sm:w-24 sm:h-24">
                   <path d="M9 5l7 7-7 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </button>
+              <button className="w-full px-6 py-3 rounded-2xl bg-dark-bg/60 text-dark-text font-semibold shadow-inner text-base active:scale-95 transition-all hover:scale-105" onClick={() => setShowLogin(s => !s)}>
+                {showLogin ? 'Скрыть вход' : 'У меня уже есть аккаунт — Войти'}
+              </button>
             </div>
+
+            {showLogin && (
+              <div className="w-full bg-dark-card rounded-2xl p-4 border border-blue-500/20 animate-fade-in">
+                <div className="text-lg font-bold text-dark-text mb-3">Вход</div>
+                <div className="flex flex-col gap-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <button type="button" className={`px-3 py-1 rounded-full ${!loginUsePhone ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white' : 'bg-dark-bg/60 text-dark-text'}`} onClick={() => setLoginUsePhone(false)}>Email</button>
+                    <button type="button" className={`px-3 py-1 rounded-full ${loginUsePhone ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white' : 'bg-dark-bg/60 text-dark-text'}`} onClick={() => setLoginUsePhone(true)}>Телефон</button>
+                  </div>
+                  {!loginUsePhone ? (
+                    <input
+                      className="px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base"
+                      placeholder="Email"
+                      type="email"
+                      value={loginEmail}
+                      onChange={e => setLoginEmail(e.target.value)}
+                      autoComplete="email"
+                    />
+                  ) : (
+                    <input
+                      className="px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base"
+                      placeholder="Телефон (+7 (XXX) XXX-XX-XX)"
+                      value={loginPhone}
+                      onChange={e => {
+                        let val = e.target.value.replace(/\D/g, '');
+                        if (val.length > 11) val = val.slice(0, 11);
+                        let formatted = '+7';
+                        if (val.length > 1) formatted += ' (' + val.slice(1, 4);
+                        if (val.length >= 4) formatted += ') ' + val.slice(4, 7);
+                        if (val.length >= 7) formatted += '-' + val.slice(7, 9);
+                        if (val.length >= 9) formatted += '-' + val.slice(9, 11);
+                        setLoginPhone(formatted);
+                      }}
+                      autoComplete="tel"
+                    />
+                  )}
+                  <input
+                    className="px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base"
+                    placeholder="Пароль"
+                    type="password"
+                    value={loginPassword}
+                    onChange={e => setLoginPassword(e.target.value)}
+                    autoComplete="current-password"
+                  />
+                  {loginError && <div className="text-xs text-red-500">{loginError}</div>}
+                  <button
+                    className="w-full px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-bold shadow-lg text-lg active:scale-95 transition-all hover:scale-105 disabled:opacity-60"
+                    disabled={loginPending || (!loginUsePhone && !loginEmail) || (loginUsePhone && loginPhone.replace(/\D/g,'').length < 10) || !loginPassword}
+                    onClick={async () => {
+                      try {
+                        setLoginError(null);
+                        setLoginPending(true);
+                        const { token, user } = await apiLogin(loginUsePhone ? { phone: normalizePhone(loginPhone), password: loginPassword } : { email: loginEmail.trim(), password: loginPassword });
+                        localStorage.setItem('token', token);
+                        const [firstName, ...rest] = (user.name || '').trim().split(' ');
+                        const lastName = rest.join(' ');
+                        onFinish({
+                          userId: String(user.id),
+                          firstName: firstName || user.name || 'User',
+                          lastName: lastName || '',
+                          name: user.name || 'User',
+                          bio: '',
+                          skills: [],
+                          interests: [],
+                          email: user.email,
+                          phone: (user as any).phone,
+                        });
+                      } catch (e: any) {
+                        setLoginError(e?.message || 'Ошибка входа');
+                      } finally {
+                        setLoginPending(false);
+                      }
+                    }}
+                  >
+                    {loginPending ? 'Входим...' : 'Войти'}
+                  </button>
+                </div>
+              </div>
+            )}
             
             <div className="flex gap-6 mt-2 sm:gap-8">
               <div className="flex flex-col items-center">
@@ -234,6 +345,75 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
           </div>
         )}
         {step === 1 && (
+          <div className="flex flex-col gap-4 animate-fade-in">
+            <div className="text-xl font-bold text-dark-text mb-2">Создание аккаунта</div>
+            {/* Имя и фамилия */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.firstName ? 'border border-red-500' : ''}`} placeholder="Имя" value={profile.firstName} onChange={e => {
+                setProfile(p => ({ ...p, firstName: e.target.value }));
+                setErrors((err: any) => ({ ...err, firstName: validateField('firstName', e.target.value) }));
+              }} maxLength={40} />
+              <input className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.lastName ? 'border border-red-500' : ''}`} placeholder="Фамилия" value={profile.lastName} onChange={e => {
+                setProfile(p => ({ ...p, lastName: e.target.value }));
+                setErrors((err: any) => ({ ...err, lastName: validateField('lastName', e.target.value) }));
+              }} maxLength={40} />
+            </div>
+            {/* Email и Телефон — оба обязательны */}
+            <input className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.email ? 'border border-red-500' : ''}`} placeholder="Email" value={regEmail} onChange={e => {
+              setRegEmail(e.target.value);
+              setErrors((err: any) => ({ ...err, email: validateField('email', e.target.value) }));
+            }} maxLength={60} type="email" autoComplete="email" />
+            <input className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.phone ? 'border border-red-500' : ''}`} placeholder="Телефон (+7 ... или международный)" value={regPhone} onChange={e => {
+              const onlyDigits = e.target.value.replace(/\D/g, '');
+              setRegPhone(onlyDigits.startsWith('8') ? '+7' + onlyDigits.slice(1) : (onlyDigits.startsWith('7') ? '+7' + onlyDigits.slice(1) : ('+' + onlyDigits)));
+            }} maxLength={18} />
+            <input className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base`} placeholder="Пароль (минимум 6 символов)" value={regPassword} onChange={e => setRegPassword(e.target.value)} maxLength={64} type="password" autoComplete="new-password" />
+            {regError && <div className="text-xs text-red-500">{regError}</div>}
+            <div className="flex items-center justify-center gap-8 mt-2">
+              <button onClick={prev} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Назад">
+                <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+              <button
+                onClick={async () => {
+                  try {
+                    setRegError(null);
+                    setRegPending(true);
+                    const name = `${profile.firstName} ${profile.lastName}`.trim() || 'User';
+                    const payload: any = { password: regPassword, name, email: regEmail.trim(), phone: normalizePhone(regPhone) };
+                    const { token, user } = await apiRegister(payload);
+                    localStorage.setItem('token', token);
+                    onFinish({
+                      userId: String(user.id),
+                      firstName: profile.firstName,
+                      lastName: profile.lastName,
+                      name,
+                      bio: '',
+                      skills: [],
+                      interests: [],
+                      email: user.email,
+                      phone: user.phone,
+                    });
+                  } catch (e: any) {
+                    setRegError(e?.message || 'Ошибка регистрации');
+                  } finally {
+                    setRegPending(false);
+                  }
+                }}
+                className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition disabled:opacity-60"
+                title="Далее"
+                disabled={regPending || !validFirst || !validLast || !validEmail || !validPhone || !validPassword}
+              >
+                <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </button>
+            </div>
+            {!validFirst && <div className="text-xs text-red-500">Укажите корректное имя (мин. 2 буквы)</div>}
+            {!validLast && <div className="text-xs text-red-500">Укажите корректную фамилию (мин. 2 буквы)</div>}
+            {!validEmail && <div className="text-xs text-red-500">Введите корректный email</div>}
+            {!validPhone && <div className="text-xs text-red-500">Введите телефон (мин. 10 цифр)</div>}
+            {!validPassword && <div className="text-xs text-red-500">Пароль минимум 6 символов</div>}
+          </div>
+        )}
+        {step === 2 && (
           <div className="flex flex-col items-center gap-8 animate-fade-in">
             <div className="text-xl font-bold text-dark-text mb-2">Загрузите аватар</div>
             <div className="relative w-28 h-28 mb-2">
@@ -296,32 +476,21 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
             </div>
           </div>
         )}
-        {step === 2 && (
+        {step === 3 && (
           <div className="flex flex-col gap-4 animate-fade-in">
-            <div className="text-xl font-bold text-dark-text mb-2">Как вас зовут?</div>
-            <input className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.firstName ? 'border border-red-500' : ''}`} placeholder="Имя" value={profile.firstName} onChange={e => {
-              setProfile(p => ({ ...p, firstName: e.target.value }));
-              setErrors((err: any) => ({ ...err, firstName: validateField('firstName', e.target.value) }));
-            }} maxLength={40} autoFocus />
-            {errors.firstName && <div className="text-xs text-red-500 -mt-2">{errors.firstName}</div>}
-            <input className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.lastName ? 'border border-red-500' : ''}`} placeholder="Фамилия" value={profile.lastName} onChange={e => {
-              setProfile(p => ({ ...p, lastName: e.target.value }));
-              setErrors((err: any) => ({ ...err, lastName: validateField('lastName', e.target.value) }));
-            }} maxLength={40} />
-            {errors.lastName && <div className="text-xs text-red-500 -mt-2">{errors.lastName}</div>}
-            <div className="text-dark-muted text-xs">Только буквы, минимум 2 символа</div>
+            <div className="text-xl font-bold text-dark-text mb-2">Где вы живёте?</div>
             {/* Стрелки навигации */}
             <div className="flex items-center justify-center gap-8 mt-2">
               <button onClick={prev} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Назад">
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
-              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Далее" disabled={!!validateField('firstName', profile.firstName) || !!validateField('lastName', profile.lastName)}>
+              <button onClick={next} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Далее">
                 <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
               </button>
             </div>
           </div>
         )}
-        {step === 3 && (
+        {step === 4 && (
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="text-xl font-bold text-dark-text mb-2">Где вы живёте?</div>
             <input className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.country ? 'border border-red-500' : ''}`} placeholder="Страна" value={profile.country} onChange={e => {
@@ -383,7 +552,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
             </div>
           </div>
         )}
-        {step === 4 && (
+        {step === 5 && (
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="text-xl font-bold text-dark-text mb-2">Место работы</div>
             <input className="px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base" placeholder="Место работы" value={profile.workPlace} onChange={e => setProfile(p => ({ ...p, workPlace: e.target.value }))} maxLength={60} />
@@ -398,7 +567,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
             </div>
           </div>
         )}
-        {step === 5 && (
+        {step === 6 && (
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="text-xl font-bold text-dark-text mb-2">Ваши навыки</div>
             <div className="text-dark-muted text-sm mb-2">Выберите хотя бы 1 навык, который вас характеризует как музыканта или специалиста.</div>
@@ -418,7 +587,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
             </div>
           </div>
         )}
-        {step === 6 && (
+        {step === 7 && (
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="text-xl font-bold text-dark-text mb-2">Ваши интересы</div>
             <div className="text-dark-muted text-sm mb-2">Выберите хотя бы 3 интереса — это поможет Mooza подобрать для вас лучших собеседников и рекомендации.</div>
@@ -438,7 +607,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
             </div>
           </div>
         )}
-        {step === 7 && (
+        {step === 8 && (
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="text-xl font-bold text-dark-text mb-2">Резюме / портфолио</div>
             <textarea className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base resize-none ${errors.portfolioText ? 'border border-red-500' : ''}`} placeholder="Расскажите о себе, опыте, достижениях, прикрепите ссылку или файл..." value={profile.portfolio.text} onChange={e => {
@@ -483,7 +652,7 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
             </div>
           </div>
         )}
-        {step === 8 && (
+        {step === 9 && (
           <div className="flex flex-col gap-4 animate-fade-in">
             <div className="text-xl font-bold text-dark-text mb-2">Контактная информация</div>
             <input className={`px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base ${errors.phone ? 'border border-red-500' : ''}`} placeholder="Телефон (+7 ...)" value={profile.phone} onChange={e => {
@@ -517,27 +686,6 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
           </div>
         )}
         {step === 9 && (
-          <div className="flex flex-col gap-4 animate-fade-in">
-            <div className="text-xl font-bold text-dark-text mb-2">Привяжите соцсети</div>
-            <SocialLinkEdit label="VK" icon={VKIcon} value={vkInput} onChange={v => setVkInput(v)} placeholder="Ссылка на VK" />
-            {errors.vk && <div className="text-xs text-red-500 -mt-2">{errors.vk}</div>}
-            <SocialLinkEdit label="YouTube" icon={YTIcon} value={ytInput} onChange={v => setYtInput(v)} placeholder="Ссылка на YouTube" />
-            {errors.youtube && <div className="text-xs text-red-500 -mt-2">{errors.youtube}</div>}
-            <SocialLinkEdit label="Telegram" icon={TGIcon} value={tgInput} onChange={v => setTgInput(v)} placeholder="Ссылка на Telegram" />
-            {errors.telegram && <div className="text-xs text-red-500 -mt-2">{errors.telegram}</div>}
-            <div className="text-dark-muted text-xs">Введите ссылку на профиль, начиная с https://</div>
-            {/* Стрелки навигации */}
-            <div className="flex items-center justify-center gap-8 mt-2">
-              <button onClick={prev} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Назад">
-                <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </button>
-              <button onClick={() => { setProfile(p => ({ ...p, vk: vkInput.trim(), youtube: ytInput.trim(), telegram: tgInput.trim() })); next(); }} className="p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:scale-110 transition" title="Далее" disabled={!!errors.vk || !!errors.youtube || !!errors.telegram}>
-                <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
-              </button>
-            </div>
-          </div>
-        )}
-        {step === 10 && (
           <div className="flex flex-col gap-6 items-center animate-fade-in">
             <div className="text-2xl font-bold text-dark-text mb-2">Профиль готов!</div>
             <div className="text-dark-muted text-center text-base mb-4 max-w-md animate-fade-in z-10">Теперь вы можете пользоваться всеми возможностями Mooza.<br/>Проверьте данные и начните знакомство с сообществом!</div>
