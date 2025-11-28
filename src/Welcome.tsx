@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { apiLogin, apiRegister } from "./api";
+import { apiLogin, apiRegister, getProfile } from "./api";
 import { InterestSelector } from "./InterestSelector";
 
 function SocialLinkEdit({ label, icon, value, onChange, placeholder }: { label: string, icon: React.ReactNode, value: string, onChange: (v: string) => void, placeholder: string }) {
@@ -306,19 +306,63 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
                         setLoginPending(true);
                         const { token, user } = await apiLogin(loginUsePhone ? { phone: normalizePhone(loginPhone), password: loginPassword } : { email: loginEmail.trim(), password: loginPassword });
                         localStorage.setItem('token', token);
-                        const [firstName, ...rest] = (user.name || '').trim().split(' ');
-                        const lastName = rest.join(' ');
-                        onFinish({
-                          userId: String(user.id),
-                          firstName: firstName || user.name || 'User',
-                          lastName: lastName || '',
-                          name: user.name || 'User',
-                          bio: '',
-                          skills: [],
-                          interests: [],
-                          email: user.email,
-                          phone: (user as any).phone,
-                        });
+                        
+                        // Fetch the actual profile data from the server
+                        try {
+                          const { profile: serverProfile } = await getProfile(token);
+                          if (serverProfile) {
+                            const [firstName, ...rest] = (serverProfile.firstName || user.name || '').trim().split(' ');
+                            const lastName = rest.join(' ');
+                            onFinish({
+                              userId: String(user.id),
+                              firstName: serverProfile.firstName || firstName || user.name || 'User',
+                              lastName: serverProfile.lastName || lastName || '',
+                              name: `${serverProfile.firstName || firstName || user.name} ${serverProfile.lastName || lastName || ''}`.trim() || user.name || 'User',
+                              bio: serverProfile.bio || '',
+                              skills: serverProfile.skills || [],
+                              interests: serverProfile.interests || [],
+                              email: user.email,
+                              phone: (user as any).phone,
+                              workPlace: serverProfile.workPlace || '',
+                              portfolio: serverProfile.portfolio || { text: '' },
+                              city: serverProfile.city || '',
+                              country: serverProfile.country || '',
+                              avatarUrl: serverProfile.avatarUrl || undefined,
+                              vkId: '', youtubeId: '', telegramId: '',
+                            });
+                          } else {
+                            // Fallback to minimal profile if no server profile exists
+                            const [firstName, ...rest] = (user.name || '').trim().split(' ');
+                            const lastName = rest.join(' ');
+                            onFinish({
+                              userId: String(user.id),
+                              firstName: firstName || user.name || 'User',
+                              lastName: lastName || '',
+                              name: user.name || 'User',
+                              bio: '',
+                              skills: [],
+                              interests: [],
+                              email: user.email,
+                              phone: (user as any).phone,
+                            });
+                          }
+                        } catch (profileError) {
+                          console.error('Error fetching profile:', profileError);
+                          // Fallback to minimal profile if there's an error fetching the profile
+                          const [firstName, ...rest] = (user.name || '').trim().split(' ');
+                          const lastName = rest.join(' ');
+                          onFinish({
+                            userId: String(user.id),
+                            firstName: firstName || user.name || 'User',
+                            lastName: lastName || '',
+                            name: user.name || 'User',
+                            bio: '',
+                            skills: [],
+                            interests: [],
+                            email: user.email,
+                            phone: (user as any).phone,
+                          });
+                        }
                       } catch (e: any) {
                         setLoginError(e?.message || 'Ошибка входа');
                       } finally {
@@ -382,17 +426,57 @@ export function WelcomePage({ onFinish }: { onFinish: (profile: any) => void }) 
                     const payload: any = { password: regPassword, name, email: regEmail.trim(), phone: normalizePhone(regPhone) };
                     const { token, user } = await apiRegister(payload);
                     localStorage.setItem('token', token);
-                    onFinish({
-                      userId: String(user.id),
-                      firstName: profile.firstName,
-                      lastName: profile.lastName,
-                      name,
-                      bio: '',
-                      skills: [],
-                      interests: [],
-                      email: user.email,
-                      phone: user.phone,
-                    });
+                    
+                    // Fetch the actual profile data from the server
+                    try {
+                      const { profile: serverProfile } = await getProfile(token);
+                      if (serverProfile) {
+                        onFinish({
+                          userId: String(user.id),
+                          firstName: serverProfile.firstName || profile.firstName,
+                          lastName: serverProfile.lastName || profile.lastName,
+                          name: `${serverProfile.firstName || profile.firstName} ${serverProfile.lastName || profile.lastName}`.trim() || name,
+                          bio: serverProfile.bio || '',
+                          skills: serverProfile.skills || [],
+                          interests: serverProfile.interests || [],
+                          email: user.email,
+                          phone: user.phone,
+                          workPlace: serverProfile.workPlace || '',
+                          portfolio: serverProfile.portfolio || { text: '' },
+                          city: serverProfile.city || '',
+                          country: serverProfile.country || '',
+                          avatarUrl: serverProfile.avatarUrl || undefined,
+                          vkId: '', youtubeId: '', telegramId: '',
+                        });
+                      } else {
+                        // Fallback to the local profile data if no server profile exists
+                        onFinish({
+                          userId: String(user.id),
+                          firstName: profile.firstName,
+                          lastName: profile.lastName,
+                          name,
+                          bio: '',
+                          skills: [],
+                          interests: [],
+                          email: user.email,
+                          phone: user.phone,
+                        });
+                      }
+                    } catch (profileError) {
+                      console.error('Error fetching profile:', profileError);
+                      // Fallback to the local profile data if there's an error fetching the profile
+                      onFinish({
+                        userId: String(user.id),
+                        firstName: profile.firstName,
+                        lastName: profile.lastName,
+                        name,
+                        bio: '',
+                        skills: [],
+                        interests: [],
+                        email: user.email,
+                        phone: user.phone,
+                      });
+                    }
                   } catch (e: any) {
                     setRegError(e?.message || 'Ошибка регистрации');
                   } finally {
