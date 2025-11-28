@@ -86,8 +86,8 @@ export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, 
         {/* Верхний блок — рекомендация друга с новым дизайном */}
         <div className="flex flex-col gap-4">
           <div className="flex justify-between items-center">
-            <div className="text-2xl font-bold text-dark-text">Рекомендации</div>
-            <div className="text-sm text-dark-muted">
+            <div className="text-xl sm:text-2xl font-bold text-dark-text">Рекомендации</div>
+            <div className="text-xs sm:text-sm text-dark-muted">
               {visibleCandidates.length > 0 ? `${currentIndex + 1} из ${visibleCandidates.length}` : '0'}
             </div>
           </div>
@@ -98,25 +98,25 @@ export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, 
               {visibleCandidates.length > 1 && (
                 <>
                   <button 
-                    className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 z-20 p-2 rounded-full bg-dark-bg/60 text-dark-text hover:bg-dark-accent/10 active:scale-95 transition-all shadow-lg"
+                    className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 z-20 p-1.5 sm:p-2 rounded-full bg-dark-bg/60 text-dark-text hover:bg-dark-accent/10 active:scale-95 transition-all shadow-lg md:p-3"
                     onClick={(e) => { e.stopPropagation(); prevCandidate(); }}
                     title="Предыдущий"
                   >
-                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M15 19l-7-7 7-7" stroke="currentColor" strokeWidth="2"/></svg>
+                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" className="sm:w-18 sm:h-18"><path d="M15 19l-7-7 7-7" stroke="currentColor" strokeWidth="2"/></svg>
                   </button>
                   
                   <button 
-                    className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1 z-20 p-2 rounded-full bg-dark-bg/60 text-dark-text hover:bg-dark-accent/10 active:scale-95 transition-all shadow-lg"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1 z-20 p-1.5 sm:p-2 rounded-full bg-dark-bg/60 text-dark-text hover:bg-dark-accent/10 active:scale-95 transition-all shadow-lg md:p-3"
                     onClick={(e) => { e.stopPropagation(); nextCandidate(); }}
                     title="Следующий"
                   >
-                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2"/></svg>
+                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" className="sm:w-18 sm:h-18"><path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2"/></svg>
                   </button>
                 </>
               )}
               
               {/* Carousel card */}
-              <div className="bg-dark-card rounded-3xl shadow-card border border-dark-bg/40 overflow-hidden ml-8 mr-8">
+              <div className="bg-dark-card rounded-3xl shadow-card border border-dark-bg/40 overflow-hidden ml-8 mr-8 sm:ml-10 sm:mr-10">
                 <div className="relative h-60 overflow-hidden rounded-3xl">
                   {visibleCandidates.map((candidate, index) => (
                     <div 
@@ -131,7 +131,7 @@ export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, 
                     >
                       <div className="h-full flex flex-col">
                         {/* User info section */}
-                        <div className="flex items-center gap-4 mb-4">
+                        <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
                           <div 
                             className="relative flex-shrink-0 cursor-pointer group"
                             onClick={e => {
@@ -140,24 +140,24 @@ export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, 
                               }
                             }}
                           >
-                            <div className="w-14 h-14 rounded-2xl overflow-hidden border-3 border-white shadow-lg">
+                            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border-2 sm:border-3 border-white shadow-lg md:w-16 md:h-16">
                               {candidate.avatarUrl ? (
                                 <img src={candidate.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
                               ) : (
                                 <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
-                                  <span className="text-white text-xl font-bold">
+                                  <span className="text-white text-lg sm:text-xl font-bold">
                                     {candidate.name.charAt(0)}
                                   </span>
                                 </div>
                               )}
                             </div>
                             {/* Online indicator */}
-                            <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-dark-card"></div>
+                            <div className="absolute -bottom-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 bg-green-500 rounded-full border-2 border-dark-card md:w-5 md:h-5"></div>
                           </div>
                           
                           <div className="flex-1 min-w-0">
                             <div 
-                              className="font-bold text-dark-text text-base truncate cursor-pointer hover:text-blue-400 transition-colors"
+                              className="font-bold text-dark-text text-sm sm:text-base truncate cursor-pointer hover:text-blue-400 transition-colors md:text-lg"
                               onClick={e => {
                                 if (!(e.target as HTMLElement).closest('button')) {
                                   onUserClick(candidate);
@@ -168,8 +168,8 @@ export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, 
                             </div>
                             
                             {candidate.city && (
-                              <div className="flex items-center gap-1.5 mt-1">
-                                <svg width="12" height="12" fill="none" viewBox="0 0 24 24" className="text-dark-muted">
+                              <div className="flex items-center gap-1 mt-1">
+                                <svg width="10" height="10" fill="none" viewBox="0 0 24 24" className="text-dark-muted sm:w-12 sm:h-12">
                                   <path d="M12 12c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-8c-4.4 0-8 3.6-8 8 0 1.4.4 2.7 1 3.8l-1 1 3-1.5 1.5 3 1.5-1c1.1.6 2.4 1 3.8 1 4.4 0 8-3.6 8-8s-3.6-8-8-8z" stroke="currentColor" strokeWidth="1.5"/>
                                 </svg>
                                 <span className="text-xs text-dark-muted truncate">
@@ -182,20 +182,20 @@ export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, 
                         
                         {/* Match info and interests */}
                         <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-3">
-                            <span className="text-xs px-2 py-1 bg-gradient-to-r from-blue-500/20 to-cyan-400/20 text-blue-300 rounded-full font-medium">
+                          <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+                            <span className="text-xs px-1.5 py-0.5 sm:px-2 sm:py-1 bg-gradient-to-r from-blue-500/20 to-cyan-400/20 text-blue-300 rounded-full font-medium md:text-sm">
                               {candidate.matchCount} совпадений
                             </span>
                           </div>
                           
                           <div className="flex flex-wrap gap-1">
                             {candidate.interests.filter(tag => profile.interests.includes(tag)).slice(0, 3).map(tag => (
-                              <span key={tag} className="text-xs px-2 py-1 bg-dark-bg/60 text-dark-accent rounded-full truncate">
+                              <span key={tag} className="text-xs px-1.5 py-0.5 sm:px-2 sm:py-1 bg-dark-bg/60 text-dark-accent rounded-full truncate md:text-sm">
                                 {getInterestPath(tag)}
                               </span>
                             ))}
                             {candidate.interests.filter(tag => profile.interests.includes(tag)).length > 3 && (
-                              <span className="text-xs px-2 py-1 bg-dark-bg/40 text-dark-muted rounded-full">
+                              <span className="text-xs px-1.5 py-0.5 sm:px-2 sm:py-1 bg-dark-bg/40 text-dark-muted rounded-full md:text-sm">
                                 +{candidate.interests.filter(tag => profile.interests.includes(tag)).length - 3}
                               </span>
                             )}
@@ -203,21 +203,22 @@ export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, 
                         </div>
                         
                         {/* Action buttons */}
-                        <div className="flex gap-2 pt-3">
+                        <div className="flex gap-1.5 sm:gap-2 pt-2 sm:pt-3">
                           <button 
-                            className="flex-1 py-2 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold text-xs shadow-md hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-1.5"
+                            className="flex-1 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold text-xs shadow-md hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-1 sm:py-2.5 sm:text-sm"
                             title="Добавить в друзья"
                             onClick={e => { e.stopPropagation(); onAddFriend(candidate.userId); }}
                           >
-                            <svg width="12" height="12" fill="none" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5" stroke="currentColor" strokeWidth="2"/></svg>
-                            Добавить
+                            <svg width="10" height="10" fill="none" viewBox="0 0 24 24" className="sm:w-12 sm:h-12"><path d="M12 5v14m7-7H5" stroke="currentColor" strokeWidth="2"/></svg>
+                            <span className="hidden xs:inline">Добавить</span>
+                            <span className="xs:hidden">+</span>
                           </button>
                           <button 
-                            className="px-2.5 py-2 rounded-lg bg-dark-bg/60 text-dark-muted shadow-md hover:bg-red-500/10 hover:text-red-500 active:scale-95 transition-all"
+                            className="px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-lg bg-dark-bg/60 text-dark-muted shadow-md hover:bg-red-500/10 hover:text-red-500 active:scale-95 transition-all md:px-3 md:py-2.5"
                             title="Скрыть"
                             onClick={e => { e.stopPropagation(); setHidden(h => [...h, candidate.userId]); }}
                           >
-                            <svg width="12" height="12" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="2"/></svg>
+                            <svg width="10" height="10" fill="none" viewBox="0 0 24 24" className="sm:w-12 sm:h-12"><path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="2"/></svg>
                           </button>
                         </div>
                       </div>
@@ -232,7 +233,7 @@ export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, 
                       {visibleCandidates.map((_, index) => (
                         <div
                           key={index}
-                          className={`w-1.5 h-1.5 rounded-full transition-all ${index === currentIndex ? 'bg-gradient-to-r from-blue-500 to-cyan-400 scale-125' : 'bg-dark-bg/40'}`}
+                          className={`w-1.5 h-1.5 rounded-full transition-all sm:w-2 sm:h-2 ${index === currentIndex ? 'bg-gradient-to-r from-blue-500 to-cyan-400 scale-125' : 'bg-dark-bg/40'}`}
                           title={`Слайд ${index + 1}`}
                         />
                       ))}
@@ -254,7 +255,7 @@ export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, 
         
         {/* Нижний блок — список друзей */}
         <div className="flex flex-col gap-4">
-          <div className="text-2xl font-bold text-dark-text">Мои друзья</div>
+          <div className="text-xl sm:text-2xl font-bold text-dark-text">Мои друзья</div>
           {friendList.length === 0 ? (
             <div className="bg-dark-card rounded-3xl shadow-card p-12 flex flex-col items-center justify-center gap-5">
               <div className="text-6xl opacity-50">🎵</div>
@@ -265,8 +266,8 @@ export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, 
             </div>
           ) : (
             friendList.map(user => (
-              <div key={user.userId} className="bg-dark-card rounded-3xl shadow-card p-5 flex items-center gap-4 border border-dark-bg/40 animate-fade-in animate-scale-in cursor-pointer hover:bg-dark-bg/80 transition shadow-lg" onClick={() => onUserClick(user)}>
-                <div className="w-16 h-16 rounded-2xl bg-dark-bg/80 flex items-center justify-center text-2xl border-2 border-white overflow-hidden shadow-lg">
+              <div key={user.userId} className="bg-dark-card rounded-3xl shadow-card p-4 flex items-center gap-3 border border-dark-bg/40 animate-fade-in animate-scale-in cursor-pointer hover:bg-dark-bg/80 transition shadow-lg sm:p-5 md:p-6" onClick={() => onUserClick(user)}>
+                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-dark-bg/80 flex items-center justify-center text-xl sm:text-2xl border-2 border-white overflow-hidden shadow-lg md:w-20 md:h-20">
                   {user.avatarUrl ? (
                     <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-2xl" />
                   ) : (
@@ -274,15 +275,15 @@ export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, 
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-dark-text text-lg truncate">{user.name}</div>
+                  <div className="font-bold text-dark-text text-base sm:text-lg truncate md:text-xl">{user.name}</div>
                   {user.city && <div className="text-sm text-blue-400 truncate">{user.city}</div>}
                 </div>
-                <div className="flex gap-3 items-center ml-2">
-                  <button className="p-3 rounded-2xl bg-dark-bg/60 text-dark-accent shadow-lg hover:bg-blue-500/10 hover:text-blue-500 active:scale-95 transition-all hover:scale-105" title="Написать" onClick={e => e.stopPropagation()}>
-                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M4 20l16-8-16-8v6h12v4H4v6z" stroke="currentColor" strokeWidth="1.5"/></svg>
+                <div className="flex gap-2 sm:gap-3 items-center ml-2">
+                  <button className="p-2.5 sm:p-3 rounded-2xl bg-dark-bg/60 text-dark-accent shadow-lg hover:bg-blue-500/10 hover:text-blue-500 active:scale-95 transition-all hover:scale-105 md:p-3.5" title="Написать" onClick={e => e.stopPropagation()}>
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" className="sm:w-20 sm:h-20"><path d="M4 20l16-8-16-8v6h12v4H4v6z" stroke="currentColor" strokeWidth="1.5"/></svg>
                   </button>
-                  <button className="p-3 rounded-2xl bg-dark-bg/60 text-red-500 shadow-lg hover:bg-red-500/10 hover:text-red-500 active:scale-95 transition-all hover:scale-105" title="Удалить" onClick={e => { e.stopPropagation(); onRemoveFriend(user.userId); }}>
-                    <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12ZM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4Z" stroke="currentColor" strokeWidth="1.5"/></svg>
+                  <button className="p-2.5 sm:p-3 rounded-2xl bg-dark-bg/60 text-red-500 shadow-lg hover:bg-red-500/10 hover:text-red-500 active:scale-95 transition-all hover:scale-105 md:p-3.5" title="Удалить" onClick={e => { e.stopPropagation(); onRemoveFriend(user.userId); }}>
+                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" className="sm:w-20 sm:h-20"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12ZM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4Z" stroke="currentColor" strokeWidth="1.5"/></svg>
                   </button>
                 </div>
               </div>

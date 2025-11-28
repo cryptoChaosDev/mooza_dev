@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { HashRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
 import { WelcomePage } from "./Welcome";
 import { UserProfile, Post } from "./types";
-import { getTelegramUser, MOCK_USERS, MOCK_POSTS } from "./utils";
+import { getTelegramUser, MOCK_POSTS } from "./utils";
 import { AppBar } from "./components/AppBar";
 import { TabBar } from "./components/TabBar";
 import { Layout } from "./components/Layout";
@@ -14,7 +14,7 @@ import { SkillsInterests } from "./pages/SkillsInterests";
 import { ToastProvider } from "./contexts/ToastContext";
 import { UserPageWrapper } from "./pages/UserPageWrapper";
 import { useProfile } from "./hooks/useProfile";
-import { updateProfile } from "./api";
+import { updateProfile, getAllUsers } from "./api";
 
 
 const navItems = [
@@ -75,12 +75,40 @@ function App() {
   }, [refreshProfile]);
 
   // ВСЕ остальные хуки — сюда, до любого return!
-  const [allUsers, setAllUsers] = useState<UserProfile[]>(MOCK_USERS);
+  const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [allPosts, setAllPosts] = useState<Post[]>(MOCK_POSTS);
-  const [friends, setFriends] = useState<string[]>([MOCK_USERS[0].userId, MOCK_USERS[1].userId]);
-  const [favorites, setFavorites] = useState<string[]>([MOCK_USERS[2].userId]);
+  const [friends, setFriends] = useState<string[]>([]);
+  const [favorites, setFavorites] = useState<string[]>([]);
   const [userCard, setUserCard] = useState<{ user: UserProfile, posts: Post[] } | null>(null);
   const navigate = useNavigate();
+
+  // Fetch all users from the database
+  useEffect(() => {
+    const fetchAllUsers = async () => {
+      if (profile) {
+        try {
+          const token = localStorage.getItem('token');
+          if (token) {
+            const response = await getAllUsers(token);
+            setAllUsers(response.users || []);
+            
+            // Set initial friends and favorites for demo purposes
+            // In a real app, this would come from the database
+            if (response.users && response.users.length > 0) {
+              setFriends([response.users[0]?.userId, response.users[1]?.userId].filter(Boolean));
+              setFavorites([response.users[2]?.userId].filter(Boolean));
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch users:', error);
+          // Fallback to mock users if API fails
+          // setAllUsers(MOCK_USERS);
+        }
+      }
+    };
+
+    fetchAllUsers();
+  }, [profile]);
 
   // ... handleUserClick ...
   const handleUserClick = (user: UserProfile) => {
@@ -155,29 +183,31 @@ function App() {
 
   return (
     <ToastProvider>
-      <AppBar />
-      <Layout>
-        <Routes>
-          <Route path="/" element={<HomeFeed profile={profile!} allPosts={allPosts} friends={friends} onUserClick={handleUserClick} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} users={allUsers} />} />
-          <Route path="/search" element={<Search profile={profile!} users={allUsers} friends={friends} favorites={favorites} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onToggleFavorite={handleToggleFavorite} onUserClick={handleUserClick} />} />
-          <Route path="/friends" element={<Friends profile={profile!} friends={friends} users={allUsers} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onUserClick={handleUserClick} />} />
-          <Route path="/profile" element={<Profile key={profile?.userId} profile={profile!} setProfile={setProfile} allPosts={allPosts} setAllPosts={setAllPosts} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} users={allUsers} setAllUsers={setAllUsers} friends={friends} favorites={favorites} onUserClick={handleUserClick} />} />
-          <Route path="/skills" element={<SkillsInterests profile={profile!} setProfile={setProfile} />} />
-          <Route path="/user/:userName" element={<UserPageWrapper 
-            allUsers={allUsers} 
-            allPosts={allPosts} 
-            onBack={() => navigate(-1)}
-            friends={friends}
-            favorites={favorites}
-            onAddFriend={handleAddFriend}
-            onRemoveFriend={handleRemoveFriend}
-            onToggleFavorite={handleToggleFavorite}
-            onLikeUserPost={handleLikeUserPost}
-            currentUserName={profile!.name}
-          />} />
-        </Routes>
-      </Layout>
-      <TabBar />
+      <div className="flex flex-col min-h-screen bg-dark-bg">
+        <AppBar />
+        <Layout>
+          <Routes>
+            <Route path="/" element={<HomeFeed profile={profile!} allPosts={allPosts} friends={friends} onUserClick={handleUserClick} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} users={allUsers} />} />
+            <Route path="/search" element={<Search profile={profile!} users={allUsers} friends={friends} favorites={favorites} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onToggleFavorite={handleToggleFavorite} onUserClick={handleUserClick} />} />
+            <Route path="/friends" element={<Friends profile={profile!} friends={friends} users={allUsers} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onUserClick={handleUserClick} />} />
+            <Route path="/profile" element={<Profile key={profile?.userId} profile={profile!} setProfile={setProfile} allPosts={allPosts} setAllPosts={setAllPosts} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} users={allUsers} setAllUsers={setAllUsers} friends={friends} favorites={favorites} onUserClick={handleUserClick} />} />
+            <Route path="/skills" element={<SkillsInterests profile={profile!} setProfile={setProfile} />} />
+            <Route path="/user/:userName" element={<UserPageWrapper 
+              allUsers={allUsers} 
+              allPosts={allPosts} 
+              onBack={() => navigate(-1)}
+              friends={friends}
+              favorites={favorites}
+              onAddFriend={handleAddFriend}
+              onRemoveFriend={handleRemoveFriend}
+              onToggleFavorite={handleToggleFavorite}
+              onLikeUserPost={handleLikeUserPost}
+              currentUserName={profile!.name}
+            />} />
+          </Routes>
+        </Layout>
+        <TabBar />
+      </div>
     </ToastProvider>
   );
 }
@@ -192,4 +222,3 @@ function AppWithRouter() {
 }
 
 export default AppWithRouter;
-

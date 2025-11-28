@@ -75,4 +75,11 @@ export async function updateProfile(token: string, payload: ProfilePayload): Pro
   return res.json();
 }
 
-
+// New function to fetch all users
+export async function getAllUsers(token: string): Promise<any> {
+  const res = await fetch(`${API_URL}/profile`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Не удалось загрузить пользователей');
+  return res.json();
+}
