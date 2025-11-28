@@ -30,7 +30,7 @@ export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePo
     workPlace: profile.workPlace || '',
     skills: profile.skills || [],
     interests: profile.interests || [],
-    portfolio: profile.portfolio ? { text: profile.portfolio.text || '', fileUrl: profile.portfolio.fileUrl } : { text: '', fileUrl: undefined },
+    portfolio: profile.portfolio ? { text: profile.portfolio.text || '' } : { text: '' },
     phone: profile.phone || '',
     email: profile.email || '',
     socials: profile.socials || [],
@@ -40,6 +40,29 @@ export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePo
     city: profile.city || '',
     country: profile.country || '',
   });
+
+  // Update editData when profile changes
+  React.useEffect(() => {
+    setEditData({
+      ...profile,
+      firstName: profile.firstName || '',
+      lastName: profile.lastName || '',
+      name: profile.name || '',
+      bio: profile.bio || '',
+      workPlace: profile.workPlace || '',
+      skills: profile.skills || [],
+      interests: profile.interests || [],
+      portfolio: profile.portfolio ? { text: profile.portfolio.text || '' } : { text: '' },
+      phone: profile.phone || '',
+      email: profile.email || '',
+      socials: profile.socials || [],
+      vkId: profile.vkId || '',
+      youtubeId: profile.youtubeId || '',
+      telegramId: profile.telegramId || '',
+      city: profile.city || '',
+      country: profile.country || '',
+    });
+  }, [profile]);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [newPost, setNewPost] = useState<{ content: string; tags: string[]; attachment: File | null }>({ content: "", tags: [], attachment: null });
   const [showCreate, setShowCreate] = useState(false);
@@ -97,7 +120,10 @@ export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePo
         const newData = {
           ...editData,
           ...response.profile,
+          userId: profile.userId, // Preserve userId
+          name: `${response.profile.firstName} ${response.profile.lastName}`.trim(),
           avatarUrl: response.profile.avatarUrl || avatarUrl,
+          portfolio: response.profile.portfolio || { text: '' },
         };
 
         // Обновляем посты с новым аватаром и именем
@@ -119,6 +145,15 @@ export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePo
 
         setEditOpen(false);
         toast("Профиль успешно обновлён!");
+        
+        // Force a profile refresh to ensure latest data is loaded
+        setTimeout(() => {
+          const token = localStorage.getItem('token');
+          if (token) {
+            // Trigger a refresh in the parent component
+            window.dispatchEvent(new CustomEvent('profileUpdated'));
+          }
+        }, 100);
       } else {
         throw new Error("Некорректный ответ сервера");
       }
@@ -598,126 +633,7 @@ export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePo
                       />
                       {errors.portfolioText && <div className="text-sm text-red-500">{errors.portfolioText}</div>}
                       
-                      <div className="flex items-center gap-4">
-                        <label className="inline-flex items-center gap-2 cursor-pointer p-3 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow hover:opacity-90 transition-colors">
-                          <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
-                            <path d="M16.5 13.5V7a4.5 4.5 0 0 0-9 0v8a6 6 0 0 0 12 0V9.5" stroke="currentColor" strokeWidth="1.5"/>
-                            <circle cx="12" cy="17" r="1.5" fill="currentColor"/>
-                          </svg>
-                          <span className="text-sm">Прикрепить файл</span>
-                          <input 
-                            type="file" 
-                            accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" 
-                            onChange={async (e) => {
-                              const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-                              if (!file) return;
 
-                              // Проверка размера файла (15 МБ)
-                              if (file.size > 15 * 1024 * 1024) {
-                                toast("Максимальный размер файла 15 МБ");
-                                return;
-                              }
-
-                              // Проверка типа файла
-                              const allowedTypes = [
-                                'application/pdf',
-                                'application/msword',
-                                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-                              ];
-                              if (!allowedTypes.includes(file.type)) {
-                                toast("Поддерживаются только файлы DOC, DOCX и PDF");
-                                return;
-                              }
-
-                              try {
-                                const formData = new FormData();
-                                formData.append('file', file);
-
-                                const token = localStorage.getItem('token');
-                                if (!token) {
-                                  toast("Ошибка авторизации");
-                                  return;
-                                }
-
-                                const response = await fetch('http://localhost:4000/profile/me/portfolio-file', {
-                                  method: 'POST',
-                                  headers: {
-                                    'Authorization': `Bearer ${token}`
-                                  },
-                                  body: formData
-                                });
-
-                                if (!response.ok) {
-                                  throw new Error('Ошибка загрузки файла');
-                                }
-
-                                const result = await response.json();
-                                if (result.success) {
-                                  setEditData(prev => ({
-                                    ...prev,
-                                    portfolio: { 
-                                      text: prev.portfolio?.text || '',
-                                      fileUrl: prev.portfolio?.fileUrl,
-                                      fileName: file.name,
-                                      fileType: file.type
-                                    }
-                                  }));
-                                  toast("Файл успешно загружен");
-                                }
-                              } catch (error) {
-                                console.error('Error uploading file:', error);
-                                toast("Ошибка при загрузке файла");
-                              }
-                            }} 
-                            className="hidden" 
-                          />
-                        </label>
-                        {editData.portfolio?.fileName && (
-                          <div className="flex items-center gap-3">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" className="text-blue-500">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            <a 
-                              href={`http://localhost:4000/profile/me/portfolio-file`}
-                              className="text-blue-500 hover:text-blue-600 underline text-sm truncate max-w-[200px]"
-                              download
-                              onClick={async (e) => {
-                                e.preventDefault();
-                                try {
-                                  const token = localStorage.getItem('token');
-                                  if (!token) {
-                                    toast("Ошибка авторизации");
-                                    return;
-                                  }
-
-                                  const response = await fetch('http://localhost:4000/profile/me/portfolio-file', {
-                                    headers: {
-                                      'Authorization': `Bearer ${token}`
-                                    }
-                                  });
-
-                                  if (!response.ok) throw new Error('Ошибка загрузки файла');
-
-                                  const blob = await response.blob();
-                                  const url = window.URL.createObjectURL(blob);
-                                  const a = document.createElement('a');
-                                  a.href = url;
-                                  a.download = editData.portfolio?.fileName || 'download';
-                                  document.body.appendChild(a);
-                                  a.click();
-                                  window.URL.revokeObjectURL(url);
-                                  document.body.removeChild(a);
-                                } catch (error) {
-                                  console.error('Error downloading file:', error);
-                                  toast("Ошибка при скачивании файла");
-                                }
-                              }}
-                            >
-                              {editData.portfolio?.fileName || 'Скачать файл'}
-                            </a>
-                          </div>
-                        )}
-                      </div>
                     </div>
                   </div>
                   
