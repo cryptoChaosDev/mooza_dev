@@ -42,15 +42,17 @@ const navItems = [
 export function TabBar() {
   return (
     <nav
-      className="fixed inset-x-0 bottom-0 z-50 bg-dark-card border-t border-dark-bg/40 w-full overflow-x-hidden"
+      className="fixed inset-x-0 bottom-0 z-50 bg-dark-card border-t border-dark-bg/40 w-full overflow-x-hidden backdrop-blur-md bg-opacity-90"
       style={{
         height: 'var(--tabbar-height)',
         paddingBottom: 'max(env(safe-area-inset-bottom, 0px), 8px)',
         boxShadow: '0 -2px 20px rgba(0,0,0,0.15)',
         maxWidth: '100vw',
       }}
+      role="navigation"
+      aria-label="Основная навигация"
     >
-      <div className="flex items-center justify-around h-full px-2">
+      <div className="flex items-center justify-around h-full px-2 max-w-md mx-auto">
         {navItems.map((item) => (
           <NavLink
             key={item.to}
@@ -58,13 +60,19 @@ export function TabBar() {
             className={({ isActive }) =>
               `flex flex-col items-center justify-center gap-1 transition-all duration-200 relative flex-1 py-2 ${isActive ? 'text-dark-accent' : 'text-dark-muted'}`
             }
+            tabIndex={0}
+            role="link"
+            aria-current={window.location.pathname === item.to ? 'page' : undefined}
           >
             {({ isActive }) => (
               <>
-                <span className="touch-target">
+                <span className="touch-target" aria-hidden="true">
                   <span className={`transition-transform duration-200 ${isActive ? 'scale-110' : ''}`}>
                     {item.icon}
                   </span>
+                </span>
+                <span className="text-xs font-medium tracking-wide select-none text-center leading-tight sr-only">
+                  {item.label}
                 </span>
                 <span className="text-xs font-medium tracking-wide select-none text-center leading-tight">
                   {item.label}

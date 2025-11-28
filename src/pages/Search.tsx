@@ -42,11 +42,11 @@ export function Search({ profile, users, friends, favorites, onAddFriend, onRemo
   });
 
   return (
-    <main className="p-4 sm:p-6 pt-6 text-center text-dark-text min-h-[100dvh] bg-dark-bg flex flex-col items-center text-base sm:text-lg w-full flex-1 overflow-x-hidden" style={{ paddingBottom: 'calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px))' }}>
-      <div className="w-full max-w-md flex flex-col gap-6">
+    <main className="p-3 sm:p-4 md:p-6 pt-4 sm:pt-5 md:pt-6 text-center text-dark-text min-h-[100dvh] bg-dark-bg flex flex-col items-center text-sm sm:text-base md:text-lg w-full flex-1 overflow-x-hidden" style={{ paddingBottom: 'calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px))' }}>
+      <div className="w-full max-w-md flex flex-col gap-6 container-responsive max-width-md">
         {/* Filter Section */}
-        <div className="bg-dark-card rounded-3xl shadow-card p-6 flex flex-col gap-5 animate-fade-in">
-          <h2 className="text-2xl font-bold text-dark-text">Поиск музыкантов</h2>
+        <div className="bg-dark-card rounded-3xl shadow-card p-4 sm:p-5 md:p-6 flex flex-col gap-4 sm:gap-5 animate-fade-in lg:p-7">
+          <h2 className="text-xl font-bold text-dark-text sm:text-2xl md:text-3xl">Поиск музыкантов</h2>
           
           <div className="flex flex-col gap-4">
             <InterestSelector
@@ -55,20 +55,20 @@ export function Search({ profile, users, friends, favorites, onAddFriend, onRemo
             />
             
             <div className="flex flex-col gap-4">
-              <label className="flex items-center gap-3 cursor-pointer text-base">
+              <label className="flex items-center gap-2 sm:gap-3 cursor-pointer text-sm sm:text-base md:text-lg">
                 <input 
                   type="checkbox" 
                   checked={showOnlyMatches} 
                   onChange={e => setShowOnlyMatches(e.target.checked)} 
-                  className="w-5 h-5 rounded accent-blue-500"
+                  className="w-4 h-4 sm:w-5 sm:h-5 rounded accent-blue-500 md:w-6 md:h-6"
                 />
                 <span>Только совпадающие</span>
               </label>
               
-              <div className="flex flex-col gap-2">
-                <span className="text-sm text-dark-muted font-semibold">Сортировать:</span>
+              <div className="flex flex-col gap-1.5 sm:gap-2">
+                <span className="text-xs sm:text-sm text-dark-muted font-semibold md:text-base">Сортировать:</span>
                 <select 
-                  className="px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text text-base shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="px-3 py-2 sm:px-4 sm:py-3 rounded-2xl bg-dark-bg/60 text-dark-text text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-400 sm:text-base md:px-5 md:py-4 md:text-lg"
                   value={sortBy} 
                   onChange={e => setSortBy(e.target.value as any)}
                 >
@@ -85,41 +85,41 @@ export function Search({ profile, users, friends, favorites, onAddFriend, onRemo
         {/* Results Section */}
         <div className="flex flex-col gap-5">
           <div className="flex items-center justify-between">
-            <div className="text-2xl font-bold text-dark-text">Результаты поиска</div>
-            <div className="text-base text-dark-muted font-medium">{sortedUsers.length} пользователей</div>
+            <div className="text-xl font-bold text-dark-text sm:text-2xl md:text-3xl">Результаты поиска</div>
+            <div className="text-sm text-dark-muted font-medium sm:text-base md:text-lg">{sortedUsers.length} пользователей</div>
           </div>
           
           {sortedUsers.length === 0 ? (
             <div className="bg-dark-card rounded-3xl shadow-card p-12 flex flex-col items-center justify-center gap-5">
               <div className="text-6xl opacity-50">🎵</div>
               <div className="text-center text-dark-muted">
-                <div className="font-semibold text-xl">Нет подходящих пользователей</div>
-                <div className="text-base mt-2">Попробуйте изменить критерии поиска</div>
+                <div className="font-semibold text-xl sm:text-2xl">Нет подходящих пользователей</div>
+                <div className="text-base mt-2 sm:text-lg">Попробуйте изменить критерии поиска</div>
               </div>
             </div>
           ) : (
             sortedUsers.map(user => (
               <div 
                 key={user.userId} 
-                className="bg-dark-card rounded-3xl shadow-card p-6 flex flex-col gap-5 animate-fade-in animate-scale-in cursor-pointer hover:bg-dark-bg/80 transition shadow-lg"
+                className="bg-dark-card rounded-3xl shadow-card p-6 flex flex-col gap-5 animate-fade-in animate-scale-in cursor-pointer hover:bg-dark-bg/80 transition shadow-lg sm:p-7"
                 onClick={() => onUserClick(user)}
               >
                 <div className="flex flex-col items-center gap-2 w-full relative">
                   <div className="relative">
-                    <div className="w-24 h-24 rounded-2xl overflow-hidden border-4 border-white shadow-xl bg-dark-bg/80 flex items-center justify-center">
+                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-2xl overflow-hidden border-3 sm:border-4 border-white shadow-xl bg-dark-bg/80 flex items-center justify-center md:w-28 md:h-28">
                       {user.avatarUrl ? (
                         <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-2xl" />
                       ) : (
-                        <span role="img" aria-label="avatar" className="text-4xl">👤</span>
+                        <span role="img" aria-label="avatar" className="text-3xl sm:text-4xl md:text-5xl">👤</span>
                       )}
                     </div>
                   </div>
-                  <div className="font-bold text-xl text-dark-text text-center break-words leading-tight">
+                  <div className="font-bold text-lg text-dark-text text-center break-words leading-tight sm:text-xl md:text-2xl">
                     {user.firstName} {user.lastName}
                   </div>
                   {(user.city || user.country) && (
-                    <div className="text-blue-400 text-sm font-medium flex items-center gap-2 bg-blue-500/10 px-3 py-1 rounded-full">
-                      <svg width="16" height="16" fill="none" viewBox="0 0 24 24">
+                    <div className="text-blue-400 text-xs font-medium flex items-center gap-1.5 sm:gap-2 bg-blue-500/10 px-2.5 py-1 sm:px-3 sm:py-1 rounded-full sm:text-sm md:text-base">
+                      <svg width="14" height="14" fill="none" viewBox="0 0 24 24" className="sm:w-16 sm:h-16">
                         <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5a2.5 2.5 0 0 1 0-5 2.5 2.5 0 0 1 0 5z" fill="currentColor"/>
                       </svg>
                       {[user.country, user.city].filter(Boolean).join(', ')}
@@ -129,17 +129,17 @@ export function Search({ profile, users, friends, favorites, onAddFriend, onRemo
                 
                 {user.bio && (
                   <div className="w-full text-center">
-                    <div className="text-sm font-semibold text-dark-muted mb-2 uppercase tracking-wider">О себе</div>
-                    <div className="text-dark-text text-base whitespace-pre-line font-normal bg-dark-bg/30 rounded-2xl p-4 shadow-inner">{user.bio}</div>
+                    <div className="text-xs font-semibold text-dark-muted mb-1.5 sm:mb-2 uppercase tracking-wider sm:text-sm md:text-base">О себе</div>
+                    <div className="text-dark-text text-sm whitespace-pre-line font-normal bg-dark-bg/30 rounded-2xl p-3 shadow-inner sm:text-base sm:p-4 md:text-lg md:p-5">{user.bio}</div>
                   </div>
                 )}
                 
                 {user.workPlace && (
                   <div className="w-full">
-                    <div className="text-sm font-semibold text-dark-muted mb-2 uppercase tracking-wider">Место работы</div>
-                    <div className="text-dark-text text-sm bg-dark-bg/40 rounded-2xl px-4 py-3 shadow-sm flex items-center gap-2">
+                    <div className="text-sm font-semibold text-dark-muted mb-2 uppercase tracking-wider sm:text-base">Место работы</div>
+                    <div className="text-dark-text text-sm bg-dark-bg/40 rounded-2xl px-4 py-3 shadow-sm flex items-center gap-2 sm:text-base sm:px-5 sm:py-4">
                       <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
-                        <path d="M3 21h18v-2H3v2zM19 9h-2V7h2v2zm0-4h-2V3h2v2zm-4 8h-2v-2h2v2zm0-4h-2V7h2v2zm0-4h-2V3h2v2zm-8 8H5v-2h2v2zm0-4H5V7h2v2zm0-4H5V3h2v2zm-4 8h2v2H3v-2h2v-2H3v2h2v-2H3v2zm16 0h2v2h-2v-2zm0-2v-2h2v2h-2z" fill="currentColor"/>
+                        <path d="M3 21h18v-2H3v2zM19 9h-2V7h2v2zm0-4h-2V3h2v2zm-4 8h-2v-2h2v2zm0-4h-2V7h2v2zm0-4h-2V3h2v2zm-8 8H5v-2h2v2zm0-4H5V7h2v2zm0-4H5V3h2v2zm-4 8h2v2H3v-2h2v-2H3v2zm16 0h2v2h-2v-2zm0-2v-2h2v2h-2z" fill="currentColor"/>
                       </svg>
                       <span>{user.workPlace}</span>
                     </div>
@@ -148,10 +148,10 @@ export function Search({ profile, users, friends, favorites, onAddFriend, onRemo
                 
                 {user.skills?.length > 0 && (
                   <div className="w-full">
-                    <div className="text-sm font-semibold text-dark-muted mb-3 uppercase tracking-wider">Навыки</div>
+                    <div className="text-sm font-semibold text-dark-muted mb-3 uppercase tracking-wider sm:text-base">Навыки</div>
                     <div className="flex flex-wrap gap-2 justify-center">
                       {user.skills.map((skill, i) => (
-                        <span key={i} className="px-4 py-2 rounded-2xl text-sm font-medium bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-md">{getInterestPath(skill)}</span>
+                        <span key={i} className="px-4 py-2 rounded-2xl text-sm font-medium bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-md sm:px-5 sm:py-2.5 sm:text-base">{getInterestPath(skill)}</span>
                       ))}
                     </div>
                   </div>
@@ -159,25 +159,25 @@ export function Search({ profile, users, friends, favorites, onAddFriend, onRemo
                 
                 {user.interests?.length > 0 && (
                   <div className="w-full">
-                    <div className="text-sm font-semibold text-dark-muted mb-3 uppercase tracking-wider">Интересы</div>
+                    <div className="text-sm font-semibold text-dark-muted mb-3 uppercase tracking-wider sm:text-base">Интересы</div>
                     <div className="flex flex-wrap gap-2 justify-center">
                       {user.interests.map((interest, i) => (
-                        <span key={i} className="px-4 py-2 rounded-2xl text-sm font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-400/30 shadow-sm">{getInterestPath(interest)}</span>
+                        <span key={i} className="px-4 py-2 rounded-2xl text-sm font-medium bg-cyan-500/10 text-cyan-400 border border-cyan-400/30 shadow-sm sm:px-5 sm:py-2.5 sm:text-base">{getInterestPath(interest)}</span>
                       ))}
                     </div>
                   </div>
                 )}
                 
                 {user.portfolio && (user.portfolio.text || user.portfolio.fileUrl) && (
-                  <div className="w-full flex flex-col items-center gap-3 bg-dark-bg/30 rounded-2xl p-4 shadow-inner">
-                    <div className="text-sm font-semibold text-dark-muted uppercase tracking-wider">Портфолио</div>
-                    {user.portfolio.text && <div className="text-dark-text text-sm text-center whitespace-pre-line">{user.portfolio.text}</div>}
+                  <div className="w-full flex flex-col items-center gap-3 bg-dark-bg/30 rounded-2xl p-4 shadow-inner sm:p-5">
+                    <div className="text-sm font-semibold text-dark-muted uppercase tracking-wider sm:text-base">Портфолио</div>
+                    {user.portfolio.text && <div className="text-dark-text text-sm text-center whitespace-pre-line sm:text-base">{user.portfolio.text}</div>}
                     {user.portfolio.fileUrl && (
                       <a 
                         href={user.portfolio.fileUrl} 
                         target="_blank" 
                         rel="noopener noreferrer" 
-                        className="text-blue-400 underline text-sm flex items-center gap-2 hover:text-blue-300 transition-colors"
+                        className="text-blue-400 underline text-sm flex items-center gap-2 hover:text-blue-300 transition-colors sm:text-base"
                         onClick={e => e.stopPropagation()}
                       >
                         <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
@@ -194,13 +194,13 @@ export function Search({ profile, users, friends, favorites, onAddFriend, onRemo
                 )}
                 
                 {(user.phone || user.email) && (
-                  <div className="w-full flex flex-col items-center gap-3 bg-dark-bg/30 rounded-2xl p-4 shadow-inner">
-                    <div className="text-sm font-semibold text-dark-muted uppercase tracking-wider">Контакты</div>
+                  <div className="w-full flex flex-col items-center gap-3 bg-dark-bg/30 rounded-2xl p-4 shadow-inner sm:p-5">
+                    <div className="text-sm font-semibold text-dark-muted uppercase tracking-wider sm:text-base">Контакты</div>
                     <div className="flex flex-col items-center gap-2">
                       {user.phone && (
                         <a 
                           href={`tel:${user.phone}`} 
-                          className="text-blue-400 underline text-sm flex items-center gap-2 hover:text-blue-300 transition-colors"
+                          className="text-blue-400 underline text-sm flex items-center gap-2 hover:text-blue-300 transition-colors sm:text-base"
                           onClick={e => e.stopPropagation()}
                         >
                           <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
@@ -213,7 +213,7 @@ export function Search({ profile, users, friends, favorites, onAddFriend, onRemo
                       {user.email && (
                         <a 
                           href={`mailto:${user.email}`} 
-                          className="text-blue-400 underline text-sm flex items-center gap-2 hover:text-blue-300 transition-colors"
+                          className="text-blue-400 underline text-sm flex items-center gap-2 hover:text-blue-300 transition-colors sm:text-base"
                           onClick={e => e.stopPropagation()}
                         >
                           <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
@@ -230,7 +230,7 @@ export function Search({ profile, users, friends, favorites, onAddFriend, onRemo
                   {friends.includes(user.userId) ? (
                     <button 
                       title="Удалить из друзей" 
-                      className="p-3 rounded-2xl bg-dark-bg/60 text-red-500 shadow-lg hover:bg-red-500/10 hover:text-red-500 active:scale-95 transition-all hover:scale-105"
+                      className="p-3 rounded-2xl bg-dark-bg/60 text-red-500 shadow-lg hover:bg-red-500/10 hover:text-red-500 active:scale-95 transition-all hover:scale-105 sm:p-3.5"
                       onClick={e => { e.stopPropagation(); onRemoveFriend(user.userId); }}
                     >
                       <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="1.5"/></svg>
@@ -238,7 +238,7 @@ export function Search({ profile, users, friends, favorites, onAddFriend, onRemo
                   ) : (
                     <button 
                       title="Добавить в друзья" 
-                      className="p-3 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-lg hover:opacity-90 active:scale-95 transition-all hover:scale-105"
+                      className="p-3 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-lg hover:opacity-90 active:scale-95 transition-all hover:scale-105 sm:p-3.5"
                       onClick={e => { e.stopPropagation(); onAddFriend(user.userId); }}
                     >
                       <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5" stroke="currentColor" strokeWidth="1.5"/></svg>
@@ -246,7 +246,7 @@ export function Search({ profile, users, friends, favorites, onAddFriend, onRemo
                   )}
                   <button
                     title={favorites.includes(user.userId) ? "Убрать из избранного" : "В избранное"}
-                    className={`p-3 rounded-2xl shadow-lg active:scale-95 transition-all hover:scale-105 ${favorites.includes(user.userId) 
+                    className={`p-3 rounded-2xl shadow-lg active:scale-95 transition-all hover:scale-105 sm:p-3.5 ${favorites.includes(user.userId) 
                       ? 'bg-yellow-400 text-white hover:bg-yellow-500' 
                       : 'bg-dark-bg/60 text-yellow-400 hover:bg-yellow-400/10 hover:text-yellow-300'}`}
                     onClick={e => { e.stopPropagation(); onToggleFavorite(user.userId); }}

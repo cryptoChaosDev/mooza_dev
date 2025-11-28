@@ -42,7 +42,7 @@ const Dropdown: React.FC<{
         onClick={() => setOpen(!open)}
         disabled={disabled}
       >
-        <span className={value ? '' : 'text-dark-muted'}>{selectedLabel}</span>
+        <span className={`truncate ${value ? '' : 'text-dark-muted'}`}>{selectedLabel}</span>
         <span className={`ml-2 text-dark-accent text-lg transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
       </button>
       {open && (
@@ -53,7 +53,7 @@ const Dropdown: React.FC<{
           {options.map((opt: string) => (
             <div
               key={opt}
-              className={`px-4 py-3 cursor-pointer text-base rounded-2xl transition-all select-none ${value === opt ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold' : 'hover:bg-dark-bg/70 text-dark-text'}`}
+              className={`px-4 py-3 cursor-pointer text-base rounded-2xl transition-all select-none truncate ${value === opt ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold' : 'hover:bg-dark-bg/70 text-dark-text'}`}
               onClick={() => { onChange(opt); setOpen(false); }}
             >
               {opt}
@@ -82,6 +82,7 @@ export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, on
       setCategory("");
       setSubcategory("");
       setTag("");
+      setQuery(""); // Clear search query after adding
     }
   };
 
@@ -103,10 +104,11 @@ export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, on
     setCategory("");
     setSubcategory("");
     setTag("");
+    setQuery("");
     onChange([]);
   };
 
-  // Для отображения пути
+  // For displaying the path
   const getInterestPath = (tag: string) => {
     for (const cat of INTEREST_CATEGORIES) {
       for (const sub of cat.subcategories) {
@@ -118,40 +120,70 @@ export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, on
     return tag;
   };
 
+  // Filter tags based on search query
+  const filteredTags = Array.from(new Set(
+    INTEREST_CATEGORIES.flatMap(c => c.subcategories.flatMap(s => s.tags))
+  )).filter(t => t.toLowerCase().includes(query.trim().toLowerCase()));
+
   return (
     <div className="flex flex-col gap-4 w-full animate-fade-in overflow-x-hidden">
-      {/* Быстрый поиск и выбор тегов */}
-      <div className="flex flex-col gap-2">
+      {/* Quick search and tag selection */}
+      <div className="flex flex-col gap-3">
         <input
-          className="px-4 py-3 rounded-2xl bg-dark-bg/70 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base"
+          className="px-4 py-3 rounded-2xl bg-dark-bg/70 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base placeholder-dark-muted"
           placeholder="Поиск интересов (например, Рок, Джаз, Техно)"
           value={query}
           onChange={e => setQuery(e.target.value)}
         />
-        <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto custom-scrollbar">
-          {Array.from(new Set(
-            INTEREST_CATEGORIES.flatMap(c => c.subcategories.flatMap(s => s.tags))
-          ))
-            .filter(t => t.toLowerCase().includes(query.trim().toLowerCase()))
-            .slice(0, 60)
-            .map(t => (
-              <button
-                key={t}
-                type="button"
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${selected.includes(t) ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white' : 'bg-dark-bg/60 text-dark-text hover:bg-dark-bg/80'}`}
-                onClick={() => selected.includes(t) ? onChange(selected.filter(x => x !== t)) : onChange([...selected, t])}
-                title={t}
-              >
-                {t}
-              </button>
-            ))}
-        </div>
+        
+        {/* Popular tags */}
+        {query.length === 0 && (
+          <div className="flex flex-col gap-2">
+            <div className="text-xs font-semibold text-dark-muted uppercase tracking-wider">Популярные теги</div>
+            <div className="flex flex-wrap gap-2">
+              {['Рок', 'Джаз', 'Поп', 'Хип-хоп', 'Электроника', 'Классика', 'Фолк', 'Метал'].map(tag => (
+                <button
+                  key={tag}
+                  type="button"
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${selected.includes(tag) ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white' : 'bg-dark-bg/60 text-dark-text hover:bg-dark-bg/80'}`}
+                  onClick={() => selected.includes(tag) ? onChange(selected.filter(x => x !== tag)) : onChange([...selected, tag])}
+                  title={tag}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {/* Search results */}
+        {query.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <div className="text-xs font-semibold text-dark-muted uppercase tracking-wider">
+              {filteredTags.length > 0 ? `Найдено: ${filteredTags.length}` : 'Ничего не найдено'}
+            </div>
+            <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto custom-scrollbar">
+              {filteredTags.slice(0, 30).map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${selected.includes(t) ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white' : 'bg-dark-bg/60 text-dark-text hover:bg-dark-bg/80'}`}
+                  onClick={() => selected.includes(t) ? onChange(selected.filter(x => x !== t)) : onChange([...selected, t])}
+                  title={t}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
-      {/* Выбранные фильтры и сброс */}
+      
+      {/* Selected filters and reset */}
       <div className="flex flex-wrap gap-2 items-center mb-1">
         {selected.length > 0 && (
           <button className="px-3 py-1 rounded-full bg-dark-bg/60 text-dark-accent text-xs font-semibold shadow hover:bg-dark-accent/10 transition-all" onClick={handleReset} type="button">
-            Сбросить фильтры
+            Сбросить всё
           </button>
         )}
         {selected.map(t => (
@@ -161,7 +193,8 @@ export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, on
           </span>
         ))}
       </div>
-      {/* Категория */}
+      
+      {/* Category */}
       <Dropdown
         value={category}
         options={INTEREST_CATEGORIES.map(cat => cat.category).sort((a, b) => a.localeCompare(b, 'ru'))}
@@ -173,7 +206,8 @@ export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, on
           setOpenSub(true);
         }}
       />
-      {/* Подкатегория */}
+      
+      {/* Subcategory */}
       <Dropdown
         value={subcategory}
         options={catObj ? catObj.subcategories.map(sub => sub.name).sort((a, b) => a.localeCompare(b, 'ru')) : []}
@@ -187,7 +221,8 @@ export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, on
         open={openSub}
         onOpenChange={setOpenSub}
       />
-      {/* Тег */}
+      
+      {/* Tag */}
       <Dropdown
         value={tag}
         options={subObj ? subObj.tags.slice().sort((a, b) => a.localeCompare(b, 'ru')) : []}
@@ -197,11 +232,15 @@ export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, on
         open={openTag}
         onOpenChange={setOpenTag}
       />
-      {/* Кнопка добавить - теперь скрыта, так как выбор автоматический */}
+      
+      {/* Add button - now visible when a tag is selected */}
       {tag && !selected.includes(tag) && (
-        <div className="mt-2 text-center text-xs text-dark-accent animate-fade-in">
-          Тег будет добавлен автоматически
-        </div>
+        <button 
+          className="w-full py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-bold shadow-lg hover:opacity-90 active:scale-95 transition-all"
+          onClick={handleAddTag}
+        >
+          Добавить "{tag}"
+        </button>
       )}
     </div>
   );

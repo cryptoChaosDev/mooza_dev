@@ -1,187 +1,52 @@
-import React, { useState } from "react";
-import { ProfileView } from "../components/ProfileView";
-import { InterestSelector } from "../InterestSelector";
-import { formatPostDate, getInterestPath } from "../utils";
-import { Post, UserProfile } from "../types";
+import React, { useState, useRef } from "react";
 import { useToast } from "../contexts/ToastContext";
-import { updateProfile } from "../api";
-export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePost, onUpdatePost, onDeletePost, onLikePost, users, setAllUsers, friends, favorites, onUserClick }: {
-  profile: UserProfile,
-  setProfile: (p: UserProfile) => void,
-  allPosts: Post[],
-  setAllPosts: React.Dispatch<React.SetStateAction<Post[]>>,
-  onCreatePost: (content: string, tags: string[], attachmentUrl?: string) => void,
-  onUpdatePost: (id: number, content: string, tags: string[]) => void,
-  onDeletePost: (id: number) => void,
-  onLikePost: (id: number) => void,
-  users: UserProfile[],
-  setAllUsers: React.Dispatch<React.SetStateAction<UserProfile[]>>,
-  friends: string[],
-  favorites: string[],
-  onUserClick: (user: UserProfile) => void,
+import { updateProfile, apiMe } from "../api";
+import { ProfileView } from "../components/ProfileView";
+import { PostCard } from "../components/PostCard";
+import { formatPostDate } from "../utils";
+import { UserProfile, Post } from "../types";
+
+export function Profile({ 
+  profile, 
+  setProfile, 
+  allPosts, 
+  setAllPosts,
+  onCreatePost,
+  onUpdatePost,
+  onDeletePost,
+  onLikePost,
+  users,
+  setAllUsers,
+  friends,
+  favorites,
+  onUserClick
+}: { 
+  profile: UserProfile;
+  setProfile: (p: UserProfile) => void;
+  allPosts: Post[];
+  setAllPosts: (posts: Post[]) => void;
+  onCreatePost: (content: string, tags: string[], attachmentUrl?: string) => void;
+  onUpdatePost: (id: number, content: string, tags: string[]) => void;
+  onDeletePost: (id: number) => void;
+  onLikePost: (id: number) => void;
+  users: UserProfile[];
+  setAllUsers: (users: UserProfile[]) => void;
+  friends: string[];
+  favorites: string[];
+  onUserClick: (user: UserProfile) => void;
 }) {
-  const [editOpen, setEditOpen] = useState(false);
-  const [editData, setEditData] = useState<UserProfile>({
-    ...profile,
-    firstName: profile.firstName || '',
-    lastName: profile.lastName || '',
-    name: profile.name || '',
-    bio: profile.bio || '',
-    workPlace: profile.workPlace || '',
-    skills: profile.skills || [],
-    interests: profile.interests || [],
-    portfolio: profile.portfolio ? { text: profile.portfolio.text || '' } : { text: '' },
-    phone: profile.phone || '',
-    email: profile.email || '',
-    socials: profile.socials || [],
-    vkId: profile.vkId || '',
-    youtubeId: profile.youtubeId || '',
-    telegramId: profile.telegramId || '',
-    city: profile.city || '',
-    country: profile.country || '',
-  });
-
-  // Update editData when profile changes
-  React.useEffect(() => {
-    setEditData({
-      ...profile,
-      firstName: profile.firstName || '',
-      lastName: profile.lastName || '',
-      name: profile.name || '',
-      bio: profile.bio || '',
-      workPlace: profile.workPlace || '',
-      skills: profile.skills || [],
-      interests: profile.interests || [],
-      portfolio: profile.portfolio ? { text: profile.portfolio.text || '' } : { text: '' },
-      phone: profile.phone || '',
-      email: profile.email || '',
-      socials: profile.socials || [],
-      vkId: profile.vkId || '',
-      youtubeId: profile.youtubeId || '',
-      telegramId: profile.telegramId || '',
-      city: profile.city || '',
-      country: profile.country || '',
-    });
-  }, [profile]);
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
-  const [newPost, setNewPost] = useState<{ content: string; tags: string[]; attachment: File | null }>({ content: "", tags: [], attachment: null });
-  const [showCreate, setShowCreate] = useState(false);
-  const [editPost, setEditPost] = useState<Post | null>(null);
-  const [editPostData, setEditPostData] = useState<{ content: string; tags: string[] }>({ content: '', tags: [] });
   const toast = useToast();
-  const userPosts = allPosts.filter((p) => p.userId === profile.userId);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editData, setEditData] = useState(profile);
   const [errors, setErrors] = useState<any>({});
-
-  // Счетчики друзей и избранных
-  const friendsCount = friends.length;
-  const favoritesCount = favorites.length;
-
-  // Сохранение профиля (редактирование)
-  const handleSave = async () => {
-    let avatarUrl = editData.avatarUrl;
-    if (avatarFile) {
-      // Persistable Base64 data URL for backend storage (blob: URL is not persistent)
-      const toDataUrl = (file: File) => new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result));
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      try {
-        avatarUrl = await toDataUrl(avatarFile);
-      } catch {}
-    }
-    
-    const token = localStorage.getItem('token');
-    if (!token) {
-      toast("Ошибка авторизации");
-      return;
-    }
-
-    try {
-      // Отправляем данные на сервер
-      const payload = {
-        firstName: editData.firstName,
-        lastName: editData.lastName,
-        avatarUrl: avatarUrl,
-        bio: editData.bio,
-        workPlace: editData.workPlace,
-        portfolio: editData.portfolio || null,
-        phone: editData.phone,
-        email: editData.email,
-        city: editData.city,
-        country: editData.country,
-      };
-      
-      const response = await updateProfile(token, payload);
-      
-      if (response && response.profile) {
-        // Обновляем локальное состояние данными с сервера
-        const newData = {
-          ...editData,
-          ...response.profile,
-          userId: profile.userId, // Preserve userId
-          name: `${response.profile.firstName} ${response.profile.lastName}`.trim(),
-          avatarUrl: response.profile.avatarUrl || avatarUrl,
-          portfolio: response.profile.portfolio || { text: '' },
-        };
-
-        // Обновляем посты с новым аватаром и именем
-        setAllPosts(prev => prev.map(post =>
-          post.userId === profile.userId
-            ? { ...post, avatarUrl: newData.avatarUrl, author: `${newData.firstName} ${newData.lastName}`.trim() }
-            : post
-        ));
-
-        // Обновляем профиль
-        setProfile(newData);
-
-        // Обновляем список пользователей
-        setAllUsers(prev => prev.map(u =>
-          u.userId === profile.userId
-            ? newData
-            : u
-        ));
-
-        setEditOpen(false);
-        toast("Профиль успешно обновлён!");
-        
-        // Force a profile refresh to ensure latest data is loaded
-        setTimeout(() => {
-          const token = localStorage.getItem('token');
-          if (token) {
-            // Trigger a refresh in the parent component
-            window.dispatchEvent(new CustomEvent('profileUpdated'));
-          }
-        }, 100);
-      } else {
-        throw new Error("Некорректный ответ сервера");
-      }
-    } catch (error) {
-      console.error("Ошибка при сохранении профиля:", error);
-      toast("Ошибка при сохранении профиля. Попробуйте еще раз.");
-    }
-  };
-
-  // Создание поста
-  const handleCreatePost = () => {
-    if (!newPost.content.trim() || newPost.tags.length === 0) return;
-    const attachmentUrl = newPost.attachment ? URL.createObjectURL(newPost.attachment) : undefined;
-    onCreatePost(newPost.content, newPost.tags, attachmentUrl);
-    setNewPost({ content: "", tags: [], attachment: null });
-    setShowCreate(false);
-  };
-
-  
-
-  // Функция для Mooza-иконок соцсетей
-  const getSocialIcon = (url: string) => {
-    if (url.includes('vk.com')) return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#2787F5"/><text x="7" y="16" fontSize="10" fill="#fff">VK</text></svg>;
-    if (url.includes('t.me')) return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#229ED9"/><text x="5" y="16" fontSize="10" fill="#fff">TG</text></svg>;
-    if (url.includes('instagram.com')) return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#E1306C"/><text x="3" y="16" fontSize="10" fill="#fff">IG</text></svg>;
-    if (url.includes('youtube.com')) return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#FF0000"/><text x="3" y="16" fontSize="10" fill="#fff">YT</text></svg>;
-    return <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="#888"/></svg>;
-  };
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(profile.avatarUrl || null);
+  const [newPost, setNewPost] = useState({ content: "", tags: [] as string[], attachment: null as File | null });
+  const [editPost, setEditPost] = useState<Post | null>(null);
+  const [editPostData, setEditPostData] = useState<{ content: string; tags: string[] }>({ content: "", tags: [] });
+  const [showCreate, setShowCreate] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Валидация полей ---
   function validateField(field: string, value: any) {
@@ -235,491 +100,531 @@ export function Profile({ profile, setProfile, allPosts, setAllPosts, onCreatePo
   });
   const progress = Math.round((validCount / fieldsToCheck.length) * 100);
 
+  // --- Сохранение профиля ---
+  const handleSave = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        toast("Ошибка авторизации");
+        setLoading(false);
+        return;
+      }
+
+      // Обновляем профиль на сервере
+      const payload: any = {
+        firstName: editData.firstName,
+        lastName: editData.lastName,
+        bio: editData.bio || '',
+        workPlace: editData.workPlace || '',
+        city: editData.city || '',
+        country: editData.country || '',
+        phone: editData.phone,
+        email: editData.email,
+        vkId: editData.vkId,
+        youtubeId: editData.youtubeId,
+        telegramId: editData.telegramId,
+      };
+
+      // Добавляем portfolio только если он существует
+      if (editData.portfolio) {
+        payload.portfolio = {
+          text: editData.portfolio.text || '',
+          fileUrl: editData.portfolio.fileUrl,
+        };
+      }
+
+      const res = await updateProfile(token, payload);
+      if (res?.profile) {
+        const updatedProfile = {
+          ...profile,
+          ...res.profile,
+          firstName: res.profile.firstName || profile.firstName,
+          lastName: res.profile.lastName || profile.lastName,
+          name: `${res.profile.firstName || profile.firstName} ${res.profile.lastName || profile.lastName}`.trim(),
+          bio: res.profile.bio !== undefined ? res.profile.bio : profile.bio,
+          workPlace: res.profile.workPlace !== undefined ? res.profile.workPlace : profile.workPlace,
+          city: res.profile.city !== undefined ? res.profile.city : profile.city,
+          country: res.profile.country !== undefined ? res.profile.country : profile.country,
+          phone: res.profile.phone !== undefined ? res.profile.phone : profile.phone,
+          email: res.profile.email !== undefined ? res.profile.email : profile.email,
+          vkId: res.profile.vkId !== undefined ? res.profile.vkId : profile.vkId,
+          youtubeId: res.profile.youtubeId !== undefined ? res.profile.youtubeId : profile.youtubeId,
+          telegramId: res.profile.telegramId !== undefined ? res.profile.telegramId : profile.telegramId,
+          portfolio: res.profile.portfolio !== undefined ? res.profile.portfolio : profile.portfolio,
+        };
+        setProfile(updatedProfile);
+        setEditData(updatedProfile);
+        setIsEditing(false);
+        toast("Профиль успешно обновлён");
+        
+        // Обновляем данные пользователя в списке всех пользователей
+        setAllUsers(users.map(u => u.userId === updatedProfile.userId ? updatedProfile : u));
+      } else {
+        throw new Error('Не удалось сохранить профиль');
+      }
+    } catch (err: any) {
+      console.error('Error saving profile', err);
+      setError(err.message || 'Ошибка при сохранении профиля');
+      toast(err.message || 'Ошибка при сохранении профиля');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // --- Обработка аватара ---
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
+    if (!file) return;
+
+    // Проверка размера файла (максимум 5 МБ)
+    if (file.size > 5 * 1024 * 1024) {
+      toast("Размер файла не должен превышать 5 МБ");
+      return;
+    }
+
+    // Проверка типа файла
+    if (!['image/jpeg','image/png','image/jpg'].includes(file.type)) {
+      toast("Поддерживаются только изображения в формате JPG, JPEG или PNG");
+      return;
+    }
+
+    // Создаем временный элемент img для проверки размеров изображения
+    const img = new Image();
+    img.onload = () => {
+      // Проверка минимальных размеров (400x400)
+      if (img.width < 400 || img.height < 400) {
+        toast("Изображение должно быть не менее 400x400 пикселей");
+        return;
+      }
+
+      // Создаем превью
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setAvatarPreview(e.target?.result as string);
+        setEditData({ ...editData, avatarUrl: e.target?.result as string });
+      };
+      reader.readAsDataURL(file);
+    };
+    img.src = URL.createObjectURL(file);
+  };
+
+  // --- Обработка социальных сетей ---
+  const handleSocialChange = (field: 'vkId' | 'youtubeId' | 'telegramId', value: string) => {
+    // Автоматически добавляем https:// если пользователь не указал протокол
+    let formattedValue = value;
+    if (value && !/^https?:\/\//.test(value)) {
+      formattedValue = `https://${value}`;
+    }
+    setEditData({ ...editData, [field]: formattedValue });
+  };
+
+  // --- Обработка постов ---
+  const handleCreatePostSubmit = () => {
+    if (!newPost.content.trim() || newPost.tags.length === 0) return;
+    const attachmentUrl = newPost.attachment ? URL.createObjectURL(newPost.attachment) : undefined;
+    onCreatePost(newPost.content, newPost.tags, attachmentUrl);
+    setNewPost({ content: "", tags: [], attachment: null });
+    setShowCreate(false);
+    toast("Пост опубликован!");
+  };
+
+  const handleEditPostSubmit = () => {
+    if (!editPost || !editPostData.content.trim() || editPostData.tags.length === 0) return;
+    onUpdatePost(editPost.id, editPostData.content, editPostData.tags);
+    setEditPost(null);
+    setEditPostData({ content: "", tags: [] });
+    toast("Пост обновлён!");
+  };
+
+  const userPosts = allPosts.filter(p => p.userId === profile.userId);
+
   return (
     <main className="flex flex-col items-center min-h-[100dvh] pt-6 bg-dark-bg w-full flex-1 overflow-x-hidden" style={{ paddingBottom: 'calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px))' }}>
       <section className="w-full max-w-md flex flex-col gap-6 animate-fade-in px-4">
-        {/* Современный профиль Mooza */}
-        <div className="bg-dark-card rounded-3xl shadow-card p-6 flex flex-col gap-6">
-          <ProfileView profile={profile} editable onEdit={() => setEditOpen(true)} />
-          
-          {/* Stats Section */}
-          <div className="flex justify-around bg-dark-bg/30 rounded-2xl p-4">
-            <div className="flex flex-col items-center">
-              <span className="text-xl font-bold text-dark-text">{userPosts.length}</span>
-              <span className="text-xs text-dark-muted">Постов</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-xl font-bold text-dark-text">{friendsCount}</span>
-              <span className="text-xs text-dark-muted">Друзей</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <span className="text-xl font-bold text-dark-text">{favoritesCount}</span>
-              <span className="text-xs text-dark-muted">Избранных</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Кнопка создать пост */}
-        <div className="flex justify-end">
-          <button 
-            className="flex items-center gap-3 p-4 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-lg hover:opacity-90 active:scale-95 transition-all"
-            title="Создать пост" 
-            onClick={() => setShowCreate(v => !v)}
-          >
-            <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M12 5v14m7-7H5" stroke="#fff" strokeWidth="1.5"/></svg>
-            <span className="font-medium text-base">Новый пост</span>
-          </button>
-        </div>
-
-        {/* Форма создания поста */}
-        {showCreate && (
-          <div className="bg-dark-card rounded-3xl shadow-card p-7 flex flex-col gap-6 animate-fade-in animate-scale-in">
-            <div className="text-2xl font-bold text-dark-text">Создать пост</div>
-            <textarea
-              className="w-full border-none rounded-2xl px-6 py-5 text-base focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none bg-dark-bg/60 text-dark-text shadow-inner"
-              rows={5}
-              placeholder="Что нового? Поделитесь с друзьями..."
-              value={newPost.content}
-              onChange={e => setNewPost({ ...newPost, content: e.target.value })}
-            />
-            <div className="flex flex-col gap-5">
-              <div className="text-base text-dark-muted font-semibold">Теги:</div>
-              <InterestSelector
-                selected={newPost.tags}
-                onChange={tags => setNewPost(prev => ({ ...prev, tags }))}
-              />
-            </div>
-            <div className="flex items-center gap-5">
-              <label className="cursor-pointer p-4 rounded-2xl bg-dark-bg/60 hover:bg-dark-accent/10 transition-colors shadow text-dark-accent" title="Прикрепить изображение">
-                <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M16.5 13.5V7a4.5 4.5 0 0 0-9 0v8a6 6 0 0 0 12 0V9.5" stroke="currentColor" strokeWidth="1.5"/><circle cx="12" cy="17" r="1.5" fill="currentColor"/></svg>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={e => setNewPost(prev => ({ ...prev, attachment: e.target.files?.[0] || null }))}
-                  className="hidden"
-                />
-              </label>
-              {newPost.attachment && (
-                <img src={URL.createObjectURL(newPost.attachment)} alt="attachment" className="max-h-24 rounded-2xl object-contain" />
-              )}
-              <button
-                className="ml-auto px-7 py-4 rounded-2xl bg-dark-accent text-white font-semibold shadow-btn hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-3"
-                onClick={handleCreatePost}
-                disabled={!newPost.content.trim() || newPost.tags.length === 0}
-                title="Опубликовать пост"
-                type="button"
-              >
-                <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M4 12h16M12 4l8 8-8 8" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                <span className="text-base">Опубликовать</span>
-              </button>
+        {/* Loading overlay */}
+        {loading && (
+          <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center">
+            <div className="bg-dark-card rounded-2xl p-6 flex flex-col items-center gap-4">
+              <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              <div className="text-dark-text">Сохранение...</div>
             </div>
           </div>
         )}
-
-        {/* Лента постов */}
-        <div className="flex flex-col gap-5">
-          <div className="flex items-center justify-between">
-            <div className="text-2xl font-bold text-dark-text">Мои посты</div>
-            <div className="text-base text-dark-muted font-medium">{userPosts.length} постов</div>
+        
+        {/* Error message */}
+        {error && (
+          <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 bg-red-500/90 text-white px-4 py-2 rounded-xl shadow-lg animate-fade-in">
+            {error}
           </div>
-          
-          {userPosts.length === 0 ? (
-            <div className="bg-dark-card rounded-3xl shadow-card p-12 flex flex-col items-center justify-center gap-5">
-              <div className="text-6xl opacity-50">🎵</div>
-              <div className="text-center text-dark-muted">
-                <div className="font-semibold text-xl">У вас пока нет постов</div>
-                <div className="text-base mt-2">Поделитесь чем-нибудь интересным!</div>
-              </div>
+        )}
+        
+        {!isEditing ? (
+          <ProfileView 
+            profile={profile} 
+            editable={true} 
+            onEdit={() => {
+              setEditData(profile);
+              setAvatarPreview(profile.avatarUrl || null);
+              setIsEditing(true);
+            }} 
+          />
+        ) : (
+          <div className="bg-dark-card rounded-3xl shadow-card p-6 animate-fade-in">
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-dark-text">Редактирование профиля</h2>
               <button 
-                className="mt-3 px-6 py-4 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold shadow-btn hover:opacity-90 active:scale-95 transition-all text-base"
-                onClick={() => setShowCreate(true)}
+                className="text-dark-muted hover:text-dark-text transition-colors"
+                onClick={() => setIsEditing(false)}
+                aria-label="Отменить редактирование профиля"
               >
-                Создать первый пост
+                Отмена
               </button>
             </div>
-          ) : (
-            <div className="flex flex-col gap-5">
-              {userPosts.map((post) => (
-                <div key={post.id} className="bg-dark-card rounded-3xl shadow-card p-7 flex flex-col gap-5 animate-fade-in animate-scale-in">
-                  <div className="flex items-start gap-5">
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center text-xl border-2 border-white overflow-hidden flex-shrink-0">
-                      {post.avatarUrl ? (
-                        <img src={post.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
-                      ) : (
-                        <span role="img" aria-label="avatar" className="text-2xl">👤</span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="font-bold text-dark-text text-lg">{profile.firstName} {profile.lastName}</div>
-                      <div className="text-sm text-dark-muted">{formatPostDate(post.createdAt)}</div>
-                    </div>
-                    {/* Кнопки редактирования/удаления только для своих постов */}
-                    <div className="flex gap-3">
-                      <button 
-                        title="Редактировать пост" 
-                        className="p-3 rounded-2xl bg-dark-bg/60 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors"
-                        onClick={() => { setEditPost(post); setEditPostData({ content: post.content, tags: post.tags }); }}
-                      >
-                        <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="currentColor" strokeWidth="1.5"/></svg>
-                      </button>
-                      <button 
-                        title="Удалить пост" 
-                        className="p-3 rounded-2xl bg-dark-bg/60 text-red-500 hover:bg-red-500 hover:text-white transition-colors"
-                        onClick={() => onDeletePost(post.id)}
-                      >
-                        <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="1.5"/></svg>
-                      </button>
-                    </div>
-                  </div>
-                  
-                  <div className="text-dark-text text-lg whitespace-pre-line leading-relaxed">{post.content}</div>
-                  
-                  {post.attachmentUrl && (
-                    <img src={post.attachmentUrl} alt="attachment" className="max-h-72 rounded-2xl object-contain" />
-                  )}
-                  
-                  <div className="flex flex-wrap gap-3">
-                    {post.tags.map((tag, i) => (
-                      <span key={i} className="px-4 py-2 bg-dark-bg/60 text-blue-700 rounded-2xl text-sm font-medium">{getInterestPath(tag)}</span>
-                    ))}
-                  </div>
-                </div>
-              ))}
+            
+            {/* Progress */}
+            <div className="mb-6">
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-dark-muted">Прогресс заполнения</span>
+                <span className="text-dark-text font-medium">{progress}%</span>
+              </div>
+              <div className="w-full bg-dark-bg/60 rounded-full h-2">
+                <div 
+                  className="bg-gradient-to-r from-blue-500 to-cyan-400 h-2 rounded-full transition-all duration-500"
+                  style={{ width: `${progress}%` }}
+                ></div>
+              </div>
             </div>
-          )}
-        </div>
-
-        {/* Модальное окно редактирования поста */}
-        {editPost && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 overflow-x-hidden">
-            <div className="bg-dark-card rounded-3xl shadow-2xl p-7 w-[90vw] max-w-md flex flex-col gap-6 animate-fade-in animate-scale-in">
-              <div className="flex justify-between items-center">
-                <div className="text-xl font-bold text-dark-text">Редактировать пост</div>
-                <button 
-                  className="p-3 rounded-2xl hover:bg-dark-bg/60 transition-colors"
-                  onClick={() => setEditPost(null)}
-                >
-                  <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="1.5"/></svg>
-                </button>
+            
+            <div className="space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto pr-2 custom-scrollbar">
+              {/* Avatar */}
+              <div className="flex flex-col items-center gap-4">
+                <div className="relative">
+                  <div className="w-24 h-24 rounded-2xl overflow-hidden bg-dark-bg/80 flex items-center justify-center">
+                    {avatarPreview ? (
+                      <img src={avatarPreview} alt="avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <span role="img" aria-label="avatar" className="text-3xl">👤</span>
+                    )}
+                  </div>
+                  <button
+                    className="absolute -bottom-2 -right-2 p-2 rounded-full bg-gradient-to-r from-blue-500 to-cyan-400 text-white shadow-lg hover:opacity-90 transition-all"
+                    onClick={() => fileInputRef.current?.click()}
+                    aria-label="Изменить аватар"
+                  >
+                    <svg width="16" height="16" fill="none" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#fff" strokeWidth="1.5"/></svg>
+                  </button>
+                </div>
+                <input 
+                  type="file" 
+                  ref={fileInputRef}
+                  className="hidden" 
+                  accept="image/jpeg,image/png,image/jpg"
+                  onChange={handleAvatarChange}
+                  aria-label="Загрузить новое изображение аватара"
+                />
+                <div className="text-xs text-dark-muted text-center max-w-xs">
+                  JPG, PNG не более 5 МБ. Минимальный размер 400x400 пикселей.
+                </div>
               </div>
               
-              <textarea
-                className="w-full border-none rounded-2xl px-5 py-4 text-base focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none bg-dark-bg/60 text-dark-text shadow-inner"
-                rows={4}
-                placeholder="Текст поста"
-                value={editPostData.content}
-                onChange={e => setEditPostData({ ...editPostData, content: e.target.value })}
-              />
+              {/* Name */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-dark-muted font-semibold mb-2">Имя</label>
+                  <input 
+                    className={`w-full bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-4 py-3 ${errors.firstName ? 'border border-red-500' : ''}`}
+                    value={editData.firstName} 
+                    onChange={e => {
+                      setEditData({ ...editData, firstName: e.target.value });
+                      setErrors((err: any) => ({ ...err, firstName: validateField('firstName', e.target.value) }));
+                    }} 
+                    placeholder="Имя" 
+                    maxLength={40}
+                  />
+                  {errors.firstName && <div className="text-sm text-red-500 mt-1">{errors.firstName}</div>}
+                </div>
+                <div>
+                  <label className="block text-sm text-dark-muted font-semibold mb-2">Фамилия</label>
+                  <input 
+                    className={`w-full bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-4 py-3 ${errors.lastName ? 'border border-red-500' : ''}`}
+                    value={editData.lastName} 
+                    onChange={e => {
+                      setEditData({ ...editData, lastName: e.target.value });
+                      setErrors((err: any) => ({ ...err, lastName: validateField('lastName', e.target.value) }));
+                    }} 
+                    placeholder="Фамилия" 
+                    maxLength={40}
+                  />
+                  {errors.lastName && <div className="text-sm text-red-500 mt-1">{errors.lastName}</div>}
+                </div>
+              </div>
               
-              <div className="flex flex-col gap-4">
-                <div className="text-sm text-dark-muted">Теги:</div>
-                <InterestSelector
-                  selected={editPostData.tags}
-                  onChange={tags => setEditPostData(prev => ({ ...prev, tags }))}
+              {/* Bio */}
+              <div>
+                <label className="block text-sm text-dark-muted font-semibold mb-2">О себе</label>
+                <textarea 
+                  className="w-full bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-4 py-3 resize-none"
+                  value={editData.bio || ''} 
+                  onChange={e => setEditData({ ...editData, bio: e.target.value })} 
+                  placeholder="Расскажите немного о себе" 
+                  rows={3}
+                  maxLength={1000}
                 />
               </div>
               
-              <div className="flex gap-4 pt-3">
-                <button
-                  className="flex-1 py-4 rounded-2xl bg-dark-accent text-white font-semibold shadow active:scale-95 transition-transform"
-                  onClick={() => { onUpdatePost(editPost.id, editPostData.content, editPostData.tags); setEditPost(null); }}
-                  disabled={!editPostData.content.trim() || editPostData.tags.length === 0}
-                >
-                  Сохранить
-                </button>
-                <button
-                  className="flex-1 py-4 rounded-2xl bg-dark-bg/60 text-dark-muted font-semibold shadow active:scale-95 transition-transform"
-                  onClick={() => setEditPost(null)}
+              {/* Location */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-dark-muted font-semibold mb-2">Страна</label>
+                  <input 
+                    className={`w-full bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-4 py-3 ${errors.country ? 'border border-red-500' : ''}`}
+                    value={editData.country || ''} 
+                    onChange={e => {
+                      setEditData({ ...editData, country: e.target.value });
+                      setErrors((err: any) => ({ ...err, country: validateField('country', e.target.value) }));
+                    }} 
+                    placeholder="Страна" 
+                    maxLength={50}
+                  />
+                  {errors.country && <div className="text-sm text-red-500 mt-1">{errors.country}</div>}
+                </div>
+                <div>
+                  <label className="block text-sm text-dark-muted font-semibold mb-2">Город</label>
+                  <input 
+                    className={`w-full bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-4 py-3 ${errors.city ? 'border border-red-500' : ''}`}
+                    value={editData.city || ''} 
+                    onChange={e => {
+                      setEditData({ ...editData, city: e.target.value });
+                      setErrors((err: any) => ({ ...err, city: validateField('city', e.target.value) }));
+                    }} 
+                    placeholder="Город" 
+                    maxLength={50}
+                  />
+                  {errors.city && <div className="text-sm text-red-500 mt-1">{errors.city}</div>}
+                </div>
+              </div>
+              
+              {/* Work */}
+              <div>
+                <label className="block text-sm text-dark-muted font-semibold mb-2">Место работы</label>
+                <input 
+                  className="w-full bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-4 py-3"
+                  value={editData.workPlace || ''} 
+                  onChange={e => setEditData({ ...editData, workPlace: e.target.value })} 
+                  placeholder="Где вы работаете?" 
+                  maxLength={100}
+                />
+              </div>
+              
+              {/* Portfolio */}
+              <div>
+                <label className="block text-sm text-dark-muted font-semibold mb-2">Портфолио</label>
+                <textarea 
+                  className="w-full bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-4 py-3 resize-none"
+                  value={editData.portfolio?.text || ''} 
+                  onChange={e => setEditData({ ...editData, portfolio: { ...editData.portfolio, text: e.target.value } })} 
+                  placeholder="Расскажите о вашем творчестве, опыте, достижениях" 
+                  rows={3}
+                  maxLength={500}
+                />
+              </div>
+              
+              {/* Contacts */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-dark-muted font-semibold mb-2">Телефон</label>
+                  <input 
+                    className={`w-full bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-4 py-3 ${errors.phone ? 'border border-red-500' : ''}`}
+                    value={editData.phone || ''} 
+                    onChange={e => {
+                      // Форматирование телефона
+                      let val = e.target.value.replace(/\D/g, '');
+                      if (val.length > 11) val = val.slice(0, 11);
+                      let formatted = '+7';
+                      if (val.length > 1) formatted += ' (' + val.slice(1, 4);
+                      if (val.length >= 4) formatted += ') ' + val.slice(4, 7);
+                      if (val.length >= 7) formatted += '-' + val.slice(7, 9);
+                      if (val.length >= 9) formatted += '-' + val.slice(9, 11);
+                      setEditData({ ...editData, phone: formatted });
+                      setErrors((err: any) => ({ ...err, phone: validateField('phone', formatted) }));
+                    }} 
+                    placeholder="+7 (___) ___-__-__" 
+                    maxLength={18}
+                  />
+                  {errors.phone && <div className="text-sm text-red-500 mt-1">{errors.phone}</div>}
+                </div>
+                <div>
+                  <label className="block text-sm text-dark-muted font-semibold mb-2">Email</label>
+                  <input 
+                    className={`w-full bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-4 py-3 ${errors.email ? 'border border-red-500' : ''}`}
+                    value={editData.email || ''} 
+                    onChange={e => {
+                      setEditData({ ...editData, email: e.target.value });
+                      setErrors((err: any) => ({ ...err, email: validateField('email', e.target.value) }));
+                    }} 
+                    placeholder="Email" 
+                    maxLength={60}
+                    type="email"
+                  />
+                  {errors.email && <div className="text-sm text-red-500 mt-1">{errors.email}</div>}
+                </div>
+              </div>
+              
+              {/* Social Links */}
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm text-dark-muted font-semibold mb-2">VK</label>
+                  <input 
+                    className="w-full bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-4 py-3"
+                    value={editData.vkId || ''} 
+                    onChange={e => handleSocialChange('vkId', e.target.value)} 
+                    placeholder="Ссылка на VK" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-dark-muted font-semibold mb-2">YouTube</label>
+                  <input 
+                    className="w-full bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-4 py-3"
+                    value={editData.youtubeId || ''} 
+                    onChange={e => handleSocialChange('youtubeId', e.target.value)} 
+                    placeholder="Ссылка на YouTube" 
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm text-dark-muted font-semibold mb-2">Telegram</label>
+                  <input 
+                    className="w-full bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-4 py-3"
+                    value={editData.telegramId || ''} 
+                    onChange={e => handleSocialChange('telegramId', e.target.value)} 
+                    placeholder="Ссылка на Telegram" 
+                  />
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4">
+                <button 
+                  className="flex-1 py-3 rounded-2xl bg-dark-bg/60 text-dark-text font-medium hover:bg-dark-bg/80 transition-all"
+                  onClick={() => setIsEditing(false)}
                 >
                   Отмена
                 </button>
+                <button 
+                  className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-bold shadow-lg hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+                  onClick={() => {
+                    // Валидация перед сохранением
+                    const newErrors: any = {};
+                    newErrors.firstName = validateField('firstName', editData.firstName);
+                    newErrors.lastName = validateField('lastName', editData.lastName);
+                    newErrors.country = validateField('country', editData.country);
+                    newErrors.city = validateField('city', editData.city);
+                    // skills/interests are edited on the separate /skills page
+                    newErrors.portfolioText = validateField('portfolioText', editData.portfolio?.text || '');
+                    newErrors.phone = validateField('phone', editData.phone);
+                    newErrors.email = validateField('email', editData.email);
+
+                    
+                    setErrors(newErrors);
+                    
+                    const hasErrors = Object.values(newErrors).some(err => err);
+                    if (!hasErrors) {
+                      handleSave();
+                    } else {
+                      toast("Пожалуйста, исправьте ошибки в форме");
+                    }
+                  }}
+                  disabled={loading}
+                  aria-label="Сохранить изменения в профиле"
+                >
+                  {loading ? 'Сохранение...' : 'Сохранить'}
+                </button>
               </div>
             </div>
           </div>
         )}
-
-        {/* Модальное окно редактирования профиля - Современный дизайн */}
-        {editOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-dark-bg/90 p-4 overflow-x-hidden">
-            <div className="w-full max-w-md bg-dark-card rounded-3xl shadow-2xl flex flex-col animate-fade-in animate-scale-in relative overflow-hidden max-h-[95vh]">
-              {/* Header с градиентом */}
-              <div className="flex justify-between items-center p-5 border-b border-dark-bg/30 bg-gradient-to-r from-blue-600 to-cyan-500">
-                <div className="text-xl font-bold text-white">Редактировать профиль</div>
-                <button 
-                  className="p-3 rounded-2xl hover:bg-white/20 transition-colors"
-                  onClick={() => setEditOpen(false)}
-                >
-                  <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="white" strokeWidth="1.5"/></svg>
-                </button>
-              </div>
-              
-              {/* Индикатор прогресса */}
-              <div className="p-5 bg-dark-bg/20">
-                <div className="flex justify-between text-sm mb-2">
-                  <span className="text-dark-muted">Заполненность профиля</span>
-                  <span className="font-medium text-dark-text">{progress}%</span>
+        
+        {/* Posts Section */}
+        <div className="w-full">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold text-dark-text">Мои посты</h2>
+            <button 
+              className="text-sm text-dark-accent hover:underline"
+              onClick={() => setShowCreate(true)}
+              aria-label="Создать новый пост"
+            >
+              Создать пост
+            </button>
+          </div>
+          
+          {showCreate && (
+            <div className="bg-dark-card rounded-3xl shadow-card p-5 mb-6 animate-fade-in">
+              <textarea
+                className="w-full bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-4 py-3 mb-3 resize-none"
+                placeholder="О чём думаете?"
+                value={newPost.content}
+                onChange={e => setNewPost({ ...newPost, content: e.target.value })}
+                rows={3}
+                aria-label="Текст нового поста"
+              />
+              <div className="flex justify-between items-center">
+                <div className="text-sm text-dark-muted">
+                  {newPost.tags.length > 0 ? `${newPost.tags.length} тегов` : 'Добавьте теги'}
                 </div>
-                <div className="w-full h-2.5 bg-dark-bg/30 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-blue-400 to-cyan-400 transition-all duration-500" style={{ width: `${progress}%` }}></div>
-                </div>
-              </div>
-              
-              {/* Прокручиваемый контент */}
-              <div className="overflow-y-auto flex-1 p-5">
-                {/* Секция аватара */}
-                <div className="flex flex-col items-center gap-4 mb-7">
-                  <div className="relative">
-                    <div className="w-28 h-28 rounded-3xl overflow-hidden border-4 border-white shadow-2xl bg-dark-bg/80 flex items-center justify-center">
-                      {avatarFile ? (
-                        <img src={URL.createObjectURL(avatarFile)} alt="avatar" className="w-full h-full object-cover" />
-                      ) : editData.avatarUrl ? (
-                        <img src={editData.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
-                      ) : (
-                        <span role="img" aria-label="avatar" className="text-5xl">👤</span>
-                      )}
-                    </div>
-                    <label className="absolute -bottom-2 -right-2 bg-gradient-to-r from-blue-500 to-cyan-400 p-3 rounded-2xl shadow-lg hover:scale-105 transition cursor-pointer" title="Сменить аватар">
-                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#fff" strokeWidth="1.5"/></svg>
-                      <input type="file" accept="image/jpeg,image/png,image/jpg" className="hidden" onChange={e => {
-                        const file = e.target.files && e.target.files[0] ? e.target.files[0] : null;
-                        if (!file) return;
-
-                        // Проверка размера файла (максимум 5 МБ)
-                        if (file.size > 5 * 1024 * 1024) {
-                          toast("Размер файла не должен превышать 5 МБ");
-                          return;
-                        }
-
-                        // Проверка типа файла
-                        if (!['image/jpeg','image/png','image/jpg'].includes(file.type)) {
-                          toast("Поддерживаются только изображения в формате JPG, JPEG или PNG");
-                          return;
-                        }
-
-                        // Создаем временный элемент img для проверки размеров изображения
-                        const img = new Image();
-                        img.onload = function() {
-                          // Проверяем размеры изображения
-                          if (img.width > 2048 || img.height > 2048) {
-                            toast("Максимальный размер изображения 2048x2048 пикселей");
-                            return;
-                          }
-                          setAvatarFile(file);
-                        };
-                        img.onerror = function() {
-                          toast("Ошибка при загрузке изображения");
-                        };
-                        img.src = URL.createObjectURL(file);
-                      }} />
-                    </label>
-                  </div>
-                  <div className="text-sm text-dark-muted">JPG, PNG, до 3 МБ</div>
-                </div>
-                
-                {/* Форма профиля */}
-                <div className="w-full flex flex-col gap-6">
-                  {/* Основная информация */}
-                  <div className="flex flex-col gap-5">
-                    <h3 className="text-lg font-semibold text-dark-text border-b border-dark-bg/30 pb-3">Основная информация</h3>
-                    
-                    <div className="grid grid-cols-2 gap-5">
-                      <div className="flex flex-col gap-3">
-                        <label className="text-sm text-dark-muted font-semibold" htmlFor="profile-firstName">Имя</label>
-                        <input 
-                          id="profile-firstName" 
-                          className={`flex-1 bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-5 py-4 ${errors.firstName ? 'border border-red-500' : ''}`} 
-                          value={editData.firstName} 
-                          onChange={e => {
-                            setEditData({ ...editData, firstName: e.target.value });
-                            setErrors((err: any) => ({ ...err, firstName: validateField('firstName', e.target.value) }));
-                          }} 
-                          placeholder="Имя" 
-                          maxLength={40} 
-                          autoComplete="given-name" 
-                        />
-                        {errors.firstName && <div className="text-sm text-red-500">{errors.firstName}</div>}
-                      </div>
-                      <div className="flex flex-col gap-3">
-                        <label className="text-sm text-dark-muted font-semibold" htmlFor="profile-lastName">Фамилия</label>
-                        <input 
-                          id="profile-lastName" 
-                          className={`flex-1 bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-5 py-4 ${errors.lastName ? 'border border-red-500' : ''}`} 
-                          value={editData.lastName} 
-                          onChange={e => {
-                            setEditData({ ...editData, lastName: e.target.value });
-                            setErrors((err: any) => ({ ...err, lastName: validateField('lastName', e.target.value) }));
-                          }} 
-                          placeholder="Фамилия" 
-                          maxLength={40} 
-                          autoComplete="family-name" 
-                        />
-                        {errors.lastName && <div className="text-sm text-red-500">{errors.lastName}</div>}
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-col gap-3">
-                      <label className="text-sm text-dark-muted font-semibold" htmlFor="profile-bio">О себе</label>
-                      <textarea 
-                        id="profile-bio" 
-                        className="flex-1 bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-5 py-4 resize-none" 
-                        value={editData.bio || ''} 
-                        onChange={e => setEditData({ ...editData, bio: e.target.value })} 
-                        placeholder="Расскажите немного о себе..." 
-                        rows={4} 
-                        maxLength={300} 
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Местоположение и работа */}
-                  <div className="flex flex-col gap-5">
-                    <h3 className="text-lg font-semibold text-dark-text border-b border-dark-bg/30 pb-3">Местоположение и работа</h3>
-                    
-                    <div className="grid grid-cols-2 gap-5">
-                      <div className="flex flex-col gap-3">
-                        <label className="text-sm text-dark-muted font-semibold" htmlFor="profile-country">Страна</label>
-                        <input 
-                          id="profile-country" 
-                          className="flex-1 bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-5 py-4" 
-                          value={editData.country || ''} 
-                          onChange={e => setEditData({ ...editData, country: e.target.value })} 
-                          placeholder="Страна" 
-                          maxLength={40} 
-                        />
-                      </div>
-                      <div className="flex flex-col gap-3">
-                        <label className="text-sm text-dark-muted font-semibold" htmlFor="profile-city">Город</label>
-                        <input 
-                          id="profile-city" 
-                          className="flex-1 bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-5 py-4" 
-                          value={editData.city || ''} 
-                          onChange={e => setEditData({ ...editData, city: e.target.value })} 
-                          placeholder="Город" 
-                          maxLength={40} 
-                          autoComplete="address-level2" 
-                        />
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-col gap-3">
-                      <label className="text-sm text-dark-muted font-semibold" htmlFor="profile-workPlace">Место работы</label>
-                      <input 
-                        id="profile-workPlace" 
-                        className="flex-1 bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-5 py-4" 
-                        value={editData.workPlace || ''} 
-                        onChange={e => setEditData({ ...editData, workPlace: e.target.value })} 
-                        placeholder="Место работы" 
-                        maxLength={60} 
-                      />
-                    </div>
-                  </div>
-                  {/* Навыки и интересы теперь управляются на отдельной странице */}
-                  
-                  {/* Портфолио */}
-                  <div className="flex flex-col gap-5">
-                    <h3 className="text-lg font-semibold text-dark-text border-b border-dark-bg/30 pb-3">Портфолио</h3>
-                    
-                    <div className="flex flex-col gap-4">
-                      <textarea 
-                        className={`flex-1 bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-5 py-4 resize-none ${errors.portfolioText ? 'border border-red-500' : ''}`} 
-                        value={editData.portfolio?.text || ''} 
-                        onChange={e => {
-                          setEditData({ ...editData, portfolio: { ...editData.portfolio, text: e.target.value } });
-                          setErrors((err: any) => ({ ...err, portfolioText: validateField('portfolioText', e.target.value) }));
-                        }} 
-                        placeholder="Резюме, достижения, ссылки..." 
-                        rows={4} 
-                        maxLength={500} 
-                      />
-                      {errors.portfolioText && <div className="text-sm text-red-500">{errors.portfolioText}</div>}
-                      
-
-                    </div>
-                  </div>
-                  
-                  {/* Контакты */}
-                  <div className="flex flex-col gap-5">
-                    <h3 className="text-lg font-semibold text-dark-text border-b border-dark-bg/30 pb-3">Контакты</h3>
-                    
-                    <div className="flex flex-col gap-5">
-                      <div className="flex flex-col gap-3">
-                        <label className="text-sm text-dark-muted font-semibold" htmlFor="profile-phone">Телефон</label>
-                        <input 
-                          id="profile-phone" 
-                          className={`flex-1 bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-5 py-4 ${errors.phone ? 'border border-red-500' : ''}`} 
-                          value={editData.phone || ''} 
-                          onChange={e => {
-                            let val = e.target.value.replace(/\D/g, '');
-                            if (val.length > 11) val = val.slice(0, 11);
-                            let formatted = '+7';
-                            if (val.length > 1) formatted += ' (' + val.slice(1, 4);
-                            if (val.length >= 4) formatted += ') ' + val.slice(4, 7);
-                            if (val.length >= 7) formatted += '-' + val.slice(7, 9);
-                            if (val.length >= 9) formatted += '-' + val.slice(9, 11);
-                            setEditData({ ...editData, phone: formatted });
-                            setErrors((err: any) => ({ ...err, phone: validateField('phone', formatted) }));
-                          }} 
-                          placeholder="+7 (___) ___-__-__" 
-                          maxLength={18} 
-                        />
-                        {errors.phone && <div className="text-sm text-red-500">{errors.phone}</div>}
-                      </div>
-                      
-                      <div className="flex flex-col gap-3">
-                        <label className="text-sm text-dark-muted font-semibold" htmlFor="profile-email">Email</label>
-                        <input 
-                          id="profile-email" 
-                          className={`flex-1 bg-dark-bg/60 outline-none text-base text-dark-text rounded-2xl px-5 py-4 ${errors.email ? 'border border-red-500' : ''}`} 
-                          value={editData.email || ''} 
-                          onChange={e => {
-                            setEditData({ ...editData, email: e.target.value });
-                            setErrors((err: any) => ({ ...err, email: validateField('email', e.target.value) }));
-                          }} 
-                          placeholder="Email" 
-                          maxLength={60} 
-                          type="email" 
-                          autoComplete="email" 
-                        />
-                        {errors.email && <div className="text-sm text-red-500">{errors.email}</div>}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                {/* Кнопка сохранить */}
-                <div className="sticky bottom-4 left-0 right-0 p-5 bg-gradient-to-t from-dark-bg to-transparent">
+                <div className="flex gap-2">
                   <button 
-                    className="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-bold shadow-lg hover:opacity-90 active:scale-95 transition-all"
-                    onClick={() => {
-                      // Валидация перед сохранением
-                      const newErrors: any = {};
-                      newErrors.firstName = validateField('firstName', editData.firstName);
-                      newErrors.lastName = validateField('lastName', editData.lastName);
-                      newErrors.country = validateField('country', editData.country);
-                      newErrors.city = validateField('city', editData.city);
-                      // skills/interests are edited on the separate /skills page
-                      newErrors.portfolioText = validateField('portfolioText', editData.portfolio?.text || '');
-                      newErrors.phone = validateField('phone', editData.phone);
-                      newErrors.email = validateField('email', editData.email);
-
-                      
-                      setErrors(newErrors);
-                      
-                      const hasErrors = Object.values(newErrors).some(err => err);
-                      if (!hasErrors) {
-                        handleSave();
-                      } else {
-                        toast("Пожалуйста, исправьте ошибки в форме");
-                      }
-                    }}
+                    className="px-4 py-2 rounded-2xl bg-dark-bg/60 text-dark-text text-sm font-medium hover:bg-dark-bg/80 transition-all"
+                    onClick={() => setShowCreate(false)}
+                    aria-label="Отменить создание поста"
                   >
-                    Сохранить изменения
+                    Отмена
+                  </button>
+                  <button 
+                    className="px-4 py-2 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white text-sm font-bold shadow-lg hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+                    onClick={handleCreatePostSubmit}
+                    disabled={!newPost.content.trim() || newPost.tags.length === 0}
+                    aria-label="Опубликовать пост"
+                  >
+                    Опубликовать
                   </button>
                 </div>
               </div>
             </div>
+          )}
+          
+          <div className="space-y-4">
+            {userPosts.length === 0 ? (
+              <div className="bg-dark-card rounded-3xl shadow-card p-8 text-center">
+                <div className="text-dark-muted mb-2">Пока нет постов</div>
+                <button 
+                  className="text-dark-accent hover:underline text-sm"
+                  onClick={() => setShowCreate(true)}
+                >
+                  Создать первый пост
+                </button>
+              </div>
+            ) : (
+              userPosts.map(post => (
+                <PostCard
+                  key={post.id}
+                  post={post}
+                  users={users}
+                  isOwn={true}
+                  onEdit={() => {
+                    setEditPost(post);
+                    setEditPostData({ content: post.content, tags: post.tags });
+                  }}
+                  onDelete={() => onDeletePost(post.id)}
+                  onLike={() => onLikePost(post.id)}
+                  onUserClick={() => {}}
+                />
+              ))
+            )}
           </div>
-        )}
+        </div>
       </section>
     </main>
   );
