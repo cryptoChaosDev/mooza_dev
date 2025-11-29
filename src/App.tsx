@@ -2,7 +2,9 @@ import React, { useState, useEffect } from "react";
 import { HashRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
 import { WelcomePage } from "./Welcome";
 import { UserProfile, Post } from "./types";
+import { ToastProvider } from './contexts/ToastContext';
 import { getTelegramUser, MOCK_POSTS } from "./utils";
+import { getAllUsers, addFriend, removeFriend, getFriends, createPost, getAllPosts, updatePost, deletePost, togglePostLike, updateProfile } from "./api";
 import { AppBar } from "./components/AppBar";
 import { TabBar } from "./components/TabBar";
 import { Layout } from "./components/Layout";
@@ -11,42 +13,8 @@ import { Search } from "./pages/Search";
 import { Friends } from "./pages/Friends";
 import { Profile } from "./pages/Profile";
 import { SkillsInterests } from "./pages/SkillsInterests";
-import { ToastProvider } from "./contexts/ToastContext";
 import { UserPageWrapper } from "./pages/UserPageWrapper";
 import { useProfile } from "./hooks/useProfile";
-import { updateProfile, getAllUsers, getFriends, addFriend, removeFriend } from "./api";
-
-
-const navItems = [
-  {
-    to: "/",
-    label: "Главная",
-    icon: (
-      <svg width="26" height="26" fill="none" viewBox="0 0 24 24"><path d="M3 10.75L12 4l9 6.75V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V10.75Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round"/></svg>
-    ),
-  },
-  {
-    to: "/search",
-    label: "Поиск",
-    icon: (
-      <svg width="26" height="26" fill="none" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.5"/><path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/></svg>
-    ),
-  },
-  {
-    to: "/friends",
-    label: "Друзья",
-    icon: (
-      <svg width="26" height="26" fill="none" viewBox="0 0 24 24"><circle cx="8" cy="8" r="4" stroke="currentColor" strokeWidth="1.5"/><circle cx="16" cy="17" r="4" stroke="currentColor" strokeWidth="1.5"/><path d="M12 12c2.5 0 4.5 2 4.5 4.5" stroke="currentColor" strokeWidth="1.5"/></svg>
-    ),
-  },
-  {
-    to: "/profile",
-    label: "Профиль",
-    icon: (
-      <svg width="26" height="26" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.5"/><path d="M4 20c0-2.5 3.5-4 8-4s8 1.5 8 4" stroke="currentColor" strokeWidth="1.5"/></svg>
-    ),
-  },
-];
 
 function App() {
   // Получаем пользователя Telegram (или дефолт)
@@ -76,21 +44,31 @@ function App() {
 
   // ВСЕ остальные хуки — сюда, до любого return!
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
-  const [allPosts, setAllPosts] = useState<Post[]>(MOCK_POSTS);
+  const [allPosts, setAllPosts] = useState<Post[]>([]);
   const [friends, setFriends] = useState<string[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
-  const [userCard, setUserCard] = useState<{ user: UserProfile, posts: Post[] } | null>(null);
   const navigate = useNavigate();
 
-  // Fetch all users from the database
+  // Fetch all users and posts from the database
   useEffect(() => {
-    const fetchAllUsers = async () => {
+    const fetchData = async () => {
       if (profile) {
         try {
           const token = localStorage.getItem('token');
           if (token) {
-            const response = await getAllUsers(token);
-            setAllUsers(response.users || []);
+            // Fetch all users
+            const usersResponse = await getAllUsers(token);
+            setAllUsers(usersResponse.users || []);
+            
+            // Fetch all posts
+            try {
+              const postsResponse = await getAllPosts(token);
+              setAllPosts(postsResponse.posts || []);
+            } catch (error) {
+              console.error('Failed to fetch posts:', error);
+              // Fallback to mock posts if API fails
+              setAllPosts(MOCK_POSTS);
+            }
             
             // Fetch actual friends from the database
             try {
@@ -99,26 +77,27 @@ function App() {
             } catch (error) {
               console.error('Failed to fetch friends:', error);
               // Fallback to demo friends if API fails
-              if (response.users && response.users.length > 0) {
-                setFriends([response.users[0]?.userId, response.users[1]?.userId].filter(Boolean));
+              if (usersResponse.users && usersResponse.users.length > 0) {
+                setFriends([usersResponse.users[0]?.userId, usersResponse.users[1]?.userId].filter(Boolean));
               }
             }
             
             // For now, we'll keep favorites as demo data
             // In a real app, this would also come from the database
-            if (response.users && response.users.length > 0) {
-              setFavorites([response.users[2]?.userId].filter(Boolean));
+            if (usersResponse.users && usersResponse.users.length > 0) {
+              setFavorites([usersResponse.users[2]?.userId].filter(Boolean));
             }
           }
         } catch (error) {
-          console.error('Failed to fetch users:', error);
-          // Fallback to mock users if API fails
+          console.error('Failed to fetch data:', error);
+          // Fallback to mock data if API fails
           // setAllUsers(MOCK_USERS);
+          setAllPosts(MOCK_POSTS);
         }
       }
     };
 
-    fetchAllUsers();
+    fetchData();
   }, [profile]);
 
   // AppBar search handler
@@ -163,41 +142,91 @@ function App() {
   };
 
   // Handle post creation
-  const handleCreateUserPost = (content: string, tags: string[], attachmentUrl?: string) => {
+  const handleCreateUserPost = async (content: string, tags: string[], attachmentUrl?: string) => {
     if (!profile) return;
-    const newPost: Post = {
-      id: allPosts.length + 1,
-      userId: profile.userId,
-      author: profile.name,
-      avatarUrl: profile.avatarUrl,
-      content,
-      tags,
-      liked: false,
-      favorite: false,
-      attachmentUrl,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setAllPosts(prev => [newPost, ...prev]);
+    
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    try {
+      const response = await createPost(token, content, tags, attachmentUrl);
+      const newPost = response.post;
+      
+      // Transform the post to match frontend expectations
+      const transformedPost: Post = {
+        id: newPost.id,
+        userId: profile.userId,
+        author: profile.name,
+        avatarUrl: profile.avatarUrl,
+        content: newPost.content,
+        tags: newPost.tagsCsv ? newPost.tagsCsv.split(',').filter(Boolean) : [],
+        liked: newPost.liked,
+        favorite: false,
+        attachmentUrl: newPost.attachmentUrl || undefined,
+        createdAt: newPost.createdAt,
+        updatedAt: newPost.updatedAt,
+      };
+      
+      setAllPosts(prev => [transformedPost, ...prev]);
+    } catch (error) {
+      console.error('Failed to create post:', error);
+      // Handle error (show toast, etc.)
+    }
   };
 
   // Handle post update
-  const handleUpdateUserPost = (id: number, content: string, tags: string[]) => {
-    setAllPosts(prev => prev.map(post => 
-      post.id === id ? { ...post, content, tags, updatedAt: new Date().toISOString() } : post
-    ));
+  const handleUpdateUserPost = async (id: number, content: string, tags: string[]) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    try {
+      const response = await updatePost(token, id, content, tags);
+      const updatedPost = response.post;
+      
+      setAllPosts(prev => prev.map(post => 
+        post.id === id ? { 
+          ...post, 
+          content: updatedPost.content,
+          tags: updatedPost.tagsCsv ? updatedPost.tagsCsv.split(',').filter(Boolean) : [],
+          updatedAt: updatedPost.updatedAt
+        } : post
+      ));
+    } catch (error) {
+      console.error('Failed to update post:', error);
+      // Handle error (show toast, etc.)
+    }
   };
 
   // Handle post deletion
-  const handleDeleteUserPost = (id: number) => {
-    setAllPosts(prev => prev.filter(post => post.id !== id));
+  const handleDeleteUserPost = async (id: number) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    try {
+      await deletePost(token, id);
+      setAllPosts(prev => prev.filter(post => post.id !== id));
+    } catch (error) {
+      console.error('Failed to delete post:', error);
+      // Handle error (show toast, etc.)
+    }
   };
 
   // Handle post like
-  const handleLikeUserPost = (id: number) => {
-    setAllPosts(prev => prev.map(post => 
-      post.id === id ? { ...post, liked: !post.liked } : post
-    ));
+  const handleLikeUserPost = async (id: number) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    try {
+      const response = await togglePostLike(token, id);
+      const liked = response.liked;
+      
+      setAllPosts(prev => prev.map(post => 
+        post.id === id ? { ...post, liked } : post
+      ));
+    } catch (error) {
+      console.error('Failed to like post:', error);
+      // Handle error (show toast, etc.)
+    }
   };
 
   if (showWelcome) {
@@ -221,7 +250,7 @@ function App() {
           portfolio: p.portfolio || null,
           city: p.city || '',
           country: p.country || '',
-        }).then(result => {
+        }).then((result: any) => {
           if (result && result.profile) {
             // Refresh profile data from server
             refreshProfile();
