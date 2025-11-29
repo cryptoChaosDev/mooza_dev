@@ -1,15 +1,15 @@
 {
   "files": {
-    "main.css": "/mooza_dev/static/css/main.8f1d39ca.css",
-    "main.js": "/mooza_dev/static/js/main.ea98ab15.js",
-    "static/js/453.5b5ab2b4.chunk.js": "/mooza_dev/static/js/453.5b5ab2b4.chunk.js",
+    "main.css": "/mooza_dev/static/css/main.59855946.css",
+    "main.js": "/mooza_dev/static/js/main.7f8e6bde.js",
+    "static/js/317.42a4d2bf.chunk.js": "/mooza_dev/static/js/317.42a4d2bf.chunk.js",
     "index.html": "/mooza_dev/index.html",
-    "main.8f1d39ca.css.map": "/mooza_dev/static/css/main.8f1d39ca.css.map",
-    "main.ea98ab15.js.map": "/mooza_dev/static/js/main.ea98ab15.js.map",
-    "453.5b5ab2b4.chunk.js.map": "/mooza_dev/static/js/453.5b5ab2b4.chunk.js.map"
+    "main.59855946.css.map": "/mooza_dev/static/css/main.59855946.css.map",
+    "main.7f8e6bde.js.map": "/mooza_dev/static/js/main.7f8e6bde.js.map",
+    "317.42a4d2bf.chunk.js.map": "/mooza_dev/static/js/317.42a4d2bf.chunk.js.map"
   },
   "entrypoints": [
-    "static/css/main.8f1d39ca.css",
-    "static/js/main.ea98ab15.js"
+    "static/css/main.59855946.css",
+    "static/js/main.7f8e6bde.js"
   ]
 }
