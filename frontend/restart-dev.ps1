@@ -50,7 +50,18 @@ Start-Sleep -Seconds 2
 # Start the development environment
 Write-Host "Starting Mooza Development Environment..." -ForegroundColor Yellow
 try {
-    npm run dev
+    # Start backend server in background
+    Write-Host "Starting backend server..." -ForegroundColor Cyan
+    Set-Location ..\backend
+    Start-Process powershell -ArgumentList "-Command", "npm run dev" -WindowStyle Minimized
+    
+    # Wait a moment for backend to start
+    Start-Sleep -Seconds 3
+    
+    # Start frontend server
+    Write-Host "Starting frontend server..." -ForegroundColor Cyan
+    Set-Location ..\frontend
+    npm start
 } catch {
     Write-Host "Error starting development environment: $_" -ForegroundColor Red
 }
