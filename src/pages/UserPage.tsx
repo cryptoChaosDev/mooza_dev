@@ -4,6 +4,7 @@ import { ProfileView } from "../components/ProfileView";
 import { Post } from "../types";
 import { UserProfile } from "../types";
 import { formatPostDate, getInterestPath } from "../utils";
+import { UnifiedCard } from "../components/UnifiedCard";
 
 interface UserPageProps {
   user: UserProfile;
@@ -32,7 +33,7 @@ export function UserPage({ user, posts, onBack, isFriend, isFavorite, onAddFrien
         <div className="flex flex-col gap-4 max-h-56 overflow-y-auto overflow-x-hidden pr-1 custom-scrollbar sm:max-h-64">
           {posts.length === 0 && <div className="text-dark-muted text-center">Нет постов</div>}
           {posts.map((post) => (
-            <div key={post.id} className="relative bg-dark-card rounded-2xl shadow p-4 flex flex-col gap-2 animate-fade-in animate-scale-in sm:p-5">
+            <UnifiedCard key={post.id}>
               <div className="flex items-center gap-3 mb-1">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center text-2xl border-2 border-white overflow-hidden sm:w-12 sm:h-12">
                   {post.avatarUrl ? (
@@ -53,7 +54,7 @@ export function UserPage({ user, posts, onBack, isFriend, isFavorite, onAddFrien
                   <span key={i} className="px-2 py-0.5 bg-dark-bg/60 text-blue-700 rounded-full text-xs font-medium sm:text-sm">{getInterestPath(tag)}</span>
                 ))}
               </div>
-            </div>
+            </UnifiedCard>
           ))}
         </div>
       </section>

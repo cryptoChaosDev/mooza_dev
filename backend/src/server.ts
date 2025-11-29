@@ -1,53 +1,13 @@
-import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import helmet from "helmet";
 import morgan from "morgan";
+import { createServer } from "http";
 
 const app = express();
 
-// Enhanced security middleware
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-      connectSrc: ["'self'", "http://localhost:4000", "http://localhost:3000"],
-      fontSrc: ["'self'", "https:", "data:"],
-      objectSrc: ["'none'"],
-      mediaSrc: ["'self'"],
-      frameSrc: ["'none'"],
-      childSrc: ["'none'"],
-      formAction: ["'self'"],
-      baseUri: ["'self'"],
-      upgradeInsecureRequests: [],
-    },
-  },
-  dnsPrefetchControl: {
-    allow: false,
-  },
-  frameguard: {
-    action: "deny",
-  },
-  hidePoweredBy: true,
-  hsts: {
-    maxAge: 31536000,
-    includeSubDomains: true,
-    preload: true,
-  },
-  ieNoOpen: true,
-  noSniff: true,
-  referrerPolicy: {
-    policy: "no-referrer",
-  },
-  xssFilter: true,
-}));
-
 app.use(cors({
   origin: process.env.NODE_ENV === "production" 
-    ? ["https://cryptoChaosDev.github.io"] 
+    ? ["https://mooza-music.vercel.app"] 
     : ["http://localhost:3000", "http://localhost:4000"],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -77,9 +37,11 @@ app.get("/health", (_req, res) => {
 import { router as authRouter } from "./routes/auth";
 import { router as categoriesRouter } from "./routes/categories";
 import { router as profileRouter } from "./routes/profile";
+import { router as friendshipsRouter } from "./routes/friendships";
 
 app.use("/auth", authRouter);
 app.use("/categories", categoriesRouter);
 app.use("/profile", profileRouter);
+app.use("/friendships", friendshipsRouter);
 
 export default app;

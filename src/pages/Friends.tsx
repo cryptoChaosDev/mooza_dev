@@ -1,6 +1,8 @@
-import React, { useState, useEffect, useRef } from "react";
-import { getInterestPath } from "../utils";
+import React, { useState } from "react";
 import { UserProfile } from "../types";
+import { getInterestPath } from "../utils";
+import { ConsistentUserCard } from "../components/ConsistentUserCard";
+import { ConsistentActionButton } from "../components/ConsistentActionButton";
 
 export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, onUserClick }: {
   profile: UserProfile,
@@ -10,287 +12,156 @@ export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, 
   onRemoveFriend: (userId: string) => void,
   onUserClick: (user: UserProfile) => void,
 }) {
-  // Кандидаты в друзья по совпадению интересов (не в друзьях)
-  const candidates = users
-    .filter(u => u.userId !== profile.userId && !friends.includes(u.userId))
-    .map(u => ({ ...u, matchCount: u.interests.filter(tag => profile.interests.includes(tag)).length }))
-    .filter(u => u.matchCount > 0)
-    .sort((a, b) => b.matchCount - a.matchCount);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<'name' | 'city' | 'country'>('name');
   
-  const [hidden, setHidden] = useState<string[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const autoScrollRef = useRef<NodeJS.Timeout | null>(null);
-  const [isAutoScrolling, setIsAutoScrolling] = useState(false);
+  // Get friend users
+  const friendUsers = users.filter(user => friends.includes(user.userId));
   
-  // Filter out hidden candidates
-  const visibleCandidates = candidates.filter(u => !hidden.includes(u.userId));
+  // Filter by search query
+  const filteredFriends = friendUsers.filter(user => 
+    `${user.firstName} ${user.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.city?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.country?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.interests.some(interest => interest.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
   
-  // Reset index when candidates change
-  useEffect(() => {
-    setCurrentIndex(0);
-  }, [candidates.length]);
+  // Sort friends
+  const sortedFriends = [...filteredFriends].sort((a, b) => {
+    if (sortBy === 'name') return a.name.localeCompare(b.name, 'ru');
+    if (sortBy === 'city') return (a.city || '').localeCompare(b.city || '', 'ru');
+    if (sortBy === 'country') return (a.country || '').localeCompare(b.country || '', 'ru');
+    return 0;
+  });
   
-  // Auto-scroll functionality
-  useEffect(() => {
-    if (visibleCandidates.length > 1) {
-      autoScrollRef.current = setInterval(() => {
-        setIsAutoScrolling(true);
-        setCurrentIndex(prev => (prev + 1) % visibleCandidates.length);
-        setTimeout(() => setIsAutoScrolling(false), 500);
-      }, 5000);
-    }
-    
-    return () => {
-      if (autoScrollRef.current) {
-        clearInterval(autoScrollRef.current);
-      }
-    };
-  }, [visibleCandidates.length]);
+  // Get all users who are not friends
+  const nonFriends = users.filter(user => 
+    !friends.includes(user.userId) && 
+    user.userId !== profile.userId
+  );
   
-  // Carousel navigation
-  const nextCandidate = () => {
-    if (autoScrollRef.current) {
-      clearInterval(autoScrollRef.current);
-    }
-    setIsAutoScrolling(true);
-    setCurrentIndex(prev => (prev + 1) % visibleCandidates.length);
-    setTimeout(() => setIsAutoScrolling(false), 500);
-  };
-  
-  const prevCandidate = () => {
-    if (autoScrollRef.current) {
-      clearInterval(autoScrollRef.current);
-    }
-    setIsAutoScrolling(true);
-    setCurrentIndex(prev => (prev - 1 + visibleCandidates.length) % visibleCandidates.length);
-    setTimeout(() => setIsAutoScrolling(false), 500);
-  };
-  
-  const goToCandidate = (index: number) => {
-    if (autoScrollRef.current) {
-      clearInterval(autoScrollRef.current);
-    }
-    setIsAutoScrolling(true);
-    setCurrentIndex(index);
-    setTimeout(() => setIsAutoScrolling(false), 500);
-  };
-  
-  const currentCandidate = visibleCandidates[currentIndex];
-
-  // Список друзей
-  const friendList = users.filter(u => friends.includes(u.userId));
+  // Filter non-friends by search query
+  const filteredNonFriends = nonFriends.filter(user => 
+    `${user.firstName} ${user.lastName}`.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.city?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.country?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    user.interests.some(interest => interest.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
   return (
-    <main className="p-4 sm:p-6 pt-6 min-h-[100dvh] bg-dark-bg flex flex-col items-center font-sans animate-fade-in transition-all duration-300 w-full flex-1 overflow-x-hidden" style={{ paddingBottom: 'calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px))' }}>
-      <section className="w-full max-w-md flex flex-col gap-6">
-        {/* Верхний блок — рекомендация друга с новым дизайном */}
+    <main className="p-3 sm:p-4 md:p-6 pt-4 sm:pt-5 md:pt-6 text-center text-dark-text min-h-[100dvh] bg-dark-bg flex flex-col items-center text-sm sm:text-base md:text-lg w-full flex-1 overflow-x-hidden" style={{ paddingBottom: 'calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px))' }}>
+      <div className="w-full max-w-md flex flex-col gap-6 container-responsive max-width-md">
+        {/* Header */}
         <div className="flex flex-col gap-4">
-          <div className="flex justify-between items-center">
-            <div className="text-xl sm:text-2xl font-bold text-dark-text">Рекомендации</div>
-            <div className="text-xs sm:text-sm text-dark-muted">
-              {visibleCandidates.length > 0 ? `${currentIndex + 1} из ${visibleCandidates.length}` : '0'}
+          <h1 className="text-2xl font-bold text-dark-text">Мои друзья</h1>
+          
+          {/* Search and sort controls */}
+          <div className="flex flex-col gap-3">
+            <div className="relative">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Поиск друзей..."
+                className="w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner"
+              />
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-dark-muted">
+                <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.5"/>
+                  <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+              </div>
+            </div>
+            
+            <div className="flex flex-col gap-2">
+              <span className="text-xs text-dark-muted font-semibold uppercase tracking-wider">Сортировать:</span>
+              <select 
+                className="px-3 py-2 rounded-2xl bg-dark-bg/60 text-dark-text text-sm shadow-inner focus:outline-none focus:ring-2 focus:ring-blue-400"
+                value={sortBy} 
+                onChange={e => setSortBy(e.target.value as any)}
+              >
+                <option value="name">По имени</option>
+                <option value="city">По городу</option>
+                <option value="country">По стране</option>
+              </select>
             </div>
           </div>
-          
-          {visibleCandidates.length > 0 ? (
-            <div className="relative">
-              {/* Carousel controls on the sides */}
-              {visibleCandidates.length > 1 && (
-                <>
-                  <button 
-                    className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-1 z-20 p-1.5 sm:p-2 rounded-full bg-dark-bg/60 text-dark-text hover:bg-dark-accent/10 active:scale-95 transition-all shadow-lg md:p-3"
-                    onClick={(e) => { e.stopPropagation(); prevCandidate(); }}
-                    title="Предыдущий"
-                  >
-                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" className="sm:w-18 sm:h-18"><path d="M15 19l-7-7 7-7" stroke="currentColor" strokeWidth="2"/></svg>
-                  </button>
-                  
-                  <button 
-                    className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1 z-20 p-1.5 sm:p-2 rounded-full bg-dark-bg/60 text-dark-text hover:bg-dark-accent/10 active:scale-95 transition-all shadow-lg md:p-3"
-                    onClick={(e) => { e.stopPropagation(); nextCandidate(); }}
-                    title="Следующий"
-                  >
-                    <svg width="14" height="14" fill="none" viewBox="0 0 24 24" className="sm:w-18 sm:h-18"><path d="M9 5l7 7-7 7" stroke="currentColor" strokeWidth="2"/></svg>
-                  </button>
-                </>
-              )}
-              
-              {/* Carousel card */}
-              <div className="bg-dark-card rounded-3xl shadow-card border border-dark-bg/40 overflow-hidden ml-8 mr-8 sm:ml-10 sm:mr-10">
-                <div className="relative h-60 overflow-hidden rounded-3xl">
-                  {visibleCandidates.map((candidate, index) => (
-                    <div 
-                      key={candidate.userId}
-                      className={`absolute inset-0 p-5 transition-all duration-500 ease-in-out ${
-                        index === currentIndex 
-                          ? 'opacity-100 translate-x-0 z-10' 
-                          : index < currentIndex 
-                            ? 'opacity-0 -translate-x-full z-0' 
-                            : 'opacity-0 translate-x-full z-0'
-                      }`}
-                    >
-                      <div className="h-full flex flex-col">
-                        {/* User info section */}
-                        <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
-                          <div 
-                            className="relative flex-shrink-0 cursor-pointer group"
-                            onClick={e => {
-                              if (!(e.target as HTMLElement).closest('button')) {
-                                onUserClick(candidate);
-                              }
-                            }}
-                          >
-                            <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl overflow-hidden border-2 sm:border-3 border-white shadow-lg md:w-16 md:h-16">
-                              {candidate.avatarUrl ? (
-                                <img src={candidate.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
-                                  <span className="text-white text-lg sm:text-xl font-bold">
-                                    {candidate.name.charAt(0)}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                            {/* Online indicator */}
-                            <div className="absolute -bottom-1 -right-1 w-3 h-3 sm:w-4 sm:h-4 bg-green-500 rounded-full border-2 border-dark-card md:w-5 md:h-5"></div>
-                          </div>
-                          
-                          <div className="flex-1 min-w-0">
-                            <div 
-                              className="font-bold text-dark-text text-sm sm:text-base truncate cursor-pointer hover:text-blue-400 transition-colors md:text-lg"
-                              onClick={e => {
-                                if (!(e.target as HTMLElement).closest('button')) {
-                                  onUserClick(candidate);
-                                }
-                              }}
-                            >
-                              {candidate.name}
-                            </div>
-                            
-                            {candidate.city && (
-                              <div className="flex items-center gap-1 mt-1">
-                                <svg width="10" height="10" fill="none" viewBox="0 0 24 24" className="text-dark-muted sm:w-12 sm:h-12">
-                                  <path d="M12 12c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm0-8c-4.4 0-8 3.6-8 8 0 1.4.4 2.7 1 3.8l-1 1 3-1.5 1.5 3 1.5-1c1.1.6 2.4 1 3.8 1 4.4 0 8-3.6 8-8s-3.6-8-8-8z" stroke="currentColor" strokeWidth="1.5"/>
-                                </svg>
-                                <span className="text-xs text-dark-muted truncate">
-                                  {candidate.city}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                        
-                        {/* Match info and interests */}
-                        <div className="flex-1">
-                          <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
-                            <span className="text-xs px-1.5 py-0.5 sm:px-2 sm:py-1 bg-gradient-to-r from-blue-500/20 to-cyan-400/20 text-blue-300 rounded-full font-medium md:text-sm">
-                              {candidate.matchCount} совпадений
-                            </span>
-                          </div>
-                          
-                          <div className="flex flex-wrap gap-1">
-                            {candidate.interests.filter(tag => profile.interests.includes(tag)).slice(0, 3).map(tag => (
-                              <span key={tag} className="text-xs px-1.5 py-0.5 sm:px-2 sm:py-1 bg-dark-bg/60 text-dark-accent rounded-full truncate md:text-sm">
-                                {getInterestPath(tag)}
-                              </span>
-                            ))}
-                            {candidate.interests.filter(tag => profile.interests.includes(tag)).length > 3 && (
-                              <span className="text-xs px-1.5 py-0.5 sm:px-2 sm:py-1 bg-dark-bg/40 text-dark-muted rounded-full md:text-sm">
-                                +{candidate.interests.filter(tag => profile.interests.includes(tag)).length - 3}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        
-                        {/* Action buttons */}
-                        <div className="flex gap-1.5 sm:gap-2 pt-2 sm:pt-3">
-                          <button 
-                            className="flex-1 py-1.5 sm:py-2 rounded-lg bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold text-xs shadow-md hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-1 sm:py-2.5 sm:text-sm"
-                            title="Добавить в друзья"
-                            onClick={e => { e.stopPropagation(); onAddFriend(candidate.userId); }}
-                          >
-                            <svg width="10" height="10" fill="none" viewBox="0 0 24 24" className="sm:w-12 sm:h-12"><path d="M12 5v14m7-7H5" stroke="currentColor" strokeWidth="2"/></svg>
-                            <span className="hidden xs:inline">Добавить</span>
-                            <span className="xs:hidden">+</span>
-                          </button>
-                          <button 
-                            className="px-2 py-1.5 sm:px-2.5 sm:py-2 rounded-lg bg-dark-bg/60 text-dark-muted shadow-md hover:bg-red-500/10 hover:text-red-500 active:scale-95 transition-all md:px-3 md:py-2.5"
-                            title="Скрыть"
-                            onClick={e => { e.stopPropagation(); setHidden(h => [...h, candidate.userId]); }}
-                          >
-                            <svg width="10" height="10" fill="none" viewBox="0 0 24 24" className="sm:w-12 sm:h-12"><path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="2"/></svg>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                
-                {/* Progress dots at the bottom */}
-                {visibleCandidates.length > 1 && (
-                  <div className="flex items-center justify-center py-3 bg-dark-bg/20 border-t border-dark-bg/30">
-                    <div className="flex gap-1">
-                      {visibleCandidates.map((_, index) => (
-                        <div
-                          key={index}
-                          className={`w-1.5 h-1.5 rounded-full transition-all sm:w-2 sm:h-2 ${index === currentIndex ? 'bg-gradient-to-r from-blue-500 to-cyan-400 scale-125' : 'bg-dark-bg/40'}`}
-                          title={`Слайд ${index + 1}`}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          ) : (
-            <div className="bg-dark-card rounded-3xl shadow-card p-8 flex flex-col items-center justify-center gap-4">
-              <div className="text-4xl opacity-50">👥</div>
-              <div className="text-center text-dark-muted">
-                <div className="font-semibold text-lg">Нет рекомендаций</div>
-                <div className="text-sm mt-1">Попробуйте добавить интересы в профиль</div>
-              </div>
-            </div>
-          )}
         </div>
         
-        {/* Нижний блок — список друзей */}
-        <div className="flex flex-col gap-4">
-          <div className="text-xl sm:text-2xl font-bold text-dark-text">Мои друзья</div>
-          {friendList.length === 0 ? (
-            <div className="bg-dark-card rounded-3xl shadow-card p-12 flex flex-col items-center justify-center gap-5">
-              <div className="text-6xl opacity-50">🎵</div>
-              <div className="text-center text-dark-muted">
-                <div className="font-semibold text-xl">У вас пока нет друзей</div>
-                <div className="text-base mt-2">Найдите единомышленников по интересам!</div>
-              </div>
-            </div>
-          ) : (
-            friendList.map(user => (
-              <div key={user.userId} className="bg-dark-card rounded-3xl shadow-card p-4 flex items-center gap-3 border border-dark-bg/40 animate-fade-in animate-scale-in cursor-pointer hover:bg-dark-bg/80 transition shadow-lg sm:p-5 md:p-6" onClick={() => onUserClick(user)}>
-                <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-dark-bg/80 flex items-center justify-center text-xl sm:text-2xl border-2 border-white overflow-hidden shadow-lg md:w-20 md:h-20">
-                  {user.avatarUrl ? (
-                    <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-2xl" />
-                  ) : (
-                    <span role="img" aria-label="avatar">👤</span>
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="font-bold text-dark-text text-base sm:text-lg truncate md:text-xl">{user.name}</div>
-                  {user.city && <div className="text-sm text-blue-400 truncate">{user.city}</div>}
-                </div>
-                <div className="flex gap-2 sm:gap-3 items-center ml-2">
-                  <button className="p-2.5 sm:p-3 rounded-2xl bg-dark-bg/60 text-dark-accent shadow-lg hover:bg-blue-500/10 hover:text-blue-500 active:scale-95 transition-all hover:scale-105 md:p-3.5" title="Написать" onClick={e => e.stopPropagation()}>
-                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" className="sm:w-20 sm:h-20"><path d="M4 20l16-8-16-8v6h12v4H4v6z" stroke="currentColor" strokeWidth="1.5"/></svg>
-                  </button>
-                  <button className="p-2.5 sm:p-3 rounded-2xl bg-dark-bg/60 text-red-500 shadow-lg hover:bg-red-500/10 hover:text-red-500 active:scale-95 transition-all hover:scale-105 md:p-3.5" title="Удалить" onClick={e => { e.stopPropagation(); onRemoveFriend(user.userId); }}>
-                    <svg width="18" height="18" fill="none" viewBox="0 0 24 24" className="sm:w-20 sm:h-20"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12ZM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4Z" stroke="currentColor" strokeWidth="1.5"/></svg>
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
+        {/* Friends count */}
+        <div className="bg-dark-card rounded-3xl shadow-card p-5 flex items-center justify-between">
+          <div className="text-left">
+            <div className="text-2xl font-bold text-dark-text">{sortedFriends.length}</div>
+            <div className="text-dark-muted text-sm">друзей</div>
+          </div>
+          <div className="text-right">
+            <div className="text-2xl font-bold text-dark-text">{filteredNonFriends.length}</div>
+            <div className="text-dark-muted text-sm">потенциальных друзей</div>
+          </div>
         </div>
-      </section>
+        
+        {/* Friends list */}
+        {sortedFriends.length > 0 ? (
+          <div className="flex flex-col gap-5">
+            <h2 className="text-xl font-bold text-dark-text text-left">Ваши друзья</h2>
+            <div className="grid grid-cols-1 gap-4">
+              {sortedFriends.map(user => (
+                <div key={user.userId} className="relative">
+                  <ConsistentUserCard 
+                    user={user} 
+                    onClick={() => onUserClick(user)}
+                  />
+                  <div className="absolute top-3 right-3">
+                    <ConsistentActionButton
+                      variant="danger"
+                      size="small"
+                      onClick={() => onRemoveFriend(user.userId)}
+                    >
+                      Удалить
+                    </ConsistentActionButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-dark-card rounded-3xl shadow-card p-8 flex flex-col items-center justify-center gap-4">
+            <div className="text-5xl opacity-50">👥</div>
+            <div className="text-center text-dark-muted">
+              <div className="font-semibold text-xl">У вас пока нет друзей</div>
+              <div className="text-base mt-2">Найдите единомышленников в разделе "Поиск"</div>
+            </div>
+          </div>
+        )}
+        
+        {/* Suggestions */}
+        {filteredNonFriends.length > 0 && (
+          <div className="flex flex-col gap-5 pt-4">
+            <h2 className="text-xl font-bold text-dark-text text-left">Рекомендации</h2>
+            <div className="grid grid-cols-1 gap-4">
+              {filteredNonFriends.slice(0, 5).map(user => (
+                <div key={user.userId} className="relative">
+                  <ConsistentUserCard 
+                    user={user} 
+                    onClick={() => onUserClick(user)}
+                    showMatchScore={true}
+                    profile={profile}
+                  />
+                  <div className="absolute top-3 right-3">
+                    <ConsistentActionButton
+                      variant="primary"
+                      size="small"
+                      onClick={() => onAddFriend(user.userId)}
+                    >
+                      Добавить
+                    </ConsistentActionButton>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </main>
   );
 }

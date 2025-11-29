@@ -14,7 +14,7 @@ import { SkillsInterests } from "./pages/SkillsInterests";
 import { ToastProvider } from "./contexts/ToastContext";
 import { UserPageWrapper } from "./pages/UserPageWrapper";
 import { useProfile } from "./hooks/useProfile";
-import { updateProfile, getAllUsers } from "./api";
+import { updateProfile, getAllUsers, getFriends, addFriend, removeFriend } from "./api";
 
 
 const navItems = [
@@ -92,10 +92,21 @@ function App() {
             const response = await getAllUsers(token);
             setAllUsers(response.users || []);
             
-            // Set initial friends and favorites for demo purposes
-            // In a real app, this would come from the database
+            // Fetch actual friends from the database
+            try {
+              const friendsResponse = await getFriends(token);
+              setFriends(friendsResponse.friendIds || []);
+            } catch (error) {
+              console.error('Failed to fetch friends:', error);
+              // Fallback to demo friends if API fails
+              if (response.users && response.users.length > 0) {
+                setFriends([response.users[0]?.userId, response.users[1]?.userId].filter(Boolean));
+              }
+            }
+            
+            // For now, we'll keep favorites as demo data
+            // In a real app, this would also come from the database
             if (response.users && response.users.length > 0) {
-              setFriends([response.users[0]?.userId, response.users[1]?.userId].filter(Boolean));
               setFavorites([response.users[2]?.userId].filter(Boolean));
             }
           }
@@ -110,54 +121,96 @@ function App() {
     fetchAllUsers();
   }, [profile]);
 
-  // ... handleUserClick ...
+  // AppBar search handler
+  const handleAppBarSearch = (query: string) => {
+    // This will be handled by the Search page
+  };
+
+  // Handle user click
   const handleUserClick = (user: UserProfile) => {
     navigate(`/user/${encodeURIComponent(user.userId)}`);
   };
-  // ... handleAddFriend, handleRemoveFriend, handleToggleFavorite ...
-  const handleAddFriend = (userId: string) => setFriends((prev) => [...prev, userId]);
-  const handleRemoveFriend = (userId: string) => setFriends((prev) => prev.filter((id) => id !== userId));
-  const handleToggleFavorite = (userId: string) => setFavorites((prev) => prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]);
 
-  // Добавляю функции для редактирования, удаления, лайка поста
+  // Handle add/remove friend with API calls
+  const handleAddFriend = async (userId: string) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    try {
+      await addFriend(token, userId);
+      setFriends((prev) => [...prev, userId]);
+    } catch (error) {
+      console.error('Failed to add friend:', error);
+      // Handle error (show toast, etc.)
+    }
+  };
+  
+  const handleRemoveFriend = async (userId: string) => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    
+    try {
+      await removeFriend(token, userId);
+      setFriends((prev) => prev.filter((id) => id !== userId));
+    } catch (error) {
+      console.error('Failed to remove friend:', error);
+      // Handle error (show toast, etc.)
+    }
+  };
+  
+  const handleToggleFavorite = (userId: string) => {
+    setFavorites((prev) => prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId]);
+  };
+
+  // Handle post creation
   const handleCreateUserPost = (content: string, tags: string[], attachmentUrl?: string) => {
-    const now = new Date().toISOString();
-    setAllPosts(prev => [
-      {
-        id: Date.now(),
-        userId: profile!.userId,
-        author: `${profile!.firstName} ${profile!.lastName}`.trim(),
-        avatarUrl: profile!.avatarUrl,
-        content,
-        tags,
-        liked: false,
-        favorite: false,
-        attachmentUrl,
-        createdAt: now,
-        updatedAt: now,
-      },
-      ...prev,
-    ]);
+    if (!profile) return;
+    const newPost: Post = {
+      id: allPosts.length + 1,
+      userId: profile.userId,
+      author: profile.name,
+      avatarUrl: profile.avatarUrl,
+      content,
+      tags,
+      liked: false,
+      favorite: false,
+      attachmentUrl,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    setAllPosts(prev => [newPost, ...prev]);
   };
+
+  // Handle post update
   const handleUpdateUserPost = (id: number, content: string, tags: string[]) => {
-    const now = new Date().toISOString();
-    setAllPosts(prev => prev.map(p => p.id === id ? { ...p, content, tags, updatedAt: now } : p));
+    setAllPosts(prev => prev.map(post => 
+      post.id === id ? { ...post, content, tags, updatedAt: new Date().toISOString() } : post
+    ));
   };
+
+  // Handle post deletion
   const handleDeleteUserPost = (id: number) => {
-    setAllPosts(prev => prev.filter(p => p.id !== id));
+    setAllPosts(prev => prev.filter(post => post.id !== id));
   };
+
+  // Handle post like
   const handleLikeUserPost = (id: number) => {
-    setAllPosts(prev => prev.map(p => p.id === id ? { ...p, liked: !p.liked } : p));
+    setAllPosts(prev => prev.map(post => 
+      post.id === id ? { ...post, liked: !post.liked } : post
+    ));
   };
 
   if (showWelcome) {
-    return <WelcomePage onFinish={async p => {
+    return <WelcomePage onFinish={(p) => {
+      setProfile(p);
+      
+      // Also save to server
       const token = localStorage.getItem('token');
       if (!token) return;
       
       try {
         // Save profile data to server
-        const result = await updateProfile(token, {
+        updateProfile(token, {
           firstName: p.firstName,
           lastName: p.lastName,
           avatarUrl: p.avatarUrl,
@@ -168,12 +221,12 @@ function App() {
           portfolio: p.portfolio || null,
           city: p.city || '',
           country: p.country || '',
+        }).then(result => {
+          if (result && result.profile) {
+            // Refresh profile data from server
+            refreshProfile();
+          }
         });
-
-        if (result && result.profile) {
-          // Refresh profile data from server
-          refreshProfile();
-        }
       } catch (error) {
         console.error('Failed to save profile:', error);
         // Could show error toast here
@@ -184,41 +237,40 @@ function App() {
   return (
     <ToastProvider>
       <div className="flex flex-col min-h-screen bg-dark-bg">
-        <AppBar />
-        <Layout>
-          <Routes>
-            <Route path="/" element={<HomeFeed profile={profile!} allPosts={allPosts} friends={friends} onUserClick={handleUserClick} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} users={allUsers} />} />
-            <Route path="/search" element={<Search profile={profile!} users={allUsers} friends={friends} favorites={favorites} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onToggleFavorite={handleToggleFavorite} onUserClick={handleUserClick} />} />
-            <Route path="/friends" element={<Friends profile={profile!} friends={friends} users={allUsers} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onUserClick={handleUserClick} />} />
-            <Route path="/profile" element={<Profile key={profile?.userId} profile={profile!} setProfile={setProfile} allPosts={allPosts} setAllPosts={setAllPosts} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} users={allUsers} setAllUsers={setAllUsers} friends={friends} favorites={favorites} onUserClick={handleUserClick} />} />
-            <Route path="/skills" element={<SkillsInterests profile={profile!} setProfile={setProfile} />} />
-            <Route path="/user/:userName" element={<UserPageWrapper 
-              allUsers={allUsers} 
-              allPosts={allPosts} 
-              onBack={() => navigate(-1)}
-              friends={friends}
-              favorites={favorites}
-              onAddFriend={handleAddFriend}
-              onRemoveFriend={handleRemoveFriend}
-              onToggleFavorite={handleToggleFavorite}
-              onLikeUserPost={handleLikeUserPost}
-              currentUserName={profile!.name}
-            />} />
-          </Routes>
-        </Layout>
+        <AppBar onSearch={handleAppBarSearch} />
+        <div className="flex-1 pt-[var(--header-height)] pb-[var(--tabbar-height)] w-full overflow-x-hidden">
+          <Layout>
+            <Routes>
+              <Route path="/" element={<HomeFeed profile={profile!} allPosts={allPosts} friends={friends} onUserClick={handleUserClick} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} users={allUsers} />} />
+              <Route path="/search" element={<Search profile={profile!} users={allUsers} friends={friends} favorites={favorites} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onToggleFavorite={handleToggleFavorite} onUserClick={handleUserClick} />} />
+              <Route path="/friends" element={<Friends profile={profile!} friends={friends} users={allUsers} onAddFriend={handleAddFriend} onRemoveFriend={handleRemoveFriend} onUserClick={handleUserClick} />} />
+              <Route path="/profile" element={<Profile key={profile?.userId} profile={profile!} setProfile={setProfile} allPosts={allPosts} setAllPosts={setAllPosts} onCreatePost={handleCreateUserPost} onUpdatePost={handleUpdateUserPost} onDeletePost={handleDeleteUserPost} onLikePost={handleLikeUserPost} users={allUsers} setAllUsers={setAllUsers} friends={friends} favorites={favorites} onUserClick={handleUserClick} />} />
+              <Route path="/skills" element={<SkillsInterests profile={profile!} setProfile={setProfile} />} />
+              <Route path="/user/:userName" element={<UserPageWrapper 
+                allUsers={allUsers} 
+                allPosts={allPosts} 
+                onBack={() => navigate(-1)}
+                friends={friends}
+                favorites={favorites}
+                onAddFriend={handleAddFriend}
+                onRemoveFriend={handleRemoveFriend}
+                onToggleFavorite={handleToggleFavorite}
+                onLikeUserPost={handleLikeUserPost}
+                currentUserName={profile!.name}
+              />} />
+            </Routes>
+          </Layout>
+        </div>
         <TabBar />
       </div>
     </ToastProvider>
   );
 }
 
-// Обёртка для Router
-function AppWithRouter() {
+export default function AppWrapper() {
   return (
     <Router>
       <App />
     </Router>
   );
 }
-
-export default AppWithRouter;

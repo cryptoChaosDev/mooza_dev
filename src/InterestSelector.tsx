@@ -1,246 +1,218 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { INTEREST_CATEGORIES } from "./categories";
-import "./scrollbar.css";
+import { ConsistentActionButton } from "./components/ConsistentActionButton";
 
 interface InterestSelectorProps {
   selected: string[];
   onChange: (selected: string[]) => void;
+  placeholder?: string;
 }
 
-function useOutsideClick<T extends HTMLElement>(ref: React.RefObject<T>, handler: () => void) {
+// Predefined popular tags for quick selection
+const POPULAR_TAGS = ['Рок', 'Джаз', 'Поп', 'Хип-хоп', 'Электроника', 'Классика', 'Фолк', 'Метал'];
+
+export const InterestSelector: React.FC<InterestSelectorProps> = ({ 
+  selected, 
+  onChange,
+  placeholder = "Начните вводить интересы..." 
+}) => {
+  const [query, setQuery] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+
+  // Get all available tags from categories
+  const allTags = useMemo(() => {
+    return Array.from(new Set(
+      INTEREST_CATEGORIES.flatMap(category => 
+        category.subcategories.flatMap(sub => sub.tags)
+      )
+    ));
+  }, []);
+
+  // Filter tags based on search query
+  const filteredTags = useMemo(() => {
+    if (!query.trim()) return [];
+    
+    const lowerQuery = query.toLowerCase();
+    return allTags
+      .filter(tag => tag.toLowerCase().includes(lowerQuery))
+      .slice(0, 15); // Limit to 15 suggestions
+  }, [allTags, query]);
+
+  // Toggle tag selection
+  const toggleTag = (tag: string) => {
+    if (selected.includes(tag)) {
+      onChange(selected.filter(t => t !== tag));
+    } else {
+      onChange([...selected, tag]);
+    }
+  };
+
+  // Handle adding custom tag
+  const handleAddCustomTag = () => {
+    if (query.trim() && !selected.includes(query.trim())) {
+      onChange([...selected, query.trim()]);
+      setQuery("");
+      setIsOpen(false);
+    }
+  };
+
+  // Handle Enter key press
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddCustomTag();
+    }
+  };
+
+  // Close dropdown when clicking outside
   useEffect(() => {
-    const listener = (event: MouseEvent) => {
-      if (!ref.current || ref.current.contains(event.target as Node)) return;
-      handler();
+    const handleClickOutside = () => {
+      if (isOpen) {
+        setIsOpen(false);
+      }
     };
-    document.addEventListener("mousedown", listener);
-    return () => document.removeEventListener("mousedown", listener);
-  }, [ref, handler]);
-}
 
-const Dropdown: React.FC<{
-  value: string;
-  options: string[];
-  placeholder: string;
-  onChange: (v: string) => void;
-  disabled?: boolean;
-  open?: boolean;
-  onOpenChange?: (v: boolean) => void;
-}> = ({ value, options, placeholder, onChange, disabled, open: openProp, onOpenChange }) => {
-  const [internalOpen, setInternalOpen] = useState(false);
-  const isControlled = openProp !== undefined && onOpenChange !== undefined;
-  const open = isControlled ? openProp : internalOpen;
-  const setOpen = isControlled ? onOpenChange! : setInternalOpen;
-  const ref = useRef<HTMLDivElement>(null);
-  useOutsideClick(ref as React.RefObject<HTMLElement>, () => setOpen(false));
-  const selectedLabel = value || placeholder;
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [isOpen]);
+
   return (
-    <div ref={ref} className={`relative w-full ${disabled ? 'opacity-60 pointer-events-none' : ''}`}>
-      <button
-        type="button"
-        className={`w-full px-4 py-3 rounded-2xl bg-dark-bg/70 text-dark-text text-base font-medium shadow-md border-none outline-none flex items-center justify-between transition-all duration-150 hover:bg-dark-bg/90 focus:bg-dark-bg/90 cursor-pointer ${open ? 'ring-2 ring-blue-400' : ''}`}
-        onClick={() => setOpen(!open)}
-        disabled={disabled}
-      >
-        <span className={`truncate ${value ? '' : 'text-dark-muted'}`}>{selectedLabel}</span>
-        <span className={`ml-2 text-dark-accent text-lg transition-transform ${open ? 'rotate-180' : ''}`}>▼</span>
-      </button>
-      {open && (
-        <div className="absolute z-50 left-0 right-0 mt-2 bg-dark-card rounded-2xl shadow-xl border border-dark-bg/40 max-h-[70vh] overflow-y-auto overflow-x-hidden animate-fade-in animate-scale-in custom-scrollbar">
-          {options.length === 0 && (
-            <div className="px-4 py-3 text-dark-muted text-sm">Нет вариантов</div>
-          )}
-          {options.map((opt: string) => (
-            <div
-              key={opt}
-              className={`px-4 py-3 cursor-pointer text-base rounded-2xl transition-all select-none truncate ${value === opt ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold' : 'hover:bg-dark-bg/70 text-dark-text'}`}
-              onClick={() => { onChange(opt); setOpen(false); }}
+    <div className="w-full">
+      {/* Selected tags display */}
+      {selected.length > 0 && (
+        <div className="flex flex-wrap gap-2 mb-3">
+          {selected.map(tag => (
+            <span 
+              key={tag} 
+              className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-gradient-to-r from-blue-500 to-cyan-400 text-white border-none shadow-sm animate-fade-in"
             >
-              {opt}
-            </div>
+              {tag}
+              <button 
+                className="ml-2 text-white hover:text-red-200 transition-colors focus:outline-none"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleTag(tag);
+                }}
+                aria-label={`Удалить ${tag}`}
+              >
+                &times;
+              </button>
+            </span>
           ))}
         </div>
       )}
-    </div>
-  );
-};
 
-export const InterestSelector: React.FC<InterestSelectorProps> = ({ selected, onChange }) => {
-  const [category, setCategory] = useState<string>("");
-  const [subcategory, setSubcategory] = useState<string>("");
-  const [tag, setTag] = useState<string>("");
-  const [openSub, setOpenSub] = useState(false);
-  const [openTag, setOpenTag] = useState(false);
-  const [query, setQuery] = useState("");
-
-  const catObj = INTEREST_CATEGORIES.find(c => c.category === category);
-  const subObj = catObj?.subcategories.find(s => s.name === subcategory);
-
-  const handleAddTag = () => {
-    if (tag && !selected.includes(tag)) {
-      onChange([...selected, tag]);
-      setCategory("");
-      setSubcategory("");
-      setTag("");
-      setQuery(""); // Clear search query after adding
-    }
-  };
-
-  // Automatically add tag when it's selected
-  useEffect(() => {
-    if (tag && !selected.includes(tag)) {
-      const timer = setTimeout(() => {
-        handleAddTag();
-      }, 300); // Small delay to allow for UI feedback
-      return () => clearTimeout(timer);
-    }
-  }, [tag]);
-
-  const handleRemove = (t: string) => {
-    onChange(selected.filter(s => s !== t));
-  };
-
-  const handleReset = () => {
-    setCategory("");
-    setSubcategory("");
-    setTag("");
-    setQuery("");
-    onChange([]);
-  };
-
-  // For displaying the path
-  const getInterestPath = (tag: string) => {
-    for (const cat of INTEREST_CATEGORIES) {
-      for (const sub of cat.subcategories) {
-        if (sub.tags.includes(tag)) {
-          return `${cat.category} – ${sub.name} – ${tag}`;
-        }
-      }
-    }
-    return tag;
-  };
-
-  // Filter tags based on search query
-  const filteredTags = Array.from(new Set(
-    INTEREST_CATEGORIES.flatMap(c => c.subcategories.flatMap(s => s.tags))
-  )).filter(t => t.toLowerCase().includes(query.trim().toLowerCase()));
-
-  return (
-    <div className="flex flex-col gap-4 w-full animate-fade-in overflow-x-hidden">
-      {/* Quick search and tag selection */}
-      <div className="flex flex-col gap-3">
-        <input
-          className="px-4 py-3 rounded-2xl bg-dark-bg/70 text-dark-text shadow-inner focus:ring-2 focus:ring-blue-400 text-base placeholder-dark-muted"
-          placeholder="Поиск интересов (например, Рок, Джаз, Техно)"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-        />
-        
-        {/* Popular tags */}
-        {query.length === 0 && (
-          <div className="flex flex-col gap-2">
-            <div className="text-xs font-semibold text-dark-muted uppercase tracking-wider">Популярные теги</div>
-            <div className="flex flex-wrap gap-2">
-              {['Рок', 'Джаз', 'Поп', 'Хип-хоп', 'Электроника', 'Классика', 'Фолк', 'Метал'].map(tag => (
-                <button
-                  key={tag}
-                  type="button"
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${selected.includes(tag) ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white' : 'bg-dark-bg/60 text-dark-text hover:bg-dark-bg/80'}`}
-                  onClick={() => selected.includes(tag) ? onChange(selected.filter(x => x !== tag)) : onChange([...selected, tag])}
-                  title={tag}
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-        
-        {/* Search results */}
-        {query.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <div className="text-xs font-semibold text-dark-muted uppercase tracking-wider">
-              {filteredTags.length > 0 ? `Найдено: ${filteredTags.length}` : 'Ничего не найдено'}
-            </div>
-            <div className="flex flex-wrap gap-2 max-h-48 overflow-y-auto custom-scrollbar">
-              {filteredTags.slice(0, 30).map(t => (
-                <button
-                  key={t}
-                  type="button"
-                  className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${selected.includes(t) ? 'bg-gradient-to-r from-blue-500 to-cyan-400 text-white' : 'bg-dark-bg/60 text-dark-text hover:bg-dark-bg/80'}`}
-                  onClick={() => selected.includes(t) ? onChange(selected.filter(x => x !== t)) : onChange([...selected, t])}
-                  title={t}
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-      
-      {/* Selected filters and reset */}
-      <div className="flex flex-wrap gap-2 items-center mb-1">
-        {selected.length > 0 && (
-          <button className="px-3 py-1 rounded-full bg-dark-bg/60 text-dark-accent text-xs font-semibold shadow hover:bg-dark-accent/10 transition-all" onClick={handleReset} type="button">
-            Сбросить всё
-          </button>
-        )}
-        {selected.map(t => (
-          <span key={t} className="flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-500 to-cyan-400 text-white border-none shadow-sm animate-fade-in">
-            {getInterestPath(t)}
-            <button className="ml-1 text-white hover:text-red-300 transition-colors" onClick={() => handleRemove(t)} title="Удалить" style={{fontSize: '1.1em', lineHeight: 1}}>&times;</button>
-          </span>
-        ))}
-      </div>
-      
-      {/* Category */}
-      <Dropdown
-        value={category}
-        options={INTEREST_CATEGORIES.map(cat => cat.category).sort((a, b) => a.localeCompare(b, 'ru'))}
-        placeholder="Категория..."
-        onChange={(v: string) => {
-          setCategory(v);
-          setSubcategory("");
-          setTag("");
-          setOpenSub(true);
-        }}
-      />
-      
-      {/* Subcategory */}
-      <Dropdown
-        value={subcategory}
-        options={catObj ? catObj.subcategories.map(sub => sub.name).sort((a, b) => a.localeCompare(b, 'ru')) : []}
-        placeholder="Подкатегория..."
-        onChange={(v: string) => {
-          setSubcategory(v);
-          setTag("");
-          setOpenTag(true);
-        }}
-        disabled={!category}
-        open={openSub}
-        onOpenChange={setOpenSub}
-      />
-      
-      {/* Tag */}
-      <Dropdown
-        value={tag}
-        options={subObj ? subObj.tags.slice().sort((a, b) => a.localeCompare(b, 'ru')) : []}
-        placeholder="Тег..."
-        onChange={setTag}
-        disabled={!subcategory}
-        open={openTag}
-        onOpenChange={setOpenTag}
-      />
-      
-      {/* Add button - now visible when a tag is selected */}
-      {tag && !selected.includes(tag) && (
-        <button 
-          className="w-full py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-bold shadow-lg hover:opacity-90 active:scale-95 transition-all"
-          onClick={handleAddTag}
+      {/* Search input with dropdown */}
+      <div className="relative">
+        <div 
+          className="flex items-center px-4 py-3 rounded-2xl bg-dark-bg/70 text-dark-text shadow-inner focus-within:ring-2 focus-within:ring-blue-400"
+          onClick={(e) => {
+            e.stopPropagation();
+            setIsOpen(true);
+          }}
         >
-          Добавить "{tag}"
-        </button>
+          <input
+            className="flex-1 bg-transparent outline-none text-base placeholder-dark-muted"
+            placeholder={placeholder}
+            value={query}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setIsOpen(true);
+            }}
+            onKeyDown={handleKeyPress}
+            onFocus={() => setIsOpen(true)}
+          />
+          {query && (
+            <button 
+              className="ml-2 text-dark-muted hover:text-dark-text transition-colors"
+              onClick={(e) => {
+                e.stopPropagation();
+                setQuery("");
+              }}
+              aria-label="Очистить"
+            >
+              ✖
+            </button>
+          )}
+        </div>
+
+        {/* Dropdown suggestions */}
+        {isOpen && (
+          <div 
+            className="absolute z-50 left-0 right-0 mt-2 bg-dark-card rounded-2xl shadow-xl border border-dark-bg/40 max-h-60 overflow-y-auto animate-fade-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Popular tags when no query */}
+            {!query && (
+              <div className="p-3">
+                <div className="text-xs font-semibold text-dark-muted uppercase tracking-wider mb-2">
+                  Популярные теги
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {POPULAR_TAGS.map(tag => (
+                    <ConsistentActionButton
+                      key={tag}
+                      variant={selected.includes(tag) ? "primary" : "secondary"}
+                      size="small"
+                      onClick={() => toggleTag(tag)}
+                    >
+                      {tag}
+                    </ConsistentActionButton>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Filtered tags */}
+            {query && (
+              <>
+                {/* Option to add custom tag */}
+                {!filteredTags.includes(query.trim()) && query.trim() && (
+                  <ConsistentActionButton
+                    variant="primary"
+                    size="small"
+                    className="w-full text-left"
+                    onClick={handleAddCustomTag}
+                  >
+                    Добавить "{query.trim()}"
+                  </ConsistentActionButton>
+                )}
+
+                {/* Matching tags */}
+                {filteredTags.length > 0 ? (
+                  filteredTags.map(tag => (
+                    <ConsistentActionButton
+                      key={tag}
+                      variant={selected.includes(tag) ? "primary" : "secondary"}
+                      size="small"
+                      className="w-full"
+                      onClick={() => toggleTag(tag)}
+                    >
+                      {tag}
+                    </ConsistentActionButton>
+                  ))
+                ) : (
+                  <div className="px-4 py-3 text-sm text-dark-muted">
+                    Ничего не найдено
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Clear all button */}
+      {selected.length > 0 && (
+        <div className="mt-3">
+          <ConsistentActionButton
+            variant="ghost"
+            size="small"
+            onClick={() => onChange([])}
+          >
+            Очистить все
+          </ConsistentActionButton>
+        </div>
       )}
     </div>
   );
