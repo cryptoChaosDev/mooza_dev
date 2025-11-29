@@ -8,6 +8,7 @@ This directory contains various documentation files for the Mooza Music Social N
 - `RESPONSIVE_DESIGN_CHANGES.md` - Changes made for responsive design
 - `RESPONSIVE_DESIGN_SUMMARY.md` - Summary of responsive design implementation
 - `WELCOME_PAGE_REDIGN.md` - Redesign documentation for the welcome page
+- `GITHUB_PAGES_DEPLOYMENT.md` - Guide for deploying to GitHub Pages
 - `НСИ.docx` - Technical documentation (Russian)
 - `ОПЗ_Диспетеризация.docx` - Technical documentation (Russian)
 
