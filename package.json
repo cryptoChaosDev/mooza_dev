@@ -1,54 +1,45 @@
 {
-  "name": "mooza_dev",
-  "version": "0.1.0",
+  "name": "mooza-social-network",
+  "version": "1.0.0",
+  "description": "Mooza Music Social Network - A platform for musicians to connect and collaborate",
   "private": true,
-  "homepage": "https://cryptoChaosDev.github.io/mooza_dev",
-  "dependencies": {
-    "@testing-library/dom": "^10.4.0",
-    "@testing-library/jest-dom": "^6.6.3",
-    "@testing-library/react": "^16.3.0",
-    "@testing-library/user-event": "^13.5.0",
-    "@types/jest": "^27.5.2",
-    "@types/node": "^16.18.126",
-    "@types/react": "^19.1.8",
-    "@types/react-dom": "^19.1.6",
-    "@types/react-router-dom": "^5.3.3",
-    "express-rate-limit": "^8.2.1",
-    "gh-pages": "^6.3.0",
-    "react": "^19.1.0",
-    "react-dom": "^19.1.0",
-    "react-router-dom": "^7.6.3",
-    "react-scripts": "5.0.1",
-    "sqlite3": "^5.1.7",
-    "typescript": "^4.9.5",
-    "web-vitals": "^2.1.4",
-    "xss": "^1.0.15"
-  },
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
-    "start": "react-scripts start",
-    "dev": "node start-dev.js",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+    "dev": "concurrently \"npm run dev --workspace=backend\" \"npm start --workspace=frontend\"",
+    "build": "npm run build --workspace=frontend",
+    "test": "npm test --workspaces",
+    "deploy": "node deployment/deploy-to-vps.js",
+    "lint": "npm run lint --workspaces",
+    "clean": "rimraf node_modules && npm run clean --workspaces"
   },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
+  "devDependencies": {
+    "concurrently": "^8.0.0",
+    "rimraf": "^5.0.0"
   },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
-  }
+  "engines": {
+    "node": ">=16.0.0",
+    "npm": ">=8.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cryptoChaosDev/mooza_dev.git"
+  },
+  "keywords": [
+    "music",
+    "social-network",
+    "react",
+    "nodejs",
+    "express",
+    "prisma",
+    "typescript"
+  ],
+  "author": "Crypto Chaos Dev",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/cryptoChaosDev/mooza_dev/issues"
+  },
+  "homepage": "https://github.com/cryptoChaosDev/mooza_dev#readme"
 }
