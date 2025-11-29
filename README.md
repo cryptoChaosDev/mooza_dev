@@ -1,58 +1,111 @@
-# 🎵 Mooza — музыкальная социальная сеть нового поколения
+# Mooza Music Social Network
 
-Добро пожаловать в **Mooza** — современную платформу для музыкантов, продюсеров, исполнителей и всех, кто живёт музыкой!
+Mooza is a next-generation music-focused social network designed to connect musicians, producers, vocalists, beatmakers, and other music enthusiasts. It aims to foster creative collaboration by enabling users to share their work, find like-minded individuals, and build teams based on shared interests and skills.
 
-![Mooza Banner](https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1200&q=80)
+## Project Structure
 
-## 🚀 О Mooza
+```
+mooza_dev/
+├── frontend/              # React frontend application
+├── backend/               # Node.js/Express backend API
+├── deployment/            # Deployment scripts and configurations
+├── docs/                  # Documentation and guides
+├── .gitignore
+└── README.md
+```
 
-**Mooza** — это музыкальная соцсеть, где каждый может:
-- Найти единомышленников и собрать команду мечты
-- Делиться творчеством, получать обратную связь и вдохновение
-- Быстро фильтровать людей по интересам, жанрам, ролям и навыкам
-- Создавать посты, обсуждать идеи, находить коллаборации
-- Оформить свой профиль в современном стиле
+## Features
 
-## 🌟 Ключевые возможности
+- User profile customization with music-specific fields (genres, roles, skills, bio, city)
+- Integration with external social platforms (VK, YouTube, Telegram)
+- Advanced filtering and search by interests, genres, roles, and skill sets
+- Interest tagging system with hierarchical categories and tag clouds
+- Social features: friend requests, favorites, posts, feed, and comments
+- Post creation, editing, deletion, and discussion capabilities
+- Personalized recommendations based on common interests
+- Responsive UI with dark theme, smooth animations, and mobile/tablet/desktop support
 
-- **Современный дизайн**: тёмная тема, плавные анимации, адаптивность, быстрый интерфейс
-- **Гибкая система интересов**: дерево категорий, подкатегорий и тегов, облако популярных интересов, ручной и быстрый выбор
-- **Расширенный поиск**: фильтрация по интересам, жанрам, ролям, совпадениям, поиск по тегам и категориям
-- **Карточки пользователей**: красивые профили, быстрые действия (добавить в друзья, избранное), подсветка совпадающих интересов
-- **Посты и лента**: делитесь новостями, треками, ищите участников, обсуждайте идеи, редактируйте и удаляйте свои посты
-- **Профиль музыканта**: только ваши реальные интересы, соцсети (VK, YouTube, Telegram), город, био, стиль
-- **Привязка соцсетей**: добавьте ссылки на свои VK, YouTube, Telegram — чтобы вас легко нашли
-- **Рекомендации**: Mooza подскажет, с кем у вас больше всего общих интересов
-- **Адаптивность**: удобно на смартфоне, планшете и десктопе
+## Technology Stack
 
-## 🎸 Для кого Mooza?
-- Музыканты всех жанров и уровней
-- Вокалисты, инструменталисты, битмейкеры, саунд-продюсеры
-- Те, кто ищет группу, коллаборацию или просто музыкальное общение
-- Организаторы, менеджеры, промоутеры
+### Frontend
+- **Framework**: React 19.1.0
+- **Language**: TypeScript 4.9.5
+- **Routing**: react-router-dom 7.6.3
+- **Styling**: Tailwind CSS, PostCSS
+- **State Management**: React Context API
 
-## 🛠️ Как начать?
-1. Зарегистрируйтесь и настройте профиль: укажите интересы, город, соцсети
-2. Используйте фильтры и поиск для поиска музыкантов и команд
-3. Добавляйте в друзья, отмечайте избранных, пишите посты
-4. Делитесь творчеством, ищите единомышленников, вдохновляйтесь!
+### Backend
+- **Runtime**: Node.js
+- **Framework**: Express
+- **ORM**: Prisma 5+
+- **Database**: SQLite
+- **Language**: TypeScript
 
-## 💡 Почему Mooza?
-- Уникальная система интересов и фильтрации
-- Максимум функций для музыкантов, минимум лишнего
-- Современный стиль и удобство
-- Открыто для идей и развития — присоединяйтесь к комьюнити!
+### DevOps
+- **Containerization**: Docker, docker-compose
+- **Deployment**: VPS with Nginx reverse proxy
 
-## 📱 Адаптивный дизайн
-Mooza теперь имеет полностью адаптивный дизайн, который отлично работает как на мобильных устройствах, так и на десктопах. Все страницы были переработаны для обеспечения оптимального пользовательского опыта на любом устройстве.
+## Getting Started
 
-## 🎨 Последние улучшения
-- Полностью переработанная страница приветствия с упрощенным процессом регистрации и входа
-- Улучшенный адаптивный дизайн всех компонентов
-- Оптимизированные сенсорные элементы управления
-- Современные анимации и переходы
-- Улучшенная типографика и визуальная иерархия
+### Prerequisites
+- Node.js (v16+)
+- npm or yarn
+- Docker (for backend services)
 
----
+### Development Setup
 
-> **Mooza** — здесь рождается музыка и новые творческие связи. Присоединяйся!
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/cryptoChaosDev/mooza_dev.git
+   cd mooza_dev
+   ```
+
+2. **Install frontend dependencies:**
+   ```bash
+   cd frontend
+   npm install
+   ```
+
+3. **Install backend dependencies:**
+   ```bash
+   cd ../backend
+   npm install
+   ```
+
+4. **Start development servers:**
+   ```bash
+   # In one terminal, start backend
+   cd backend
+   npm run dev
+   
+   # In another terminal, start frontend
+   cd frontend
+   npm start
+   ```
+
+### Deployment
+
+For production deployment, refer to the [Deployment Guide](deployment/DEPLOYMENT_README.md).
+
+## Documentation
+
+- [Development Guide](docs/README-DEV.md)
+- [Responsive Design Changes](docs/RESPONSIVE_DESIGN_CHANGES.md)
+- [Responsive Design Summary](docs/RESPONSIVE_DESIGN_SUMMARY.md)
+- [Welcome Page Redesign](docs/WELCOME_PAGE_REDIGN.md)
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
+4. Push to the branch (`git push origin feature/AmazingFeature`)
+5. Open a pull request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Support
+
+For issues and feature requests, please open an issue on GitHub.
