@@ -124,3 +124,92 @@ export async function getFriends(token: string): Promise<any> {
   if (!res.ok) throw new Error('Не удалось загрузить список друзей');
   return res.json();
 }
+
+// Posts API functions
+export async function createPost(token: string, content: string, tags: string[], attachmentUrl?: string): Promise<any> {
+  const res = await fetch(`${API_URL}/profile/me/posts`, {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json', 
+      Authorization: `Bearer ${token}` 
+    },
+    body: JSON.stringify({ content, tags, attachmentUrl }),
+  });
+  if (!res.ok) {
+    let msg = 'Не удалось создать пост';
+    try {
+      const j = await res.json();
+      msg = j?.error || j?.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export async function getMyPosts(token: string): Promise<any> {
+  const res = await fetch(`${API_URL}/profile/me/posts`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Не удалось загрузить посты');
+  return res.json();
+}
+
+export async function getAllPosts(token: string): Promise<any> {
+  const res = await fetch(`${API_URL}/profile/posts`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Не удалось загрузить посты');
+  return res.json();
+}
+
+export async function updatePost(token: string, postId: number, content: string, tags: string[], attachmentUrl?: string): Promise<any> {
+  const res = await fetch(`${API_URL}/profile/me/posts/${postId}`, {
+    method: 'PUT',
+    headers: { 
+      'Content-Type': 'application/json', 
+      Authorization: `Bearer ${token}` 
+    },
+    body: JSON.stringify({ content, tags, attachmentUrl }),
+  });
+  if (!res.ok) {
+    let msg = 'Не удалось обновить пост';
+    try {
+      const j = await res.json();
+      msg = j?.error || j?.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export async function deletePost(token: string, postId: number): Promise<any> {
+  const res = await fetch(`${API_URL}/profile/me/posts/${postId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    let msg = 'Не удалось удалить пост';
+    try {
+      const j = await res.json();
+      msg = j?.error || j?.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export async function togglePostLike(token: string, postId: number): Promise<any> {
+  const res = await fetch(`${API_URL}/profile/posts/${postId}/like`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    let msg = 'Не удалось изменить статус лайка';
+    try {
+      const j = await res.json();
+      msg = j?.error || j?.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}

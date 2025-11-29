@@ -535,3 +535,288 @@ router.get("/me/friends", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch friends" });
   }
 });
+
+// Create a new post
+router.post("/me/posts", async (req, res) => {
+  const userId = authUserId(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    // First get the user's profile
+    const profile = await prisma.profile.findUnique({
+      where: { userId }
+    });
+
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
+
+    // Validate request body
+    const { content, tags, attachmentUrl } = req.body;
+    
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ error: "Content is required" });
+    }
+
+    // Sanitize content to prevent XSS
+    const sanitizedContent = sanitizeInput(content);
+    
+    // Process tags
+    const tagsCsv = Array.isArray(tags) ? tags.join(',') : "";
+
+    // Create the post
+    // @ts-ignore: Prisma client post model not recognized by TypeScript
+    const post = await prisma.post.create({
+      data: {
+        profileId: profile.id,
+        content: sanitizedContent,
+        tagsCsv,
+        attachmentUrl: attachmentUrl || null
+      }
+    });
+
+    res.status(201).json({ post });
+  } catch (error) {
+    console.error('Error creating post:', error);
+    res.status(500).json({ error: "Failed to create post" });
+  }
+});
+
+// Get all posts for the current user
+router.get("/me/posts", async (req, res) => {
+  const userId = authUserId(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    // First get the user's profile
+    const profile = await prisma.profile.findUnique({
+      where: { userId }
+    });
+
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
+
+    // Get all posts for this profile
+    // @ts-ignore: Prisma client post model not recognized by TypeScript
+    const posts = await prisma.post.findMany({
+      where: { profileId: profile.id },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Transform posts to match frontend expectations
+    const transformedPosts = posts.map((post: any) => ({
+      id: post.id,
+      userId: String(userId),
+      author: `${profile.firstName} ${profile.lastName}`,
+      avatarUrl: profile.avatarUrl || null,
+      content: post.content,
+      tags: post.tagsCsv ? post.tagsCsv.split(',').filter(Boolean) : [],
+      attachmentUrl: post.attachmentUrl || null,
+      liked: post.liked,
+      favorite: false,
+      createdAt: post.createdAt.toISOString(),
+      updatedAt: post.updatedAt.toISOString()
+    }));
+
+    res.json({ posts: transformedPosts });
+  } catch (error) {
+    console.error('Error fetching posts:', error);
+    res.status(500).json({ error: "Failed to fetch posts" });
+  }
+});
+
+// Get all posts (for feed)
+router.get("/posts", async (req, res) => {
+  const userId = authUserId(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    // Get all posts ordered by creation date
+    // @ts-ignore: Prisma client post model not recognized by TypeScript
+    const posts = await prisma.post.findMany({
+      include: {
+        profile: {
+          include: {
+            user: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    // Transform posts to match frontend expectations
+    const transformedPosts = posts.map((post: any) => {
+      const profile = post.profile;
+      const user = profile.user;
+      
+      return {
+        id: post.id,
+        userId: String(user.id),
+        author: user.name,
+        avatarUrl: profile.avatarUrl || null,
+        content: post.content,
+        tags: post.tagsCsv ? post.tagsCsv.split(',').filter(Boolean) : [],
+        attachmentUrl: post.attachmentUrl || null,
+        liked: post.liked,
+        favorite: false,
+        createdAt: post.createdAt.toISOString(),
+        updatedAt: post.updatedAt.toISOString()
+      };
+    });
+
+    res.json({ posts: transformedPosts });
+  } catch (error) {
+    console.error('Error fetching posts:', error);
+    res.status(500).json({ error: "Failed to fetch posts" });
+  }
+});
+
+// Update a post
+router.put("/me/posts/:postId", async (req, res) => {
+  const userId = authUserId(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const postId = parseInt(req.params.postId);
+    if (isNaN(postId)) {
+      return res.status(400).json({ error: "Invalid post ID" });
+    }
+
+    // First get the user's profile
+    const profile = await prisma.profile.findUnique({
+      where: { userId }
+    });
+
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
+
+    // Check if the post belongs to this user
+    // @ts-ignore: Prisma client post model not recognized by TypeScript
+    const existingPost = await prisma.post.findUnique({
+      where: { id: postId }
+    });
+
+    if (!existingPost) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+
+    if (existingPost.profileId !== profile.id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    // Validate request body
+    const { content, tags, attachmentUrl } = req.body;
+    
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ error: "Content is required" });
+    }
+
+    // Sanitize content to prevent XSS
+    const sanitizedContent = sanitizeInput(content);
+    
+    // Process tags
+    const tagsCsv = Array.isArray(tags) ? tags.join(',') : "";
+
+    // Update the post
+    // @ts-ignore: Prisma client post model not recognized by TypeScript
+    const updatedPost = await prisma.post.update({
+      where: { id: postId },
+      data: {
+        content: sanitizedContent,
+        tagsCsv,
+        attachmentUrl: attachmentUrl || null
+      }
+    });
+
+    res.json({ post: updatedPost });
+  } catch (error) {
+    console.error('Error updating post:', error);
+    res.status(500).json({ error: "Failed to update post" });
+  }
+});
+
+// Delete a post
+router.delete("/me/posts/:postId", async (req, res) => {
+  const userId = authUserId(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const postId = parseInt(req.params.postId);
+    if (isNaN(postId)) {
+      return res.status(400).json({ error: "Invalid post ID" });
+    }
+
+    // First get the user's profile
+    const profile = await prisma.profile.findUnique({
+      where: { userId }
+    });
+
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
+
+    // Check if the post belongs to this user
+    // @ts-ignore: Prisma client post model not recognized by TypeScript
+    const existingPost = await prisma.post.findUnique({
+      where: { id: postId }
+    });
+
+    if (!existingPost) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+
+    if (existingPost.profileId !== profile.id) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    // Delete the post
+    // @ts-ignore: Prisma client post model not recognized by TypeScript
+    await prisma.post.delete({
+      where: { id: postId }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting post:', error);
+    res.status(500).json({ error: "Failed to delete post" });
+  }
+});
+
+// Toggle post like
+router.post("/posts/:postId/like", async (req, res) => {
+  const userId = authUserId(req);
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  try {
+    const postId = parseInt(req.params.postId);
+    if (isNaN(postId)) {
+      return res.status(400).json({ error: "Invalid post ID" });
+    }
+
+    // Get the post
+    // @ts-ignore: Prisma client post model not recognized by TypeScript
+    const post = await prisma.post.findUnique({
+      where: { id: postId }
+    });
+
+    if (!post) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+
+    // Toggle the liked status
+    // @ts-ignore: Prisma client post model not recognized by TypeScript
+    const updatedPost = await prisma.post.update({
+      where: { id: postId },
+      data: {
+        liked: !post.liked
+      }
+    });
+
+    res.json({ liked: updatedPost.liked });
+  } catch (error) {
+    console.error('Error toggling post like:', error);
+    res.status(500).json({ error: "Failed to toggle post like" });
+  }
+});
