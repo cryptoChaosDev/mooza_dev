@@ -28,6 +28,7 @@ model Profile {
   workPlace  String?   @default("")
   skillsCsv  String    @default("")
   interestsCsv String  @default("")
+  friendsCsv String    @default("")  // Add this line for storing friends
   portfolioJson String?
   portfolioFile Bytes?
   portfolioFileName String?
@@ -38,4 +39,3 @@ model Profile {
   updatedAt  DateTime  @updatedAt
   user       User      @relation(fields: [userId], references: [id])
 }
-

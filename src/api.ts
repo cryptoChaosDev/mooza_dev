@@ -1,4 +1,4 @@
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000';
+export const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000';
 
 export type LoginResponse = { token: string; user: { id: number; email?: string; phone?: string; name: string } };
 
@@ -81,5 +81,46 @@ export async function getAllUsers(token: string): Promise<any> {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error('Не удалось загрузить пользователей');
+  return res.json();
+}
+
+// Friendships API functions using the new endpoints
+export async function addFriend(token: string, userId: string): Promise<any> {
+  const res = await fetch(`${API_URL}/profile/me/friends/${userId}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    let msg = 'Не удалось добавить в друзья';
+    try {
+      const j = await res.json();
+      msg = j?.error || j?.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export async function removeFriend(token: string, userId: string): Promise<any> {
+  const res = await fetch(`${API_URL}/profile/me/friends/${userId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    let msg = 'Не удалось удалить из друзей';
+    try {
+      const j = await res.json();
+      msg = j?.error || j?.message || msg;
+    } catch {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+export async function getFriends(token: string): Promise<any> {
+  const res = await fetch(`${API_URL}/profile/me/friends`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Не удалось загрузить список друзей');
   return res.json();
 }

@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface AppBarProps {
   onSearch?: (query: string) => void;
   showSearch?: boolean;
 }
 
-export function AppBar({ onSearch, showSearch = true }: AppBarProps) {
+export function AppBar({ onSearch, showSearch = false }: AppBarProps) {
   const location = useLocation();
-  const [searchQuery, setSearchQuery] = useState('');
+  const navigate = useNavigate();
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
 
   // Load theme from localStorage on mount
@@ -30,19 +30,15 @@ export function AppBar({ onSearch, showSearch = true }: AppBarProps) {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (onSearch) {
-      onSearch(searchQuery);
-    }
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('profile');
+    window.location.reload();
   };
 
-  // Don't show AppBar on welcome page
-  if (location.pathname === '/') return null;
-
   return (
-    <header className="sticky top-0 z-40 bg-dark-card/80 backdrop-blur-md border-b border-dark-bg/40">
-      <div className="flex items-center justify-between p-4">
+    <header className="fixed top-0 left-0 right-0 z-50 bg-dark-card/80 backdrop-blur-md border-b border-dark-bg/40">
+      <div className="flex items-center justify-between p-4 max-w-md mx-auto">
         {/* Left side - Logo */}
         <div className="flex items-center">
           <span className="text-2xl font-bold" style={{ 
@@ -55,30 +51,26 @@ export function AppBar({ onSearch, showSearch = true }: AppBarProps) {
           </span>
         </div>
 
-        {/* Center - Search (if enabled) */}
-        {showSearch && (
-          <form onSubmit={handleSearch} className="flex-1 max-w-md mx-4">
-            <div className="relative">
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Поиск..."
-                className="w-full py-2 pl-10 pr-4 rounded-full bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"
-                aria-label="Поиск по сайту"
-              />
-              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-dark-muted">
-                <svg width="16" height="16" fill="none" viewBox="0 0 24 24">
-                  <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.5"/>
-                  <path d="M20 20l-3.5-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-              </div>
-            </div>
-          </form>
-        )}
-
-        {/* Right side - Theme toggle */}
-        <div className="flex items-center">
+        {/* Right side - Notification and Logout buttons */}
+        <div className="flex items-center gap-2">
+          <button 
+            className="p-2 rounded-full bg-dark-bg/60 text-dark-text hover:bg-dark-accent/10 active:scale-95 transition-all"
+            aria-label="Уведомления"
+          >
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
+              <path d="M18 8A6 6 0 1 0 6 8c0 7-3 9-3 9h18s-3-2-3-9Z" stroke="currentColor" strokeWidth="1.5"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0" stroke="currentColor" strokeWidth="1.5"/>
+            </svg>
+          </button>
+          <button 
+            onClick={handleLogout}
+            className="p-2 rounded-full bg-dark-bg/60 text-dark-text hover:bg-dark-accent/10 active:scale-95 transition-all"
+            aria-label="Выйти"
+          >
+            <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
           <button 
             onClick={toggleTheme}
             className="p-2 rounded-full bg-dark-bg/60 text-dark-text hover:bg-dark-accent/10 active:scale-95 transition-all"
@@ -86,7 +78,7 @@ export function AppBar({ onSearch, showSearch = true }: AppBarProps) {
           >
             {theme === 'dark' ? (
               <svg width="20" height="20" fill="none" viewBox="0 0 24 24">
-                <path d="M12 16c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zm0-12c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zm0 18c-1.105 0-2 .895-2 2s.895 2 2 2 2-.895 2-2-.895-2-2-2zM4 12c0-1.105-.895-2-2-2s-2 .895-2 2 .895 2 2 2 2-.895 2-2zm18 0c0 1.105.895 2 2 2s2-.895 2-2-.895-2-2-2-2 .895-2 2zM6.343 6.343c-.78-.78.78-2.047 0-2.828-.78-.78-2.047-.78-2.828 0-.78.78-.78 2.047 0 2.828.78.78 2.047.78 2.828 0zm11.314 11.314c-.78.78-.78 2.047 0 2.828.78.78 2.047.78 2.828 0 .78-.78.78-2.047 0-2.828-.78-.78-2.047-.78-2.828 0zM6.343 17.657c-.78-.78-2.047-.78-2.828 0-.78.78-.78 2.047 0 2.828.78.78 2.047.78 2.828 0 .78-.78.78-2.047 0-2.828zm11.314-11.314c.78-.78.78-2.047 0-2.828-.78-.78-2.047-.78-2.828 0-.78.78-.78 2.047 0 2.828.78.78 2.047.78 2.828 0z" fill="currentColor"/>
+                <path d="M12 16c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zm0-12c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zm0 18c-1.105 0-2 .895-2 2s.895 2 2 2 2-.895 2-2-.895-2-2-2zM4 12c0-1.105-.895-2-2-2s-2 .895-2 2 .895 2 2 2 2-.895 2-2zm18 0c0 1.105.895 2 2 2s2-.895 2-2-.895-2-2-2-2 .895-2 2zM6.343 6.343c-.78-.78.78-2.047 0-2.828-.78-.78-2.047-.78-2.828 0-.78.78-.78 2.047 0 2.828.78.78 2.047.78 2.828 0zm11.314 11.314c-.78.78-.78 2.047 0 2.828.78.78 2.047.78 2.828 0 .78-.78.78-2.047 0-2.828-.78-.78-2.047-.78-2.828 0zM6.343 17.657c-.78-.78-2.047-.78-2.828 0-.78.78-2.047.78-2.828 0-.78-.78-.78-2.047 0-2.828.78-.78 2.047-.78 2.828 0 .78.78.78 2.047 0 2.828zm11.314-11.314c.78-.78.78-2.047 0-2.828-.78-.78-2.047-.78-2.828 0-.78.78-.78 2.047 0 2.828.78.78 2.047.78 2.828 0z" fill="currentColor"/>
               </svg>
             ) : (
               <svg width="20" height="20" fill="none" viewBox="0 0 24 24">

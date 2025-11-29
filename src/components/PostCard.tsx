@@ -1,6 +1,8 @@
 import React from "react";
 import { formatPostDate, getInterestPath } from "../utils";
 import { Post, UserProfile } from "../types";
+import { UnifiedCard } from "./UnifiedCard";
+import { ConsistentActionButton } from "./ConsistentActionButton";
 
 // --- PostCard ---
 export function PostCard({ post, users, isOwn, onEdit, onDelete, onLike, onUserClick }: {
@@ -14,7 +16,7 @@ export function PostCard({ post, users, isOwn, onEdit, onDelete, onLike, onUserC
 }) {
   const user = users.find(u => u.userId === post.userId);
   return (
-    <div className="bg-dark-card rounded-3xl shadow-card p-4 sm:p-6 flex flex-col gap-4 sm:gap-6 relative border border-dark-bg/40 font-sans animate-fade-in animate-scale-in mb-4">
+    <UnifiedCard>
       <div className="flex items-center gap-3 sm:gap-4 mb-2">
         <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-dark-bg/80 flex items-center justify-center text-xl sm:text-2xl border border-dark-bg/40 overflow-hidden">
           {user?.avatarUrl ? (
@@ -26,18 +28,18 @@ export function PostCard({ post, users, isOwn, onEdit, onDelete, onLike, onUserC
         <div className="font-semibold text-dark-text text-sm sm:text-base cursor-pointer hover:underline truncate" onClick={() => user && onUserClick && onUserClick(user)}>{user?.name || post.author}</div>
         <div className="flex gap-1 sm:gap-2 ml-auto">
           {isOwn && onEdit && (
-            <button className="flex items-center gap-1 text-xs bg-accent-gradient text-white shadow-btn px-2 py-1 sm:px-3 sm:py-1 font-medium hover:opacity-90 active:scale-95 transition-all" onClick={onEdit}>
+            <ConsistentActionButton variant="primary" size="small" onClick={onEdit}>
               <svg width="14" height="14" fill="none" viewBox="0 0 24 24" className="sm:w-16 sm:h-16"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="#fff" strokeWidth="1.5"/></svg> 
               <span className="hidden sm:inline">Редактировать</span>
               <span className="sm:hidden">✏️</span>
-            </button>
+            </ConsistentActionButton>
           )}
           {isOwn && onDelete && (
-            <button className="flex items-center gap-1 text-xs bg-red-500 text-white shadow-btn px-2 py-1 sm:px-3 sm:py-1 font-medium hover:bg-red-600 active:scale-95 transition-all" onClick={onDelete}>
+            <ConsistentActionButton variant="danger" size="small" onClick={onDelete}>
               <svg width="14" height="14" fill="none" viewBox="0 0 24 24" className="sm:w-16 sm:h-16"><path d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12ZM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4Z" stroke="#fff" strokeWidth="1.5"/></svg>
               <span className="hidden sm:inline">Удалить</span>
               <span className="sm:hidden">🗑️</span>
-            </button>
+            </ConsistentActionButton>
           )}
         </div>
       </div>
@@ -56,16 +58,17 @@ export function PostCard({ post, users, isOwn, onEdit, onDelete, onLike, onUserC
       </div>
       <div className="flex gap-2 sm:gap-4 mt-2 justify-end">
         {onLike && (
-          <button
-            className={`flex items-center gap-1 text-sm sm:text-base px-3 py-1.5 sm:px-4 sm:py-2 rounded-xl border border-dark-bg/40 transition-all font-medium shadow-sm hover:shadow-md active:scale-95 ${post.liked ? "bg-dark-accent/10 text-dark-accent" : "bg-dark-bg/40 text-dark-muted hover:bg-dark-accent/10 hover:text-dark-accent"}`}
+          <ConsistentActionButton 
+            variant={post.liked ? "primary" : "secondary"} 
+            size="small" 
             onClick={onLike}
           >
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" className="sm:w-20 sm:h-20"><path d="M12 21s-6.5-5.5-9-9.5C1.5 8.5 3.5 5 7 5c2.5 0 3.5 2 5 2s2.5-2 5-2c3.5 0 5.5 3.5 4 6.5C18.5 15.5 12 21 12 21Z" stroke="#4F8CFF" strokeWidth="1.5"/></svg>
             <span className="hidden sm:inline">{post.liked ? "Лайк" : "Лайкнуть"}</span>
             <span className="sm:hidden">❤️</span>
-          </button>
+          </ConsistentActionButton>
         )}
       </div>
-    </div>
+    </UnifiedCard>
   );
 }

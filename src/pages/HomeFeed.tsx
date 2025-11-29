@@ -5,6 +5,8 @@ import { formatPostDate, getInterestPath } from "../utils";
 import { Post, UserProfile } from "../types";
 import { ConfirmModal } from "../components/ConfirmModal";
 import { useToast } from "../contexts/ToastContext";
+import { ConsistentActionButton } from "../components/ConsistentActionButton";
+import { UnifiedCard } from "../components/UnifiedCard";
 
 // --- HomeFeed ---
 export function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost, onLikePost, onCreatePost, onUpdatePost, users }: {
@@ -94,9 +96,9 @@ export function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost
             </div>
             
             {/* New Post button */}
-            <button 
-              className="flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold text-sm shadow-lg hover:opacity-90 active:scale-95 transition-all hover:scale-105"
-              title={showCreate ? 'Скрыть создание поста' : 'Создать пост'} 
+            <ConsistentActionButton
+              variant="primary"
+              size="medium"
               onClick={() => setShowCreate(v => !v)}
             >
               <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
@@ -104,12 +106,12 @@ export function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost
               </svg>
               <span className="hidden sm:inline">Новый пост</span>
               <span className="sm:hidden">+</span>
-            </button>
+            </ConsistentActionButton>
           </div>
         </div>
 
         {showCreate && (
-          <div className="bg-dark-card rounded-3xl shadow-card p-6 flex flex-col gap-6 animate-fade-in animate-scale-in border border-dark-bg/40">
+          <UnifiedCard>
             <div className="text-2xl font-bold text-dark-text">Создать пост</div>
             <textarea
               className="w-full border-none rounded-2xl px-5 py-4 text-base focus:outline-none focus:ring-2 focus:ring-blue-400 resize-none bg-dark-bg/60 text-dark-text shadow-inner"
@@ -138,41 +140,42 @@ export function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost
               {newPost.attachment && (
                 <img src={URL.createObjectURL(newPost.attachment)} alt="attachment" className="max-h-20 rounded-2xl object-contain" />
               )}
-              <button
-                className="ml-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold shadow-btn hover:opacity-90 active:scale-95 transition-all disabled:opacity-50 flex items-center gap-2 hover:scale-105"
+              <ConsistentActionButton
+                variant="primary"
+                size="medium"
                 onClick={handleCreatePost}
                 disabled={!newPost.content.trim() || newPost.tags.length === 0}
-                title="Опубликовать пост"
-                type="button"
+                className="ml-auto"
               >
                 <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M4 12h16M12 4l8 8-8 8" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>
                 <span className="text-base hidden sm:inline">Опубликовать</span>
                 <span className="sm:hidden">↗️</span>
-              </button>
+              </ConsistentActionButton>
             </div>
-          </div>
+          </UnifiedCard>
         )}
         
         <div className="flex flex-col gap-5">
           {sortedPosts.length === 0 ? (
-            <div className="bg-dark-card rounded-3xl shadow-card p-8 flex flex-col items-center justify-center gap-5 border border-dark-bg/40">
+            <UnifiedCard className="flex flex-col items-center justify-center gap-5 border border-dark-bg/40">
               <div className="text-5xl opacity-50">🎵</div>
               <div className="text-center text-dark-muted">
                 <div className="font-semibold text-xl">Нет постов по вашим интересам</div>
                 <div className="text-base mt-2">Подпишитесь на интересных людей или создайте свой первый пост!</div>
               </div>
-              <button 
-                className="mt-3 px-5 py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold shadow-btn hover:opacity-90 active:scale-95 transition-all text-base hover:scale-105"
+              <ConsistentActionButton
+                variant="primary"
+                size="medium"
                 onClick={() => setShowCreate(true)}
               >
                 Создать первый пост
-              </button>
-            </div>
+              </ConsistentActionButton>
+            </UnifiedCard>
           ) : (
             sortedPosts.map((post) => {
               const user = users.find(u => u.userId === post.userId);
               return (
-                <div key={post.id} className="bg-dark-card rounded-3xl shadow-card p-6 flex flex-col gap-5 animate-fade-in animate-scale-in border border-dark-bg/40 hover:bg-dark-bg/80 transition shadow-lg">
+                <UnifiedCard key={post.id} className="gap-5 border border-dark-bg/40 hover:bg-dark-bg/80 transition shadow-lg">
                   <div className="flex items-start gap-4">
                     <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center text-xl border-2 border-white overflow-hidden flex-shrink-0 shadow-lg">
                       {user?.avatarUrl || post.avatarUrl ? (
@@ -199,20 +202,20 @@ export function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost
                     {/* Кнопки редактирования/удаления только для своих постов */}
                     {post.userId === profile.userId && (
                       <div className="flex gap-2">
-                        <button 
-                          title="Редактировать пост" 
-                          className="p-2 rounded-2xl bg-dark-bg/60 text-blue-500 hover:bg-blue-500 hover:text-white transition-colors hover:scale-105"
+                        <ConsistentActionButton
+                          variant="ghost"
+                          size="small"
                           onClick={() => { setEditPost(post); setEditPostData({ content: post.content, tags: post.tags }); }}
                         >
                           <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M4 20h4.586a1 1 0 0 0 .707-.293l9.414-9.414a2 2 0 0 0 0-2.828l-2.172-2.172a2 2 0 0 0-2.828 0l-9.414 9.414A1 1 0 0 0 4 15.414V20z" stroke="currentColor" strokeWidth="1.5"/></svg>
-                        </button>
-                        <button 
-                          title="Удалить пост" 
-                          className="p-2 rounded-2xl bg-dark-bg/60 text-red-500 hover:bg-red-500 hover:text-white transition-colors hover:scale-105"
+                        </ConsistentActionButton>
+                        <ConsistentActionButton
+                          variant="danger"
+                          size="small"
                           onClick={() => setDeletePostId(post.id)}
                         >
                           <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" stroke="currentColor" strokeWidth="1.5"/></svg>
-                        </button>
+                        </ConsistentActionButton>
                       </div>
                     )}
                   </div>
@@ -230,22 +233,22 @@ export function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost
                   </div>
                   
                   <div className="flex gap-3 pt-2">
-                    <button 
-                      title={post.liked ? "Убрать лайк" : "Лайкнуть"} 
-                      className={`p-2 rounded-2xl transition-colors ${post.liked ? 'bg-red-500 text-white' : 'bg-dark-bg/60 text-red-500 hover:bg-red-500 hover:text-white'} hover:scale-105`}
+                    <ConsistentActionButton
+                      variant={post.liked ? "danger" : "ghost"}
+                      size="small"
                       onClick={() => onLikePost(post.id)}
                     >
                       <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 21s-6.5-5.5-9-9.5C1.5 8.5 3.5 5 7 5c2.5 0 3.5 2 5 2s2.5-2 5-2c3.5 0 5.5 3.5 4 6.5C18.5 15.5 12 21 12 21Z" stroke="currentColor" strokeWidth="1.5" fill={post.liked ? '#ef4444' : 'none'} /></svg>
-                    </button>
-                    <button 
-                      title={post.favorite ? "Убрать из избранного" : "В избранное"} 
-                      className={`p-2 rounded-2xl transition-colors ${post.favorite ? 'bg-yellow-400 text-white' : 'bg-dark-bg/60 text-yellow-400 hover:bg-yellow-400 hover:text-white'} hover:scale-105`}
+                    </ConsistentActionButton>
+                    <ConsistentActionButton
+                      variant={post.favorite ? "secondary" : "ghost"}
+                      size="small"
                       onClick={() => onLikePost(post.id)}
                     >
                       <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z" stroke="currentColor" strokeWidth="1.5" fill={post.favorite ? '#fbbf24' : 'none'} /></svg>
-                    </button>
+                    </ConsistentActionButton>
                   </div>
-                </div>
+                </UnifiedCard>
               );
             })
           )}
@@ -290,19 +293,21 @@ export function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost
             </div>
             
             <div className="flex gap-4 pt-3">
-              <button
-                className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-400 text-white font-semibold shadow active:scale-95 transition-transform hover:scale-105"
+              <ConsistentActionButton
+                variant="primary"
+                size="medium"
                 onClick={() => { onUpdatePost(editPost.id, editPostData.content, editPostData.tags); setEditPost(null); }}
                 disabled={!editPostData.content.trim() || editPostData.tags.length === 0}
               >
                 Сохранить
-              </button>
-              <button
-                className="flex-1 py-3 rounded-2xl bg-dark-bg/60 text-dark-muted font-semibold shadow active:scale-95 transition-transform hover:scale-105"
+              </ConsistentActionButton>
+              <ConsistentActionButton
+                variant="secondary"
+                size="medium"
                 onClick={() => setEditPost(null)}
               >
                 Отмена
-              </button>
+              </ConsistentActionButton>
             </div>
           </div>
         </div>
