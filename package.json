@@ -14,6 +14,7 @@
     "deploy": "npm run deploy --workspace=frontend",
     "deploy:gh": "npm run deploy:gh --workspace=frontend",
     "deploy:vps": "node deployment/deploy-to-vps.js",
+    "deploy:vps-auto": "bash deployment/automated-deploy.sh",
     "lint": "npm run lint --workspaces",
     "clean": "rimraf node_modules && npm run clean --workspaces"
   },
