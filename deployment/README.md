@@ -140,3 +140,8 @@ If containers fail to start:
 2. Verify environment variables are set correctly
 3. Ensure ports are not already in use
 4. Or use the detailed-diag.sh script for comprehensive diagnostics
+
+### NPM Authentication Issues
+If you encounter NPM authentication errors:
+1. The fix-missing-deps.sh script now handles this by clearing the NPM cache
+2. It will continue with public package installation if authentication fails

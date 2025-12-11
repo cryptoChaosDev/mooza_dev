@@ -67,12 +67,16 @@ update_backend_dependencies() {
         # Add xss dependency
         jq '.dependencies += {"xss": "^1.0.15"}' backend/package.json > backend/package.json.tmp && mv backend/package.json.tmp backend/package.json
         
-        # Remove any incorrect @types/xss entry
-        jq 'del(.devDependencies."@types/xss")' backend/package.json > backend/package.json.tmp && mv backend/package.json.tmp backend/package.json
-        
         success "Added xss dependencies using jq"
     else
         log "xss dependency already exists"
+    fi
+    
+    # Remove any incorrect @types/xss entry if it exists
+    if jq -e '.devDependencies."@types/xss"' backend/package.json > /dev/null 2>&1; then
+        log "Removing incorrect @types/xss entry..."
+        jq 'del(.devDependencies."@types/xss")' backend/package.json > backend/package.json.tmp && mv backend/package.json.tmp backend/package.json
+        success "Removed incorrect @types/xss entry"
     fi
 }
 
@@ -88,7 +92,15 @@ reinstall_backend_dependencies() {
         rm -rf node_modules
     fi
     
-    # Note: We don't remove package-lock.json as it might not exist
+    # Remove package-lock.json if it exists
+    if [ -f "package-lock.json" ]; then
+        log "Removing existing package-lock.json..."
+        rm package-lock.json
+    fi
+    
+    # Clear NPM cache
+    log "Clearing NPM cache..."
+    npm cache clean --force 2>/dev/null || warning "Failed to clear NPM cache"
     
     # Handle NPM authentication issues
     log "Checking NPM authentication..."
@@ -101,7 +113,7 @@ reinstall_backend_dependencies() {
     
     # Install dependencies
     log "Installing backend dependencies..."
-    # Use npm install instead of npm ci since there might not be a package-lock.json
+    # Use npm install to create a fresh package-lock.json
     npm install
     
     if [ $? -eq 0 ]; then
