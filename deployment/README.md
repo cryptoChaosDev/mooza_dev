@@ -143,5 +143,17 @@ If containers fail to start:
 
 ### NPM Authentication Issues
 If you encounter NPM authentication errors:
-1. The fix-missing-deps.sh script now handles this by clearing the NPM cache
+1. The fix-missing-deps.sh script now handles this by:
+   - Clearing the NPM cache
+   - Temporarily disabling strict SSL
+   - Setting the registry to the official NPM registry
+   - Installing packages directly when needed
+   - Using alternative installation methods if the primary method fails
 2. It will continue with public package installation if authentication fails
+
+### Package Not Found Errors
+If you encounter "package not found" errors:
+1. The fix-missing-deps.sh script now handles this by:
+   - Installing packages directly before full installation
+   - Using legacy peer dependencies when needed
+   - Clearing all caches and temporary files

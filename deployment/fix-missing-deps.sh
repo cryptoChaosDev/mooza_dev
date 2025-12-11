@@ -102,6 +102,10 @@ reinstall_backend_dependencies() {
     log "Clearing NPM cache..."
     npm cache clean --force 2>/dev/null || warning "Failed to clear NPM cache"
     
+    # Handle NPM authentication issues by temporarily disabling strict SSL
+    log "Configuring NPM for installation..."
+    npm config set strict-ssl false 2>/dev/null || warning "Failed to configure NPM"
+    
     # Handle NPM authentication issues
     log "Checking NPM authentication..."
     if npm whoami >/dev/null 2>&1; then
@@ -109,9 +113,21 @@ reinstall_backend_dependencies() {
     else
         warning "NPM not authenticated, this might cause issues with private packages"
         log "Continuing with public package installation..."
+        # Set registry to official NPM registry
+        npm config set registry https://registry.npmjs.org/ 2>/dev/null || warning "Failed to set registry"
     fi
     
-    # Install dependencies
+    # Install the xss package directly first
+    log "Installing xss package directly..."
+    npm install xss@^1.0.15 --no-save
+    
+    if [ $? -eq 0 ]; then
+        success "xss package installed successfully"
+    else
+        warning "Failed to install xss package directly, continuing with full installation"
+    fi
+    
+    # Install all dependencies
     log "Installing backend dependencies..."
     # Use npm install to create a fresh package-lock.json
     npm install
@@ -120,8 +136,22 @@ reinstall_backend_dependencies() {
         success "Backend dependencies installed successfully"
     else
         error "Failed to install backend dependencies"
-        exit 1
+        # Try alternative installation method
+        log "Trying alternative installation method..."
+        npm install --legacy-peer-deps
+        
+        if [ $? -eq 0 ]; then
+            success "Backend dependencies installed successfully with legacy peer deps"
+        else
+            error "Failed to install backend dependencies with alternative method"
+            exit 1
+        fi
     fi
+    
+    # Reset NPM configuration
+    log "Resetting NPM configuration..."
+    npm config delete strict-ssl 2>/dev/null || warning "Failed to reset strict-ssl"
+    npm config delete registry 2>/dev/null || warning "Failed to reset registry"
     
     cd ..
 }
