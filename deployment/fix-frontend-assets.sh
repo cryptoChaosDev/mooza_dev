@@ -314,32 +314,77 @@ rebuild_frontend() {
     cd ..
 }
 
+# Find docker-compose file
+find_docker_compose() {
+    log "Finding docker-compose file..."
+    
+    # Common locations for docker-compose file
+    local possible_locations=(
+        "docker-compose.prod.yml"
+        "deployment/docker-compose.prod.yml"
+        "docker-compose.yml"
+        "deployment/docker-compose.yml"
+    )
+    
+    for location in "${possible_locations[@]}"; do
+        if [ -f "$location" ]; then
+            log "Found docker-compose file at: $location"
+            echo "$location"
+            return 0
+        fi
+    done
+    
+    # If not found, create a basic one
+    warning "Docker-compose file not found, creating a basic one..."
+    cat > docker-compose.prod.yml << 'EOF'
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf
+      - ./frontend/build:/usr/share/nginx/html
+    depends_on:
+      - api
+    restart: unless-stopped
+
+  api:
+    build: 
+      context: ./backend
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - JWT_SECRET=${JWT_SECRET}
+      - DATABASE_URL=file:/app/prisma/prod.db
+    volumes:
+      - api_data:/app/prisma
+    restart: unless-stopped
+
+volumes:
+  api_data:
+EOF
+    
+    log "Created basic docker-compose.prod.yml"
+    echo "docker-compose.prod.yml"
+}
+
 # Restart services
 restart_services() {
     log "Restarting services..."
     
     if command -v docker &> /dev/null; then
-        # Check if docker-compose file exists in current directory
-        if [ -f "docker-compose.prod.yml" ]; then
+        # Find docker-compose file
+        local compose_file=$(find_docker_compose)
+        
+        if [ -n "$compose_file" ]; then
             # Stop services
-            sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml down >> /var/log/mooza-deploy.log 2>&1
+            sudo -u "$SUDO_USER" docker compose -f "$compose_file" down >> /var/log/mooza-deploy.log 2>&1
             
             # Start services
-            sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml up -d --build >> /var/log/mooza-deploy.log 2>&1
-            
-            if [ $? -eq 0 ]; then
-                success "Services restarted successfully"
-            else
-                error "Failed to restart services"
-                return 1
-            fi
-        # Check if docker-compose file exists in deployment directory
-        elif [ -f "deployment/docker-compose.prod.yml" ]; then
-            # Stop services
-            sudo -u "$SUDO_USER" docker compose -f deployment/docker-compose.prod.yml down >> /var/log/mooza-deploy.log 2>&1
-            
-            # Start services
-            sudo -u "$SUDO_USER" docker compose -f deployment/docker-compose.prod.yml up -d --build >> /var/log/mooza-deploy.log 2>&1
+            sudo -u "$SUDO_USER" docker compose -f "$compose_file" up -d --build >> /var/log/mooza-deploy.log 2>&1
             
             if [ $? -eq 0 ]; then
                 success "Services restarted successfully"
@@ -348,30 +393,10 @@ restart_services() {
                 return 1
             fi
         else
-            warning "docker-compose.prod.yml not found, skipping Docker restart"
-            # Try to restart nginx service directly if it exists
-            if command -v systemctl &> /dev/null && systemctl is-active --quiet nginx; then
-                log "Restarting nginx service..."
-                systemctl restart nginx >> /var/log/mooza-deploy.log 2>&1
-                if [ $? -eq 0 ]; then
-                    success "Nginx restarted successfully"
-                else
-                    warning "Failed to restart nginx service"
-                fi
-            fi
+            warning "No docker-compose file found, skipping Docker restart"
         fi
     else
         warning "Docker not found, skipping service restart"
-        # Try to restart nginx service directly if it exists
-        if command -v systemctl &> /dev/null && systemctl is-active --quiet nginx; then
-            log "Restarting nginx service..."
-            systemctl restart nginx >> /var/log/mooza-deploy.log 2>&1
-            if [ $? -eq 0 ]; then
-                success "Nginx restarted successfully"
-            else
-                warning "Failed to restart nginx service"
-            fi
-        fi
     fi
 }
 
