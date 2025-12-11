@@ -80,6 +80,29 @@ update_backend_dependencies() {
     fi
 }
 
+# Fix Dockerfile issues
+fix_dockerfile() {
+    log "Checking and fixing Dockerfile..."
+    
+    # Check if the Dockerfile exists
+    if [ ! -f "backend/Dockerfile" ]; then
+        error "Dockerfile not found in backend directory"
+        return 1
+    fi
+    
+    # Check if Dockerfile is trying to copy package-lock.json
+    if grep -q "package-lock.json" backend/Dockerfile; then
+        log "Updating Dockerfile to remove package-lock.json references..."
+        
+        # Replace lines that copy both package.json and package-lock.json with just package.json
+        sed -i 's/COPY package.json package-lock.json ./COPY package.json ./' backend/Dockerfile
+        
+        success "Dockerfile updated to remove package-lock.json references"
+    else
+        log "Dockerfile does not reference package-lock.json"
+    fi
+}
+
 # Reinstall backend dependencies
 reinstall_backend_dependencies() {
     log "Reinstalling backend dependencies..."
@@ -218,6 +241,7 @@ main() {
     check_root
     check_deployment_dir
     update_backend_dependencies
+    fix_dockerfile
     reinstall_backend_dependencies
     rebuild_and_restart
     check_final_status
