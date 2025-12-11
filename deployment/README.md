@@ -73,6 +73,21 @@ Error: `@prisma/client did not initialize yet. Please run "prisma generate" and 
 **Solution**:
 Run the [fix-missing-deps.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-missing-deps.sh) script which includes fixes for Prisma client issues.
 
+### Frontend Build Failures
+If the frontend build fails during the fix script execution, it could be due to various reasons:
+
+**Common causes and solutions**:
+1. **Insufficient memory**: The build process may fail due to insufficient RAM. The improved script now tries to build with increased memory limits.
+2. **Corrupted node_modules**: The script now removes existing node_modules before installing dependencies.
+3. **Network issues**: Try running the script again, or check network connectivity.
+4. **Outdated dependencies**: The script now tries both `npm ci` and `npm install` to ensure dependencies are installed.
+
+**To manually troubleshoot build issues**:
+1. SSH into your VPS: `ssh root@147.45.166.246`
+2. Navigate to the frontend directory: `cd /opt/mooza/frontend`
+3. Check the build log: `tail -n 100 /var/log/mooza-deploy.log`
+4. Try building manually: `npm run build`
+
 ## Accessing Your Deployed Application
 
 After successful deployment, you can access your application at:
