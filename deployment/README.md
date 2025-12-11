@@ -1,165 +1,88 @@
-# Mooza Deployment
+# Mooza Deployment Scripts
 
-This directory contains scripts and documentation for deploying the Mooza application to various environments.
+This directory contains scripts for deploying the Mooza application to a VPS.
 
-## Deployment Options
+## Available Scripts
 
-### 1. VPS Deployment (Recommended)
+### 1. Automated Deployment Script
+- **File**: [automated-deploy.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/automated-deploy.sh)
+- **Purpose**: Fully automated deployment of the Mooza application to a fresh Ubuntu VPS
+- **Usage**: 
+  ```bash
+  curl -fsSL -o automated-deploy.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/automated-deploy.sh
+  chmod +x automated-deploy.sh
+  sudo ./automated-deploy.sh
+  ```
 
-Deploy Mooza to a Linux VPS server for production use.
+### 2. Troubleshooting Script
+- **File**: [troubleshoot-deploy.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/troubleshoot-deploy.sh)
+- **Purpose**: Diagnose common deployment issues
+- **Usage**:
+  ```bash
+  curl -fsSL -o troubleshoot-deploy.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/troubleshoot-deploy.sh
+  chmod +x troubleshoot-deploy.sh
+  sudo ./troubleshoot-deploy.sh
+  ```
 
-**Files:**
-- `deploy-to-vps.sh` - Bash script to deploy directly on a Linux VPS
-- `deploy-to-vps.ps1` - PowerShell script to deploy from Windows to a VPS
-- `automated-deploy.sh` - Enhanced automated deployment script with better error handling
-- `simple-deploy.sh` - Simplified deployment script for basic setups
-- `troubleshoot.sh` - Diagnostic script to help troubleshoot deployment issues
-- `fix-deployment.sh` - Script to fix common deployment issues
-- `fix-docker-rate-limit.sh` - Script to fix Docker Hub rate limit issues
-- `fix-missing-deps.sh` - Script to fix missing dependencies issues
-- `detailed-diag.sh` - Detailed diagnostic script for complex issues
-- `setup-vps.sh` - Helper script to install and prepare the deployment environment
-- `install-deploy.sh` - Simple installer for the deployment tools
+### 3. Missing Dependencies Fix Script
+- **File**: [fix-missing-deps.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-missing-deps.sh)
+- **Purpose**: Fix issues with missing dependencies in backend package.json
+- **Usage**:
+  ```bash
+  curl -fsSL -o fix-missing-deps.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-missing-deps.sh
+  chmod +x fix-missing-deps.sh
+  sudo ./fix-missing-deps.sh
+  ```
 
-### 2. Docker Deployment
-
-Deploy using Docker containers for isolated environments.
-
-**Files:**
-- `docker-compose.yml` - Docker Compose configuration for development
-- `docker-compose.prod.yml` - Docker Compose configuration for production
-
-### 3. GitHub Pages Deployment
-
-Deploy the frontend to GitHub Pages for static hosting.
-
-**Files:**
-- `.github/workflows/deploy.yml` - GitHub Actions workflow for deployment
-
-## Quick Start (VPS)
-
-1. Copy the deployment scripts to your VPS:
-   ```bash
-   scp deploy-to-vps.sh user@your-vps-ip:/tmp/
-   ```
-
-2. SSH into your VPS and run the deployment script:
-   ```bash
-   ssh user@your-vps-ip
-   sudo /tmp/deploy-to-vps.sh
-   ```
-
-## Troubleshooting
-
-If you encounter issues during deployment, try these diagnostic tools:
-
-1. **Run the troubleshooting script:**
-   ```bash
-   curl -fsSL -o troubleshoot.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/troubleshoot.sh
-   chmod +x troubleshoot.sh
-   sudo ./troubleshoot.sh
-   ```
-
-2. **Check common deployment issues:**
-   ```bash
-   curl -fsSL -o fix-deployment.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-deployment.sh
-   chmod +x fix-deployment.sh
-   sudo ./fix-deployment.sh
-   ```
-
-3. **Fix Docker rate limit issues:**
-   ```bash
-   curl -fsSL -o fix-docker-rate-limit.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-docker-rate-limit.sh
-   chmod +x fix-docker-rate-limit.sh
-   sudo ./fix-docker-rate-limit.sh
-   ```
-
-4. **Fix missing dependencies issues:**
-   ```bash
-   curl -fsSL -o fix-missing-deps.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-missing-deps.sh
-   chmod +x fix-missing-deps.sh
-   sudo ./fix-missing-deps.sh
-   ```
-
-5. **Run detailed diagnostics:**
-   ```bash
-   curl -fsSL -o detailed-diag.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/detailed-diag.sh
-   chmod +x detailed-diag.sh
-   sudo ./detailed-diag.sh
-   ```
-
-## Manual Installation
-
-If you prefer to install manually:
-
-1. Install prerequisites:
-   ```bash
-   sudo apt update
-   sudo apt install -y curl git docker.io docker-compose
-   ```
-
-2. Clone the repository:
-   ```bash
-   git clone https://github.com/cryptoChaosDev/mooza_dev.git
-   cd mooza_dev
-   ```
-
-3. Install dependencies and build:
-   ```bash
-   cd frontend && npm install && npm run build && cd ..
-   cd backend && npm install && npx prisma generate && npm run build && cd ..
-   ```
-
-4. Configure environment:
-   ```bash
-   echo "JWT_SECRET=$(openssl rand -base64 32)" > .env
-   ```
-
-5. Start services:
-   ```bash
-   docker compose up -d
-   ```
+### 4. Frontend Assets Fix Script
+- **File**: [fix-frontend-assets.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-frontend-assets.sh)
+- **Purpose**: Fix issues with frontend asset paths for VPS deployment
+- **Usage**:
+  ```bash
+  curl -fsSL -o fix-frontend-assets.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-frontend-assets.sh
+  chmod +x fix-frontend-assets.sh
+  sudo ./fix-frontend-assets.sh
+  ```
 
 ## Common Issues and Solutions
 
-### Docker Rate Limits
-Docker Hub imposes rate limits on anonymous image pulls. To resolve:
+### White Screen Issue
+If you're seeing a white screen when accessing your deployed application, it's likely due to incorrect asset paths in the frontend build.
+
+**Symptoms**:
+- Application loads but shows a blank white screen
+- Browser console shows 404 errors for CSS/JS files
+
+**Solution**:
+Run the [fix-frontend-assets.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-frontend-assets.sh) script to correct the asset paths.
+
+### Docker Rate Limit Issues
+Docker Hub has rate limits for anonymous pulls which can cause deployment failures.
+
+**Solution**:
 1. Create a Docker Hub account
-2. Log in on your server: `docker login`
-3. Or use the fix-docker-rate-limit.sh script
+2. Login to Docker Hub on your VPS:
+   ```bash
+   sudo docker login
+   ```
+3. Re-run the deployment script
 
-### Missing Dependencies
-If you see TypeScript compilation errors about missing modules:
-1. Ensure all required dependencies are in package.json
-2. Run npm install in the appropriate directory
-3. Or use the fix-missing-deps.sh script
+### Prisma Client Initialization Error
+Error: `@prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.`
 
-### Container Won't Start
-If containers fail to start:
-1. Check Docker logs: `docker compose logs`
-2. Verify environment variables are set correctly
-3. Ensure ports are not already in use
-4. Or use the detailed-diag.sh script for comprehensive diagnostics
+**Solution**:
+Run the [fix-missing-deps.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-missing-deps.sh) script which includes fixes for Prisma client issues.
 
-### NPM Authentication Issues
-If you encounter NPM authentication errors:
-1. The fix-missing-deps.sh script now handles this by:
-   - Clearing the NPM cache
-   - Temporarily disabling strict SSL
-   - Setting the registry to the official NPM registry
-   - Installing packages directly when needed
-   - Using alternative installation methods if the primary method fails
-2. It will continue with public package installation if authentication fails
+## Accessing Your Deployed Application
 
-### Package Not Found Errors
-If you encounter "package not found" errors:
-1. The fix-missing-deps.sh script now handles this by:
-   - Installing packages directly before full installation
-   - Using legacy peer dependencies when needed
-   - Clearing all caches and temporary files
+After successful deployment, you can access your application at:
+- **Web Interface**: `http://your-vps-ip`
+- **API Endpoint**: `http://your-vps-ip/api`
+- **Health Check**: `http://your-vps-ip/health`
 
-### Docker Build Issues
-If you encounter Docker build errors related to missing files:
-1. The fix-missing-deps.sh script now handles this by:
-   - Checking and fixing Dockerfile references to non-existent files
-   - Ensuring only existing files are copied during the build process
+## Updating Your Deployment
+
+To update your deployed application:
+1. Navigate to `/opt/mooza`
+2. Pull the latest changes: `git pull origin master`
+3. Rebuild and restart services: `sudo docker compose -f docker-compose.prod.yml up -d --build`
