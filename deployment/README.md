@@ -24,19 +24,9 @@ This directory contains scripts for deploying the Mooza application to a VPS.
   sudo ./troubleshoot-deploy.sh
   ```
 
-### 3. Missing Dependencies Fix Script
-- **File**: [fix-missing-deps.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-missing-deps.sh)
-- **Purpose**: Fix issues with missing dependencies in backend package.json
-- **Usage**:
-  ```bash
-  curl -fsSL -o fix-missing-deps.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-missing-deps.sh
-  chmod +x fix-missing-deps.sh
-  sudo ./fix-missing-deps.sh
-  ```
-
-### 4. Frontend Assets Fix Script
+### 3. Fix Frontend Assets Script
 - **File**: [fix-frontend-assets.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-frontend-assets.sh)
-- **Purpose**: Fix issues with frontend asset paths for VPS deployment
+- **Purpose**: Fix frontend asset path issues for VPS deployment
 - **Usage**:
   ```bash
   curl -fsSL -o fix-frontend-assets.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-frontend-assets.sh
@@ -44,81 +34,38 @@ This directory contains scripts for deploying the Mooza application to a VPS.
   sudo ./fix-frontend-assets.sh
   ```
 
-## Common Issues and Solutions
+### 4. Fix Frontend API Script
+- **File**: [fix-frontend-api.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-frontend-api.sh)
+- **Purpose**: Fix frontend API URL configuration issues for VPS deployment
+- **Usage**:
+  ```bash
+  curl -fsSL -o fix-frontend-api.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-frontend-api.sh
+  chmod +x fix-frontend-api.sh
+  sudo ./fix-frontend-api.sh
+  ```
 
-### White Screen Issue
-If you're seeing a white screen when accessing your deployed application, it's likely due to incorrect asset paths in the frontend build.
+### 5. PostgreSQL Setup Script
+- **File**: [fix-postgres-setup.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-postgres-setup.sh)
+- **Purpose**: Configure and set up PostgreSQL database for the Mooza application
+- **Usage**:
+  ```bash
+  curl -fsSL -o fix-postgres-setup.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-postgres-setup.sh
+  chmod +x fix-postgres-setup.sh
+  sudo ./fix-postgres-setup.sh
+  ```
 
-**Symptoms**:
-- Application loads but shows a blank white screen
-- Browser console shows 404 errors for CSS/JS files
+## Documentation
 
-**Solution**:
-Run the [fix-frontend-assets.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-frontend-assets.sh) script to correct the asset paths.
+- [Main VPS Deployment Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/VPS_DEPLOYMENT.md)
+- [Automated Deployment Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/AUTOMATED_DEPLOYMENT.md)
+- [Deployment Checklist](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/DEPLOYMENT_CHECKLIST.md)
+- [PostgreSQL Setup Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/POSTGRES_SETUP.md)
 
-### Docker Rate Limit Issues
-Docker Hub has rate limits for anonymous pulls which can cause deployment failures.
+## Quick Start
 
-**Solution**:
-1. Create a Docker Hub account
-2. Login to Docker Hub on your VPS:
-   ```bash
-   sudo docker login
-   ```
-3. Re-run the deployment script
+For a fresh Ubuntu VPS, the fastest way to deploy is:
 
-### Prisma Client Initialization Error
-Error: `@prisma/client did not initialize yet. Please run "prisma generate" and try to import it again.`
+```bash
+curl -fsSL https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/automated-deploy.sh | sudo bash
+```
 
-**Solution**:
-Run the [fix-missing-deps.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-missing-deps.sh) script which includes fixes for Prisma client issues.
-
-### Frontend Build Failures
-If the frontend build fails during the fix script execution, it could be due to various reasons:
-
-**Common causes and solutions**:
-1. **Insufficient memory**: The build process may fail due to insufficient RAM. The improved script now tries to build with increased memory limits.
-2. **Corrupted node_modules**: The script now removes existing node_modules before installing dependencies.
-3. **Network issues**: Try running the script again, or check network connectivity.
-4. **Outdated dependencies**: The script now tries both `npm ci` and `npm install` to ensure dependencies are installed.
-5. **Missing public directory**: The improved script now checks for and recreates missing public directory files.
-
-**To manually troubleshoot build issues**:
-1. SSH into your VPS: `ssh root@147.45.166.246`
-2. Navigate to the frontend directory: `cd /opt/mooza/frontend`
-3. Check the build log: `tail -n 100 /var/log/mooza-deploy.log`
-4. Try building manually: `npm run build`
-
-### Missing Public Directory
-If the build fails with "Could not find a required file. Name: index.html", it means the public directory is missing or incomplete.
-
-**Solution**:
-Run the [fix-frontend-assets.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-frontend-assets.sh) script which now includes automatic detection and recreation of missing public directory files.
-
-### 403 Forbidden Error
-If you're getting a 403 Forbidden error when accessing your application, it's likely due to one of these issues:
-
-**Common causes and solutions**:
-1. **Frontend not built**: The frontend build directory is missing or empty. Run the fix script to rebuild the frontend.
-2. **File permissions**: Nginx doesn't have permission to read the files. The fix script will restart services which should resolve this.
-3. **Nginx configuration**: The Nginx configuration might be incorrect. The fix script will restart services which should reload the correct configuration.
-
-**To manually troubleshoot**:
-1. SSH into your VPS: `ssh root@147.45.166.246`
-2. Check if the build directory exists and has files: `ls -la /opt/mooza/frontend/build`
-3. Check Nginx configuration: `cat /opt/mooza/nginx.conf`
-4. Restart services: `sudo docker compose -f /opt/mooza/deployment/docker-compose.prod.yml restart`
-
-## Accessing Your Deployed Application
-
-After successful deployment, you can access your application at:
-- **Web Interface**: `http://your-vps-ip`
-- **API Endpoint**: `http://your-vps-ip/api`
-- **Health Check**: `http://your-vps-ip/health`
-
-## Updating Your Deployment
-
-To update your deployed application:
-1. Navigate to `/opt/mooza`
-2. Pull the latest changes: `git pull origin master`
-3. Rebuild and restart services: `sudo docker compose -f docker-compose.prod.yml up -d --build`
