@@ -568,6 +568,11 @@ display_summary() {
     echo -e "    ${GREEN}chmod +x fix-deployment.sh${NC}"
     echo -e "    ${GREEN}sudo ./fix-deployment.sh${NC}"
     echo
+    echo -e "  For Docker rate limit issues:"
+    echo -e "    ${GREEN}curl -fsSL -o fix-docker-rate-limit.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-docker-rate-limit.sh${NC}"
+    echo -e "    ${GREEN}chmod +x fix-docker-rate-limit.sh${NC}"
+    echo -e "    ${GREEN}sudo ./fix-docker-rate-limit.sh${NC}"
+    echo
     echo -e "  For detailed diagnostics:"
     echo -e "    ${GREEN}curl -fsSL -o detailed-diag.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/detailed-diag.sh${NC}"
     echo -e "    ${GREEN}chmod +x detailed-diag.sh${NC}"
