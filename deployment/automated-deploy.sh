@@ -261,11 +261,16 @@ create_env_files() {
     
     local backend_dir="$DEPLOY_DIR/backend"
     
+    # Generate JWT secret if not already set
+    if [ -z "$JWT_SECRET" ]; then
+        export JWT_SECRET=$(openssl rand -base64 32)
+    fi
+    
     # Create backend .env file
     cat > "$backend_dir/.env" << EOF
 NODE_ENV=production
 PORT=4000
-JWT_SECRET=$(openssl rand -base64 32)
+JWT_SECRET=$JWT_SECRET
 DATABASE_URL=file:./prod.db
 EOF
     
@@ -404,17 +409,19 @@ deploy_with_docker() {
     
     cd "$DEPLOY_DIR"
     
-    # Set JWT secret environment variable
-    export JWT_SECRET=$(openssl rand -base64 32)
+    # Generate JWT secret if not already set
+    if [ -z "$JWT_SECRET" ]; then
+        export JWT_SECRET=$(openssl rand -base64 32)
+    fi
+    
+    # Save JWT secret to .env file for persistence
+    echo "JWT_SECRET=$JWT_SECRET" > .env
     
     # Stop any existing services
     sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml down >> "$LOG_FILE" 2>&1
     
-    # Pull latest images
-    sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml pull >> "$LOG_FILE" 2>&1
-    
-    # Build and start services
-    sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml up -d --build >> "$LOG_FILE" 2>&1
+    # Start services with environment variables
+    JWT_SECRET=$JWT_SECRET sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml up -d --build >> "$LOG_FILE" 2>&1
     
     if [ $? -eq 0 ]; then
         success "Application deployed successfully"
