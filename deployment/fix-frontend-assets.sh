@@ -314,29 +314,13 @@ rebuild_frontend() {
     cd ..
 }
 
-# Find docker-compose file
-find_docker_compose() {
-    log "Finding docker-compose file..."
+# Create proper docker-compose file
+create_docker_compose() {
+    log "Creating proper docker-compose file..."
     
-    # Common locations for docker-compose file
-    local possible_locations=(
-        "docker-compose.prod.yml"
-        "deployment/docker-compose.prod.yml"
-        "docker-compose.yml"
-        "deployment/docker-compose.yml"
-    )
-    
-    for location in "${possible_locations[@]}"; do
-        if [ -f "$location" ]; then
-            log "Found docker-compose file at: $location"
-            echo "$location"
-            return 0
-        fi
-    done
-    
-    # If not found, create a basic one
-    warning "Docker-compose file not found, creating a basic one..."
     cat > docker-compose.prod.yml << 'EOF'
+version: "3.8"
+
 services:
   nginx:
     image: nginx:alpine
@@ -367,7 +351,41 @@ volumes:
   api_data:
 EOF
     
-    log "Created basic docker-compose.prod.yml"
+    log "Created properly formatted docker-compose.prod.yml"
+}
+
+# Find docker-compose file
+find_docker_compose() {
+    log "Finding docker-compose file..."
+    
+    # Common locations for docker-compose file
+    local possible_locations=(
+        "docker-compose.prod.yml"
+        "deployment/docker-compose.prod.yml"
+        "docker-compose.yml"
+        "deployment/docker-compose.yml"
+    )
+    
+    for location in "${possible_locations[@]}"; do
+        if [ -f "$location" ]; then
+            # Check if the file is properly formatted
+            if sudo -u "$SUDO_USER" docker compose -f "$location" config > /dev/null 2>&1; then
+                log "Found properly formatted docker-compose file at: $location"
+                echo "$location"
+                return 0
+            else
+                warning "Found docker-compose file at $location but it has formatting issues"
+                # Try to fix it by creating a new one
+                create_docker_compose
+                echo "docker-compose.prod.yml"
+                return 0
+            fi
+        fi
+    done
+    
+    # If not found, create a basic one
+    warning "Docker-compose file not found, creating a properly formatted one..."
+    create_docker_compose
     echo "docker-compose.prod.yml"
 }
 
@@ -380,6 +398,12 @@ restart_services() {
         local compose_file=$(find_docker_compose)
         
         if [ -n "$compose_file" ]; then
+            # Validate the docker-compose file
+            if ! sudo -u "$SUDO_USER" docker compose -f "$compose_file" config > /dev/null 2>&1; then
+                error "Docker-compose file has formatting issues"
+                return 1
+            fi
+            
             # Stop services
             sudo -u "$SUDO_USER" docker compose -f "$compose_file" down >> /var/log/mooza-deploy.log 2>&1
             
