@@ -314,79 +314,53 @@ rebuild_frontend() {
     cd ..
 }
 
-# Create proper docker-compose file
+# Create proper docker-compose file with debugging
 create_docker_compose() {
     log "Creating proper docker-compose file..."
     
-    cat > docker-compose.prod.yml << 'EOF'
-version: "3.8"
-
-services:
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf
-      - ./frontend/build:/usr/share/nginx/html
-    depends_on:
-      - api
-    restart: unless-stopped
-
-  api:
-    build: 
-      context: ./backend
-    ports:
-      - "4000:4000"
-    environment:
-      - NODE_ENV=production
-      - PORT=4000
-      - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=file:/app/prisma/prod.db
-    volumes:
-      - api_data:/app/prisma
-    restart: unless-stopped
-
-volumes:
-  api_data:
-EOF
+    # Remove any existing problematic file
+    if [ -f "docker-compose.prod.yml" ]; then
+        log "Removing existing docker-compose.prod.yml"
+        rm -f docker-compose.prod.yml
+    fi
     
-    log "Created properly formatted docker-compose.prod.yml"
-}
-
-# Find docker-compose file
-find_docker_compose() {
-    log "Finding docker-compose file..."
+    # Create the file step by step to avoid formatting issues
+    echo "version: '3.8'" > docker-compose.prod.yml
+    echo "" >> docker-compose.prod.yml
+    echo "services:" >> docker-compose.prod.yml
+    echo "  nginx:" >> docker-compose.prod.yml
+    echo "    image: nginx:alpine" >> docker-compose.prod.yml
+    echo "    ports:" >> docker-compose.prod.yml
+    echo "      - \"80:80\"" >> docker-compose.prod.yml
+    echo "    volumes:" >> docker-compose.prod.yml
+    echo "      - ./nginx.conf:/etc/nginx/nginx.conf" >> docker-compose.prod.yml
+    echo "      - ./frontend/build:/usr/share/nginx/html" >> docker-compose.prod.yml
+    echo "    depends_on:" >> docker-compose.prod.yml
+    echo "      - api" >> docker-compose.prod.yml
+    echo "    restart: unless-stopped" >> docker-compose.prod.yml
+    echo "" >> docker-compose.prod.yml
+    echo "  api:" >> docker-compose.prod.yml
+    echo "    build:" >> docker-compose.prod.yml
+    echo "      context: ./backend" >> docker-compose.prod.yml
+    echo "    ports:" >> docker-compose.prod.yml
+    echo "      - \"4000:4000\"" >> docker-compose.prod.yml
+    echo "    environment:" >> docker-compose.prod.yml
+    echo "      - NODE_ENV=production" >> docker-compose.prod.yml
+    echo "      - PORT=4000" >> docker-compose.prod.yml
+    echo "      - JWT_SECRET=\${JWT_SECRET}" >> docker-compose.prod.yml
+    echo "      - DATABASE_URL=file:/app/prisma/prod.db" >> docker-compose.prod.yml
+    echo "    volumes:" >> docker-compose.prod.yml
+    echo "      - api_data:/app/prisma" >> docker-compose.prod.yml
+    echo "    restart: unless-stopped" >> docker-compose.prod.yml
+    echo "" >> docker-compose.prod.yml
+    echo "volumes:" >> docker-compose.prod.yml
+    echo "  api_data:" >> docker-compose.prod.yml
     
-    # Common locations for docker-compose file
-    local possible_locations=(
-        "docker-compose.prod.yml"
-        "deployment/docker-compose.prod.yml"
-        "docker-compose.yml"
-        "deployment/docker-compose.yml"
-    )
+    log "Created docker-compose.prod.yml"
     
-    for location in "${possible_locations[@]}"; do
-        if [ -f "$location" ]; then
-            # Check if the file is properly formatted
-            if sudo -u "$SUDO_USER" docker compose -f "$location" config > /dev/null 2>&1; then
-                log "Found properly formatted docker-compose file at: $location"
-                echo "$location"
-                return 0
-            else
-                warning "Found docker-compose file at $location but it has formatting issues"
-                # Try to fix it by creating a new one
-                create_docker_compose
-                echo "docker-compose.prod.yml"
-                return 0
-            fi
-        fi
-    done
-    
-    # If not found, create a basic one
-    warning "Docker-compose file not found, creating a properly formatted one..."
-    create_docker_compose
-    echo "docker-compose.prod.yml"
+    # Show the file contents for debugging
+    log "Docker Compose file contents:"
+    cat docker-compose.prod.yml >> /var/log/mooza-deploy.log 2>&1
 }
 
 # Restart services
@@ -394,30 +368,33 @@ restart_services() {
     log "Restarting services..."
     
     if command -v docker &> /dev/null; then
-        # Find docker-compose file
-        local compose_file=$(find_docker_compose)
+        # Create a fresh docker-compose file
+        create_docker_compose
         
-        if [ -n "$compose_file" ]; then
-            # Validate the docker-compose file
-            if ! sudo -u "$SUDO_USER" docker compose -f "$compose_file" config > /dev/null 2>&1; then
-                error "Docker-compose file has formatting issues"
-                return 1
-            fi
-            
-            # Stop services
-            sudo -u "$SUDO_USER" docker compose -f "$compose_file" down >> /var/log/mooza-deploy.log 2>&1
-            
-            # Start services
-            sudo -u "$SUDO_USER" docker compose -f "$compose_file" up -d --build >> /var/log/mooza-deploy.log 2>&1
-            
-            if [ $? -eq 0 ]; then
-                success "Services restarted successfully"
-            else
-                error "Failed to restart services"
-                return 1
-            fi
+        # Validate the docker-compose file
+        log "Validating docker-compose file..."
+        if sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml config > /dev/null 2>&1; then
+            log "Docker-compose file validated successfully"
         else
-            warning "No docker-compose file found, skipping Docker restart"
+            error "Docker-compose file validation failed"
+            log "Showing docker-compose file for debugging:"
+            cat docker-compose.prod.yml
+            return 1
+        fi
+        
+        # Stop services
+        log "Stopping services..."
+        sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml down >> /var/log/mooza-deploy.log 2>&1
+        
+        # Start services
+        log "Starting services..."
+        sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml up -d --build >> /var/log/mooza-deploy.log 2>&1
+        
+        if [ $? -eq 0 ]; then
+            success "Services restarted successfully"
+        else
+            error "Failed to restart services"
+            return 1
         fi
     else
         warning "Docker not found, skipping service restart"
