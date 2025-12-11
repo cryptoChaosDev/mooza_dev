@@ -95,6 +95,20 @@ If the build fails with "Could not find a required file. Name: index.html", it m
 **Solution**:
 Run the [fix-frontend-assets.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-frontend-assets.sh) script which now includes automatic detection and recreation of missing public directory files.
 
+### 403 Forbidden Error
+If you're getting a 403 Forbidden error when accessing your application, it's likely due to one of these issues:
+
+**Common causes and solutions**:
+1. **Frontend not built**: The frontend build directory is missing or empty. Run the fix script to rebuild the frontend.
+2. **File permissions**: Nginx doesn't have permission to read the files. The fix script will restart services which should resolve this.
+3. **Nginx configuration**: The Nginx configuration might be incorrect. The fix script will restart services which should reload the correct configuration.
+
+**To manually troubleshoot**:
+1. SSH into your VPS: `ssh root@147.45.166.246`
+2. Check if the build directory exists and has files: `ls -la /opt/mooza/frontend/build`
+3. Check Nginx configuration: `cat /opt/mooza/nginx.conf`
+4. Restart services: `sudo docker compose -f /opt/mooza/deployment/docker-compose.prod.yml restart`
+
 ## Accessing Your Deployed Application
 
 After successful deployment, you can access your application at:
