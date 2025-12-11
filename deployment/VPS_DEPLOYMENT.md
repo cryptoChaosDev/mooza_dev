@@ -16,7 +16,23 @@ This guide explains how to deploy the Mooza application to a VPS server using th
 - CentOS 8 or newer
 - Other modern Linux distributions
 
-## Deployment Steps
+## Automated Deployment (Recommended)
+
+For the easiest deployment experience, use our new automated deployment script:
+
+1. **Quick One-liner Installation**:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/setup-vps.sh | sudo bash
+   ```
+
+2. **Run the Deployment**:
+   ```bash
+   sudo mooza-deploy
+   ```
+
+See [AUTOMATED_DEPLOYMENT.md](AUTOMATED_DEPLOYMENT.md) for detailed instructions.
+
+## Manual Deployment
 
 ### 1. Connect to Your VPS
 
