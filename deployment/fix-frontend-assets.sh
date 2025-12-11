@@ -298,6 +298,18 @@ rebuild_frontend() {
         fi
     fi
     
+    # Verify build was successful
+    if [ ! -d "build" ] || [ -z "$(ls -A build)" ]; then
+        error "Build directory is empty or missing after build process"
+        return 1
+    fi
+    
+    log "Verifying build contents..."
+    if [ ! -f "build/index.html" ]; then
+        error "Build completed but index.html is missing"
+        return 1
+    fi
+    
     success "Frontend rebuilt successfully"
     cd ..
 }
@@ -337,9 +349,64 @@ restart_services() {
             fi
         else
             warning "docker-compose.prod.yml not found, skipping Docker restart"
+            # Try to restart nginx service directly if it exists
+            if command -v systemctl &> /dev/null && systemctl is-active --quiet nginx; then
+                log "Restarting nginx service..."
+                systemctl restart nginx >> /var/log/mooza-deploy.log 2>&1
+                if [ $? -eq 0 ]; then
+                    success "Nginx restarted successfully"
+                else
+                    warning "Failed to restart nginx service"
+                fi
+            fi
         fi
     else
         warning "Docker not found, skipping service restart"
+        # Try to restart nginx service directly if it exists
+        if command -v systemctl &> /dev/null && systemctl is-active --quiet nginx; then
+            log "Restarting nginx service..."
+            systemctl restart nginx >> /var/log/mooza-deploy.log 2>&1
+            if [ $? -eq 0 ]; then
+                success "Nginx restarted successfully"
+            else
+                warning "Failed to restart nginx service"
+            fi
+        fi
+    fi
+}
+
+# Verify deployment
+verify_deployment() {
+    log "Verifying deployment..."
+    
+    # Wait a moment for services to start
+    sleep 5
+    
+    # Check if we can access the site
+    if command -v curl &> /dev/null; then
+        local response_code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost/)
+        if [ "$response_code" == "200" ]; then
+            success "Application is accessible (HTTP 200)"
+        elif [ "$response_code" == "403" ]; then
+            warning "Application returns 403 Forbidden - checking file permissions..."
+            # Check if build directory exists and has files
+            if [ -d "frontend/build" ] && [ -n "$(ls -A frontend/build)" ]; then
+                log "Build directory exists and has files"
+                # Check nginx configuration
+                if [ -f "nginx.conf" ]; then
+                    log "Nginx configuration exists"
+                else
+                    warning "Nginx configuration file not found"
+                fi
+            else
+                error "Build directory is missing or empty"
+                return 1
+            fi
+        else
+            warning "Application returns HTTP $response_code"
+        fi
+    else
+        warning "curl not available, skipping verification"
     fi
 }
 
@@ -351,6 +418,7 @@ main() {
     fix_homepage_field
     rebuild_frontend
     restart_services
+    verify_deployment
     
     echo
     success "Frontend assets fix completed!"
