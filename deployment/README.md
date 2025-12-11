@@ -16,6 +16,7 @@ Deploy Mooza to a Linux VPS server for production use.
 - `troubleshoot.sh` - Diagnostic script to help troubleshoot deployment issues
 - `fix-deployment.sh` - Script to fix common deployment issues
 - `fix-docker-rate-limit.sh` - Script to fix Docker Hub rate limit issues
+- `fix-missing-deps.sh` - Script to fix missing dependencies issues
 - `detailed-diag.sh` - Detailed diagnostic script for complex issues
 - `setup-vps.sh` - Helper script to install and prepare the deployment environment
 - `install-deploy.sh` - Simple installer for the deployment tools
@@ -68,6 +69,15 @@ sudo ./fix-deployment.sh
 curl -fsSL -o fix-docker-rate-limit.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-docker-rate-limit.sh
 chmod +x fix-docker-rate-limit.sh
 sudo ./fix-docker-rate-limit.sh
+```
+
+### Fixing Missing Dependencies Issues:
+
+```bash
+# Download and run the missing dependencies fix script
+curl -fsSL -o fix-missing-deps.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-missing-deps.sh
+chmod +x fix-missing-deps.sh
+sudo ./fix-missing-deps.sh
 ```
 
 ### Detailed Diagnostics for Complex Issues:
@@ -137,5 +147,6 @@ For issues with deployment, please check:
 3. Run the troubleshooting script
 4. Try the fix deployment script
 5. Fix Docker rate limit issues
-6. Run the detailed diagnostics script
-7. Open an issue on the GitHub repository
+6. Fix missing dependencies issues
+7. Run the detailed diagnostics script
+8. Open an issue on the GitHub repository

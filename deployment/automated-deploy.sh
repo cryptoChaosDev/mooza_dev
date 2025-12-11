@@ -573,6 +573,11 @@ display_summary() {
     echo -e "    ${GREEN}chmod +x fix-docker-rate-limit.sh${NC}"
     echo -e "    ${GREEN}sudo ./fix-docker-rate-limit.sh${NC}"
     echo
+    echo -e "  For missing dependencies issues:"
+    echo -e "    ${GREEN}curl -fsSL -o fix-missing-deps.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-missing-deps.sh${NC}"
+    echo -e "    ${GREEN}chmod +x fix-missing-deps.sh${NC}"
+    echo -e "    ${GREEN}sudo ./fix-missing-deps.sh${NC}"
+    echo
     echo -e "  For detailed diagnostics:"
     echo -e "    ${GREEN}curl -fsSL -o detailed-diag.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/detailed-diag.sh${NC}"
     echo -e "    ${GREEN}chmod +x detailed-diag.sh${NC}"
