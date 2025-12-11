@@ -7,7 +7,7 @@ const app = express();
 
 app.use(cors({
   origin: process.env.NODE_ENV === "production" 
-    ? ["https://mooza-music.vercel.app"] 
+    ? ["https://mooza-music.vercel.app", "http://147.45.166.246"] 
     : ["http://localhost:3000", "http://localhost:4000"],
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],

@@ -216,7 +216,7 @@ export function Profile({
         const formData = new FormData();
         formData.append('avatar', file);
 
-        const response = await fetch(`${process.env.REACT_APP_API_URL || 'http://localhost:4000'}/profile/me/avatar`, {
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/profile/me/avatar`, {
           method: 'POST',
           headers: { 
             'Authorization': `Bearer ${token}`
