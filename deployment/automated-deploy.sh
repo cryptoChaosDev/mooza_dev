@@ -279,7 +279,6 @@ create_docker_compose() {
     cd "$DEPLOY_DIR"
     
     cat > docker-compose.prod.yml << 'EOF'
-version: "3.8"
 services:
   nginx:
     image: nginx:alpine
@@ -408,6 +407,9 @@ deploy_with_docker() {
     # Set JWT secret environment variable
     export JWT_SECRET=$(openssl rand -base64 32)
     
+    # Stop any existing services
+    sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml down >> "$LOG_FILE" 2>&1
+    
     # Pull latest images
     sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml pull >> "$LOG_FILE" 2>&1
     
@@ -434,14 +436,18 @@ check_status() {
         success "Containers are running ($running_containers services up)"
     else
         warning "No containers are running"
+        log "Showing container status:"
+        sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml ps >> "$LOG_FILE" 2>&1
     fi
     
     # Check API health (wait a bit for services to start)
-    sleep 10
+    sleep 15
     if curl -f http://localhost:4000/health > /dev/null 2>&1; then
         success "API is responding"
     else
         warning "API health check failed"
+        log "Checking API logs:"
+        sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml logs api | tail -n 10 >> "$LOG_FILE" 2>&1
     fi
     
     # Show service status
@@ -543,6 +549,12 @@ display_summary() {
     echo -e "  2. For SSL certificate, run: ${GREEN}sudo certbot --nginx${NC}"
     echo -e "  3. Check logs with: ${GREEN}docker compose -f $DEPLOY_DIR/docker-compose.prod.yml logs -f${NC}"
     echo -e "  4. View status with: ${GREEN}systemctl status mooza${NC}"
+    echo
+    echo -e "${YELLOW}If you encounter issues:${NC}"
+    echo -e "  Download and run the troubleshooting script:"
+    echo -e "    ${GREEN}curl -fsSL -o troubleshoot.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/troubleshoot.sh${NC}"
+    echo -e "    ${GREEN}chmod +x troubleshoot.sh${NC}"
+    echo -e "    ${GREEN}sudo ./troubleshoot.sh${NC}"
     echo
 }
 
