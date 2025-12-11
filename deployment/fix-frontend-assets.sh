@@ -99,20 +99,36 @@ rebuild_frontend() {
         log "Cleaned build directory"
     fi
     
-    # Install dependencies
-    log "Installing frontend dependencies..."
-    sudo -u "$SUDO_USER" npm ci >> /var/log/mooza-deploy.log 2>&1
-    if [ $? -ne 0 ]; then
-        error "Failed to install frontend dependencies"
-        return 1
+    # Check if node_modules exists and remove it to ensure clean install
+    if [ -d "node_modules" ]; then
+        log "Removing existing node_modules directory"
+        rm -rf node_modules
     fi
     
-    # Build frontend
+    # Install dependencies with verbose output on failure
+    log "Installing frontend dependencies..."
+    if ! sudo -u "$SUDO_USER" npm ci >> /var/log/mooza-deploy.log 2>&1; then
+        warning "npm ci failed, trying npm install..."
+        if ! sudo -u "$SUDO_USER" npm install >> /var/log/mooza-deploy.log 2>&1; then
+            error "Failed to install frontend dependencies"
+            log "Check /var/log/mooza-deploy.log for more details"
+            return 1
+        fi
+    fi
+    
+    # Build frontend with verbose output on failure
     log "Building frontend..."
-    sudo -u "$SUDO_USER" npm run build >> /var/log/mooza-deploy.log 2>&1
-    if [ $? -ne 0 ]; then
+    if ! sudo -u "$SUDO_USER" npm run build >> /var/log/mooza-deploy.log 2>&1; then
         error "Failed to build frontend"
-        return 1
+        log "Check /var/log/mooza-deploy.log for more details"
+        log "Trying to build with increased memory limit..."
+        # Try with increased memory limit
+        if ! sudo -u "$SUDO_USER" NODE_OPTIONS="--max-old-space-size=4096" npm run build >> /var/log/mooza-deploy.log 2>&1; then
+            error "Failed to build frontend even with increased memory"
+            log "Last 50 lines of build log:"
+            tail -n 50 /var/log/mooza-deploy.log
+            return 1
+        fi
     fi
     
     success "Frontend rebuilt successfully"
@@ -124,13 +140,27 @@ restart_services() {
     log "Restarting services..."
     
     if command -v docker &> /dev/null; then
-        # Check if docker-compose file exists
+        # Check if docker-compose file exists in current directory
         if [ -f "docker-compose.prod.yml" ]; then
             # Stop services
             sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml down >> /var/log/mooza-deploy.log 2>&1
             
             # Start services
             sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml up -d --build >> /var/log/mooza-deploy.log 2>&1
+            
+            if [ $? -eq 0 ]; then
+                success "Services restarted successfully"
+            else
+                error "Failed to restart services"
+                return 1
+            fi
+        # Check if docker-compose file exists in deployment directory
+        elif [ -f "deployment/docker-compose.prod.yml" ]; then
+            # Stop services
+            sudo -u "$SUDO_USER" docker compose -f deployment/docker-compose.prod.yml down >> /var/log/mooza-deploy.log 2>&1
+            
+            # Start services
+            sudo -u "$SUDO_USER" docker compose -f deployment/docker-compose.prod.yml up -d --build >> /var/log/mooza-deploy.log 2>&1
             
             if [ $? -eq 0 ]; then
                 success "Services restarted successfully"
