@@ -12,6 +12,7 @@ Deploy Mooza to a Linux VPS server for production use.
 - `deploy-to-vps.sh` - Bash script to deploy directly on a Linux VPS
 - `deploy-to-vps.ps1` - PowerShell script to deploy from Windows to a VPS
 - `automated-deploy.sh` - Enhanced automated deployment script with better error handling
+- `simple-deploy.sh` - Simplified deployment script for basic setups
 - `setup-vps.sh` - Helper script to install and prepare the deployment environment
 - `install-deploy.sh` - Simple installer for the deployment tools
 
@@ -27,6 +28,15 @@ Deploy using Docker containers on any Docker-supported platform.
 # One-liner to install and deploy
 curl -fsSL https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/setup-vps.sh | sudo bash
 sudo mooza-deploy
+```
+
+### Simple Deployment:
+
+```bash
+# Download and run the simple deployment script
+curl -fsSL -o simple-deploy.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/simple-deploy.sh
+chmod +x simple-deploy.sh
+sudo ./simple-deploy.sh
 ```
 
 ### Manual Deployment:

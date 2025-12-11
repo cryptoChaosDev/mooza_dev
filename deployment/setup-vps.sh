@@ -59,9 +59,9 @@ download_script() {
         mv /tmp/automated-deploy.sh /usr/local/bin/mooza-deploy
         chmod +x /usr/local/bin/mooza-deploy
         success "Deployment script downloaded and installed to /usr/local/bin/mooza-deploy"
+        return 0
     else
-        error "Failed to download deployment script"
-        exit 1
+        return 1
     fi
 }
 
@@ -456,7 +456,7 @@ setup_firewall() {
     log "Setting up firewall..."
     
     # Enable UFW
-    ufw --force enable >> "$LOG_FILE" 2>&1
+    echo "y" | ufw enable >> "$LOG_FILE" 2>&1
     
     # Allow SSH (assuming default port 22)
     ufw allow ssh >> "$LOG_FILE" 2>&1
