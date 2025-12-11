@@ -102,15 +102,15 @@ fix_dockerfile() {
 # syntax=docker/dockerfile:1
 FROM node:20-alpine AS deps
 WORKDIR /app
-# Install OpenSSL for Prisma
-RUN apk add --no-cache openssl
+# Install OpenSSL and development packages for Prisma
+RUN apk add --no-cache openssl openssl-dev libc6-compat
 COPY package.json ./
 RUN npm ci --omit=dev || npm install --omit=dev
 
 FROM node:20-alpine AS builder
 WORKDIR /app
-# Install OpenSSL for Prisma
-RUN apk add --no-cache openssl
+# Install OpenSSL and development packages for Prisma
+RUN apk add --no-cache openssl openssl-dev libc6-compat
 COPY package.json ./
 RUN npm ci || npm install
 COPY tsconfig.json ./
@@ -121,8 +121,8 @@ RUN npx prisma generate && npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-# Install OpenSSL for Prisma
-RUN apk add --no-cache openssl
+# Install OpenSSL and development packages for Prisma
+RUN apk add --no-cache openssl openssl-dev libc6-compat
 # Install production dependencies
 COPY package.json ./
 RUN npm ci --only=production || npm install --only=production
