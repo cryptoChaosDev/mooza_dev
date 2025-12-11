@@ -54,12 +54,23 @@ This directory contains scripts for deploying the Mooza application to a VPS.
   sudo ./fix-postgres-setup.sh
   ```
 
+### 6. Prisma to Sequelize Migration Script
+- **File**: [migrate-to-sequelize.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/migrate-to-sequelize.sh)
+- **Purpose**: Migrate the application from Prisma ORM to Sequelize ORM
+- **Usage**:
+  ```bash
+  curl -fsSL -o migrate-to-sequelize.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/migrate-to-sequelize.sh
+  chmod +x migrate-to-sequelize.sh
+  sudo ./migrate-to-sequelize.sh
+  ```
+
 ## Documentation
 
 - [Main VPS Deployment Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/VPS_DEPLOYMENT.md)
 - [Automated Deployment Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/AUTOMATED_DEPLOYMENT.md)
 - [Deployment Checklist](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/DEPLOYMENT_CHECKLIST.md)
 - [PostgreSQL Setup Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/POSTGRES_SETUP.md)
+- [Sequelize Migration Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/SEQUELIZE_MIGRATION.md)
 
 ## Quick Start
 
@@ -68,4 +79,3 @@ For a fresh Ubuntu VPS, the fastest way to deploy is:
 ```bash
 curl -fsSL https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/automated-deploy.sh | sudo bash
 ```
-
