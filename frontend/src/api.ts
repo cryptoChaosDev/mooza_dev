@@ -1,4 +1,4 @@
-export const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:4000';
+export const API_URL = 'http://147.45.166.246'; // Instead of 'http://localhost:4000'
 
 export type LoginResponse = { token: string; user: { id: number; email?: string; phone?: string; name: string } };
 
