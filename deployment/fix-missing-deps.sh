@@ -95,12 +95,10 @@ fix_dockerfile() {
     cat backend/Dockerfile
     echo ""
     
-    # Check if Dockerfile is trying to copy package-lock.json
-    if grep -q "package-lock.json" backend/Dockerfile; then
-        log "Rewriting Dockerfile to fix package-lock.json references..."
-        
-        # Create a new Dockerfile with the correct content
-        cat > backend/Dockerfile << 'EOF'
+    log "Rewriting Dockerfile to fix Prisma client issues..."
+    
+    # Create a new Dockerfile with the correct content
+    cat > backend/Dockerfile << 'EOF'
 # syntax=docker/dockerfile:1
 FROM node:20-alpine AS deps
 WORKDIR /app
@@ -122,19 +120,18 @@ ENV NODE_ENV=production
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
+# Copy the generated Prisma client
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
 EXPOSE 4000
 CMD ["node", "dist/index.js"]
 EOF
-        
-        success "Dockerfile rewritten with correct content"
-        
-        # Show updated Dockerfile content for verification
-        log "Updated Dockerfile content:"
-        cat backend/Dockerfile
-        echo ""
-    else
-        log "Dockerfile does not reference package-lock.json"
-    fi
+    
+    success "Dockerfile rewritten with correct content"
+    
+    # Show updated Dockerfile content for verification
+    log "Updated Dockerfile content:"
+    cat backend/Dockerfile
+    echo ""
 }
 
 # Reinstall backend dependencies
