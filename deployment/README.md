@@ -23,130 +23,120 @@ Deploy Mooza to a Linux VPS server for production use.
 
 ### 2. Docker Deployment
 
-Deploy using Docker containers on any Docker-supported platform.
+Deploy using Docker containers for isolated environments.
 
-## Quick Start - VPS Deployment
+**Files:**
+- `docker-compose.yml` - Docker Compose configuration for development
+- `docker-compose.prod.yml` - Docker Compose configuration for production
 
-### Automated Deployment (Easiest):
+### 3. GitHub Pages Deployment
 
-```bash
-# One-liner to install and deploy
-curl -fsSL https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/setup-vps.sh | sudo bash
-sudo mooza-deploy
-```
+Deploy the frontend to GitHub Pages for static hosting.
 
-### Simple Deployment:
+**Files:**
+- `.github/workflows/deploy.yml` - GitHub Actions workflow for deployment
 
-```bash
-# Download and run the simple deployment script
-curl -fsSL -o simple-deploy.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/simple-deploy.sh
-chmod +x simple-deploy.sh
-sudo ./simple-deploy.sh
-```
+## Quick Start (VPS)
 
-### Troubleshooting Deployment Issues:
+1. Copy the deployment scripts to your VPS:
+   ```bash
+   scp deploy-to-vps.sh user@your-vps-ip:/tmp/
+   ```
 
-```bash
-# Download and run the troubleshooting script
-curl -fsSL -o troubleshoot.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/troubleshoot.sh
-chmod +x troubleshoot.sh
-sudo ./troubleshoot.sh
-```
+2. SSH into your VPS and run the deployment script:
+   ```bash
+   ssh user@your-vps-ip
+   sudo /tmp/deploy-to-vps.sh
+   ```
 
-### Fixing Common Deployment Issues:
+## Troubleshooting
 
-```bash
-# Download and run the fix deployment script
-curl -fsSL -o fix-deployment.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-deployment.sh
-chmod +x fix-deployment.sh
-sudo ./fix-deployment.sh
-```
+If you encounter issues during deployment, try these diagnostic tools:
 
-### Fixing Docker Hub Rate Limit Issues:
+1. **Run the troubleshooting script:**
+   ```bash
+   curl -fsSL -o troubleshoot.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/troubleshoot.sh
+   chmod +x troubleshoot.sh
+   sudo ./troubleshoot.sh
+   ```
 
-```bash
-# Download and run the Docker rate limit fix script
-curl -fsSL -o fix-docker-rate-limit.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-docker-rate-limit.sh
-chmod +x fix-docker-rate-limit.sh
-sudo ./fix-docker-rate-limit.sh
-```
+2. **Check common deployment issues:**
+   ```bash
+   curl -fsSL -o fix-deployment.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-deployment.sh
+   chmod +x fix-deployment.sh
+   sudo ./fix-deployment.sh
+   ```
 
-### Fixing Missing Dependencies Issues:
+3. **Fix Docker rate limit issues:**
+   ```bash
+   curl -fsSL -o fix-docker-rate-limit.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-docker-rate-limit.sh
+   chmod +x fix-docker-rate-limit.sh
+   sudo ./fix-docker-rate-limit.sh
+   ```
 
-```bash
-# Download and run the missing dependencies fix script
-curl -fsSL -o fix-missing-deps.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-missing-deps.sh
-chmod +x fix-missing-deps.sh
-sudo ./fix-missing-deps.sh
-```
+4. **Fix missing dependencies issues:**
+   ```bash
+   curl -fsSL -o fix-missing-deps.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-missing-deps.sh
+   chmod +x fix-missing-deps.sh
+   sudo ./fix-missing-deps.sh
+   ```
 
-### Detailed Diagnostics for Complex Issues:
+5. **Run detailed diagnostics:**
+   ```bash
+   curl -fsSL -o detailed-diag.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/detailed-diag.sh
+   chmod +x detailed-diag.sh
+   sudo ./detailed-diag.sh
+   ```
 
-```bash
-# Download and run the detailed diagnostic script
-curl -fsSL -o detailed-diag.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/detailed-diag.sh
-chmod +x detailed-diag.sh
-sudo ./detailed-diag.sh
-```
+## Manual Installation
 
-### Manual Deployment:
+If you prefer to install manually:
 
-#### From Linux VPS:
-```bash
-# Copy the deployment script to your VPS
-scp deploy-to-vps.sh root@your-vps-ip:/root/
+1. Install prerequisites:
+   ```bash
+   sudo apt update
+   sudo apt install -y curl git docker.io docker-compose
+   ```
 
-# SSH into your VPS
-ssh root@your-vps-ip
+2. Clone the repository:
+   ```bash
+   git clone https://github.com/cryptoChaosDev/mooza_dev.git
+   cd mooza_dev
+   ```
 
-# Make the script executable and run it
-chmod +x deploy-to-vps.sh
-./deploy-to-vps.sh
-```
+3. Install dependencies and build:
+   ```bash
+   cd frontend && npm install && npm run build && cd ..
+   cd backend && npm install && npx prisma generate && npm run build && cd ..
+   ```
 
-#### From Windows:
-```powershell
-# Run the PowerShell deployment helper
-.\deploy-to-vps.ps1
-```
+4. Configure environment:
+   ```bash
+   echo "JWT_SECRET=$(openssl rand -base64 32)" > .env
+   ```
 
-## Architecture Overview
+5. Start services:
+   ```bash
+   docker compose up -d
+   ```
 
-The deployment includes:
+## Common Issues and Solutions
 
-1. **Frontend**: React application served by Nginx
-2. **Backend**: Node.js/Express API with SQLite database
-3. **Reverse Proxy**: Nginx routing requests to appropriate services
-4. **Containerization**: Docker for consistent deployment across environments
+### Docker Rate Limits
+Docker Hub imposes rate limits on anonymous image pulls. To resolve:
+1. Create a Docker Hub account
+2. Log in on your server: `docker login`
+3. Or use the fix-docker-rate-limit.sh script
 
-## Requirements
+### Missing Dependencies
+If you see TypeScript compilation errors about missing modules:
+1. Ensure all required dependencies are in package.json
+2. Run npm install in the appropriate directory
+3. Or use the fix-missing-deps.sh script
 
-### VPS Deployment:
-- Ubuntu 20.04 LTS or newer (recommended)
-- 1 CPU core, 1GB RAM minimum
-- 10GB disk space
-- SSH access
-- Public IP address
-
-### Local Dependencies:
-- Git
-- SSH client
-- SCP client
-
-## Documentation
-
-For detailed deployment instructions, please refer to:
-- `VPS_DEPLOYMENT.md` - Comprehensive VPS deployment guide
-- `AUTOMATED_DEPLOYMENT.md` - Guide for the new automated deployment system
-
-## Support
-
-For issues with deployment, please check:
-1. The documentation in `VPS_DEPLOYMENT.md`
-2. The application logs
-3. Run the troubleshooting script
-4. Try the fix deployment script
-5. Fix Docker rate limit issues
-6. Fix missing dependencies issues
-7. Run the detailed diagnostics script
-8. Open an issue on the GitHub repository
+### Container Won't Start
+If containers fail to start:
+1. Check Docker logs: `docker compose logs`
+2. Verify environment variables are set correctly
+3. Ensure ports are not already in use
+4. Or use the detailed-diag.sh script for comprehensive diagnostics
