@@ -186,7 +186,6 @@ create_docker_compose() {
     cd /opt/mooza
     
     cat > docker-compose.yml << 'EOF'
-version: "3.8"
 services:
   nginx:
     image: nginx:alpine
@@ -276,6 +275,9 @@ start_services() {
     # Set JWT secret
     export JWT_SECRET=$(openssl rand -base64 32)
     
+    # Stop any existing services
+    docker compose down >/dev/null 2>&1
+    
     # Start services
     docker compose up -d --build >/dev/null 2>&1
     
@@ -289,20 +291,25 @@ check_status() {
     cd /opt/mooza
     
     # Wait a moment for services to start
-    sleep 10
+    sleep 15
     
     # Check if containers are running
     if docker compose ps | grep -q "Up"; then
         success "Containers are running"
     else
         warning "Containers may not be running properly"
+        log "Showing container status:"
+        docker compose ps
     fi
     
     # Check API health
+    sleep 5
     if curl -f http://localhost:4000/health >/dev/null 2>&1; then
         success "API is responding"
     else
         warning "API health check failed"
+        log "Checking API logs:"
+        docker compose logs api | tail -n 10
     fi
     
     echo
@@ -338,6 +345,12 @@ main() {
     echo "  1. Access your application at: http://your-vps-ip"
     echo "  2. For SSL, install certbot: sudo apt install certbot python3-certbot-nginx"
     echo "  3. Then run: sudo certbot --nginx"
+    echo
+    echo "If you encounter issues:"
+    echo "  Download and run the troubleshooting script:"
+    echo "    curl -fsSL -o troubleshoot.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/troubleshoot.sh"
+    echo "    chmod +x troubleshoot.sh"
+    echo "    sudo ./troubleshoot.sh"
 }
 
 # Run main function
