@@ -169,10 +169,15 @@ create_env_file() {
     
     cd /opt/mooza/backend
     
+    # Generate JWT secret if not already set
+    if [ -z "$JWT_SECRET" ]; then
+        export JWT_SECRET=$(openssl rand -base64 32)
+    fi
+    
     cat > .env << EOF
 NODE_ENV=production
 PORT=4000
-JWT_SECRET=$(openssl rand -base64 32)
+JWT_SECRET=$JWT_SECRET
 DATABASE_URL=file:./prod.db
 EOF
     
@@ -272,14 +277,19 @@ start_services() {
     
     cd /opt/mooza
     
-    # Set JWT secret
-    export JWT_SECRET=$(openssl rand -base64 32)
+    # Generate JWT secret if not already set
+    if [ -z "$JWT_SECRET" ]; then
+        export JWT_SECRET=$(openssl rand -base64 32)
+    fi
+    
+    # Save JWT secret to .env file for persistence
+    echo "JWT_SECRET=$JWT_SECRET" > .env
     
     # Stop any existing services
     docker compose down >/dev/null 2>&1
     
-    # Start services
-    docker compose up -d --build >/dev/null 2>&1
+    # Start services with environment variables
+    JWT_SECRET=$JWT_SECRET docker compose up -d --build >/dev/null 2>&1
     
     success "Services started"
 }

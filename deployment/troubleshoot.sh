@@ -40,7 +40,21 @@ else
 fi
 echo
 
-echo "4. Checking running containers..."
+echo "4. Checking environment variables..."
+if [ -d "/opt/mooza" ]; then
+    cd /opt/mooza
+    if [ -f ".env" ]; then
+        echo ".env file exists:"
+        cat .env
+    else
+        echo "No .env file found"
+    fi
+else
+    echo "Deployment directory not found"
+fi
+echo
+
+echo "5. Checking running containers..."
 if command -v docker &> /dev/null; then
     if docker compose ps &> /dev/null; then
         docker compose -f /opt/mooza/docker-compose.yml ps 2>/dev/null || docker compose ps
@@ -52,7 +66,7 @@ else
 fi
 echo
 
-echo "5. Checking container logs..."
+echo "6. Checking container logs..."
 if [ -d "/opt/mooza" ] && command -v docker &> /dev/null; then
     cd /opt/mooza
     echo "--- Nginx logs ---"
@@ -60,12 +74,22 @@ if [ -d "/opt/mooza" ] && command -v docker &> /dev/null; then
     echo
     echo "--- API logs ---"
     docker compose logs api 2>/dev/null | tail -n 20 || echo "Could not get API logs"
+    
+    # Check for JWT_SECRET warnings specifically
+    echo
+    echo "--- Checking for JWT_SECRET warnings ---"
+    if docker compose logs api 2>/dev/null | grep -q "JWT_SECRET"; then
+        echo "Found JWT_SECRET related messages in API logs:"
+        docker compose logs api 2>/dev/null | grep "JWT_SECRET" | tail -n 5
+    else
+        echo "No JWT_SECRET warnings found in API logs"
+    fi
 else
     echo "Cannot check logs - deployment directory or Docker not available"
 fi
 echo
 
-echo "6. Checking network connectivity..."
+echo "7. Checking network connectivity..."
 if command -v curl &> /dev/null; then
     echo "Testing localhost:4000..."
     curl -v http://localhost:4000/health 2>&1 | head -n 10
@@ -74,21 +98,22 @@ else
 fi
 echo
 
-echo "7. Checking disk space..."
+echo "8. Checking disk space..."
 df -h
 echo
 
-echo "8. Checking system resources..."
+echo "9. Checking system resources..."
 free -h
 echo
 
 echo "Troubleshooting complete."
 echo
 echo "Common solutions:"
-echo "1. If containers aren't starting, check the logs above for error messages"
-echo "2. If API isn't responding, ensure the backend built correctly"
-echo "3. If nginx isn't serving content, check the nginx configuration"
-echo "4. If database issues occur, check the backend logs for Prisma errors"
+echo "1. If JWT_SECRET warning appears, the secret is not being passed to containers"
+echo "2. If containers aren't starting, check the logs above for error messages"
+echo "3. If API isn't responding, ensure the backend built correctly"
+echo "4. If nginx isn't serving content, check the nginx configuration"
+echo "5. If database issues occur, check the backend logs for Prisma errors"
 echo
 echo "To manually check container status:"
 echo "  cd /opt/mooza && docker compose ps"
@@ -96,3 +121,6 @@ echo
 echo "To view detailed logs:"
 echo "  cd /opt/mooza && docker compose logs api"
 echo "  cd /opt/mooza && docker compose logs nginx"
+echo
+echo "To restart services with proper environment variables:"
+echo "  cd /opt/mooza && export JWT_SECRET=\$(openssl rand -base64 32) && echo \"JWT_SECRET=\$JWT_SECRET\" > .env && docker compose down && JWT_SECRET=\$JWT_SECRET docker compose up -d"
