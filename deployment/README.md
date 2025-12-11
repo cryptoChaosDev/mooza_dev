@@ -81,12 +81,19 @@ If the frontend build fails during the fix script execution, it could be due to 
 2. **Corrupted node_modules**: The script now removes existing node_modules before installing dependencies.
 3. **Network issues**: Try running the script again, or check network connectivity.
 4. **Outdated dependencies**: The script now tries both `npm ci` and `npm install` to ensure dependencies are installed.
+5. **Missing public directory**: The improved script now checks for and recreates missing public directory files.
 
 **To manually troubleshoot build issues**:
 1. SSH into your VPS: `ssh root@147.45.166.246`
 2. Navigate to the frontend directory: `cd /opt/mooza/frontend`
 3. Check the build log: `tail -n 100 /var/log/mooza-deploy.log`
 4. Try building manually: `npm run build`
+
+### Missing Public Directory
+If the build fails with "Could not find a required file. Name: index.html", it means the public directory is missing or incomplete.
+
+**Solution**:
+Run the [fix-frontend-assets.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-frontend-assets.sh) script which now includes automatic detection and recreation of missing public directory files.
 
 ## Accessing Your Deployed Application
 

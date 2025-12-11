@@ -58,6 +58,173 @@ check_deployment_dir() {
     success "Deployment directory verified"
 }
 
+# Check and fix public directory
+check_public_directory() {
+    log "Checking public directory..."
+    
+    if [ ! -d "frontend/public" ]; then
+        error "frontend/public directory not found"
+        log "Creating public directory and copying required files..."
+        
+        # Create public directory
+        mkdir -p frontend/public
+        
+        # Check if we have the source files in the repository
+        if [ -d ".git" ]; then
+            # Try to restore public directory from git
+            log "Attempting to restore public directory from git..."
+            git checkout -- frontend/public >> /var/log/mooza-deploy.log 2>&1
+        fi
+        
+        # If public directory is still missing, we need to recreate it
+        if [ ! -d "frontend/public" ] || [ -z "$(ls -A frontend/public)" ]; then
+            warning "Public directory is empty or missing. Creating minimal required files..."
+            
+            # Create a basic index.html
+            cat > frontend/public/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="Mooza Music Social Network" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+    <title>Mooza Music</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
+EOF
+            
+            # Create a basic manifest.json
+            cat > frontend/public/manifest.json << 'EOF'
+{
+  "short_name": "Mooza",
+  "name": "Mooza Music Social Network",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
+}
+EOF
+            
+            # Create a basic robots.txt
+            echo "# https://www.robotstxt.org/robotstxt.html" > frontend/public/robots.txt
+            echo "User-agent: *" >> frontend/public/robots.txt
+            echo "Disallow:" >> frontend/public/robots.txt
+            
+            # Create a favicon (empty file, will be replaced if needed)
+            touch frontend/public/favicon.ico
+        fi
+    else
+        log "Public directory exists"
+        
+        # Check if required files exist
+        local missing_files=()
+        if [ ! -f "frontend/public/index.html" ]; then
+            missing_files+=("index.html")
+        fi
+        if [ ! -f "frontend/public/manifest.json" ]; then
+            missing_files+=("manifest.json")
+        fi
+        if [ ! -f "frontend/public/robots.txt" ]; then
+            missing_files+=("robots.txt")
+        fi
+        
+        if [ ${#missing_files[@]} -gt 0 ]; then
+            warning "Missing files in public directory: ${missing_files[*]}"
+            log "Creating missing files..."
+            
+            # Create missing files
+            for file in "${missing_files[@]}"; do
+                case $file in
+                    "index.html")
+                        cat > frontend/public/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="description" content="Mooza Music Social Network" />
+    <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
+    <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
+    <link href="https://fonts.googleapis.com/css2?family=Pacifico&display=swap" rel="stylesheet">
+    <title>Mooza Music</title>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
+EOF
+                        ;;
+                    "manifest.json")
+                        cat > frontend/public/manifest.json << 'EOF'
+{
+  "short_name": "Mooza",
+  "name": "Mooza Music Social Network",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "logo192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "logo512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
+}
+EOF
+                        ;;
+                    "robots.txt")
+                        echo "# https://www.robotstxt.org/robotstxt.html" > frontend/public/robots.txt
+                        echo "User-agent: *" >> frontend/public/robots.txt
+                        echo "Disallow:" >> frontend/public/robots.txt
+                        ;;
+                esac
+            done
+        fi
+    fi
+    
+    success "Public directory checked and fixed"
+}
+
 # Fix homepage field in package.json
 fix_homepage_field() {
     log "Fixing homepage field in frontend/package.json..."
@@ -180,6 +347,7 @@ restart_services() {
 main() {
     check_root
     check_deployment_dir
+    check_public_directory
     fix_homepage_field
     rebuild_frontend
     restart_services
