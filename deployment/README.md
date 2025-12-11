@@ -157,3 +157,9 @@ If you encounter "package not found" errors:
    - Installing packages directly before full installation
    - Using legacy peer dependencies when needed
    - Clearing all caches and temporary files
+
+### Docker Build Issues
+If you encounter Docker build errors related to missing files:
+1. The fix-missing-deps.sh script now handles this by:
+   - Checking and fixing Dockerfile references to non-existent files
+   - Ensuring only existing files are copied during the build process
