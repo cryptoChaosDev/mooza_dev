@@ -366,6 +366,11 @@ main() {
     echo "    curl -fsSL -o fix-deployment.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-deployment.sh"
     echo "    chmod +x fix-deployment.sh"
     echo "    sudo ./fix-deployment.sh"
+    echo
+    echo "  For detailed diagnostics:"
+    echo "    curl -fsSL -o detailed-diag.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/detailed-diag.sh"
+    echo "    chmod +x detailed-diag.sh"
+    echo "    sudo ./detailed-diag.sh"
 }
 
 # Run main function
