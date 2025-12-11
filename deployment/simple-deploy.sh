@@ -372,6 +372,11 @@ main() {
     echo "    chmod +x fix-docker-rate-limit.sh"
     echo "    sudo ./fix-docker-rate-limit.sh"
     echo
+    echo "  For missing dependencies issues:"
+    echo "    curl -fsSL -o fix-missing-deps.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-missing-deps.sh"
+    echo "    chmod +x fix-missing-deps.sh"
+    echo "    sudo ./fix-missing-deps.sh"
+    echo
     echo "  For detailed diagnostics:"
     echo "    curl -fsSL -o detailed-diag.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/detailed-diag.sh"
     echo "    chmod +x detailed-diag.sh"
