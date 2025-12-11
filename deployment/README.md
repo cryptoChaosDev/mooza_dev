@@ -14,6 +14,7 @@ Deploy Mooza to a Linux VPS server for production use.
 - `automated-deploy.sh` - Enhanced automated deployment script with better error handling
 - `simple-deploy.sh` - Simplified deployment script for basic setups
 - `troubleshoot.sh` - Diagnostic script to help troubleshoot deployment issues
+- `fix-deployment.sh` - Script to fix common deployment issues
 - `setup-vps.sh` - Helper script to install and prepare the deployment environment
 - `install-deploy.sh` - Simple installer for the deployment tools
 
@@ -47,6 +48,15 @@ sudo ./simple-deploy.sh
 curl -fsSL -o troubleshoot.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/troubleshoot.sh
 chmod +x troubleshoot.sh
 sudo ./troubleshoot.sh
+```
+
+### Fixing Common Deployment Issues:
+
+```bash
+# Download and run the fix deployment script
+curl -fsSL -o fix-deployment.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-deployment.sh
+chmod +x fix-deployment.sh
+sudo ./fix-deployment.sh
 ```
 
 ### Manual Deployment:
@@ -105,4 +115,5 @@ For issues with deployment, please check:
 1. The documentation in `VPS_DEPLOYMENT.md`
 2. The application logs
 3. Run the troubleshooting script
-4. Open an issue on the GitHub repository
+4. Try the fix deployment script
+5. Open an issue on the GitHub repository

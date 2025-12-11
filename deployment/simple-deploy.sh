@@ -361,6 +361,11 @@ main() {
     echo "    curl -fsSL -o troubleshoot.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/troubleshoot.sh"
     echo "    chmod +x troubleshoot.sh"
     echo "    sudo ./troubleshoot.sh"
+    echo
+    echo "  Or try the fix deployment script:"
+    echo "    curl -fsSL -o fix-deployment.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-deployment.sh"
+    echo "    chmod +x fix-deployment.sh"
+    echo "    sudo ./fix-deployment.sh"
 }
 
 # Run main function

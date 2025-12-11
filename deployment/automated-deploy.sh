@@ -563,6 +563,11 @@ display_summary() {
     echo -e "    ${GREEN}chmod +x troubleshoot.sh${NC}"
     echo -e "    ${GREEN}sudo ./troubleshoot.sh${NC}"
     echo
+    echo -e "  Or try the fix deployment script:"
+    echo -e "    ${GREEN}curl -fsSL -o fix-deployment.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-deployment.sh${NC}"
+    echo -e "    ${GREEN}chmod +x fix-deployment.sh${NC}"
+    echo -e "    ${GREEN}sudo ./fix-deployment.sh${NC}"
+    echo
 }
 
 # Main deployment function
