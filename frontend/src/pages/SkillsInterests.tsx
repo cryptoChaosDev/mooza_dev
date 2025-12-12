@@ -28,8 +28,8 @@ export function SkillsInterests({ profile, setProfile }: {
       const payload = {
         firstName: profile.firstName || '',
         lastName: profile.lastName || '',
-        skills,
-        interests,
+        skills: skills.length > 0 ? skills : [],
+        interests: interests.length > 0 ? interests : [],
       };
       const res = await updateProfile(token, payload as any);
       if (res && res.profile) {
@@ -41,6 +41,10 @@ export function SkillsInterests({ profile, setProfile }: {
         } as UserProfile;
         setProfile(updated);
         toast('Навыки и интересы сохранены');
+        
+        // Dispatch event to refresh profile in other components
+        window.dispatchEvent(new CustomEvent('profileUpdated'));
+        
         navigate('/profile');
       } else {
         throw new Error('Некорректный ответ сервера');
