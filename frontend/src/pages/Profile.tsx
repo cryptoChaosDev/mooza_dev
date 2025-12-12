@@ -66,7 +66,7 @@ export function Profile({
         return '';
       // skills/interests moved to separate page — no validation here
       case 'portfolioText':
-        if (value.length > 500) return 'Максимум 500 символов';
+        if (value && value.length > 500) return 'Максимум 500 символов';
         return '';
       case 'phone':
         if (!value) return 'Обязательное поле';
@@ -80,7 +80,7 @@ export function Profile({
       case 'vkId':
       case 'youtubeId':
       case 'telegramId':
-        if (value && !/^https?:\/\//.test(value)) return 'Введите ссылку, начиная с https://';
+        if (value && value.trim() !== '' && !/^https?:\/\//.test(value)) return 'Введите ссылку, начиная с https://';
         return '';
       default:
         return '';
@@ -116,6 +116,43 @@ export function Profile({
         return;
       }
 
+      // Validate all fields before saving
+      const newErrors: any = {};
+      const fieldsToValidate = [
+        { key: 'firstName', value: editData.firstName },
+        { key: 'lastName', value: editData.lastName },
+        { key: 'country', value: editData.country },
+        { key: 'city', value: editData.city },
+        { key: 'phone', value: editData.phone },
+        { key: 'email', value: editData.email },
+        { key: 'vkId', value: editData.vkId },
+        { key: 'youtubeId', value: editData.youtubeId },
+        { key: 'telegramId', value: editData.telegramId },
+      ];
+
+      fieldsToValidate.forEach(({ key, value }) => {
+        const error = validateField(key, value);
+        if (error) {
+          newErrors[key] = error;
+        }
+      });
+
+      // Also validate portfolio text separately
+      const portfolioTextError = validateField('portfolioText', editData.portfolio?.text);
+      if (portfolioTextError) {
+        newErrors['portfolioText'] = portfolioTextError;
+      }
+
+      if (Object.keys(newErrors).length > 0) {
+        setErrors(newErrors);
+        toast("Пожалуйста, исправьте ошибки в форме");
+        setLoading(false);
+        return;
+      }
+
+      // Clear errors if validation passes
+      setErrors({});
+
       // Обновляем профиль на сервере
       const payload: any = {
         firstName: editData.firstName,
@@ -127,16 +164,15 @@ export function Profile({
         country: editData.country || '',
         phone: editData.phone,
         email: editData.email,
-        vkId: editData.vkId,
-        youtubeId: editData.youtubeId,
-        telegramId: editData.telegramId,
+        vkId: editData.vkId || '',
+        youtubeId: editData.youtubeId || '',
+        telegramId: editData.telegramId || '',
       };
 
       // Добавляем portfolio только если он существует
       if (editData.portfolio) {
         payload.portfolio = {
           text: editData.portfolio.text || '',
-          fileUrl: editData.portfolio.fileUrl,
         };
       }
 
@@ -164,9 +200,12 @@ export function Profile({
         setEditData(updatedProfile);
         setIsEditing(false);
         toast("Профиль успешно обновлён");
-        
+      
         // Обновляем данные пользователя в списке всех пользователей
         setAllUsers(users.map(u => u.userId === updatedProfile.userId ? updatedProfile : u));
+      
+        // Dispatch event to refresh profile in other components
+        window.dispatchEvent(new CustomEvent('profileUpdated'));
       } else {
         throw new Error('Не удалось сохранить профиль');
       }
@@ -245,7 +284,7 @@ export function Profile({
   const handleSocialChange = (field: 'vkId' | 'youtubeId' | 'telegramId', value: string) => {
     // Автоматически добавляем https:// если пользователь не указал протокол
     let formattedValue = value;
-    if (value && !/^https?:\/\//.test(value)) {
+    if (value && value.trim() !== '' && !/^https?:\/\//.test(value)) {
       formattedValue = `https://${value}`;
     }
     setEditData({ ...editData, [field]: formattedValue });

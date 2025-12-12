@@ -114,6 +114,14 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
       updateUserFields.name = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim();
     }
     
+    // Always update phone and email from profile data
+    if (profileData.hasOwnProperty('phone')) {
+      updateUserFields.phone = profileData.phone;
+    }
+    if (profileData.hasOwnProperty('email')) {
+      updateUserFields.email = profileData.email;
+    }
+    
     if (Object.keys(updateUserFields).length > 0) {
       console.log("Updating user fields:", updateUserFields);
       await User.update(updateUserFields, {
@@ -146,24 +154,53 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
 
     if (!created) {
       // Update existing profile
-      const updateProfileFields = {
-        firstName: profileData.firstName || '',
-        lastName: profileData.lastName || '',
-        avatarUrl: profileData.avatarUrl || '',
-        bio: profileData.bio || '',
-        workPlace: profileData.workPlace || '',
-        skills: Array.isArray(profileData.skills) ? profileData.skills.join(',') : (profileData.skills || ''),
-        interests: Array.isArray(profileData.interests) ? profileData.interests.join(',') : (profileData.interests || ''),
-        portfolio: profileData.portfolio ? (typeof profileData.portfolio === 'string' ? profileData.portfolio : JSON.stringify(profileData.portfolio)) : null,
-        city: profileData.city || '',
-        country: profileData.country || '',
-        vkId: profileData.vkId || '',
-        youtubeId: profileData.youtubeId || '',
-        telegramId: profileData.telegramId || ''
-      };
+      const updateProfileFields: any = {};
+      
+      // Only update fields that are provided in the request
+      if (profileData.hasOwnProperty('firstName')) {
+        updateProfileFields.firstName = profileData.firstName;
+      }
+      if (profileData.hasOwnProperty('lastName')) {
+        updateProfileFields.lastName = profileData.lastName;
+      }
+      if (profileData.hasOwnProperty('avatarUrl')) {
+        updateProfileFields.avatarUrl = profileData.avatarUrl;
+      }
+      if (profileData.hasOwnProperty('bio')) {
+        updateProfileFields.bio = profileData.bio;
+      }
+      if (profileData.hasOwnProperty('workPlace')) {
+        updateProfileFields.workPlace = profileData.workPlace;
+      }
+      if (profileData.hasOwnProperty('skills')) {
+        updateProfileFields.skills = Array.isArray(profileData.skills) ? profileData.skills.join(',') : (profileData.skills || '');
+      }
+      if (profileData.hasOwnProperty('interests')) {
+        updateProfileFields.interests = Array.isArray(profileData.interests) ? profileData.interests.join(',') : (profileData.interests || '');
+      }
+      if (profileData.hasOwnProperty('portfolio')) {
+        updateProfileFields.portfolio = profileData.portfolio ? (typeof profileData.portfolio === 'string' ? profileData.portfolio : JSON.stringify(profileData.portfolio)) : null;
+      }
+      if (profileData.hasOwnProperty('city')) {
+        updateProfileFields.city = profileData.city;
+      }
+      if (profileData.hasOwnProperty('country')) {
+        updateProfileFields.country = profileData.country;
+      }
+      if (profileData.hasOwnProperty('vkId')) {
+        updateProfileFields.vkId = profileData.vkId;
+      }
+      if (profileData.hasOwnProperty('youtubeId')) {
+        updateProfileFields.youtubeId = profileData.youtubeId;
+      }
+      if (profileData.hasOwnProperty('telegramId')) {
+        updateProfileFields.telegramId = profileData.telegramId;
+      }
       
       console.log("Updating profile fields:", updateProfileFields);
-      await profile.update(updateProfileFields);
+      if (Object.keys(updateProfileFields).length > 0) {
+        await profile.update(updateProfileFields);
+      }
     }
 
     // Return updated profile
