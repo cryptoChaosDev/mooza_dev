@@ -1,189 +1,145 @@
-import { Router } from "express";
-import { z } from "zod";
+import { Router, Request, Response } from "express";
 import bcrypt from "bcryptjs";
-import jwt, { SignOptions } from "jsonwebtoken";
-import { PrismaClient } from "@prisma/client";
+import jwt from "jsonwebtoken";
+import { authenticateToken } from "../middleware/auth";
+import User from "../models/User";
+import Profile from "../models/Profile";
 
-const prisma = new PrismaClient();
-export const router = Router();
+const router = Router();
 
-const env = {
-  JWT_SECRET: process.env.JWT_SECRET || "dev-secret",
-  JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || "1d",
-};
-
-function normalizeEmail(email?: string) {
-  return email ? email.trim().toLowerCase() : undefined;
-}
-
-function normalizePhone(phone?: string) {
-  if (!phone) return undefined;
-  const digits = phone.replace(/\D/g, "");
-  if (!digits) return undefined;
-  // assume Russia if starts with 8 or 7; otherwise keep as international with +
-  if (digits.startsWith("8")) return "+7" + digits.slice(1);
-  if (digits.startsWith("7")) return "+7" + digits.slice(1);
-  return "+" + digits;
-}
-
-const phoneRegex = /^\+?\d{10,15}$/;
-
-// Enhanced register schema with stronger validation
-const registerSchema = z.object({
-  email: z.string().email().max(255),
-  phone: z.string().regex(phoneRegex, 'Некорректный телефон').max(20),
-  password: z.string().min(12).max(128), // Increased minimum password length
-  name: z.string().min(1).max(100),
-});
-
-router.post("/register", async (req, res) => {
+// Register endpoint
+router.post("/register", async (req: Request, res: Response) => {
   try {
-    const parse = registerSchema.safeParse(req.body);
-    if (!parse.success) return res.status(400).json({ error: parse.error.flatten() });
-    const { email: rawEmail, phone: rawPhone, password, name } = parse.data;
-    const email = normalizeEmail(rawEmail);
-    const phone = normalizePhone(rawPhone);
+    const { email, phone, password, name } = req.body;
 
-    // Check for existing user with email
-    if (email) {
-      const existingEmail = await prisma.user.findUnique({ where: { email } });
-      if (existingEmail) return res.status(409).json({ error: "Email already registered" });
-    }
-    
-    // Check for existing user with phone
-    if (phone) {
-      const existingPhone = await prisma.user.findUnique({ where: { phone } });
-      if (existingPhone) return res.status(409).json({ error: "Phone already registered" });
+    // Validate input
+    if ((!email && !phone) || !password || !name) {
+      return res.status(400).json({ error: "Все поля обязательны" });
     }
 
-    // Stronger password hashing
-    const saltRounds = 12;
-    const passwordHash = await bcrypt.hash(password, saltRounds);
-    
-    const user = await prisma.user.create({ 
-      data: { 
-        email: email!, 
-        phone: phone ?? undefined, 
-        passwordHash, 
-        name 
-      } 
-    });
-    
-    // Ensure an empty profile is created
-    await prisma.profile.upsert({
-      where: { userId: user.id },
-      update: {},
-      create: { 
-        userId: user.id, 
-        firstName: name.split(' ')[0] || 'User', 
-        lastName: name.split(' ').slice(1).join(' ') || '' , 
-        skillsCsv: '', 
-        interestsCsv: '' 
-      },
+    // Check if user already exists
+    const existingUser = await User.findOne({
+      where: {
+        [email ? 'email' : 'phone']: email || phone
+      }
     });
 
-    // Generate JWT with shorter expiration and more secure options
+    if (existingUser) {
+      return res.status(400).json({ error: "Пользователь уже существует" });
+    }
+
+    // Hash password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+    // Create user
+    const user = await User.create({
+      email,
+      phone,
+      password: hashedPassword,
+      name
+    });
+
+    // Create profile for the user
+    const names = name.split(' ');
+    const firstName = names[0] || name;
+    const lastName = names.slice(1).join(' ') || '';
+    
+    await Profile.create({
+      userId: user.id,
+      firstName,
+      lastName,
+      skills: [],
+      interests: []
+    });
+
+    // Generate JWT token
     const token = jwt.sign(
-      { sub: user.id, email: user.email, phone: user.phone }, 
-      env.JWT_SECRET, 
-      { 
-        expiresIn: "1h", // Shorter token expiration for better security
-        issuer: 'mooza-auth',
-        audience: 'mooza-client'
-      } as SignOptions
+      { userId: user.id },
+      process.env.JWT_SECRET || "fallback_secret",
+      { expiresIn: "24h" }
     );
-    
-    res.status(201).json({ 
-      token, 
-      user: { 
-        id: user.id, 
-        email: user.email, 
-        name: user.name, 
-        phone: user.phone 
-      } 
+
+    res.status(201).json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        phone: user.phone,
+        name: user.name
+      }
     });
   } catch (error) {
-    console.error('Registration error:', error);
+    console.error("Registration error:", error);
     res.status(500).json({ error: "Registration failed" });
   }
 });
 
-// Enhanced login schema
-const loginSchema = z.object({
-  email: z.string().email().optional(),
-  phone: z.string().regex(phoneRegex, 'Некорректный телефон').optional(),
-  password: z.string().min(8).max(128),
-}).refine((d) => !!d.email || !!d.phone, { message: 'Нужен email или телефон', path: ['email'] });
-
-router.post("/login", async (req, res) => {
+// Login endpoint
+router.post("/login", async (req: Request, res: Response) => {
   try {
-    const parse = loginSchema.safeParse(req.body);
-    if (!parse.success) return res.status(400).json({ error: parse.error.flatten() });
-    const { email: rawEmail, phone: rawPhone, password } = parse.data;
-    const email = normalizeEmail(rawEmail);
-    const phone = normalizePhone(rawPhone);
+    const { email, phone, password } = req.body;
 
-    // Find user by email or phone
-    const user = email
-      ? await prisma.user.findUnique({ where: { email } })
-      : await prisma.user.findUnique({ where: { phone: phone! } });
-      
-    if (!user) return res.status(401).json({ error: "Invalid email or password" });
-    
-    // Verify password with timing-safe comparison
-    const ok = await bcrypt.compare(password, user.passwordHash);
-    if (!ok) return res.status(401).json({ error: "Invalid email or password" });
+    // Validate input
+    if ((!email && !phone) || !password) {
+      return res.status(400).json({ error: "Email/phone and password are required" });
+    }
 
-    // Generate JWT with security enhancements
+    // Find user
+    const user = await User.findOne({
+      where: {
+        [email ? 'email' : 'phone']: email || phone
+      }
+    });
+
+    if (!user) {
+      return res.status(400).json({ error: "Invalid credentials" });
+    }
+
+    // Check password
+    const isValidPassword = await bcrypt.compare(password, user.password);
+    if (!isValidPassword) {
+      return res.status(400).json({ error: "Invalid credentials" });
+    }
+
+    // Generate JWT token
     const token = jwt.sign(
-      { sub: user.id, email: user.email, phone: user.phone }, 
-      env.JWT_SECRET, 
-      { 
-        expiresIn: "1h", // Shorter token expiration for better security
-        issuer: 'mooza-auth',
-        audience: 'mooza-client'
-      } as SignOptions
+      { userId: user.id },
+      process.env.JWT_SECRET || "fallback_secret",
+      { expiresIn: "24h" }
     );
-    
-    res.json({ 
-      token, 
-      user: { 
-        id: user.id, 
-        email: user.email, 
-        phone: user.phone, 
-        name: user.name 
-      } 
+
+    res.json({
+      token,
+      user: {
+        id: user.id,
+        email: user.email,
+        phone: user.phone,
+        name: user.name
+      }
     });
   } catch (error) {
-    console.error('Login error:', error);
+    console.error("Login error:", error);
     res.status(500).json({ error: "Login failed" });
   }
 });
 
-router.get("/me", async (req, res) => {
-  const auth = req.header("authorization");
-  if (!auth?.startsWith("Bearer ")) return res.status(401).json({ error: "Missing token" });
-  const token = auth.slice("Bearer ".length);
-  
+// Get current user endpoint
+router.get("/me", authenticateToken, async (req: any, res: Response) => {
   try {
-    // Verify JWT with issuer and audience checks
-    const payload = jwt.verify(token, env.JWT_SECRET, {
-      issuer: 'mooza-auth',
-      audience: 'mooza-client'
-    }) as unknown as { sub: number };
-    
-    const user = await prisma.user.findUnique({ where: { id: payload.sub } });
-    if (!user) return res.status(404).json({ error: "User not found" });
-    
-    res.json({ id: user.id, email: user.email, name: user.name, phone: user.phone });
+    const user = await User.findByPk(req.user.userId, {
+      attributes: { exclude: ['password'] }
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ user });
   } catch (error) {
-    if (error instanceof jwt.TokenExpiredError) {
-      return res.status(401).json({ error: "Token expired" });
-    }
-    if (error instanceof jwt.JsonWebTokenError) {
-      return res.status(401).json({ error: "Invalid token" });
-    }
-    console.error('Auth verification error:', error);
-    res.status(401).json({ error: "Invalid token" });
+    console.error("Auth verification error:", error);
+    res.status(500).json({ error: "Authentication verification failed" });
   }
 });
+
+export { router };
