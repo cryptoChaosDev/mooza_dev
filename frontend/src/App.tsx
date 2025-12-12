@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
+import { HashRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
 import { WelcomePage } from "./Welcome";
 import { UserProfile, Post } from "./types";
 import { ToastProvider } from './contexts/ToastContext';
@@ -29,7 +29,7 @@ function App() {
       setShowWelcome(false);
       // Redirect to home page only if we're on the root path (initial load)
       // This ensures users go to home page after login, but can navigate to other pages
-      if (window.location.pathname === '/') {
+      if (window.location.hash === '#/' || window.location.hash === '') {
         navigate('/');
       }
     }
