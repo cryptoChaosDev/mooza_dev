@@ -16,15 +16,16 @@ This error occurs because the code is trying to access a property called `friend
 
 After migrating from Prisma to Sequelize, the friendships route was not properly updated. The code was still trying to use Prisma-style relationship access where you could directly access related models through properties. In Sequelize, you need to explicitly query related models separately.
 
+Additionally, the Sequelize models and dependencies were not properly installed, causing import errors.
+
 ## Solution
 
-The fix involves updating the implementation to:
+The fix involves:
 
-1. First query the `Friendship` model to get the friendships
-2. Extract the friend IDs from the friendships
-3. Then query the `User` model separately to get the friend details
-
-This is the correct approach for Sequelize relationships.
+1. Installing the required Sequelize dependencies (sequelize, pg, @types/pg)
+2. Creating the Sequelize models directory and model files
+3. Updating the package.json to remove Prisma dependencies and add Sequelize dependencies
+4. Updating the implementation to use the correct Sequelize approach
 
 ## Usage
 
@@ -43,7 +44,31 @@ sudo ./fix-friendships-ts-error.sh
 
 ## What the Script Does
 
-### 1. Fixes the Friendships Route Implementation
+### 1. Installs Sequelize Dependencies
+The script installs the required dependencies:
+
+- `sequelize` - The Sequelize ORM
+- `pg` - PostgreSQL driver
+- `@types/pg` - TypeScript definitions for PostgreSQL
+
+### 2. Creates Sequelize Models
+The script creates all the necessary Sequelize models:
+
+- `backend/src/config/database.ts` - Database configuration
+- `backend/src/models/User.ts` - User model
+- `backend/src/models/Profile.ts` - Profile model
+- `backend/src/models/Post.ts` - Post model
+- `backend/src/models/Like.ts` - Like model
+- `backend/src/models/Friendship.ts` - Friendship model
+
+### 3. Updates package.json
+The script updates the package.json file to:
+
+- Remove Prisma dependencies and scripts
+- Add Sequelize dependencies
+- Create a backup of the original package.json
+
+### 4. Fixes the Friendships Route Implementation
 The script updates the `backend/src/routes/friendships.ts` file with the correct Sequelize implementation:
 
 ```typescript
@@ -74,14 +99,16 @@ router.get("/me/friends", authenticateToken, async (req: any, res: Response) => 
 });
 ```
 
-### 2. Creates a Backup
-Before making changes, the script creates a backup of the original file:
+### 5. Creates Backups
+Before making changes, the script creates backups of the original files:
 
 - `backend/src/routes/friendships.ts.backup.[timestamp]`
+- `backend/package.json.backup.[timestamp]`
 
-### 3. Rebuilds and Restarts Services
+### 6. Rebuilds and Restarts Services
 After applying the fix, the script:
 
+- Installs the new dependencies
 - Stops existing containers
 - Removes old images
 - Builds new images with corrected code
@@ -105,7 +132,19 @@ The build should complete and show something like:
 
 ## Manual Fix (if needed)
 
-If you prefer to apply the fix manually, you can update the `backend/src/routes/friendships.ts` file directly with the correct implementation shown above.
+If you prefer to apply the fix manually, you need to:
+
+1. Install the Sequelize dependencies:
+   ```bash
+   npm install sequelize pg
+   npm install --save-dev @types/node @types/pg
+   ```
+
+2. Update package.json to remove Prisma dependencies and add Sequelize dependencies
+
+3. Create the model files as shown above
+
+4. Update the `backend/src/routes/friendships.ts` file directly with the correct implementation shown above
 
 ## Common Issues
 
@@ -126,5 +165,6 @@ docker builder prune -a
 ## Additional Notes
 
 - The script must be run with sudo privileges
-- Ensure you have internet connectivity for Docker image pulls
+- Ensure you have internet connectivity for Docker image pulls and npm installs
 - The fix is specifically targeted at the TypeScript error and doesn't affect other functionality
+- The script will automatically install all required dependencies

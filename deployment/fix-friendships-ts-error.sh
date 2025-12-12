@@ -58,6 +58,395 @@ check_deployment_dir() {
     success "Deployment directory verified"
 }
 
+# Install Sequelize dependencies
+install_sequelize_dependencies() {
+    log "Installing Sequelize dependencies..."
+    
+    cd /opt/mooza/backend
+    
+    # Install Sequelize and PostgreSQL driver
+    npm install sequelize pg
+    
+    # Install TypeScript definitions
+    npm install --save-dev @types/node @types/pg
+    
+    success "Sequelize dependencies installed"
+}
+
+# Create Sequelize models directory and files
+create_sequelize_models() {
+    log "Creating Sequelize models..."
+    
+    cd /opt/mooza/backend
+    
+    # Create models directory
+    mkdir -p src/models
+    mkdir -p src/config
+    
+    # Create database configuration
+    cat > src/config/database.ts << 'EOF'
+import { Sequelize } from 'sequelize';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const sequelize = new Sequelize(
+  process.env.DATABASE_URL || 'postgresql://user:password@db:5432/mooza',
+  {
+    dialect: 'postgres',
+    logging: process.env.NODE_ENV === 'development' ? console.log : false,
+    pool: {
+      max: 5,
+      min: 0,
+      acquire: 30000,
+      idle: 10000
+    }
+  }
+);
+
+export { sequelize };
+EOF
+
+    # Create User model
+    cat > src/models/User.ts << 'EOF'
+import { Model, DataTypes, Optional } from 'sequelize';
+import { sequelize } from '../config/database';
+
+interface UserAttributes {
+  id: number;
+  email?: string;
+  phone?: string;
+  password: string;
+  name: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+interface UserCreationAttributes extends Optional<UserAttributes, 'id'> {}
+
+class User extends Model<UserAttributes, UserCreationAttributes> implements UserAttributes {
+  public id!: number;
+  public email?: string;
+  public phone?: string;
+  public password!: string;
+  public name!: string;
+  public readonly createdAt!: Date;
+  public readonly updatedAt!: Date;
+}
+
+User.init({
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  email: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    unique: true,
+  },
+  phone: {
+    type: DataTypes.STRING,
+    allowNull: true,
+    unique: true,
+  },
+  password: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+  name: {
+    type: DataTypes.STRING,
+    allowNull: false,
+  },
+}, {
+  sequelize,
+  tableName: 'users',
+  timestamps: true,
+});
+
+export default User;
+EOF
+
+    # Create Profile model
+    cat > src/models/Profile.ts << 'EOF'
+import { Model, DataTypes, Optional } from 'sequelize';
+import { sequelize } from '../config/database';
+
+interface ProfileAttributes {
+  id: number;
+  userId: number;
+  firstName?: string;
+  lastName?: string;
+  avatarUrl?: string;
+  bio?: string;
+  workPlace?: string;
+  skills?: string[];
+  interests?: string[];
+  portfolio?: any;
+  city?: string;
+  country?: string;
+  vkId?: string;
+  youtubeId?: string;
+  telegramId?: string;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+interface ProfileCreationAttributes extends Optional<ProfileAttributes, 'id'> {}
+
+class Profile extends Model<ProfileAttributes, ProfileCreationAttributes> implements ProfileAttributes {
+  public id!: number;
+  public userId!: number;
+  public firstName?: string;
+  public lastName?: string;
+  public avatarUrl?: string;
+  public bio?: string;
+  public workPlace?: string;
+  public skills?: string[];
+  public interests?: string[];
+  public portfolio?: any;
+  public city?: string;
+  public country?: string;
+  public vkId?: string;
+  public youtubeId?: string;
+  public telegramId?: string;
+  public readonly createdAt!: Date;
+  public readonly updatedAt!: Date;
+}
+
+Profile.init({
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  userId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+    unique: true,
+  },
+  firstName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  lastName: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  avatarUrl: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  bio: {
+    type: DataTypes.TEXT,
+    allowNull: true,
+  },
+  workPlace: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  skills: {
+    type: DataTypes.ARRAY(DataTypes.STRING),
+    allowNull: true,
+  },
+  interests: {
+    type: DataTypes.ARRAY(DataTypes.STRING),
+    allowNull: true,
+  },
+  portfolio: {
+    type: DataTypes.JSON,
+    allowNull: true,
+  },
+  city: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  country: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  vkId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  youtubeId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+  telegramId: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+}, {
+  sequelize,
+  tableName: 'profiles',
+  timestamps: true,
+});
+
+export default Profile;
+EOF
+
+    # Create Post model
+    cat > src/models/Post.ts << 'EOF'
+import { Model, DataTypes, Optional } from 'sequelize';
+import { sequelize } from '../config/database';
+
+interface PostAttributes {
+  id: number;
+  content: string;
+  userId: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+  tags?: string[];
+  attachmentUrl?: string;
+}
+
+interface PostCreationAttributes extends Optional<PostAttributes, 'id'> {}
+
+class Post extends Model<PostAttributes, PostCreationAttributes> implements PostAttributes {
+  public id!: number;
+  public content!: string;
+  public userId!: number;
+  public readonly createdAt!: Date;
+  public readonly updatedAt!: Date;
+  public tags?: string[];
+  public attachmentUrl?: string;
+}
+
+Post.init({
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  content: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+  },
+  userId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+  },
+  tags: {
+    type: DataTypes.ARRAY(DataTypes.STRING),
+    allowNull: true,
+  },
+  attachmentUrl: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
+}, {
+  sequelize,
+  tableName: 'posts',
+  timestamps: true,
+});
+
+export default Post;
+EOF
+
+    # Create Like model
+    cat > src/models/Like.ts << 'EOF'
+import { Model, DataTypes, Optional } from 'sequelize';
+import { sequelize } from '../config/database';
+
+interface LikeAttributes {
+  id: number;
+  userId: number;
+  postId: number;
+  createdAt?: Date;
+}
+
+interface LikeCreationAttributes extends Optional<LikeAttributes, 'id'> {}
+
+class Like extends Model<LikeAttributes, LikeCreationAttributes> implements LikeAttributes {
+  public id!: number;
+  public userId!: number;
+  public postId!: number;
+  public readonly createdAt!: Date;
+}
+
+Like.init({
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  userId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+  },
+  postId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+  },
+}, {
+  sequelize,
+  tableName: 'likes',
+  timestamps: true,
+  indexes: [
+    {
+      unique: true,
+      fields: ['userId', 'postId']
+    }
+  ]
+});
+
+export default Like;
+EOF
+
+    # Create Friendship model
+    cat > src/models/Friendship.ts << 'EOF'
+import { Model, DataTypes, Optional } from 'sequelize';
+import { sequelize } from '../config/database';
+
+interface FriendshipAttributes {
+  id: number;
+  userId: number;
+  friendId: number;
+  createdAt?: Date;
+}
+
+interface FriendshipCreationAttributes extends Optional<FriendshipAttributes, 'id'> {}
+
+class Friendship extends Model<FriendshipAttributes, FriendshipCreationAttributes> implements FriendshipAttributes {
+  public id!: number;
+  public userId!: number;
+  public friendId!: number;
+  public readonly createdAt!: Date;
+}
+
+Friendship.init({
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  userId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+  },
+  friendId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+  },
+}, {
+  sequelize,
+  tableName: 'friendships',
+  timestamps: true,
+  indexes: [
+    {
+      unique: true,
+      fields: ['userId', 'friendId']
+    }
+  ]
+});
+
+export default Friendship;
+EOF
+
+    success "Sequelize models created"
+}
+
 # Fix friendships route TypeScript error
 fix_friendships_route_ts_error() {
     log "Fixing friendships route TypeScript error..."
@@ -165,11 +554,52 @@ EOF
     success "Friendships route TypeScript error fixed"
 }
 
+# Update package.json to remove Prisma dependencies and add Sequelize
+update_package_json() {
+    log "Updating package.json..."
+    
+    cd /opt/mooza/backend
+    
+    # Create backup
+    cp package.json package.json.backup.$(date +%s)
+    
+    # Update package.json
+    node << 'EOF'
+const fs = require('fs');
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+
+// Remove Prisma scripts
+delete pkg.scripts['prisma:generate'];
+delete pkg.scripts['prisma:migrate'];
+delete pkg.scripts['prisma:deploy'];
+
+// Remove Prisma dependencies
+delete pkg.dependencies['@prisma/client'];
+delete pkg.devDependencies['prisma'];
+delete pkg.devDependencies['@types/multer'];
+
+// Add Sequelize dependencies
+pkg.dependencies['pg'] = '^8.11.3';
+pkg.dependencies['sequelize'] = '^6.37.3';
+pkg.devDependencies['@types/pg'] = '^8.11.6';
+
+// Write updated package.json
+fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2));
+EOF
+
+    success "package.json updated"
+}
+
 # Rebuild and restart services
 rebuild_and_restart() {
     log "Rebuilding and restarting services..."
     
     cd /opt/mooza
+    
+    # Install dependencies
+    cd backend
+    npm install
+    cd ..
     
     # Stop the services
     sudo -u "$SUDO_USER" docker compose -f docker-compose.prod.yml down
@@ -204,6 +634,9 @@ wait_and_verify() {
 main() {
     check_root
     check_deployment_dir
+    install_sequelize_dependencies
+    create_sequelize_models
+    update_package_json
     fix_friendships_route_ts_error
     rebuild_and_restart
     wait_and_verify
