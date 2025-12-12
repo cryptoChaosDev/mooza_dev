@@ -12,7 +12,8 @@ import fs from 'fs';
 // Configure multer for file uploads
 const storage = multer.diskStorage({
   destination: function (req: any, file: any, cb: any) {
-    const uploadDir = path.join(__dirname, '../../uploads');
+    // Use a fixed path that's easy to serve
+    const uploadDir = '/app/uploads';
     if (!fs.existsSync(uploadDir)) {
       fs.mkdirSync(uploadDir, { recursive: true });
     }
