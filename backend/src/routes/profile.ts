@@ -607,8 +607,8 @@ router.post("/me/avatar", authenticateToken, upload.single('avatar'), async (req
 
     const userId = req.user.userId;
     
-    // Generate avatar URL - using absolute URL for direct access
-    const avatarUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
+    // Generate avatar URL - relative path for database storage
+    const avatarUrl = `/uploads/${req.file.filename}`;
     console.log('Generated avatar URL:', avatarUrl);
     
     // Update profile with new avatar URL
@@ -621,14 +621,14 @@ router.post("/me/avatar", authenticateToken, upload.single('avatar'), async (req
     }
     
     await profile.update({
-      avatarUrl: `/uploads/${req.file.filename}` // Store relative path in database
+      avatarUrl: avatarUrl
     });
     
     console.log('Profile updated with avatar URL:', avatarUrl);
     
     res.json({ 
       message: "Avatar uploaded successfully",
-      avatarUrl: avatarUrl // Return absolute URL for immediate use
+      avatarUrl: avatarUrl // Return relative URL for frontend to construct full URL
     });
   } catch (error) {
     console.error("Avatar upload error:", error);
