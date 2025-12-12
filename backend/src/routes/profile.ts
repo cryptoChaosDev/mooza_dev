@@ -14,18 +14,23 @@ const storage = multer.diskStorage({
   destination: function (req: any, file: any, cb: any) {
     // Use a fixed path that's easy to serve
     const uploadDir = '/app/uploads';
+    console.log('Attempting to create/upload to directory:', uploadDir);
     if (!fs.existsSync(uploadDir)) {
       try {
         fs.mkdirSync(uploadDir, { recursive: true });
+        console.log('Created upload directory:', uploadDir);
       } catch (err) {
         console.error('Failed to create upload directory:', err);
       }
     }
+    console.log('Upload directory exists:', fs.existsSync(uploadDir));
     cb(null, uploadDir);
   },
   filename: function (req: any, file: any, cb: any) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, 'avatar-' + uniqueSuffix + path.extname(file.originalname));
+    const filename = 'avatar-' + uniqueSuffix + path.extname(file.originalname);
+    console.log('Generated filename:', filename);
+    cb(null, filename);
   }
 });
 
@@ -546,6 +551,9 @@ router.delete("/me/friends/:friendId", authenticateToken, async (req: any, res: 
 // Upload avatar endpoint
 router.post("/me/avatar", authenticateToken, upload.single('avatar'), async (req: any, res: Response) => {
   try {
+    console.log('Received avatar upload request');
+    console.log('File info:', req.file);
+    
     if (!req.file) {
       return res.status(400).json({ error: "No file uploaded" });
     }
@@ -554,6 +562,7 @@ router.post("/me/avatar", authenticateToken, upload.single('avatar'), async (req
     
     // Generate avatar URL
     const avatarUrl = `/uploads/${req.file.filename}`;
+    console.log('Generated avatar URL:', avatarUrl);
     
     // Update profile with new avatar URL
     const profile = await Profile.findOne({
@@ -567,6 +576,8 @@ router.post("/me/avatar", authenticateToken, upload.single('avatar'), async (req
     await profile.update({
       avatarUrl: avatarUrl
     });
+    
+    console.log('Profile updated with avatar URL:', avatarUrl);
     
     res.json({ 
       message: "Avatar uploaded successfully",
