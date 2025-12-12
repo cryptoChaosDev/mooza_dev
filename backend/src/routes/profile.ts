@@ -15,7 +15,11 @@ const storage = multer.diskStorage({
     // Use a fixed path that's easy to serve
     const uploadDir = '/app/uploads';
     if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
+      try {
+        fs.mkdirSync(uploadDir, { recursive: true });
+      } catch (err) {
+        console.error('Failed to create upload directory:', err);
+      }
     }
     cb(null, uploadDir);
   },
