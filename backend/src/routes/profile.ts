@@ -251,7 +251,7 @@ router.get("/posts", authenticateToken, async (req: any, res: Response) => {
       where: {
         userId: friendIds
       },
-      order: [['createdAt', 'DESC']]
+      order: [["createdAt", "DESC"]]
     });
 
     // Manually fetch user data for each post
@@ -260,7 +260,7 @@ router.get("/posts", authenticateToken, async (req: any, res: Response) => {
       where: {
         id: userIds
       },
-      attributes: ['id', 'name']
+      attributes: ["id", "name"]
     });
 
     // Create a map for quick user lookup
