@@ -27,8 +27,11 @@ function App() {
   React.useEffect(() => {
     if (profile) {
       setShowWelcome(false);
-      // Navigate to home page when profile is set
-      navigate('/');
+      // Redirect to home page only if we're on the root path (initial load)
+      // This ensures users go to home page after login, but can navigate to other pages
+      if (window.location.pathname === '/') {
+        navigate('/');
+      }
     }
   }, [profile, navigate]);
 
