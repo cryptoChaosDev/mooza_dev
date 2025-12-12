@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "../contexts/ToastContext";
 import { updateProfile, apiMe, API_URL } from "../api";
@@ -51,6 +51,12 @@ export function Profile({
   const [activeTab, setActiveTab] = useState<'profile' | 'posts'>('profile');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Initialize editData when profile changes
+  useEffect(() => {
+    setEditData(profile);
+    setAvatarPreview(profile.avatarUrl || null);
+  }, [profile]);
+
   // --- Валидация полей ---
   function validateField(field: string, value: any) {
     switch (field) {
@@ -64,7 +70,6 @@ export function Profile({
         if (!value) return 'Обязательное поле';
         if (value.length < 2) return 'Минимум 2 символа';
         return '';
-      // skills/interests moved to separate page — no validation here
       case 'portfolioText':
         if (value && value.length > 500) return 'Максимум 500 символов';
         return '';
@@ -88,20 +93,26 @@ export function Profile({
   }
 
   // --- Прогресс заполнения ---
-  const fieldsToCheck = [
-    { key: 'firstName', value: editData.firstName },
-    { key: 'lastName', value: editData.lastName },
-    { key: 'country', value: editData.country },
-    { key: 'city', value: editData.city },
-    { key: 'portfolioText', value: editData.portfolio?.text || '' },
-    { key: 'phone', value: editData.phone },
-    { key: 'email', value: editData.email },
-  ];
-  let validCount = 0;
-  fieldsToCheck.forEach(f => {
-    if (!validateField(f.key, f.value)) validCount++;
-  });
-  const progress = Math.round((validCount / fieldsToCheck.length) * 100);
+  const calculateProgress = () => {
+    const fieldsToCheck = [
+      { key: 'firstName', value: editData.firstName },
+      { key: 'lastName', value: editData.lastName },
+      { key: 'country', value: editData.country },
+      { key: 'city', value: editData.city },
+      { key: 'portfolioText', value: editData.portfolio?.text || '' },
+      { key: 'phone', value: editData.phone },
+      { key: 'email', value: editData.email },
+    ];
+    
+    let validCount = 0;
+    fieldsToCheck.forEach(f => {
+      if (!validateField(f.key, f.value)) validCount++;
+    });
+    
+    return Math.round((validCount / fieldsToCheck.length) * 100);
+  };
+
+  const progress = calculateProgress();
 
   // --- Сохранение профиля ---
   const handleSave = async () => {
@@ -125,9 +136,6 @@ export function Profile({
         { key: 'city', value: editData.city },
         { key: 'phone', value: editData.phone },
         { key: 'email', value: editData.email },
-        { key: 'vkId', value: editData.vkId },
-        { key: 'youtubeId', value: editData.youtubeId },
-        { key: 'telegramId', value: editData.telegramId },
       ];
 
       fieldsToValidate.forEach(({ key, value }) => {
@@ -142,6 +150,22 @@ export function Profile({
       if (portfolioTextError) {
         newErrors['portfolioText'] = portfolioTextError;
       }
+
+      // Validate social links only if they have values
+      const socialFields = [
+        { key: 'vkId', value: editData.vkId },
+        { key: 'youtubeId', value: editData.youtubeId },
+        { key: 'telegramId', value: editData.telegramId },
+      ];
+
+      socialFields.forEach(({ key, value }) => {
+        if (value && value.trim() !== '') {
+          const error = validateField(key, value);
+          if (error) {
+            newErrors[key] = error;
+          }
+        }
+      });
 
       if (Object.keys(newErrors).length > 0) {
         setErrors(newErrors);
@@ -200,10 +224,10 @@ export function Profile({
         setEditData(updatedProfile);
         setIsEditing(false);
         toast("Профиль успешно обновлён");
-      
+        
         // Обновляем данные пользователя в списке всех пользователей
         setAllUsers(users.map(u => u.userId === updatedProfile.userId ? updatedProfile : u));
-      
+        
         // Dispatch event to refresh profile in other components
         window.dispatchEvent(new CustomEvent('profileUpdated'));
       } else {
@@ -310,6 +334,14 @@ export function Profile({
 
   const userPosts = allPosts.filter(p => p.userId === profile.userId);
 
+  // --- Форматирование ошибок ---
+  const renderError = (field: string) => {
+    if (errors[field]) {
+      return <div className="text-red-500 text-xs mt-1">{errors[field]}</div>;
+    }
+    return null;
+  };
+
   return (
     <main className="flex flex-col items-center min-h-[100dvh] pt-6 bg-dark-bg w-full flex-1 overflow-x-hidden" style={{ paddingBottom: 'calc(var(--tabbar-height) + env(safe-area-inset-bottom, 0px))' }}>
       <section className="w-full max-w-md px-4">
@@ -320,7 +352,7 @@ export function Profile({
             <div className="relative">
               <div className="w-24 h-24 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center text-3xl border-4 border-white shadow-xl">
                 {avatarPreview ? (
-                  <img src={avatarPreview} alt="avatar" className="w-full h-full object-cover" />
+                  <img src={`${API_URL}${avatarPreview}`} alt="avatar" className="w-full h-full object-cover" />
                 ) : (
                   <span role="img" aria-label="avatar">👤</span>
                 )}
@@ -350,15 +382,19 @@ export function Profile({
                 {isEditing ? (
                   <div className="flex flex-col gap-2">
                     <input
-                      className="text-center bg-dark-bg/60 rounded-xl px-3 py-1 text-dark-text"
+                      className={`text-center bg-dark-bg/60 rounded-xl px-3 py-1 text-dark-text ${errors.firstName ? 'border border-red-500' : ''}`}
                       value={editData.firstName || ''}
                       onChange={e => setEditData({...editData, firstName: e.target.value})}
+                      placeholder="Имя"
                     />
+                    {renderError('firstName')}
                     <input
-                      className="text-center bg-dark-bg/60 rounded-xl px-3 py-1 text-dark-text"
+                      className={`text-center bg-dark-bg/60 rounded-xl px-3 py-1 text-dark-text ${errors.lastName ? 'border border-red-500' : ''}`}
                       value={editData.lastName || ''}
                       onChange={e => setEditData({...editData, lastName: e.target.value})}
+                      placeholder="Фамилия"
                     />
+                    {renderError('lastName')}
                   </div>
                 ) : (
                   `${profile.firstName || ''} ${profile.lastName || ''}`
@@ -374,6 +410,22 @@ export function Profile({
               )}
             </div>
             
+            {/* Progress bar */}
+            {isEditing && (
+              <div className="w-full">
+                <div className="flex justify-between text-xs text-dark-muted mb-1">
+                  <span>Заполненность профиля</span>
+                  <span>{progress}%</span>
+                </div>
+                <div className="h-2 bg-dark-bg/60 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-blue-500 to-cyan-400 rounded-full transition-all duration-500"
+                    style={{ width: `${progress}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
+            
             {/* Edit/Save buttons */}
             <div className="flex gap-3">
               {isEditing ? (
@@ -384,6 +436,7 @@ export function Profile({
                       setIsEditing(false);
                       setEditData(profile);
                       setAvatarPreview(profile.avatarUrl || null);
+                      setErrors({});
                     }}
                   >
                     Отмена
@@ -474,44 +527,48 @@ export function Profile({
                 {/* Location */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-semibold text-dark-muted mb-2">Страна</label>
+                    <label className="block text-sm font-semibold text-dark-muted mb-2">Страна *</label>
                     <input
-                      className="w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner"
+                      className={`w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner ${errors.country ? 'border border-red-500' : ''}`}
                       value={editData.country || ''}
                       onChange={e => setEditData({...editData, country: e.target.value})}
                       placeholder="Страна"
                     />
+                    {renderError('country')}
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-dark-muted mb-2">Город</label>
+                    <label className="block text-sm font-semibold text-dark-muted mb-2">Город *</label>
                     <input
-                      className="w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner"
+                      className={`w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner ${errors.city ? 'border border-red-500' : ''}`}
                       value={editData.city || ''}
                       onChange={e => setEditData({...editData, city: e.target.value})}
                       placeholder="Город"
                     />
+                    {renderError('city')}
                   </div>
                 </div>
                 
                 {/* Contact info */}
                 <div className="grid grid-cols-1 gap-4">
                   <div>
-                    <label className="block text-sm font-semibold text-dark-muted mb-2">Телефон</label>
+                    <label className="block text-sm font-semibold text-dark-muted mb-2">Телефон *</label>
                     <input
-                      className="w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner"
+                      className={`w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner ${errors.phone ? 'border border-red-500' : ''}`}
                       value={editData.phone || ''}
                       onChange={e => setEditData({...editData, phone: e.target.value})}
                       placeholder="+7 (XXX) XXX-XX-XX"
                     />
+                    {renderError('phone')}
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-dark-muted mb-2">Email</label>
+                    <label className="block text-sm font-semibold text-dark-muted mb-2">Email *</label>
                     <input
-                      className="w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner"
+                      className={`w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner ${errors.email ? 'border border-red-500' : ''}`}
                       value={editData.email || ''}
                       onChange={e => setEditData({...editData, email: e.target.value})}
                       placeholder="your@email.com"
                     />
+                    {renderError('email')}
                   </div>
                 </div>
                 
@@ -519,7 +576,7 @@ export function Profile({
                 <div>
                   <label className="block text-sm font-semibold text-dark-muted mb-2">Портфолио</label>
                   <textarea
-                    className="w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner"
+                    className={`w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner ${errors.portfolioText ? 'border border-red-500' : ''}`}
                     rows={3}
                     value={editData.portfolio?.text || ''}
                     onChange={e => setEditData({
@@ -528,38 +585,48 @@ export function Profile({
                     })}
                     placeholder="Расскажите о ваших работах, проектах, достижениях..."
                   />
+                  {renderError('portfolioText')}
                 </div>
                 
                 {/* Social links */}
                 <div className="flex flex-col gap-3">
                   <label className="block text-sm font-semibold text-dark-muted mb-2">Социальные сети</label>
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm">VK:</span>
-                      <input
-                        className="flex-1 px-3 py-2 rounded-xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm"
-                        value={editData.vkId || ''}
-                        onChange={e => setEditData({...editData, vkId: e.target.value})}
-                        placeholder="https://vk.com/username"
-                      />
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm w-20">VK:</span>
+                        <input
+                          className={`flex-1 px-3 py-2 rounded-xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm ${errors.vkId ? 'border border-red-500' : ''}`}
+                          value={editData.vkId || ''}
+                          onChange={e => handleSocialChange('vkId', e.target.value)}
+                          placeholder="https://vk.com/username"
+                        />
+                      </div>
+                      {renderError('vkId')}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm">YouTube:</span>
-                      <input
-                        className="flex-1 px-3 py-2 rounded-xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm"
-                        value={editData.youtubeId || ''}
-                        onChange={e => setEditData({...editData, youtubeId: e.target.value})}
-                        placeholder="https://youtube.com/channel/id"
-                      />
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm w-20">YouTube:</span>
+                        <input
+                          className={`flex-1 px-3 py-2 rounded-xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm ${errors.youtubeId ? 'border border-red-500' : ''}`}
+                          value={editData.youtubeId || ''}
+                          onChange={e => handleSocialChange('youtubeId', e.target.value)}
+                          placeholder="https://youtube.com/channel/id"
+                        />
+                      </div>
+                      {renderError('youtubeId')}
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm">Telegram:</span>
-                      <input
-                        className="flex-1 px-3 py-2 rounded-xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm"
-                        value={editData.telegramId || ''}
-                        onChange={e => setEditData({...editData, telegramId: e.target.value})}
-                        placeholder="https://t.me/username"
-                      />
+                    <div className="flex flex-col gap-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm w-20">Telegram:</span>
+                        <input
+                          className={`flex-1 px-3 py-2 rounded-xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-1 focus:ring-blue-400 text-sm ${errors.telegramId ? 'border border-red-500' : ''}`}
+                          value={editData.telegramId || ''}
+                          onChange={e => handleSocialChange('telegramId', e.target.value)}
+                          placeholder="https://t.me/username"
+                        />
+                      </div>
+                      {renderError('telegramId')}
                     </div>
                   </div>
                 </div>
