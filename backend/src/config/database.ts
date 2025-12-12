@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 // Determine the dialect based on the DATABASE_URL
-const databaseUrl = process.env.DATABASE_URL || 'sqlite:./prisma/dev.db';
+const databaseUrl = process.env.DATABASE_URL || 'sqlite:./dev.db';
 const dialect = databaseUrl.startsWith('sqlite:') ? 'sqlite' : 'postgres';
 
 const sequelize = new Sequelize(databaseUrl, {
