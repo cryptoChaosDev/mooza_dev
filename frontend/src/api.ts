@@ -50,8 +50,8 @@ export type ProfilePayload = {
   avatarUrl?: string;
   bio?: string;
   workPlace?: string;
-  skills?: string[];
-  interests?: string[];
+  skills?: string;
+  interests?: string;
   portfolio?: { text?: string; fileUrl?: string } | null;
   city?: string;
   country?: string;
@@ -66,10 +66,17 @@ export async function getProfile(token: string): Promise<any> {
 }
 
 export async function updateProfile(token: string, payload: ProfilePayload): Promise<any> {
+  // Convert arrays to comma-separated strings if needed
+  const processedPayload = {
+    ...payload,
+    skills: Array.isArray(payload.skills) ? payload.skills.join(',') : payload.skills,
+    interests: Array.isArray(payload.interests) ? payload.interests.join(',') : payload.interests
+  };
+
   const res = await fetch(`${API_URL}/api/profile/me`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(processedPayload),
   });
   if (!res.ok) throw new Error('Не удалось сохранить профиль');
   return res.json();
@@ -133,7 +140,7 @@ export async function createPost(token: string, content: string, tags: string[],
       'Content-Type': 'application/json', 
       Authorization: `Bearer ${token}` 
     },
-    body: JSON.stringify({ content, tags, attachmentUrl }),
+    body: JSON.stringify({ content, tags: tags.join(','), attachmentUrl }),
   });
   if (!res.ok) {
     let msg = 'Не удалось создать пост';
@@ -169,7 +176,7 @@ export async function updatePost(token: string, postId: number, content: string,
       'Content-Type': 'application/json', 
       Authorization: `Bearer ${token}` 
     },
-    body: JSON.stringify({ content, tags, attachmentUrl }),
+    body: JSON.stringify({ content, tags: tags.join(','), attachmentUrl }),
   });
   if (!res.ok) {
     let msg = 'Не удалось обновить пост';

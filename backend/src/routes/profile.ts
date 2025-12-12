@@ -36,16 +36,16 @@ router.get("/me", authenticateToken, async (req: any, res: Response) => {
         userId: req.user.userId,
         firstName,
         lastName,
-        skills: [],
-        interests: []
+        skills: '',
+        interests: ''
       });
     }
 
     res.json({
       profile: {
         ...profile.toJSON(),
-        skills: profile.skills || [],
-        interests: profile.interests || [],
+        skills: profile.skills ? profile.skills.split(',') : [],
+        interests: profile.interests ? profile.interests.split(',') : [],
         phone: user.phone || '',
         email: user.email || '',
         name: user.name
@@ -83,8 +83,8 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
         avatarUrl: profileData.avatarUrl || '',
         bio: profileData.bio || '',
         workPlace: profileData.workPlace || '',
-        skills: profileData.skills || [],
-        interests: profileData.interests || [],
+        skills: profileData.skills || '',
+        interests: profileData.interests || '',
         portfolio: profileData.portfolio || null,
         city: profileData.city || '',
         country: profileData.country || ''
@@ -99,8 +99,8 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
         avatarUrl: profileData.avatarUrl || '',
         bio: profileData.bio || '',
         workPlace: profileData.workPlace || '',
-        skills: profileData.skills || [],
-        interests: profileData.interests || [],
+        skills: profileData.skills || '',
+        interests: profileData.interests || '',
         portfolio: profileData.portfolio || null,
         city: profileData.city || '',
         country: profileData.country || ''
@@ -119,8 +119,8 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
     res.json({
       profile: {
         ...updatedProfile!.toJSON(),
-        skills: updatedProfile!.skills || [],
-        interests: updatedProfile!.interests || [],
+        skills: updatedProfile!.skills ? updatedProfile!.skills.split(',') : [],
+        interests: updatedProfile!.interests ? updatedProfile!.interests.split(',') : [],
         phone: updatedUser!.phone || '',
         email: updatedUser!.email || '',
         name: updatedUser!.name
@@ -155,7 +155,16 @@ router.get("/me/posts", authenticateToken, async (req: any, res: Response) => {
       order: [["createdAt", "DESC"]]
     });
 
-    res.json(posts);
+    // Convert tags from comma-separated string to array
+    const postsWithTagsArray = posts.map(post => {
+      const postData = post.toJSON();
+      return {
+        ...postData,
+        tags: postData.tags ? postData.tags.split(',') : []
+      };
+    });
+
+    res.json(postsWithTagsArray);
   } catch (error) {
     console.error("Get user posts error:", error);
     res.status(500).json({ error: "Failed to fetch posts" });
@@ -170,7 +179,7 @@ router.post("/me/posts", authenticateToken, async (req: any, res: Response) => {
     const post = await Post.create({
       content,
       userId: req.user.userId,
-      tags: tags || [],
+      tags: tags ? (Array.isArray(tags) ? tags.join(',') : tags) : '',
       attachmentUrl
     });
 
@@ -200,7 +209,7 @@ router.put("/me/posts/:postId", authenticateToken, async (req: any, res: Respons
 
     await post.update({
       content,
-      tags: tags || []
+      tags: tags ? (Array.isArray(tags) ? tags.join(',') : tags) : ''
     });
 
     res.json(post);
@@ -269,11 +278,13 @@ router.get("/posts", authenticateToken, async (req: any, res: Response) => {
       return map;
     }, {} as Record<number, typeof users[0]>);
 
-    // Add user data to each post
+    // Add user data to each post and convert tags
     const postsWithUserData = posts.map(post => {
       const user = userMap[post.userId];
+      const postData = post.toJSON();
       return {
-        ...post.toJSON(),
+        ...postData,
+        tags: postData.tags ? postData.tags.split(',') : [],
         user: user ? { id: user.id, name: user.name } : null
       };
     });
