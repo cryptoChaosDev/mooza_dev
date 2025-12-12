@@ -21,13 +21,16 @@ function App() {
   const tgUser = getTelegramUser();
   const [showWelcome, setShowWelcome] = useState(true);
   const { profile, setProfile, refreshProfile } = useProfile();
+  const navigate = useNavigate(); // Add navigate hook
 
   // Update showWelcome based on profile state
   React.useEffect(() => {
     if (profile) {
       setShowWelcome(false);
+      // Navigate to home page when profile is set
+      navigate('/');
     }
-  }, [profile]);
+  }, [profile, navigate]);
 
   // Listen for profile updates from child components
   React.useEffect(() => {
@@ -47,7 +50,6 @@ function App() {
   const [allPosts, setAllPosts] = useState<Post[]>([]);
   const [friends, setFriends] = useState<string[]>([]);
   const [favorites, setFavorites] = useState<string[]>([]);
-  const navigate = useNavigate();
 
   // Fetch all users and posts from the database
   useEffect(() => {
