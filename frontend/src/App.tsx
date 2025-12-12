@@ -59,8 +59,14 @@ function App() {
           const token = localStorage.getItem('token');
           if (token) {
             // Fetch all users
-            const usersResponse = await getAllUsers(token);
-            setAllUsers(usersResponse.users || []);
+            try {
+              const usersResponse = await getAllUsers(token);
+              setAllUsers(usersResponse.users || []);
+            } catch (error) {
+              console.error('Failed to fetch users:', error);
+              // Fallback to empty array if API fails
+              setAllUsers([]);
+            }
             
             // Fetch all posts
             try {
@@ -75,19 +81,24 @@ function App() {
             // Fetch actual friends from the database
             try {
               const friendsResponse = await getFriends(token);
-              setFriends(friendsResponse.friendIds || []);
+              setFriends(friendsResponse.friends || []);
             } catch (error) {
               console.error('Failed to fetch friends:', error);
               // Fallback to demo friends if API fails
-              if (usersResponse.users && usersResponse.users.length > 0) {
-                setFriends([usersResponse.users[0]?.userId, usersResponse.users[1]?.userId].filter(Boolean));
+              if (allUsers && allUsers.length > 0) {
+                setFriends([
+                  allUsers[0]?.userId,
+                  allUsers[1]?.userId
+                ].filter(Boolean));
               }
             }
             
             // For now, we'll keep favorites as demo data
             // In a real app, this would also come from the database
-            if (usersResponse.users && usersResponse.users.length > 0) {
-              setFavorites([usersResponse.users[2]?.userId].filter(Boolean));
+            if (allUsers && allUsers.length > 0) {
+              setFavorites([
+                allUsers[2]?.userId
+              ].filter(Boolean));
             }
           }
         } catch (error) {
@@ -119,6 +130,8 @@ function App() {
     
     try {
       await addFriend(token, userId);
+      // For now, we're just adding the user ID to the friends list
+      // In a real app, we might want to fetch the updated friends list from the server
       setFriends((prev) => [...prev, userId]);
     } catch (error) {
       console.error('Failed to add friend:', error);
@@ -132,6 +145,8 @@ function App() {
     
     try {
       await removeFriend(token, userId);
+      // For now, we're just removing the user ID from the friends list
+      // In a real app, we might want to fetch the updated friends list from the server
       setFriends((prev) => prev.filter((id) => id !== userId));
     } catch (error) {
       console.error('Failed to remove friend:', error);

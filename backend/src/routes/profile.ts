@@ -138,7 +138,43 @@ router.get("/", authenticateToken, async (req: any, res: Response) => {
     const users = await User.findAll({
       attributes: { exclude: ['password'] }
     });
-    res.json(users);
+    
+    // Get profiles for all users
+    const userIds = users.map(user => user.id);
+    const profiles = await Profile.findAll({
+      where: {
+        userId: userIds
+      }
+    });
+    
+    // Create a map for quick profile lookup
+    const profileMap = profiles.reduce((map, profile) => {
+      map[profile.userId] = profile;
+      return map;
+    }, {} as Record<number, typeof profiles[0]>);
+    
+    // Combine user and profile data
+    const usersWithProfiles = users.map(user => {
+      const profile = profileMap[user.id];
+      return {
+        ...user.toJSON(),
+        firstName: profile?.firstName || '',
+        lastName: profile?.lastName || '',
+        avatarUrl: profile?.avatarUrl || '',
+        bio: profile?.bio || '',
+        workPlace: profile?.workPlace || '',
+        skills: profile?.skills ? profile.skills.split(',') : [],
+        interests: profile?.interests ? profile.interests.split(',') : [],
+        portfolio: profile?.portfolio || null,
+        city: profile?.city || '',
+        country: profile?.country || '',
+        vkId: profile?.vkId || '',
+        youtubeId: profile?.youtubeId || '',
+        telegramId: profile?.telegramId || ''
+      };
+    });
+    
+    res.json({ users: usersWithProfiles });
   } catch (error) {
     console.error("Get users error:", error);
     res.status(500).json({ error: "Failed to fetch users" });
@@ -345,8 +381,45 @@ router.get("/me/friends", authenticateToken, async (req: any, res: Response) => 
       },
       attributes: ["id", "name", "email"]
     });
+    
+    // Get profiles for all friends
+    const profiles = await Profile.findAll({
+      where: {
+        userId: friendIds
+      }
+    });
+    
+    // Create a map for quick profile lookup
+    const profileMap = profiles.reduce((map, profile) => {
+      map[profile.userId] = profile;
+      return map;
+    }, {} as Record<number, typeof profiles[0]>);
+    
+    // Combine user and profile data
+    const friendsWithProfiles = friends.map(user => {
+      const profile = profileMap[user.id];
+      return {
+        userId: String(user.id),
+        firstName: profile?.firstName || '',
+        lastName: profile?.lastName || '',
+        name: user.name || '',
+        avatarUrl: profile?.avatarUrl || '',
+        bio: profile?.bio || '',
+        workPlace: profile?.workPlace || '',
+        skills: profile?.skills ? profile.skills.split(',') : [],
+        interests: profile?.interests ? profile.interests.split(',') : [],
+        portfolio: profile?.portfolio || null,
+        phone: user.phone || '',
+        email: user.email || '',
+        vkId: profile?.vkId || '',
+        youtubeId: profile?.youtubeId || '',
+        telegramId: profile?.telegramId || '',
+        city: profile?.city || '',
+        country: profile?.country || ''
+      };
+    });
 
-    res.json(friends);
+    res.json({ friends: friendsWithProfiles });
   } catch (error) {
     console.error("Get friends error:", error);
     res.status(500).json({ error: "Failed to fetch friends" });
