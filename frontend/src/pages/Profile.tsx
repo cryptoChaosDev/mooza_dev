@@ -216,7 +216,7 @@ export function Profile({
         const formData = new FormData();
         formData.append('avatar', file);
 
-        const response = await fetch(`${process.env.REACT_APP_API_URL}/profile/me/avatar`, {
+        const response = await fetch(`${process.env.REACT_APP_API_URL}/api/profile/me/avatar`, {
           method: 'POST',
           headers: { 
             'Authorization': `Bearer ${token}`
@@ -229,7 +229,7 @@ export function Profile({
         }
 
         const result = await response.json();
-        
+      
         // Set preview and update editData with the avatar URL returned from server
         setAvatarPreview(result.avatarUrl);
         setEditData({ ...editData, avatarUrl: result.avatarUrl });
