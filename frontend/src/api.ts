@@ -3,7 +3,7 @@ export const API_URL = process.env.REACT_APP_API_URL || 'http://147.45.166.246';
 export type LoginResponse = { token: string; user: { id: number; email?: string; phone?: string; name: string } };
 
 export async function apiRegister(data: { email?: string; phone?: string; password: string; name: string }): Promise<LoginResponse> {
-  const res = await fetch(`${API_URL}/auth/register`, {
+  const res = await fetch(`${API_URL}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -20,7 +20,7 @@ export async function apiRegister(data: { email?: string; phone?: string; passwo
 }
 
 export async function apiLogin(data: { email?: string; phone?: string; password: string }): Promise<LoginResponse> {
-  const res = await fetch(`${API_URL}/auth/login`, {
+  const res = await fetch(`${API_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
@@ -37,7 +37,7 @@ export async function apiLogin(data: { email?: string; phone?: string; password:
 }
 
 export async function apiMe(token: string): Promise<{ id: number; email?: string; phone?: string; name: string }> {
-  const res = await fetch(`${API_URL}/auth/me`, {
+  const res = await fetch(`${API_URL}/api/auth/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error('Не удалось получить профиль');
@@ -58,7 +58,7 @@ export type ProfilePayload = {
 };
 
 export async function getProfile(token: string): Promise<any> {
-  const res = await fetch(`${API_URL}/profile/me`, {
+  const res = await fetch(`${API_URL}/api/profile/me`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error('Не удалось загрузить профиль');
@@ -66,7 +66,7 @@ export async function getProfile(token: string): Promise<any> {
 }
 
 export async function updateProfile(token: string, payload: ProfilePayload): Promise<any> {
-  const res = await fetch(`${API_URL}/profile/me`, {
+  const res = await fetch(`${API_URL}/api/profile/me`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(payload),
@@ -77,7 +77,7 @@ export async function updateProfile(token: string, payload: ProfilePayload): Pro
 
 // New function to fetch all users
 export async function getAllUsers(token: string): Promise<any> {
-  const res = await fetch(`${API_URL}/profile`, {
+  const res = await fetch(`${API_URL}/api/profile`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error('Не удалось загрузить пользователей');
@@ -86,7 +86,7 @@ export async function getAllUsers(token: string): Promise<any> {
 
 // Friendships API functions using the new endpoints
 export async function addFriend(token: string, userId: string): Promise<any> {
-  const res = await fetch(`${API_URL}/profile/me/friends/${userId}`, {
+  const res = await fetch(`${API_URL}/api/profile/me/friends/${userId}`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -102,7 +102,7 @@ export async function addFriend(token: string, userId: string): Promise<any> {
 }
 
 export async function removeFriend(token: string, userId: string): Promise<any> {
-  const res = await fetch(`${API_URL}/profile/me/friends/${userId}`, {
+  const res = await fetch(`${API_URL}/api/profile/me/friends/${userId}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -118,7 +118,7 @@ export async function removeFriend(token: string, userId: string): Promise<any> 
 }
 
 export async function getFriends(token: string): Promise<any> {
-  const res = await fetch(`${API_URL}/profile/me/friends`, {
+  const res = await fetch(`${API_URL}/api/profile/me/friends`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error('Не удалось загрузить список друзей');
@@ -127,7 +127,7 @@ export async function getFriends(token: string): Promise<any> {
 
 // Posts API functions
 export async function createPost(token: string, content: string, tags: string[], attachmentUrl?: string): Promise<any> {
-  const res = await fetch(`${API_URL}/profile/me/posts`, {
+  const res = await fetch(`${API_URL}/api/profile/me/posts`, {
     method: 'POST',
     headers: { 
       'Content-Type': 'application/json', 
@@ -147,7 +147,7 @@ export async function createPost(token: string, content: string, tags: string[],
 }
 
 export async function getMyPosts(token: string): Promise<any> {
-  const res = await fetch(`${API_URL}/profile/me/posts`, {
+  const res = await fetch(`${API_URL}/api/profile/me/posts`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error('Не удалось загрузить посты');
@@ -155,7 +155,7 @@ export async function getMyPosts(token: string): Promise<any> {
 }
 
 export async function getAllPosts(token: string): Promise<any> {
-  const res = await fetch(`${API_URL}/profile/posts`, {
+  const res = await fetch(`${API_URL}/api/profile/posts`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error('Не удалось загрузить посты');
@@ -163,7 +163,7 @@ export async function getAllPosts(token: string): Promise<any> {
 }
 
 export async function updatePost(token: string, postId: number, content: string, tags: string[], attachmentUrl?: string): Promise<any> {
-  const res = await fetch(`${API_URL}/profile/me/posts/${postId}`, {
+  const res = await fetch(`${API_URL}/api/profile/me/posts/${postId}`, {
     method: 'PUT',
     headers: { 
       'Content-Type': 'application/json', 
@@ -183,7 +183,7 @@ export async function updatePost(token: string, postId: number, content: string,
 }
 
 export async function deletePost(token: string, postId: number): Promise<any> {
-  const res = await fetch(`${API_URL}/profile/me/posts/${postId}`, {
+  const res = await fetch(`${API_URL}/api/profile/me/posts/${postId}`, {
     method: 'DELETE',
     headers: { Authorization: `Bearer ${token}` },
   });
@@ -199,7 +199,7 @@ export async function deletePost(token: string, postId: number): Promise<any> {
 }
 
 export async function togglePostLike(token: string, postId: number): Promise<any> {
-  const res = await fetch(`${API_URL}/profile/posts/${postId}/like`, {
+  const res = await fetch(`${API_URL}/api/profile/posts/${postId}/like`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}` },
   });
