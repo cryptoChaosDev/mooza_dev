@@ -5,6 +5,38 @@ import Profile from "../models/Profile";
 import Post from "../models/Post";
 import Like from "../models/Like";
 import Friendship from "../models/Friendship";
+const multer = require('multer');
+import path from 'path';
+import fs from 'fs';
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req: any, file: any, cb: any) {
+    const uploadDir = path.join(__dirname, '../../uploads');
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
+  },
+  filename: function (req: any, file: any, cb: any) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, 'avatar-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: function (req: any, file: any, cb: any) {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed'));
+    }
+  }
+});
 
 const router = Router();
 
@@ -503,6 +535,41 @@ router.delete("/me/friends/:friendId", authenticateToken, async (req: any, res: 
   } catch (error) {
     console.error("Remove friend error:", error);
     res.status(500).json({ error: "Failed to remove friend" });
+  }
+});
+
+// Upload avatar endpoint
+router.post("/me/avatar", authenticateToken, upload.single('avatar'), async (req: any, res: Response) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No file uploaded" });
+    }
+
+    const userId = req.user.userId;
+    
+    // Generate avatar URL
+    const avatarUrl = `/uploads/${req.file.filename}`;
+    
+    // Update profile with new avatar URL
+    const profile = await Profile.findOne({
+      where: { userId: userId }
+    });
+    
+    if (!profile) {
+      return res.status(404).json({ error: "Profile not found" });
+    }
+    
+    await profile.update({
+      avatarUrl: avatarUrl
+    });
+    
+    res.json({ 
+      message: "Avatar uploaded successfully",
+      avatarUrl: avatarUrl
+    });
+  } catch (error) {
+    console.error("Avatar upload error:", error);
+    res.status(500).json({ error: "Failed to upload avatar" });
   }
 });
 
