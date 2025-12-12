@@ -55,6 +55,11 @@ export type ProfilePayload = {
   portfolio?: { text?: string; fileUrl?: string } | null;
   city?: string;
   country?: string;
+  phone?: string;
+  email?: string;
+  vkId?: string;
+  youtubeId?: string;
+  telegramId?: string;
 };
 
 export async function getProfile(token: string): Promise<any> {
