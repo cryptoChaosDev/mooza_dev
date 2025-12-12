@@ -387,7 +387,7 @@ export function Profile({
             <div className="relative">
               <div className="w-24 h-24 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center text-3xl border-4 border-white shadow-xl">
                 {avatarPreview ? (
-                  <img src={`${API_URL}${avatarPreview}`} alt="avatar" className="w-full h-full object-cover" />
+                  <img src={avatarPreview.startsWith('http') ? avatarPreview : `${API_URL}${avatarPreview}`} alt="avatar" className="w-full h-full object-cover" />
                 ) : (
                   <span role="img" aria-label="avatar">👤</span>
                 )}
