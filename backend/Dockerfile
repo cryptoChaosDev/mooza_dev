@@ -23,6 +23,8 @@ RUN npm ci --only=production || npm install --only=production
 COPY prisma ./prisma
 # Create the directory for SQLite database
 RUN mkdir -p /app/prisma
+# Create uploads directory
+RUN mkdir -p /app/uploads
 # Copy built files
 COPY --from=builder /app/dist ./dist
 EXPOSE 4000
