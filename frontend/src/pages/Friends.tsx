@@ -6,7 +6,7 @@ import { ConsistentActionButton } from "../components/ConsistentActionButton";
 
 export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, onUserClick }: {
   profile: UserProfile,
-  friends: string[],
+  friends: string[] | UserProfile[],  // Accept both string[] and UserProfile[]
   users: UserProfile[],
   onAddFriend: (userId: string) => void,
   onRemoveFriend: (userId: string) => void,
@@ -16,7 +16,9 @@ export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, 
   const [sortBy, setSortBy] = useState<'name' | 'city' | 'country'>('name');
   
   // Get friend users
-  const friendUsers = users.filter(user => friends.includes(user.userId));
+  const friendUsers = Array.isArray(friends) && friends.length > 0 && typeof friends[0] === 'string'
+    ? users.filter(user => (friends as string[]).includes(user.userId))
+    : friends as UserProfile[];
   
   // Filter by search query
   const filteredFriends = friendUsers.filter(user => 
@@ -36,7 +38,9 @@ export function Friends({ profile, friends, users, onAddFriend, onRemoveFriend, 
   
   // Get all users who are not friends
   const nonFriends = users.filter(user => 
-    !friends.includes(user.userId) && 
+    Array.isArray(friends) && friends.length > 0 && typeof friends[0] === 'string'
+      ? !(friends as string[]).includes(user.userId)
+      : !friendUsers.some(friend => friend.userId === user.userId) && 
     user.userId !== profile.userId
   );
   
