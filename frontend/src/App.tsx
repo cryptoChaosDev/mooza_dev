@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { HashRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
 import { WelcomePage } from "./Welcome";
 import { UserProfile, Post } from "./types";
 import { ToastProvider } from './contexts/ToastContext';
