@@ -49,8 +49,8 @@ router.post("/register", async (req: Request, res: Response) => {
       userId: user.id,
       firstName,
       lastName,
-      skills: [],
-      interests: []
+      skills: '',
+      interests: ''
     });
 
     // Generate JWT token
