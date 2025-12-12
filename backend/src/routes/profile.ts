@@ -61,12 +61,16 @@ router.get("/me", authenticateToken, async (req: any, res: Response) => {
       return res.status(404).json({ error: "User not found" });
     }
 
+    console.log("User data:", user.toJSON());
+
     // Try to find existing profile
     let profile = await Profile.findOne({
       where: {
         userId: req.user.userId
       }
     });
+
+    console.log("Profile data:", profile?.toJSON());
 
     // If no profile exists, create one
     if (!profile) {
@@ -83,7 +87,7 @@ router.get("/me", authenticateToken, async (req: any, res: Response) => {
       });
     }
 
-    res.json({
+    const responseData = {
       profile: {
         ...profile.toJSON(),
         skills: profile.skills ? profile.skills.split(',') : [],
@@ -92,7 +96,10 @@ router.get("/me", authenticateToken, async (req: any, res: Response) => {
         email: user.email || '',
         name: user.name
       }
-    });
+    };
+
+    console.log("Response data:", responseData);
+    res.json(responseData);
   } catch (error) {
     console.error("Get profile error:", error);
     res.status(500).json({ error: "Failed to fetch profile" });
@@ -215,7 +222,7 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
     console.log("Updated user:", updatedUser?.toJSON());
     console.log("Updated profile:", updatedProfile?.toJSON());
 
-    res.json({
+    const responseData = {
       profile: {
         ...updatedProfile!.toJSON(),
         skills: updatedProfile!.skills ? updatedProfile!.skills.split(',') : [],
@@ -224,7 +231,10 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
         email: updatedUser!.email || '',
         name: updatedUser!.name
       }
-    });
+    };
+
+    console.log("Final response data:", responseData);
+    res.json(responseData);
   } catch (error) {
     console.error("Update profile error:", error);
     // Log more detailed error information
