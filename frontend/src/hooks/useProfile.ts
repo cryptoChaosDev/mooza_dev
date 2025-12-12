@@ -21,7 +21,6 @@ export const useProfile = () => {
       
       const meResponse = await apiMe(token);
       console.log('apiMe response:', meResponse);
-      const { id, email, phone, name } = meResponse;
       
       const profileResponse = await getProfile(token);
       console.log('getProfile response:', profileResponse);
@@ -29,17 +28,17 @@ export const useProfile = () => {
       if (profileResponse && profileResponse.profile) {
         const p = profileResponse.profile;
         const hydrated: UserProfile = {
-          userId: String(id),
+          userId: String(meResponse.id),
           firstName: p.firstName,
           lastName: p.lastName,
-          name: `${p.firstName} ${p.lastName}`.trim() || name,
+          name: `${p.firstName} ${p.lastName}`.trim() || meResponse.name,
           bio: p.bio || '',
           workPlace: p.workPlace || '',
           skills: Array.isArray(p.skills) ? p.skills : (p.skills ? p.skills.split(',') : []),
           interests: Array.isArray(p.interests) ? p.interests : (p.interests ? p.interests.split(',') : []),
           portfolio: p.portfolio || { text: '' },
-          phone: phone || '',
-          email: email || '',
+          phone: meResponse.phone || '',
+          email: meResponse.email || '',
           vkId: p.vkId || '', 
           youtubeId: p.youtubeId || '', 
           telegramId: p.telegramId || '',
