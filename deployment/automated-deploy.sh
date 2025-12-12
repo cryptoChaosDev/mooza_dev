@@ -343,6 +343,14 @@ http {
     include       /etc/nginx/mime.types;
     default_type  application/octet-stream;
     
+    # Explicitly set MIME types for static files
+    map $sent_http_content_type $expires {
+        default                    off;
+        ~text/css                  1y;
+        ~application/javascript    1y;
+        ~image/                    1y;
+    }
+    
     # Frontend server block
     server {
         listen 80;
@@ -350,6 +358,29 @@ http {
         
         root /usr/share/nginx/html;
         index index.html;
+        
+        # Set expiration headers for static files
+        location ~* \.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires $expires;
+            add_header Cache-Control "public, immutable";
+            try_files $uri =404;
+        }
+        
+        # Explicitly set MIME type for CSS files
+        location ~* \.css$ {
+            add_header Content-Type text/css;
+            expires $expires;
+            add_header Cache-Control "public, immutable";
+            try_files $uri =404;
+        }
+        
+        # Explicitly set MIME type for JS files
+        location ~* \.js$ {
+            add_header Content-Type application/javascript;
+            expires $expires;
+            add_header Cache-Control "public, immutable";
+            try_files $uri =404;
+        }
         
         # Serve static files
         location / {
