@@ -63,15 +63,17 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
     const userId = req.user.userId;
     const profileData = req.body;
 
-    // Update user
-    await User.update(
-      {
-        name: `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim()
-      },
-      {
+    // Update user fields that exist in the User model
+    const updateUserFields: any = {};
+    if (profileData.firstName || profileData.lastName) {
+      updateUserFields.name = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim();
+    }
+    
+    if (Object.keys(updateUserFields).length > 0) {
+      await User.update(updateUserFields, {
         where: { id: userId }
-      }
-    );
+      });
+    }
 
     // Find or create profile
     const [profile, created] = await Profile.findOrCreate({
@@ -83,11 +85,14 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
         avatarUrl: profileData.avatarUrl || '',
         bio: profileData.bio || '',
         workPlace: profileData.workPlace || '',
-        skills: profileData.skills || '',
-        interests: profileData.interests || '',
+        skills: Array.isArray(profileData.skills) ? profileData.skills.join(',') : (profileData.skills || ''),
+        interests: Array.isArray(profileData.interests) ? profileData.interests.join(',') : (profileData.interests || ''),
         portfolio: profileData.portfolio || null,
         city: profileData.city || '',
-        country: profileData.country || ''
+        country: profileData.country || '',
+        vkId: profileData.vkId || '',
+        youtubeId: profileData.youtubeId || '',
+        telegramId: profileData.telegramId || ''
       }
     });
 
@@ -99,11 +104,14 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
         avatarUrl: profileData.avatarUrl || '',
         bio: profileData.bio || '',
         workPlace: profileData.workPlace || '',
-        skills: profileData.skills || '',
-        interests: profileData.interests || '',
+        skills: Array.isArray(profileData.skills) ? profileData.skills.join(',') : (profileData.skills || ''),
+        interests: Array.isArray(profileData.interests) ? profileData.interests.join(',') : (profileData.interests || ''),
         portfolio: profileData.portfolio || null,
         city: profileData.city || '',
-        country: profileData.country || ''
+        country: profileData.country || '',
+        vkId: profileData.vkId || '',
+        youtubeId: profileData.youtubeId || '',
+        telegramId: profileData.telegramId || ''
       });
     }
 
