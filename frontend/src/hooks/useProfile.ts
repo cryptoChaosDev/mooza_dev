@@ -20,8 +20,10 @@ export const useProfile = () => {
       setError(null);
       
       const me = await apiMe(token);
+      console.log('apiMe response:', me);
       const { id, email, phone } = me;
       const { profile: p } = await getProfile(token);
+      console.log('getProfile response:', p);
       
       if (p) {
         const hydrated: UserProfile = {
@@ -41,6 +43,7 @@ export const useProfile = () => {
           country: p.country || '',
           avatarUrl: p.avatarUrl || undefined,
         };
+        console.log('Hydrated profile:', hydrated);
         setProfile(hydrated);
       } else {
         setProfile(null);
@@ -55,6 +58,7 @@ export const useProfile = () => {
   }, []);
 
   const refreshProfile = useCallback(() => {
+    console.log('Refreshing profile...');
     loadProfile();
   }, [loadProfile]);
 
