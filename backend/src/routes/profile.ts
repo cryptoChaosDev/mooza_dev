@@ -152,7 +152,7 @@ router.get("/me/posts", authenticateToken, async (req: any, res: Response) => {
       where: {
         userId: req.user.userId
       },
-      order: [['createdAt', 'DESC']]
+      order: [["createdAt", "DESC"]]
     });
 
     res.json(posts);
@@ -332,7 +332,7 @@ router.get("/me/friends", authenticateToken, async (req: any, res: Response) => 
       where: {
         id: friendIds
       },
-      attributes: ['id', 'name', 'email']
+      attributes: ["id", "name", "email"]
     });
 
     res.json(friends);
