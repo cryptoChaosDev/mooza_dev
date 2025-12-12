@@ -17,6 +17,10 @@ This directory contains all the scripts needed to deploy and manage the Mooza ap
 - [fix-auth-profile-routes.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-auth-profile-routes.sh) - Auth and profile routes fix script
 - [fix-sequelize-migration.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-sequelize-migration.sh) - Sequelize migration fix script
 
+### Configuration Files
+- [nginx.conf](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/nginx.conf) - Static Nginx configuration file with proper MIME type settings
+- [docker-compose.prod.yml](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/docker-compose.prod.yml) - Production docker-compose file that references the static nginx.conf
+
 ### Diagnostic Scripts
 - [troubleshoot.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/troubleshoot.sh) - General troubleshooting script
 - [detailed-diag.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/detailed-diag.sh) - Detailed diagnostics script
