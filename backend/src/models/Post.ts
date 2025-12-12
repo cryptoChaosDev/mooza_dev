@@ -7,7 +7,7 @@ interface PostAttributes {
   userId: number;
   createdAt?: Date;
   updatedAt?: Date;
-  tags?: string[];
+  tags?: string;
   attachmentUrl?: string;
 }
 
@@ -19,7 +19,7 @@ class Post extends Model<PostAttributes, PostCreationAttributes> implements Post
   public userId!: number;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
-  public tags?: string[];
+  public tags?: string;
   public attachmentUrl?: string;
 }
 
@@ -38,7 +38,7 @@ Post.init({
     allowNull: false,
   },
   tags: {
-    type: DataTypes.ARRAY(DataTypes.STRING),
+    type: DataTypes.STRING,
     allowNull: true,
   },
   attachmentUrl: {

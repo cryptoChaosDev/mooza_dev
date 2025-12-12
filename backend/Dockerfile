@@ -9,6 +9,7 @@ WORKDIR /app
 COPY package.json ./
 RUN npm ci || npm install
 COPY tsconfig.json ./
+COPY prisma ./prisma
 COPY src ./src
 RUN npm run build
 
@@ -18,6 +19,10 @@ ENV NODE_ENV=production
 # Install production dependencies
 COPY package.json ./
 RUN npm ci --only=production || npm install --only=production
+# Copy prisma directory for database migrations
+COPY prisma ./prisma
+# Create the directory for SQLite database
+RUN mkdir -p /app/prisma
 # Copy built files
 COPY --from=builder /app/dist ./dist
 EXPOSE 4000

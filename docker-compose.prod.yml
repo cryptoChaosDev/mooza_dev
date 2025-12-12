@@ -24,7 +24,7 @@ services:
       - NODE_ENV=production
       - PORT=4000
       - JWT_SECRET=${JWT_SECRET}
-      - DATABASE_URL=file:/app/prisma/prod.db
+      - DATABASE_URL=sqlite:/app/prisma/prod.db
     volumes:
       - api_data:/app/prisma
     restart: unless-stopped

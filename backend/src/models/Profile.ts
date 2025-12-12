@@ -9,9 +9,9 @@ interface ProfileAttributes {
   avatarUrl?: string;
   bio?: string;
   workPlace?: string;
-  skills?: string[];
-  interests?: string[];
-  portfolio?: any;
+  skills?: string;
+  interests?: string;
+  portfolio?: string;
   city?: string;
   country?: string;
   vkId?: string;
@@ -31,9 +31,9 @@ class Profile extends Model<ProfileAttributes, ProfileCreationAttributes> implem
   public avatarUrl?: string;
   public bio?: string;
   public workPlace?: string;
-  public skills?: string[];
-  public interests?: string[];
-  public portfolio?: any;
+  public skills?: string;
+  public interests?: string;
+  public portfolio?: string;
   public city?: string;
   public country?: string;
   public vkId?: string;
@@ -75,15 +75,15 @@ Profile.init({
     allowNull: true,
   },
   skills: {
-    type: DataTypes.ARRAY(DataTypes.STRING),
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   interests: {
-    type: DataTypes.ARRAY(DataTypes.STRING),
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   portfolio: {
-    type: DataTypes.JSON,
+    type: DataTypes.TEXT,
     allowNull: true,
   },
   city: {
