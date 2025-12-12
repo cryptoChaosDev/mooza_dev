@@ -387,7 +387,13 @@ export function Profile({
             <div className="relative">
               <div className="w-24 h-24 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center text-3xl border-4 border-white shadow-xl">
                 {avatarPreview ? (
-                  <img src={avatarPreview.startsWith('http') || avatarPreview.startsWith('/') ? avatarPreview : `${API_URL}${avatarPreview}`} alt="avatar" className="w-full h-full object-cover" />
+                  <img src={avatarPreview} alt="avatar" className="w-full h-full object-cover" onError={(e) => {
+                    // Handle broken image by showing placeholder
+                    const target = e.target as HTMLImageElement;
+                    target.onerror = null;
+                    target.style.display = 'none';
+                    target.parentElement!.innerHTML = '<span role="img" aria-label="avatar">👤</span>';
+                  }} />
                 ) : (
                   <span role="img" aria-label="avatar">👤</span>
                 )}

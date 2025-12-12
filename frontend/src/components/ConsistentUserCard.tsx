@@ -23,9 +23,15 @@ export function ConsistentUserCard({ user, onClick, showMatchScore = false, prof
       <div className="flex items-center gap-4">
         <div className="w-16 h-16 rounded-2xl overflow-hidden bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center text-xl border-2 border-white flex-shrink-0">
           {user.avatarUrl ? (
-            <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+            <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover" onError={(e) => {
+              // Handle broken image by showing placeholder
+              const target = e.target as HTMLImageElement;
+              target.onerror = null;
+              target.style.display = 'none';
+              target.parentElement!.innerHTML = '<span role="img" aria-label="avatar" class="text-lg">👤</span>';
+            }} />
           ) : (
-            <span role="img" aria-label="avatar" className="text-2xl">👤</span>
+            <span role="img" aria-label="avatar" className="text-lg">👤</span>
           )}
         </div>
         <div className="flex-1 min-w-0">

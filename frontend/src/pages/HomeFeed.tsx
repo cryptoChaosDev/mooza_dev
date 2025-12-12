@@ -179,10 +179,17 @@ export function HomeFeed({ profile, allPosts, friends, onUserClick, onDeletePost
                   <div className="flex items-start gap-4">
                     <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center text-xl border-2 border-white overflow-hidden flex-shrink-0 shadow-lg">
                       {user?.avatarUrl || post.avatarUrl ? (
-                        <img src={user?.avatarUrl || post.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-2xl" />
+                        <img src={user?.avatarUrl || post.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-2xl" onError={(e) => {
+                          // Handle broken image by showing placeholder
+                          const target = e.target as HTMLImageElement;
+                          target.onerror = null;
+                          target.style.display = 'none';
+                          target.parentElement!.innerHTML = '<span role="img" aria-label="avatar" class="text-lg">👤</span>';
+                        }} />
                       ) : (
-                        <span role="img" aria-label="avatar" className="text-2xl">👤</span>
+                        <span role="img" aria-label="avatar" className="text-lg">👤</span>
                       )}
+
                     </div>
                     <div className="flex-1 min-w-0">
                       <div 
