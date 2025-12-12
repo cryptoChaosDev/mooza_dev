@@ -251,14 +251,34 @@ router.get("/posts", authenticateToken, async (req: any, res: Response) => {
       where: {
         userId: friendIds
       },
-      order: [['createdAt', 'DESC']],
-      include: [{
-        model: User,
-        attributes: ['id', 'name']
-      }]
+      order: [['createdAt', 'DESC']]
     });
 
-    res.json(posts);
+    // Manually fetch user data for each post
+    const userIds = [...new Set(posts.map(post => post.userId))];
+    const users = await User.findAll({
+      where: {
+        id: userIds
+      },
+      attributes: ['id', 'name']
+    });
+
+    // Create a map for quick user lookup
+    const userMap = users.reduce((map, user) => {
+      map[user.id] = user;
+      return map;
+    }, {} as Record<number, typeof users[0]>);
+
+    // Add user data to each post
+    const postsWithUserData = posts.map(post => {
+      const user = userMap[post.userId];
+      return {
+        ...post.toJSON(),
+        user: user ? { id: user.id, name: user.name } : null
+      };
+    });
+
+    res.json(postsWithUserData);
   } catch (error) {
     console.error("Get posts error:", error);
     res.status(500).json({ error: "Failed to fetch posts" });

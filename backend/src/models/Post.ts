@@ -1,5 +1,6 @@
 import { Model, DataTypes, Optional } from 'sequelize';
 import { sequelize } from '../config/database';
+import User from './User';
 
 interface PostAttributes {
   id: number;
@@ -49,6 +50,12 @@ Post.init({
   sequelize,
   tableName: 'posts',
   timestamps: true,
+});
+
+// Define associations
+Post.belongsTo(User, {
+  foreignKey: 'userId',
+  as: 'user'
 });
 
 export default Post;
