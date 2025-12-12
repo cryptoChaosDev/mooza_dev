@@ -64,6 +64,16 @@ This directory contains scripts for deploying the Mooza application to a VPS.
   sudo ./migrate-to-sequelize.sh
   ```
 
+### 7. Fix Sequelize Migration Issues Script
+- **File**: [fix-sequelize-migration.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-sequelize-migration.sh)
+- **Purpose**: Fix issues encountered during Sequelize migration
+- **Usage**:
+  ```bash
+  curl -fsSL -o fix-sequelize-migration.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-sequelize-migration.sh
+  chmod +x fix-sequelize-migration.sh
+  sudo ./fix-sequelize-migration.sh
+  ```
+
 ## Documentation
 
 - [Main VPS Deployment Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/VPS_DEPLOYMENT.md)
@@ -71,6 +81,7 @@ This directory contains scripts for deploying the Mooza application to a VPS.
 - [Deployment Checklist](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/DEPLOYMENT_CHECKLIST.md)
 - [PostgreSQL Setup Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/POSTGRES_SETUP.md)
 - [Sequelize Migration Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/SEQUELIZE_MIGRATION.md)
+- [Fix Sequelize Migration Issues Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/FIX_SEQUELIZE_MIGRATION.md)
 
 ## Quick Start
 
