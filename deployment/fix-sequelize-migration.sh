@@ -263,18 +263,22 @@ const router = Router();
 // Get friends list
 router.get("/me/friends", authenticateToken, async (req: any, res: Response) => {
   try {
+    // First get the friendships
     const friendships = await Friendship.findAll({
       where: {
         userId: req.user.userId
-      },
-      include: [{
-        model: User,
-        as: 'friend',
-        attributes: ['id', 'name', 'email']
-      }]
+      }
     });
 
-    const friends = friendships.map(f => f.friend);
+    // Then get the friend users
+    const friendIds = friendships.map(f => f.friendId);
+    const friends = await User.findAll({
+      where: {
+        id: friendIds
+      },
+      attributes: ['id', 'name', 'email']
+    });
+
     res.json(friends);
   } catch (error) {
     console.error("Get friends error:", error);

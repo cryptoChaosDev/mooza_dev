@@ -30,59 +30,54 @@ sudo ./fix-sequelize-migration.sh
 ## What the Script Does
 
 ### 1. Creates Missing Middleware
-
-The script creates the authentication middleware that was missing:
+The script creates the authentication middleware that was missing after the Sequelize migration:
 
 - Creates `backend/src/middleware/auth.ts`
-- Implements JWT token verification
-- Provides proper TypeScript typings
+- Implements the `authenticateToken` function
+- Properly verifies JWT tokens
+- Adds proper typing for authenticated requests
 
-### 2. Fixes Auth Route
+### 2. Fixes Route Implementations
+Updates all route files to use Sequelize models instead of Prisma:
 
-Updates `backend/src/routes/auth.ts` to:
+- `backend/src/routes/auth.ts` - Registration, login, and user verification
+- `backend/src/routes/friendships.ts` - Friend management (add, remove, list)
+- `backend/src/routes/profile.ts` - Profile management and posts
 
-- Fix TypeScript type errors
-- Use Sequelize models instead of Prisma client
-- Maintain all existing functionality
+### 3. Fixes TypeScript Compilation Errors
+Resolves all TypeScript errors that occurred during the migration:
 
-### 3. Fixes Friendships Route
+- Corrects model imports
+- Updates function signatures
+- Fixes property access issues
+- Resolves type inconsistencies
 
-Updates `backend/src/routes/friendships.ts` to:
-
-- Remove all Prisma references
-- Implement Sequelize equivalents
-- Maintain all existing endpoints
-
-### 4. Fixes Profile Route
-
-Updates `backend/src/routes/profile.ts` to:
-
-- Replace Prisma client with Sequelize models
-- Fix TypeScript compilation issues
-- Maintain all existing functionality
-
-### 5. Fixes Frontend Redirection
-
-Updates `frontend/src/App.tsx` to ensure proper navigation:
-
-- Adds navigation to home page ('/') after successful registration
-- Ensures user is redirected to the main feed after creating an account
-- Maintains all existing navigation functionality
-
-### 6. Rebuilds Services
+### 4. Rebuilds Services
+After applying fixes, the script:
 
 - Stops existing containers
 - Removes old images
-- Builds new images with updated code
-- Restarts services
+- Builds new images with corrected code
+- Restarts all services
+- Verifies services are running correctly
 
-## Manual Fix Steps
+### 5. Fixes Frontend Redirection
+Ensures proper navigation after registration:
 
-If you prefer to apply the fixes manually:
+- Updates App.tsx to navigate to home page after registration
+- Verifies registration flow redirects correctly
 
-### 1. Create Auth Middleware
+## Common Issues Fixed
 
-Create `backend/src/middleware/auth.ts`:
+### TypeScript Error: Property 'friend' does not exist on type 'Friendship'
+This error occurs when trying to access a property that doesn't exist on the Sequelize model. The fix involves:
+
+1. First querying the Friendship model to get friendships
+2. Extracting friend IDs from the friendships
+3. Then querying the User model separately to get friend details
+
+### Authentication Middleware Missing
+After migration, the authentication middleware was missing. The script creates:
 
 ```typescript
 import { Request, Response, NextFunction } from "express";
@@ -114,104 +109,29 @@ const authenticateToken = (req: AuthenticatedRequest, res: Response, next: NextF
 export { authenticateToken, AuthenticatedRequest };
 ```
 
-### 2. Update Route Files
+## Verification Steps
 
-Update each route file to use Sequelize models and fix TypeScript errors as shown in the script.
+After running the script, verify that:
 
-### 3. Fix Frontend Redirection
-
-Update `frontend/src/App.tsx` to include navigation after registration:
-
-```typescript
-// In the useEffect hook that handles profile state changes
-React.useEffect(() => {
-  if (profile) {
-    setShowWelcome(false);
-    // Navigate to home page when profile is set
-    navigate('/');
-  }
-}, [profile, navigate]);
-```
-
-### 4. Rebuild Services
-
-```bash
-cd /opt/mooza
-sudo docker compose -f docker-compose.prod.yml down
-sudo docker rmi mooza-api
-sudo docker compose -f docker-compose.prod.yml up -d --build
-```
-
-## Testing
-
-After running the fix script:
-
-1. **Check the logs**:
-   ```bash
-   sudo docker compose -f docker-compose.prod.yml logs api
-   ```
-
-2. **Test registration**:
-   ```bash
-   curl -X POST http://147.45.166.246/auth/register \
-     -H "Content-Type: application/json" \
-     -d '{"email":"test@example.com","password":"password123","name":"Test User"}'
-   ```
-
-3. **Test login**:
-   ```bash
-   curl -X POST http://147.45.166.246/auth/login \
-     -H "Content-Type: application/json" \
-     -d '{"email":"test@example.com","password":"password123"}'
-   ```
-
-4. **Test frontend registration flow**:
-   - Open the application in a browser
-   - Click "Create Account"
-   - Fill in registration details
-   - Submit the form
-   - Verify that you're redirected to the home page after registration
+1. Services build successfully without TypeScript errors
+2. Backend API responds correctly to requests
+3. Registration and login work properly
+4. Friend management functions correctly
+5. Posts can be created and retrieved
+6. Frontend redirects properly after registration
 
 ## Troubleshooting
 
-### Common Issues
+If you still encounter issues:
 
-1. **Build Still Fails**:
-   - Check that all Prisma references have been removed
-   - Ensure all TypeScript types are correct
-   - Verify Sequelize models are properly imported
+1. Check the logs: `docker compose -f docker-compose.prod.yml logs`
+2. Verify all environment variables are set correctly
+3. Ensure the database is accessible and has the correct schema
+4. Confirm that all dependencies are installed: `npm install` in both frontend and backend directories
 
-2. **Runtime Errors**:
-   - Check database connection settings
-   - Verify environment variables
-   - Ensure PostgreSQL container is running
+## Additional Notes
 
-3. **Authentication Issues**:
-   - Check JWT_SECRET in environment variables
-   - Verify middleware is properly applied to routes
-
-4. **Navigation Issues**:
-   - Ensure the navigate hook is properly imported and used
-   - Check that the useEffect hook includes navigation
-   - Verify that profile state changes trigger navigation
-
-### Rolling Back
-
-If you need to roll back:
-
-1. Restore the backed up files if you made copies
-2. Reinstall Prisma if needed:
-   ```bash
-   cd /opt/mooza/backend
-   npm install @prisma/client prisma
-   ```
-
-## Benefits
-
-This fix script resolves the immediate issues with the Sequelize migration while maintaining all application functionality. After applying these fixes, your application should:
-
-1. Build successfully without TypeScript errors
-2. Run without runtime errors
-3. Maintain all existing features
-4. Use Sequelize ORM for database operations
-5. Properly redirect users to the home page after registration
+- The script creates backups of original files before modifying them
+- All changes are logged with timestamps for debugging
+- The script must be run with sudo privileges
+- Ensure you have internet connectivity for Docker image pulls
