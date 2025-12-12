@@ -2,6 +2,7 @@ import express from "express";
 import cors from "cors";
 import morgan from "morgan";
 import { createServer } from "http";
+import path from "path";
 
 const app = express();
 
@@ -17,6 +18,9 @@ app.use(cors({
 }));
 app.use(express.json({ limit: '10mb' }));
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
+
+// Serve static files from uploads directory
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Add security headers middleware
 app.use((req, res, next) => {
