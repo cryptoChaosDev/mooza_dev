@@ -53,7 +53,13 @@ export function ProfileView({ profile, editable, onEdit }: { profile: UserProfil
           <div className="relative">
             <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-3xl overflow-hidden border-3 sm:border-4 border-white shadow-2xl bg-dark-bg/80 flex items-center justify-center">
               {profile.avatarUrl ? (
-                <img src={profile.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                <img src={profile.avatarUrl} alt="avatar" className="w-full h-full object-cover" onError={(e) => {
+                  // Handle broken image by showing placeholder
+                  const target = e.target as HTMLImageElement;
+                  target.onerror = null;
+                  target.style.display = 'none';
+                  target.parentElement!.innerHTML = '<span role="img" aria-label="avatar" class="text-4xl sm:text-5xl">👤</span>';
+                }} />
               ) : (
                 <span role="img" aria-label="avatar" className="text-4xl sm:text-5xl">👤</span>
               )}

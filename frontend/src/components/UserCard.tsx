@@ -36,7 +36,13 @@ export function UserCard({ user, posts, isFriend, isFavorite, onAddFriend, onRem
           <div className="avatar-gradient mx-auto" style={{background: isFriend ? 'linear-gradient(135deg,#4F8CFF,#38BDF8)' : isFavorite ? 'linear-gradient(135deg,#fbbf24,#fde68a)' : 'linear-gradient(135deg,#888,#222)'}}>
             <div className="avatar-inner w-20 h-20 sm:w-24 sm:h-24 rounded-full overflow-hidden border-3 sm:border-4 border-white shadow-lg flex items-center justify-center">
               {user.avatarUrl ? (
-                <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
+                <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" onError={(e) => {
+                  // Handle broken image by showing placeholder
+                  const target = e.target as HTMLImageElement;
+                  target.onerror = null;
+                  target.style.display = 'none';
+                  target.parentElement!.innerHTML = '<span role="img" aria-label="avatar" class="text-3xl sm:text-4xl">👤</span>';
+                }} />
               ) : (
                 <span role="img" aria-label="avatar" className="text-3xl sm:text-4xl">👤</span>
               )}

@@ -20,9 +20,15 @@ export function PostCard({ post, users, isOwn, onEdit, onDelete, onLike, onUserC
       <div className="flex items-center gap-3 sm:gap-4 mb-2">
         <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-dark-bg/80 flex items-center justify-center text-xl sm:text-2xl border border-dark-bg/40 overflow-hidden">
           {user?.avatarUrl ? (
-            <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
+            <img src={user.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" onError={(e) => {
+              // Handle broken image by showing placeholder
+              const target = e.target as HTMLImageElement;
+              target.onerror = null;
+              target.style.display = 'none';
+              target.parentElement!.innerHTML = '<span role="img" aria-label="avatar" class="text-lg">👤</span>';
+            }} />
           ) : (
-            <span role="img" aria-label="avatar">👤</span>
+            <span role="img" aria-label="avatar" className="text-lg">👤</span>
           )}
         </div>
         <div className="font-semibold text-dark-text text-sm sm:text-base cursor-pointer hover:underline truncate" onClick={() => user && onUserClick && onUserClick(user)}>{user?.name || post.author}</div>

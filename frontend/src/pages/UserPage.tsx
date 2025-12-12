@@ -37,9 +37,15 @@ export function UserPage({ user, posts, onBack, isFriend, isFavorite, onAddFrien
               <div className="flex items-center gap-3 mb-1">
                 <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-200 to-blue-400 flex items-center justify-center text-2xl border-2 border-white overflow-hidden sm:w-12 sm:h-12">
                   {post.avatarUrl ? (
-                    <img src={post.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" />
+                    <img src={post.avatarUrl} alt="avatar" className="w-full h-full object-cover rounded-full" onError={(e) => {
+                      // Handle broken image by showing placeholder
+                      const target = e.target as HTMLImageElement;
+                      target.onerror = null;
+                      target.style.display = 'none';
+                      target.parentElement!.innerHTML = '<span role="img" aria-label="avatar" class="text-lg">👤</span>';
+                    }} />
                   ) : (
-                    <span role="img" aria-label="avatar">👤</span>
+                    <span role="img" aria-label="avatar" className="text-lg">👤</span>
                   )}
                 </div>
                 <div className="font-medium text-dark-text text-sm cursor-pointer hover:underline sm:text-base">{post.author}</div>
