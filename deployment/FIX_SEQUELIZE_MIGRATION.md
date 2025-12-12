@@ -10,6 +10,7 @@ This script fixes common issues that occur when migrating from Prisma to Sequeli
 2. **TypeScript compilation errors** - Fixes type issues in route files
 3. **Route implementation updates** - Updates routes to use Sequelize models
 4. **Service rebuilding** - Rebuilds and restarts Docker containers
+5. **Frontend redirection fix** - Ensures proper navigation after registration
 
 ## Usage
 
@@ -60,7 +61,15 @@ Updates `backend/src/routes/profile.ts` to:
 - Fix TypeScript compilation issues
 - Maintain all existing functionality
 
-### 5. Rebuilds Services
+### 5. Fixes Frontend Redirection
+
+Updates `frontend/src/App.tsx` to ensure proper navigation:
+
+- Adds navigation to home page ('/') after successful registration
+- Ensures user is redirected to the main feed after creating an account
+- Maintains all existing navigation functionality
+
+### 6. Rebuilds Services
 
 - Stops existing containers
 - Removes old images
@@ -109,7 +118,22 @@ export { authenticateToken, AuthenticatedRequest };
 
 Update each route file to use Sequelize models and fix TypeScript errors as shown in the script.
 
-### 3. Rebuild Services
+### 3. Fix Frontend Redirection
+
+Update `frontend/src/App.tsx` to include navigation after registration:
+
+```typescript
+// In the useEffect hook that handles profile state changes
+React.useEffect(() => {
+  if (profile) {
+    setShowWelcome(false);
+    // Navigate to home page when profile is set
+    navigate('/');
+  }
+}, [profile, navigate]);
+```
+
+### 4. Rebuild Services
 
 ```bash
 cd /opt/mooza
@@ -141,6 +165,13 @@ After running the fix script:
      -d '{"email":"test@example.com","password":"password123"}'
    ```
 
+4. **Test frontend registration flow**:
+   - Open the application in a browser
+   - Click "Create Account"
+   - Fill in registration details
+   - Submit the form
+   - Verify that you're redirected to the home page after registration
+
 ## Troubleshooting
 
 ### Common Issues
@@ -158,6 +189,11 @@ After running the fix script:
 3. **Authentication Issues**:
    - Check JWT_SECRET in environment variables
    - Verify middleware is properly applied to routes
+
+4. **Navigation Issues**:
+   - Ensure the navigate hook is properly imported and used
+   - Check that the useEffect hook includes navigation
+   - Verify that profile state changes trigger navigation
 
 ### Rolling Back
 
@@ -178,3 +214,4 @@ This fix script resolves the immediate issues with the Sequelize migration while
 2. Run without runtime errors
 3. Maintain all existing features
 4. Use Sequelize ORM for database operations
+5. Properly redirect users to the home page after registration

@@ -641,6 +641,70 @@ wait_and_verify() {
     fi
 }
 
+# Fix frontend redirection issue
+fix_frontend_redirection() {
+    log "Checking frontend redirection issue..."
+    
+    cd /opt/mooza
+    
+    # Check if the Login component exists
+    if [ -f "frontend/src/pages/Login.tsx" ]; then
+        log "Checking Login component for registration redirection..."
+        
+        # Look for the registration function and ensure it redirects
+        if grep -q "apiRegister\|register" frontend/src/pages/Login.tsx; then
+            log "Found registration logic in Login component"
+            
+            # Check if there's navigation after registration
+            if ! grep -q "navigate\|history\.push\|window\.location" frontend/src/pages/Login.tsx; then
+                warning "Registration logic may be missing navigation"
+                log "Please check that the registration function navigates to '/' after successful registration"
+            fi
+        fi
+    else
+        warning "Login.tsx not found, can't verify registration redirection"
+    fi
+    
+    # Check WelcomePage component for proper redirection
+    if [ -f "frontend/src/Welcome.tsx" ]; then
+        log "Checking WelcomePage component for proper redirection..."
+        
+        # Check if the onFinish callback properly handles navigation
+        # The issue is that after registration, we need to ensure navigation to '/'
+        # We'll modify the App.tsx to include navigation in the onFinish callback
+        
+        log "Will update App.tsx to ensure proper navigation after registration"
+    fi
+    
+    success "Frontend redirection check completed"
+}
+
+# Fix App.tsx to ensure proper navigation after registration
+fix_app_navigation() {
+    log "Verifying App.tsx navigation fix..."
+    
+    cd /opt/mooza
+    
+    # Check if the navigation fix is already in place
+    if [ -f "frontend/src/App.tsx" ]; then
+        if grep -q "navigate('/');" frontend/src/App.tsx; then
+            success "App.tsx already has navigation fix in place"
+        else
+            log "Adding navigation fix to App.tsx..."
+            
+            # Create a backup of the original App.tsx
+            cp frontend/src/App.tsx frontend/src/App.tsx.backup
+            
+            # Add navigation to the useEffect hook
+            sed -i '30i\      \/\/ Navigate to home page when profile is set\n      navigate('\''/'\'');' frontend/src/App.tsx
+            
+            success "App.tsx navigation fix completed"
+        fi
+    else
+        warning "App.tsx not found, skipping navigation fix"
+    fi
+}
+
 # Main execution
 main() {
     check_root
@@ -651,11 +715,15 @@ main() {
     fix_profile_route
     rebuild_and_restart
     wait_and_verify
+    fix_frontend_redirection
+    fix_app_navigation
     
     echo
     success "Sequelize migration fixes applied successfully!"
     log "Your application should now build and run correctly with Sequelize."
     log "Please test the registration and login functionality."
+    log "If registration doesn't redirect to home page, check the frontend Login component"
+    log "to ensure it navigates to '/' after successful registration."
 }
 
 # Run main function
