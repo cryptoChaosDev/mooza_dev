@@ -28,17 +28,17 @@ export const useProfile = () => {
       if (profileResponse && profileResponse.profile) {
         const p = profileResponse.profile;
         const hydrated: UserProfile = {
-          userId: String(meResponse.id),
+          userId: String(p.userId || meResponse.id),
           firstName: p.firstName,
           lastName: p.lastName,
-          name: `${p.firstName} ${p.lastName}`.trim() || meResponse.name,
+          name: `${p.firstName} ${p.lastName}`.trim() || p.name || meResponse.name,
           bio: p.bio || '',
           workPlace: p.workPlace || '',
           skills: Array.isArray(p.skills) ? p.skills : (p.skills ? p.skills.split(',') : []),
           interests: Array.isArray(p.interests) ? p.interests : (p.interests ? p.interests.split(',') : []),
           portfolio: p.portfolio || { text: '' },
-          phone: meResponse.phone || '',
-          email: meResponse.email || '',
+          phone: p.phone || meResponse.phone || '',
+          email: p.email || meResponse.email || '',
           vkId: p.vkId || '', 
           youtubeId: p.youtubeId || '', 
           telegramId: p.telegramId || '',
