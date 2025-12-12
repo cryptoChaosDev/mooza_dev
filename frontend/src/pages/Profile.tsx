@@ -57,6 +57,41 @@ export function Profile({
     setAvatarPreview(profile.avatarUrl || null);
   }, [profile]);
 
+  // --- Phone number formatting ---
+  const formatPhoneNumber = (value: string) => {
+    // Remove all non-digit characters
+    const phoneNumber = value.replace(/\D/g, '');
+    
+    // Take only first 11 digits (for +7XXXXXXXXXX format)
+    const trimmed = phoneNumber.substring(0, 11);
+    
+    // Format according to +7 (XXX) XXX-XX-XX
+    let formatted = '';
+    if (trimmed.length > 0) {
+      formatted = '+7';
+      if (trimmed.length >= 2) {
+        formatted += ' (' + trimmed.substring(1, 4);
+      }
+      if (trimmed.length >= 5) {
+        formatted += ') ' + trimmed.substring(4, 7);
+      }
+      if (trimmed.length >= 8) {
+        formatted += '-' + trimmed.substring(7, 9);
+      }
+      if (trimmed.length >= 10) {
+        formatted += '-' + trimmed.substring(9, 11);
+      }
+    }
+    
+    return formatted;
+  };
+
+  // --- Handle phone number input ---
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const formatted = formatPhoneNumber(e.target.value);
+    setEditData({...editData, phone: formatted});
+  };
+
   // --- Валидация полей ---
   function validateField(field: string, value: any) {
     switch (field) {
@@ -75,8 +110,8 @@ export function Profile({
         return '';
       case 'phone':
         if (!value) return 'Обязательное поле';
-        // Разрешаем маску +7 (XXX) XXX-XX-XX ИЛИ E.164 +7XXXXXXXXXX (10-15 цифр)
-        if (!/^(\+\d{10,15}|\+7 \(\d{3}\) \d{3}-\d{2}-\d{2})$/.test(value)) return 'Формат: +7 (XXX) XXX-XX-XX либо +7XXXXXXXXXX';
+        // Check if it matches the format +7 (XXX) XXX-XX-XX
+        if (!/^\+7 \(\d{3}\) \d{3}-\d{2}-\d{2}$/.test(value)) return 'Формат: +7 (XXX) XXX-XX-XX';
         return '';
       case 'email':
         if (!value) return 'Обязательное поле';
@@ -555,7 +590,7 @@ export function Profile({
                     <input
                       className={`w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner ${errors.phone ? 'border border-red-500' : ''}`}
                       value={editData.phone || ''}
-                      onChange={e => setEditData({...editData, phone: e.target.value})}
+                      onChange={handlePhoneChange}
                       placeholder="+7 (XXX) XXX-XX-XX"
                     />
                     {renderError('phone')}
