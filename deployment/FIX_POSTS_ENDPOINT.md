@@ -8,20 +8,19 @@ The application was showing a 500 Internal Server Error when trying to fetch pos
 
 1. The endpoint was trying to use Sequelize model associations (`include`) that weren't properly defined
 2. There was a circular dependency issue between the Post and User models
-3. The `include` option in the query was causing the server to crash
+3. There was a TypeScript error with the `createdAt` field reference
 
 ## Root Cause
 
-The issue was in the `/profile/posts` endpoint implementation in `backend/src/routes/profile.ts`. The code was trying to use Sequelize's `include` feature to join the Post and User tables, but the model associations weren't properly set up, causing a runtime error.
+The issue was in the `/profile/posts` endpoint implementation in `backend/src/routes/profile.ts`. The code had a TypeScript error where `createdAt` was not properly referenced, and there were issues with model associations causing runtime errors.
 
 ## Solution
 
-The fix involves updating the `/profile/posts` endpoint to manually fetch user data instead of using Sequelize's `include` feature:
+The fix involves updating the `/profile/posts` endpoint to:
 
-1. Fetch all posts from friends and the current user
-2. Extract unique user IDs from the posts
-3. Fetch user data for those IDs in a separate query
-4. Map the user data to the posts manually
+1. Properly reference the `createdAt` field for ordering
+2. Manually fetch user data instead of using Sequelize's `include` feature
+3. Avoid circular dependency issues between models
 
 ## Usage
 
@@ -41,7 +40,7 @@ sudo ./fix-posts-endpoint.sh
 ## What the Script Does
 
 ### 1. Fixes Posts Endpoint Implementation
-The script updates the `/profile/posts` endpoint in `backend/src/routes/profile.ts` to avoid using Sequelize's `include` feature:
+The script updates the `/profile/posts` endpoint in `backend/src/routes/profile.ts` to fix the TypeScript error and avoid using Sequelize's `include` feature:
 
 ```typescript
 // Get all posts (from friends and self)
@@ -61,7 +60,7 @@ router.get("/posts", authenticateToken, async (req: any, res: Response) => {
       where: {
         userId: friendIds
       },
-      order: [['createdAt', 'DESC']]
+      order: [["createdAt", "DESC"]]
     });
 
     // Manually fetch user data for each post
@@ -70,7 +69,7 @@ router.get("/posts", authenticateToken, async (req: any, res: Response) => {
       where: {
         id: userIds
       },
-      attributes: ['id', 'name']
+      attributes: ["id", "name"]
     });
 
     // Create a map for quick user lookup

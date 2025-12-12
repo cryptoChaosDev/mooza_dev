@@ -65,7 +65,9 @@ fix_posts_endpoint() {
     cd /opt/mooza
     
     # Create backup
-    cp backend/src/routes/profile.ts backend/src/routes/profile.ts.backup.$(date +%s)
+    if [ -f "backend/src/routes/profile.ts" ]; then
+        cp backend/src/routes/profile.ts backend/src/routes/profile.ts.backup.$(date +%s)
+    fi
     
     # Update the profile route to fix the posts endpoint
     # We need to find the /posts endpoint and fix it
@@ -87,7 +89,7 @@ router.get("/posts", authenticateToken, async (req: any, res: Response) => {\
       where: {\
         userId: friendIds\
       },\
-      order: [['createdAt', '"'"'DESC'"'"']]\
+      order: [["createdAt", "DESC"]]\
     });\
 \
     // Manually fetch user data for each post\
@@ -96,7 +98,7 @@ router.get("/posts", authenticateToken, async (req: any, res: Response) => {\
       where: {\
         id: userIds\
       },\
-      attributes: ['"'"'id'"'"', '"'"'name'"'"']\
+      attributes: ["id", "name"]\
     });\
 \
     // Create a map for quick user lookup\
