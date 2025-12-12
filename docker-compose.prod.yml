@@ -7,7 +7,7 @@ services:
     volumes:
       - ./deployment/nginx.conf:/etc/nginx/nginx.conf
       - ./frontend/build:/usr/share/nginx/html
-      - uploads:/usr/share/nginx/uploads
+      - ./uploads:/usr/share/nginx/uploads
       - ./ssl:/etc/nginx/ssl
     depends_on:
       - api
@@ -28,14 +28,13 @@ services:
       - DATABASE_URL=sqlite:/app/prisma/prod.db
     volumes:
       - api_data:/app/prisma
-      - uploads:/app/uploads
+      - ./uploads:/app/uploads
     restart: unless-stopped
     networks:
       - mooza-network
 
 volumes:
   api_data:
-  uploads:
 
 networks:
   mooza-network:
