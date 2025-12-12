@@ -62,6 +62,9 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
   try {
     const userId = req.user.userId;
     const profileData = req.body;
+    
+    console.log("Updating profile for user:", userId);
+    console.log("Profile data received:", profileData);
 
     // Update user fields that exist in the User model
     const updateUserFields: any = {};
@@ -70,6 +73,7 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
     }
     
     if (Object.keys(updateUserFields).length > 0) {
+      console.log("Updating user fields:", updateUserFields);
       await User.update(updateUserFields, {
         where: { id: userId }
       });
@@ -95,10 +99,12 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
         telegramId: profileData.telegramId || ''
       }
     });
+    
+    console.log("Profile found or created:", created);
 
     if (!created) {
       // Update existing profile
-      await profile.update({
+      const updateProfileFields = {
         firstName: profileData.firstName || '',
         lastName: profileData.lastName || '',
         avatarUrl: profileData.avatarUrl || '',
@@ -112,7 +118,10 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
         vkId: profileData.vkId || '',
         youtubeId: profileData.youtubeId || '',
         telegramId: profileData.telegramId || ''
-      });
+      };
+      
+      console.log("Updating profile fields:", updateProfileFields);
+      await profile.update(updateProfileFields);
     }
 
     // Return updated profile
@@ -123,6 +132,9 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
     const updatedProfile = await Profile.findOne({
       where: { userId: userId }
     });
+    
+    console.log("Updated user:", updatedUser?.toJSON());
+    console.log("Updated profile:", updatedProfile?.toJSON());
 
     res.json({
       profile: {
@@ -136,7 +148,13 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
     });
   } catch (error) {
     console.error("Update profile error:", error);
-    res.status(500).json({ error: "Failed to update profile" });
+    // Log more detailed error information
+    if (error instanceof Error) {
+      console.error("Error name:", error.name);
+      console.error("Error message:", error.message);
+      console.error("Error stack:", error.stack);
+    }
+    res.status(500).json({ error: "Failed to update profile", details: error instanceof Error ? error.message : String(error) });
   }
 });
 
