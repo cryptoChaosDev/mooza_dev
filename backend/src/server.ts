@@ -20,7 +20,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(morgan(process.env.NODE_ENV === "production" ? "combined" : "dev"));
 
 // Serve static files from uploads directory
-app.use('/uploads', express.static('/app/uploads'));
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Add security headers middleware
 app.use((req, res, next) => {

@@ -67,7 +67,14 @@ export async function getProfile(token: string): Promise<any> {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) throw new Error('Не удалось загрузить профиль');
-  return res.json();
+  const data = await res.json();
+  
+  // Construct full avatar URL if it's a relative path
+  if (data.profile && data.profile.avatarUrl && data.profile.avatarUrl.startsWith('/')) {
+    data.profile.avatarUrl = `${API_URL}${data.profile.avatarUrl}`;
+  }
+  
+  return data;
 }
 
 export async function updateProfile(token: string, payload: ProfilePayload): Promise<any> {
@@ -84,7 +91,15 @@ export async function updateProfile(token: string, payload: ProfilePayload): Pro
     body: JSON.stringify(processedPayload),
   });
   if (!res.ok) throw new Error('Не удалось сохранить профиль');
-  return res.json();
+  
+  const data = await res.json();
+  
+  // Construct full avatar URL if it's a relative path
+  if (data.profile && data.profile.avatarUrl && data.profile.avatarUrl.startsWith('/')) {
+    data.profile.avatarUrl = `${API_URL}${data.profile.avatarUrl}`;
+  }
+  
+  return data;
 }
 
 // New function to fetch all users
