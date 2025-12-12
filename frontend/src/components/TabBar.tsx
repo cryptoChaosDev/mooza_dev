@@ -62,7 +62,7 @@ export function TabBar() {
             }
             tabIndex={0}
             role="link"
-            aria-current={window.location.pathname === item.to ? 'page' : undefined}
+            aria-current={window.location.hash === `#${item.to}` || (item.to === '/' && (window.location.hash === '' || window.location.hash === '#/')) ? 'page' : undefined}
           >
             {({ isActive }) => (
               <>
