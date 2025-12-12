@@ -1,92 +1,83 @@
 # Mooza Deployment Scripts
 
-This directory contains scripts for deploying the Mooza application to a VPS.
+This directory contains all the scripts needed to deploy and manage the Mooza application.
 
 ## Available Scripts
 
-### 1. Automated Deployment Script
-- **File**: [automated-deploy.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/automated-deploy.sh)
-- **Purpose**: Fully automated deployment of the Mooza application to a fresh Ubuntu VPS
-- **Usage**: 
-  ```bash
-  curl -fsSL -o automated-deploy.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/automated-deploy.sh
-  chmod +x automated-deploy.sh
-  sudo ./automated-deploy.sh
-  ```
+### Main Deployment Scripts
+- [automated-deploy.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/automated-deploy.sh) - Complete automated deployment script
+- [auto-rebuild.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/auto-rebuild.sh) - Automatic rebuild script for continuous deployment
 
-### 2. Troubleshooting Script
-- **File**: [troubleshoot-deploy.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/troubleshoot-deploy.sh)
-- **Purpose**: Diagnose common deployment issues
-- **Usage**:
-  ```bash
-  curl -fsSL -o troubleshoot-deploy.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/troubleshoot-deploy.sh
-  chmod +x troubleshoot-deploy.sh
-  sudo ./troubleshoot-deploy.sh
-  ```
+### Fix Scripts
+- [fix-deployment.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-deployment.sh) - General deployment fix script
+- [fix-missing-deps.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-missing-deps.sh) - Missing dependencies fix script
+- [fix-docker-rate-limit.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-docker-rate-limit.sh) - Docker rate limit fix script
+- [fix-posts-endpoint.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-posts-endpoint.sh) - Posts endpoint fix script
+- [fix-frontend-assets.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-frontend-assets.sh) - Frontend assets fix script
+- [fix-auth-profile-routes.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-auth-profile-routes.sh) - Auth and profile routes fix script
+- [fix-sequelize-migration.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-sequelize-migration.sh) - Sequelize migration fix script
 
-### 3. Fix Frontend Assets Script
-- **File**: [fix-frontend-assets.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-frontend-assets.sh)
-- **Purpose**: Fix frontend asset path issues for VPS deployment
-- **Usage**:
-  ```bash
-  curl -fsSL -o fix-frontend-assets.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-frontend-assets.sh
-  chmod +x fix-frontend-assets.sh
-  sudo ./fix-frontend-assets.sh
-  ```
+### Diagnostic Scripts
+- [troubleshoot.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/troubleshoot.sh) - General troubleshooting script
+- [detailed-diag.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/detailed-diag.sh) - Detailed diagnostics script
 
-### 4. Fix Frontend API Script
-- **File**: [fix-frontend-api.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-frontend-api.sh)
-- **Purpose**: Fix frontend API URL configuration issues for VPS deployment
-- **Usage**:
-  ```bash
-  curl -fsSL -o fix-frontend-api.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-frontend-api.sh
-  chmod +x fix-frontend-api.sh
-  sudo ./fix-frontend-api.sh
-  ```
+## Setting Up Continuous Deployment
 
-### 5. PostgreSQL Setup Script
-- **File**: [fix-postgres-setup.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-postgres-setup.sh)
-- **Purpose**: Configure and set up PostgreSQL database for the Mooza application
-- **Usage**:
-  ```bash
-  curl -fsSL -o fix-postgres-setup.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-postgres-setup.sh
-  chmod +x fix-postgres-setup.sh
-  sudo ./fix-postgres-setup.sh
-  ```
+To set up automatic rebuilding when you push changes to your repository:
 
-### 6. Prisma to Sequelize Migration Script
-- **File**: [migrate-to-sequelize.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/migrate-to-sequelize.sh)
-- **Purpose**: Migrate the application from Prisma ORM to Sequelize ORM
-- **Usage**:
-  ```bash
-  curl -fsSL -o migrate-to-sequelize.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/migrate-to-sequelize.sh
-  chmod +x migrate-to-sequelize.sh
-  sudo ./migrate-to-sequelize.sh
-  ```
+1. Copy the auto-rebuild script to your VPS:
+   ```bash
+   sudo cp deployment/auto-rebuild.sh /opt/mooza/
+   sudo chmod +x /opt/mooza/auto-rebuild.sh
+   ```
 
-### 7. Fix Sequelize Migration Issues Script
-- **File**: [fix-sequelize-migration.sh](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/fix-sequelize-migration.sh)
-- **Purpose**: Fix issues encountered during Sequelize migration
-- **Usage**:
-  ```bash
-  curl -fsSL -o fix-sequelize-migration.sh https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/fix-sequelize-migration.sh
-  chmod +x fix-sequelize-migration.sh
-  sudo ./fix-sequelize-migration.sh
-  ```
+2. Set up a cron job to run the script every 5 minutes:
+   ```bash
+   sudo crontab -e
+   ```
+   
+   Add this line to the crontab:
+   ```
+   */5 * * * * /opt/mooza/auto-rebuild.sh
+   ```
 
-## Documentation
+3. The script will automatically check for updates every 5 minutes and rebuild if needed.
 
-- [Main VPS Deployment Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/VPS_DEPLOYMENT.md)
-- [Automated Deployment Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/AUTOMATED_DEPLOYMENT.md)
-- [Deployment Checklist](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/DEPLOYMENT_CHECKLIST.md)
-- [PostgreSQL Setup Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/POSTGRES_SETUP.md)
-- [Sequelize Migration Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/SEQUELIZE_MIGRATION.md)
-- [Fix Sequelize Migration Issues Guide](file:///c:/Users/79779/Desktop/mooza_dev/mooza_dev/deployment/FIX_SEQUELIZE_MIGRATION.md)
+## Manual Redeployment
 
-## Quick Start
-
-For a fresh Ubuntu VPS, the fastest way to deploy is:
+To manually redeploy the application after making changes:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/cryptoChaosDev/mooza_dev/master/deployment/automated-deploy.sh | sudo bash
+cd /opt/mooza
+sudo ./deployment/automated-deploy.sh
+```
+
+Or to just rebuild with the latest changes:
+
+```bash
+cd /opt/mooza
+sudo docker compose -f docker-compose.prod.yml up -d --build
+```
+
+## Troubleshooting
+
+If you encounter issues, check the logs:
+```bash
+# Deployment logs
+tail -f /var/log/mooza-deploy.log
+
+# Auto-rebuild logs
+tail -f /var/log/mooza-auto-rebuild.log
+
+# Container logs
+sudo docker compose -f docker-compose.prod.yml logs -f
+```
+
+You can also run the troubleshooting scripts:
+```bash
+# General troubleshooting
+sudo ./deployment/troubleshoot.sh
+
+# Detailed diagnostics
+sudo ./deployment/detailed-diag.sh
 ```
