@@ -4,6 +4,11 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 
+// Устанавливаем темную тему по умолчанию
+if (!document.documentElement.classList.contains('dark')) {
+  document.documentElement.classList.add('dark');
+}
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );
