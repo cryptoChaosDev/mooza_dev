@@ -122,6 +122,9 @@ export function Profile({
       case 'telegramId':
         if (value && value.trim() !== '' && !/^https?:\/\//.test(value)) return 'Введите ссылку, начиная с https://';
         return '';
+      case 'profileType':
+        if (!value) return 'Тип профиля обязателен';
+        return '';
       default:
         return '';
     }
@@ -137,6 +140,7 @@ export function Profile({
       { key: 'portfolioText', value: editData.portfolio?.text || '' },
       { key: 'phone', value: editData.phone },
       { key: 'email', value: editData.email },
+      { key: 'profileType', value: editData.profileType },
     ];
     
     let validCount = 0;
@@ -171,6 +175,7 @@ export function Profile({
         { key: 'city', value: editData.city },
         { key: 'phone', value: editData.phone },
         { key: 'email', value: editData.email },
+        { key: 'profileType', value: editData.profileType },
       ];
 
       fieldsToValidate.forEach(({ key, value }) => {
@@ -226,7 +231,22 @@ export function Profile({
         vkId: editData.vkId || '',
         youtubeId: editData.youtubeId || '',
         telegramId: editData.telegramId || '',
+        profileType: editData.profileType || '',
+        middleName: editData.middleName || '',
+        isSeller: editData.isSeller || false,
+        isEmployer: editData.isEmployer || false,
+        myGroup: editData.myGroup || '',
+        education: editData.education || '',
+        userInterests: editData.userInterests || []
       };
+
+      // Add skills and interests if they exist
+      if (editData.skills) {
+        payload.skills = editData.skills;
+      }
+      if (editData.interests) {
+        payload.interests = editData.interests;
+      }
 
       // Добавляем portfolio только если он существует
       if (editData.portfolio) {
@@ -554,6 +574,33 @@ export function Profile({
                   />
                 </div>
                 
+                {/* Profile Type */}
+                <div>
+                  <label className="block text-sm font-semibold text-dark-muted mb-2">Тип профиля *</label>
+                  <select
+                    className={`w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner ${errors.profileType ? 'border border-red-500' : ''}`}
+                    value={editData.profileType || ''}
+                    onChange={e => setEditData({...editData, profileType: e.target.value})}
+                  >
+                    <option value="">Выберите тип профиля</option>
+                    <option value="individual">Физ.лицо</option>
+                    <option value="band">Музыкальный коллектив</option>
+                    <option value="legal">Юр.лицо</option>
+                  </select>
+                  {renderError('profileType')}
+                </div>
+                
+                {/* Middle Name */}
+                <div>
+                  <label className="block text-sm font-semibold text-dark-muted mb-2">Отчество</label>
+                  <input
+                    className="w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner"
+                    value={editData.middleName || ''}
+                    onChange={e => setEditData({...editData, middleName: e.target.value})}
+                    placeholder="Иванович"
+                  />
+                </div>
+                
                 {/* Work place */}
                 <div>
                   <label className="block text-sm font-semibold text-dark-muted mb-2">Место работы</label>
@@ -563,6 +610,52 @@ export function Profile({
                     onChange={e => setEditData({...editData, workPlace: e.target.value})}
                     placeholder="Где вы работаете?"
                   />
+                </div>
+                
+                {/* My Group */}
+                <div>
+                  <label className="block text-sm font-semibold text-dark-muted mb-2">Моя группа</label>
+                  <input
+                    className="w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner"
+                    value={editData.myGroup || ''}
+                    onChange={e => setEditData({...editData, myGroup: e.target.value})}
+                    placeholder="Название группы"
+                  />
+                </div>
+                
+                {/* Education */}
+                <div>
+                  <label className="block text-sm font-semibold text-dark-muted mb-2">Образование</label>
+                  <textarea
+                    className="w-full px-4 py-3 rounded-2xl bg-dark-bg/60 text-dark-text focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm shadow-inner"
+                    rows={2}
+                    value={editData.education || ''}
+                    onChange={e => setEditData({...editData, education: e.target.value})}
+                    placeholder="Где и что изучали"
+                  />
+                </div>
+                
+                {/* Seller/Employer checkboxes */}
+                <div className="space-y-3">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={editData.isSeller || false}
+                      onChange={e => setEditData({...editData, isSeller: e.target.checked})}
+                      className="w-5 h-5 text-blue-500 bg-dark-bg/60 border-dark-border rounded focus:ring-blue-400"
+                    />
+                    <label className="ml-3 text-sm text-dark-text">Являюсь продавцом</label>
+                  </div>
+                  
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={editData.isEmployer || false}
+                      onChange={e => setEditData({...editData, isEmployer: e.target.checked})}
+                      className="w-5 h-5 text-blue-500 bg-dark-bg/60 border-dark-border rounded focus:ring-blue-400"
+                    />
+                    <label className="ml-3 text-sm text-dark-text">Являюсь работодателем</label>
+                  </div>
                 </div>
                 
                 {/* Location */}
@@ -685,6 +778,33 @@ export function Profile({
             ) : (
               // View mode
               <div className="flex flex-col gap-6">
+                {/* Profile Type */}
+                {profile.profileType && (
+                  <div>
+                    <div className="text-sm font-semibold text-dark-muted mb-2">Тип профиля</div>
+                    <div className="text-dark-text bg-dark-bg/30 rounded-2xl px-4 py-3 shadow-inner flex items-center gap-2">
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
+                        <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="currentColor"/>
+                      </svg>
+                      <span>
+                        {profile.profileType === 'individual' && 'Физ.лицо'}
+                        {profile.profileType === 'band' && 'Музыкальный коллектив'}
+                        {profile.profileType === 'legal' && 'Юр.лицо'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Middle Name */}
+                {profile.middleName && (
+                  <div>
+                    <div className="text-sm font-semibold text-dark-muted mb-2">Отчество</div>
+                    <div className="text-dark-text bg-dark-bg/30 rounded-2xl px-4 py-3 shadow-inner">
+                      {profile.middleName}
+                    </div>
+                  </div>
+                )}
+                
                 {/* Bio */}
                 {profile.bio && (
                   <div>
@@ -692,6 +812,58 @@ export function Profile({
                     <div className="text-dark-text whitespace-pre-line bg-dark-bg/30 rounded-2xl p-4 shadow-inner">
                       {profile.bio}
                     </div>
+                  </div>
+                )}
+                
+                {/* Work place */}
+                {profile.workPlace && (
+                  <div>
+                    <div className="text-sm font-semibold text-dark-muted mb-2">Место работы</div>
+                    <div className="text-dark-text bg-dark-bg/30 rounded-2xl px-4 py-3 shadow-inner flex items-center gap-2">
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
+                        <path d="M3 21h18v-2H3v2zM19 9h-2V7h2v2zm0-4h-2V3h2v2zm-4 8h-2v-2h2v2zm0-4h-2V7h2v2zm0-4h-2V3h2v2zm-8 8H5v-2h2v2zm0-4H5V7h2v2zm0-4H5V3h2v2zm-4 8h2v2H3v-2h2v-2H3v2zm16 0h2v2h-2v-2zm0-2v-2h2v2h-2z" fill="currentColor"/>
+                      </svg>
+                      <span>{profile.workPlace}</span>
+                    </div>
+                  </div>
+                )}
+                
+                {/* My Group */}
+                {profile.myGroup && (
+                  <div>
+                    <div className="text-sm font-semibold text-dark-muted mb-2">Моя группа</div>
+                    <div className="text-dark-text bg-dark-bg/30 rounded-2xl px-4 py-3 shadow-inner flex items-center gap-2">
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" fill="currentColor"/>
+                      </svg>
+                      <span>{profile.myGroup}</span>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Education */}
+                {profile.education && (
+                  <div>
+                    <div className="text-sm font-semibold text-dark-muted mb-2">Образование</div>
+                    <div className="text-dark-text bg-dark-bg/30 rounded-2xl p-4 shadow-inner">
+                      {profile.education}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Seller/Employer status */}
+                {(profile.isSeller || profile.isEmployer) && (
+                  <div className="flex flex-wrap gap-2">
+                    {profile.isSeller && (
+                      <span className="px-3 py-1.5 rounded-2xl text-sm font-medium bg-green-500/10 text-green-400 border border-green-400/30 shadow-sm">
+                        Продавец
+                      </span>
+                    )}
+                    {profile.isEmployer && (
+                      <span className="px-3 py-1.5 rounded-2xl text-sm font-medium bg-purple-500/10 text-purple-400 border border-purple-400/30 shadow-sm">
+                        Работодатель
+                      </span>
+                    )}
                   </div>
                 )}
                 

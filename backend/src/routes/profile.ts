@@ -94,7 +94,21 @@ router.get("/me", authenticateToken, async (req: any, res: Response) => {
         interests: profile.interests ? profile.interests.split(',') : [],
         phone: user.phone || '',
         email: user.email || '',
-        name: user.name
+        name: user.name,
+        profileType: user.profileType,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        middleName: user.middleName,
+        isSeller: user.isSeller,
+        isEmployer: user.isEmployer,
+        city: user.city,
+        country: user.country,
+        myGroup: user.myGroup,
+        workPlace: user.workPlace,
+        bio: user.bio,
+        education: user.education,
+        // Remove duplicate interests property
+        userInterests: user.interests ? user.interests.split(',') : []
       }
     };
 
@@ -117,8 +131,48 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
 
     // Update user fields that exist in the User model
     const updateUserFields: any = {};
-    if (profileData.firstName || profileData.lastName) {
-      updateUserFields.name = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim();
+    if (profileData.hasOwnProperty('profileType')) {
+      updateUserFields.profileType = profileData.profileType;
+    }
+    if (profileData.hasOwnProperty('firstName')) {
+      updateUserFields.firstName = profileData.firstName;
+      // Update the full name as well
+      updateUserFields.name = `${profileData.firstName} ${profileData.lastName || ''}`.trim();
+    }
+    if (profileData.hasOwnProperty('lastName')) {
+      updateUserFields.lastName = profileData.lastName;
+      // Update the full name as well
+      updateUserFields.name = `${profileData.firstName || ''} ${profileData.lastName}`.trim();
+    }
+    if (profileData.hasOwnProperty('middleName')) {
+      updateUserFields.middleName = profileData.middleName;
+    }
+    if (profileData.hasOwnProperty('isSeller')) {
+      updateUserFields.isSeller = profileData.isSeller;
+    }
+    if (profileData.hasOwnProperty('isEmployer')) {
+      updateUserFields.isEmployer = profileData.isEmployer;
+    }
+    if (profileData.hasOwnProperty('city')) {
+      updateUserFields.city = profileData.city;
+    }
+    if (profileData.hasOwnProperty('country')) {
+      updateUserFields.country = profileData.country;
+    }
+    if (profileData.hasOwnProperty('myGroup')) {
+      updateUserFields.myGroup = profileData.myGroup;
+    }
+    if (profileData.hasOwnProperty('workPlace')) {
+      updateUserFields.workPlace = profileData.workPlace;
+    }
+    if (profileData.hasOwnProperty('bio')) {
+      updateUserFields.bio = profileData.bio;
+    }
+    if (profileData.hasOwnProperty('education')) {
+      updateUserFields.education = profileData.education;
+    }
+    if (profileData.hasOwnProperty('interests')) {
+      updateUserFields.interests = Array.isArray(profileData.interests) ? profileData.interests.join(',') : (profileData.interests || '');
     }
     
     // Always update phone and email from profile data
@@ -128,7 +182,7 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
     if (profileData.hasOwnProperty('email')) {
       updateUserFields.email = profileData.email;
     }
-    
+
     if (Object.keys(updateUserFields).length > 0) {
       console.log("Updating user fields:", updateUserFields);
       await User.update(updateUserFields, {
@@ -229,7 +283,21 @@ router.put("/me", authenticateToken, async (req: any, res: Response) => {
         interests: updatedProfile!.interests ? updatedProfile!.interests.split(',') : [],
         phone: updatedUser!.phone || '',
         email: updatedUser!.email || '',
-        name: updatedUser!.name
+        name: updatedUser!.name,
+        profileType: updatedUser!.profileType,
+        firstName: updatedUser!.firstName,
+        lastName: updatedUser!.lastName,
+        middleName: updatedUser!.middleName,
+        isSeller: updatedUser!.isSeller,
+        isEmployer: updatedUser!.isEmployer,
+        city: updatedUser!.city,
+        country: updatedUser!.country,
+        myGroup: updatedUser!.myGroup,
+        workPlace: updatedUser!.workPlace,
+        bio: updatedUser!.bio,
+        education: updatedUser!.education,
+        // Remove duplicate interests property
+        userInterests: updatedUser!.interests ? updatedUser!.interests.split(',') : []
       }
     };
 
@@ -285,7 +353,12 @@ router.get("/", authenticateToken, async (req: any, res: Response) => {
         country: profile?.country || '',
         vkId: profile?.vkId || '',
         youtubeId: profile?.youtubeId || '',
-        telegramId: profile?.telegramId || ''
+        telegramId: profile?.telegramId || '',
+        profileType: user.profileType,
+        isSeller: user.isSeller,
+        isEmployer: user.isEmployer,
+        myGroup: user.myGroup,
+        education: user.education
       };
     });
     
@@ -530,7 +603,12 @@ router.get("/me/friends", authenticateToken, async (req: any, res: Response) => 
         youtubeId: profile?.youtubeId || '',
         telegramId: profile?.telegramId || '',
         city: profile?.city || '',
-        country: profile?.country || ''
+        country: profile?.country || '',
+        profileType: user.profileType,
+        isSeller: user.isSeller,
+        isEmployer: user.isEmployer,
+        myGroup: user.myGroup,
+        education: user.education
       };
     });
 
@@ -623,6 +701,9 @@ router.post("/me/avatar", authenticateToken, upload.single('avatar'), async (req
     await profile.update({
       avatarUrl: avatarUrl
     });
+    
+    // Also update user avatar
+    await User.update({ avatarUrl }, { where: { id: userId } });
     
     console.log('Profile updated with avatar URL:', avatarUrl);
     

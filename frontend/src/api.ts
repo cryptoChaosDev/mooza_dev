@@ -2,7 +2,7 @@ export const API_URL = process.env.REACT_APP_API_URL || 'http://147.45.166.246';
 
 export type LoginResponse = { token: string; user: { id: number; email?: string; phone?: string; name: string } };
 
-export async function apiRegister(data: { email?: string; phone?: string; password: string; name: string }): Promise<LoginResponse> {
+export async function apiRegister(data: { email?: string; phone?: string; password: string; name: string; profileType?: string; firstName?: string; lastName?: string; middleName?: string }): Promise<LoginResponse> {
   const res = await fetch(`${API_URL}/api/auth/register`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -60,6 +60,13 @@ export type ProfilePayload = {
   vkId?: string;
   youtubeId?: string;
   telegramId?: string;
+  profileType?: string;
+  middleName?: string;
+  isSeller?: boolean;
+  isEmployer?: boolean;
+  myGroup?: string;
+  education?: string;
+  userInterests?: string[];
 };
 
 export async function getProfile(token: string): Promise<any> {
@@ -82,7 +89,8 @@ export async function updateProfile(token: string, payload: ProfilePayload): Pro
   const processedPayload = {
     ...payload,
     skills: Array.isArray(payload.skills) ? payload.skills.join(',') : payload.skills,
-    interests: Array.isArray(payload.interests) ? payload.interests.join(',') : payload.interests
+    interests: Array.isArray(payload.interests) ? payload.interests.join(',') : payload.interests,
+    userInterests: Array.isArray(payload.userInterests) ? payload.userInterests.join(',') : payload.userInterests
   };
 
   const res = await fetch(`${API_URL}/api/profile/me`, {
