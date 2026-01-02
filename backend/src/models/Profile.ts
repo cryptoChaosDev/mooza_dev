@@ -1,58 +1,40 @@
-import { Model, DataTypes, Optional } from 'sequelize';
+import { DataTypes, Model } from 'sequelize';
 import { sequelize } from '../config/database';
 
-interface ProfileAttributes {
-  id: number;
-  userId: number;
-  firstName?: string;
-  lastName?: string;
-  avatarUrl?: string;
-  bio?: string;
-  workPlace?: string;
-  skills?: string;
-  interests?: string;
-  portfolio?: string;
-  city?: string;
-  country?: string;
-  vkId?: string;
-  youtubeId?: string;
-  telegramId?: string;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
-
-interface ProfileCreationAttributes extends Optional<ProfileAttributes, 'id'> {}
-
-class Profile extends Model<ProfileAttributes, ProfileCreationAttributes> implements ProfileAttributes {
-  public id!: number;
-  public userId!: number;
-  public firstName?: string;
-  public lastName?: string;
-  public avatarUrl?: string;
-  public bio?: string;
-  public workPlace?: string;
-  public skills?: string;
-  public interests?: string;
-  public portfolio?: string;
-  public city?: string;
-  public country?: string;
-  public vkId?: string;
-  public youtubeId?: string;
-  public telegramId?: string;
-  public readonly createdAt!: Date;
-  public readonly updatedAt!: Date;
+class Profile extends Model {
+  declare id: number;
+  declare userId: number;
+  declare firstName: string;
+  declare lastName: string;
+  declare avatarUrl?: string;
+  declare bio?: string;
+  declare workPlace?: string;
+  declare skills?: string;
+  declare interests?: string;
+  declare portfolio?: string;
+  declare city?: string;
+  declare country?: string;
+  declare vkId?: string;
+  declare youtubeId?: string;
+  declare telegramId?: string;
+  declare createdAt: Date;
+  declare updatedAt: Date;
 }
 
 Profile.init({
   id: {
-    type: DataTypes.INTEGER.UNSIGNED,
+    type: DataTypes.INTEGER,
     autoIncrement: true,
     primaryKey: true,
   },
   userId: {
-    type: DataTypes.INTEGER.UNSIGNED,
+    type: DataTypes.INTEGER,
     allowNull: false,
     unique: true,
+    references: {
+      model: 'users',
+      key: 'id',
+    },
   },
   firstName: {
     type: DataTypes.STRING,
@@ -106,9 +88,19 @@ Profile.init({
     type: DataTypes.STRING,
     allowNull: true,
   },
+  createdAt: {
+    type: DataTypes.DATE,
+    allowNull: false,
+    defaultValue: DataTypes.NOW,
+  },
+  updatedAt: {
+    type: DataTypes.DATE,
+    allowNull: false,
+    defaultValue: DataTypes.NOW,
+  },
 }, {
-  sequelize,
   tableName: 'profiles',
+  sequelize,
   timestamps: true,
 });
 

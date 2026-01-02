@@ -23,6 +23,13 @@ export interface UserProfile {
   telegramId?: string;
   city?: string;
   country?: string;
+  profileType?: string;
+  middleName?: string;
+  isSeller?: boolean;
+  isEmployer?: boolean;
+  myGroup?: string;
+  education?: string;
+  userInterests?: string[];
 }
 
 export interface Post {
