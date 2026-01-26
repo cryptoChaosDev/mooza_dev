@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  phone     String?  @unique
+  password  String
+  firstName String
+  lastName  String
+  avatar    String?
+  bio       String?
+  city      String?
+  role      String?  // producer, vocalist, beatmaker, etc.
+  genres    String[] // array of genres
+  skills    String[] // array of skills
+
+  // Social links
+  vkLink       String?
+  youtubeLink  String?
+  telegramLink String?
+
+  // Relationships
+  posts        Post[]
+  likes        Like[]
+  comments     Comment[]
+  sentRequests Friendship[] @relation("SentRequests")
+  receivedRequests Friendship[] @relation("ReceivedRequests")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+  @@index([city])
+  @@index([role])
+}
+
+model Post {
+  id       String @id @default(uuid())
+  content  String
+  imageUrl String?
+
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId String
+
+  likes    Like[]
+  comments Comment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+model Like {
+  id String @id @default(uuid())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId String
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@index([postId])
+}
+
+model Comment {
+  id      String @id @default(uuid())
+  content String
+
+  author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  authorId String
+
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([postId])
+  @@index([authorId])
+}
+
+model Friendship {
+  id String @id @default(uuid())
+
+  requester   User   @relation("SentRequests", fields: [requesterId], references: [id], onDelete: Cascade)
+  requesterId String
+
+  receiver   User   @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+  receiverId String
+
+  status String // pending, accepted, rejected
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([requesterId, receiverId])
+  @@index([requesterId])
+  @@index([receiverId])
+  @@index([status])
+}

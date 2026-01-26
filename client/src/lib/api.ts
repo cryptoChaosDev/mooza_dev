@@ -1,0 +1,65 @@
+import axios from 'axios';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
+export const api = axios.create({
+  baseURL: `${API_URL}/api`,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add auth token to requests
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Auth API
+export const authAPI = {
+  login: (email: string, password: string) =>
+    api.post('/auth/login', { email, password }),
+  register: (data: {
+    email: string;
+    password: string;
+    firstName: string;
+    lastName: string;
+  }) => api.post('/auth/register', data),
+};
+
+// User API
+export const userAPI = {
+  getMe: () => api.get('/users/me'),
+  updateMe: (data: any) => api.put('/users/me', data),
+  uploadAvatar: (formData: FormData) =>
+    api.post('/users/me/avatar', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  search: (params: any) => api.get('/users/search', { params }),
+  getUser: (id: string) => api.get(`/users/${id}`),
+};
+
+// Post API
+export const postAPI = {
+  getFeed: (params?: { limit?: number; offset?: number }) =>
+    api.get('/posts/feed', { params }),
+  createPost: (data: { content: string; imageUrl?: string }) =>
+    api.post('/posts', data),
+  likePost: (postId: string) => api.post(`/posts/${postId}/like`),
+  unlikePost: (postId: string) => api.delete(`/posts/${postId}/like`),
+  commentPost: (postId: string, content: string) =>
+    api.post(`/posts/${postId}/comments`, { content }),
+};
+
+// Friendship API
+export const friendshipAPI = {
+  sendRequest: (receiverId: string) =>
+    api.post('/friendships', { receiverId }),
+  getRequests: () => api.get('/friendships/requests'),
+  acceptRequest: (id: string) => api.put(`/friendships/${id}/accept`),
+  rejectRequest: (id: string) => api.delete(`/friendships/${id}`),
+  getFriends: () => api.get('/friendships'),
+};

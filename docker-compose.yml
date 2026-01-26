@@ -1,0 +1,74 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: mooza-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: mooza
+      POSTGRES_PASSWORD: mooza123
+      POSTGRES_DB: mooza_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - mooza-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mooza"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: mooza-api
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      DATABASE_URL: postgresql://mooza:mooza123@postgres:5432/mooza_db
+      JWT_SECRET: your-secret-key-change-in-production
+    volumes:
+      - ./server:/app
+      - /app/node_modules
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - mooza-network
+    command: npm run dev
+
+  # Frontend Web App
+  web:
+    build:
+      context: ./client
+      dockerfile: Dockerfile.dev
+    container_name: mooza-web
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:4000
+    volumes:
+      - ./client:/app
+      - /app/node_modules
+    depends_on:
+      - api
+    networks:
+      - mooza-network
+    stdin_open: true
+    tty: true
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  mooza-network:
+    driver: bridge
