@@ -1,0 +1,7 @@
+{
+  "css.validate": false,
+  "less.validate": false,
+  "scss.validate": false,
+  "css.lint.unknownAtRules": "ignore",
+  "git.ignoreLimitWarning": true
+}
