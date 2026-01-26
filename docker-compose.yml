@@ -37,12 +37,13 @@ services:
     volumes:
       - ./server:/app
       - /app/node_modules
+      - ./server/uploads:/app/uploads
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - mooza-network
-    command: npm run dev
+    command: sh -c "npm install && npx prisma migrate deploy && npm run dev"
 
   # Frontend Web App
   web:
