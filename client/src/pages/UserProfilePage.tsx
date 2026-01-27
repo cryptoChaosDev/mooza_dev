@@ -169,8 +169,8 @@ export default function UserProfilePage() {
                 <Briefcase size={20} className="text-blue-400" />
               </div>
             </div>
-            <p className="text-3xl font-bold text-white mb-1">{user.skills?.length || 0}</p>
-            <p className="text-sm text-slate-400">Навыков</p>
+            <p className="text-3xl font-bold text-white mb-1">{user.professions?.length || 0}</p>
+            <p className="text-sm text-slate-400">Профессий</p>
           </div>
         </div>
 
@@ -196,22 +196,22 @@ export default function UserProfilePage() {
           </div>
         )}
 
-        {/* Skills Section */}
-        {user.skills && user.skills.length > 0 && (
+        {/* Professions Section */}
+        {user.professions && user.professions.length > 0 && (
           <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50">
             <div className="flex items-center gap-3 mb-4">
               <div className="p-2 bg-purple-500/10 rounded-lg">
                 <Sparkles size={24} className="text-purple-400" />
               </div>
-              <h2 className="text-2xl font-bold text-white">Навыки и умения</h2>
+              <h2 className="text-2xl font-bold text-white">Профессии</h2>
             </div>
             <div className="flex flex-wrap gap-3">
-              {user.skills.map((skill: string) => (
+              {user.professions.map((profession: string) => (
                 <span
-                  key={skill}
+                  key={profession}
                   className="px-5 py-2.5 bg-slate-700/40 hover:bg-slate-700/60 border border-slate-600/30 hover:border-slate-500/50 text-slate-200 rounded-xl text-sm font-medium transition-all duration-300 hover:scale-105"
                 >
-                  {skill}
+                  {profession}
                 </span>
               ))}
             </div>

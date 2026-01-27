@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { User, Mail, Lock, Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
+import { User, Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, Briefcase } from 'lucide-react';
 import { authAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import ProfessionSelector from '../components/ProfessionSelector';
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -10,8 +11,10 @@ export default function RegisterPage() {
     password: '',
     firstName: '',
     lastName: '',
+    professions: [] as string[],
   });
   const [showPassword, setShowPassword] = useState(false);
+  const [showProfessionSelector, setShowProfessionSelector] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -138,6 +141,48 @@ export default function RegisterPage() {
               <p className="text-xs text-slate-400 mt-1">Минимум 6 символов</p>
             </div>
 
+            {/* Professions Selector */}
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-2">
+                Профессии (необязательно)
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowProfessionSelector(true)}
+                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-left transition-all hover:bg-slate-700/70 hover:border-primary-500/50 group"
+              >
+                <div className="flex items-center gap-3">
+                  <Briefcase className="text-slate-400 group-hover:text-primary-400 transition-colors" size={20} />
+                  <div className="flex-1 min-w-0">
+                    {formData.professions.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {formData.professions.slice(0, 3).map((prof) => (
+                          <span
+                            key={prof}
+                            className="inline-block px-2 py-0.5 bg-primary-500/20 text-primary-300 rounded text-xs font-medium"
+                          >
+                            {prof}
+                          </span>
+                        ))}
+                        {formData.professions.length > 3 && (
+                          <span className="inline-block px-2 py-0.5 bg-primary-500/20 text-primary-300 rounded text-xs font-medium">
+                            +{formData.professions.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-slate-400">Выберите профессии...</span>
+                    )}
+                  </div>
+                </div>
+              </button>
+              {formData.professions.length > 0 && (
+                <p className="text-xs text-slate-400 mt-1">
+                  Выбрано: {formData.professions.length}
+                </p>
+              )}
+            </div>
+
             {/* Submit Button */}
             <button
               type="submit"
@@ -157,6 +202,14 @@ export default function RegisterPage() {
           </p>
         </div>
       </div>
+
+      {/* Profession Selector Modal */}
+      <ProfessionSelector
+        isOpen={showProfessionSelector}
+        onClose={() => setShowProfessionSelector(false)}
+        selectedProfessions={formData.professions}
+        onUpdate={(professions) => setFormData({ ...formData, professions })}
+      />
     </div>
   );
 }

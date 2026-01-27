@@ -12,6 +12,7 @@ const registerSchema = z.object({
   firstName: z.string().min(1),
   lastName: z.string().min(1),
   phone: z.string().optional(),
+  professions: z.array(z.string()).optional(),
 });
 
 const loginSchema = z.object({
@@ -44,6 +45,7 @@ router.post('/register', async (req, res) => {
         firstName: data.firstName,
         lastName: data.lastName,
         phone: data.phone,
+        professions: data.professions || [],
       },
       select: {
         id: true,
@@ -55,7 +57,7 @@ router.post('/register', async (req, res) => {
         city: true,
         role: true,
         genres: true,
-        skills: true,
+        professions: true,
         createdAt: true,
       }
     });

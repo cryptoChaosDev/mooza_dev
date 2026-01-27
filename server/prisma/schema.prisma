@@ -16,10 +16,10 @@ model User {
   lastName  String
   avatar    String?
   bio       String?
-  city      String?
-  role      String?  // producer, vocalist, beatmaker, etc.
-  genres    String[] // array of genres
-  skills    String[] // array of skills
+  city        String?
+  role        String?  // producer, vocalist, beatmaker, etc.
+  genres      String[] // array of genres
+  professions String[] // array of professions
 
   // Social links
   vkLink       String?

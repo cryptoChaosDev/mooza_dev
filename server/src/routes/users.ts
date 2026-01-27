@@ -22,7 +22,7 @@ router.get('/me', authenticate, async (req: AuthRequest, res) => {
         city: true,
         role: true,
         genres: true,
-        skills: true,
+        professions: true,
         vkLink: true,
         youtubeLink: true,
         telegramLink: true,
@@ -77,7 +77,7 @@ router.post('/me/avatar', authenticate, upload.single('avatar'), async (req: Aut
         city: true,
         role: true,
         genres: true,
-        skills: true,
+        professions: true,
       }
     });
 
@@ -91,7 +91,7 @@ router.post('/me/avatar', authenticate, upload.single('avatar'), async (req: Aut
 // Update current user
 router.put('/me', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { firstName, lastName, bio, city, role, genres, skills, vkLink, youtubeLink, telegramLink } = req.body;
+    const { firstName, lastName, bio, city, role, genres, professions, vkLink, youtubeLink, telegramLink } = req.body;
 
     const user = await prisma.user.update({
       where: { id: req.userId },
@@ -102,7 +102,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
         city,
         role,
         genres,
-        skills,
+        professions,
         vkLink,
         youtubeLink,
         telegramLink,
@@ -117,7 +117,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
         city: true,
         role: true,
         genres: true,
-        skills: true,
+        professions: true,
         vkLink: true,
         youtubeLink: true,
         telegramLink: true,
@@ -171,7 +171,7 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
         city: true,
         role: true,
         genres: true,
-        skills: true,
+        professions: true,
       },
       orderBy: [
         { firstName: 'asc' },
@@ -201,7 +201,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
         city: true,
         role: true,
         genres: true,
-        skills: true,
+        professions: true,
         vkLink: true,
         youtubeLink: true,
         telegramLink: true,

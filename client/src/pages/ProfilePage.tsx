@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import { Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut } from 'lucide-react';
+import ProfessionSelector from '../components/ProfessionSelector';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -11,6 +12,7 @@ export default function ProfilePage() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [showProfessionSelector, setShowProfessionSelector] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
@@ -18,7 +20,7 @@ export default function ProfilePage() {
     city: '',
     role: '',
     genres: [] as string[],
-    skills: [] as string[],
+    professions: [] as string[],
     vkLink: '',
     youtubeLink: '',
     telegramLink: '',
@@ -36,7 +38,7 @@ export default function ProfilePage() {
         city: data.city || '',
         role: data.role || '',
         genres: data.genres || [],
-        skills: data.skills || [],
+        professions: data.professions || [],
         vkLink: data.vkLink || '',
         youtubeLink: data.youtubeLink || '',
         telegramLink: data.telegramLink || '',
@@ -250,6 +252,45 @@ export default function ProfilePage() {
               </div>
             </div>
 
+            {/* Professions */}
+            {isEditing && (
+              <div>
+                <label className="block text-sm font-semibold mb-3 text-slate-300 flex items-center gap-2">
+                  <Star size={18} /> Профессии
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowProfessionSelector(true)}
+                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-left transition-all hover:bg-slate-700/70 hover:border-primary-500/50 group"
+                >
+                  <div className="flex items-center gap-3">
+                    <Briefcase className="text-slate-400 group-hover:text-primary-400 transition-colors" size={20} />
+                    <div className="flex-1 min-w-0">
+                      {formData.professions.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {formData.professions.slice(0, 5).map((prof) => (
+                            <span
+                              key={prof}
+                              className="inline-block px-2 py-0.5 bg-primary-500/20 text-primary-300 rounded text-xs font-medium"
+                            >
+                              {prof}
+                            </span>
+                          ))}
+                          {formData.professions.length > 5 && (
+                            <span className="inline-block px-2 py-0.5 bg-primary-500/20 text-primary-300 rounded text-xs font-medium">
+                              +{formData.professions.length - 5}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400">Выберите профессии...</span>
+                      )}
+                    </div>
+                  </div>
+                </button>
+              </div>
+            )}
+
             {/* Quick Stats */}
             {!isEditing && (
               <div className="grid grid-cols-3 gap-4 pt-4">
@@ -260,8 +301,8 @@ export default function ProfilePage() {
                 </div>
                 <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 rounded-xl p-4 text-center border border-slate-600/30 shadow-lg">
                   <Star className="mx-auto mb-2 text-primary-400" size={24} />
-                  <div className="text-xs text-slate-400 font-medium">Навыки</div>
-                  <div className="text-xl font-bold text-white mt-1">{profile?.skills?.length || 0}</div>
+                  <div className="text-xs text-slate-400 font-medium">Профессии</div>
+                  <div className="text-xl font-bold text-white mt-1">{profile?.professions?.length || 0}</div>
                 </div>
                 <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 rounded-xl p-4 text-center border border-slate-600/30 shadow-lg">
                   <Briefcase className="mx-auto mb-2 text-primary-400" size={24} />
@@ -273,6 +314,28 @@ export default function ProfilePage() {
           </form>
         </div>
 
+        {/* Professions Section */}
+        {profile?.professions && profile.professions.length > 0 && (
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-8 border border-slate-700/50 shadow-xl">
+            <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
+              <div className="p-2 bg-gradient-to-r from-primary-500/20 to-primary-600/20 rounded-xl">
+                <Star className="text-primary-400" size={24} />
+              </div>
+              Профессии
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {profile.professions.map((profession: string) => (
+                <span
+                  key={profession}
+                  className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-primary-500/20 to-primary-600/20 text-primary-300 rounded-xl text-sm font-medium border border-primary-500/30 hover:border-primary-500/50 transition-all hover:scale-105"
+                >
+                  {profession}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Logout */}
         <button
           onClick={() => logout()}
@@ -282,6 +345,14 @@ export default function ProfilePage() {
           Выйти из аккаунта
         </button>
       </div>
+
+      {/* Profession Selector Modal */}
+      <ProfessionSelector
+        isOpen={showProfessionSelector}
+        onClose={() => setShowProfessionSelector(false)}
+        selectedProfessions={formData.professions}
+        onUpdate={(professions) => setFormData({ ...formData, professions })}
+      />
     </div>
   );
 }
