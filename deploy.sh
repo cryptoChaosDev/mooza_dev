@@ -96,7 +96,7 @@ services:
     networks:
       - mooza-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U mooza"]
+      test: ["CMD-SHELL", "pg_isready -U mooza -d mooza_db"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -122,6 +122,7 @@ services:
         condition: service_healthy
     networks:
       - mooza-network
+    command: sh -c "npx prisma migrate deploy && npm start"
 
   # Frontend Web App
   web:
