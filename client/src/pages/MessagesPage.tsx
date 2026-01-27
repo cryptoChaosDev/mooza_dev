@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Search, Loader2 } from 'lucide-react';
+import { MessageCircle, Search } from 'lucide-react';
 import { messageAPI } from '../lib/api';
 
 interface Conversation {

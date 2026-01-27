@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Users, Check, X, MessageCircle, UserMinus, User } from 'lucide-react';
+import { Users, Check, X, MessageCircle, User } from 'lucide-react';
 import { friendshipAPI } from '../lib/api';
 
 export default function FriendsPage() {
@@ -15,7 +15,7 @@ export default function FriendsPage() {
     },
   });
 
-  const { data: requests, isLoading: requestsLoading } = useQuery({
+  const { data: requests } = useQuery({
     queryKey: ['friend-requests'],
     queryFn: async () => {
       const { data } = await friendshipAPI.getRequests();
