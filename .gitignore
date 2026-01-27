@@ -135,6 +135,18 @@ client/.env.local
 .env.test.local
 .env.production.local
 
+# Uploads (содержат пользовательские файлы)
+server/uploads/*
+!server/uploads/.gitkeep
+
+# Backups (содержат чувствительные данные)
+backups/
+*.sql
+*.sql.gz
+
+# Production config (содержит секреты и IP адреса)
+docker-compose.prod.yml
+
 # Docker
 *.db
 *.db-journal
