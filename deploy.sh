@@ -58,13 +58,13 @@ echo -e "${GREEN}✓ API URL: ${API_URL}${NC}"
 
 # Генерация JWT_SECRET
 echo -e "${YELLOW}Генерация безопасного JWT_SECRET...${NC}"
-JWT_SECRET=$(openssl rand -base64 32)
+JWT_SECRET=$(openssl rand -hex 32)
 
 # Создание .env файла
 echo -e "${YELLOW}Создание .env файла...${NC}"
 cat > .env << EOF
 JWT_SECRET=${JWT_SECRET}
-POSTGRES_PASSWORD=$(openssl rand -base64 16)
+POSTGRES_PASSWORD=$(openssl rand -hex 16)
 API_URL=${API_URL}
 EOF
 
