@@ -73,7 +73,7 @@ export default function MessagesPage() {
         </div>
 
         {/* Loading Skeleton */}
-        <div className="max-w-4xl mx-auto px-4 pb-8 space-y-3">
+        <div className="max-w-4xl mx-auto px-4 pb-24 space-y-3">
           {[1, 2, 3, 4, 5].map((i) => (
             <div
               key={i}
@@ -116,7 +116,7 @@ export default function MessagesPage() {
       </div>
 
       {/* Conversations List */}
-      <div className="max-w-4xl mx-auto px-4 pb-8">
+      <div className="max-w-4xl mx-auto px-4 pb-24">
         {conversations.length === 0 ? (
           <div className="relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-700/50 shadow-2xl">
             {/* Decorative gradient orbs */}
