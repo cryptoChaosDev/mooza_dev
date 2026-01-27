@@ -24,7 +24,15 @@ const PORT = process.env.PORT || 4000;
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
-app.use(cors());
+//app.use(cors());
+
+// На эти строки:
+app.use(cors({
+  origin: ['http://147.45.166.246:3000', 'http://localhost:3000', 'http://127.0.0.1:3000'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+}));
 app.use(express.json());
 app.use(morgan('dev'));
 
