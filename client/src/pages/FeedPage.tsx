@@ -2,10 +2,14 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Newspaper, Send, Heart, MessageCircle, Loader2 } from 'lucide-react';
 import { postAPI } from '../lib/api';
+import { useAuthStore } from '../stores/authStore';
 
 export default function FeedPage() {
   const [content, setContent] = useState('');
+  const [commentContent, setCommentContent] = useState<{ [key: string]: string }>({});
+  const [showComments, setShowComments] = useState<{ [key: string]: boolean }>({});
   const queryClient = useQueryClient();
+  const { user: currentUser } = useAuthStore();
 
   const { data: posts, isLoading } = useQuery({
     queryKey: ['feed'],
@@ -24,9 +28,45 @@ export default function FeedPage() {
   });
 
   const likeMutation = useMutation({
-    mutationFn: postAPI.likePost,
+    mutationFn: (postId: string) => postAPI.likePost(postId),
+    onSuccess: (_, postId) => {
+      queryClient.setQueryData(['feed'], (oldData: any) => {
+        if (!oldData) return oldData;
+        return oldData.map((post: any) => 
+          post.id === postId 
+            ? { ...post, isLiked: true, _count: { ...post._count, likes: post._count.likes + 1 } }
+            : post
+        );
+      });
+    },
+    onError: (error: any) => {
+      // Handle the case where post is already liked
+      if (error.response?.data?.error === 'Post already liked') {
+        console.log('Post already liked');
+      }
+    },
+  });
+
+  const unlikeMutation = useMutation({
+    mutationFn: (postId: string) => postAPI.unlikePost(postId),
+    onSuccess: (_, postId) => {
+      queryClient.setQueryData(['feed'], (oldData: any) => {
+        if (!oldData) return oldData;
+        return oldData.map((post: any) =>
+          post.id === postId
+            ? { ...post, isLiked: false, _count: { ...post._count, likes: Math.max(0, post._count.likes - 1) } }
+            : post
+        );
+      });
+    },
+  });
+
+  const commentMutation = useMutation({
+    mutationFn: ({ postId, content }: { postId: string; content: string }) =>
+      postAPI.commentPost(postId, content),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feed'] });
+      setCommentContent({});
     },
   });
 
@@ -113,19 +153,95 @@ export default function FeedPage() {
               {/* Actions */}
               <div className="flex items-center gap-6 text-sm">
                 <button
-                  onClick={() => likeMutation.mutate(post.id)}
-                  disabled={likeMutation.isPending}
-                  className="flex items-center gap-2 text-slate-400 hover:text-red-400 transition-colors disabled:cursor-not-allowed"
+                  onClick={() => {
+                    if (post.isLiked) {
+                      unlikeMutation.mutate(post.id);
+                    } else {
+                      likeMutation.mutate(post.id);
+                    }
+                  }}
+                  disabled={likeMutation.isPending || unlikeMutation.isPending || post.author.id === currentUser?.id}
+                  className="flex items-center gap-2 text-slate-400 hover:text-red-400 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Heart size={20} className={post.isLiked ? 'fill-red-400 text-red-400' : ''} />
                   <span className={post.isLiked ? 'text-red-400' : ''}>{post._count.likes}</span>
                 </button>
 
-                <button className="flex items-center gap-2 text-slate-400 hover:text-primary-400 transition-colors">
+                <button
+                  onClick={() => setShowComments({ ...showComments, [post.id]: !showComments[post.id] })}
+                  className="flex items-center gap-2 text-slate-400 hover:text-primary-400 transition-colors"
+                >
                   <MessageCircle size={20} />
                   <span>{post._count.comments}</span>
                 </button>
               </div>
+
+              {/* Comments Section */}
+              {showComments[post.id] && (
+                <div className="mt-4 pt-4 border-t border-slate-700/50">
+                  {/* Comment Input */}
+                  <form
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const content = commentContent[post.id];
+                      if (content?.trim()) {
+                        commentMutation.mutate({ postId: post.id, content });
+                      }
+                    }}
+                    className="flex gap-2 mb-4"
+                  >
+                    <input
+                      type="text"
+                      value={commentContent[post.id] || ''}
+                      onChange={(e) =>
+                        setCommentContent({ ...commentContent, [post.id]: e.target.value })
+                      }
+                      placeholder="Написать комментарий..."
+                      className="flex-1 bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-2 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm"
+                    />
+                    <button
+                      type="submit"
+                      disabled={!commentContent[post.id]?.trim() || commentMutation.isPending}
+                      className="bg-primary-500 hover:bg-primary-600 disabled:bg-slate-700 text-white px-4 py-2 rounded-lg transition-all disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {commentMutation.isPending ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <Send size={16} />
+                      )}
+                    </button>
+                  </form>
+
+                  {/* Comments List */}
+                  {post.comments && post.comments.length > 0 && (
+                    <div className="space-y-3">
+                      {post.comments.map((comment: any) => (
+                        <div key={comment.id} className="flex gap-3">
+                          {comment.author.avatar ? (
+                            <img
+                              src={`${import.meta.env.VITE_API_URL}${comment.author.avatar}`}
+                              alt={`${comment.author.firstName} ${comment.author.lastName}`}
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-primary-700 rounded-full flex items-center justify-center flex-shrink-0">
+                              <span className="text-white text-xs font-semibold">
+                                {comment.author.firstName[0]}{comment.author.lastName[0]}
+                              </span>
+                            </div>
+                          )}
+                          <div className="flex-1 bg-slate-700/30 rounded-lg px-3 py-2">
+                            <p className="text-sm font-semibold text-white">
+                              {comment.author.firstName} {comment.author.lastName}
+                            </p>
+                            <p className="text-sm text-slate-200 mt-1">{comment.content}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>

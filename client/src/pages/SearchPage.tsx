@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, SlidersHorizontal, UserPlus, X } from 'lucide-react';
+import { Search, SlidersHorizontal, UserPlus, X, MessageCircle } from 'lucide-react';
 import { userAPI, friendshipAPI } from '../lib/api';
+import { useNavigate } from 'react-router-dom';
 
 const ROLES = ['Продюсер', 'Вокалист', 'Битмейкер', 'Композитор', 'Саунд-дизайнер', 'Диджей', 'Звукорежиссер'];
 const GENRES = ['Hip-Hop', 'Trap', 'Drill', 'R&B', 'Pop', 'EDM', 'House', 'Rock', 'Jazz'];
 
 export default function SearchPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selectedRole, setSelectedRole] = useState('');
@@ -197,14 +199,22 @@ export default function SearchPage() {
                   )}
                 </div>
 
-                {/* Add Friend Button */}
-                <button
-                  onClick={() => addFriendMutation.mutate(user.id)}
-                  disabled={addFriendMutation.isPending}
-                  className="p-2 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:bg-slate-700 disabled:cursor-not-allowed transition-colors"
-                >
-                  <UserPlus size={20} className="text-white" />
-                </button>
+                {/* Action Buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => navigate(`/messages/${user.id}`)}
+                    className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors"
+                  >
+                    <MessageCircle size={20} className="text-slate-300" />
+                  </button>
+                  <button
+                    onClick={() => addFriendMutation.mutate(user.id)}
+                    disabled={addFriendMutation.isPending}
+                    className="p-2 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:bg-slate-700 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <UserPlus size={20} className="text-white" />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
