@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Search, SlidersHorizontal, UserPlus, X, MessageCircle } from 'lucide-react';
+import { Search, SlidersHorizontal, UserPlus, X, MessageCircle, User } from 'lucide-react';
 import { userAPI, friendshipAPI } from '../lib/api';
 import { useNavigate } from 'react-router-dom';
 
@@ -202,8 +202,16 @@ export default function SearchPage() {
                 {/* Action Buttons */}
                 <div className="flex gap-2">
                   <button
-                    onClick={() => navigate(`/messages/${user.id}`)}
+                    onClick={() => navigate(`/profile/${user.id}`)}
                     className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors"
+                    title="Профиль"
+                  >
+                    <User size={20} className="text-slate-300" />
+                  </button>
+                  <button
+                    onClick={() => navigate(`/chat/${user.id}`)}
+                    className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors"
+                    title="Написать сообщение"
                   >
                     <MessageCircle size={20} className="text-slate-300" />
                   </button>
@@ -211,6 +219,7 @@ export default function SearchPage() {
                     onClick={() => addFriendMutation.mutate(user.id)}
                     disabled={addFriendMutation.isPending}
                     className="p-2 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:bg-slate-700 disabled:cursor-not-allowed transition-colors"
+                    title="Добавить в друзья"
                   >
                     <UserPlus size={20} className="text-white" />
                   </button>

@@ -1,9 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Users, Check, X, MessageCircle, UserMinus } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Users, Check, X, MessageCircle, UserMinus, User } from 'lucide-react';
 import { friendshipAPI } from '../lib/api';
 
 export default function FriendsPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const { data: friends, isLoading: friendsLoading } = useQuery({
     queryKey: ['friends'],
@@ -163,12 +165,22 @@ export default function FriendsPage() {
                   </div>
 
                   {/* Action Buttons */}
-                  <button
-                    className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors"
-                    title="Написать сообщение"
-                  >
-                    <MessageCircle size={20} className="text-white" />
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => navigate(`/profile/${friend.id}`)}
+                      className="p-2 rounded-lg bg-slate-700 hover:bg-slate-600 transition-colors"
+                      title="Профиль"
+                    >
+                      <User size={20} className="text-white" />
+                    </button>
+                    <button
+                      onClick={() => navigate(`/chat/${friend.id}`)}
+                      className="p-2 rounded-lg bg-primary-500 hover:bg-primary-600 transition-colors"
+                      title="Написать сообщение"
+                    >
+                      <MessageCircle size={20} className="text-white" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
