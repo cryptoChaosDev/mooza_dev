@@ -234,7 +234,7 @@ export default function ChatPage() {
       </div>
 
       {/* Message Input */}
-      <div className="border-t border-slate-700/50 backdrop-blur-sm bg-slate-900/80">
+      <div className="border-t border-slate-700/50 backdrop-blur-sm bg-slate-900/80 pb-20">
         <div className="max-w-4xl mx-auto px-4 py-4">
           <form onSubmit={handleSendMessage}>
             <div className="flex items-center gap-3">
