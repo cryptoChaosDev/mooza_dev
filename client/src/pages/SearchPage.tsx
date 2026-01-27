@@ -18,15 +18,13 @@ export default function SearchPage() {
   const { data: users, isLoading } = useQuery({
     queryKey: ['search', query, selectedRole, selectedGenre],
     queryFn: async () => {
-      if (!query && !selectedRole && !selectedGenre) return [];
       const { data } = await userAPI.search({
-        query,
+        query: query || undefined,
         role: selectedRole || undefined,
         genre: selectedGenre || undefined
       });
       return data;
     },
-    enabled: query.length > 0 || !!selectedRole || !!selectedGenre,
   });
 
   const addFriendMutation = useMutation({
@@ -228,19 +226,15 @@ export default function SearchPage() {
             </div>
           ))}
 
-          {(query || activeFiltersCount > 0) && users?.length === 0 && (
+          {users?.length === 0 && !isLoading && (
             <div className="text-center py-12 bg-slate-800/30 rounded-xl border border-slate-700/50">
               <Search size={48} className="text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-400 text-lg">Ничего не найдено</p>
-              <p className="text-slate-500 text-sm mt-1">Попробуйте изменить параметры поиска</p>
-            </div>
-          )}
-
-          {!query && activeFiltersCount === 0 && (
-            <div className="text-center py-12 bg-slate-800/30 rounded-xl border border-slate-700/50">
-              <Search size={48} className="text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-400 text-lg">Начните поиск</p>
-              <p className="text-slate-500 text-sm mt-1">Введите имя или используйте фильтры</p>
+              <p className="text-slate-400 text-lg">Пользователи не найдены</p>
+              <p className="text-slate-500 text-sm mt-1">
+                {query || activeFiltersCount > 0
+                  ? 'Попробуйте изменить параметры поиска'
+                  : 'В базе данных пока нет других пользователей'}
+              </p>
             </div>
           )}
         </div>

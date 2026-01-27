@@ -173,6 +173,10 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
         genres: true,
         skills: true,
       },
+      orderBy: [
+        { firstName: 'asc' },
+        { lastName: 'asc' }
+      ],
       take: 50,
     });
 
