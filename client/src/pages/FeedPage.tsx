@@ -95,7 +95,7 @@ export default function FeedPage() {
         </div>
 
         {/* Loading Skeleton */}
-        <div className="max-w-4xl mx-auto px-4 pb-8 space-y-4">
+        <div className="max-w-4xl mx-auto px-4 pb-24 space-y-4">
           {[1, 2, 3].map((i) => (
             <div
               key={i}
@@ -136,7 +136,7 @@ export default function FeedPage() {
         </div>
       </div>
 
-      <div className="max-w-4xl mx-auto px-4 pb-8 space-y-4">
+      <div className="max-w-4xl mx-auto px-4 pb-24 space-y-4">
         {/* Create Post */}
         <form onSubmit={handleCreatePost} className="group relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 hover:border-primary-500/50 transition-all shadow-lg">
           <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>

@@ -56,7 +56,7 @@ export default function UserProfilePage() {
         </div>
       </div>
 
-      <div className="max-w-5xl mx-auto px-4 pb-8 space-y-6">
+      <div className="max-w-5xl mx-auto px-4 pb-24 space-y-6">
         {/* Hero Profile Card */}
         <div className="relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-700/50 shadow-2xl">
           {/* Decorative gradient orbs */}
