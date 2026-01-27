@@ -28,10 +28,8 @@ app.use(helmet({
 
 // На эти строки:
 app.use(cors({
-  origin: ['http://147.45.166.246:3000', 'http://localhost:3000', 'http://127.0.0.1:3000'],
+  origin: true,
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 app.use(express.json());
 app.use(morgan('dev'));
