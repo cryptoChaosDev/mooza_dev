@@ -38,6 +38,27 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
             role: true,
           }
         },
+        likes: {
+          where: {
+            userId: req.userId
+          },
+          select: {
+            id: true
+          }
+        },
+        comments: {
+          include: {
+            author: {
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                avatar: true,
+              }
+            }
+          },
+          orderBy: { createdAt: 'asc' }
+        },
         _count: {
           select: { likes: true, comments: true }
         }
@@ -47,7 +68,13 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
       skip: Number(offset),
     });
 
-    res.json(posts);
+    // Add isLiked property to each post
+    const postsWithLikeStatus = posts.map(post => ({
+      ...post,
+      isLiked: post.likes.length > 0
+    }));
+
+    res.json(postsWithLikeStatus);
   } catch (error) {
     console.error('Get feed error:', error);
     res.status(500).json({ error: 'Failed to get feed' });
@@ -104,6 +131,14 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
             role: true,
           }
         },
+        likes: {
+          where: {
+            userId: req.userId
+          },
+          select: {
+            id: true
+          }
+        },
         comments: {
           include: {
             author: {
@@ -127,7 +162,13 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'Post not found' });
     }
 
-    res.json(post);
+    // Add isLiked property
+    const postWithLikeStatus = {
+      ...post,
+      isLiked: post.likes.length > 0
+    };
+
+    res.json(postWithLikeStatus);
   } catch (error) {
     console.error('Get post error:', error);
     res.status(500).json({ error: 'Failed to get post' });
@@ -137,6 +178,20 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
 // Like post
 router.post('/:id/like', authenticate, async (req: AuthRequest, res) => {
   try {
+    // Check if user has already liked this post
+    const existingLike = await prisma.like.findUnique({
+      where: {
+        userId_postId: {
+          userId: req.userId!,
+          postId: req.params.id
+        }
+      }
+    });
+
+    if (existingLike) {
+      return res.status(400).json({ error: 'Post already liked' });
+    }
+
     const like = await prisma.like.create({
       data: {
         userId: req.userId!,
@@ -154,13 +209,14 @@ router.post('/:id/like', authenticate, async (req: AuthRequest, res) => {
 // Unlike post
 router.delete('/:id/like', authenticate, async (req: AuthRequest, res) => {
   try {
-    await prisma.like.deleteMany({
+    const deleted = await prisma.like.deleteMany({
       where: {
         userId: req.userId,
         postId: req.params.id,
       }
     });
 
+    // Return success even if no like was deleted (idempotent)
     res.status(204).send();
   } catch (error) {
     console.error('Unlike post error:', error);

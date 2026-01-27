@@ -63,3 +63,12 @@ export const friendshipAPI = {
   rejectRequest: (id: string) => api.delete(`/friendships/${id}`),
   getFriends: () => api.get('/friendships'),
 };
+
+// Message API
+export const messageAPI = {
+  getConversations: () => api.get('/messages/conversations'),
+  getMessages: (userId: string) => api.get(`/messages/${userId}`),
+  sendMessage: (receiverId: string, content: string) =>
+    api.post('/messages', { receiverId, content }),
+  getUnreadCount: () => api.get('/messages/unread/count'),
+};

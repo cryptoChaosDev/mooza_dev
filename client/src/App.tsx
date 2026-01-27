@@ -6,6 +6,8 @@ import FeedPage from './pages/FeedPage';
 import ProfilePage from './pages/ProfilePage';
 import SearchPage from './pages/SearchPage';
 import FriendsPage from './pages/FriendsPage';
+import MessagesPage from './pages/MessagesPage';
+import ChatPage from './pages/ChatPage';
 import Layout from './components/Layout';
 
 function App() {
@@ -28,6 +30,8 @@ function App() {
         <Route path="/profile" element={<ProfilePage />} />
         <Route path="/search" element={<SearchPage />} />
         <Route path="/friends" element={<FriendsPage />} />
+        <Route path="/messages" element={<MessagesPage />} />
+        <Route path="/messages/:userId" element={<ChatPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>
