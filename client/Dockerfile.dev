@@ -5,8 +5,11 @@ WORKDIR /app
 # Copy package.json only (not package-lock.json)
 COPY package.json ./
 
-# Fresh install to generate Linux-compatible lock file
-RUN npm install
+# Fix for rollup optional dependencies issue in Alpine
+# Clear cache and do clean install
+RUN npm cache clean --force && \
+    rm -rf package-lock.json node_modules && \
+    npm install --force
 
 # Copy source code
 COPY . .
