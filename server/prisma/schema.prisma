@@ -7,6 +7,61 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ============ REFERENCE TABLES ============
+
+model FieldOfActivity {
+  id   String @id @default(uuid())
+  name String @unique
+
+  professions Profession[]
+  users       User[]
+
+  createdAt DateTime @default(now())
+}
+
+model Profession {
+  id                String          @id @default(uuid())
+  name              String
+  fieldOfActivityId String
+  fieldOfActivity   FieldOfActivity @relation(fields: [fieldOfActivityId], references: [id])
+
+  userProfessions UserProfession[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([name, fieldOfActivityId])
+  @@index([fieldOfActivityId])
+}
+
+model ProfessionFeature {
+  id   String @id @default(uuid())
+  name String @unique
+
+  createdAt DateTime @default(now())
+}
+
+model Artist {
+  id   String @id @default(uuid())
+  name String @unique
+
+  userArtists UserArtist[]
+
+  createdAt DateTime @default(now())
+}
+
+model Employer {
+  id   String  @id @default(uuid())
+  name String
+  inn  String? @unique
+  ogrn String? @unique
+
+  users User[]
+
+  createdAt DateTime @default(now())
+}
+
+// ============ USER MODEL ============
+
 model User {
   id        String   @id @default(uuid())
   email     String   @unique
@@ -14,12 +69,28 @@ model User {
   password  String
   firstName String
   lastName  String
+  nickname  String?
   avatar    String?
   bio       String?
-  city        String?
-  role        String?  // producer, vocalist, beatmaker, etc.
-  genres      String[] // array of genres
-  professions String[] // array of professions
+  country   String?
+  city      String?
+  role      String?
+  genres    String[]
+  professions String[] // legacy flat list, kept for backward compat
+
+  // Field of Activity (reference)
+  fieldOfActivityId String?
+  fieldOfActivity   FieldOfActivity? @relation(fields: [fieldOfActivityId], references: [id])
+
+  // Multi-level professions (relational)
+  userProfessions UserProfession[]
+
+  // Artist / Group (many-to-many)
+  userArtists UserArtist[]
+
+  // Employer (many-to-one)
+  employerId String?
+  employer   Employer? @relation(fields: [employerId], references: [id])
 
   // Social links
   vkLink       String?
@@ -41,7 +112,43 @@ model User {
   @@index([email])
   @@index([city])
   @@index([role])
+  @@index([fieldOfActivityId])
 }
+
+// ============ JOIN TABLES ============
+
+model UserProfession {
+  id           String     @id @default(uuid())
+  userId       String
+  professionId String
+  features     String[]   // selected feature names (e.g. "Начинающий", "Платно")
+
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profession Profession @relation(fields: [professionId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, professionId])
+  @@index([userId])
+  @@index([professionId])
+}
+
+model UserArtist {
+  id       String @id @default(uuid())
+  userId   String
+  artistId String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artist Artist @relation(fields: [artistId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, artistId])
+  @@index([userId])
+  @@index([artistId])
+}
+
+// ============ EXISTING MODELS ============
 
 model Post {
   id       String @id @default(uuid())

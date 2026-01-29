@@ -24,7 +24,7 @@ services:
   api:
     build:
       context: ./server
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: mooza-api
     restart: unless-stopped
     ports:
@@ -43,7 +43,7 @@ services:
         condition: service_healthy
     networks:
       - mooza-network
-    command: sh -c "npm install && npx prisma migrate deploy && npm run dev"
+    command: sh -c "npm install && npx prisma generate && npx prisma migrate deploy && npx prisma db seed || true && npm run dev"
 
   # Frontend Web App
   web:

@@ -27,6 +27,14 @@ export const authAPI = {
     password: string;
     firstName: string;
     lastName: string;
+    nickname?: string;
+    phone?: string;
+    country?: string;
+    city?: string;
+    fieldOfActivityId?: string;
+    userProfessions?: { professionId: string; features?: string[] }[];
+    artistIds?: string[];
+    employerId?: string;
   }) => api.post('/auth/register', data),
 };
 
@@ -40,6 +48,18 @@ export const userAPI = {
     }),
   search: (params: any) => api.get('/users/search', { params }),
   getUser: (id: string) => api.get(`/users/${id}`),
+};
+
+// Reference API
+export const referenceAPI = {
+  getFieldsOfActivity: () => api.get('/references/fields-of-activity'),
+  getProfessions: (params?: { fieldOfActivityId?: string; search?: string }) =>
+    api.get('/references/professions', { params }),
+  getProfessionFeatures: () => api.get('/references/profession-features'),
+  getArtists: (params?: { search?: string }) =>
+    api.get('/references/artists', { params }),
+  getEmployers: (params?: { search?: string }) =>
+    api.get('/references/employers', { params }),
 };
 
 // Post API
