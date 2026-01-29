@@ -143,6 +143,8 @@ server/uploads/*
 backups/
 *.sql
 *.sql.gz
+# But allow Prisma migration SQL files
+!server/prisma/migrations/**/*.sql
 
 # Production config (содержит секреты и IP адреса)
 docker-compose.prod.yml

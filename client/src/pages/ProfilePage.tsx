@@ -1,9 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { userAPI } from '../lib/api';
+import { userAPI, referenceAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
-import { Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut } from 'lucide-react';
-import ProfessionSelector from '../components/ProfessionSelector';
+import {
+  Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
+  Globe, Phone, Mail, Building2, User, Search, Check
+} from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -12,19 +14,61 @@ export default function ProfilePage() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEditing, setIsEditing] = useState(false);
-  const [showProfessionSelector, setShowProfessionSelector] = useState(false);
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
+    nickname: '',
     bio: '',
+    country: '',
     city: '',
     role: '',
     genres: [] as string[],
-    professions: [] as string[],
     vkLink: '',
     youtubeLink: '',
     telegramLink: '',
+    fieldOfActivityId: '',
+    employerId: '',
+    userProfessions: [] as { professionId: string; features: string[] }[],
+    artistIds: [] as string[],
   });
+
+  // Reference data for editing
+  const [fieldsOfActivity, setFieldsOfActivity] = useState<any[]>([]);
+  const [professions, setProfessions] = useState<any[]>([]);
+  const [professionFeatures, setProfessionFeatures] = useState<any[]>([]);
+  const [artists, setArtists] = useState<any[]>([]);
+  const [employers, setEmployers] = useState<any[]>([]);
+  const [searchArtist, setSearchArtist] = useState('');
+  const [searchEmployer, setSearchEmployer] = useState('');
+
+  // Load references when editing
+  useEffect(() => {
+    if (isEditing) {
+      referenceAPI.getFieldsOfActivity().then(r => setFieldsOfActivity(r.data));
+      referenceAPI.getProfessionFeatures().then(r => setProfessionFeatures(r.data));
+      referenceAPI.getArtists({}).then(r => setArtists(r.data));
+      referenceAPI.getEmployers({}).then(r => setEmployers(r.data));
+    }
+  }, [isEditing]);
+
+  useEffect(() => {
+    if (isEditing && formData.fieldOfActivityId) {
+      referenceAPI.getProfessions({ fieldOfActivityId: formData.fieldOfActivityId })
+        .then(r => setProfessions(r.data));
+    }
+  }, [isEditing, formData.fieldOfActivityId]);
+
+  useEffect(() => {
+    if (isEditing) {
+      referenceAPI.getArtists({ search: searchArtist }).then(r => setArtists(r.data));
+    }
+  }, [searchArtist, isEditing]);
+
+  useEffect(() => {
+    if (isEditing) {
+      referenceAPI.getEmployers({ search: searchEmployer }).then(r => setEmployers(r.data));
+    }
+  }, [searchEmployer, isEditing]);
 
   // Fetch current user data
   const { data: profile, isLoading } = useQuery({
@@ -34,14 +78,22 @@ export default function ProfilePage() {
       setFormData({
         firstName: data.firstName || '',
         lastName: data.lastName || '',
+        nickname: data.nickname || '',
         bio: data.bio || '',
+        country: data.country || '',
         city: data.city || '',
         role: data.role || '',
         genres: data.genres || [],
-        professions: data.professions || [],
         vkLink: data.vkLink || '',
         youtubeLink: data.youtubeLink || '',
         telegramLink: data.telegramLink || '',
+        fieldOfActivityId: data.fieldOfActivityId || '',
+        employerId: data.employerId || '',
+        userProfessions: data.userProfessions?.map((up: any) => ({
+          professionId: up.professionId || up.profession?.id,
+          features: up.features || [],
+        })) || [],
+        artistIds: data.userArtists?.map((ua: any) => ua.artistId || ua.artist?.id) || [],
       });
       return data;
     },
@@ -105,11 +157,7 @@ export default function ProfilePage() {
             <div className="relative group">
               <div className="w-36 h-36 rounded-2xl overflow-hidden bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center ring-4 ring-slate-900/50 shadow-2xl">
                 {avatarUrl ? (
-                  <img
-                    src={avatarUrl}
-                    alt="Avatar"
-                    className="w-full h-full object-cover"
-                  />
+                  <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
                   <span className="text-5xl font-bold text-slate-400">
                     {profile?.firstName?.[0]}{profile?.lastName?.[0]}
@@ -133,10 +181,47 @@ export default function ProfilePage() {
             <h2 className="mt-6 text-3xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
               {profile?.firstName} {profile?.lastName}
             </h2>
-            <p className="text-slate-400 flex items-center gap-2 mt-2">
-              <MapPin size={18} />
-              {profile?.city || 'Город не указан'}
-            </p>
+            {profile?.nickname && (
+              <p className="text-slate-400 text-sm mt-1">@{profile.nickname}</p>
+            )}
+            <div className="flex items-center gap-4 mt-2 text-slate-400 text-sm">
+              {profile?.country && (
+                <span className="flex items-center gap-1">
+                  <Globe size={14} />
+                  {profile.country}
+                </span>
+              )}
+              {profile?.city && (
+                <span className="flex items-center gap-1">
+                  <MapPin size={14} />
+                  {profile.city}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Quick Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 rounded-xl p-4 text-center border border-slate-600/30 shadow-lg">
+            <Briefcase className="mx-auto mb-1 text-primary-400" size={20} />
+            <div className="text-xs text-slate-400">Сфера</div>
+            <div className="text-sm font-bold text-white mt-0.5 truncate">{profile?.fieldOfActivity?.name || '—'}</div>
+          </div>
+          <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 rounded-xl p-4 text-center border border-slate-600/30 shadow-lg">
+            <Star className="mx-auto mb-1 text-primary-400" size={20} />
+            <div className="text-xs text-slate-400">Профессии</div>
+            <div className="text-xl font-bold text-white mt-0.5">{profile?.userProfessions?.length || 0}</div>
+          </div>
+          <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 rounded-xl p-4 text-center border border-slate-600/30 shadow-lg">
+            <Music className="mx-auto mb-1 text-primary-400" size={20} />
+            <div className="text-xs text-slate-400">Артисты</div>
+            <div className="text-xl font-bold text-white mt-0.5">{profile?.userArtists?.length || 0}</div>
+          </div>
+          <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 rounded-xl p-4 text-center border border-slate-600/30 shadow-lg">
+            <Building2 className="mx-auto mb-1 text-primary-400" size={20} />
+            <div className="text-xs text-slate-400">Работодатель</div>
+            <div className="text-sm font-bold text-white mt-0.5 truncate">{profile?.employer?.name || '—'}</div>
           </div>
         </div>
 
@@ -171,167 +256,409 @@ export default function ProfilePage() {
             )}
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {/* Name */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold mb-3 text-slate-300">
-                  Имя
-                </label>
+                <label className="block text-sm font-semibold mb-2 text-slate-300">Имя</label>
                 <input
                   type="text"
                   value={formData.firstName}
                   onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                   disabled={!isEditing}
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500/50 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
+                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-3 text-slate-300">
-                  Фамилия
-                </label>
+                <label className="block text-sm font-semibold mb-2 text-slate-300">Фамилия</label>
                 <input
                   type="text"
                   value={formData.lastName}
                   onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                   disabled={!isEditing}
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500/50 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
+                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
                 />
               </div>
             </div>
 
+            {/* Nickname */}
+            <div>
+              <label className="block text-sm font-semibold mb-2 text-slate-300">Никнейм</label>
+              <input
+                type="text"
+                value={formData.nickname}
+                onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
+                disabled={!isEditing}
+                placeholder="nickname"
+                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
+              />
+            </div>
+
             {/* Bio */}
             <div>
-              <label className="block text-sm font-semibold mb-3 text-slate-300">
-                О себе
-              </label>
+              <label className="block text-sm font-semibold mb-2 text-slate-300">О себе</label>
               <textarea
                 value={formData.bio}
                 onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                 disabled={!isEditing}
-                rows={4}
-                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500/50 disabled:opacity-60 disabled:cursor-not-allowed resize-none transition text-white"
+                rows={3}
+                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed resize-none transition text-white"
                 placeholder="Расскажите о себе..."
               />
             </div>
 
-            {/* Role & City */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Location */}
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold mb-3 text-slate-300 flex items-center gap-2">
-                  <Briefcase size={18} /> Роль
+                <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                  <Globe size={14} /> Страна
                 </label>
-                <select
-                  value={formData.role}
-                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                <input
+                  type="text"
+                  value={formData.country}
+                  onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                   disabled={!isEditing}
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500/50 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
-                >
-                  <option value="">Выберите роль</option>
-                  <option value="Продюсер">Продюсер</option>
-                  <option value="Вокалист">Вокалист</option>
-                  <option value="Битмейкер">Битмейкер</option>
-                  <option value="Композитор">Композитор</option>
-                  <option value="Саунд-дизайнер">Саунд-дизайнер</option>
-                  <option value="Диджей">Диджей</option>
-                  <option value="Звукорежиссер">Звукорежиссер</option>
-                </select>
+                  placeholder="Россия"
+                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
+                />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-3 text-slate-300 flex items-center gap-2">
-                  <MapPin size={18} /> Город
+                <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                  <MapPin size={14} /> Город
                 </label>
                 <input
                   type="text"
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   disabled={!isEditing}
-                  placeholder="Ваш город"
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500/50 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
+                  placeholder="Москва"
+                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
                 />
               </div>
             </div>
 
-            {/* Professions */}
+            {/* Field of Activity (edit mode) */}
             {isEditing && (
               <div>
-                <label className="block text-sm font-semibold mb-3 text-slate-300 flex items-center gap-2">
-                  <Star size={18} /> Профессии
+                <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                  <Briefcase size={14} /> Сфера деятельности
                 </label>
-                <button
-                  type="button"
-                  onClick={() => setShowProfessionSelector(true)}
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl text-left transition-all hover:bg-slate-700/70 hover:border-primary-500/50 group"
-                >
-                  <div className="flex items-center gap-3">
-                    <Briefcase className="text-slate-400 group-hover:text-primary-400 transition-colors" size={20} />
-                    <div className="flex-1 min-w-0">
-                      {formData.professions.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {formData.professions.slice(0, 5).map((prof) => (
-                            <span
-                              key={prof}
-                              className="inline-block px-2 py-0.5 bg-primary-500/20 text-primary-300 rounded text-xs font-medium"
-                            >
-                              {prof}
-                            </span>
-                          ))}
-                          {formData.professions.length > 5 && (
-                            <span className="inline-block px-2 py-0.5 bg-primary-500/20 text-primary-300 rounded text-xs font-medium">
-                              +{formData.professions.length - 5}
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-slate-400">Выберите профессии...</span>
-                      )}
-                    </div>
-                  </div>
-                </button>
+                <div className="space-y-1">
+                  {fieldsOfActivity.map((field: any) => (
+                    <button
+                      key={field.id}
+                      type="button"
+                      onClick={() => setFormData({
+                        ...formData,
+                        fieldOfActivityId: formData.fieldOfActivityId === field.id ? '' : field.id,
+                      })}
+                      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-all text-left text-sm ${
+                        formData.fieldOfActivityId === field.id
+                          ? 'bg-primary-500/20 border-primary-500/50 text-primary-300'
+                          : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-slate-700/50'
+                      }`}
+                    >
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                        formData.fieldOfActivityId === field.id ? 'bg-primary-500 border-primary-500' : 'border-slate-500'
+                      }`}>
+                        {formData.fieldOfActivityId === field.id && <Check size={10} className="text-white" />}
+                      </div>
+                      {field.name}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
-            {/* Quick Stats */}
-            {!isEditing && (
-              <div className="grid grid-cols-3 gap-4 pt-4">
-                <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 rounded-xl p-4 text-center border border-slate-600/30 shadow-lg">
-                  <Music className="mx-auto mb-2 text-primary-400" size={24} />
-                  <div className="text-xs text-slate-400 font-medium">Жанры</div>
-                  <div className="text-xl font-bold text-white mt-1">{profile?.genres?.length || 0}</div>
+            {/* Professions (edit mode) */}
+            {isEditing && formData.fieldOfActivityId && (
+              <div>
+                <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                  <Star size={14} /> Профессии
+                </label>
+                <div className="space-y-1 max-h-48 overflow-y-auto">
+                  {professions.map((prof: any) => {
+                    const idx = formData.userProfessions.findIndex(up => up.professionId === prof.id);
+                    const selected = idx >= 0;
+                    return (
+                      <button
+                        key={prof.id}
+                        type="button"
+                        onClick={() => {
+                          if (selected) {
+                            setFormData({
+                              ...formData,
+                              userProfessions: formData.userProfessions.filter(up => up.professionId !== prof.id),
+                            });
+                          } else {
+                            setFormData({
+                              ...formData,
+                              userProfessions: [...formData.userProfessions, { professionId: prof.id, features: [] }],
+                            });
+                          }
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all text-left text-sm ${
+                          selected ? 'bg-primary-500/15 text-primary-300' : 'text-slate-300 hover:bg-slate-700/50'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                          selected ? 'bg-primary-500 border-primary-500' : 'border-slate-500'
+                        }`}>
+                          {selected && <Check size={10} className="text-white" />}
+                        </div>
+                        {prof.name}
+                      </button>
+                    );
+                  })}
                 </div>
-                <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 rounded-xl p-4 text-center border border-slate-600/30 shadow-lg">
-                  <Star className="mx-auto mb-2 text-primary-400" size={24} />
-                  <div className="text-xs text-slate-400 font-medium">Профессии</div>
-                  <div className="text-xl font-bold text-white mt-1">{profile?.professions?.length || 0}</div>
+
+                {/* Features for selected professions */}
+                {formData.userProfessions.length > 0 && (
+                  <div className="mt-3 space-y-3">
+                    {formData.userProfessions.map(up => {
+                      const prof = professions.find((p: any) => p.id === up.professionId);
+                      return (
+                        <div key={up.professionId} className="bg-slate-700/20 rounded-lg p-3 border border-slate-600/30">
+                          <p className="text-xs font-medium text-white mb-2">{prof?.name || 'Профессия'}</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {professionFeatures.map((feat: any) => {
+                              const isSelected = up.features.includes(feat.name);
+                              return (
+                                <button
+                                  key={feat.id}
+                                  type="button"
+                                  onClick={() => {
+                                    setFormData({
+                                      ...formData,
+                                      userProfessions: formData.userProfessions.map(p => {
+                                        if (p.professionId !== up.professionId) return p;
+                                        return {
+                                          ...p,
+                                          features: isSelected
+                                            ? p.features.filter(f => f !== feat.name)
+                                            : [...p.features, feat.name],
+                                        };
+                                      }),
+                                    });
+                                  }}
+                                  className={`px-2 py-1 rounded text-xs font-medium border transition-all ${
+                                    isSelected
+                                      ? 'bg-primary-500/20 border-primary-500/50 text-primary-300'
+                                      : 'bg-slate-600/20 border-slate-600/50 text-slate-400 hover:text-slate-300'
+                                  }`}
+                                >
+                                  {feat.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Artists (edit mode) */}
+            {isEditing && (
+              <div>
+                <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                  <Music size={14} /> Мой артист / Группа
+                </label>
+                <div className="relative mb-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input
+                    type="text"
+                    value={searchArtist}
+                    onChange={(e) => setSearchArtist(e.target.value)}
+                    placeholder="Поиск..."
+                    className="w-full pl-9 pr-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                  />
                 </div>
-                <div className="bg-gradient-to-br from-slate-700/50 to-slate-800/50 rounded-xl p-4 text-center border border-slate-600/30 shadow-lg">
-                  <Briefcase className="mx-auto mb-2 text-primary-400" size={24} />
-                  <div className="text-xs text-slate-400 font-medium">Роль</div>
-                  <div className="text-sm font-bold text-white mt-1 truncate">{profile?.role || '—'}</div>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {artists.map((artist: any) => {
+                    const selected = formData.artistIds.includes(artist.id);
+                    return (
+                      <button
+                        key={artist.id}
+                        type="button"
+                        onClick={() => {
+                          if (selected) {
+                            setFormData({ ...formData, artistIds: formData.artistIds.filter(id => id !== artist.id) });
+                          } else {
+                            setFormData({ ...formData, artistIds: [...formData.artistIds, artist.id] });
+                          }
+                        }}
+                        className={`w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all text-left text-sm ${
+                          selected ? 'bg-primary-500/15 text-primary-300' : 'text-slate-300 hover:bg-slate-700/50'
+                        }`}
+                      >
+                        <div className={`w-4 h-4 rounded border-2 flex items-center justify-center ${
+                          selected ? 'bg-primary-500 border-primary-500' : 'border-slate-500'
+                        }`}>
+                          {selected && <Check size={10} className="text-white" />}
+                        </div>
+                        {artist.name}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
+            )}
+
+            {/* Employer (edit mode) */}
+            {isEditing && (
+              <div>
+                <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                  <Building2 size={14} /> Работодатель
+                </label>
+                <div className="relative mb-2">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                  <input
+                    type="text"
+                    value={searchEmployer}
+                    onChange={(e) => setSearchEmployer(e.target.value)}
+                    placeholder="Поиск по названию, ИНН или ОГРН..."
+                    className="w-full pl-9 pr-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
+                  />
+                </div>
+                <div className="space-y-1 max-h-32 overflow-y-auto">
+                  {employers.map((emp: any) => {
+                    const selected = formData.employerId === emp.id;
+                    return (
+                      <button
+                        key={emp.id}
+                        type="button"
+                        onClick={() => setFormData({
+                          ...formData,
+                          employerId: selected ? '' : emp.id,
+                        })}
+                        className={`w-full flex items-center justify-between gap-3 px-4 py-2 rounded-lg transition-all text-left text-sm ${
+                          selected ? 'bg-green-500/15 text-green-300' : 'text-slate-300 hover:bg-slate-700/50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                            selected ? 'bg-green-500 border-green-500' : 'border-slate-500'
+                          }`}>
+                            {selected && <Check size={10} className="text-white" />}
+                          </div>
+                          {emp.name}
+                        </div>
+                        {emp.inn && <span className="text-xs text-slate-500">ИНН: {emp.inn}</span>}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Role & Social Links */}
+            {isEditing && (
+              <>
+                <div>
+                  <label className="block text-sm font-semibold mb-2 text-slate-300">Роль</label>
+                  <select
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                    className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white"
+                  >
+                    <option value="">Выберите роль</option>
+                    <option value="Продюсер">Продюсер</option>
+                    <option value="Вокалист">Вокалист</option>
+                    <option value="Битмейкер">Битмейкер</option>
+                    <option value="Композитор">Композитор</option>
+                    <option value="Саунд-дизайнер">Саунд-дизайнер</option>
+                    <option value="Диджей">Диджей</option>
+                    <option value="Звукорежиссер">Звукорежиссер</option>
+                  </select>
+                </div>
+
+                <div className="space-y-3">
+                  <label className="block text-sm font-semibold text-slate-300">Социальные сети</label>
+                  <input
+                    type="text"
+                    value={formData.vkLink}
+                    onChange={(e) => setFormData({ ...formData, vkLink: e.target.value })}
+                    placeholder="VK ссылка"
+                    className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
+                  />
+                  <input
+                    type="text"
+                    value={formData.youtubeLink}
+                    onChange={(e) => setFormData({ ...formData, youtubeLink: e.target.value })}
+                    placeholder="YouTube ссылка"
+                    className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
+                  />
+                  <input
+                    type="text"
+                    value={formData.telegramLink}
+                    onChange={(e) => setFormData({ ...formData, telegramLink: e.target.value })}
+                    placeholder="Telegram ссылка"
+                    className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
+                  />
+                </div>
+              </>
             )}
           </form>
         </div>
 
-        {/* Professions Section */}
-        {profile?.professions && profile.professions.length > 0 && (
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-8 border border-slate-700/50 shadow-xl">
-            <h3 className="text-2xl font-bold text-white mb-6 flex items-center gap-3">
-              <div className="p-2 bg-gradient-to-r from-primary-500/20 to-primary-600/20 rounded-xl">
-                <Star className="text-primary-400" size={24} />
-              </div>
+        {/* Professions Section (display mode) */}
+        {!isEditing && profile?.userProfessions && profile.userProfessions.length > 0 && (
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-xl">
+            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <Star className="text-primary-400" size={20} />
               Профессии
             </h3>
+            <div className="space-y-3">
+              {profile.userProfessions.map((up: any) => (
+                <div key={up.id} className="flex flex-wrap items-center gap-2">
+                  <span className="px-3 py-1.5 bg-primary-500/20 text-primary-300 rounded-xl text-sm font-medium border border-primary-500/30">
+                    {up.profession?.name}
+                  </span>
+                  {up.features && up.features.length > 0 && up.features.map((f: string) => (
+                    <span key={f} className="px-2 py-1 bg-slate-700/50 text-slate-400 rounded-lg text-xs border border-slate-600/30">
+                      {f}
+                    </span>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Artists Section (display mode) */}
+        {!isEditing && profile?.userArtists && profile.userArtists.length > 0 && (
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-xl">
+            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <Music className="text-purple-400" size={20} />
+              Артисты / Группы
+            </h3>
             <div className="flex flex-wrap gap-2">
-              {profile.professions.map((profession: string) => (
-                <span
-                  key={profession}
-                  className="inline-flex items-center px-4 py-2 bg-gradient-to-r from-primary-500/20 to-primary-600/20 text-primary-300 rounded-xl text-sm font-medium border border-primary-500/30 hover:border-primary-500/50 transition-all hover:scale-105"
-                >
-                  {profession}
+              {profile.userArtists.map((ua: any) => (
+                <span key={ua.id} className="px-3 py-1.5 bg-purple-500/20 text-purple-300 rounded-xl text-sm font-medium border border-purple-500/30">
+                  {ua.artist?.name}
                 </span>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* Employer Section (display mode) */}
+        {!isEditing && profile?.employer && (
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-xl">
+            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <Building2 className="text-green-400" size={20} />
+              Работодатель
+            </h3>
+            <div className="flex items-center gap-3">
+              <span className="px-3 py-1.5 bg-green-500/20 text-green-300 rounded-xl text-sm font-medium border border-green-500/30">
+                {profile.employer.name}
+              </span>
+              {profile.employer.inn && (
+                <span className="text-xs text-slate-500">ИНН: {profile.employer.inn}</span>
+              )}
             </div>
           </div>
         )}
@@ -345,14 +672,6 @@ export default function ProfilePage() {
           Выйти из аккаунта
         </button>
       </div>
-
-      {/* Profession Selector Modal */}
-      <ProfessionSelector
-        isOpen={showProfessionSelector}
-        onClose={() => setShowProfessionSelector(false)}
-        selectedProfessions={formData.professions}
-        onUpdate={(professions) => setFormData({ ...formData, professions })}
-      />
     </div>
   );
 }

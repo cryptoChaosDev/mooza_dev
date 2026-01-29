@@ -7,27 +7,45 @@ import fs from 'fs';
 
 const router = Router();
 
+const userSelect = {
+  id: true,
+  email: true,
+  phone: true,
+  firstName: true,
+  lastName: true,
+  nickname: true,
+  avatar: true,
+  bio: true,
+  country: true,
+  city: true,
+  role: true,
+  genres: true,
+  fieldOfActivityId: true,
+  fieldOfActivity: { select: { id: true, name: true } },
+  userProfessions: {
+    include: {
+      profession: {
+        include: { fieldOfActivity: { select: { id: true, name: true } } },
+      },
+    },
+  },
+  userArtists: {
+    include: { artist: { select: { id: true, name: true } } },
+  },
+  employerId: true,
+  employer: { select: { id: true, name: true, inn: true, ogrn: true } },
+  vkLink: true,
+  youtubeLink: true,
+  telegramLink: true,
+  createdAt: true,
+} as const;
+
 // Get current user
 router.get('/me', authenticate, async (req: AuthRequest, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.userId },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        avatar: true,
-        bio: true,
-        city: true,
-        role: true,
-        genres: true,
-        professions: true,
-        vkLink: true,
-        youtubeLink: true,
-        telegramLink: true,
-        createdAt: true,
-      }
+      select: userSelect,
     });
 
     if (!user) {
@@ -67,18 +85,7 @@ router.post('/me/avatar', authenticate, upload.single('avatar'), async (req: Aut
     const user = await prisma.user.update({
       where: { id: req.userId },
       data: { avatar: avatarUrl },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        avatar: true,
-        bio: true,
-        city: true,
-        role: true,
-        genres: true,
-        professions: true,
-      }
+      select: userSelect,
     });
 
     res.json(user);
@@ -91,37 +98,56 @@ router.post('/me/avatar', authenticate, upload.single('avatar'), async (req: Aut
 // Update current user
 router.put('/me', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { firstName, lastName, bio, city, role, genres, professions, vkLink, youtubeLink, telegramLink } = req.body;
+    const {
+      firstName, lastName, nickname, bio, country, city, role, genres,
+      vkLink, youtubeLink, telegramLink,
+      fieldOfActivityId, employerId,
+      userProfessions, artistIds,
+    } = req.body;
+
+    // Update basic fields
+    const updateData: any = {};
+    if (firstName !== undefined) updateData.firstName = firstName;
+    if (lastName !== undefined) updateData.lastName = lastName;
+    if (nickname !== undefined) updateData.nickname = nickname;
+    if (bio !== undefined) updateData.bio = bio;
+    if (country !== undefined) updateData.country = country;
+    if (city !== undefined) updateData.city = city;
+    if (role !== undefined) updateData.role = role;
+    if (genres !== undefined) updateData.genres = genres;
+    if (vkLink !== undefined) updateData.vkLink = vkLink;
+    if (youtubeLink !== undefined) updateData.youtubeLink = youtubeLink;
+    if (telegramLink !== undefined) updateData.telegramLink = telegramLink;
+    if (fieldOfActivityId !== undefined) updateData.fieldOfActivityId = fieldOfActivityId || null;
+    if (employerId !== undefined) updateData.employerId = employerId || null;
+
+    // Handle userProfessions: delete old, create new
+    if (userProfessions !== undefined) {
+      await prisma.userProfession.deleteMany({ where: { userId: req.userId } });
+      if (userProfessions.length > 0) {
+        updateData.userProfessions = {
+          create: userProfessions.map((up: { professionId: string; features?: string[] }) => ({
+            professionId: up.professionId,
+            features: up.features || [],
+          })),
+        };
+      }
+    }
+
+    // Handle artists: delete old, create new
+    if (artistIds !== undefined) {
+      await prisma.userArtist.deleteMany({ where: { userId: req.userId } });
+      if (artistIds.length > 0) {
+        updateData.userArtists = {
+          create: artistIds.map((artistId: string) => ({ artistId })),
+        };
+      }
+    }
 
     const user = await prisma.user.update({
       where: { id: req.userId },
-      data: {
-        firstName,
-        lastName,
-        bio,
-        city,
-        role,
-        genres,
-        professions,
-        vkLink,
-        youtubeLink,
-        telegramLink,
-      },
-      select: {
-        id: true,
-        email: true,
-        firstName: true,
-        lastName: true,
-        avatar: true,
-        bio: true,
-        city: true,
-        role: true,
-        genres: true,
-        professions: true,
-        vkLink: true,
-        youtubeLink: true,
-        telegramLink: true,
-      }
+      data: updateData,
+      select: userSelect,
     });
 
     res.json(user);
@@ -137,13 +163,14 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
     const { query, role, city, genre } = req.query;
 
     const where: any = {
-      id: { not: req.userId }, // Exclude current user
+      id: { not: req.userId },
     };
 
     if (query) {
       where.OR = [
         { firstName: { contains: query as string, mode: 'insensitive' } },
         { lastName: { contains: query as string, mode: 'insensitive' } },
+        { nickname: { contains: query as string, mode: 'insensitive' } },
         { bio: { contains: query as string, mode: 'insensitive' } },
       ];
     }
@@ -166,12 +193,19 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
         id: true,
         firstName: true,
         lastName: true,
+        nickname: true,
         avatar: true,
         bio: true,
+        country: true,
         city: true,
         role: true,
         genres: true,
-        professions: true,
+        fieldOfActivity: { select: { id: true, name: true } },
+        userProfessions: {
+          include: {
+            profession: { select: { id: true, name: true } },
+          },
+        },
       },
       orderBy: [
         { firstName: 'asc' },
@@ -193,19 +227,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
     const user = await prisma.user.findUnique({
       where: { id: req.params.id },
       select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        avatar: true,
-        bio: true,
-        city: true,
-        role: true,
-        genres: true,
-        professions: true,
-        vkLink: true,
-        youtubeLink: true,
-        telegramLink: true,
-        createdAt: true,
+        ...userSelect,
         _count: {
           select: {
             posts: true,
