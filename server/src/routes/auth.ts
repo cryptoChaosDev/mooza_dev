@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { prisma } from '../index';
 import { z } from 'zod';
+import { authLimiter, registerLimiter } from '../middleware/rateLimiter';
+import { generateToken } from '../utils/jwt';
 
 const router = Router();
 
@@ -37,7 +38,7 @@ const loginSchema = z.object({
 });
 
 // Register
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   try {
     const data = registerSchema.parse(req.body);
 
@@ -126,11 +127,7 @@ router.post('/register', async (req, res) => {
     });
 
     // Generate token
-    const token = jwt.sign(
-      { userId: user.id },
-      process.env.JWT_SECRET || 'secret',
-      { expiresIn: '7d' }
-    );
+    const token = generateToken({ userId: user.id });
 
     res.status(201).json({ user, token });
   } catch (error) {
@@ -143,7 +140,7 @@ router.post('/register', async (req, res) => {
 });
 
 // Login
-router.post('/login', async (req, res) => {
+router.post('/login', authLimiter, async (req, res) => {
   try {
     const data = loginSchema.parse(req.body);
 
@@ -177,11 +174,7 @@ router.post('/login', async (req, res) => {
     }
 
     // Generate token
-    const token = jwt.sign(
-      { userId: user.id },
-      process.env.JWT_SECRET || 'secret',
-      { expiresIn: '7d' }
-    );
+    const token = generateToken({ userId: user.id });
 
     const { password: _, ...userWithoutPassword } = user;
 
