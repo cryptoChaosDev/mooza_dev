@@ -12,6 +12,9 @@ import { apiLimiter } from './middleware/rateLimiter';
 // Import JWT utilities
 import { getJwtSecret } from './utils/jwt';
 
+// Import logger
+import logger, { morganStream } from './utils/logger';
+
 // Import routes
 import authRoutes from './routes/auth';
 import userRoutes from './routes/users';
@@ -26,11 +29,11 @@ dotenv.config();
 // Validate critical environment variables on startup
 try {
   getJwtSecret(); // Will throw error if JWT_SECRET is not set
-  console.log('✅ JWT_SECRET is configured');
+  logger.info('✅ JWT_SECRET is configured');
 } catch (error) {
   if (error instanceof Error) {
-    console.error('❌ STARTUP ERROR:', error.message);
-    console.error('The application cannot start without JWT_SECRET.');
+    logger.error('❌ STARTUP ERROR: ' + error.message);
+    logger.error('The application cannot start without JWT_SECRET.');
     process.exit(1);
   }
 }
@@ -64,7 +67,7 @@ app.use(cors({
     if (allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.warn(`[SECURITY] Blocked CORS request from unauthorized origin: ${origin}`);
+      logger.warn(`[SECURITY] Blocked CORS request from unauthorized origin: ${origin}`);
       callback(null, false); // Отклоняем origin
     }
   },
@@ -76,7 +79,9 @@ app.use(cors({
 }));
 
 app.use(express.json());
-app.use(morgan('dev'));
+
+// HTTP request logging через Morgan + Winston
+app.use(morgan('combined', { stream: morganStream }));
 
 // Serve static files (avatars)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
@@ -97,24 +102,46 @@ app.use('/api/friendships', friendshipRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/references', referenceRoutes);
 
-// Error handling
+// Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Something went wrong!' });
+  // Логируем детали ошибки
+  logger.error('Unhandled error', {
+    error: err.message,
+    stack: err.stack,
+    url: req.url,
+    method: req.method,
+    ip: req.ip,
+    userAgent: req.get('user-agent'),
+  });
+
+  // В production не показываем детали ошибки
+  if (process.env.NODE_ENV === 'production') {
+    res.status(err.status || 500).json({
+      error: 'Внутренняя ошибка сервера',
+      message: 'Произошла непредвиденная ошибка. Пожалуйста, попробуйте позже.',
+    });
+  } else {
+    // В development показываем детали для отладки
+    res.status(err.status || 500).json({
+      error: err.message || 'Something went wrong',
+      stack: err.stack,
+      details: err,
+    });
+  }
 });
 
 // Start server
 const server = app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
+  logger.info(`🚀 Server running on http://localhost:${PORT}`);
+  logger.info(`📊 Health check: http://localhost:${PORT}/health`);
 });
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
-  console.log('SIGTERM signal received: closing HTTP server');
+  logger.info('SIGTERM signal received: closing HTTP server');
   server.close(async () => {
     await prisma.$disconnect();
-    console.log('HTTP server closed');
+    logger.info('HTTP server closed');
   });
 });
 
