@@ -113,6 +113,7 @@ model User {
   @@index([city])
   @@index([role])
   @@index([fieldOfActivityId])
+  @@index([employerId])
 }
 
 // ============ JOIN TABLES ============
@@ -166,6 +167,7 @@ model Post {
 
   @@index([authorId])
   @@index([createdAt])
+  @@index([authorId, createdAt])
 }
 
 model Like {
@@ -218,6 +220,8 @@ model Message {
   @@index([senderId])
   @@index([receiverId])
   @@index([createdAt])
+  @@index([receiverId, readAt])
+  @@index([senderId, receiverId, createdAt])
 }
 
 model Friendship {
@@ -238,4 +242,6 @@ model Friendship {
   @@index([requesterId])
   @@index([receiverId])
   @@index([status])
+  @@index([receiverId, status])
+  @@index([requesterId, status])
 }
