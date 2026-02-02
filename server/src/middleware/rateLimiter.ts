@@ -1,4 +1,5 @@
 import rateLimit from 'express-rate-limit';
+import { logSecurity } from '../utils/logger';
 
 /**
  * Rate limiter для авторизации и регистрации
@@ -15,7 +16,11 @@ export const authLimiter = rateLimit({
   legacyHeaders: false, // Отключает заголовки `X-RateLimit-*`
   // Обработчик превышения лимита
   handler: (req, res) => {
-    console.log(`[SECURITY] Rate limit exceeded for IP ${req.ip} on auth endpoint`);
+    logSecurity(`Rate limit exceeded for IP ${req.ip} on auth endpoint`, {
+      ip: req.ip,
+      url: req.url,
+      method: req.method,
+    });
     res.status(429).json({
       error: 'Слишком много попыток входа с вашего IP адреса',
       message: 'Пожалуйста, подождите 15 минут перед следующей попыткой',
