@@ -19,9 +19,7 @@ router.get('/fields-of-activity', async (_req, res) => {
     const formattedFields = fields.map(field => ({
       id: field.id,
       name: field.name,
-      description: field.description,
       createdAt: field.createdAt,
-      updatedAt: field.updatedAt,
       userCount: field._count.users,
     }));
     

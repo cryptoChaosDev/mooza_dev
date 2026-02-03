@@ -170,6 +170,10 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
 // Update search profile
 router.put('/me/search-profile', authenticate, async (req: AuthRequest, res) => {
   try {
+    if (!req.userId) {
+      return res.status(401).json({ error: 'User not authenticated' });
+    }
+
     const {
       serviceId,
       genreId,
