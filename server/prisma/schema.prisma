@@ -26,12 +26,106 @@ model Profession {
   fieldOfActivity   FieldOfActivity @relation(fields: [fieldOfActivityId], references: [id])
 
   userProfessions UserProfession[]
+  services        Service[]
 
   createdAt DateTime @default(now())
 
   @@unique([name, fieldOfActivityId])
   @@index([fieldOfActivityId])
 }
+
+// ============ NEW MULTI-LEVEL SEARCH MODELS ============
+
+model Service {
+  id           String       @id @default(uuid())
+  name         String       @unique
+  nameEn       String?
+  sortOrder    Int          @default(0)
+  professionId String
+  profession   Profession   @relation(fields: [professionId], references: [id])
+  genres       Genre[]
+  users        UserSearchProfile[]
+  createdAt    DateTime     @default(now())
+}
+
+model Genre {
+  id        String            @id @default(uuid())
+  name      String            @unique
+  nameEn    String?
+  serviceId String
+  service   Service           @relation(fields: [serviceId], references: [id])
+  users     UserSearchProfile[]
+  createdAt DateTime          @default(now())
+}
+
+model WorkFormat {
+  id        String            @id @default(uuid())
+  name      String            @unique
+  nameEn    String?
+  sortOrder Int               @default(0)
+  users     UserSearchProfile[]
+  createdAt DateTime          @default(now())
+}
+
+model EmploymentType {
+  id        String            @id @default(uuid())
+  name      String            @unique
+  nameEn    String?
+  sortOrder Int               @default(0)
+  users     UserSearchProfile[]
+  createdAt DateTime          @default(now())
+}
+
+model SkillLevel {
+  id        String            @id @default(uuid())
+  name      String            @unique
+  nameEn    String?
+  sortOrder Int               @default(0)
+  users     UserSearchProfile[]
+  createdAt DateTime          @default(now())
+}
+
+model Availability {
+  id        String            @id @default(uuid())
+  name      String            @unique
+  nameEn    String?
+  sortOrder Int               @default(0)
+  users     UserSearchProfile[]
+  createdAt DateTime          @default(now())
+}
+
+model UserSearchProfile {
+  id               String         @id @default(uuid())
+  userId           String
+  user             User           @relation(fields: [userId], references: [id])
+  serviceId        String?
+  service          Service?       @relation(fields: [serviceId], references: [id])
+  genreId          String?
+  genre            Genre?         @relation(fields: [genreId], references: [id])
+  workFormatId     String?
+  workFormat       WorkFormat?    @relation(fields: [workFormatId], references: [id])
+  employmentTypeId String?
+  employmentType   EmploymentType? @relation(fields: [employmentTypeId], references: [id])
+  skillLevelId     String?
+  skillLevel       SkillLevel?    @relation(fields: [skillLevelId], references: [id])
+  availabilityId   String?
+  availability     Availability?  @relation(fields: [availabilityId], references: [id])
+  pricePerHour     Float?
+  pricePerEvent    Float?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@unique([userId, serviceId, genreId])
+  @@index([userId])
+  @@index([serviceId])
+  @@index([genreId])
+  @@index([workFormatId])
+  @@index([employmentTypeId])
+  @@index([skillLevelId])
+  @@index([availabilityId])
+}
+
+// ============ OTHER REFERENCE TABLES ============
 
 model ProfessionFeature {
   id   String @id @default(uuid())
@@ -84,6 +178,9 @@ model User {
 
   // Multi-level professions (relational)
   userProfessions UserProfession[]
+
+  // Multi-level search profiles
+  userSearchProfiles UserSearchProfile[]
 
   // Artist / Group (many-to-many)
   userArtists UserArtist[]

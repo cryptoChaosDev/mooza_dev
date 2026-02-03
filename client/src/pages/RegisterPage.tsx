@@ -17,32 +17,24 @@ interface ProfessionEntry {
 }
 
 interface FormData {
-  // Step 1
   country: string;
   city: string;
-  // Step 2
   phone: string;
   email: string;
-  // Step 3
   lastName: string;
   firstName: string;
   nickname: string;
-  // Step 4
   fieldOfActivityId: string;
   fieldOfActivityName: string;
-  // Step 5
   userProfessions: ProfessionEntry[];
-  // Step 6
   artistIds: string[];
   artistNames: string[];
   employerId: string;
   employerName: string;
-  // Step 7
   password: string;
   passwordConfirm: string;
 }
 
-// Phone mask helper
 function formatPhone(value: string): string {
   const digits = value.replace(/\D/g, '');
   const d = digits.startsWith('7') ? digits : '7' + digits;
@@ -58,14 +50,13 @@ function unformatPhone(formatted: string): string {
   return formatted.replace(/\D/g, '');
 }
 
-// Step indicator component
 function StepIndicator({ current, total }: { current: number; total: number }) {
   return (
-    <div className="flex items-center justify-center gap-2 mb-8">
+    <div className="flex items-center justify-center gap-2 mb-8 overflow-x-auto py-2">
       {Array.from({ length: total }, (_, i) => (
-        <div key={i} className="flex items-center">
+        <div key={i} className="flex items-center flex-shrink-0">
           <div
-            className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+            className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-sm font-bold transition-all duration-300 ${
               i + 1 < current
                 ? 'bg-green-500 text-white shadow-lg shadow-green-500/30'
                 : i + 1 === current
@@ -73,10 +64,10 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
                 : 'bg-slate-700 text-slate-400'
             }`}
           >
-            {i + 1 < current ? <Check size={18} /> : i + 1}
+            {i + 1 < current ? <Check size={14} className="sm:w-4 sm:h-4" /> : i + 1}
           </div>
           {i < total - 1 && (
-            <div className={`w-6 h-0.5 mx-1 transition-all duration-300 ${
+            <div className={`w-4 sm:w-6 h-0.5 mx-1 sm:mx-2 transition-all duration-300 ${
               i + 1 < current ? 'bg-green-500' : 'bg-slate-700'
             }`} />
           )}
@@ -86,7 +77,6 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
   );
 }
 
-// Step titles
 const STEP_TITLES = [
   'Местоположение',
   'Контакты',
@@ -133,7 +123,6 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
 
-  // Reference data
   const [fieldsOfActivity, setFieldsOfActivity] = useState<any[]>([]);
   const [professions, setProfessions] = useState<any[]>([]);
   const [professionFeatures, setProfessionFeatures] = useState<any[]>([]);
@@ -145,13 +134,11 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showPasswordConfirm, setShowPasswordConfirm] = useState(false);
 
-  // Load reference data
   useEffect(() => {
     referenceAPI.getFieldsOfActivity().then(r => setFieldsOfActivity(r.data));
     referenceAPI.getProfessionFeatures().then(r => setProfessionFeatures(r.data));
   }, []);
 
-  // Load professions when field changes
   useEffect(() => {
     if (formData.fieldOfActivityId) {
       referenceAPI.getProfessions({ fieldOfActivityId: formData.fieldOfActivityId })
@@ -159,17 +146,14 @@ export default function RegisterPage() {
     }
   }, [formData.fieldOfActivityId]);
 
-  // Search artists
   useEffect(() => {
     referenceAPI.getArtists({ search: searchArtist }).then(r => setArtists(r.data));
   }, [searchArtist]);
 
-  // Search employers
   useEffect(() => {
     referenceAPI.getEmployers({ search: searchEmployer }).then(r => setEmployers(r.data));
   }, [searchEmployer]);
 
-  // Geolocation
   const detectLocation = useCallback(() => {
     setGeoLoading(true);
     if ('geolocation' in navigator) {
@@ -189,7 +173,6 @@ export default function RegisterPage() {
               }));
             }
           } catch {
-            // Silently fail - user can input manually
           } finally {
             setGeoLoading(false);
           }
@@ -204,12 +187,10 @@ export default function RegisterPage() {
     }
   }, []);
 
-  // Validate current step
   const validateStep = (): boolean => {
     setError('');
     switch (step) {
       case 1:
-        // Location is optional but recommended
         return true;
       case 2:
         if (!formData.email) {
@@ -232,13 +213,10 @@ export default function RegisterPage() {
         }
         return true;
       case 4:
-        // Field of activity is optional
         return true;
       case 5:
-        // Professions are optional
         return true;
       case 6:
-        // Artist/employer are optional
         return true;
       case 7:
         if (!formData.password || formData.password.length < 6) {
@@ -305,7 +283,6 @@ export default function RegisterPage() {
     }
   };
 
-  // Toggle profession
   const toggleProfession = (prof: any) => {
     setFormData(prev => {
       const exists = prev.userProfessions.find(up => up.professionId === prof.id);
@@ -330,7 +307,6 @@ export default function RegisterPage() {
     });
   };
 
-  // Toggle feature on profession
   const toggleFeature = (professionId: string, featureName: string) => {
     setFormData(prev => ({
       ...prev,
@@ -347,7 +323,6 @@ export default function RegisterPage() {
     }));
   };
 
-  // Toggle artist
   const toggleArtist = (artist: any) => {
     setFormData(prev => {
       const idx = prev.artistIds.indexOf(artist.id);
@@ -366,23 +341,21 @@ export default function RegisterPage() {
     });
   };
 
-  // Render step content
   const renderStep = () => {
     switch (step) {
-      // ====== STEP 1: Location ======
       case 1:
         return (
-          <div className="space-y-5">
+          <div className="space-y-4 sm:space-y-5">
             <button
               type="button"
               onClick={detectLocation}
               disabled={geoLoading}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-primary-500/10 border border-primary-500/30 hover:border-primary-500/50 text-primary-300 rounded-xl transition-all hover:bg-primary-500/20"
+              className="w-full flex items-center justify-center gap-2 sm:gap-3 px-4 py-3 sm:py-3.5 bg-primary-500/10 border border-primary-500/30 hover:border-primary-500/50 text-primary-300 rounded-xl transition-all hover:bg-primary-500/20 text-sm sm:text-base"
             >
               {geoLoading ? (
-                <Loader2 size={20} className="animate-spin" />
+                <Loader2 size={18} className="sm:w-5 sm:h-5 animate-spin" />
               ) : (
-                <Globe size={20} />
+                <Globe size={18} className="sm:w-5 sm:h-5" />
               )}
               {geoLoading ? 'Определяем...' : 'Определить автоматически'}
             </button>
@@ -390,13 +363,13 @@ export default function RegisterPage() {
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">Страна</label>
               <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
                 <input
                   type="text"
                   value={formData.country}
                   onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                   placeholder="Россия"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-3.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base"
                 />
               </div>
             </div>
@@ -404,27 +377,26 @@ export default function RegisterPage() {
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">Город</label>
               <div className="relative">
-                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
                 <input
                   type="text"
                   value={formData.city}
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   placeholder="Москва"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-3.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base"
                 />
               </div>
             </div>
           </div>
         );
 
-      // ====== STEP 2: Contacts ======
       case 2:
         return (
-          <div className="space-y-5">
+          <div className="space-y-4 sm:space-y-5">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">Телефон</label>
               <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
                 <input
                   type="tel"
                   value={formData.phone}
@@ -433,7 +405,7 @@ export default function RegisterPage() {
                     setFormData({ ...formData, phone: formatted });
                   }}
                   placeholder="+7 (___) ___ __ __"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-3.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base"
                 />
               </div>
             </div>
@@ -443,14 +415,14 @@ export default function RegisterPage() {
                 Email <span className="text-red-400">*</span>
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   placeholder="your@email.com"
                   autoComplete="email"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-3.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base"
                   required
                 />
               </div>
@@ -458,23 +430,22 @@ export default function RegisterPage() {
           </div>
         );
 
-      // ====== STEP 3: Personal ======
       case 3:
         return (
-          <div className="space-y-5">
+          <div className="space-y-4 sm:space-y-5">
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
                 Фамилия <span className="text-red-400">*</span>
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
                 <input
                   type="text"
                   value={formData.lastName}
                   onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                   placeholder="Иванов"
                   autoComplete="family-name"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-3.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base"
                   required
                 />
               </div>
@@ -485,14 +456,14 @@ export default function RegisterPage() {
                 Имя <span className="text-red-400">*</span>
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
                 <input
                   type="text"
                   value={formData.firstName}
                   onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                   placeholder="Иван"
                   autoComplete="given-name"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-3.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base"
                   required
                 />
               </div>
@@ -503,25 +474,24 @@ export default function RegisterPage() {
                 Никнейм <span className="text-slate-500">(необязательно)</span>
               </label>
               <div className="relative">
-                <Star className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <Star className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
                 <input
                   type="text"
                   value={formData.nickname}
                   onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
                   placeholder="nickname"
-                  className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 sm:pl-12 pr-4 py-3 sm:py-3.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base"
                 />
               </div>
             </div>
           </div>
         );
 
-      // ====== STEP 4: Field of Activity ======
       case 4:
         return (
-          <div className="space-y-4">
+          <div className="space-y-3 sm:space-y-4">
             <p className="text-sm text-slate-400 mb-2">Выберите вашу основную сферу деятельности:</p>
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-2">
               {fieldsOfActivity.map((field: any) => (
                 <button
                   key={field.id}
@@ -532,22 +502,22 @@ export default function RegisterPage() {
                     fieldOfActivityName: formData.fieldOfActivityId === field.id ? '' : field.name,
                     userProfessions: formData.fieldOfActivityId === field.id ? [] : formData.userProfessions,
                   })}
-                  className={`w-full flex items-center gap-4 px-5 py-4 rounded-xl border transition-all text-left ${
+                  className={`w-full flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3 sm:py-4 rounded-xl border transition-all text-left ${
                     formData.fieldOfActivityId === field.id
                       ? 'bg-primary-500/20 border-primary-500/50 text-primary-300 shadow-lg shadow-primary-500/10'
-                      : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-slate-700/50 hover:border-slate-500/50'
+                      : 'bg-slate-800/50 border-slate-700/50 text-slate-300 hover:bg-slate-700/50 hover:border-slate-600/50'
                   }`}
                 >
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                  <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
                     formData.fieldOfActivityId === field.id
                       ? 'bg-primary-500/30'
-                      : 'bg-slate-600/50'
+                      : 'bg-slate-700/50'
                   }`}>
-                    <Briefcase size={20} className={formData.fieldOfActivityId === field.id ? 'text-primary-400' : 'text-slate-400'} />
+                    <Briefcase className={formData.fieldOfActivityId === field.id ? 'text-primary-400 w-5 h-5 sm:w-[22px] sm:h-[22px]' : 'text-slate-400 w-5 h-5 sm:w-[22px] sm:h-[22px]'} />
                   </div>
-                  <span className="font-medium">{field.name}</span>
+                  <span className="font-medium text-sm sm:text-base">{field.name}</span>
                   {formData.fieldOfActivityId === field.id && (
-                    <Check size={20} className="ml-auto text-primary-400" />
+                    <Check className="ml-auto text-primary-400 w-5 h-5 sm:w-[22px] sm:h-[22px] flex-shrink-0" />
                   )}
                 </button>
               ))}
@@ -555,14 +525,13 @@ export default function RegisterPage() {
           </div>
         );
 
-      // ====== STEP 5: Professions (multi-level) ======
       case 5:
         return (
           <div className="space-y-4">
             {!formData.fieldOfActivityId ? (
               <div className="text-center py-8 text-slate-400">
-                <Briefcase size={48} className="mx-auto mb-3 opacity-50" />
-                <p>Сначала выберите сферу деятельности на предыдущем шаге</p>
+                <Briefcase className="mx-auto mb-3 opacity-50 w-10 h-10 sm:w-12 sm:h-12" />
+                <p className="text-sm sm:text-base">Сначала выберите сферу деятельности на предыдущем шаге</p>
                 <button
                   type="button"
                   onClick={prevStep}
@@ -573,7 +542,6 @@ export default function RegisterPage() {
               </div>
             ) : (
               <>
-                {/* Search */}
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input
@@ -581,12 +549,11 @@ export default function RegisterPage() {
                     value={searchProfession}
                     onChange={(e) => setSearchProfession(e.target.value)}
                     placeholder="Поиск профессии..."
-                    className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm"
                   />
                 </div>
 
-                {/* Profession list */}
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1 custom-scrollbar">
+                <div className="space-y-2 max-h-48 sm:max-h-60 overflow-y-auto pr-1">
                   {professions
                     .filter((p: any) => !searchProfession || p.name.toLowerCase().includes(searchProfession.toLowerCase()))
                     .map((prof: any) => {
@@ -599,10 +566,10 @@ export default function RegisterPage() {
                           className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl border transition-all text-left ${
                             selected
                               ? 'bg-primary-500/20 border-primary-500/50 text-primary-300'
-                              : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-slate-700/50'
+                              : 'bg-slate-800/50 border-slate-700/50 text-slate-300 hover:bg-slate-700/50'
                           }`}
                         >
-                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center ${
+                          <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
                             selected ? 'bg-primary-500 border-primary-500' : 'border-slate-500'
                           }`}>
                             {selected && <Check size={14} className="text-white" />}
@@ -613,7 +580,6 @@ export default function RegisterPage() {
                     })}
                 </div>
 
-                {/* Features for selected professions */}
                 {formData.userProfessions.length > 0 && (
                   <div className="mt-4 space-y-4">
                     <h4 className="text-sm font-semibold text-slate-300 flex items-center gap-2">
@@ -621,7 +587,7 @@ export default function RegisterPage() {
                       Особенности профессий
                     </h4>
                     {formData.userProfessions.map(up => (
-                      <div key={up.professionId} className="bg-slate-700/30 rounded-xl p-4 border border-slate-600/30">
+                      <div key={up.professionId} className="bg-slate-800/50 rounded-xl p-4 border border-slate-700/30">
                         <p className="text-sm font-medium text-white mb-3">{up.professionName}</p>
                         <div className="flex flex-wrap gap-2">
                           {professionFeatures.map((feat: any) => {
@@ -634,7 +600,7 @@ export default function RegisterPage() {
                                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
                                   isSelected
                                     ? 'bg-primary-500/20 border-primary-500/50 text-primary-300'
-                                    : 'bg-slate-600/30 border-slate-600/50 text-slate-400 hover:text-slate-300 hover:bg-slate-600/50'
+                                    : 'bg-slate-700/50 border-slate-600/50 text-slate-400 hover:text-slate-300 hover:bg-slate-600/50'
                                 }`}
                               >
                                 {feat.name}
@@ -651,11 +617,9 @@ export default function RegisterPage() {
           </div>
         );
 
-      // ====== STEP 6: Artist/Group + Employer ======
       case 6:
         return (
-          <div className="space-y-6">
-            {/* Artists / Groups */}
+          <div className="space-y-5 sm:space-y-6">
             <div>
               <label className="block text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
                 <Music size={16} className="text-primary-400" />
@@ -668,11 +632,10 @@ export default function RegisterPage() {
                   value={searchArtist}
                   onChange={(e) => setSearchArtist(e.target.value)}
                   placeholder="Поиск артиста или группы..."
-                  className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm"
                 />
               </div>
 
-              {/* Selected artists */}
               {formData.artistNames.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-3">
                   {formData.artistNames.map((name, idx) => (
@@ -693,7 +656,7 @@ export default function RegisterPage() {
                 </div>
               )}
 
-              <div className="space-y-1 max-h-40 overflow-y-auto">
+              <div className="space-y-1 max-h-36 sm:max-h-40 overflow-y-auto">
                 {artists.map((artist: any) => {
                   const selected = formData.artistIds.includes(artist.id);
                   return (
@@ -707,19 +670,18 @@ export default function RegisterPage() {
                           : 'text-slate-300 hover:bg-slate-700/50'
                       }`}
                     >
-                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center ${
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
                         selected ? 'bg-primary-500 border-primary-500' : 'border-slate-500'
                       }`}>
                         {selected && <Check size={14} className="text-white" />}
                       </div>
-                      {artist.name}
+                      <span className="truncate">{artist.name}</span>
                     </button>
                   );
                 })}
               </div>
             </div>
 
-            {/* Employer */}
             <div>
               <label className="block text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
                 <Building2 size={16} className="text-primary-400" />
@@ -732,7 +694,7 @@ export default function RegisterPage() {
                   value={searchEmployer}
                   onChange={(e) => setSearchEmployer(e.target.value)}
                   placeholder="Поиск по названию, ИНН или ОГРН..."
-                  className="w-full pl-10 pr-4 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm"
+                  className="w-full pl-10 pr-4 py-3 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm"
                 />
               </div>
 
@@ -751,7 +713,7 @@ export default function RegisterPage() {
                 </div>
               )}
 
-              <div className="space-y-1 max-h-40 overflow-y-auto">
+              <div className="space-y-1 max-h-36 sm:max-h-40 overflow-y-auto">
                 {employers.map((emp: any) => {
                   const selected = formData.employerId === emp.id;
                   return (
@@ -769,16 +731,16 @@ export default function RegisterPage() {
                           : 'text-slate-300 hover:bg-slate-700/50'
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
                           selected ? 'bg-green-500 border-green-500' : 'border-slate-500'
                         }`}>
                           {selected && <Check size={12} className="text-white" />}
                         </div>
-                        <span>{emp.name}</span>
+                        <span className="truncate">{emp.name}</span>
                       </div>
                       {emp.inn && (
-                        <span className="text-xs text-slate-500">ИНН: {emp.inn}</span>
+                        <span className="text-xs text-slate-500 flex-shrink-0">ИНН: {emp.inn}</span>
                       )}
                     </button>
                   );
@@ -788,15 +750,13 @@ export default function RegisterPage() {
           </div>
         );
 
-      // ====== STEP 7: Review + Password ======
       case 7:
         return (
-          <div className="space-y-5">
-            {/* Review summary */}
-            <div className="bg-slate-700/30 rounded-xl p-5 border border-slate-600/30 space-y-3">
+          <div className="space-y-4 sm:space-y-5">
+            <div className="bg-slate-800/50 rounded-xl p-4 sm:p-5 border border-slate-700/30 space-y-3">
               <h4 className="text-sm font-bold text-white mb-3">Ваши данные</h4>
 
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm">
                 {formData.country && (
                   <>
                     <span className="text-slate-400">Страна:</span>
@@ -879,29 +839,28 @@ export default function RegisterPage() {
               </button>
             </div>
 
-            {/* Password */}
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-2">
                 Пароль <span className="text-red-400">*</span>
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
                 <input
                   type={showPassword ? 'text' : 'password'}
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   placeholder="Минимум 6 символов"
                   autoComplete="new-password"
-                  className="w-full pl-10 pr-12 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 sm:pl-12 pr-12 py-3 sm:py-3.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base"
                   required
                   minLength={6}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-300 transition-colors"
+                  className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-300 transition-colors p-1"
                 >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
             </div>
@@ -911,22 +870,22 @@ export default function RegisterPage() {
                 Подтверждение пароля <span className="text-red-400">*</span>
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
                 <input
                   type={showPasswordConfirm ? 'text' : 'password'}
                   value={formData.passwordConfirm}
                   onChange={(e) => setFormData({ ...formData, passwordConfirm: e.target.value })}
                   placeholder="Повторите пароль"
                   autoComplete="new-password"
-                  className="w-full pl-10 pr-12 py-3 bg-slate-700/50 border border-slate-600 rounded-xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all"
+                  className="w-full pl-10 sm:pl-12 pr-12 py-3 sm:py-3.5 bg-slate-800/50 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all text-sm sm:text-base"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPasswordConfirm(!showPasswordConfirm)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-300 transition-colors"
+                  className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-300 transition-colors p-1"
                 >
-                  {showPasswordConfirm ? <EyeOff size={20} /> : <Eye size={20} />}
+                  {showPasswordConfirm ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                 </button>
               </div>
               {formData.password && formData.passwordConfirm && formData.password === formData.passwordConfirm && (
@@ -944,48 +903,42 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center px-4 py-8">
-      <div className="max-w-lg w-full">
-        {/* Logo */}
-        <div className="text-center mb-6">
-          <h1 className="text-4xl font-bold text-primary-400 mb-1">Mooza</h1>
-          <p className="text-slate-400 text-sm">Регистрация нового аккаунта</p>
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4 py-6 sm:py-8">
+      <div className="w-full max-w-lg">
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-primary-500 to-purple-600 shadow-glow mb-3">
+            <Music className="text-white w-6 h-6 sm:w-7 sm:h-7" />
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-bold text-white mb-1">Mooza</h1>
+          <p className="text-slate-400 text-sm sm:text-base">Регистрация нового аккаунта</p>
         </div>
 
-        {/* Step Indicator */}
         <StepIndicator current={step} total={TOTAL_STEPS} />
 
-        {/* Card */}
-        <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl p-6 shadow-xl border border-slate-700/50">
-          {/* Step header */}
-          <div className="mb-6">
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-xs font-semibold text-primary-400 uppercase tracking-wider">
-                Шаг {step} из {TOTAL_STEPS}
-              </span>
-            </div>
-            <h2 className="text-xl font-bold text-white">{STEP_TITLES[step - 1]}</h2>
-            <p className="text-sm text-slate-400 mt-1">{STEP_DESCRIPTIONS[step - 1]}</p>
+        <div className="bg-slate-900/60 backdrop-blur-xl rounded-2xl sm:rounded-3xl p-5 sm:p-6 md:p-8 border border-slate-800/50 shadow-xl">
+          <div className="mb-5 sm:mb-6">
+            <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold tracking-wider uppercase text-primary-400 bg-primary-500/10 border border-primary-500/20 mb-2 sm:mb-3">
+              Шаг {step} из {TOTAL_STEPS}
+            </span>
+            <h2 className="text-xl sm:text-2xl font-bold text-white">{STEP_TITLES[step - 1]}</h2>
+            <p className="text-slate-400 text-sm mt-1">{STEP_DESCRIPTIONS[step - 1]}</p>
           </div>
 
-          {/* Error */}
           {error && (
-            <div className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-xl mb-4 flex items-center gap-2 text-sm">
-              <AlertCircle size={16} />
+            <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl mb-4 flex items-center gap-2 text-sm animate-fade-in">
+              <AlertCircle size={18} />
               <span>{error}</span>
             </div>
           )}
 
-          {/* Step Content */}
           {renderStep()}
 
-          {/* Navigation */}
-          <div className="flex items-center justify-between mt-8">
+          <div className="flex items-center justify-between mt-6 sm:mt-8 gap-4">
             {step > 1 ? (
               <button
                 type="button"
                 onClick={prevStep}
-                className="flex items-center gap-2 px-4 py-2.5 bg-slate-700/50 hover:bg-slate-700 text-slate-300 rounded-xl transition-all text-sm font-medium"
+                className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/50 hover:bg-slate-700 text-slate-300 rounded-xl transition-all text-sm font-medium"
               >
                 <ChevronLeft size={18} />
                 Назад
@@ -998,7 +951,7 @@ export default function RegisterPage() {
               <button
                 type="button"
                 onClick={nextStep}
-                className="flex items-center gap-2 px-6 py-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-xl transition-all text-sm font-semibold shadow-lg shadow-primary-500/25"
+                className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-primary-500 to-purple-500 hover:from-primary-400 hover:to-purple-400 text-white rounded-xl transition-all text-sm font-semibold shadow-lg shadow-primary-500/25"
               >
                 Далее
                 <ChevronRight size={18} />
@@ -1008,7 +961,7 @@ export default function RegisterPage() {
                 type="button"
                 onClick={handleSubmit}
                 disabled={loading}
-                className="flex items-center gap-2 px-6 py-2.5 bg-green-500 hover:bg-green-600 disabled:bg-slate-700 text-white rounded-xl transition-all text-sm font-semibold shadow-lg shadow-green-500/25 disabled:shadow-none disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 disabled:from-slate-700 disabled:to-slate-600 text-white rounded-xl transition-all text-sm font-semibold shadow-lg shadow-green-500/25 disabled:shadow-none disabled:cursor-not-allowed"
               >
                 {loading ? (
                   <>
@@ -1026,8 +979,7 @@ export default function RegisterPage() {
           </div>
         </div>
 
-        {/* Login link */}
-        <p className="mt-6 text-center text-slate-400 text-sm">
+        <p className="mt-6 text-center text-slate-500 text-sm">
           Уже есть аккаунт?{' '}
           <Link to="/login" className="text-primary-400 hover:text-primary-300 font-medium transition-colors">
             Войти

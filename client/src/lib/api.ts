@@ -42,6 +42,16 @@ export const authAPI = {
 export const userAPI = {
   getMe: () => api.get('/users/me'),
   updateMe: (data: any) => api.put('/users/me', data),
+  updateSearchProfile: (data: {
+    serviceId?: string;
+    genreId?: string;
+    workFormatId?: string;
+    employmentTypeId?: string;
+    skillLevelId?: string;
+    availabilityId?: string;
+    pricePerHour?: number;
+    pricePerEvent?: number;
+  }) => api.put('/users/me/search-profile', data),
   uploadAvatar: (formData: FormData) =>
     api.post('/users/me/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
@@ -60,6 +70,28 @@ export const referenceAPI = {
     api.get('/references/artists', { params }),
   getEmployers: (params?: { search?: string }) =>
     api.get('/references/employers', { params }),
+  // Multi-level search endpoints
+  getServices: (params?: { professionId?: string; fieldOfActivityId?: string }) =>
+    api.get('/references/services', { params }),
+  getGenres: (params?: { serviceId?: string }) =>
+    api.get('/references/genres', { params }),
+  getWorkFormats: () => api.get('/references/work-formats'),
+  getEmploymentTypes: () => api.get('/references/employment-types'),
+  getSkillLevels: () => api.get('/references/skill-levels'),
+  getAvailabilities: () => api.get('/references/availabilities'),
+  getAllReferences: () => api.get('/references/all'),
+  searchMusicians: (params: {
+    fieldId?: string;
+    professionId?: string;
+    serviceId?: string;
+    genreId?: string;
+    workFormatId?: string;
+    employmentTypeId?: string;
+    skillLevelId?: string;
+    availabilityId?: string;
+    page?: number;
+    limit?: number;
+  }) => api.get('/references/search', { params }),
 };
 
 // Post API
@@ -92,3 +124,86 @@ export const messageAPI = {
     api.post('/messages', { receiverId, content }),
   getUnreadCount: () => api.get('/messages/unread/count'),
 };
+
+// Search Filters Type
+export interface SearchFilters {
+  fieldId?: string;
+  professionId?: string;
+  serviceId?: string;
+  genreId?: string;
+  workFormatId?: string;
+  employmentTypeId?: string;
+  skillLevelId?: string;
+  availabilityId?: string;
+  page?: number;
+  limit?: number;
+}
+
+// Search Result Types
+export interface SearchResult {
+  id: string;
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    nickname?: string;
+    avatar?: string;
+    city?: string;
+    fieldOfActivity?: {
+      id: string;
+      name: string;
+    };
+  };
+  searchProfile: {
+    service?: {
+      id: string;
+      name: string;
+    };
+    genre?: {
+      id: string;
+      name: string;
+    };
+    workFormat?: {
+      id: string;
+      name: string;
+    };
+    employmentType?: {
+      id: string;
+      name: string;
+    };
+    skillLevel?: {
+      id: string;
+      name: string;
+    };
+    availability?: {
+      id: string;
+      name: string;
+    };
+    pricePerHour?: number;
+    pricePerEvent?: number;
+  };
+}
+
+export interface SearchResponse {
+  results: SearchResult[];
+  pagination: {
+    page: number;
+    limit: number;
+    totalCount: number;
+    totalPages: number;
+  };
+  facets: {
+    fields: Array<{ id: string; name: string; count: number }>;
+    professions: Array<{
+      id: string;
+      name: string;
+      professionId: string;
+      professionName: string;
+      fieldOfActivityId: string;
+      fieldOfActivityName: string;
+      count: number;
+    }>;
+    services: Array<{ id: string; count: number }>;
+    genres: Array<{ id: string; count: number }>;
+  };
+}
