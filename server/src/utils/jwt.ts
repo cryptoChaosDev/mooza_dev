@@ -31,13 +31,13 @@ export function getJwtSecret(): string {
  * @param payload - Данные для включения в токен
  * @param expiresIn - Время жизни токена (по умолчанию 7 дней)
  */
-export function generateToken(payload: { userId: string }, expiresIn: string = '7d'): string {
+export function generateToken(payload: { userId: string }, expiresIn: number = 60 * 60 * 24 * 7): string {
   return jwt.sign(
     payload,
     getJwtSecret(),
     {
       expiresIn,
-      algorithm: 'HS256', // Явно указываем алгоритм
+      algorithm: 'HS256',
     }
   );
 }
