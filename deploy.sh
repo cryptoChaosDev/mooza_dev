@@ -56,15 +56,28 @@ fi
 
 echo -e "${GREEN}✓ API URL: ${API_URL}${NC}"
 
-# Генерация JWT_SECRET
-echo -e "${YELLOW}Генерация безопасного JWT_SECRET...${NC}"
-JWT_SECRET=$(openssl rand -hex 32)
+# Генерация или загрузка существующих secrets
+if [ -f .env ]; then
+    echo -e "${YELLOW}Загрузка существующих secrets...${NC}"
+    JWT_SECRET=$(grep JWT_SECRET .env | cut -d '=' -f2)
+    POSTGRES_PASSWORD=$(grep POSTGRES_PASSWORD .env | cut -d '=' -f2)
+    if [ -z "$JWT_SECRET" ]; then
+        JWT_SECRET=$(openssl rand -hex 32)
+    fi
+    if [ -z "$POSTGRES_PASSWORD" ]; then
+        POSTGRES_PASSWORD=$(openssl rand -hex 16)
+    fi
+else
+    echo -e "${YELLOW}Генерация новых secrets...${NC}"
+    JWT_SECRET=$(openssl rand -hex 32)
+    POSTGRES_PASSWORD=$(openssl rand -hex 16)
+fi
 
 # Создание .env файла
 echo -e "${YELLOW}Создание .env файла...${NC}"
 cat > .env << EOF
 JWT_SECRET=${JWT_SECRET}
-POSTGRES_PASSWORD=$(openssl rand -hex 16)
+POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 API_URL=${API_URL}
 EOF
 
