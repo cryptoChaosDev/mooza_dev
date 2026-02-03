@@ -37,6 +37,16 @@ const userSelect = {
   vkLink: true,
   youtubeLink: true,
   telegramLink: true,
+  userSearchProfiles: {
+    include: {
+      service: { select: { id: true, name: true } },
+      genre: { select: { id: true, name: true } },
+      workFormat: { select: { id: true, name: true } },
+      employmentType: { select: { id: true, name: true } },
+      skillLevel: { select: { id: true, name: true } },
+      availability: { select: { id: true, name: true } },
+    },
+  },
   createdAt: true,
 } as const;
 
@@ -157,10 +167,83 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
+// Update search profile
+router.put('/me/search-profile', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const {
+      serviceId,
+      genreId,
+      workFormatId,
+      employmentTypeId,
+      skillLevelId,
+      availabilityId,
+      pricePerHour,
+      pricePerEvent,
+    } = req.body;
+
+    // Find existing or create new search profile
+    const existingProfile = await prisma.userSearchProfile.findFirst({
+      where: { userId: req.userId },
+    });
+
+    let searchProfile;
+    if (existingProfile) {
+      searchProfile = await prisma.userSearchProfile.update({
+        where: { id: existingProfile.id },
+        data: {
+          serviceId: serviceId || null,
+          genreId: genreId || null,
+          workFormatId: workFormatId || null,
+          employmentTypeId: employmentTypeId || null,
+          skillLevelId: skillLevelId || null,
+          availabilityId: availabilityId || null,
+          pricePerHour: pricePerHour || null,
+          pricePerEvent: pricePerEvent || null,
+        },
+        include: {
+          service: { select: { id: true, name: true } },
+          genre: { select: { id: true, name: true } },
+          workFormat: { select: { id: true, name: true } },
+          employmentType: { select: { id: true, name: true } },
+          skillLevel: { select: { id: true, name: true } },
+          availability: { select: { id: true, name: true } },
+        },
+      });
+    } else {
+      searchProfile = await prisma.userSearchProfile.create({
+        data: {
+          userId: req.userId,
+          serviceId: serviceId || null,
+          genreId: genreId || null,
+          workFormatId: workFormatId || null,
+          employmentTypeId: employmentTypeId || null,
+          skillLevelId: skillLevelId || null,
+          availabilityId: availabilityId || null,
+          pricePerHour: pricePerHour || null,
+          pricePerEvent: pricePerEvent || null,
+        },
+        include: {
+          service: { select: { id: true, name: true } },
+          genre: { select: { id: true, name: true } },
+          workFormat: { select: { id: true, name: true } },
+          employmentType: { select: { id: true, name: true } },
+          skillLevel: { select: { id: true, name: true } },
+          availability: { select: { id: true, name: true } },
+        },
+      });
+    }
+
+    res.json(searchProfile);
+  } catch (error) {
+    console.error('Update search profile error:', error);
+    res.status(500).json({ error: 'Failed to update search profile' });
+  }
+});
+
 // Search users
 router.get('/search', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { query, role, city, genre } = req.query;
+    const { query, role, city, genre, fieldOfActivityId } = req.query;
 
     const where: any = {
       id: { not: req.userId },
@@ -185,6 +268,10 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
 
     if (genre) {
       where.genres = { has: genre as string };
+    }
+
+    if (fieldOfActivityId) {
+      where.fieldOfActivityId = fieldOfActivityId as string;
     }
 
     const users = await prisma.user.findMany({

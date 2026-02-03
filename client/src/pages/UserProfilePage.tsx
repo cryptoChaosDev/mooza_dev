@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, Briefcase, Music2, MessageCircle, Loader2,
-  Youtube, Send, Sparkles, Globe, Building2, Star, Music
+  Youtube, Send, Sparkles, Building2, Star, Music
 } from 'lucide-react';
 import { userAPI } from '../lib/api';
 

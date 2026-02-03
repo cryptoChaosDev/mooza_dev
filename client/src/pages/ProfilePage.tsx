@@ -4,7 +4,8 @@ import { userAPI, referenceAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
-  Globe, Phone, Mail, Building2, User, Search, Check
+  Globe, Building2, Search, Check,
+  Clock, DollarSign, Calendar, Headphones, Settings
 } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -41,6 +42,26 @@ export default function ProfilePage() {
   const [searchArtist, setSearchArtist] = useState('');
   const [searchEmployer, setSearchEmployer] = useState('');
 
+  // Search profile reference data
+  const [services, setServices] = useState<any[]>([]);
+  const [genres, setGenres] = useState<any[]>([]);
+  const [workFormats, setWorkFormats] = useState<any[]>([]);
+  const [employmentTypes, setEmploymentTypes] = useState<any[]>([]);
+  const [skillLevels, setSkillLevels] = useState<any[]>([]);
+  const [availabilities, setAvailabilities] = useState<any[]>([]);
+
+  // Search profile form state
+  const [searchProfile, setSearchProfile] = useState({
+    serviceId: '',
+    genreId: '',
+    workFormatId: '',
+    employmentTypeId: '',
+    skillLevelId: '',
+    availabilityId: '',
+    pricePerHour: '',
+    pricePerEvent: '',
+  });
+
   // Load references when editing
   useEffect(() => {
     if (isEditing) {
@@ -48,6 +69,11 @@ export default function ProfilePage() {
       referenceAPI.getProfessionFeatures().then(r => setProfessionFeatures(r.data));
       referenceAPI.getArtists({}).then(r => setArtists(r.data));
       referenceAPI.getEmployers({}).then(r => setEmployers(r.data));
+      // Load search profile references
+      referenceAPI.getWorkFormats().then(r => setWorkFormats(r.data));
+      referenceAPI.getEmploymentTypes().then(r => setEmploymentTypes(r.data));
+      referenceAPI.getSkillLevels().then(r => setSkillLevels(r.data));
+      referenceAPI.getAvailabilities().then(r => setAvailabilities(r.data));
     }
   }, [isEditing]);
 
@@ -55,6 +81,8 @@ export default function ProfilePage() {
     if (isEditing && formData.fieldOfActivityId) {
       referenceAPI.getProfessions({ fieldOfActivityId: formData.fieldOfActivityId })
         .then(r => setProfessions(r.data));
+      referenceAPI.getServices({ fieldOfActivityId: formData.fieldOfActivityId })
+        .then(r => setServices(r.data));
     }
   }, [isEditing, formData.fieldOfActivityId]);
 
@@ -95,6 +123,22 @@ export default function ProfilePage() {
         })) || [],
         artistIds: data.userArtists?.map((ua: any) => ua.artistId || ua.artist?.id) || [],
       });
+
+      // Load search profile
+      if (data.userSearchProfiles && data.userSearchProfiles.length > 0) {
+        const sp = data.userSearchProfiles[0];
+        setSearchProfile({
+          serviceId: sp.serviceId || '',
+          genreId: sp.genreId || '',
+          workFormatId: sp.workFormatId || '',
+          employmentTypeId: sp.employmentTypeId || '',
+          skillLevelId: sp.skillLevelId || '',
+          availabilityId: sp.availabilityId || '',
+          pricePerHour: sp.pricePerHour?.toString() || '',
+          pricePerEvent: sp.pricePerEvent?.toString() || '',
+        });
+      }
+
       return data;
     },
   });
@@ -121,6 +165,22 @@ export default function ProfilePage() {
     },
   });
 
+  // Update search profile mutation
+  const updateSearchProfileMutation = useMutation({
+    mutationFn: userAPI.updateSearchProfile,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    },
+  });
+
+  // Load genres when service is selected
+  useEffect(() => {
+    if (isEditing && searchProfile.serviceId) {
+      referenceAPI.getGenres({ serviceId: searchProfile.serviceId })
+        .then(r => setGenres(r.data));
+    }
+  }, [isEditing, searchProfile.serviceId]);
+
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -131,6 +191,17 @@ export default function ProfilePage() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     updateMutation.mutate(formData);
+    // Also save search profile
+    updateSearchProfileMutation.mutate({
+      serviceId: searchProfile.serviceId || undefined,
+      genreId: searchProfile.genreId || undefined,
+      workFormatId: searchProfile.workFormatId || undefined,
+      employmentTypeId: searchProfile.employmentTypeId || undefined,
+      skillLevelId: searchProfile.skillLevelId || undefined,
+      availabilityId: searchProfile.availabilityId || undefined,
+      pricePerHour: searchProfile.pricePerHour ? parseFloat(searchProfile.pricePerHour) : undefined,
+      pricePerEvent: searchProfile.pricePerEvent ? parseFloat(searchProfile.pricePerEvent) : undefined,
+    });
   };
 
   if (isLoading) {
@@ -554,6 +625,150 @@ export default function ProfilePage() {
               </div>
             )}
 
+            {/* Search Profile (edit mode) */}
+            {isEditing && (
+              <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl p-5 border border-slate-700/50">
+                <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Settings className="text-primary-400" size={20} />
+                  Параметры поиска
+                </h4>
+
+                <div className="space-y-4">
+                  {/* Service */}
+                  <div>
+                    <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                      <Headphones size={14} /> Услуга
+                    </label>
+                    <select
+                      value={searchProfile.serviceId}
+                      onChange={(e) => setSearchProfile({ ...searchProfile, serviceId: e.target.value, genreId: '' })}
+                      className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
+                    >
+                      <option value="">Выберите услугу</option>
+                      {services.map((s: any) => (
+                        <option key={s.id} value={s.id}>{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Genre */}
+                  {searchProfile.serviceId && (
+                    <div>
+                      <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                        <Music size={14} /> Жанр
+                      </label>
+                      <select
+                        value={searchProfile.genreId}
+                        onChange={(e) => setSearchProfile({ ...searchProfile, genreId: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
+                      >
+                        <option value="">Выберите жанр</option>
+                        {genres.map((g: any) => (
+                          <option key={g.id} value={g.id}>{g.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {/* Work Format & Employment Type */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                        <Globe size={14} /> Формат работы
+                      </label>
+                      <select
+                        value={searchProfile.workFormatId}
+                        onChange={(e) => setSearchProfile({ ...searchProfile, workFormatId: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
+                      >
+                        <option value="">Любой</option>
+                        {workFormats.map((wf: any) => (
+                          <option key={wf.id} value={wf.id}>{wf.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                        <Briefcase size={14} /> Тип занятости
+                      </label>
+                      <select
+                        value={searchProfile.employmentTypeId}
+                        onChange={(e) => setSearchProfile({ ...searchProfile, employmentTypeId: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
+                      >
+                        <option value="">Любой</option>
+                        {employmentTypes.map((et: any) => (
+                          <option key={et.id} value={et.id}>{et.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Skill Level & Availability */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                        <Star size={14} /> Уровень
+                      </label>
+                      <select
+                        value={searchProfile.skillLevelId}
+                        onChange={(e) => setSearchProfile({ ...searchProfile, skillLevelId: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
+                      >
+                        <option value="">Любой</option>
+                        {skillLevels.map((sl: any) => (
+                          <option key={sl.id} value={sl.id}>{sl.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                        <Calendar size={14} /> Доступность
+                      </label>
+                      <select
+                        value={searchProfile.availabilityId}
+                        onChange={(e) => setSearchProfile({ ...searchProfile, availabilityId: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
+                      >
+                        <option value="">Любая</option>
+                        {availabilities.map((a: any) => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Prices */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                        <DollarSign size={14} /> Цена/час
+                      </label>
+                      <input
+                        type="number"
+                        value={searchProfile.pricePerHour}
+                        onChange={(e) => setSearchProfile({ ...searchProfile, pricePerHour: e.target.value })}
+                        placeholder="0"
+                        className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                        <Clock size={14} /> Цена/выступление
+                      </label>
+                      <input
+                        type="number"
+                        value={searchProfile.pricePerEvent}
+                        onChange={(e) => setSearchProfile({ ...searchProfile, pricePerEvent: e.target.value })}
+                        placeholder="0"
+                        className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Role & Social Links */}
             {isEditing && (
               <>
@@ -661,6 +876,99 @@ export default function ProfilePage() {
               )}
             </div>
           </div>
+        )}
+
+        {/* Search Profile Section (display mode) */}
+        {!isEditing && profile?.userSearchProfiles && profile.userSearchProfiles.length > 0 && (
+          (() => {
+            const sp = profile.userSearchProfiles[0];
+            const hasContent = sp.service || sp.genre || sp.workFormat || sp.employmentType || sp.skillLevel || sp.availability || sp.pricePerHour || sp.pricePerEvent;
+            if (!hasContent) return null;
+            return (
+              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-xl">
+                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                  <Settings className="text-primary-400" size={20} />
+                  Параметры поиска
+                </h3>
+                <div className="space-y-3">
+                  {sp.service && (
+                    <div className="flex items-center gap-2">
+                      <Headphones size={16} className="text-slate-400" />
+                      <span className="text-slate-300">Услуга:</span>
+                      <span className="px-2 py-1 bg-primary-500/20 text-primary-300 rounded-lg text-sm font-medium border border-primary-500/30">
+                        {sp.service.name}
+                      </span>
+                    </div>
+                  )}
+                  {sp.genre && (
+                    <div className="flex items-center gap-2">
+                      <Music size={16} className="text-slate-400" />
+                      <span className="text-slate-300">Жанр:</span>
+                      <span className="px-2 py-1 bg-primary-500/20 text-primary-300 rounded-lg text-sm font-medium border border-primary-500/30">
+                        {sp.genre.name}
+                      </span>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    {sp.workFormat && (
+                      <div className="flex items-center gap-2">
+                        <Globe size={16} className="text-slate-400" />
+                        <span className="text-slate-300 text-sm">Формат:</span>
+                        <span className="px-2 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">
+                          {sp.workFormat.name}
+                        </span>
+                      </div>
+                    )}
+                    {sp.employmentType && (
+                      <div className="flex items-center gap-2">
+                        <Briefcase size={16} className="text-slate-400" />
+                        <span className="text-slate-300 text-sm">Занятость:</span>
+                        <span className="px-2 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">
+                          {sp.employmentType.name}
+                        </span>
+                      </div>
+                    )}
+                    {sp.skillLevel && (
+                      <div className="flex items-center gap-2">
+                        <Star size={16} className="text-slate-400" />
+                        <span className="text-slate-300 text-sm">Уровень:</span>
+                        <span className="px-2 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">
+                          {sp.skillLevel.name}
+                        </span>
+                      </div>
+                    )}
+                    {sp.availability && (
+                      <div className="flex items-center gap-2">
+                        <Calendar size={16} className="text-slate-400" />
+                        <span className="text-slate-300 text-sm">Доступность:</span>
+                        <span className="px-2 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">
+                          {sp.availability.name}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {(sp.pricePerHour || sp.pricePerEvent) && (
+                    <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-700/50">
+                      {sp.pricePerHour && (
+                        <div className="flex items-center gap-2">
+                          <DollarSign size={16} className="text-green-400" />
+                          <span className="text-slate-300 text-sm">Цена/час:</span>
+                          <span className="text-green-300 font-medium">{sp.pricePerHour} ₽</span>
+                        </div>
+                      )}
+                      {sp.pricePerEvent && (
+                        <div className="flex items-center gap-2">
+                          <Clock size={16} className="text-green-400" />
+                          <span className="text-slate-300 text-sm">Цена/выступление:</span>
+                          <span className="text-green-300 font-medium">{sp.pricePerEvent} ₽</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })()
         )}
 
         {/* Logout */}
