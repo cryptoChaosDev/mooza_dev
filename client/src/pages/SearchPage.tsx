@@ -4,7 +4,8 @@ import {
   Search, UserPlus, X, MessageCircle, Check, Users,
   SlidersHorizontal, ArrowUpDown, ChevronDown, Loader2,
 } from 'lucide-react';
-import { friendshipAPI } from '../lib/api';
+import { friendshipAPI, userAPI } from '../lib/api';
+import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import {
@@ -299,26 +300,48 @@ export default function SearchPage() {
   const { data: skillLevels, isLoading: skillLevelsLoading } = useSkillLevels();
   const { data: availabilities, isLoading: availabilitiesLoading } = useAvailabilities();
 
-  // Filters object for query
+  // Whether any profile-based filter is active
+  const hasProfileFilters = !!(fieldId || professionId || serviceId || genreId || workFormatId || employmentTypeId || skillLevelId || availabilityId);
+
+  // ── Default: all users (or name search) — no profile filters needed ──
+  const { data: defaultUsers, isLoading: defaultLoading } = useQuery({
+    queryKey: ['users', debouncedName],
+    queryFn: async () => {
+      const { data } = await userAPI.search(
+        debouncedName.trim() ? { query: debouncedName.trim() } : {}
+      );
+      return (data as any[]).filter((u: any) => u.id !== currentUser?.id);
+    },
+    enabled: !hasProfileFilters,
+  });
+
+  // ── Profile-filter search — only when filter chips are active ──
   const filters = useMemo(() => ({
     ...getFilters(),
     ...(debouncedName.trim() ? { query: debouncedName.trim() } : {}),
   }), [fieldId, professionId, serviceId, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, debouncedName, page]);
 
-  const { data: searchData, isLoading, isFetching } = useSearchResults(filters);
+  const { data: searchData, isLoading: searchLoading, isFetching: searchFetching } = useSearchResults(filters);
+
+  // Pick the right source depending on mode
+  const isLoading = hasProfileFilters ? searchLoading : defaultLoading;
+  const isFetching = hasProfileFilters ? searchFetching : false;
 
   // Sort results client-side
   const results = useMemo(() => {
-    const list: any[] = (searchData?.results || [])
-      .map((r: any) => r.user ?? r)
-      .filter((u: any) => u.id !== currentUser?.id);
+    let list: any[];
+    if (hasProfileFilters) {
+      list = (searchData?.results || []).map((r: any) => r.user ?? r).filter((u: any) => u.id !== currentUser?.id);
+    } else {
+      list = defaultUsers || [];
+    }
     if (sortBy === 'name_asc') return [...list].sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`));
     if (sortBy === 'name_desc') return [...list].sort((a, b) => `${b.firstName} ${b.lastName}`.localeCompare(`${a.firstName} ${a.lastName}`));
     return list;
-  }, [searchData, sortBy, currentUser?.id]);
+  }, [searchData, defaultUsers, hasProfileFilters, sortBy, currentUser?.id]);
 
-  const totalCount = searchData?.pagination?.totalCount ?? 0;
-  const totalPages = searchData?.pagination?.totalPages ?? 1;
+  const totalCount = hasProfileFilters ? (searchData?.pagination?.totalCount ?? 0) : (defaultUsers?.length ?? 0);
+  const totalPages = hasProfileFilters ? (searchData?.pagination?.totalPages ?? 1) : 1;
   const anyLoading = isLoading || isFetching;
 
   // Helper: label for a filter chip
@@ -601,12 +624,10 @@ export default function SearchPage() {
                     <Search size={56} className="text-slate-500" />
                   </div>
                   <h3 className="text-2xl font-bold text-white mb-3">
-                    {activeCount > 0 || nameQuery ? 'Ничего не найдено' : 'Начните поиск'}
+                    Ничего не найдено
                   </h3>
                   <p className="text-slate-400 text-base">
-                    {activeCount > 0 || nameQuery
-                      ? 'Попробуйте изменить фильтры или поисковый запрос'
-                      : 'Используйте фильтры или введите имя'}
+                    Попробуйте изменить фильтры или поисковый запрос
                   </p>
                   {(activeCount > 0 || nameQuery) && (
                     <button
