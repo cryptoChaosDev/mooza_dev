@@ -7,6 +7,8 @@ import {
   Globe, Building2, Search, Check,
   Clock, DollarSign, Calendar, Headphones, Settings
 } from 'lucide-react';
+import SelectField from '../components/SelectField';
+import SelectSheet from '../components/SelectSheet';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -61,6 +63,20 @@ export default function ProfilePage() {
     pricePerHour: '',
     pricePerEvent: '',
   });
+
+  // Search profile sheet open states
+  const [searchSheets, setSearchSheets] = useState({
+    service: false,
+    genre: false,
+    workFormat: false,
+    employmentType: false,
+    skillLevel: false,
+    availability: false,
+  });
+  const openSearchSheet = (key: keyof typeof searchSheets) =>
+    setSearchSheets((s) => ({ ...s, [key]: true }));
+  const closeSearchSheet = (key: keyof typeof searchSheets) =>
+    setSearchSheets((s) => ({ ...s, [key]: false }));
 
   // Load references when editing
   useEffect(() => {
@@ -628,121 +644,76 @@ export default function ProfilePage() {
             {/* Search Profile (edit mode) */}
             {isEditing && (
               <div className="bg-gradient-to-br from-slate-800/50 to-slate-900/50 rounded-xl p-5 border border-slate-700/50">
-                <h4 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+                <h4 className="text-lg font-bold text-white mb-1 flex items-center gap-2">
                   <Settings className="text-primary-400" size={20} />
                   Параметры поиска
                 </h4>
+                <p className="text-slate-400 text-sm mb-4">
+                  Заполни, чтобы другие пользователи могли найти тебя по фильтрам
+                </p>
 
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {/* Service */}
-                  <div>
-                    <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
-                      <Headphones size={14} /> Услуга
-                    </label>
-                    <select
-                      value={searchProfile.serviceId}
-                      onChange={(e) => setSearchProfile({ ...searchProfile, serviceId: e.target.value, genreId: '' })}
-                      className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
-                    >
-                      <option value="">Выберите услугу</option>
-                      {services.map((s: any) => (
-                        <option key={s.id} value={s.id}>{s.name}</option>
-                      ))}
-                    </select>
-                  </div>
+                  <SelectField
+                    label="Услуга"
+                    value={services.find((s: any) => s.id === searchProfile.serviceId)?.name || ''}
+                    placeholder="Выберите услугу"
+                    icon={<Headphones size={14} />}
+                    onClick={() => openSearchSheet('service')}
+                  />
 
-                  {/* Genre */}
+                  {/* Genre — only when service is selected */}
                   {searchProfile.serviceId && (
-                    <div>
-                      <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
-                        <Music size={14} /> Жанр
-                      </label>
-                      <select
-                        value={searchProfile.genreId}
-                        onChange={(e) => setSearchProfile({ ...searchProfile, genreId: e.target.value })}
-                        className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
-                      >
-                        <option value="">Выберите жанр</option>
-                        {genres.map((g: any) => (
-                          <option key={g.id} value={g.id}>{g.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                    <SelectField
+                      label="Жанр"
+                      value={genres.find((g: any) => g.id === searchProfile.genreId)?.name || ''}
+                      placeholder="Выберите жанр"
+                      icon={<Music size={14} />}
+                      onClick={() => openSearchSheet('genre')}
+                    />
                   )}
 
-                  {/* Work Format & Employment Type */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
-                        <Globe size={14} /> Формат работы
-                      </label>
-                      <select
-                        value={searchProfile.workFormatId}
-                        onChange={(e) => setSearchProfile({ ...searchProfile, workFormatId: e.target.value })}
-                        className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
-                      >
-                        <option value="">Любой</option>
-                        {workFormats.map((wf: any) => (
-                          <option key={wf.id} value={wf.id}>{wf.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
-                        <Briefcase size={14} /> Тип занятости
-                      </label>
-                      <select
-                        value={searchProfile.employmentTypeId}
-                        onChange={(e) => setSearchProfile({ ...searchProfile, employmentTypeId: e.target.value })}
-                        className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
-                      >
-                        <option value="">Любой</option>
-                        {employmentTypes.map((et: any) => (
-                          <option key={et.id} value={et.id}>{et.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+                  {/* Work Format */}
+                  <SelectField
+                    label="Формат работы"
+                    value={workFormats.find((w: any) => w.id === searchProfile.workFormatId)?.name || ''}
+                    placeholder="Не указан"
+                    icon={<Globe size={14} />}
+                    onClick={() => openSearchSheet('workFormat')}
+                  />
 
-                  {/* Skill Level & Availability */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
-                        <Star size={14} /> Уровень
-                      </label>
-                      <select
-                        value={searchProfile.skillLevelId}
-                        onChange={(e) => setSearchProfile({ ...searchProfile, skillLevelId: e.target.value })}
-                        className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
-                      >
-                        <option value="">Любой</option>
-                        {skillLevels.map((sl: any) => (
-                          <option key={sl.id} value={sl.id}>{sl.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
-                        <Calendar size={14} /> Доступность
-                      </label>
-                      <select
-                        value={searchProfile.availabilityId}
-                        onChange={(e) => setSearchProfile({ ...searchProfile, availabilityId: e.target.value })}
-                        className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white text-sm"
-                      >
-                        <option value="">Любая</option>
-                        {availabilities.map((a: any) => (
-                          <option key={a.id} value={a.id}>{a.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
+                  {/* Employment Type */}
+                  <SelectField
+                    label="Тип занятости"
+                    value={employmentTypes.find((e: any) => e.id === searchProfile.employmentTypeId)?.name || ''}
+                    placeholder="Не указан"
+                    icon={<Briefcase size={14} />}
+                    onClick={() => openSearchSheet('employmentType')}
+                  />
+
+                  {/* Skill Level */}
+                  <SelectField
+                    label="Уровень навыка"
+                    value={skillLevels.find((s: any) => s.id === searchProfile.skillLevelId)?.name || ''}
+                    placeholder="Не указан"
+                    icon={<Star size={14} />}
+                    onClick={() => openSearchSheet('skillLevel')}
+                  />
+
+                  {/* Availability */}
+                  <SelectField
+                    label="Доступность"
+                    value={availabilities.find((a: any) => a.id === searchProfile.availabilityId)?.name || ''}
+                    placeholder="Не указана"
+                    icon={<Calendar size={14} />}
+                    onClick={() => openSearchSheet('availability')}
+                  />
 
                   {/* Prices */}
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className="grid grid-cols-2 gap-3 pt-1">
                     <div>
                       <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
-                        <DollarSign size={14} /> Цена/час
+                        <DollarSign size={14} /> Цена/час, ₽
                       </label>
                       <input
                         type="number"
@@ -754,7 +725,7 @@ export default function ProfilePage() {
                     </div>
                     <div>
                       <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
-                        <Clock size={14} /> Цена/выступление
+                        <Clock size={14} /> Цена/выступление, ₽
                       </label>
                       <input
                         type="number"
@@ -766,6 +737,98 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 </div>
+
+                {/* Select Sheets */}
+                <SelectSheet
+                  isOpen={searchSheets.service}
+                  onClose={() => closeSearchSheet('service')}
+                  title="Выберите услугу"
+                  options={services.map((s: any) => ({ id: s.id, name: s.name }))}
+                  selectedIds={searchProfile.serviceId}
+                  onSelect={(id) => {
+                    setSearchProfile({ ...searchProfile, serviceId: id as string, genreId: '' });
+                    closeSearchSheet('service');
+                  }}
+                  mode="single"
+                  searchable
+                  searchPlaceholder="Поиск услуги..."
+                  height="half"
+                />
+
+                <SelectSheet
+                  isOpen={searchSheets.genre}
+                  onClose={() => closeSearchSheet('genre')}
+                  title="Выберите жанр"
+                  options={genres.map((g: any) => ({ id: g.id, name: g.name }))}
+                  selectedIds={searchProfile.genreId}
+                  onSelect={(id) => {
+                    setSearchProfile({ ...searchProfile, genreId: id as string });
+                    closeSearchSheet('genre');
+                  }}
+                  mode="single"
+                  searchable
+                  height="half"
+                />
+
+                <SelectSheet
+                  isOpen={searchSheets.workFormat}
+                  onClose={() => closeSearchSheet('workFormat')}
+                  title="Формат работы"
+                  options={workFormats.map((w: any) => ({ id: w.id, name: w.name }))}
+                  selectedIds={searchProfile.workFormatId}
+                  onSelect={(id) => {
+                    setSearchProfile({ ...searchProfile, workFormatId: id as string });
+                    closeSearchSheet('workFormat');
+                  }}
+                  mode="single"
+                  searchable={false}
+                  height="auto"
+                />
+
+                <SelectSheet
+                  isOpen={searchSheets.employmentType}
+                  onClose={() => closeSearchSheet('employmentType')}
+                  title="Тип занятости"
+                  options={employmentTypes.map((e: any) => ({ id: e.id, name: e.name }))}
+                  selectedIds={searchProfile.employmentTypeId}
+                  onSelect={(id) => {
+                    setSearchProfile({ ...searchProfile, employmentTypeId: id as string });
+                    closeSearchSheet('employmentType');
+                  }}
+                  mode="single"
+                  searchable={false}
+                  height="auto"
+                />
+
+                <SelectSheet
+                  isOpen={searchSheets.skillLevel}
+                  onClose={() => closeSearchSheet('skillLevel')}
+                  title="Уровень навыка"
+                  options={skillLevels.map((s: any) => ({ id: s.id, name: s.name }))}
+                  selectedIds={searchProfile.skillLevelId}
+                  onSelect={(id) => {
+                    setSearchProfile({ ...searchProfile, skillLevelId: id as string });
+                    closeSearchSheet('skillLevel');
+                  }}
+                  mode="single"
+                  searchable={false}
+                  height="auto"
+                />
+
+                <SelectSheet
+                  isOpen={searchSheets.availability}
+                  onClose={() => closeSearchSheet('availability')}
+                  title="Доступность"
+                  options={availabilities.map((a: any) => ({ id: a.id, name: a.name }))}
+                  selectedIds={searchProfile.availabilityId}
+                  onSelect={(id) => {
+                    setSearchProfile({ ...searchProfile, availabilityId: id as string });
+                    closeSearchSheet('availability');
+                  }}
+                  mode="single"
+                  searchable={false}
+                  height="auto"
+                />
               </div>
             )}
 
