@@ -89,6 +89,7 @@ export const referenceAPI = {
     employmentTypeId?: string;
     skillLevelId?: string;
     availabilityId?: string;
+    query?: string;
     page?: number;
     limit?: number;
   }) => api.get('/references/search', { params }),
@@ -135,6 +136,7 @@ export interface SearchFilters {
   employmentTypeId?: string;
   skillLevelId?: string;
   availabilityId?: string;
+  query?: string;
   page?: number;
   limit?: number;
 }

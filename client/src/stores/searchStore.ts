@@ -330,6 +330,7 @@ export function useSearchResults(filters: SearchFilters) {
       const { data } = await referenceAPI.searchMusicians(filters);
       return data as SearchResponse;
     },
-    enabled: Object.values(filters).some((v) => v !== undefined),
+    // Always enabled — show results even when no filters are selected
+    enabled: true,
   });
 }
