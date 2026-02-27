@@ -256,6 +256,7 @@ router.get('/search', async (req, res) => {
       employmentTypeId,
       skillLevelId,
       availabilityId,
+      query,
       page = '1',
       limit = '20',
     } = req.query;
@@ -274,6 +275,28 @@ router.get('/search', async (req, res) => {
     if (skillLevelId) where.skillLevelId = skillLevelId;
     if (availabilityId) where.availabilityId = availabilityId;
 
+    // Filter by field via user.fieldOfActivityId
+    if (fieldId) {
+      where.user = { ...(where.user || {}), fieldOfActivityId: fieldId };
+    }
+
+    // Filter by profession via service.professionId
+    if (professionId) {
+      where.service = { ...(where.service || {}), professionId };
+    }
+
+    // Filter by name/nickname
+    if (query) {
+      where.user = {
+        ...(where.user || {}),
+        OR: [
+          { firstName: { contains: query as string, mode: 'insensitive' } },
+          { lastName: { contains: query as string, mode: 'insensitive' } },
+          { nickname: { contains: query as string, mode: 'insensitive' } },
+        ],
+      };
+    }
+
     // Get user search profiles with filters
     const [userProfiles, totalCount] = await Promise.all([
       prisma.userSearchProfile.findMany({
@@ -288,6 +311,12 @@ router.get('/search', async (req, res) => {
               avatar: true,
               city: true,
               fieldOfActivity: { select: { id: true, name: true } },
+              userProfessions: {
+                select: {
+                  id: true,
+                  profession: { select: { id: true, name: true } },
+                },
+              },
             },
           },
           service: { select: { id: true, name: true } },
