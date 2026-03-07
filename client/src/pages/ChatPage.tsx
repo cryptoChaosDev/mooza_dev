@@ -117,13 +117,13 @@ export default function ChatPage() {
     return (
       <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
         <div className="text-center">
-          <div className="inline-flex p-6 bg-slate-700/30 rounded-3xl mb-6">
-            <MoreVertical size={64} className="text-slate-500" />
+          <div className="inline-flex p-4 bg-slate-700/30 rounded-2xl mb-4">
+            <MoreVertical size={36} className="text-slate-500" />
           </div>
-          <p className="text-slate-400 text-lg">Пользователь не найден</p>
+          <p className="text-slate-400 text-sm">Пользователь не найден</p>
           <button
             onClick={() => navigate('/messages')}
-            className="mt-4 bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-xl transition-all"
+            className="mt-3 bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg text-sm transition-all"
           >
             Вернуться к сообщениям
           </button>
@@ -151,18 +151,18 @@ export default function ChatPage() {
                 <img
                   src={`${import.meta.env.VITE_API_URL}${user.avatar}`}
                   alt={`${user.firstName} ${user.lastName}`}
-                  className="w-12 h-12 rounded-2xl object-cover ring-2 ring-slate-700/50 hover:ring-primary-500/40 transition-all duration-300"
+                  className="w-9 h-9 rounded-xl object-cover ring-2 ring-slate-700/50 hover:ring-primary-500/40 transition-all duration-300"
                 />
               ) : (
-                <div className="w-12 h-12 bg-gradient-to-br from-primary-500 via-primary-600 to-purple-600 rounded-2xl flex items-center justify-center ring-2 ring-slate-700/50">
-                  <span className="text-white font-bold text-lg">
+                <div className="w-9 h-9 bg-gradient-to-br from-primary-500 via-primary-600 to-purple-600 rounded-xl flex items-center justify-center ring-2 ring-slate-700/50">
+                  <span className="text-white font-bold text-sm">
                     {user.firstName[0]}{user.lastName[0]}
                   </span>
                 </div>
               )}
 
               <div className="flex-1 min-w-0">
-                <h2 className="font-bold text-white text-lg truncate">
+                <h2 className="font-semibold text-white text-sm truncate">
                   {user.firstName} {user.lastName}
                 </h2>
                 <div className="flex items-center gap-2">
@@ -181,20 +181,20 @@ export default function ChatPage() {
 
       {/* Messages Container */}
       <div className="flex-1 overflow-y-auto">
-        <div className="max-w-4xl mx-auto px-4 py-6 space-y-8">
+        <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
           {Object.entries(groupedMessages).length === 0 ? (
-            <div className="text-center py-16">
-              <div className="inline-flex p-6 bg-slate-700/30 rounded-3xl mb-6">
-                <Send size={64} className="text-slate-500" />
+            <div className="text-center py-10">
+              <div className="inline-flex p-4 bg-slate-700/30 rounded-2xl mb-4">
+                <Send size={32} className="text-slate-500" />
               </div>
-              <p className="text-slate-400 text-lg">Нет сообщений</p>
-              <p className="text-slate-500 text-sm mt-2">Отправьте первое сообщение</p>
+              <p className="text-slate-400 text-sm">Нет сообщений</p>
+              <p className="text-slate-500 text-xs mt-1">Отправьте первое сообщение</p>
             </div>
           ) : (
             Object.entries(groupedMessages).map(([dateKey, dateMessages]) => (
               <div key={dateKey}>
                 <div className="text-center mb-6">
-                  <span className="inline-block px-4 py-2 bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 text-slate-300 text-sm rounded-xl font-medium shadow-lg">
+                  <span className="inline-block px-3 py-1 bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 text-slate-400 text-xs rounded-lg font-medium shadow-md">
                     {formatDate(dateMessages[0].createdAt)}
                   </span>
                 </div>
@@ -243,15 +243,15 @@ export default function ChatPage() {
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 placeholder="Введите сообщение..."
-                className="flex-1 bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 text-white rounded-2xl px-5 py-3 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500/50 transition-all placeholder-slate-400"
+                className="flex-1 bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 text-sm text-white rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500/50 transition-all placeholder-slate-400"
               />
               <button
                 type="submit"
                 disabled={!newMessage.trim()}
-                className="group relative p-3 bg-gradient-to-br from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 disabled:from-slate-700 disabled:to-slate-800 text-white rounded-2xl transition-all duration-300 disabled:cursor-not-allowed shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:scale-105 disabled:shadow-none disabled:scale-100"
+                className="group relative p-2.5 bg-gradient-to-br from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 disabled:from-slate-700 disabled:to-slate-800 text-white rounded-xl transition-all duration-300 disabled:cursor-not-allowed shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:scale-105 disabled:shadow-none disabled:scale-100"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-primary-400/0 via-white/20 to-primary-400/0 opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
-                <Send size={20} className="relative z-10" />
+                <Send size={18} className="relative z-10" />
               </button>
             </div>
           </form>

@@ -239,23 +239,23 @@ export default function ProfilePage() {
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
       <div className="max-w-2xl mx-auto px-4 py-6 space-y-6 pb-24">
         {/* Avatar Section */}
-        <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-8 border border-slate-700/50 shadow-xl">
+        <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-5 border border-slate-700/50 shadow-lg">
           <div className="flex flex-col items-center">
             <div className="relative group">
-              <div className="w-36 h-36 rounded-2xl overflow-hidden bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center ring-4 ring-slate-900/50 shadow-2xl">
+              <div className="w-24 h-24 rounded-xl overflow-hidden bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center ring-2 ring-slate-900/50 shadow-xl">
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                 ) : (
-                  <span className="text-5xl font-bold text-slate-400">
+                  <span className="text-3xl font-bold text-slate-400">
                     {profile?.firstName?.[0]}{profile?.lastName?.[0]}
                   </span>
                 )}
               </div>
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="absolute bottom-2 right-2 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white p-3 rounded-xl shadow-xl shadow-primary-500/30 transition-all transform group-hover:scale-110"
+                className="absolute bottom-1.5 right-1.5 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white p-2 rounded-lg shadow-lg shadow-primary-500/30 transition-all transform group-hover:scale-110"
               >
-                <Camera size={20} />
+                <Camera size={16} />
               </button>
               <input
                 ref={fileInputRef}
@@ -265,7 +265,7 @@ export default function ProfilePage() {
                 className="hidden"
               />
             </div>
-            <h2 className="mt-6 text-3xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
+            <h2 className="mt-4 text-xl font-bold bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
               {profile?.firstName} {profile?.lastName}
             </h2>
             {profile?.nickname && (
@@ -313,13 +313,13 @@ export default function ProfilePage() {
         </div>
 
         {/* Profile Info */}
-        <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-8 border border-slate-700/50 shadow-xl">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-2xl font-bold text-white">Информация</h3>
+        <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-5 border border-slate-700/50 shadow-lg">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-bold text-white">Информация</h3>
             {!isEditing ? (
               <button
                 onClick={() => setIsEditing(true)}
-                className="px-4 py-2 bg-gradient-to-r from-primary-500/20 to-primary-600/20 text-primary-300 rounded-xl text-sm font-medium border border-primary-500/30 hover:border-primary-500/50 transition-all hover:scale-105"
+                className="px-3.5 py-1.5 bg-gradient-to-r from-primary-500/20 to-primary-600/20 text-primary-300 rounded-lg text-sm font-medium border border-primary-500/30 hover:border-primary-500/50 transition-all hover:scale-105"
               >
                 Редактировать
               </button>
@@ -327,69 +327,69 @@ export default function ProfilePage() {
               <div className="flex gap-2">
                 <button
                   onClick={() => setIsEditing(false)}
-                  className="p-3 hover:bg-slate-700/50 rounded-xl transition-all hover:scale-110"
+                  className="p-2 hover:bg-slate-700/50 rounded-lg transition-all hover:scale-110"
                   title="Отменить"
                 >
-                  <X size={20} />
+                  <X size={18} />
                 </button>
                 <button
                   onClick={handleSubmit}
-                  className="p-3 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 rounded-xl transition-all hover:scale-110 shadow-lg shadow-primary-500/30"
+                  className="p-2 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 rounded-lg transition-all hover:scale-110 shadow-lg shadow-primary-500/30"
                   title="Сохранить"
                 >
-                  <Save size={20} />
+                  <Save size={18} />
                 </button>
               </div>
             )}
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {/* Name */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold mb-2 text-slate-300">Имя</label>
+                <label className="block text-xs font-semibold mb-1 text-slate-400">Имя</label>
                 <input
                   type="text"
                   value={formData.firstName}
                   onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                   disabled={!isEditing}
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
+                  className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-2 text-slate-300">Фамилия</label>
+                <label className="block text-xs font-semibold mb-1 text-slate-400">Фамилия</label>
                 <input
                   type="text"
                   value={formData.lastName}
                   onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                   disabled={!isEditing}
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
+                  className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
                 />
               </div>
             </div>
 
             {/* Nickname */}
             <div>
-              <label className="block text-sm font-semibold mb-2 text-slate-300">Никнейм</label>
+              <label className="block text-xs font-semibold mb-1 text-slate-400">Никнейм</label>
               <input
                 type="text"
                 value={formData.nickname}
                 onChange={(e) => setFormData({ ...formData, nickname: e.target.value })}
                 disabled={!isEditing}
                 placeholder="nickname"
-                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
+                className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
               />
             </div>
 
             {/* Bio */}
             <div>
-              <label className="block text-sm font-semibold mb-2 text-slate-300">О себе</label>
+              <label className="block text-xs font-semibold mb-1 text-slate-400">О себе</label>
               <textarea
                 value={formData.bio}
                 onChange={(e) => setFormData({ ...formData, bio: e.target.value })}
                 disabled={!isEditing}
                 rows={3}
-                className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed resize-none transition text-white"
+                className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed resize-none transition text-white"
                 placeholder="Расскажите о себе..."
               />
             </div>
@@ -397,7 +397,7 @@ export default function ProfilePage() {
             {/* Location */}
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                <label className="block text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1">
                   <Globe size={14} /> Страна
                 </label>
                 <input
@@ -406,11 +406,11 @@ export default function ProfilePage() {
                   onChange={(e) => setFormData({ ...formData, country: e.target.value })}
                   disabled={!isEditing}
                   placeholder="Россия"
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
+                  className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                <label className="block text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1">
                   <MapPin size={14} /> Город
                 </label>
                 <input
@@ -419,7 +419,7 @@ export default function ProfilePage() {
                   onChange={(e) => setFormData({ ...formData, city: e.target.value })}
                   disabled={!isEditing}
                   placeholder="Москва"
-                  className="w-full px-4 py-3 bg-slate-700/50 border border-slate-600/50 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
+                  className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:opacity-60 disabled:cursor-not-allowed transition text-white"
                 />
               </div>
             </div>
@@ -427,7 +427,7 @@ export default function ProfilePage() {
             {/* Field of Activity (edit mode) */}
             {isEditing && (
               <div>
-                <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                <label className="block text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1">
                   <Briefcase size={14} /> Сфера деятельности
                 </label>
                 <div className="space-y-1">
@@ -460,7 +460,7 @@ export default function ProfilePage() {
             {/* Professions (edit mode) */}
             {isEditing && formData.fieldOfActivityId && (
               <div>
-                <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                <label className="block text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1">
                   <Star size={14} /> Профессии
                 </label>
                 <div className="space-y-1 max-h-48 overflow-y-auto">
@@ -550,7 +550,7 @@ export default function ProfilePage() {
             {/* Artists (edit mode) */}
             {isEditing && (
               <div>
-                <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                <label className="block text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1">
                   <Music size={14} /> Мой артист / Группа
                 </label>
                 <div className="relative mb-2">
@@ -597,7 +597,7 @@ export default function ProfilePage() {
             {/* Employer (edit mode) */}
             {isEditing && (
               <div>
-                <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                <label className="block text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1">
                   <Building2 size={14} /> Работодатель
                 </label>
                 <div className="relative mb-2">
@@ -712,7 +712,7 @@ export default function ProfilePage() {
                   {/* Prices */}
                   <div className="grid grid-cols-2 gap-3 pt-1">
                     <div>
-                      <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                      <label className="block text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1">
                         <DollarSign size={14} /> Цена/час, ₽
                       </label>
                       <input
@@ -724,7 +724,7 @@ export default function ProfilePage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-semibold mb-2 text-slate-300 flex items-center gap-1">
+                      <label className="block text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1">
                         <Clock size={14} /> Цена/выступление, ₽
                       </label>
                       <input
@@ -836,7 +836,7 @@ export default function ProfilePage() {
             {isEditing && (
               <>
                 <div>
-                  <label className="block text-sm font-semibold mb-2 text-slate-300">Роль</label>
+                  <label className="block text-xs font-semibold mb-1 text-slate-400">Роль</label>
                   <select
                     value={formData.role}
                     onChange={(e) => setFormData({ ...formData, role: e.target.value })}
@@ -884,8 +884,8 @@ export default function ProfilePage() {
 
         {/* Professions Section (display mode) */}
         {!isEditing && profile?.userProfessions && profile.userProfessions.length > 0 && (
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-xl">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50 shadow-lg">
+            <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
               <Star className="text-primary-400" size={20} />
               Профессии
             </h3>
@@ -908,8 +908,8 @@ export default function ProfilePage() {
 
         {/* Artists Section (display mode) */}
         {!isEditing && profile?.userArtists && profile.userArtists.length > 0 && (
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-xl">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50 shadow-lg">
+            <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
               <Music className="text-purple-400" size={20} />
               Артисты / Группы
             </h3>
@@ -925,8 +925,8 @@ export default function ProfilePage() {
 
         {/* Employer Section (display mode) */}
         {!isEditing && profile?.employer && (
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-xl">
-            <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50 shadow-lg">
+            <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
               <Building2 className="text-green-400" size={20} />
               Работодатель
             </h3>
@@ -948,8 +948,8 @@ export default function ProfilePage() {
             const hasContent = sp.service || sp.genre || sp.workFormat || sp.employmentType || sp.skillLevel || sp.availability || sp.pricePerHour || sp.pricePerEvent;
             if (!hasContent) return null;
             return (
-              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-6 border border-slate-700/50 shadow-xl">
-                <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+              <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50 shadow-lg">
+                <h3 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
                   <Settings className="text-primary-400" size={20} />
                   Параметры поиска
                 </h3>
@@ -1037,9 +1037,9 @@ export default function ProfilePage() {
         {/* Logout */}
         <button
           onClick={() => logout()}
-          className="w-full bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm hover:from-red-500/10 hover:to-red-600/10 text-red-400 hover:text-red-300 border border-slate-700/50 hover:border-red-500/50 font-semibold py-4 px-4 rounded-2xl transition-all hover:scale-105 flex items-center justify-center gap-3 shadow-xl"
+          className="w-full bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm hover:from-red-500/10 hover:to-red-600/10 text-red-400 hover:text-red-300 border border-slate-700/50 hover:border-red-500/50 font-medium py-3 px-4 rounded-xl transition-all hover:scale-105 flex items-center justify-center gap-2 shadow-lg text-sm"
         >
-          <LogOut size={22} />
+          <LogOut size={18} />
           Выйти из аккаунта
         </button>
       </div>
