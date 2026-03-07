@@ -194,11 +194,17 @@ export default function UserProfilePage() {
                   </p>
                   <div className="space-y-2">
                     {user.userProfessions.map((up: any) => (
-                      <div key={up.id} className="flex flex-wrap items-center gap-1.5">
-                        <span className="px-2.5 py-1 bg-primary-500/15 text-primary-300 rounded-lg text-xs font-semibold border border-primary-500/30">{up.profession?.name}</span>
-                        {up.features?.map((f: string) => (
-                          <span key={f} className="px-2 py-0.5 bg-slate-700/50 text-slate-400 rounded text-xs border border-slate-600/30">{f}</span>
-                        ))}
+                      <div key={up.id} className="bg-slate-700/20 rounded-xl border border-slate-600/30 p-3">
+                        <p className="text-sm font-semibold text-white mb-2">{up.profession?.name}</p>
+                        {up.features?.length > 0 ? (
+                          <div className="flex flex-wrap gap-1.5">
+                            {up.features.map((f: string) => (
+                              <span key={f} className="px-2.5 py-1 bg-primary-500/10 text-primary-300 rounded-lg text-xs border border-primary-500/20">{f}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-slate-500 text-xs">Без специализации</p>
+                        )}
                       </div>
                     ))}
                   </div>
