@@ -5,7 +5,7 @@ import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, Building2, Search, Check, Clock, DollarSign, Calendar,
-  Headphones, Settings, Edit3, ChevronRight, User
+  Headphones, Settings, Edit3, ChevronRight, User, Plus, ChevronDown
 } from 'lucide-react';
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
@@ -27,6 +27,15 @@ export default function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('basic');
+  const [expandedProfessions, setExpandedProfessions] = useState<Set<string>>(new Set());
+  const [showAddProfession, setShowAddProfession] = useState(false);
+
+  const toggleProfExpand = (id: string) =>
+    setExpandedProfessions(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', nickname: '', bio: '',
@@ -367,54 +376,93 @@ export default function ProfilePage() {
                   </div>
                 </div>
 
-                {/* Professions */}
-                {formData.fieldOfActivityId && professions.length > 0 && (
-                  <div>
+                {/* Professions – accordion cards */}
+                {formData.fieldOfActivityId && (
+                  <div className="space-y-2">
                     <label className={`${labelCls} flex items-center gap-1`}><Star size={11} /> Профессии</label>
-                    <div className="flex flex-wrap gap-2">
-                      {professions.map((prof: any) => {
-                        const selected = formData.userProfessions.some(up => up.professionId === prof.id);
-                        return (
-                          <button key={prof.id} type="button"
-                            onClick={() => {
-                              if (selected) setFormData({ ...formData, userProfessions: formData.userProfessions.filter(up => up.professionId !== prof.id) });
-                              else setFormData({ ...formData, userProfessions: [...formData.userProfessions, { professionId: prof.id, features: [] }] });
-                            }}
-                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium ${
-                              selected ? 'bg-primary-500/20 border-primary-500/50 text-primary-300' : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:border-slate-500'
-                            }`}
-                          >
-                            {selected && <Check size={11} className="text-primary-400" />}
-                            {prof.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                    {/* Features */}
-                    {formData.userProfessions.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        {formData.userProfessions.map(up => {
-                          const prof = professions.find((p: any) => p.id === up.professionId);
-                          return (
-                            <div key={up.professionId} className="bg-slate-700/20 rounded-lg p-3 border border-slate-600/30">
-                              <p className="text-xs font-semibold text-slate-300 mb-2">{prof?.name}</p>
+
+                    {/* Selected professions */}
+                    {formData.userProfessions.map(up => {
+                      const prof = professions.find((p: any) => p.id === up.professionId);
+                      const isExpanded = expandedProfessions.has(up.professionId);
+                      return (
+                        <div key={up.professionId} className="bg-slate-700/30 rounded-xl border border-slate-600/50 overflow-hidden">
+                          <div className="flex items-center gap-2 px-3 py-2.5">
+                            <button type="button" onClick={() => toggleProfExpand(up.professionId)} className="flex-1 flex items-center justify-between text-left">
+                              <span className="text-sm font-semibold text-white">{prof?.name ?? '...'}</span>
+                              <div className="flex items-center gap-2 mr-1">
+                                {up.features.length > 0 && (
+                                  <span className="text-xs text-slate-400">{up.features.length} навык{up.features.length > 1 ? 'а' : ''}</span>
+                                )}
+                                <ChevronDown size={15} className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                              </div>
+                            </button>
+                            <button type="button"
+                              onClick={() => {
+                                setFormData({ ...formData, userProfessions: formData.userProfessions.filter(p => p.professionId !== up.professionId) });
+                                setExpandedProfessions(prev => { const n = new Set(prev); n.delete(up.professionId); return n; });
+                              }}
+                              className="flex-shrink-0 p-1 rounded-lg hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all"
+                            >
+                              <X size={14} />
+                            </button>
+                          </div>
+                          {isExpanded && (
+                            <div className="px-3 pb-3 border-t border-slate-600/30">
+                              <p className="text-xs text-slate-400 mt-2 mb-2">Специализация:</p>
                               <div className="flex flex-wrap gap-1.5">
                                 {professionFeatures.map((feat: any) => {
                                   const isSel = up.features.includes(feat.name);
                                   return (
                                     <button key={feat.id} type="button"
                                       onClick={() => setFormData({ ...formData, userProfessions: formData.userProfessions.map(p => p.professionId !== up.professionId ? p : { ...p, features: isSel ? p.features.filter(f => f !== feat.name) : [...p.features, feat.name] }) })}
-                                      className={`px-2 py-0.5 rounded text-xs font-medium border transition-all ${isSel ? 'bg-primary-500/20 border-primary-500/50 text-primary-300' : 'bg-slate-600/20 border-slate-600/50 text-slate-400 hover:text-slate-300'}`}
+                                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${isSel ? 'bg-primary-500/20 border-primary-500/50 text-primary-300' : 'bg-slate-600/20 border-slate-600/50 text-slate-400 hover:text-slate-300'}`}
                                     >
+                                      {isSel && <Check size={10} className="text-primary-400" />}
                                       {feat.name}
                                     </button>
                                   );
                                 })}
                               </div>
                             </div>
-                          );
-                        })}
-                      </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Add profession button */}
+                    {professions.filter((p: any) => !formData.userProfessions.some(up => up.professionId === p.id)).length > 0 && (
+                      <>
+                        <button type="button"
+                          onClick={() => setShowAddProfession(s => !s)}
+                          className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm"
+                        >
+                          <Plus size={14} />
+                          Добавить профессию
+                        </button>
+                        {showAddProfession && (
+                          <div className="flex flex-wrap gap-2 p-3 bg-slate-700/20 rounded-xl border border-slate-600/30">
+                            {professions
+                              .filter((p: any) => !formData.userProfessions.some(up => up.professionId === p.id))
+                              .map((prof: any) => (
+                                <button key={prof.id} type="button"
+                                  onClick={() => {
+                                    const newProfs = [...formData.userProfessions, { professionId: prof.id, features: [] }];
+                                    setFormData({ ...formData, userProfessions: newProfs });
+                                    setExpandedProfessions(prev => new Set([...prev, prof.id]));
+                                    const remaining = professions.filter((p: any) => !newProfs.some(up => up.professionId === p.id));
+                                    if (remaining.length === 0) setShowAddProfession(false);
+                                  }}
+                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
+                                >
+                                  <Plus size={11} />
+                                  {prof.name}
+                                </button>
+                              ))
+                            }
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -498,14 +546,22 @@ export default function ProfilePage() {
                 {/* Professions */}
                 {profile?.userProfessions?.length > 0 ? (
                   <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5"><Star size={11} className="text-primary-400" />Профессии</p>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                      <Star size={11} className="text-primary-400" />Профессии
+                    </p>
                     <div className="space-y-2">
                       {profile.userProfessions.map((up: any) => (
-                        <div key={up.id} className="flex flex-wrap items-center gap-1.5">
-                          <span className="px-2.5 py-1 bg-primary-500/15 text-primary-300 rounded-lg text-xs font-semibold border border-primary-500/30">{up.profession?.name}</span>
-                          {up.features?.map((f: string) => (
-                            <span key={f} className="px-2 py-0.5 bg-slate-700/50 text-slate-400 rounded text-xs border border-slate-600/30">{f}</span>
-                          ))}
+                        <div key={up.id} className="bg-slate-700/20 rounded-xl border border-slate-600/30 p-3">
+                          <p className="text-sm font-semibold text-white mb-2">{up.profession?.name}</p>
+                          {up.features?.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {up.features.map((f: string) => (
+                                <span key={f} className="px-2.5 py-1 bg-primary-500/10 text-primary-300 rounded-lg text-xs border border-primary-500/20">{f}</span>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-slate-500 text-xs">Без специализации</p>
+                          )}
                         </div>
                       ))}
                     </div>
