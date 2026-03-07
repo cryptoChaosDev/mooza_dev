@@ -42,18 +42,18 @@ function getUserCountText(n: number): string {
 // ─── Skeleton card ─────────────────────────────────────────────────────────────
 function SkeletonCard() {
   return (
-    <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-2xl p-5 border border-slate-700/50 animate-pulse">
-      <div className="flex items-center gap-4 mb-4">
-        <div className="w-14 h-14 bg-slate-700/50 rounded-2xl flex-shrink-0" />
-        <div className="flex-1 space-y-2">
-          <div className="h-4 bg-slate-700/50 rounded-lg w-2/3" />
-          <div className="h-3 bg-slate-700/50 rounded-lg w-1/3" />
-          <div className="h-3 bg-slate-700/50 rounded-lg w-1/2" />
+    <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl p-3.5 border border-slate-700/50 animate-pulse">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 bg-slate-700/50 rounded-xl flex-shrink-0" />
+        <div className="flex-1 space-y-1.5">
+          <div className="h-3.5 bg-slate-700/50 rounded w-2/3" />
+          <div className="h-3 bg-slate-700/50 rounded w-1/3" />
+          <div className="h-3 bg-slate-700/50 rounded w-1/2" />
         </div>
       </div>
       <div className="flex gap-2">
-        <div className="h-8 bg-slate-700/50 rounded-xl flex-1" />
-        <div className="h-8 bg-slate-700/50 rounded-xl flex-1" />
+        <div className="h-7 bg-slate-700/50 rounded-lg flex-1" />
+        <div className="h-7 bg-slate-700/50 rounded-lg flex-1" />
       </div>
     </div>
   );
@@ -70,19 +70,19 @@ interface UserCardProps {
 function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: UserCardProps) {
   const isSent = sentRequests.has(user.id);
   return (
-    <div className="group relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-5 border border-slate-700/50 hover:border-primary-500/50 transition-all duration-300 shadow-lg hover:shadow-primary-500/10">
+    <div className="group relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-3.5 border border-slate-700/50 hover:border-primary-500/50 transition-all duration-300 shadow-md hover:shadow-primary-500/10">
       <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
-      <div className="flex items-start gap-4">
+      <div className="flex items-start gap-3">
         <button onClick={() => onNavigate(user.id)} className="flex-shrink-0">
           {user.avatar ? (
             <img
               src={`${import.meta.env.VITE_API_URL}${user.avatar}`}
               alt={`${user.firstName} ${user.lastName}`}
-              className="w-14 h-14 rounded-2xl object-cover ring-2 ring-slate-700/50 group-hover:ring-primary-500/50 transition-all"
+              className="w-10 h-10 rounded-xl object-cover ring-2 ring-slate-700/50 group-hover:ring-primary-500/50 transition-all"
             />
           ) : (
-            <div className="w-14 h-14 bg-gradient-to-br from-primary-500 to-purple-600 rounded-2xl flex items-center justify-center ring-2 ring-slate-700/50 group-hover:ring-primary-500/50 transition-all">
-              <span className="text-white font-bold text-lg">
+            <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl flex items-center justify-center ring-2 ring-slate-700/50 group-hover:ring-primary-500/50 transition-all">
+              <span className="text-white font-bold text-sm">
                 {user.firstName?.[0]}{user.lastName?.[0]}
               </span>
             </div>
@@ -91,16 +91,16 @@ function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: Us
         <div className="flex-1 min-w-0">
           <button
             onClick={() => onNavigate(user.id)}
-            className="font-bold text-white text-base hover:text-primary-400 transition-colors truncate block"
+            className="font-semibold text-white text-sm hover:text-primary-400 transition-colors truncate block"
           >
             {user.firstName} {user.lastName}
           </button>
-          {user.nickname && <p className="text-sm text-slate-400 truncate">@{user.nickname}</p>}
-          {user.city && <p className="text-xs text-slate-500 truncate mt-0.5">{user.city}</p>}
+          {user.nickname && <p className="text-xs text-slate-400 truncate">@{user.nickname}</p>}
+          {user.city && <p className="text-xs text-slate-500 truncate">{user.city}</p>}
           {user.userProfessions && user.userProfessions.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-2">
+            <div className="flex flex-wrap gap-1 mt-1.5">
               {user.userProfessions.slice(0, 2).map((up: any) => (
-                <span key={up.id} className="text-xs bg-primary-500/20 text-primary-300 px-2 py-0.5 rounded">
+                <span key={up.id} className="text-xs bg-primary-500/20 text-primary-300 px-1.5 py-0.5 rounded">
                   {up.profession?.name}
                 </span>
               ))}
@@ -108,25 +108,25 @@ function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: Us
           )}
         </div>
       </div>
-      <div className="flex gap-2 mt-4">
+      <div className="flex gap-1.5 mt-3">
         <button
           onClick={() => onMessage(user.id)}
-          className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 hover:text-white rounded-xl text-sm font-medium transition-all"
+          className="flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 hover:text-white rounded-lg text-xs font-medium transition-all"
         >
-          <MessageCircle size={15} />
+          <MessageCircle size={13} />
           <span className="hidden sm:inline">Сообщение</span>
         </button>
         {isSent ? (
-          <div className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-green-500/10 text-green-400 rounded-xl text-sm font-medium">
-            <Check size={15} />
+          <div className="flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-xs font-medium">
+            <Check size={13} />
             <span className="hidden sm:inline">Отправлено</span>
           </div>
         ) : (
           <button
             onClick={() => onAddFriend(user.id)}
-            className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-primary-500/10 hover:bg-primary-500/20 text-primary-400 rounded-xl text-sm font-medium transition-all"
+            className="flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-primary-500/10 hover:bg-primary-500/20 text-primary-400 rounded-lg text-xs font-medium transition-all"
           >
-            <UserPlus size={15} />
+            <UserPlus size={13} />
             <span className="hidden sm:inline">В друзья</span>
           </button>
         )}
@@ -425,25 +425,25 @@ export default function SearchPage() {
       {/* ── Header ── */}
       <div className="relative">
         <div className="absolute inset-0 bg-gradient-to-r from-primary-500/10 via-purple-500/10 to-pink-500/10 blur-3xl" />
-        <div className="relative max-w-7xl mx-auto px-4 pt-6 pb-3">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="p-3 bg-primary-500/20 rounded-2xl">
-              <Search size={26} className="text-primary-400" />
+        <div className="relative max-w-7xl mx-auto px-4 pt-4 pb-2">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="p-2 bg-primary-500/20 rounded-xl">
+              <Search size={20} className="text-primary-400" />
             </div>
-            <h2 className="text-3xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
+            <h2 className="text-xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
               Поиск
             </h2>
           </div>
 
           {/* Search input */}
           <div className="relative">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
               value={nameQuery}
               onChange={(e) => setNameQuery(e.target.value)}
               placeholder="Поиск по имени или нику..."
-              className="w-full pl-11 pr-10 py-3 bg-slate-800/80 border border-slate-700/50 rounded-2xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500/50 transition-all"
+              className="w-full pl-10 pr-9 py-2.5 bg-slate-800/80 border border-slate-700/50 rounded-xl text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500/50 transition-all"
             />
             {nameQuery && (
               <button
@@ -576,12 +576,12 @@ export default function SearchPage() {
 
             {/* Grid */}
             {isLoading ? (
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
               </div>
             ) : results.length > 0 ? (
               <>
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   {results.map((user: any) => (
                     <UserCard
                       key={user.id}
@@ -616,23 +616,21 @@ export default function SearchPage() {
                 )}
               </>
             ) : !anyLoading ? (
-              <div className="relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-xl rounded-3xl border border-slate-700/50 shadow-2xl">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-primary-500/10 rounded-full blur-3xl" />
-                <div className="absolute bottom-0 left-0 w-64 h-64 bg-purple-500/10 rounded-full blur-3xl" />
-                <div className="relative text-center py-16 px-6">
-                  <div className="inline-flex p-6 bg-slate-700/30 rounded-3xl mb-6">
-                    <Search size={56} className="text-slate-500" />
+              <div className="relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-700/50 shadow-xl">
+                <div className="relative text-center py-10 px-6">
+                  <div className="inline-flex p-4 bg-slate-700/30 rounded-2xl mb-4">
+                    <Search size={32} className="text-slate-500" />
                   </div>
-                  <h3 className="text-2xl font-bold text-white mb-3">
+                  <h3 className="text-base font-bold text-white mb-2">
                     Ничего не найдено
                   </h3>
-                  <p className="text-slate-400 text-base">
+                  <p className="text-slate-400 text-sm">
                     Попробуйте изменить фильтры или поисковый запрос
                   </p>
                   {(activeCount > 0 || nameQuery) && (
                     <button
                       onClick={() => { resetAllFilters(); setNameQuery(''); }}
-                      className="mt-4 px-5 py-2 bg-primary-500/20 hover:bg-primary-500/30 text-primary-400 rounded-xl text-sm transition-all"
+                      className="mt-3 px-4 py-1.5 bg-primary-500/20 hover:bg-primary-500/30 text-primary-400 rounded-lg text-sm transition-all"
                     >
                       Сбросить всё
                     </button>

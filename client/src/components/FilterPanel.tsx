@@ -35,7 +35,7 @@ function FilterSection({ title, value, items, loading, disabled, onSelect }: Fil
       <button
         onClick={() => !disabled && setOpen((o) => !o)}
         disabled={!!disabled}
-        className={`w-full flex items-center justify-between py-3 text-left transition-colors ${
+        className={`w-full flex items-center justify-between py-2.5 text-left transition-colors ${
           disabled ? 'opacity-40 cursor-not-allowed' : 'hover:text-white'
         }`}
       >
@@ -82,7 +82,7 @@ function FilterSection({ title, value, items, loading, disabled, onSelect }: Fil
               <button
                 key={item.id}
                 onClick={() => onSelect(value === item.id ? null : item.id)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors ${
+                className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm transition-colors ${
                   value === item.id
                     ? 'bg-primary-500/15 text-primary-400'
                     : 'text-slate-300 hover:bg-slate-700/40 hover:text-white'
@@ -154,11 +154,11 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
     <div className="flex flex-col h-full">
       {/* Header — shown on sidebar; hidden inside BottomSheet (which has its own header) */}
       {showHeader && (
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <span className="text-white font-semibold text-base">Фильтры</span>
+            <span className="text-white font-semibold text-sm">Фильтры</span>
             {activeCount > 0 && (
-              <span className="bg-primary-500 text-white text-xs font-bold w-5 h-5 rounded-full flex items-center justify-center">
+              <span className="bg-primary-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none">
                 {activeCount}
               </span>
             )}
