@@ -1,8 +1,9 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  ArrowLeft, MapPin, Briefcase, Music2, MessageCircle, Loader2,
-  Youtube, Send, Sparkles, Building2, Star, Music
+  ArrowLeft, MapPin, Briefcase, Music, MessageCircle, Loader2,
+  Globe, Building2, Star, DollarSign, Clock, Headphones,
+  Settings, ChevronRight
 } from 'lucide-react';
 import { userAPI } from '../lib/api';
 
@@ -21,8 +22,11 @@ export default function UserProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-b from-slate-900 to-slate-800">
-        <Loader2 size={48} className="text-primary-500 animate-spin" />
+      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent mx-auto shadow-lg shadow-primary-500/30"></div>
+          <p className="text-slate-400 mt-3 text-sm">Загрузка профиля...</p>
+        </div>
       </div>
     );
   }
@@ -30,256 +34,278 @@ export default function UserProfilePage() {
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-b from-slate-900 to-slate-800">
-        <div className="text-center">
-          <p className="text-slate-400 text-xl mb-4">Пользователь не найден</p>
-          <button
-            onClick={() => navigate(-1)}
-            className="bg-primary-500 hover:bg-primary-600 text-white px-6 py-3 rounded-xl transition-all"
-          >
-            Вернуться назад
-          </button>
-        </div>
+        <Loader2 size={32} className="text-slate-600 mb-3" />
+        <p className="text-slate-400 text-sm mb-4">Пользователь не найден</p>
+        <button
+          onClick={() => navigate(-1)}
+          className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-xl transition-all text-sm"
+        >
+          Вернуться назад
+        </button>
       </div>
     );
   }
 
+  const sp = user.userSearchProfiles?.[0];
+  const hasSearchProfile = sp && (
+    sp.service || sp.genre || sp.workFormat || sp.employmentType ||
+    sp.skillLevel || sp.availability || sp.pricePerHour || sp.pricePerEvent
+  );
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
-      {/* Header */}
-      <div className="relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary-500/10 via-purple-500/10 to-pink-500/10 blur-3xl"></div>
-        <div className="relative max-w-5xl mx-auto px-4 pt-6 pb-8">
-          <button
-            onClick={() => navigate(-1)}
-            className="group inline-flex items-center gap-2 px-3 py-1.5 bg-slate-800/80 backdrop-blur-sm hover:bg-slate-700/80 rounded-lg transition-all duration-300 border border-slate-700/50 mb-4 text-sm"
-          >
-            <ArrowLeft size={20} className="text-slate-300 group-hover:text-white transition-colors" />
-            <span className="text-slate-300 group-hover:text-white transition-colors">Назад</span>
-          </button>
-        </div>
-      </div>
+      <div className="max-w-2xl mx-auto px-4 pt-4 pb-24">
 
-      <div className="max-w-5xl mx-auto px-4 pb-24 space-y-6">
-        {/* Hero Profile Card */}
-        <div className="relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-700/50 shadow-xl">
-          <div className="relative p-5">
-            <div className="flex flex-col md:flex-row gap-5 items-start">
+        {/* Back Button */}
+        <button
+          onClick={() => navigate(-1)}
+          className="group inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 backdrop-blur-sm hover:bg-slate-700/80 rounded-lg border border-slate-700/50 hover:border-primary-500/50 transition-all mb-3 text-sm"
+        >
+          <ArrowLeft size={15} className="text-slate-300 group-hover:text-white transition-colors" />
+          <span className="text-slate-300 group-hover:text-white transition-colors text-xs">Назад</span>
+        </button>
+
+        {/* ── HERO CARD ── */}
+        <div className="relative bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl border border-slate-700/50 shadow-lg overflow-hidden mb-4">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-purple-500/5 pointer-events-none" />
+
+          <div className="relative p-4">
+            <div className="flex items-start gap-4">
+
               {/* Avatar */}
-              <div className="flex-shrink-0 relative group">
-                {user.avatar ? (
-                  <img
-                    src={`${import.meta.env.VITE_API_URL}${user.avatar}`}
-                    alt={`${user.firstName} ${user.lastName}`}
-                    className="w-24 h-24 rounded-2xl object-cover shadow-xl ring-2 ring-primary-500/20"
-                  />
-                ) : (
-                  <div className="w-24 h-24 bg-gradient-to-br from-primary-500 via-primary-600 to-purple-600 rounded-2xl flex items-center justify-center shadow-xl ring-2 ring-primary-500/20">
-                    <span className="text-white font-bold text-3xl">
-                      {user.firstName[0]}{user.lastName[0]}
-                    </span>
-                  </div>
-                )}
+              <div className="flex-shrink-0">
+                <div className="w-[72px] h-[72px] rounded-2xl overflow-hidden ring-2 ring-primary-500/30 shadow-xl">
+                  {user.avatar ? (
+                    <img
+                      src={`${import.meta.env.VITE_API_URL}${user.avatar}`}
+                      alt={`${user.firstName} ${user.lastName}`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center">
+                      <span className="text-2xl font-bold text-white">
+                        {user.firstName[0]}{user.lastName[0]}
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Info */}
-              <div className="flex-1 space-y-3">
-                <div>
-                  <h1 className="text-2xl md:text-3xl font-bold text-white mb-0.5 bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-                    {user.firstName} {user.lastName}
-                  </h1>
-                  {user.nickname && (
-                    <p className="text-slate-400 text-xs mb-2">@{user.nickname}</p>
-                  )}
-
-                  <div className="flex flex-wrap items-center gap-2">
-                    {user.fieldOfActivity && (
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500/10 border border-primary-500/30 rounded-lg">
-                        <Briefcase size={13} className="text-primary-400" />
-                        <span className="text-primary-300 font-medium text-xs">{user.fieldOfActivity.name}</span>
-                      </div>
-                    )}
-                    {user.role && (
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/30 border border-slate-600/30 rounded-lg">
-                        <Briefcase size={13} className="text-slate-400" />
-                        <span className="text-slate-300 text-xs">{user.role}</span>
-                      </div>
-                    )}
-                    {(user.country || user.city) && (
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/30 border border-slate-600/30 rounded-lg">
-                        <MapPin size={13} className="text-slate-400" />
-                        <span className="text-slate-300 text-xs">
-                          {[user.city, user.country].filter(Boolean).join(', ')}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {user.bio && (
-                  <div className="bg-slate-700/20 rounded-xl p-3 border border-slate-600/30">
-                    <p className="text-slate-200 leading-relaxed text-sm">{user.bio}</p>
-                  </div>
+              <div className="flex-1 min-w-0">
+                <h1 className="text-base font-bold text-white leading-tight truncate">
+                  {user.firstName} {user.lastName}
+                </h1>
+                {user.nickname && (
+                  <p className="text-slate-400 text-xs mt-0.5 mb-1.5">@{user.nickname}</p>
                 )}
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => navigate(`/chat/${user.id}`)}
-                    className="group flex items-center gap-1.5 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-medium px-4 py-2 rounded-lg text-sm transition-all duration-300 shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:scale-105"
-                  >
-                    <MessageCircle size={16} className="group-hover:rotate-12 transition-transform" />
-                    Написать сообщение
-                  </button>
+                {user.role && (
+                  <span className="inline-block px-2 py-0.5 bg-primary-500/15 text-primary-300 text-xs font-medium rounded-md border border-primary-500/30 mb-1.5">
+                    {user.role}
+                  </span>
+                )}
+                <div className="flex flex-wrap gap-x-3 gap-y-1 mt-0.5">
+                  {user.country && (
+                    <span className="flex items-center gap-1 text-slate-400 text-xs">
+                      <Globe size={10} /> {user.country}
+                    </span>
+                  )}
+                  {user.city && (
+                    <span className="flex items-center gap-1 text-slate-400 text-xs">
+                      <MapPin size={10} /> {user.city}
+                    </span>
+                  )}
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="group bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-3.5 border border-slate-700/50 hover:border-primary-500/50 transition-all duration-300 hover:scale-105">
-            <div className="flex items-center gap-2 mb-1.5">
-              <div className="p-1.5 bg-primary-500/10 rounded-lg"><Sparkles size={16} className="text-primary-400" /></div>
-            </div>
-            <p className="text-2xl font-bold text-white mb-0.5">{user._count?.posts || 0}</p>
-            <p className="text-xs text-slate-400">Постов</p>
-          </div>
-          <div className="group bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl p-5 border border-slate-700/50 hover:border-purple-500/50 transition-all duration-300 hover:scale-105">
-            <div className="flex items-center gap-2 mb-1.5">
-              <div className="p-1.5 bg-purple-500/10 rounded-lg"><MessageCircle size={16} className="text-purple-400" /></div>
-            </div>
-            <p className="text-2xl font-bold text-white mb-0.5">{user._count?.sentRequests || 0}</p>
-            <p className="text-xs text-slate-400">Друзей</p>
-          </div>
-          <div className="group bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-3.5 border border-slate-700/50 hover:border-pink-500/50 transition-all duration-300 hover:scale-105">
-            <div className="flex items-center gap-2 mb-1.5">
-              <div className="p-1.5 bg-pink-500/10 rounded-lg"><Star size={16} className="text-pink-400" /></div>
-            </div>
-            <p className="text-2xl font-bold text-white mb-0.5">{user.userProfessions?.length || 0}</p>
-            <p className="text-xs text-slate-400">Профессий</p>
-          </div>
-          <div className="group bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-3.5 border border-slate-700/50 hover:border-blue-500/50 transition-all duration-300 hover:scale-105">
-            <div className="flex items-center gap-2 mb-1.5">
-              <div className="p-1.5 bg-blue-500/10 rounded-lg"><Music size={16} className="text-blue-400" /></div>
-            </div>
-            <p className="text-2xl font-bold text-white mb-0.5">{user.userArtists?.length || 0}</p>
-            <p className="text-xs text-slate-400">Артистов</p>
-          </div>
-        </div>
-
-        {/* Professions Section */}
-        {user.userProfessions && user.userProfessions.length > 0 && (
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-1.5 bg-primary-500/10 rounded-lg"><Star size={18} className="text-primary-400" /></div>
-              <h2 className="text-base font-bold text-white">Профессии</h2>
-            </div>
-            <div className="space-y-3">
-              {user.userProfessions.map((up: any) => (
-                <div key={up.id} className="flex flex-wrap items-center gap-2">
-                  <span className="px-4 py-2 bg-gradient-to-br from-primary-500/20 to-primary-600/20 border border-primary-500/30 text-primary-300 rounded-xl text-sm font-medium">
-                    {up.profession?.name}
-                  </span>
-                  {up.features && up.features.length > 0 && up.features.map((f: string) => (
-                    <span key={f} className="px-3 py-1.5 bg-slate-700/40 border border-slate-600/30 text-slate-400 rounded-xl text-xs">
-                      {f}
-                    </span>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Artists Section */}
-        {user.userArtists && user.userArtists.length > 0 && (
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-1.5 bg-purple-500/10 rounded-lg"><Music2 size={18} className="text-purple-400" /></div>
-              <h2 className="text-base font-bold text-white">Артисты / Группы</h2>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              {user.userArtists.map((ua: any) => (
-                <span
-                  key={ua.id}
-                  className="px-3 py-1.5 bg-gradient-to-br from-purple-500/20 to-purple-600/20 border border-purple-500/30 text-purple-300 rounded-lg text-sm font-medium transition-all hover:scale-105"
+              {/* Message Button */}
+              <div className="flex-shrink-0">
+                <button
+                  onClick={() => navigate(`/messages/${user.id}`)}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-primary-500 hover:bg-primary-600 rounded-lg transition-all shadow-lg shadow-primary-500/30 text-white text-xs font-medium"
                 >
-                  {ua.artist?.name}
-                </span>
-              ))}
+                  <MessageCircle size={13} />
+                  <span className="hidden sm:inline">Написать</span>
+                </button>
+              </div>
             </div>
-          </div>
-        )}
 
-        {/* Employer Section */}
-        {user.employer && (
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-1.5 bg-green-500/10 rounded-lg"><Building2 size={18} className="text-green-400" /></div>
-              <h2 className="text-base font-bold text-white">Работодатель</h2>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="px-5 py-2.5 bg-gradient-to-br from-green-500/20 to-green-600/20 border border-green-500/30 text-green-300 rounded-xl text-sm font-medium">
-                {user.employer.name}
-              </span>
-              {user.employer.inn && (
-                <span className="text-xs text-slate-500">ИНН: {user.employer.inn}</span>
-              )}
-            </div>
+            {/* Bio */}
+            {user.bio && (
+              <p className="mt-3 text-slate-300 text-sm leading-relaxed border-t border-slate-700/50 pt-3">
+                {user.bio}
+              </p>
+            )}
           </div>
-        )}
+        </div>
 
-        {/* Genres Section */}
-        {user.genres && user.genres.length > 0 && (
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-1.5 bg-primary-500/10 rounded-lg"><Music2 size={18} className="text-primary-400" /></div>
-              <h2 className="text-base font-bold text-white">Музыкальные жанры</h2>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              {user.genres.map((genre: string) => (
-                <span key={genre} className="px-5 py-2.5 bg-gradient-to-br from-primary-500/20 to-primary-600/20 border border-primary-500/30 text-primary-300 rounded-xl text-sm font-medium transition-all hover:scale-105">
-                  {genre}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
+        {/* ── INFO SECTIONS ── */}
+        <div className="space-y-3">
 
-        {/* Social Links */}
-        {(user.vkLink || user.youtubeLink || user.telegramLink) && (
-          <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="p-1.5 bg-blue-500/10 rounded-lg"><Send size={18} className="text-blue-400" /></div>
-              <h2 className="text-base font-bold text-white">Социальные сети</h2>
-            </div>
-            <div className="flex flex-wrap gap-3">
-              {user.vkLink && (
-                <a href={user.vkLink} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-300 rounded-lg text-sm transition-all hover:scale-105">
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M15.07 2H8.93C3.33 2 2 3.33 2 8.93v6.14C2 20.67 3.33 22 8.93 22h6.14c5.6 0 6.93-1.33 6.93-6.93V8.93C22 3.33 20.67 2 15.07 2zm3.15 13.21h-1.58c-.48 0-.63-.39-1.5-1.27-.75-.74-1.08-.84-1.27-.84-.26 0-.33.07-.33.41v1.15c0 .31-.1.5-1.02.5-1.5 0-3.17-.91-4.34-2.6-1.77-2.45-2.25-4.3-2.25-4.68 0-.19.07-.37.41-.37h1.58c.31 0 .42.14.54.47.59 1.73 1.59 3.25 2 3.25.15 0 .22-.07.22-.46v-1.77c-.06-.95-.55-1.03-.55-1.37 0-.15.13-.3.33-.3h2.48c.26 0 .36.14.36.44v2.39c0 .26.11.36.19.36.15 0 .28-.1.56-.38 1.07-1.21 1.84-3.08 1.84-3.08.1-.21.24-.37.55-.37h1.58c.37 0 .45.19.37.44-.14.66-1.99 3.51-1.99 3.51-.13.2-.17.29 0 .51.12.16.52.51.79.82.48.53.85.97.95 1.27.1.31-.05.47-.36.47z"/>
-                  </svg>
-                  <span className="font-medium">ВКонтакте</span>
-                </a>
+          {/* Field of Activity + Employer */}
+          {(user.fieldOfActivity || user.employer) && (
+            <div className="flex flex-wrap gap-2">
+              {user.fieldOfActivity && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 rounded-xl border border-slate-700/50 text-slate-300 text-xs font-medium">
+                  <Briefcase size={12} className="text-primary-400" />
+                  {user.fieldOfActivity.name}
+                </div>
               )}
-              {user.youtubeLink && (
-                <a href={user.youtubeLink} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-300 rounded-lg text-sm transition-all hover:scale-105">
-                  <Youtube size={20} />
-                  <span className="font-medium">YouTube</span>
-                </a>
-              )}
-              {user.telegramLink && (
-                <a href={user.telegramLink} target="_blank" rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 rounded-lg text-sm transition-all hover:scale-105">
-                  <Send size={20} />
-                  <span className="font-medium">Telegram</span>
-                </a>
+              {user.employer && (
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 rounded-xl border border-slate-700/50 text-slate-300 text-xs font-medium">
+                  <Building2 size={12} className="text-green-400" />
+                  {user.employer.name}
+                  {user.employer.inn && (
+                    <span className="text-slate-500 font-normal">· ИНН {user.employer.inn}</span>
+                  )}
+                </div>
               )}
             </div>
-          </div>
-        )}
+          )}
+
+          {/* Professions */}
+          {user.userProfessions && user.userProfessions.length > 0 && (
+            <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                <Star size={11} className="text-primary-400" /> Профессии
+              </h3>
+              <div className="space-y-2">
+                {user.userProfessions.map((up: any) => (
+                  <div key={up.id} className="flex flex-wrap items-center gap-1.5">
+                    <span className="px-2.5 py-1 bg-primary-500/15 text-primary-300 rounded-lg text-xs font-semibold border border-primary-500/30">
+                      {up.profession?.name}
+                    </span>
+                    {up.features?.map((f: string) => (
+                      <span key={f} className="px-2 py-0.5 bg-slate-700/50 text-slate-400 rounded text-xs border border-slate-600/30">
+                        {f}
+                      </span>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Artists */}
+          {user.userArtists && user.userArtists.length > 0 && (
+            <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                <Music size={11} className="text-purple-400" /> Артисты / Группы
+              </h3>
+              <div className="flex flex-wrap gap-1.5">
+                {user.userArtists.map((ua: any) => (
+                  <span key={ua.id} className="px-2.5 py-1 bg-purple-500/15 text-purple-300 rounded-lg text-xs font-medium border border-purple-500/30">
+                    {ua.artist?.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Search Profile */}
+          {hasSearchProfile && (
+            <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                <Settings size={11} className="text-primary-400" /> Параметры поиска
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {sp?.service && (
+                  <div className="flex items-center gap-1 px-2.5 py-1 bg-primary-500/10 rounded-lg border border-primary-500/20">
+                    <Headphones size={11} className="text-primary-400" />
+                    <span className="text-primary-300 text-xs">{sp.service.name}</span>
+                  </div>
+                )}
+                {sp?.genre && (
+                  <div className="flex items-center gap-1 px-2.5 py-1 bg-primary-500/10 rounded-lg border border-primary-500/20">
+                    <Music size={11} className="text-primary-400" />
+                    <span className="text-primary-300 text-xs">{sp.genre.name}</span>
+                  </div>
+                )}
+                {sp?.workFormat && (
+                  <span className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">
+                    {sp.workFormat.name}
+                  </span>
+                )}
+                {sp?.employmentType && (
+                  <span className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">
+                    {sp.employmentType.name}
+                  </span>
+                )}
+                {sp?.skillLevel && (
+                  <span className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">
+                    {sp.skillLevel.name}
+                  </span>
+                )}
+                {sp?.availability && (
+                  <span className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">
+                    {sp.availability.name}
+                  </span>
+                )}
+                {(sp?.pricePerHour || sp?.pricePerEvent) && (
+                  <div className="w-full flex flex-wrap gap-3 pt-2 mt-1 border-t border-slate-700/50">
+                    {sp?.pricePerHour && (
+                      <div className="flex items-center gap-1 text-green-300 text-xs font-semibold">
+                        <DollarSign size={11} />
+                        {sp.pricePerHour} ₽/час
+                      </div>
+                    )}
+                    {sp?.pricePerEvent && (
+                      <div className="flex items-center gap-1 text-green-300 text-xs font-semibold">
+                        <Clock size={11} />
+                        {sp.pricePerEvent} ₽/выступление
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Social Links */}
+          {(user.vkLink || user.youtubeLink || user.telegramLink) && (
+            <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+                <Globe size={11} className="text-primary-400" /> Соцсети
+              </h3>
+              <div className="space-y-2">
+                {user.vkLink && (
+                  <a href={user.vkLink} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-3 py-2 text-slate-300 hover:text-white transition-colors group"
+                  >
+                    <div className="w-7 h-7 bg-blue-500/15 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/25 transition-colors">
+                      <span className="text-blue-400 text-xs font-bold">VK</span>
+                    </div>
+                    <span className="text-sm flex-1 truncate">{user.vkLink}</span>
+                    <ChevronRight size={14} className="text-slate-500 flex-shrink-0" />
+                  </a>
+                )}
+                {user.youtubeLink && (
+                  <a href={user.youtubeLink} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-3 py-2 text-slate-300 hover:text-white transition-colors group"
+                  >
+                    <div className="w-7 h-7 bg-red-500/15 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-red-500/25 transition-colors">
+                      <span className="text-red-400 text-xs font-bold">YT</span>
+                    </div>
+                    <span className="text-sm flex-1 truncate">{user.youtubeLink}</span>
+                    <ChevronRight size={14} className="text-slate-500 flex-shrink-0" />
+                  </a>
+                )}
+                {user.telegramLink && (
+                  <a href={user.telegramLink} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-3 py-2 text-slate-300 hover:text-white transition-colors group"
+                  >
+                    <div className="w-7 h-7 bg-sky-500/15 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-sky-500/25 transition-colors">
+                      <span className="text-sky-400 text-xs font-bold">TG</span>
+                    </div>
+                    <span className="text-sm flex-1 truncate">{user.telegramLink}</span>
+                    <ChevronRight size={14} className="text-slate-500 flex-shrink-0" />
+                  </a>
+                )}
+              </div>
+            </div>
+          )}
+
+        </div>
       </div>
     </div>
   );
