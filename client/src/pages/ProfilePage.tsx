@@ -362,15 +362,33 @@ export default function ProfilePage() {
                 </div>
                 <div>
                   <label className={labelCls}>VK</label>
-                  <input type="text" value={formData.vkLink} onChange={e => setFormData({ ...formData, vkLink: e.target.value })} placeholder="https://vk.com/..." className={inputCls} />
+                  <div className="flex items-center bg-slate-700/50 border border-slate-600/50 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary-500">
+                    <span className="px-3 text-slate-500 text-sm shrink-0 border-r border-slate-600/50">vk.com/</span>
+                    <input type="text"
+                      value={formData.vkLink.replace(/^https?:\/\/(www\.)?vk\.com\//, '')}
+                      onChange={e => setFormData({ ...formData, vkLink: e.target.value ? `https://vk.com/${e.target.value}` : '' })}
+                      placeholder="никнейм" className="flex-1 px-3 py-2.5 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none" />
+                  </div>
                 </div>
                 <div>
                   <label className={labelCls}>YouTube</label>
-                  <input type="text" value={formData.youtubeLink} onChange={e => setFormData({ ...formData, youtubeLink: e.target.value })} placeholder="https://youtube.com/..." className={inputCls} />
+                  <div className="flex items-center bg-slate-700/50 border border-slate-600/50 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary-500">
+                    <span className="px-3 text-slate-500 text-sm shrink-0 border-r border-slate-600/50">youtube.com/</span>
+                    <input type="text"
+                      value={formData.youtubeLink.replace(/^https?:\/\/(www\.)?youtube\.com\//, '')}
+                      onChange={e => setFormData({ ...formData, youtubeLink: e.target.value ? `https://www.youtube.com/${e.target.value}` : '' })}
+                      placeholder="@никнейм" className="flex-1 px-3 py-2.5 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none" />
+                  </div>
                 </div>
                 <div>
                   <label className={labelCls}>Telegram</label>
-                  <input type="text" value={formData.telegramLink} onChange={e => setFormData({ ...formData, telegramLink: e.target.value })} placeholder="https://t.me/..." className={inputCls} />
+                  <div className="flex items-center bg-slate-700/50 border border-slate-600/50 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary-500">
+                    <span className="px-3 text-slate-500 text-sm shrink-0 border-r border-slate-600/50">t.me/</span>
+                    <input type="text"
+                      value={formData.telegramLink.replace(/^https?:\/\/(www\.)?t\.me\//, '')}
+                      onChange={e => setFormData({ ...formData, telegramLink: e.target.value ? `https://t.me/${e.target.value}` : '' })}
+                      placeholder="никнейм" className="flex-1 px-3 py-2.5 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none" />
+                  </div>
                 </div>
               </div>
             ) : (
