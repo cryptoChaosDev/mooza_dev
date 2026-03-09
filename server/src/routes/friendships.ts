@@ -94,6 +94,25 @@ router.get('/requests', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
+// Get sent friend requests (pending, sent by current user)
+router.get('/sent', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const requests = await prisma.friendship.findMany({
+      where: { requesterId: req.userId, status: 'pending' },
+      include: {
+        receiver: {
+          select: { id: true, firstName: true, lastName: true, avatar: true, role: true, city: true }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+    res.json(requests);
+  } catch (error) {
+    console.error('Get sent requests error:', error);
+    res.status(500).json({ error: 'Failed to get sent requests' });
+  }
+});
+
 // Accept friend request
 router.put('/:id/accept', authenticate, async (req: AuthRequest, res) => {
   try {
@@ -194,10 +213,11 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
       }
     });
 
-    // Map to get the friend (not the current user)
-    const friends = friendships.map(f => {
-      return f.requesterId === req.userId ? f.receiver : f.requester;
-    });
+    // Return { friendshipId, user } so frontend can unfriend
+    const friends = friendships.map(f => ({
+      friendshipId: f.id,
+      user: f.requesterId === req.userId ? f.receiver : f.requester,
+    }));
 
     res.json(friends);
   } catch (error) {

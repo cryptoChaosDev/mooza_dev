@@ -112,8 +112,10 @@ export const friendshipAPI = {
   sendRequest: (receiverId: string) =>
     api.post('/friendships', { receiverId }),
   getRequests: () => api.get('/friendships/requests'),
+  getSentRequests: () => api.get('/friendships/sent'),
   acceptRequest: (id: string) => api.put(`/friendships/${id}/accept`),
   rejectRequest: (id: string) => api.delete(`/friendships/${id}`),
+  removeFriend: (friendshipId: string) => api.delete(`/friendships/${friendshipId}`),
   getFriends: () => api.get('/friendships'),
 };
 
