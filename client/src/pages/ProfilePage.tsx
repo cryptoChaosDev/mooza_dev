@@ -5,20 +5,19 @@ import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, Building2, Search, Check, DollarSign, Calendar,
-  Headphones, Settings, Edit3, ChevronRight, User, Plus, ChevronDown
+  Headphones, Settings, Edit3, User, Plus, ChevronDown
 } from 'lucide-react';
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
-type Tab = 'basic' | 'profession' | 'search' | 'social';
+type Tab = 'basic' | 'profession' | 'search';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'basic',      label: 'Основное',  icon: <User size={14} /> },
   { id: 'profession', label: 'Профессия', icon: <Briefcase size={14} /> },
   { id: 'search',     label: 'Поиск',     icon: <Settings size={14} /> },
-  { id: 'social',     label: 'Соцсети',   icon: <Globe size={14} /> },
 ];
 
 export default function ProfilePage() {
@@ -259,6 +258,25 @@ export default function ProfilePage() {
                   {profile?.country && <span className="flex items-center gap-1 text-slate-400 text-xs"><Globe size={10} />{profile.country}</span>}
                   {profile?.city    && <span className="flex items-center gap-1 text-slate-400 text-xs"><MapPin size={10} />{profile.city}</span>}
                 </div>
+                {(profile?.vkLink || profile?.youtubeLink || profile?.telegramLink) && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {profile?.vkLink && (
+                      <a href={profile.vkLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-0.5 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 rounded-md text-xs transition-colors">
+                        <span className="font-bold">VK</span>
+                      </a>
+                    )}
+                    {profile?.youtubeLink && (
+                      <a href={profile.youtubeLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-0.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 rounded-md text-xs transition-colors">
+                        <span className="font-bold">YT</span>
+                      </a>
+                    )}
+                    {profile?.telegramLink && (
+                      <a href={profile.telegramLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-0.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 rounded-md text-xs transition-colors">
+                        <span className="font-bold">TG</span>
+                      </a>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Edit / Save buttons */}
@@ -338,6 +356,18 @@ export default function ProfilePage() {
                     <label className={labelCls}>Город</label>
                     <input type="text" value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="Москва" className={inputCls} />
                   </div>
+                </div>
+                <div>
+                  <label className={labelCls}>VK</label>
+                  <input type="text" value={formData.vkLink} onChange={e => setFormData({ ...formData, vkLink: e.target.value })} placeholder="https://vk.com/..." className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>YouTube</label>
+                  <input type="text" value={formData.youtubeLink} onChange={e => setFormData({ ...formData, youtubeLink: e.target.value })} placeholder="https://youtube.com/..." className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Telegram</label>
+                  <input type="text" value={formData.telegramLink} onChange={e => setFormData({ ...formData, telegramLink: e.target.value })} placeholder="https://t.me/..." className={inputCls} />
                 </div>
               </div>
             ) : (
@@ -654,78 +684,6 @@ export default function ProfilePage() {
             )
           )}
 
-          {/* ── СОЦСЕТИ ── */}
-          {activeTab === 'social' && (
-            isEditing ? (
-              <div className="p-4 space-y-4">
-                <div>
-                  <label className={labelCls}>Роль</label>
-                  <select value={formData.role} onChange={e => setFormData({ ...formData, role: e.target.value })} className={`${inputCls} cursor-pointer bg-slate-700/50`}>
-                    <option value="">Выберите роль</option>
-                    <option value="Продюсер">Продюсер</option>
-                    <option value="Вокалист">Вокалист</option>
-                    <option value="Битмейкер">Битмейкер</option>
-                    <option value="Композитор">Композитор</option>
-                    <option value="Саунд-дизайнер">Саунд-дизайнер</option>
-                    <option value="Диджей">Диджей</option>
-                    <option value="Звукорежиссер">Звукорежиссер</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={labelCls}>VK</label>
-                  <input type="text" value={formData.vkLink} onChange={e => setFormData({ ...formData, vkLink: e.target.value })} placeholder="https://vk.com/..." className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>YouTube</label>
-                  <input type="text" value={formData.youtubeLink} onChange={e => setFormData({ ...formData, youtubeLink: e.target.value })} placeholder="https://youtube.com/..." className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Telegram</label>
-                  <input type="text" value={formData.telegramLink} onChange={e => setFormData({ ...formData, telegramLink: e.target.value })} placeholder="https://t.me/..." className={inputCls} />
-                </div>
-              </div>
-            ) : (
-              <div className="p-4">
-                {(profile?.vkLink || profile?.youtubeLink || profile?.telegramLink || profile?.role) ? (
-                  <div className="space-y-2">
-                    {profile?.role && (
-                      <div className="flex items-center gap-2 pb-2 mb-2 border-b border-slate-700/50">
-                        <span className="text-slate-400 text-xs">Роль:</span>
-                        <span className="px-2 py-0.5 bg-primary-500/15 text-primary-300 text-xs font-medium rounded-md border border-primary-500/30">{profile.role}</span>
-                      </div>
-                    )}
-                    {profile?.vkLink && (
-                      <a href={profile.vkLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 py-2 text-slate-300 hover:text-white transition-colors group">
-                        <div className="w-7 h-7 bg-blue-500/15 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/25 transition-colors">
-                          <span className="text-blue-400 text-xs font-bold">VK</span>
-                        </div>
-                        <span className="text-sm flex-1 truncate">{profile.vkLink}</span>
-                        <ChevronRight size={14} className="text-slate-500 flex-shrink-0" />
-                      </a>
-                    )}
-                    {profile?.youtubeLink && (
-                      <a href={profile.youtubeLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 py-2 text-slate-300 hover:text-white transition-colors group">
-                        <div className="w-7 h-7 bg-red-500/15 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-red-500/25 transition-colors">
-                          <span className="text-red-400 text-xs font-bold">YT</span>
-                        </div>
-                        <span className="text-sm flex-1 truncate">{profile.youtubeLink}</span>
-                        <ChevronRight size={14} className="text-slate-500 flex-shrink-0" />
-                      </a>
-                    )}
-                    {profile?.telegramLink && (
-                      <a href={profile.telegramLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 py-2 text-slate-300 hover:text-white transition-colors group">
-                        <div className="w-7 h-7 bg-sky-500/15 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-sky-500/25 transition-colors">
-                          <span className="text-sky-400 text-xs font-bold">TG</span>
-                        </div>
-                        <span className="text-sm flex-1 truncate">{profile.telegramLink}</span>
-                        <ChevronRight size={14} className="text-slate-500 flex-shrink-0" />
-                      </a>
-                    )}
-                  </div>
-                ) : <EmptyState text="Соцсети не добавлены" />}
-              </div>
-            )
-          )}
         </div>
 
         {/* Save button (edit mode) */}
