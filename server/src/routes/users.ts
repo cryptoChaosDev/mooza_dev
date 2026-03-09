@@ -37,14 +37,16 @@ const userSelect = {
   vkLink: true,
   youtubeLink: true,
   telegramLink: true,
-  userSearchProfiles: {
+  userSearchProfile: {
     include: {
-      service: { select: { id: true, name: true } },
-      genre: { select: { id: true, name: true } },
-      workFormat: { select: { id: true, name: true } },
-      employmentType: { select: { id: true, name: true } },
-      skillLevel: { select: { id: true, name: true } },
-      availability: { select: { id: true, name: true } },
+      services: { select: { id: true, name: true } },
+      genres: { select: { id: true, name: true } },
+      workFormats: { select: { id: true, name: true } },
+      employmentTypes: { select: { id: true, name: true } },
+      skillLevels: { select: { id: true, name: true } },
+      availabilities: { select: { id: true, name: true } },
+      geographies: { select: { id: true, name: true } },
+      priceRanges: { select: { id: true, name: true } },
     },
   },
   createdAt: true,
@@ -175,67 +177,54 @@ router.put('/me/search-profile', authenticate, async (req: AuthRequest, res) => 
     }
 
     const {
-      serviceId,
-      genreId,
-      workFormatId,
-      employmentTypeId,
-      skillLevelId,
-      availabilityId,
-      pricePerHour,
-      pricePerEvent,
+      serviceIds = [],
+      genreIds = [],
+      workFormatIds = [],
+      employmentTypeIds = [],
+      skillLevelIds = [],
+      availabilityIds = [],
+      geographyIds = [],
+      priceRangeIds = [],
     } = req.body;
 
-    // Find existing or create new search profile
-    const existingProfile = await prisma.userSearchProfile.findFirst({
-      where: { userId: req.userId },
-    });
+    const toConnect = (ids: string[]) => ids.map((id: string) => ({ id }));
 
-    let searchProfile;
-    if (existingProfile) {
-      searchProfile = await prisma.userSearchProfile.update({
-        where: { id: existingProfile.id },
-        data: {
-          serviceId: serviceId || null,
-          genreId: genreId || null,
-          workFormatId: workFormatId || null,
-          employmentTypeId: employmentTypeId || null,
-          skillLevelId: skillLevelId || null,
-          availabilityId: availabilityId || null,
-          pricePerHour: pricePerHour || null,
-          pricePerEvent: pricePerEvent || null,
-        },
-        include: {
-          service: { select: { id: true, name: true } },
-          genre: { select: { id: true, name: true } },
-          workFormat: { select: { id: true, name: true } },
-          employmentType: { select: { id: true, name: true } },
-          skillLevel: { select: { id: true, name: true } },
-          availability: { select: { id: true, name: true } },
-        },
-      });
-    } else {
-      searchProfile = await prisma.userSearchProfile.create({
-        data: {
-          userId: req.userId,
-          serviceId: serviceId || null,
-          genreId: genreId || null,
-          workFormatId: workFormatId || null,
-          employmentTypeId: employmentTypeId || null,
-          skillLevelId: skillLevelId || null,
-          availabilityId: availabilityId || null,
-          pricePerHour: pricePerHour || null,
-          pricePerEvent: pricePerEvent || null,
-        },
-        include: {
-          service: { select: { id: true, name: true } },
-          genre: { select: { id: true, name: true } },
-          workFormat: { select: { id: true, name: true } },
-          employmentType: { select: { id: true, name: true } },
-          skillLevel: { select: { id: true, name: true } },
-          availability: { select: { id: true, name: true } },
-        },
-      });
-    }
+    const searchProfileInclude = {
+      services: { select: { id: true, name: true } },
+      genres: { select: { id: true, name: true } },
+      workFormats: { select: { id: true, name: true } },
+      employmentTypes: { select: { id: true, name: true } },
+      skillLevels: { select: { id: true, name: true } },
+      availabilities: { select: { id: true, name: true } },
+      geographies: { select: { id: true, name: true } },
+      priceRanges: { select: { id: true, name: true } },
+    };
+
+    const searchProfile = await prisma.userSearchProfile.upsert({
+      where: { userId: req.userId },
+      create: {
+        userId: req.userId,
+        services: { connect: toConnect(serviceIds) },
+        genres: { connect: toConnect(genreIds) },
+        workFormats: { connect: toConnect(workFormatIds) },
+        employmentTypes: { connect: toConnect(employmentTypeIds) },
+        skillLevels: { connect: toConnect(skillLevelIds) },
+        availabilities: { connect: toConnect(availabilityIds) },
+        geographies: { connect: toConnect(geographyIds) },
+        priceRanges: { connect: toConnect(priceRangeIds) },
+      },
+      update: {
+        services: { set: toConnect(serviceIds) },
+        genres: { set: toConnect(genreIds) },
+        workFormats: { set: toConnect(workFormatIds) },
+        employmentTypes: { set: toConnect(employmentTypeIds) },
+        skillLevels: { set: toConnect(skillLevelIds) },
+        availabilities: { set: toConnect(availabilityIds) },
+        geographies: { set: toConnect(geographyIds) },
+        priceRanges: { set: toConnect(priceRangeIds) },
+      },
+      include: searchProfileInclude,
+    });
 
     res.json(searchProfile);
   } catch (error) {

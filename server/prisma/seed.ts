@@ -6,394 +6,469 @@ async function main() {
   console.log('Seeding reference data...');
 
   // ============ Fields of Activity ============
-  const fields = await Promise.all([
-    prisma.fieldOfActivity.upsert({
-      where: { name: 'Музыкальное производство' },
-      update: {},
-      create: { name: 'Музыкальное производство' },
-    }),
-    prisma.fieldOfActivity.upsert({
-      where: { name: 'Исполнительское искусство' },
-      update: {},
-      create: { name: 'Исполнительское искусство' },
-    }),
-    prisma.fieldOfActivity.upsert({
-      where: { name: 'Звукорежиссура' },
-      update: {},
-      create: { name: 'Звукорежиссура' },
-    }),
-    prisma.fieldOfActivity.upsert({
-      where: { name: 'Музыкальный менеджмент' },
-      update: {},
-      create: { name: 'Музыкальный менеджмент' },
-    }),
-    prisma.fieldOfActivity.upsert({
-      where: { name: 'Образование и преподавание' },
-      update: {},
-      create: { name: 'Образование и преподавание' },
-    }),
-  ]);
-
-  console.log(`Created ${fields.length} fields of activity`);
-
-  // ============ Professions per Field ============
-  const professionData: { name: string; fieldIndex: number }[] = [
-    // Музыкальное производство (index 0)
-    { name: 'Продюсер', fieldIndex: 0 },
-    { name: 'Битмейкер', fieldIndex: 0 },
-    { name: 'Аранжировщик', fieldIndex: 0 },
-    { name: 'Композитор', fieldIndex: 0 },
-    { name: 'Саунд-дизайнер', fieldIndex: 0 },
-    // Исполнительское искусство (index 1)
-    { name: 'Вокалист', fieldIndex: 1 },
-    { name: 'Гитарист', fieldIndex: 1 },
-    { name: 'Барабанщик', fieldIndex: 1 },
-    { name: 'Клавишник', fieldIndex: 1 },
-    { name: 'Диджей', fieldIndex: 1 },
-    // Звукорежиссура (index 2)
-    { name: 'Звукорежиссёр', fieldIndex: 2 },
-    { name: 'Мастеринг-инженер', fieldIndex: 2 },
-    { name: 'Микс-инженер', fieldIndex: 2 },
-    { name: 'Звукооператор', fieldIndex: 2 },
-    { name: 'Инженер записи', fieldIndex: 2 },
-    // Музыкальный менеджмент (index 3)
-    { name: 'Музыкальный менеджер', fieldIndex: 3 },
-    { name: 'Концертный директор', fieldIndex: 3 },
-    { name: 'Букинг-агент', fieldIndex: 3 },
-    { name: 'PR-менеджер', fieldIndex: 3 },
-    { name: 'A&R менеджер', fieldIndex: 3 },
-    // Образование и преподавание (index 4)
-    { name: 'Преподаватель вокала', fieldIndex: 4 },
-    { name: 'Преподаватель гитары', fieldIndex: 4 },
-    { name: 'Преподаватель фортепиано', fieldIndex: 4 },
-    { name: 'Музыкальный теоретик', fieldIndex: 4 },
-    { name: 'Репетитор по сольфеджио', fieldIndex: 4 },
+  const fieldNames = [
+    'Музыкант-исполнитель',
+    'Музыкальное производство',
+    'Звукорежиссура',
+    'Музыкальный менеджмент',
+    'Образование и преподавание',
   ];
 
-  const professions: any[] = [];
+  const fields: Record<string, any> = {};
+  for (const name of fieldNames) {
+    fields[name] = await prisma.fieldOfActivity.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+  }
+  console.log(`Created ${Object.keys(fields).length} fields of activity`);
+
+  // ============ Professions ============
+  // БЛОК 1 — МУЗЫКАНТЫ-ИСПОЛНИТЕЛИ
+  const professionData: { name: string; field: string }[] = [
+    { name: 'Вокалист', field: 'Музыкант-исполнитель' },
+    { name: 'Гитарист', field: 'Музыкант-исполнитель' },
+    { name: 'Басист', field: 'Музыкант-исполнитель' },
+    { name: 'Ударник', field: 'Музыкант-исполнитель' },
+    { name: 'Клавишник', field: 'Музыкант-исполнитель' },
+    { name: 'Скрипач', field: 'Музыкант-исполнитель' },
+    { name: 'Виолончелист', field: 'Музыкант-исполнитель' },
+    { name: 'Духовик', field: 'Музыкант-исполнитель' },
+    { name: 'Перкуссионист', field: 'Музыкант-исполнитель' },
+    { name: 'Диджей', field: 'Музыкант-исполнитель' },
+    { name: 'Аккордеонист', field: 'Музыкант-исполнитель' },
+    { name: 'Арфист', field: 'Музыкант-исполнитель' },
+    { name: 'Пианист', field: 'Музыкант-исполнитель' },
+    // Музыкальное производство
+    { name: 'Продюсер', field: 'Музыкальное производство' },
+    { name: 'Битмейкер', field: 'Музыкальное производство' },
+    { name: 'Аранжировщик', field: 'Музыкальное производство' },
+    { name: 'Композитор', field: 'Музыкальное производство' },
+    { name: 'Саунд-дизайнер', field: 'Музыкальное производство' },
+    // Звукорежиссура
+    { name: 'Звукорежиссёр', field: 'Звукорежиссура' },
+    { name: 'Мастеринг-инженер', field: 'Звукорежиссура' },
+    { name: 'Микс-инженер', field: 'Звукорежиссура' },
+    { name: 'Звукооператор', field: 'Звукорежиссура' },
+    { name: 'Инженер записи', field: 'Звукорежиссура' },
+    // Музыкальный менеджмент
+    { name: 'Музыкальный менеджер', field: 'Музыкальный менеджмент' },
+    { name: 'Концертный директор', field: 'Музыкальный менеджмент' },
+    { name: 'Букинг-агент', field: 'Музыкальный менеджмент' },
+    { name: 'PR-менеджер', field: 'Музыкальный менеджмент' },
+    { name: 'A&R менеджер', field: 'Музыкальный менеджмент' },
+    // Образование и преподавание
+    { name: 'Преподаватель вокала', field: 'Образование и преподавание' },
+    { name: 'Преподаватель гитары', field: 'Образование и преподавание' },
+    { name: 'Преподаватель фортепиано', field: 'Образование и преподавание' },
+    { name: 'Музыкальный теоретик', field: 'Образование и преподавание' },
+    { name: 'Репетитор по сольфеджио', field: 'Образование и преподавание' },
+  ];
+
+  const professions: Record<string, any> = {};
   for (const p of professionData) {
-    const profession = await prisma.profession.upsert({
+    const prof = await prisma.profession.upsert({
       where: {
         name_fieldOfActivityId: {
           name: p.name,
-          fieldOfActivityId: fields[p.fieldIndex].id,
+          fieldOfActivityId: fields[p.field].id,
         },
       },
       update: {},
       create: {
         name: p.name,
-        fieldOfActivityId: fields[p.fieldIndex].id,
+        fieldOfActivityId: fields[p.field].id,
       },
     });
-    professions.push(profession);
+    professions[p.name] = prof;
   }
-
-  console.log(`Created ${professions.length} professions`);
+  console.log(`Created ${Object.keys(professions).length} professions`);
 
   // ============ Services per Profession ============
-  const serviceData: { name: string; nameEn: string; professionIndices: number[] }[] = [
-    // Production services
-    { name: 'Сессионная работа', nameEn: 'Session Work', professionIndices: [0, 1, 2, 3] },
-    { name: 'Живое выступление', nameEn: 'Live Performance', professionIndices: [0, 1, 2, 3] },
-    { name: 'Студийная запись', nameEn: 'Studio Recording', professionIndices: [0, 1, 2, 3, 4] },
-    { name: 'Микширование', nameEn: 'Mixing', professionIndices: [0, 1, 2] },
-    { name: 'Мастеринг', nameEn: 'Mastering', professionIndices: [0, 1, 2] },
-    { name: 'Саунд-дизайн', nameEn: 'Sound Design', professionIndices: [0, 4] },
-    { name: 'Запись вокала', nameEn: 'Vocal Recording', professionIndices: [0, 1, 2, 3] },
-    { name: 'Обучение игре на инструменте', nameEn: 'Instrument Lessons', professionIndices: [0, 1, 2, 3, 4] },
-    { name: 'Композиция', nameEn: 'Composition', professionIndices: [0, 2, 3] },
-    { name: 'Аранжировка', nameEn: 'Arranging', professionIndices: [0, 2] },
-    { name: 'Продюсирование', nameEn: 'Production', professionIndices: [0] },
-    { name: 'DJ-сет', nameEn: 'DJ Set', professionIndices: [4] },
-    { name: 'Звукорежиссура', nameEn: 'Sound Engineering', professionIndices: [0, 1, 2, 3] },
-    { name: 'Аудио монтаж', nameEn: 'Audio Editing', professionIndices: [0, 1, 2] },
-    { name: 'Создание минусовок', nameEn: 'Backing Track Creation', professionIndices: [0, 1, 2, 3] },
+  // Services for БЛОК 1 — МУЗЫКАНТЫ-ИСПОЛНИТЕЛИ
+  const serviceData: { name: string; nameEn: string; professions: string[]; sortOrder: number }[] = [
+    {
+      name: 'Живое выступление',
+      nameEn: 'Live Performance',
+      professions: ['Вокалист', 'Гитарист', 'Басист', 'Ударник', 'Клавишник', 'Скрипач', 'Виолончелист', 'Духовик', 'Перкуссионист', 'Диджей', 'Аккордеонист', 'Арфист', 'Пианист'],
+      sortOrder: 0,
+    },
+    {
+      name: 'Сессионная работа',
+      nameEn: 'Session Work',
+      professions: ['Вокалист', 'Гитарист', 'Басист', 'Ударник', 'Клавишник', 'Скрипач', 'Виолончелист', 'Духовик', 'Перкуссионист', 'Аккордеонист', 'Арфист', 'Пианист'],
+      sortOrder: 1,
+    },
+    {
+      name: 'Студийная запись',
+      nameEn: 'Studio Recording',
+      professions: ['Вокалист', 'Гитарист', 'Басист', 'Ударник', 'Клавишник', 'Скрипач', 'Виолончелист', 'Духовик', 'Перкуссионист', 'Аккордеонист', 'Арфист', 'Пианист'],
+      sortOrder: 2,
+    },
+    {
+      name: 'Запись вокала',
+      nameEn: 'Vocal Recording',
+      professions: ['Вокалист'],
+      sortOrder: 3,
+    },
+    {
+      name: 'Бэк-вокал',
+      nameEn: 'Backing Vocals',
+      professions: ['Вокалист'],
+      sortOrder: 4,
+    },
+    {
+      name: 'Озвучка / Джингл',
+      nameEn: 'Voiceover / Jingle',
+      professions: ['Вокалист'],
+      sortOrder: 5,
+    },
+    {
+      name: 'DJ-сет',
+      nameEn: 'DJ Set',
+      professions: ['Диджей'],
+      sortOrder: 6,
+    },
+    {
+      name: 'Продюсирование',
+      nameEn: 'Music Production',
+      professions: ['Продюсер', 'Битмейкер'],
+      sortOrder: 7,
+    },
+    {
+      name: 'Создание битов',
+      nameEn: 'Beat Making',
+      professions: ['Битмейкер'],
+      sortOrder: 8,
+    },
+    {
+      name: 'Аранжировка',
+      nameEn: 'Arranging',
+      professions: ['Аранжировщик', 'Композитор'],
+      sortOrder: 9,
+    },
+    {
+      name: 'Композиция',
+      nameEn: 'Composition',
+      professions: ['Композитор'],
+      sortOrder: 10,
+    },
+    {
+      name: 'Саунд-дизайн',
+      nameEn: 'Sound Design',
+      professions: ['Саунд-дизайнер'],
+      sortOrder: 11,
+    },
+    {
+      name: 'Микширование',
+      nameEn: 'Mixing',
+      professions: ['Звукорежиссёр', 'Микс-инженер'],
+      sortOrder: 12,
+    },
+    {
+      name: 'Мастеринг',
+      nameEn: 'Mastering',
+      professions: ['Мастеринг-инженер'],
+      sortOrder: 13,
+    },
+    {
+      name: 'Звукорежиссура мероприятий',
+      nameEn: 'Event Sound Engineering',
+      professions: ['Звукорежиссёр', 'Звукооператор'],
+      sortOrder: 14,
+    },
+    {
+      name: 'Запись в студии',
+      nameEn: 'Studio Session',
+      professions: ['Инженер записи'],
+      sortOrder: 15,
+    },
+    {
+      name: 'Аудио монтаж',
+      nameEn: 'Audio Editing',
+      professions: ['Звукорежиссёр', 'Инженер записи'],
+      sortOrder: 16,
+    },
+    {
+      name: 'Обучение вокалу',
+      nameEn: 'Vocal Lessons',
+      professions: ['Преподаватель вокала'],
+      sortOrder: 17,
+    },
+    {
+      name: 'Обучение игре на гитаре',
+      nameEn: 'Guitar Lessons',
+      professions: ['Преподаватель гитары'],
+      sortOrder: 18,
+    },
+    {
+      name: 'Обучение игре на фортепиано',
+      nameEn: 'Piano Lessons',
+      professions: ['Преподаватель фортепиано'],
+      sortOrder: 19,
+    },
+    {
+      name: 'Теория музыки',
+      nameEn: 'Music Theory',
+      professions: ['Музыкальный теоретик', 'Репетитор по сольфеджио'],
+      sortOrder: 20,
+    },
+    {
+      name: 'Менеджмент артиста',
+      nameEn: 'Artist Management',
+      professions: ['Музыкальный менеджер'],
+      sortOrder: 21,
+    },
+    {
+      name: 'Организация концертов',
+      nameEn: 'Concert Organization',
+      professions: ['Концертный директор', 'Букинг-агент'],
+      sortOrder: 22,
+    },
+    {
+      name: 'PR и продвижение',
+      nameEn: 'PR & Promotion',
+      professions: ['PR-менеджер'],
+      sortOrder: 23,
+    },
+    {
+      name: 'Работа с артистами (A&R)',
+      nameEn: 'A&R',
+      professions: ['A&R менеджер'],
+      sortOrder: 24,
+    },
   ];
 
-  const services: any[] = [];
   for (const s of serviceData) {
-    for (const profIndex of s.professionIndices) {
-      const service = await prisma.service.upsert({
-        where: {
-          name: s.name,
-        },
-        update: {},
-        create: {
-          name: s.name,
-          nameEn: s.nameEn,
-          professionId: professions[profIndex].id,
-          sortOrder: serviceData.indexOf(s),
-        },
-      });
-      services.push({ ...service, professionId: professions[profIndex].id });
-    }
-  }
+    // Use the first profession as the primary one (for the FK)
+    const primaryProfession = professions[s.professions[0]];
+    if (!primaryProfession) continue;
 
-  console.log(`Created ${services.length} service-profession links`);
+    await prisma.service.upsert({
+      where: { name: s.name },
+      update: { sortOrder: s.sortOrder },
+      create: {
+        name: s.name,
+        nameEn: s.nameEn,
+        professionId: primaryProfession.id,
+        sortOrder: s.sortOrder,
+      },
+    });
+  }
+  console.log(`Created ${serviceData.length} services`);
 
   // ============ Genres ============
-  const genreData: { name: string; nameEn: string }[] = [
-    { name: 'Рок', nameEn: 'Rock' },
-    { name: 'Поп', nameEn: 'Pop' },
-    { name: 'Джаз', nameEn: 'Jazz' },
-    { name: 'Классика', nameEn: 'Classical' },
-    { name: 'Электроника', nameEn: 'Electronic' },
-    { name: 'Хип-хоп', nameEn: 'Hip-Hop' },
-    { name: 'R&B', nameEn: 'R&B' },
-    { name: 'Кантри', nameEn: 'Country' },
-    { name: 'Фолк', nameEn: 'Folk' },
-    { name: 'Метал', nameEn: 'Metal' },
-    { name: 'Инди', nameEn: 'Indie' },
-    { name: 'Альтернатива', nameEn: 'Alternative' },
-    { name: 'Блюз', nameEn: 'Blues' },
-    { name: 'Регги', nameEn: 'Reggae' },
-    { name: 'Латинская музыка', nameEn: 'Latin' },
-    { name: 'Эмбиент', nameEn: 'Ambient' },
-    { name: 'Оркестровая', nameEn: 'Orchestral' },
+  const genreData: { name: string; nameEn: string; sortOrder: number }[] = [
+    { name: 'Поп', nameEn: 'Pop', sortOrder: 0 },
+    { name: 'Рок', nameEn: 'Rock', sortOrder: 1 },
+    { name: 'Хип-хоп / Рэп', nameEn: 'Hip-Hop / Rap', sortOrder: 2 },
+    { name: 'Электроника', nameEn: 'Electronic', sortOrder: 3 },
+    { name: 'Джаз', nameEn: 'Jazz', sortOrder: 4 },
+    { name: 'Классика', nameEn: 'Classical', sortOrder: 5 },
+    { name: 'R&B / Soul', nameEn: 'R&B / Soul', sortOrder: 6 },
+    { name: 'Метал', nameEn: 'Metal', sortOrder: 7 },
+    { name: 'Инди', nameEn: 'Indie', sortOrder: 8 },
+    { name: 'Альтернатива', nameEn: 'Alternative', sortOrder: 9 },
+    { name: 'Фолк', nameEn: 'Folk', sortOrder: 10 },
+    { name: 'Блюз', nameEn: 'Blues', sortOrder: 11 },
+    { name: 'Регги', nameEn: 'Reggae', sortOrder: 12 },
+    { name: 'Латинская музыка', nameEn: 'Latin', sortOrder: 13 },
+    { name: 'Эмбиент', nameEn: 'Ambient', sortOrder: 14 },
+    { name: 'Оркестровая', nameEn: 'Orchestral', sortOrder: 15 },
+    { name: 'Кантри', nameEn: 'Country', sortOrder: 16 },
+    { name: 'Фанк', nameEn: 'Funk', sortOrder: 17 },
+    { name: 'Поп-рок', nameEn: 'Pop-Rock', sortOrder: 18 },
+    { name: 'Диско', nameEn: 'Disco', sortOrder: 19 },
+    { name: 'Хаус', nameEn: 'House', sortOrder: 20 },
+    { name: 'Техно', nameEn: 'Techno', sortOrder: 21 },
+    { name: 'Дабстеп', nameEn: 'Dubstep', sortOrder: 22 },
+    { name: 'Трэп', nameEn: 'Trap', sortOrder: 23 },
+    { name: 'Шансон', nameEn: 'Chanson', sortOrder: 24 },
+    { name: 'Детская музыка', nameEn: 'Children', sortOrder: 25 },
   ];
 
-  // Link genres to all services (many-to-many relationship)
-  const allServices = await prisma.service.findMany({
-    include: { genres: true },
-  });
-
-  for (const service of allServices) {
-    // Link first 5 genres to each service
-    const genresToLink = genreData.slice(0, 5);
-    for (const genre of genresToLink) {
-      const existingGenre = await prisma.genre.findUnique({
-        where: { name: genre.name },
-      });
-      
-      if (existingGenre) {
-        await prisma.genre.update({
-          where: { id: existingGenre.id },
-          data: {
-            serviceId: service.id,
-          },
-        });
-      } else {
-        await prisma.genre.create({
-          data: {
-            name: genre.name,
-            nameEn: genre.nameEn,
-            serviceId: service.id,
-          },
-        });
-      }
-    }
+  for (const g of genreData) {
+    await prisma.genre.upsert({
+      where: { name: g.name },
+      update: { sortOrder: g.sortOrder },
+      create: { name: g.name, nameEn: g.nameEn, sortOrder: g.sortOrder },
+    });
   }
-
-  console.log(`Created ${genreData.length} genres linked to services`);
+  console.log(`Created ${genreData.length} genres`);
 
   // ============ Work Formats ============
-  const workFormats = await Promise.all([
-    prisma.workFormat.upsert({
-      where: { name: 'Удалённо' },
-      update: {},
-      create: { name: 'Удалённо', nameEn: 'Remote', sortOrder: 0 },
-    }),
-    prisma.workFormat.upsert({
-      where: { name: 'На площадке' },
-      update: {},
-      create: { name: 'На площадке', nameEn: 'On-site', sortOrder: 1 },
-    }),
-    prisma.workFormat.upsert({
-      where: { name: 'Гибрид' },
-      update: {},
-      create: { name: 'Гибрид', nameEn: 'Hybrid', sortOrder: 2 },
-    }),
-    prisma.workFormat.upsert({
-      where: { name: 'В студии' },
-      update: {},
-      create: { name: 'В студии', nameEn: 'Studio', sortOrder: 3 },
-    }),
-    prisma.workFormat.upsert({
-      where: { name: 'На живом мероприятии' },
-      update: {},
-      create: { name: 'На живом мероприятии', nameEn: 'Live Venue', sortOrder: 4 },
-    }),
-  ]);
+  const workFormatData: { name: string; nameEn: string; sortOrder: number }[] = [
+    { name: 'Онлайн / Удалённо', nameEn: 'Online / Remote', sortOrder: 0 },
+    { name: 'На площадке', nameEn: 'On-site', sortOrder: 1 },
+    { name: 'В студии', nameEn: 'In studio', sortOrder: 2 },
+    { name: 'На живом мероприятии', nameEn: 'Live event', sortOrder: 3 },
+    { name: 'Гибридный формат', nameEn: 'Hybrid', sortOrder: 4 },
+  ];
 
-  console.log(`Created ${workFormats.length} work formats`);
+  for (const w of workFormatData) {
+    await prisma.workFormat.upsert({
+      where: { name: w.name },
+      update: { sortOrder: w.sortOrder },
+      create: { name: w.name, nameEn: w.nameEn, sortOrder: w.sortOrder },
+    });
+  }
+  console.log(`Created ${workFormatData.length} work formats`);
 
   // ============ Employment Types ============
-  const employmentTypes = await Promise.all([
-    prisma.employmentType.upsert({
-      where: { name: 'Полная занятость' },
-      update: {},
-      create: { name: 'Полная занятость', nameEn: 'Full-time', sortOrder: 0 },
-    }),
-    prisma.employmentType.upsert({
-      where: { name: 'Частичная занятость' },
-      update: {},
-      create: { name: 'Частичная занятость', nameEn: 'Part-time', sortOrder: 1 },
-    }),
-    prisma.employmentType.upsert({
-      where: { name: 'Фриланс' },
-      update: {},
-      create: { name: 'Фриланс', nameEn: 'Freelance', sortOrder: 2 },
-    }),
-    prisma.employmentType.upsert({
-      where: { name: 'Проектная работа' },
-      update: {},
-      create: { name: 'Проектная работа', nameEn: 'Project-based', sortOrder: 3 },
-    }),
-  ]);
+  const employmentTypeData: { name: string; nameEn: string; sortOrder: number }[] = [
+    { name: 'Разовый проект', nameEn: 'One-time project', sortOrder: 0 },
+    { name: 'Фриланс', nameEn: 'Freelance', sortOrder: 1 },
+    { name: 'Частичная занятость', nameEn: 'Part-time', sortOrder: 2 },
+    { name: 'Полная занятость', nameEn: 'Full-time', sortOrder: 3 },
+    { name: 'Штатный сотрудник', nameEn: 'Staff', sortOrder: 4 },
+  ];
 
-  console.log(`Created ${employmentTypes.length} employment types`);
+  for (const e of employmentTypeData) {
+    await prisma.employmentType.upsert({
+      where: { name: e.name },
+      update: { sortOrder: e.sortOrder },
+      create: { name: e.name, nameEn: e.nameEn, sortOrder: e.sortOrder },
+    });
+  }
+  console.log(`Created ${employmentTypeData.length} employment types`);
 
   // ============ Skill Levels ============
-  const skillLevels = await Promise.all([
-    prisma.skillLevel.upsert({
-      where: { name: 'Начинающий' },
-      update: {},
-      create: { name: 'Начинающий', nameEn: 'Beginner', sortOrder: 0 },
-    }),
-    prisma.skillLevel.upsert({
-      where: { name: 'Средний уровень' },
-      update: {},
-      create: { name: 'Средний уровень', nameEn: 'Intermediate', sortOrder: 1 },
-    }),
-    prisma.skillLevel.upsert({
-      where: { name: 'Продвинутый' },
-      update: {},
-      create: { name: 'Продвинутый', nameEn: 'Advanced', sortOrder: 2 },
-    }),
-    prisma.skillLevel.upsert({
-      where: { name: 'Профессионал' },
-      update: {},
-      create: { name: 'Профессионал', nameEn: 'Professional', sortOrder: 3 },
-    }),
-    prisma.skillLevel.upsert({
-      where: { name: 'Мастер' },
-      update: {},
-      create: { name: 'Мастер', nameEn: 'Master', sortOrder: 4 },
-    }),
-  ]);
+  const skillLevelData: { name: string; nameEn: string; sortOrder: number }[] = [
+    { name: 'Начинающий', nameEn: 'Beginner', sortOrder: 0 },
+    { name: 'Любитель', nameEn: 'Amateur', sortOrder: 1 },
+    { name: 'Полупрофессионал', nameEn: 'Semi-professional', sortOrder: 2 },
+    { name: 'Профессионал', nameEn: 'Professional', sortOrder: 3 },
+  ];
 
-  console.log(`Created ${skillLevels.length} skill levels`);
+  for (const s of skillLevelData) {
+    await prisma.skillLevel.upsert({
+      where: { name: s.name },
+      update: { sortOrder: s.sortOrder },
+      create: { name: s.name, nameEn: s.nameEn, sortOrder: s.sortOrder },
+    });
+  }
+  console.log(`Created ${skillLevelData.length} skill levels`);
 
   // ============ Availabilities ============
-  const availabilities = await Promise.all([
-    prisma.availability.upsert({
-      where: { name: 'Немедленно' },
-      update: {},
-      create: { name: 'Немедленно', nameEn: 'Immediate', sortOrder: 0 },
-    }),
-    prisma.availability.upsert({
-      where: { name: 'В течение недели' },
-      update: {},
-      create: { name: 'В течение недели', nameEn: 'Within 1 week', sortOrder: 1 },
-    }),
-    prisma.availability.upsert({
-      where: { name: 'В течение месяца' },
-      update: {},
-      create: { name: 'В течение месяца', nameEn: 'Within 1 month', sortOrder: 2 },
-    }),
-    prisma.availability.upsert({
-      where: { name: 'По договорённости' },
-      update: {},
-      create: { name: 'По договорённости', nameEn: 'By arrangement', sortOrder: 3 },
-    }),
-  ]);
+  const availabilityData: { name: string; nameEn: string; sortOrder: number }[] = [
+    { name: 'Готов к работе сейчас', nameEn: 'Available now', sortOrder: 0 },
+    { name: 'В течение недели', nameEn: 'Within 1 week', sortOrder: 1 },
+    { name: 'В течение месяца', nameEn: 'Within 1 month', sortOrder: 2 },
+    { name: 'По договорённости', nameEn: 'By arrangement', sortOrder: 3 },
+  ];
 
-  console.log(`Created ${availabilities.length} availabilities`);
+  for (const a of availabilityData) {
+    await prisma.availability.upsert({
+      where: { name: a.name },
+      update: { sortOrder: a.sortOrder },
+      create: { name: a.name, nameEn: a.nameEn, sortOrder: a.sortOrder },
+    });
+  }
+  console.log(`Created ${availabilityData.length} availabilities`);
+
+  // ============ Price Ranges ============
+  const priceRangeData: { name: string; nameEn: string; minValue: number | null; maxValue: number | null; sortOrder: number }[] = [
+    { name: 'До 5 000 ₽', nameEn: 'Up to 5,000 ₽', minValue: null, maxValue: 5000, sortOrder: 0 },
+    { name: '5 000 – 15 000 ₽', nameEn: '5,000 – 15,000 ₽', minValue: 5000, maxValue: 15000, sortOrder: 1 },
+    { name: '15 000 – 30 000 ₽', nameEn: '15,000 – 30,000 ₽', minValue: 15000, maxValue: 30000, sortOrder: 2 },
+    { name: '30 000 – 60 000 ₽', nameEn: '30,000 – 60,000 ₽', minValue: 30000, maxValue: 60000, sortOrder: 3 },
+    { name: 'От 60 000 ₽', nameEn: 'From 60,000 ₽', minValue: 60000, maxValue: null, sortOrder: 4 },
+    { name: 'По договорённости', nameEn: 'By arrangement', minValue: null, maxValue: null, sortOrder: 5 },
+  ];
+
+  for (const p of priceRangeData) {
+    await prisma.priceRange.upsert({
+      where: { name: p.name },
+      update: { sortOrder: p.sortOrder },
+      create: {
+        name: p.name,
+        nameEn: p.nameEn,
+        minValue: p.minValue,
+        maxValue: p.maxValue,
+        sortOrder: p.sortOrder,
+      },
+    });
+  }
+  console.log(`Created ${priceRangeData.length} price ranges`);
+
+  // ============ Geographies ============
+  const geographyData: { name: string; nameEn: string; sortOrder: number }[] = [
+    { name: 'Вся Россия', nameEn: 'All Russia', sortOrder: 0 },
+    { name: 'Онлайн', nameEn: 'Online', sortOrder: 1 },
+    { name: 'Москва', nameEn: 'Moscow', sortOrder: 2 },
+    { name: 'Санкт-Петербург', nameEn: 'Saint Petersburg', sortOrder: 3 },
+    { name: 'Екатеринбург', nameEn: 'Yekaterinburg', sortOrder: 4 },
+    { name: 'Новосибирск', nameEn: 'Novosibirsk', sortOrder: 5 },
+    { name: 'Казань', nameEn: 'Kazan', sortOrder: 6 },
+    { name: 'Краснодар', nameEn: 'Krasnodar', sortOrder: 7 },
+    { name: 'Нижний Новгород', nameEn: 'Nizhny Novgorod', sortOrder: 8 },
+    { name: 'Ростов-на-Дону', nameEn: 'Rostov-on-Don', sortOrder: 9 },
+    { name: 'Уфа', nameEn: 'Ufa', sortOrder: 10 },
+    { name: 'Самара', nameEn: 'Samara', sortOrder: 11 },
+    { name: 'Волгоград', nameEn: 'Volgograd', sortOrder: 12 },
+    { name: 'Воронеж', nameEn: 'Voronezh', sortOrder: 13 },
+    { name: 'Пермь', nameEn: 'Perm', sortOrder: 14 },
+    { name: 'Другой город', nameEn: 'Other city', sortOrder: 15 },
+  ];
+
+  for (const g of geographyData) {
+    await prisma.geography.upsert({
+      where: { name: g.name },
+      update: { sortOrder: g.sortOrder },
+      create: { name: g.name, nameEn: g.nameEn, sortOrder: g.sortOrder },
+    });
+  }
+  console.log(`Created ${geographyData.length} geographies`);
 
   // ============ Profession Features ============
-  const features = await Promise.all([
-    prisma.professionFeature.upsert({
-      where: { name: 'Начинающий' },
-      update: {},
-      create: { name: 'Начинающий' },
-    }),
-    prisma.professionFeature.upsert({
-      where: { name: 'Средний уровень' },
-      update: {},
-      create: { name: 'Средний уровень' },
-    }),
-    prisma.professionFeature.upsert({
-      where: { name: 'Профессионал' },
-      update: {},
-      create: { name: 'Профессионал' },
-    }),
-    prisma.professionFeature.upsert({
-      where: { name: 'Работаю платно' },
-      update: {},
-      create: { name: 'Работаю платно' },
-    }),
-    prisma.professionFeature.upsert({
-      where: { name: 'Работаю бесплатно' },
-      update: {},
-      create: { name: 'Работаю бесплатно' },
-    }),
-  ]);
+  const featureNames = [
+    'Начинающий',
+    'Средний уровень',
+    'Профессионал',
+    'Работаю платно',
+    'Работаю бесплатно',
+  ];
 
-  console.log(`Created ${features.length} profession features`);
+  for (const name of featureNames) {
+    await prisma.professionFeature.upsert({
+      where: { name },
+      update: {},
+      create: { name },
+    });
+  }
+  console.log(`Created ${featureNames.length} profession features`);
 
   // ============ Artists ============
-  const artists = await Promise.all([
-    prisma.artist.upsert({
-      where: { name: 'Сплин' },
+  const artistNames = ['Сплин', 'Земфира', 'Мумий Тролль', 'Би-2', 'Noize MC'];
+  for (const name of artistNames) {
+    await prisma.artist.upsert({
+      where: { name },
       update: {},
-      create: { name: 'Сплин' },
-    }),
-    prisma.artist.upsert({
-      where: { name: 'Земфира' },
-      update: {},
-      create: { name: 'Земфира' },
-    }),
-    prisma.artist.upsert({
-      where: { name: 'Мумий Тролль' },
-      update: {},
-      create: { name: 'Мумий Тролль' },
-    }),
-    prisma.artist.upsert({
-      where: { name: 'Би-2' },
-      update: {},
-      create: { name: 'Би-2' },
-    }),
-    prisma.artist.upsert({
-      where: { name: 'Noize MC' },
-      update: {},
-      create: { name: 'Noize MC' },
-    }),
-  ]);
-
-  console.log(`Created ${artists.length} artists`);
+      create: { name },
+    });
+  }
+  console.log(`Created ${artistNames.length} artists`);
 
   // ============ Employers ============
-  const employers = await Promise.all([
-    prisma.employer.upsert({
-      where: { inn: '7707083893' },
-      update: {},
-      create: { name: 'Universal Music Russia', inn: '7707083893', ogrn: '1027700132195' },
-    }),
-    prisma.employer.upsert({
-      where: { inn: '7714456789' },
-      update: {},
-      create: { name: 'Sony Music Entertainment', inn: '7714456789', ogrn: '1037714067890' },
-    }),
-    prisma.employer.upsert({
-      where: { inn: '7725123456' },
-      update: {},
-      create: { name: 'Warner Music Russia', inn: '7725123456', ogrn: '1047725012345' },
-    }),
-    prisma.employer.upsert({
-      where: { inn: '7701987654' },
-      update: {},
-      create: { name: 'Gazgolder', inn: '7701987654', ogrn: '1057701098765' },
-    }),
-    prisma.employer.upsert({
-      where: { inn: '7709876543' },
-      update: {},
-      create: { name: 'Black Star', inn: '7709876543', ogrn: '1067709087654' },
-    }),
-  ]);
+  const employerData = [
+    { name: 'Universal Music Russia', inn: '7707083893', ogrn: '1027700132195' },
+    { name: 'Sony Music Entertainment', inn: '7714456789', ogrn: '1037714067890' },
+    { name: 'Warner Music Russia', inn: '7725123456', ogrn: '1047725012345' },
+    { name: 'Gazgolder', inn: '7701987654', ogrn: '1057701098765' },
+    { name: 'Black Star', inn: '7709876543', ogrn: '1067709087654' },
+  ];
 
-  console.log(`Created ${employers.length} employers`);
+  for (const e of employerData) {
+    await prisma.employer.upsert({
+      where: { inn: e.inn },
+      update: {},
+      create: e,
+    });
+  }
+  console.log(`Created ${employerData.length} employers`);
 
-  console.log('Seeding completed!');
+  console.log('\nSeeding completed!');
 }
 
 main()
