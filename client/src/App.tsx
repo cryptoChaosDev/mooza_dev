@@ -1,5 +1,7 @@
+import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useAuthStore } from './stores/authStore';
+import { connectSocket, disconnectSocket, getSocket } from './lib/socket';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -12,8 +14,62 @@ import MessagesPage from './pages/MessagesPage';
 import ChatPage from './pages/ChatPage';
 import Layout from './components/Layout';
 
+function showNotification(title: string, body: string, icon?: string) {
+  if (Notification.permission !== 'granted') return;
+  new Notification(title, { body, icon: icon || '/vite.svg' });
+}
+
 function App() {
   const { token } = useAuthStore();
+
+  useEffect(() => {
+    if (!token) {
+      disconnectSocket();
+      return;
+    }
+
+    // Request notification permission
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    const socket = connectSocket(token);
+
+    socket.on('new_message', (message: any) => {
+      const senderName = message.sender
+        ? `${message.sender.firstName} ${message.sender.lastName}`
+        : 'Новое сообщение';
+      showNotification(senderName, message.content, message.sender?.avatar);
+    });
+
+    socket.on('friend_request', ({ requester }: any) => {
+      if (!requester) return;
+      showNotification(
+        'Заявка в друзья',
+        `${requester.firstName} ${requester.lastName} хочет добавить вас в друзья`,
+        requester.avatar,
+      );
+    });
+
+    socket.on('friend_accepted', ({ friendship }: any) => {
+      const accepter = friendship?.requester;
+      if (!accepter) return;
+      showNotification(
+        'Вас добавили в друзья',
+        `${accepter.firstName} ${accepter.lastName} принял(а) вашу заявку`,
+        accepter.avatar,
+      );
+    });
+
+    return () => {
+      const s = getSocket();
+      if (s) {
+        s.off('new_message');
+        s.off('friend_request');
+        s.off('friend_accepted');
+      }
+    };
+  }, [token]);
 
   if (!token) {
     return (
