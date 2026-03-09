@@ -11,11 +11,11 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     const { receiverId } = req.body;
 
     if (!receiverId) {
-      return res.status(400).json({ error: 'Receiver ID is required' });
+      return res.status(400).json({ error: 'Не указан получатель' });
     }
 
     if (receiverId === req.userId) {
-      return res.status(400).json({ error: 'Cannot send friend request to yourself' });
+      return res.status(400).json({ error: 'Нельзя отправить заявку самому себе' });
     }
 
     // Check if request already exists
@@ -29,7 +29,13 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     });
 
     if (existing) {
-      return res.status(400).json({ error: 'Friend request already exists' });
+      if (existing.status === 'accepted') {
+        return res.status(400).json({ error: 'Вы уже друзья с этим пользователем' });
+      }
+      if (existing.requesterId === receiverId) {
+        return res.status(400).json({ error: 'Этот пользователь уже отправил вам заявку. Проверьте вкладку «Заявки»' });
+      }
+      return res.status(400).json({ error: 'Вы уже отправили заявку этому пользователю' });
     }
 
     const friendship = await prisma.friendship.create({
