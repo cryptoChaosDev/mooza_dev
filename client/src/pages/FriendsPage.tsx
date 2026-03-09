@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Users, Check, X, MessageCircle, User, UserX, Clock } from 'lucide-react';
+import { Users, Check, X, MessageCircle, UserX, Clock } from 'lucide-react';
 import { friendshipAPI } from '../lib/api';
 
 type Tab = 'friends' | 'requests' | 'sent';
@@ -147,7 +147,7 @@ export default function FriendsPage() {
                 const friendshipId = item.friendshipId;
                 return (
                   <div key={friend.id} className="group relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-3.5 border border-slate-700/50 hover:border-primary-500/50 transition-all duration-300">
-                    <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                    <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
                     <div className="flex flex-col items-center text-center">
                       <button onClick={() => navigate(`/profile/${friend.id}`)} className="mb-2">
                         <Avatar user={friend} size={14} />
@@ -164,12 +164,6 @@ export default function FriendsPage() {
                         >
                           <MessageCircle size={14} />
                           <span>Написать</span>
-                        </button>
-                        <button
-                          onClick={() => navigate(`/profile/${friend.id}`)}
-                          className="flex items-center justify-center p-2 bg-slate-700/50 hover:bg-slate-600/50 text-slate-400 hover:text-white rounded-lg transition-all"
-                        >
-                          <User size={14} />
                         </button>
                         {friendshipId && (
                           <button
