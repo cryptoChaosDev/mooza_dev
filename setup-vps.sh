@@ -89,11 +89,7 @@ ufw allow 22/tcp comment 'SSH'
 ufw allow 80/tcp comment 'HTTP'
 ufw allow 443/tcp comment 'HTTPS'
 
-# Разрешаем порты приложения
-ufw allow 3000/tcp comment 'Mooza Web'
-ufw allow 4000/tcp comment 'Mooza API'
-
-# НЕ открываем 5432 (PostgreSQL)!
+# НЕ открываем напрямую 3000/4000/5432 — nginx проксирует всё через 80/443
 
 echo -e "${YELLOW}Активировать файрвол? (y/n)${NC}"
 read -p "> " ACTIVATE_UFW
