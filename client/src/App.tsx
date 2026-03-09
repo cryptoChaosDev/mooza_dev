@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from './stores/authStore';
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket';
 import LandingPage from './pages/LandingPage';
@@ -21,6 +22,7 @@ function showNotification(title: string, body: string, icon?: string) {
 
 function App() {
   const { token } = useAuthStore();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (!token) {
@@ -36,6 +38,9 @@ function App() {
     const socket = connectSocket(token);
 
     socket.on('new_message', (message: any) => {
+      // Refresh conversations list
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+
       const senderName = message.sender
         ? `${message.sender.firstName} ${message.sender.lastName}`
         : 'Новое сообщение';
@@ -43,6 +48,9 @@ function App() {
     });
 
     socket.on('friend_request', ({ requester }: any) => {
+      // Refresh incoming requests so badge/list updates immediately
+      queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
+
       if (!requester) return;
       showNotification(
         'Заявка в друзья',
@@ -52,6 +60,10 @@ function App() {
     });
 
     socket.on('friend_accepted', ({ friendship }: any) => {
+      // Refresh friends list and sent requests
+      queryClient.invalidateQueries({ queryKey: ['friends'] });
+      queryClient.invalidateQueries({ queryKey: ['friend-requests-sent'] });
+
       const accepter = friendship?.requester;
       if (!accepter) return;
       showNotification(
@@ -69,7 +81,7 @@ function App() {
         s.off('friend_accepted');
       }
     };
-  }, [token]);
+  }, [token, queryClient]);
 
   if (!token) {
     return (
