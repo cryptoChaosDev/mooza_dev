@@ -1,6 +1,6 @@
 import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Search, Users, User, MessageCircle, Menu, X, Music } from 'lucide-react';
+import { Home, Search, Users, User, MessageCircle, Menu, X, Music, Bell } from 'lucide-react';
 import BottomNav from './BottomNav';
 
 interface LayoutProps {
@@ -9,7 +9,14 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notifDismissed, setNotifDismissed] = useState(false);
   const location = useLocation();
+
+  const notifPending = 'Notification' in window && Notification.permission === 'default' && !notifDismissed;
+
+  function requestNotifications() {
+    Notification.requestPermission().then(() => setNotifDismissed(true));
+  }
 
   const navItems = [
     { path: '/', icon: Home, label: 'Главная' },
@@ -23,6 +30,24 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-slate-950">
+      {/* Notification permission banner */}
+      {notifPending && (
+        <div className="fixed top-0 left-0 right-0 z-50 bg-primary-600/90 backdrop-blur-sm px-4 py-2 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm text-white">
+            <Bell size={16} />
+            <span>Разрешите уведомления, чтобы получать сообщения и события</span>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button onClick={requestNotifications} className="text-xs bg-white text-primary-700 font-semibold px-3 py-1 rounded-full hover:bg-primary-50 transition-colors">
+              Разрешить
+            </button>
+            <button onClick={() => setNotifDismissed(true)} className="text-white/70 hover:text-white transition-colors">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Header */}
       <header className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/50">
         <div className="flex items-center justify-between px-4 h-16">
