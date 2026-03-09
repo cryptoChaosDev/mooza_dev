@@ -34,95 +34,125 @@ model Profession {
   @@index([fieldOfActivityId])
 }
 
-// ============ NEW MULTI-LEVEL SEARCH MODELS ============
+// ============ SEARCH FILTER MODELS ============
 
+// Services offered — linked to Profession (hierarchical filter level 3)
 model Service {
-  id           String       @id @default(uuid())
-  name         String       @unique
+  id           String     @id @default(uuid())
+  name         String     @unique
   nameEn       String?
-  sortOrder    Int          @default(0)
+  sortOrder    Int        @default(0)
   professionId String
-  profession   Profession   @relation(fields: [professionId], references: [id])
-  genres       Genre[]
-  users        UserSearchProfile[]
-  createdAt    DateTime     @default(now())
+  profession   Profession @relation(fields: [professionId], references: [id])
+
+  users UserSearchProfile[]
+
+  createdAt DateTime @default(now())
 }
 
+// Independent filter: music genres
 model Genre {
-  id        String            @id @default(uuid())
-  name      String            @unique
+  id        String @id @default(uuid())
+  name      String @unique
   nameEn    String?
-  serviceId String
-  service   Service           @relation(fields: [serviceId], references: [id])
-  users     UserSearchProfile[]
-  createdAt DateTime          @default(now())
+  sortOrder Int    @default(0)
+
+  users UserSearchProfile[]
+
+  createdAt DateTime @default(now())
 }
 
+// Independent filter: work format
 model WorkFormat {
-  id        String            @id @default(uuid())
-  name      String            @unique
+  id        String @id @default(uuid())
+  name      String @unique
   nameEn    String?
-  sortOrder Int               @default(0)
-  users     UserSearchProfile[]
-  createdAt DateTime          @default(now())
+  sortOrder Int    @default(0)
+
+  users UserSearchProfile[]
+
+  createdAt DateTime @default(now())
 }
 
+// Independent filter: employment type
 model EmploymentType {
-  id        String            @id @default(uuid())
-  name      String            @unique
+  id        String @id @default(uuid())
+  name      String @unique
   nameEn    String?
-  sortOrder Int               @default(0)
-  users     UserSearchProfile[]
-  createdAt DateTime          @default(now())
+  sortOrder Int    @default(0)
+
+  users UserSearchProfile[]
+
+  createdAt DateTime @default(now())
 }
 
+// Independent filter: skill level
 model SkillLevel {
-  id        String            @id @default(uuid())
-  name      String            @unique
+  id        String @id @default(uuid())
+  name      String @unique
   nameEn    String?
-  sortOrder Int               @default(0)
-  users     UserSearchProfile[]
-  createdAt DateTime          @default(now())
+  sortOrder Int    @default(0)
+
+  users UserSearchProfile[]
+
+  createdAt DateTime @default(now())
 }
 
+// Independent filter: availability
 model Availability {
-  id        String            @id @default(uuid())
-  name      String            @unique
+  id        String @id @default(uuid())
+  name      String @unique
   nameEn    String?
-  sortOrder Int               @default(0)
-  users     UserSearchProfile[]
-  createdAt DateTime          @default(now())
+  sortOrder Int    @default(0)
+
+  users UserSearchProfile[]
+
+  createdAt DateTime @default(now())
 }
 
-model UserSearchProfile {
-  id               String         @id @default(uuid())
-  userId           String
-  user             User           @relation(fields: [userId], references: [id])
-  serviceId        String?
-  service          Service?       @relation(fields: [serviceId], references: [id])
-  genreId          String?
-  genre            Genre?         @relation(fields: [genreId], references: [id])
-  workFormatId     String?
-  workFormat       WorkFormat?    @relation(fields: [workFormatId], references: [id])
-  employmentTypeId String?
-  employmentType   EmploymentType? @relation(fields: [employmentTypeId], references: [id])
-  skillLevelId     String?
-  skillLevel       SkillLevel?    @relation(fields: [skillLevelId], references: [id])
-  availabilityId   String?
-  availability     Availability?  @relation(fields: [availabilityId], references: [id])
-  pricePerHour     Float?
-  pricePerEvent    Float?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
+// Independent filter: geography (cities / regions)
+model Geography {
+  id        String @id @default(uuid())
+  name      String @unique
+  nameEn    String?
+  sortOrder Int    @default(0)
 
-  @@unique([userId, serviceId, genreId])
-  @@index([userId])
-  @@index([serviceId])
-  @@index([genreId])
-  @@index([workFormatId])
-  @@index([employmentTypeId])
-  @@index([skillLevelId])
-  @@index([availabilityId])
+  users UserSearchProfile[]
+
+  createdAt DateTime @default(now())
+}
+
+// Independent filter: price range (discrete buckets)
+model PriceRange {
+  id        String @id @default(uuid())
+  name      String @unique  // e.g. "До 5 000 ₽"
+  nameEn    String?
+  minValue  Int?
+  maxValue  Int?
+  sortOrder Int    @default(0)
+
+  users UserSearchProfile[]
+
+  createdAt DateTime @default(now())
+}
+
+// One search profile per user — all filter axes are many-to-many
+model UserSearchProfile {
+  id     String @id @default(uuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  services        Service[]
+  genres          Genre[]
+  workFormats     WorkFormat[]
+  employmentTypes EmploymentType[]
+  skillLevels     SkillLevel[]
+  availabilities  Availability[]
+  geographies     Geography[]
+  priceRanges     PriceRange[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ============ OTHER REFERENCE TABLES ============
@@ -179,8 +209,8 @@ model User {
   // Multi-level professions (relational)
   userProfessions UserProfession[]
 
-  // Multi-level search profiles
-  userSearchProfiles UserSearchProfile[]
+  // Search profile (one per user)
+  userSearchProfile UserSearchProfile?
 
   // Artist / Group (many-to-many)
   userArtists UserArtist[]
