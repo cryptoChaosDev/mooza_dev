@@ -128,6 +128,7 @@ services:
       PORT: 4000
       DATABASE_URL: postgresql://mooza:${POSTGRES_PASSWORD}@postgres:5432/mooza_db
       JWT_SECRET: ${JWT_SECRET}
+      ALLOWED_ORIGINS: ${API_URL},https://www.${SERVER_HOST}
     volumes:
       - ./server/uploads:/app/uploads
     depends_on:
@@ -272,8 +273,7 @@ echo -e "  Перезапуск: ${GREEN}$DOCKER_COMPOSE -f docker-compose.prod.
 echo -e "  Остановка: ${GREEN}$DOCKER_COMPOSE -f docker-compose.prod.yml down${NC}"
 echo ""
 echo -e "${YELLOW}⚠️  Рекомендации для production:${NC}"
-echo -e "  1. Настройте HTTPS (см. DEPLOY.md)"
-echo -e "  2. Настройте Nginx reverse proxy"
-echo -e "  3. Настройте файрвол (UFW)"
-echo -e "  4. Настройте регулярные бэкапы БД"
+echo -e "  1. Настройте HTTPS: ${GREEN}sudo ./https-setup.sh${NC}"
+echo -e "  2. Настройте файрвол (UFW): ${GREEN}sudo ./setup-vps.sh${NC}"
+echo -e "  3. Настройте регулярные бэкапы БД"
 echo ""
