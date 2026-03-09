@@ -4,7 +4,7 @@ import { userAPI, referenceAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
-  Globe, Building2, Search, Check, Clock, DollarSign, Calendar,
+  Globe, Building2, Search, Check, DollarSign, Calendar,
   Headphones, Settings, Edit3, ChevronRight, User, Plus, ChevronDown
 } from 'lucide-react';
 import SelectField from '../components/SelectField';
@@ -59,15 +59,24 @@ export default function ProfilePage() {
   const [employmentTypes, setEmploymentTypes] = useState<any[]>([]);
   const [skillLevels, setSkillLevels] = useState<any[]>([]);
   const [availabilities, setAvailabilities] = useState<any[]>([]);
+  const [geographies, setGeographies] = useState<any[]>([]);
+  const [priceRanges, setPriceRanges] = useState<any[]>([]);
 
   const [searchProfile, setSearchProfile] = useState({
-    serviceId: '', genreId: '', workFormatId: '', employmentTypeId: '',
-    skillLevelId: '', availabilityId: '', pricePerHour: '', pricePerEvent: '',
+    serviceIds: [] as string[],
+    genreIds: [] as string[],
+    workFormatIds: [] as string[],
+    employmentTypeIds: [] as string[],
+    skillLevelIds: [] as string[],
+    availabilityIds: [] as string[],
+    geographyIds: [] as string[],
+    priceRangeIds: [] as string[],
   });
 
   const [searchSheets, setSearchSheets] = useState({
     service: false, genre: false, workFormat: false,
     employmentType: false, skillLevel: false, availability: false,
+    geography: false, priceRange: false,
   });
   const openSheet  = (k: keyof typeof searchSheets) => setSearchSheets(s => ({ ...s, [k]: true }));
   const closeSheet = (k: keyof typeof searchSheets) => setSearchSheets(s => ({ ...s, [k]: false }));
@@ -82,6 +91,9 @@ export default function ProfilePage() {
       referenceAPI.getEmploymentTypes().then(r => setEmploymentTypes(r.data));
       referenceAPI.getSkillLevels().then(r => setSkillLevels(r.data));
       referenceAPI.getAvailabilities().then(r => setAvailabilities(r.data));
+      referenceAPI.getGenres().then(r => setGenres(r.data));
+      referenceAPI.getGeographies().then(r => setGeographies(r.data));
+      referenceAPI.getPriceRanges().then(r => setPriceRanges(r.data));
     }
   }, [isEditing]);
 
@@ -99,11 +111,6 @@ export default function ProfilePage() {
   useEffect(() => {
     if (isEditing) referenceAPI.getEmployers({ search: searchEmployer }).then(r => setEmployers(r.data));
   }, [searchEmployer, isEditing]);
-
-  useEffect(() => {
-    if (isEditing && searchProfile.serviceId)
-      referenceAPI.getGenres({ serviceId: searchProfile.serviceId }).then(r => setGenres(r.data));
-  }, [isEditing, searchProfile.serviceId]);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],
@@ -124,14 +131,17 @@ export default function ProfilePage() {
         })) || [],
         artistIds: data.userArtists?.map((ua: any) => ua.artistId || ua.artist?.id) || [],
       });
-      if (data.userSearchProfiles?.length > 0) {
-        const sp = data.userSearchProfiles[0];
+      if (data.userSearchProfile) {
+        const sp = data.userSearchProfile;
         setSearchProfile({
-          serviceId: sp.serviceId || '', genreId: sp.genreId || '',
-          workFormatId: sp.workFormatId || '', employmentTypeId: sp.employmentTypeId || '',
-          skillLevelId: sp.skillLevelId || '', availabilityId: sp.availabilityId || '',
-          pricePerHour: sp.pricePerHour?.toString() || '',
-          pricePerEvent: sp.pricePerEvent?.toString() || '',
+          serviceIds: sp.services?.map((s: any) => s.id) || [],
+          genreIds: sp.genres?.map((g: any) => g.id) || [],
+          workFormatIds: sp.workFormats?.map((w: any) => w.id) || [],
+          employmentTypeIds: sp.employmentTypes?.map((e: any) => e.id) || [],
+          skillLevelIds: sp.skillLevels?.map((s: any) => s.id) || [],
+          availabilityIds: sp.availabilities?.map((a: any) => a.id) || [],
+          geographyIds: sp.geographies?.map((g: any) => g.id) || [],
+          priceRangeIds: sp.priceRanges?.map((p: any) => p.id) || [],
         });
       }
       return data;
@@ -164,14 +174,14 @@ export default function ProfilePage() {
   const handleSave = () => {
     updateMutation.mutate(formData);
     updateSearchProfileMutation.mutate({
-      serviceId: searchProfile.serviceId || undefined,
-      genreId: searchProfile.genreId || undefined,
-      workFormatId: searchProfile.workFormatId || undefined,
-      employmentTypeId: searchProfile.employmentTypeId || undefined,
-      skillLevelId: searchProfile.skillLevelId || undefined,
-      availabilityId: searchProfile.availabilityId || undefined,
-      pricePerHour: searchProfile.pricePerHour ? parseFloat(searchProfile.pricePerHour) : undefined,
-      pricePerEvent: searchProfile.pricePerEvent ? parseFloat(searchProfile.pricePerEvent) : undefined,
+      serviceIds: searchProfile.serviceIds,
+      genreIds: searchProfile.genreIds,
+      workFormatIds: searchProfile.workFormatIds,
+      employmentTypeIds: searchProfile.employmentTypeIds,
+      skillLevelIds: searchProfile.skillLevelIds,
+      availabilityIds: searchProfile.availabilityIds,
+      geographyIds: searchProfile.geographyIds,
+      priceRangeIds: searchProfile.priceRangeIds,
     });
   };
 
@@ -187,8 +197,12 @@ export default function ProfilePage() {
   }
 
   const avatarUrl = profile?.avatar ? `${API_URL}${profile.avatar}` : null;
-  const sp = profile?.userSearchProfiles?.[0];
-  const hasSearchProfile = sp && (sp.service || sp.genre || sp.workFormat || sp.employmentType || sp.skillLevel || sp.availability || sp.pricePerHour || sp.pricePerEvent);
+  const sp = profile?.userSearchProfile;
+  const hasSearchProfile = sp && (
+    sp.services?.length > 0 || sp.genres?.length > 0 || sp.workFormats?.length > 0 ||
+    sp.employmentTypes?.length > 0 || sp.skillLevels?.length > 0 || sp.availabilities?.length > 0 ||
+    sp.geographies?.length > 0 || sp.priceRanges?.length > 0
+  );
 
   const inputCls = "w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white placeholder-slate-500";
   const labelCls = "block text-xs font-semibold mb-1 text-slate-400";
@@ -587,53 +601,53 @@ export default function ProfilePage() {
             isEditing ? (
               <div className="p-4 space-y-4">
                 <p className="text-slate-400 text-xs leading-relaxed">Заполни параметры, чтобы другие пользователи могли найти тебя по фильтрам в поиске.</p>
-                <SelectField label="Услуга" value={services.find((s: any) => s.id === searchProfile.serviceId)?.name || ''} placeholder="Выберите услугу" icon={<Headphones size={14} />} onClick={() => openSheet('service')} />
-                {searchProfile.serviceId && <SelectField label="Жанр" value={genres.find((g: any) => g.id === searchProfile.genreId)?.name || ''} placeholder="Выберите жанр" icon={<Music size={14} />} onClick={() => openSheet('genre')} />}
-                <SelectField label="Формат работы" value={workFormats.find((w: any) => w.id === searchProfile.workFormatId)?.name || ''} placeholder="Не указан" icon={<Globe size={14} />} onClick={() => openSheet('workFormat')} />
-                <SelectField label="Тип занятости" value={employmentTypes.find((e: any) => e.id === searchProfile.employmentTypeId)?.name || ''} placeholder="Не указан" icon={<Briefcase size={14} />} onClick={() => openSheet('employmentType')} />
-                <SelectField label="Уровень навыка" value={skillLevels.find((s: any) => s.id === searchProfile.skillLevelId)?.name || ''} placeholder="Не указан" icon={<Star size={14} />} onClick={() => openSheet('skillLevel')} />
-                <SelectField label="Доступность" value={availabilities.find((a: any) => a.id === searchProfile.availabilityId)?.name || ''} placeholder="Не указана" icon={<Calendar size={14} />} onClick={() => openSheet('availability')} />
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={`${labelCls} flex items-center gap-1`}><DollarSign size={11} />Цена/час, ₽</label>
-                    <input type="number" value={searchProfile.pricePerHour} onChange={e => setSearchProfile({ ...searchProfile, pricePerHour: e.target.value })} placeholder="0" className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={`${labelCls} flex items-center gap-1`}><Clock size={11} />Цена/выступление, ₽</label>
-                    <input type="number" value={searchProfile.pricePerEvent} onChange={e => setSearchProfile({ ...searchProfile, pricePerEvent: e.target.value })} placeholder="0" className={inputCls} />
-                  </div>
-                </div>
-                <SelectSheet isOpen={searchSheets.service} onClose={() => closeSheet('service')} title="Выберите услугу" options={services.map(s => ({ id: s.id, name: s.name }))} selectedIds={searchProfile.serviceId} onSelect={id => { setSearchProfile({ ...searchProfile, serviceId: id as string, genreId: '' }); closeSheet('service'); }} mode="single" searchable searchPlaceholder="Поиск услуги..." height="half" />
-                <SelectSheet isOpen={searchSheets.genre} onClose={() => closeSheet('genre')} title="Выберите жанр" options={genres.map(g => ({ id: g.id, name: g.name }))} selectedIds={searchProfile.genreId} onSelect={id => { setSearchProfile({ ...searchProfile, genreId: id as string }); closeSheet('genre'); }} mode="single" searchable height="half" />
-                <SelectSheet isOpen={searchSheets.workFormat} onClose={() => closeSheet('workFormat')} title="Формат работы" options={workFormats.map(w => ({ id: w.id, name: w.name }))} selectedIds={searchProfile.workFormatId} onSelect={id => { setSearchProfile({ ...searchProfile, workFormatId: id as string }); closeSheet('workFormat'); }} mode="single" searchable={false} height="auto" />
-                <SelectSheet isOpen={searchSheets.employmentType} onClose={() => closeSheet('employmentType')} title="Тип занятости" options={employmentTypes.map(e => ({ id: e.id, name: e.name }))} selectedIds={searchProfile.employmentTypeId} onSelect={id => { setSearchProfile({ ...searchProfile, employmentTypeId: id as string }); closeSheet('employmentType'); }} mode="single" searchable={false} height="auto" />
-                <SelectSheet isOpen={searchSheets.skillLevel} onClose={() => closeSheet('skillLevel')} title="Уровень навыка" options={skillLevels.map(s => ({ id: s.id, name: s.name }))} selectedIds={searchProfile.skillLevelId} onSelect={id => { setSearchProfile({ ...searchProfile, skillLevelId: id as string }); closeSheet('skillLevel'); }} mode="single" searchable={false} height="auto" />
-                <SelectSheet isOpen={searchSheets.availability} onClose={() => closeSheet('availability')} title="Доступность" options={availabilities.map(a => ({ id: a.id, name: a.name }))} selectedIds={searchProfile.availabilityId} onSelect={id => { setSearchProfile({ ...searchProfile, availabilityId: id as string }); closeSheet('availability'); }} mode="single" searchable={false} height="auto" />
+
+                <SelectField label="Услуги" value={searchProfile.serviceIds.length > 0 ? services.filter((s: any) => searchProfile.serviceIds.includes(s.id)).map((s: any) => s.name).join(', ') : ''} placeholder="Выберите услуги" icon={<Headphones size={14} />} onClick={() => openSheet('service')} badge={searchProfile.serviceIds.length || undefined} />
+                <SelectField label="Жанры" value={searchProfile.genreIds.length > 0 ? genres.filter((g: any) => searchProfile.genreIds.includes(g.id)).map((g: any) => g.name).join(', ') : ''} placeholder="Выберите жанры" icon={<Music size={14} />} onClick={() => openSheet('genre')} badge={searchProfile.genreIds.length || undefined} />
+                <SelectField label="Формат работы" value={searchProfile.workFormatIds.length > 0 ? workFormats.filter((w: any) => searchProfile.workFormatIds.includes(w.id)).map((w: any) => w.name).join(', ') : ''} placeholder="Не указан" icon={<Globe size={14} />} onClick={() => openSheet('workFormat')} badge={searchProfile.workFormatIds.length || undefined} />
+                <SelectField label="Тип занятости" value={searchProfile.employmentTypeIds.length > 0 ? employmentTypes.filter((e: any) => searchProfile.employmentTypeIds.includes(e.id)).map((e: any) => e.name).join(', ') : ''} placeholder="Не указан" icon={<Briefcase size={14} />} onClick={() => openSheet('employmentType')} badge={searchProfile.employmentTypeIds.length || undefined} />
+                <SelectField label="Уровень навыка" value={searchProfile.skillLevelIds.length > 0 ? skillLevels.filter((s: any) => searchProfile.skillLevelIds.includes(s.id)).map((s: any) => s.name).join(', ') : ''} placeholder="Не указан" icon={<Star size={14} />} onClick={() => openSheet('skillLevel')} badge={searchProfile.skillLevelIds.length || undefined} />
+                <SelectField label="Доступность" value={searchProfile.availabilityIds.length > 0 ? availabilities.filter((a: any) => searchProfile.availabilityIds.includes(a.id)).map((a: any) => a.name).join(', ') : ''} placeholder="Не указана" icon={<Calendar size={14} />} onClick={() => openSheet('availability')} badge={searchProfile.availabilityIds.length || undefined} />
+                <SelectField label="Город / Регион" value={searchProfile.geographyIds.length > 0 ? geographies.filter((g: any) => searchProfile.geographyIds.includes(g.id)).map((g: any) => g.name).join(', ') : ''} placeholder="Не указан" icon={<MapPin size={14} />} onClick={() => openSheet('geography')} badge={searchProfile.geographyIds.length || undefined} />
+                <SelectField label="Бюджет" value={searchProfile.priceRangeIds.length > 0 ? priceRanges.filter((p: any) => searchProfile.priceRangeIds.includes(p.id)).map((p: any) => p.name).join(', ') : ''} placeholder="Не указан" icon={<DollarSign size={14} />} onClick={() => openSheet('priceRange')} badge={searchProfile.priceRangeIds.length || undefined} />
+
+                <SelectSheet isOpen={searchSheets.service} onClose={() => closeSheet('service')} title="Выберите услуги" options={services.map((s: any) => ({ id: s.id, name: s.name }))} selectedIds={searchProfile.serviceIds} onSelect={ids => setSearchProfile({ ...searchProfile, serviceIds: ids as string[] })} mode="multiple" showConfirm searchable searchPlaceholder="Поиск услуги..." height="half" />
+                <SelectSheet isOpen={searchSheets.genre} onClose={() => closeSheet('genre')} title="Выберите жанры" options={genres.map((g: any) => ({ id: g.id, name: g.name }))} selectedIds={searchProfile.genreIds} onSelect={ids => setSearchProfile({ ...searchProfile, genreIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />
+                <SelectSheet isOpen={searchSheets.workFormat} onClose={() => closeSheet('workFormat')} title="Формат работы" options={workFormats.map((w: any) => ({ id: w.id, name: w.name }))} selectedIds={searchProfile.workFormatIds} onSelect={ids => setSearchProfile({ ...searchProfile, workFormatIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
+                <SelectSheet isOpen={searchSheets.employmentType} onClose={() => closeSheet('employmentType')} title="Тип занятости" options={employmentTypes.map((e: any) => ({ id: e.id, name: e.name }))} selectedIds={searchProfile.employmentTypeIds} onSelect={ids => setSearchProfile({ ...searchProfile, employmentTypeIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
+                <SelectSheet isOpen={searchSheets.skillLevel} onClose={() => closeSheet('skillLevel')} title="Уровень навыка" options={skillLevels.map((s: any) => ({ id: s.id, name: s.name }))} selectedIds={searchProfile.skillLevelIds} onSelect={ids => setSearchProfile({ ...searchProfile, skillLevelIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
+                <SelectSheet isOpen={searchSheets.availability} onClose={() => closeSheet('availability')} title="Доступность" options={availabilities.map((a: any) => ({ id: a.id, name: a.name }))} selectedIds={searchProfile.availabilityIds} onSelect={ids => setSearchProfile({ ...searchProfile, availabilityIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
+                <SelectSheet isOpen={searchSheets.geography} onClose={() => closeSheet('geography')} title="Город / Регион" options={geographies.map((g: any) => ({ id: g.id, name: g.name }))} selectedIds={searchProfile.geographyIds} onSelect={ids => setSearchProfile({ ...searchProfile, geographyIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="half" />
+                <SelectSheet isOpen={searchSheets.priceRange} onClose={() => closeSheet('priceRange')} title="Бюджет" options={priceRanges.map((p: any) => ({ id: p.id, name: p.name }))} selectedIds={searchProfile.priceRangeIds} onSelect={ids => setSearchProfile({ ...searchProfile, priceRangeIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
               </div>
             ) : (
               <div className="p-4">
                 {hasSearchProfile ? (
                   <div className="flex flex-wrap gap-2">
-                    {sp?.service && (
-                      <div className="flex items-center gap-1 px-2.5 py-1 bg-primary-500/10 rounded-lg border border-primary-500/20">
-                        <Headphones size={11} className="text-primary-400" /><span className="text-primary-300 text-xs">{sp.service.name}</span>
+                    {sp?.services?.map((s: any) => (
+                      <div key={s.id} className="flex items-center gap-1 px-2.5 py-1 bg-primary-500/10 rounded-lg border border-primary-500/20">
+                        <Headphones size={11} className="text-primary-400" /><span className="text-primary-300 text-xs">{s.name}</span>
                       </div>
-                    )}
-                    {sp?.genre && (
-                      <div className="flex items-center gap-1 px-2.5 py-1 bg-primary-500/10 rounded-lg border border-primary-500/20">
-                        <Music size={11} className="text-primary-400" /><span className="text-primary-300 text-xs">{sp.genre.name}</span>
+                    ))}
+                    {sp?.genres?.map((g: any) => (
+                      <div key={g.id} className="flex items-center gap-1 px-2.5 py-1 bg-purple-500/10 rounded-lg border border-purple-500/20">
+                        <Music size={11} className="text-purple-400" /><span className="text-purple-300 text-xs">{g.name}</span>
                       </div>
-                    )}
-                    {sp?.workFormat     && <span className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{sp.workFormat.name}</span>}
-                    {sp?.employmentType && <span className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{sp.employmentType.name}</span>}
-                    {sp?.skillLevel     && <span className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{sp.skillLevel.name}</span>}
-                    {sp?.availability   && <span className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{sp.availability.name}</span>}
-                    {(sp?.pricePerHour || sp?.pricePerEvent) && (
-                      <div className="w-full flex flex-wrap gap-3 pt-2 mt-1 border-t border-slate-700/50">
-                        {sp?.pricePerHour  && <div className="flex items-center gap-1 text-green-300 text-xs font-semibold"><DollarSign size={11} />{sp.pricePerHour} ₽/час</div>}
-                        {sp?.pricePerEvent && <div className="flex items-center gap-1 text-green-300 text-xs font-semibold"><Clock size={11} />{sp.pricePerEvent} ₽/выступление</div>}
+                    ))}
+                    {sp?.workFormats?.map((w: any) => <span key={w.id} className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{w.name}</span>)}
+                    {sp?.employmentTypes?.map((e: any) => <span key={e.id} className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{e.name}</span>)}
+                    {sp?.skillLevels?.map((s: any) => <span key={s.id} className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{s.name}</span>)}
+                    {sp?.availabilities?.map((a: any) => <span key={a.id} className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{a.name}</span>)}
+                    {sp?.geographies?.map((g: any) => (
+                      <div key={g.id} className="flex items-center gap-1 px-2.5 py-1 bg-slate-700/50 rounded-lg border border-slate-600/30">
+                        <MapPin size={11} className="text-slate-400" /><span className="text-slate-300 text-xs">{g.name}</span>
                       </div>
-                    )}
+                    ))}
+                    {sp?.priceRanges?.map((p: any) => (
+                      <div key={p.id} className="flex items-center gap-1 px-2.5 py-1 bg-green-500/10 rounded-lg border border-green-500/20">
+                        <DollarSign size={11} className="text-green-400" /><span className="text-green-300 text-xs">{p.name}</span>
+                      </div>
+                    ))}
                   </div>
                 ) : <EmptyState text="Параметры поиска не заполнены" />}
               </div>

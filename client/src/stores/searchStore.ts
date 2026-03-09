@@ -33,8 +33,7 @@ export interface Genre {
   id: string;
   name: string;
   nameEn?: string;
-  serviceId: string;
-  serviceName?: string;
+  sortOrder: number;
   userCount?: number;
 }
 
@@ -70,6 +69,24 @@ export interface Availability {
   userCount?: number;
 }
 
+export interface Geography {
+  id: string;
+  name: string;
+  nameEn?: string;
+  sortOrder: number;
+  userCount?: number;
+}
+
+export interface PriceRange {
+  id: string;
+  name: string;
+  nameEn?: string;
+  minValue?: number;
+  maxValue?: number;
+  sortOrder: number;
+  userCount?: number;
+}
+
 // Filter state interface
 interface SearchFilterState {
   // Level 1: Field of Activity
@@ -95,7 +112,13 @@ interface SearchFilterState {
   
   // Level 8: Availability
   availabilityId: string | null;
-  
+
+  // Geography
+  geographyId: string | null;
+
+  // Price Range
+  priceRangeId: string | null;
+
   // Pagination
   page: number;
   limit: number;
@@ -116,7 +139,9 @@ interface SearchFilterActions {
   setEmploymentTypeId: (id: string | null) => void;
   setSkillLevelId: (id: string | null) => void;
   setAvailabilityId: (id: string | null) => void;
-  
+  setGeographyId: (id: string | null) => void;
+  setPriceRangeId: (id: string | null) => void;
+
   // Pagination
   setPage: (page: number) => void;
   nextPage: () => void;
@@ -149,6 +174,8 @@ const initialState: SearchFilterState = {
   employmentTypeId: null,
   skillLevelId: null,
   availabilityId: null,
+  geographyId: null,
+  priceRangeId: null,
   page: 1,
   limit: 20,
   resultCount: 0,
@@ -191,6 +218,8 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   setEmploymentTypeId: (id) => set({ employmentTypeId: id }),
   setSkillLevelId: (id) => set({ skillLevelId: id }),
   setAvailabilityId: (id) => set({ availabilityId: id }),
+  setGeographyId: (id) => set({ geographyId: id }),
+  setPriceRangeId: (id) => set({ priceRangeId: id }),
 
   // Pagination
   setPage: (page) => set({ page }),
@@ -212,6 +241,8 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
     employmentTypeId: null,
     skillLevelId: null,
     availabilityId: null,
+    geographyId: null,
+    priceRangeId: null,
     page: 1,
     resultCount: 0,
   }),
@@ -232,6 +263,8 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
       employmentTypeId: state.employmentTypeId || undefined,
       skillLevelId: state.skillLevelId || undefined,
       availabilityId: state.availabilityId || undefined,
+      geographyId: state.geographyId || undefined,
+      priceRangeId: state.priceRangeId || undefined,
       page: state.page,
       limit: state.limit,
     };
@@ -271,14 +304,13 @@ export function useServices(professionId?: string, fieldOfActivityId?: string) {
   });
 }
 
-export function useGenres(serviceId?: string) {
+export function useGenres() {
   return useQuery({
-    queryKey: ['genres', serviceId],
+    queryKey: ['genres'],
     queryFn: async () => {
-      const { data } = await referenceAPI.getGenres({ serviceId });
+      const { data } = await referenceAPI.getGenres();
       return data as Genre[];
     },
-    enabled: !!serviceId,
   });
 }
 
@@ -318,6 +350,26 @@ export function useAvailabilities() {
     queryFn: async () => {
       const { data } = await referenceAPI.getAvailabilities();
       return data as Availability[];
+    },
+  });
+}
+
+export function useGeographies() {
+  return useQuery({
+    queryKey: ['geographies'],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getGeographies();
+      return data as Geography[];
+    },
+  });
+}
+
+export function usePriceRanges() {
+  return useQuery({
+    queryKey: ['priceRanges'],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getPriceRanges();
+      return data as PriceRange[];
     },
   });
 }

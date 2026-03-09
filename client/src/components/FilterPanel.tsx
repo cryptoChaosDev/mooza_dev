@@ -10,6 +10,8 @@ import {
   useEmploymentTypes,
   useSkillLevels,
   useAvailabilities,
+  useGeographies,
+  usePriceRanges,
 } from '../stores/searchStore';
 
 interface FilterPanelProps {
@@ -114,6 +116,8 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
     employmentTypeId,
     skillLevelId,
     availabilityId,
+    geographyId,
+    priceRangeId,
     setFieldId,
     setProfessionId,
     setServiceId,
@@ -122,6 +126,8 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
     setEmploymentTypeId,
     setSkillLevelId,
     setAvailabilityId,
+    setGeographyId,
+    setPriceRangeId,
     resetAllFilters,
     setPage,
   } = useSearchStore();
@@ -132,15 +138,18 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
     professionId || undefined,
     fieldId || undefined
   );
-  const { data: genres, isLoading: genresLoading } = useGenres(serviceId || undefined);
+  const { data: genres, isLoading: genresLoading } = useGenres();
   const { data: workFormats, isLoading: workFormatsLoading } = useWorkFormats();
   const { data: employmentTypes, isLoading: employmentTypesLoading } = useEmploymentTypes();
   const { data: skillLevels, isLoading: skillLevelsLoading } = useSkillLevels();
   const { data: availabilities, isLoading: availabilitiesLoading } = useAvailabilities();
+  const { data: geographies, isLoading: geographiesLoading } = useGeographies();
+  const { data: priceRanges, isLoading: priceRangesLoading } = usePriceRanges();
 
   const activeCount = [
     fieldId, professionId, serviceId, genreId,
     workFormatId, employmentTypeId, skillLevelId, availabilityId,
+    geographyId, priceRangeId,
   ].filter(Boolean).length;
 
   const wrap = (setter: (v: string | null) => void, downstream?: () => void) =>
@@ -225,7 +234,6 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
           value={genreId}
           items={genres || []}
           loading={genresLoading}
-          disabled={!serviceId}
           onSelect={wrap(setGenreId)}
         />
 
@@ -259,6 +267,22 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
           items={availabilities || []}
           loading={availabilitiesLoading}
           onSelect={wrap(setAvailabilityId)}
+        />
+
+        <FilterSection
+          title="География"
+          value={geographyId}
+          items={geographies || []}
+          loading={geographiesLoading}
+          onSelect={wrap(setGeographyId)}
+        />
+
+        <FilterSection
+          title="Бюджет"
+          value={priceRangeId}
+          items={priceRanges || []}
+          loading={priceRangesLoading}
+          onSelect={wrap(setPriceRangeId)}
         />
       </div>
     </div>

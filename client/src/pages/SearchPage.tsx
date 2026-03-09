@@ -19,6 +19,8 @@ import {
   useEmploymentTypes,
   useSkillLevels,
   useAvailabilities,
+  useGeographies,
+  usePriceRanges,
 } from '../stores/searchStore';
 import FilterPanel from '../components/FilterPanel';
 import BottomSheet from '../components/BottomSheet';
@@ -285,8 +287,10 @@ export default function SearchPage() {
   const {
     fieldId, professionId, serviceId, genreId,
     workFormatId, employmentTypeId, skillLevelId, availabilityId,
+    geographyId, priceRangeId,
     setFieldId, setProfessionId, setServiceId, setGenreId,
     setWorkFormatId, setEmploymentTypeId, setSkillLevelId, setAvailabilityId,
+    setGeographyId, setPriceRangeId,
     resetAllFilters, getFilters, setPage, page,
   } = useSearchStore();
 
@@ -294,14 +298,16 @@ export default function SearchPage() {
   const { data: fields, isLoading: fieldsLoading } = useFieldsOfActivity();
   const { data: professions, isLoading: professionsLoading } = useProfessions(fieldId || undefined);
   const { data: services, isLoading: servicesLoading } = useServices(professionId || undefined, fieldId || undefined);
-  const { data: genres, isLoading: genresLoading } = useGenres(serviceId || undefined);
+  const { data: genres, isLoading: genresLoading } = useGenres();
   const { data: workFormats, isLoading: workFormatsLoading } = useWorkFormats();
   const { data: employmentTypes, isLoading: employmentTypesLoading } = useEmploymentTypes();
   const { data: skillLevels, isLoading: skillLevelsLoading } = useSkillLevels();
   const { data: availabilities, isLoading: availabilitiesLoading } = useAvailabilities();
+  const { data: geographies, isLoading: geographiesLoading } = useGeographies();
+  const { data: priceRanges, isLoading: priceRangesLoading } = usePriceRanges();
 
   // Whether any profile-based filter is active
-  const hasProfileFilters = !!(fieldId || professionId || serviceId || genreId || workFormatId || employmentTypeId || skillLevelId || availabilityId);
+  const hasProfileFilters = !!(fieldId || professionId || serviceId || genreId || workFormatId || employmentTypeId || skillLevelId || availabilityId || geographyId || priceRangeId);
 
   // ── Default: all users (or name search) — no profile filters needed ──
   const { data: defaultUsers, isLoading: defaultLoading } = useQuery({
@@ -319,7 +325,7 @@ export default function SearchPage() {
   const filters = useMemo(() => ({
     ...getFilters(),
     ...(debouncedName.trim() ? { query: debouncedName.trim() } : {}),
-  }), [fieldId, professionId, serviceId, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, debouncedName, page]);
+  }), [fieldId, professionId, serviceId, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId, priceRangeId, debouncedName, page]);
 
   const { data: searchData, isLoading: searchLoading, isFetching: searchFetching } = useSearchResults(filters);
 
@@ -355,6 +361,8 @@ export default function SearchPage() {
       case 'employmentType': return employmentTypes?.find((e) => e.id === employmentTypeId)?.name ?? null;
       case 'skillLevel': return skillLevels?.find((s) => s.id === skillLevelId)?.name ?? null;
       case 'availability': return availabilities?.find((a) => a.id === availabilityId)?.name ?? null;
+      case 'geography': return geographies?.find((g) => g.id === geographyId)?.name ?? null;
+      case 'priceRange': return priceRanges?.find((p) => p.id === priceRangeId)?.name ?? null;
       default: return null;
     }
   };
@@ -369,6 +377,8 @@ export default function SearchPage() {
       case 'employmentType': setEmploymentTypeId(null); break;
       case 'skillLevel': setSkillLevelId(null); break;
       case 'availability': setAvailabilityId(null); break;
+      case 'geography': setGeographyId(null); break;
+      case 'priceRange': setPriceRangeId(null); break;
     }
     setPage(1);
   };
@@ -378,11 +388,13 @@ export default function SearchPage() {
     { key: 'field', label: 'Сфера', disabled: false },
     { key: 'profession', label: 'Профессия', disabled: !fieldId },
     { key: 'service', label: 'Услуга', disabled: !fieldId },
-    { key: 'genre', label: 'Жанр', disabled: !serviceId },
+    { key: 'genre', label: 'Жанр', disabled: false },
     { key: 'workFormat', label: 'Формат', disabled: false },
     { key: 'employmentType', label: 'Занятость', disabled: false },
     { key: 'skillLevel', label: 'Уровень', disabled: false },
     { key: 'availability', label: 'Доступность', disabled: false },
+    { key: 'geography', label: 'Город', disabled: false },
+    { key: 'priceRange', label: 'Бюджет', disabled: false },
   ];
 
   const activeCount = CHIPS.filter((c) => chipLabel(c.key) !== null).length;
@@ -397,12 +409,15 @@ export default function SearchPage() {
     employmentType: { items: employmentTypes || [], loading: employmentTypesLoading, value: employmentTypeId, setter: setEmploymentTypeId },
     skillLevel: { items: skillLevels || [], loading: skillLevelsLoading, value: skillLevelId, setter: setSkillLevelId },
     availability: { items: availabilities || [], loading: availabilitiesLoading, value: availabilityId, setter: setAvailabilityId },
+    geography: { items: geographies || [], loading: geographiesLoading, value: geographyId, setter: setGeographyId },
+    priceRange: { items: priceRanges || [], loading: priceRangesLoading, value: priceRangeId, setter: setPriceRangeId },
   };
 
   const chipTitles: Record<string, string> = {
     field: 'Сфера деятельности', profession: 'Профессия', service: 'Услуга',
     genre: 'Жанр', workFormat: 'Формат работы', employmentType: 'Тип занятости',
     skillLevel: 'Уровень навыка', availability: 'Доступность',
+    geography: 'Город / Регион', priceRange: 'Бюджет',
   };
 
   // Friend request

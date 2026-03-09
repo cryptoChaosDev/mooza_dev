@@ -43,14 +43,14 @@ export const userAPI = {
   getMe: () => api.get('/users/me'),
   updateMe: (data: any) => api.put('/users/me', data),
   updateSearchProfile: (data: {
-    serviceId?: string;
-    genreId?: string;
-    workFormatId?: string;
-    employmentTypeId?: string;
-    skillLevelId?: string;
-    availabilityId?: string;
-    pricePerHour?: number;
-    pricePerEvent?: number;
+    serviceIds?: string[];
+    genreIds?: string[];
+    workFormatIds?: string[];
+    employmentTypeIds?: string[];
+    skillLevelIds?: string[];
+    availabilityIds?: string[];
+    geographyIds?: string[];
+    priceRangeIds?: string[];
   }) => api.put('/users/me/search-profile', data),
   uploadAvatar: (formData: FormData) =>
     api.post('/users/me/avatar', formData, {
@@ -73,12 +73,13 @@ export const referenceAPI = {
   // Multi-level search endpoints
   getServices: (params?: { professionId?: string; fieldOfActivityId?: string }) =>
     api.get('/references/services', { params }),
-  getGenres: (params?: { serviceId?: string }) =>
-    api.get('/references/genres', { params }),
+  getGenres: () => api.get('/references/genres'),
   getWorkFormats: () => api.get('/references/work-formats'),
   getEmploymentTypes: () => api.get('/references/employment-types'),
   getSkillLevels: () => api.get('/references/skill-levels'),
   getAvailabilities: () => api.get('/references/availabilities'),
+  getGeographies: () => api.get('/references/geographies'),
+  getPriceRanges: () => api.get('/references/price-ranges'),
   getAllReferences: () => api.get('/references/all'),
   searchMusicians: (params: {
     fieldId?: string;
@@ -89,6 +90,8 @@ export const referenceAPI = {
     employmentTypeId?: string;
     skillLevelId?: string;
     availabilityId?: string;
+    geographyId?: string;
+    priceRangeId?: string;
     query?: string;
     page?: number;
     limit?: number;
@@ -138,6 +141,8 @@ export interface SearchFilters {
   employmentTypeId?: string;
   skillLevelId?: string;
   availabilityId?: string;
+  geographyId?: string;
+  priceRangeId?: string;
   query?: string;
   page?: number;
   limit?: number;
@@ -153,38 +158,18 @@ export interface SearchResult {
     nickname?: string;
     avatar?: string;
     city?: string;
-    fieldOfActivity?: {
-      id: string;
-      name: string;
-    };
+    fieldOfActivity?: { id: string; name: string };
+    userProfessions?: { id: string; profession: { id: string; name: string } }[];
   };
   searchProfile: {
-    service?: {
-      id: string;
-      name: string;
-    };
-    genre?: {
-      id: string;
-      name: string;
-    };
-    workFormat?: {
-      id: string;
-      name: string;
-    };
-    employmentType?: {
-      id: string;
-      name: string;
-    };
-    skillLevel?: {
-      id: string;
-      name: string;
-    };
-    availability?: {
-      id: string;
-      name: string;
-    };
-    pricePerHour?: number;
-    pricePerEvent?: number;
+    services: { id: string; name: string }[];
+    genres: { id: string; name: string }[];
+    workFormats: { id: string; name: string }[];
+    employmentTypes: { id: string; name: string }[];
+    skillLevels: { id: string; name: string }[];
+    availabilities: { id: string; name: string }[];
+    geographies: { id: string; name: string }[];
+    priceRanges: { id: string; name: string }[];
   };
 }
 
@@ -195,19 +180,5 @@ export interface SearchResponse {
     limit: number;
     totalCount: number;
     totalPages: number;
-  };
-  facets: {
-    fields: Array<{ id: string; name: string; count: number }>;
-    professions: Array<{
-      id: string;
-      name: string;
-      professionId: string;
-      professionName: string;
-      fieldOfActivityId: string;
-      fieldOfActivityName: string;
-      count: number;
-    }>;
-    services: Array<{ id: string; count: number }>;
-    genres: Array<{ id: string; count: number }>;
   };
 }
