@@ -30,11 +30,6 @@ function App() {
       return;
     }
 
-    // Request notification permission
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
-
     const socket = connectSocket(token);
 
     socket.on('new_message', (message: any) => {
