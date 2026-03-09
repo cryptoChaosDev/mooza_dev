@@ -73,12 +73,25 @@ function App() {
       );
     });
 
+    socket.on('post_reply', ({ comment }: any) => {
+      queryClient.invalidateQueries({ queryKey: ['posts'] });
+
+      const commenter = comment?.author;
+      if (!commenter) return;
+      showNotification(
+        'Новый комментарий',
+        `${commenter.firstName} ${commenter.lastName} прокомментировал(а) вашу запись`,
+        commenter.avatar,
+      );
+    });
+
     return () => {
       const s = getSocket();
       if (s) {
         s.off('new_message');
         s.off('friend_request');
         s.off('friend_accepted');
+        s.off('post_reply');
       }
     };
   }, [token, queryClient]);

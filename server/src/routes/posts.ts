@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { emitToUser } from '../socket';
 
 const router = Router();
 
@@ -233,6 +234,11 @@ router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: 'Content is required' });
     }
 
+    const post = await prisma.post.findUnique({
+      where: { id: req.params.id },
+      select: { authorId: true },
+    });
+
     const comment = await prisma.comment.create({
       data: {
         content,
@@ -250,6 +256,11 @@ router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
         }
       }
     });
+
+    // Notify post author (unless they commented on their own post)
+    if (post && post.authorId !== req.userId) {
+      emitToUser(post.authorId, 'post_reply', { comment, postId: req.params.id });
+    }
 
     res.status(201).json(comment);
   } catch (error) {
