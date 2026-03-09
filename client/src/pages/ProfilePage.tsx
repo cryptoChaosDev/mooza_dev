@@ -259,20 +259,23 @@ export default function ProfilePage() {
                   {profile?.city    && <span className="flex items-center gap-1 text-slate-400 text-xs"><MapPin size={10} />{profile.city}</span>}
                 </div>
                 {(profile?.vkLink || profile?.youtubeLink || profile?.telegramLink) && (
-                  <div className="flex flex-wrap gap-2 mt-2">
+                  <div className="flex flex-col gap-1 mt-2">
                     {profile?.vkLink && (
-                      <a href={profile.vkLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-0.5 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 rounded-md text-xs transition-colors">
-                        <span className="font-bold">VK</span>
+                      <a href={profile.vkLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                        <span className="font-bold shrink-0">VK</span>
+                        <span className="truncate">{profile.vkLink.replace(/^https?:\/\/(www\.)?vk\.com\//, '')}</span>
                       </a>
                     )}
                     {profile?.youtubeLink && (
-                      <a href={profile.youtubeLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-0.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 rounded-md text-xs transition-colors">
-                        <span className="font-bold">YT</span>
+                      <a href={profile.youtubeLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition-colors">
+                        <span className="font-bold shrink-0">YT</span>
+                        <span className="truncate">{profile.youtubeLink.replace(/^https?:\/\/(www\.)?youtube\.com\//, '')}</span>
                       </a>
                     )}
                     {profile?.telegramLink && (
-                      <a href={profile.telegramLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 px-2 py-0.5 bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 rounded-md text-xs transition-colors">
-                        <span className="font-bold">TG</span>
+                      <a href={profile.telegramLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 transition-colors">
+                        <span className="font-bold shrink-0">TG</span>
+                        <span className="truncate">{profile.telegramLink.replace(/^https?:\/\/(www\.)?t\.me\//, '')}</span>
                       </a>
                     )}
                   </div>
