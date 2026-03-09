@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
+import { initSocket } from './socket';
 
 // Import rate limiters
 import { apiLimiter } from './middleware/rateLimiter';
@@ -130,16 +131,18 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   }
 });
 
-// Start server
-const server = app.listen(PORT, () => {
+// Start server with Socket.io
+const httpServer = initSocket(app);
+httpServer.listen(PORT, () => {
   logger.info(`🚀 Server running on http://localhost:${PORT}`);
   logger.info(`📊 Health check: http://localhost:${PORT}/health`);
+  logger.info('🔌 Socket.io enabled');
 });
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {
   logger.info('SIGTERM signal received: closing HTTP server');
-  server.close(async () => {
+  httpServer.close(async () => {
     await prisma.$disconnect();
     logger.info('HTTP server closed');
   });

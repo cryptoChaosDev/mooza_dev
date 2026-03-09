@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { emitToUser } from '../socket';
 
 const router = Router();
 
@@ -190,6 +191,9 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         }
       }
     });
+
+    // Emit real-time event to receiver
+    emitToUser(receiverId, 'new_message', message);
 
     res.status(201).json(message);
   } catch (error) {

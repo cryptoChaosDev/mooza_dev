@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { emitToUser } from '../socket';
 
 const router = Router();
 
@@ -48,6 +49,13 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         }
       }
     });
+
+    // Notify receiver about new friend request (include requester info)
+    const requester = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { id: true, firstName: true, lastName: true, avatar: true },
+    });
+    emitToUser(receiverId, 'friend_request', { friendship, requester });
 
     res.status(201).json(friendship);
   } catch (error) {
@@ -115,6 +123,9 @@ router.put('/:id/accept', authenticate, async (req: AuthRequest, res) => {
         }
       }
     });
+
+    // Notify the original requester that their request was accepted
+    emitToUser(updated.requester.id, 'friend_accepted', { friendship: updated });
 
     res.json(updated);
   } catch (error) {

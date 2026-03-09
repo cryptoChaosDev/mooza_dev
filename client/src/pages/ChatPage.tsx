@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Send, ArrowLeft, MoreVertical, Loader2 } from 'lucide-react';
 import { messageAPI } from '../lib/api';
+import { getSocket } from '../lib/socket';
 
 interface User {
   id: string;
@@ -36,6 +37,22 @@ export default function ChatPage() {
     if (userId) {
       loadChat();
     }
+  }, [userId]);
+
+  // Listen for real-time messages in this conversation
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket || !userId) return;
+
+    const handleNewMessage = (message: Message) => {
+      // Only append if the message belongs to this conversation
+      if (message.senderId === userId) {
+        setMessages(prev => [...prev, message]);
+      }
+    };
+
+    socket.on('new_message', handleNewMessage);
+    return () => { socket.off('new_message', handleNewMessage); };
   }, [userId]);
 
   useEffect(() => {
