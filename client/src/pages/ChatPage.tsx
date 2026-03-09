@@ -31,6 +31,7 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -78,14 +79,19 @@ export default function ChatPage() {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim() || !userId) return;
+    if (!newMessage.trim() || !userId || sending) return;
 
+    const text = newMessage.trim();
+    setNewMessage('');
+    setSending(true);
     try {
-      const response = await messageAPI.sendMessage(userId, newMessage.trim());
-      setMessages([...messages, response.data]);
-      setNewMessage('');
+      const response = await messageAPI.sendMessage(userId, text);
+      setMessages(prev => [...prev, response.data]);
     } catch (error) {
       console.error('Failed to send message:', error);
+      setNewMessage(text); // restore on error
+    } finally {
+      setSending(false);
     }
   };
 
@@ -264,7 +270,7 @@ export default function ChatPage() {
               />
               <button
                 type="submit"
-                disabled={!newMessage.trim()}
+                disabled={!newMessage.trim() || sending}
                 className="group relative p-2.5 bg-gradient-to-br from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 disabled:from-slate-700 disabled:to-slate-800 text-white rounded-xl transition-all duration-300 disabled:cursor-not-allowed shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:scale-105 disabled:shadow-none disabled:scale-100"
               >
                 <div className="absolute inset-0 bg-gradient-to-r from-primary-400/0 via-white/20 to-primary-400/0 opacity-0 group-hover:opacity-100 transition-opacity blur-xl"></div>
