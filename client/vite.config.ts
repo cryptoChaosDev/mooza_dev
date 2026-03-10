@@ -11,4 +11,9 @@ export default defineConfig({
       usePolling: true,
     },
   },
+  preview: {
+    host: true,
+    port: 3000,
+    allowedHosts: ['mooza.ru', 'www.mooza.ru', 'moooza.ru', 'www.moooza.ru'],
+  },
 });

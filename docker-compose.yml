@@ -64,8 +64,7 @@ services:
       - api
     networks:
       - mooza-network
-    stdin_open: true
-    tty: true
+    command: sh -c "npm install --force && npx vite build && npx vite preview"
 
 volumes:
   postgres_data:
