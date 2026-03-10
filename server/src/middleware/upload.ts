@@ -40,6 +40,32 @@ export const upload = multer({
   },
 });
 
+// ── Banner upload ─────────────────────────────────────────────────────────────
+
+const bannersDir = path.join(process.cwd(), 'uploads', 'banners');
+if (!fs.existsSync(bannersDir)) {
+  fs.mkdirSync(bannersDir, { recursive: true });
+}
+
+const bannerStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, bannersDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `banner-${uniqueSuffix}${ext}`);
+  },
+});
+
+export const uploadBanner = multer({
+  storage: bannerStorage,
+  fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max for banners
+  },
+});
+
 // ── Portfolio upload ──────────────────────────────────────────────────────────
 
 const portfolioDir = path.join(process.cwd(), 'uploads', 'portfolio');

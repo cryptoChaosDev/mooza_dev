@@ -219,7 +219,8 @@ model User {
   firstName String
   lastName  String
   nickname  String?
-  avatar    String?
+  avatar      String?
+  bannerImage String?
   bio       String?
   country   String?
   city      String?

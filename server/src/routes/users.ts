@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { upload, uploadPortfolio } from '../middleware/upload';
+import { upload, uploadBanner, uploadPortfolio } from '../middleware/upload';
 import path from 'path';
 import fs from 'fs';
 
@@ -27,6 +27,7 @@ const userSelect = {
   lastName: true,
   nickname: true,
   avatar: true,
+  bannerImage: true,
   bio: true,
   country: true,
   city: true,
@@ -106,6 +107,37 @@ router.post('/me/avatar', authenticate, upload.single('avatar'), async (req: Aut
   } catch (error) {
     console.error('Upload avatar error:', error);
     res.status(500).json({ error: 'Failed to upload avatar' });
+  }
+});
+
+// Upload banner image
+router.post('/me/banner', authenticate, uploadBanner.single('banner'), async (req: AuthRequest, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const currentUser = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { bannerImage: true }
+    });
+
+    if (currentUser?.bannerImage) {
+      const oldPath = path.join(process.cwd(), 'uploads', 'banners', path.basename(currentUser.bannerImage));
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+    }
+
+    const bannerUrl = `/uploads/banners/${req.file.filename}`;
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data: { bannerImage: bannerUrl },
+      select: userSelect,
+    });
+
+    res.json(user);
+  } catch (error) {
+    console.error('Upload banner error:', error);
+    res.status(500).json({ error: 'Failed to upload banner' });
   }
 });
 

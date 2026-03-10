@@ -47,6 +47,7 @@ export default function ProfilePage() {
   const { logout } = useAuthStore();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('basic');
 
@@ -152,6 +153,16 @@ export default function ProfilePage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['profile'] }),
   });
 
+  const uploadBannerMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append('banner', file);
+      const { data } = await userAPI.uploadBanner(fd);
+      return data;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['profile'] }),
+  });
+
   const updateMutation = useMutation({
     mutationFn: userAPI.updateMe,
     onSuccess: () => {
@@ -194,6 +205,7 @@ export default function ProfilePage() {
   }
 
   const avatarUrl = profile?.avatar ? `${API_URL}${profile.avatar}` : null;
+  const bannerUrl = profile?.bannerImage ? `${API_URL}${profile.bannerImage}` : null;
 
   const inputCls = "w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white placeholder-slate-500";
   const labelCls = "block text-xs font-semibold mb-1 text-slate-400";
@@ -429,8 +441,22 @@ export default function ProfilePage() {
         {/* ── HERO CARD ────────────────────────────────────────────────── */}
         <div className="rounded-2xl border border-slate-700/50 shadow-xl overflow-hidden mb-4 bg-slate-900">
           {/* Banner */}
-          <div className="relative h-24 bg-gradient-to-br from-primary-900/70 via-purple-900/50 to-slate-900">
-            <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle at 15% 60%, rgba(99,102,241,0.5) 0%, transparent 55%), radial-gradient(circle at 85% 20%, rgba(168,85,247,0.5) 0%, transparent 55%)' }} />
+          <div
+            className="relative h-28 bg-gradient-to-br from-primary-900/70 via-purple-900/50 to-slate-900 group"
+            style={bannerUrl ? { backgroundImage: `url(${bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
+          >
+            {!bannerUrl && <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle at 15% 60%, rgba(99,102,241,0.5) 0%, transparent 55%), radial-gradient(circle at 85% 20%, rgba(168,85,247,0.5) 0%, transparent 55%)' }} />}
+            {bannerUrl && <div className="absolute inset-0 bg-black/20" />}
+            {/* Banner upload button */}
+            <button
+              onClick={() => bannerInputRef.current?.click()}
+              className="absolute bottom-2 left-2 z-10 flex items-center gap-1 px-2 py-1 bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white/80 hover:text-white rounded-lg text-[10px] font-medium transition-all opacity-0 group-hover:opacity-100"
+            >
+              <Camera size={10} />Фон
+            </button>
+            <input ref={bannerInputRef} type="file" accept="image/*"
+              onChange={e => { const f = e.target.files?.[0]; if (f) uploadBannerMutation.mutate(f); e.target.value = ''; }}
+              className="hidden" />
             {/* Actions */}
             <div className="absolute top-3 right-3 flex gap-1.5 z-10">
               {isEditing ? (

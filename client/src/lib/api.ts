@@ -57,6 +57,10 @@ export const userAPI = {
     api.post('/users/me/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
+  uploadBanner: (formData: FormData) =>
+    api.post('/users/me/banner', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   search: (params: any) => api.get('/users/search', { params }),
   getUser: (id: string) => api.get(`/users/${id}`),
   uploadPortfolio: (formData: FormData) =>
