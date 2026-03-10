@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { upload } from '../middleware/upload';
+import { upload, uploadPortfolio } from '../middleware/upload';
 import path from 'path';
 import fs from 'fs';
 
@@ -44,6 +44,13 @@ const userSelect = {
   youtubeLink: true,
   telegramLink: true,
   createdAt: true,
+  portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
+  _count: {
+    select: {
+      sentRequests: { where: { status: 'accepted' } },
+      receivedRequests: { where: { status: 'accepted' } },
+    }
+  },
 } as const;
 
 // Get current user
@@ -294,15 +301,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.params.id },
-      select: {
-        ...userSelect,
-        _count: {
-          select: {
-            posts: true,
-            sentRequests: { where: { status: 'accepted' } },
-          }
-        }
-      }
+      select: userSelect,
     });
 
     if (!user) {
@@ -313,6 +312,38 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('Get user by ID error:', error);
     res.status(500).json({ error: 'Failed to get user' });
+  }
+});
+
+// Upload portfolio file
+router.post('/me/portfolio', authenticate, uploadPortfolio.single('file'), async (req: AuthRequest, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const count = await prisma.portfolioFile.count({ where: { userId: req.userId! } });
+    if (count >= 5) return res.status(400).json({ error: 'Max 5 portfolio files allowed' });
+    const fileUrl = `/uploads/portfolio/${req.file.filename}`;
+    const pf = await prisma.portfolioFile.create({
+      data: { userId: req.userId!, url: fileUrl, originalName: req.file.originalname, size: req.file.size, mimeType: req.file.mimetype },
+    });
+    res.json(pf);
+  } catch (error) {
+    console.error('Portfolio upload error:', error);
+    res.status(500).json({ error: 'Failed to upload portfolio file' });
+  }
+});
+
+// Delete portfolio file
+router.delete('/me/portfolio/:fileId', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const pf = await prisma.portfolioFile.findFirst({ where: { id: req.params.fileId, userId: req.userId } });
+    if (!pf) return res.status(404).json({ error: 'File not found' });
+    const filePath = path.join(process.cwd(), 'uploads', 'portfolio', path.basename(pf.url));
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    await prisma.portfolioFile.delete({ where: { id: req.params.fileId } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Portfolio delete error:', error);
+    res.status(500).json({ error: 'Failed to delete portfolio file' });
   }
 });
 

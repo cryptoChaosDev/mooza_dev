@@ -39,3 +39,28 @@ export const upload = multer({
     fileSize: 5 * 1024 * 1024, // 5MB max
   },
 });
+
+// ── Portfolio upload ──────────────────────────────────────────────────────────
+
+const portfolioDir = path.join(process.cwd(), 'uploads', 'portfolio');
+if (!fs.existsSync(portfolioDir)) {
+  fs.mkdirSync(portfolioDir, { recursive: true });
+}
+
+const portfolioStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, portfolioDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `portfolio-${uniqueSuffix}${ext}`);
+  },
+});
+
+export const uploadPortfolio = multer({
+  storage: portfolioStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB max
+  },
+});

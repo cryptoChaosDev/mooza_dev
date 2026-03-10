@@ -6,6 +6,7 @@ import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, DollarSign, Calendar,
   Headphones, Edit3, User, Plus, ChevronDown, ChevronLeft, ChevronRight,
+  Users, Building2, FileText, Trash2,
 } from 'lucide-react';
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
@@ -73,6 +74,12 @@ export default function ProfilePage() {
   const [expandedSvcIdx, setExpandedSvcIdx] = useState<number | null>(null);
   const [openFilterSheet, setOpenFilterSheet] = useState<string | null>(null);
 
+  const [portfolioFiles, setPortfolioFiles] = useState<any[]>([]);
+  const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
+  const [artists, setArtists] = useState<any[]>([]);
+  const [employers, setEmployers] = useState<any[]>([]);
+  const [openBasicSheet, setOpenBasicSheet] = useState<string | null>(null);
+
   // Add-service multi-step flow
   const [addStep, setAddStep] = useState<'field' | 'profession' | 'service' | 'filters' | null>(null);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
@@ -89,6 +96,8 @@ export default function ProfilePage() {
       referenceAPI.getGenres().then(r => setGenres(r.data));
       referenceAPI.getGeographies().then(r => setGeographies(r.data));
       referenceAPI.getPriceRanges().then(r => setPriceRanges(r.data));
+      referenceAPI.getArtists().then(r => setArtists(r.data));
+      referenceAPI.getEmployers().then(r => setEmployers(r.data));
     }
   }, [isEditing]);
 
@@ -111,6 +120,7 @@ export default function ProfilePage() {
         })) || [],
         artistIds: data.userArtists?.map((ua: any) => ua.artistId || ua.artist?.id) || [],
       });
+      setPortfolioFiles(data.portfolioFiles ?? []);
       setUserServices(
         data.userServices?.map((us: any) => ({
           fieldOfActivityId: us.profession?.fieldOfActivity?.id || '',
@@ -194,6 +204,27 @@ export default function ProfilePage() {
     </div>
   );
 
+  const friendCount = (profile?._count?.sentRequests ?? 0) + (profile?._count?.receivedRequests ?? 0);
+  const rating = (() => {
+    if (!profile) return 0;
+    let s = 0;
+    if (profile.firstName) s += 5;
+    if (profile.lastName) s += 5;
+    if (profile.nickname) s += 5;
+    if (profile.bio) s += 15;
+    if (profile.avatar) s += 15;
+    if (profile.country) s += 5;
+    if (profile.city) s += 5;
+    if (profile.vkLink) s += 5;
+    if (profile.youtubeLink) s += 5;
+    if (profile.telegramLink) s += 5;
+    if (profile.employer) s += 5;
+    if (profile.userArtists?.length > 0) s += 5;
+    if (profile.userServices?.length > 0) s += 15;
+    if (portfolioFiles.length > 0) s += 5;
+    return Math.min(100, s);
+  })();
+
   // Group userServices by field → profession for view mode
   const servicesByField = profile?.userServices?.reduce((acc: Record<string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }>, us: any) => {
     const fId = us.profession?.fieldOfActivity?.id || 'unknown';
@@ -213,6 +244,32 @@ export default function ProfilePage() {
   // Update field of a userService entry
   const updateSvc = (idx: number, patch: Partial<UserServiceEntry>) =>
     setUserServices(prev => prev.map((us, i) => i === idx ? { ...us, ...patch } : us));
+
+  const handlePortfolioUpload = async (files: FileList | null) => {
+    if (!files) return;
+    for (const file of Array.from(files)) {
+      if (portfolioFiles.length >= 5) break;
+      const fd = new FormData();
+      fd.append('file', file);
+      setIsUploadingPortfolio(true);
+      try {
+        const { data } = await userAPI.uploadPortfolio(fd);
+        setPortfolioFiles(prev => [...prev, data]);
+      } catch { /* ignore */ }
+      finally { setIsUploadingPortfolio(false); }
+    }
+  };
+
+  const handlePortfolioDelete = async (fileId: string) => {
+    await userAPI.deletePortfolioFile(fileId);
+    setPortfolioFiles(prev => prev.filter((f: any) => f.id !== fileId));
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  };
 
   // Filter selectors for a service entry (edit mode expanded)
   const ServiceFilterEditors = ({ idx }: { idx: number }) => {
@@ -432,6 +489,17 @@ export default function ProfilePage() {
                     )}
                   </div>
                 )}
+                <div className="flex items-center gap-3 mt-2">
+                  <span className="flex items-center gap-1 text-xs text-slate-400">
+                    <Users size={11} />{friendCount} друзей
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-14 h-1 bg-slate-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-primary-500 to-purple-500 rounded-full transition-all" style={{ width: `${rating}%` }} />
+                    </div>
+                    <span className="text-xs text-slate-500">{rating}</span>
+                  </div>
+                </div>
               </div>
 
               {/* Edit / Save buttons */}
@@ -512,6 +580,52 @@ export default function ProfilePage() {
                     <input type="text" value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="Москва" className={inputCls} />
                   </div>
                 </div>
+                {/* Моя группа */}
+                <div>
+                  <label className={labelCls}>Моя группа</label>
+                  <SelectField
+                    label=""
+                    value={formData.artistIds.map(id => artists.find((a: any) => a.id === id)?.name ?? profile?.userArtists?.find((ua: any) => ua.artistId === id)?.artist?.name ?? '').filter(Boolean).join(', ')}
+                    placeholder="Выберите группу или артиста"
+                    icon={<Music size={13} />}
+                    onClick={() => setOpenBasicSheet('artists')}
+                    badge={formData.artistIds.length || undefined}
+                  />
+                  <SelectSheet
+                    isOpen={openBasicSheet === 'artists'}
+                    onClose={() => setOpenBasicSheet(null)}
+                    title="Моя группа"
+                    options={artists.map((a: any) => ({ id: a.id, name: a.name }))}
+                    selectedIds={formData.artistIds}
+                    onSelect={ids => setFormData({ ...formData, artistIds: ids as string[] })}
+                    mode="multiple"
+                    showConfirm
+                    searchable
+                    height="half"
+                  />
+                </div>
+                {/* Мой работодатель */}
+                <div>
+                  <label className={labelCls}>Мой работодатель</label>
+                  <SelectField
+                    label=""
+                    value={employers.find((e: any) => e.id === formData.employerId)?.name ?? profile?.employer?.name ?? ''}
+                    placeholder="Выберите работодателя"
+                    icon={<Building2 size={13} />}
+                    onClick={() => setOpenBasicSheet('employer')}
+                  />
+                  <SelectSheet
+                    isOpen={openBasicSheet === 'employer'}
+                    onClose={() => setOpenBasicSheet(null)}
+                    title="Мой работодатель"
+                    options={employers.map((e: any) => ({ id: e.id, name: e.name, subtitle: e.inn ? `ИНН ${e.inn}` : undefined }))}
+                    selectedIds={formData.employerId}
+                    onSelect={id => setFormData({ ...formData, employerId: id as string })}
+                    mode="single"
+                    searchable
+                    height="half"
+                  />
+                </div>
                 <div>
                   <label className={labelCls}>VK</label>
                   <div className="flex items-center bg-slate-700/50 border border-slate-600/50 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary-500">
@@ -542,6 +656,30 @@ export default function ProfilePage() {
                       placeholder="никнейм" className="flex-1 px-3 py-2.5 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none" />
                   </div>
                 </div>
+                {/* Моё портфолио */}
+                <div>
+                  <label className={labelCls}>Моё портфолио</label>
+                  <p className="text-xs text-slate-500 mb-2">До 5 файлов, не более 5 МБ каждый</p>
+                  <div className="space-y-1.5 mb-2">
+                    {portfolioFiles.map((f: any) => (
+                      <div key={f.id} className="flex items-center gap-2 px-3 py-2 bg-slate-700/30 rounded-xl border border-slate-600/50">
+                        <FileText size={14} className="text-slate-400 flex-shrink-0" />
+                        <span className="flex-1 text-xs text-slate-300 truncate">{f.originalName}</span>
+                        <span className="text-xs text-slate-500 flex-shrink-0">{formatFileSize(f.size)}</span>
+                        <button type="button" onClick={() => handlePortfolioDelete(f.id)} className="p-1 rounded hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all flex-shrink-0">
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  {portfolioFiles.length < 5 && (
+                    <label className={`flex items-center justify-center gap-2 py-2.5 border border-dashed rounded-xl text-sm transition-all cursor-pointer ${isUploadingPortfolio ? 'border-slate-600 text-slate-500' : 'border-slate-600 text-slate-400 hover:text-primary-400 hover:border-primary-500/50'}`}>
+                      <input type="file" multiple accept="*/*" className="hidden" disabled={isUploadingPortfolio}
+                        onChange={e => handlePortfolioUpload(e.target.files)} />
+                      {isUploadingPortfolio ? 'Загрузка...' : `+ Добавить файл (${portfolioFiles.length}/5)`}
+                    </label>
+                  )}
+                </div>
               </div>
             ) : (
               <div className="p-4 space-y-4">
@@ -561,6 +699,42 @@ export default function ProfilePage() {
                         <MapPin size={12} className="text-slate-400" />{profile.city}
                       </span>
                     )}
+                  </div>
+                )}
+                {/* Groups */}
+                {profile?.userArtists?.length > 0 && (
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-700/50">
+                    <span className="w-full text-xs text-slate-500 font-semibold">Группы / Артисты</span>
+                    {profile.userArtists.map((ua: any) => (
+                      <span key={ua.id} className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/10 rounded-xl text-purple-300 text-xs border border-purple-500/20">
+                        <Music size={11} />{ua.artist?.name}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {/* Employer */}
+                {profile?.employer && (
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-700/50">
+                    <span className="w-full text-xs text-slate-500 font-semibold">Работодатель</span>
+                    <span className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 rounded-xl text-green-300 text-xs border border-green-500/20">
+                      <Building2 size={11} />{profile.employer.name}
+                    </span>
+                  </div>
+                )}
+                {/* Portfolio */}
+                {portfolioFiles.length > 0 && (
+                  <div className="pt-2 border-t border-slate-700/50">
+                    <p className="text-xs text-slate-500 font-semibold mb-2">Портфолио</p>
+                    <div className="space-y-1.5">
+                      {portfolioFiles.map((f: any) => (
+                        <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-2 px-3 py-2 bg-slate-700/20 rounded-xl border border-slate-600/30 hover:border-primary-500/30 transition-colors">
+                          <FileText size={13} className="text-slate-400 flex-shrink-0" />
+                          <span className="flex-1 text-xs text-slate-300 truncate">{f.originalName}</span>
+                          <span className="text-xs text-slate-500">{formatFileSize(f.size)}</span>
+                        </a>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

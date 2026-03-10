@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, Briefcase, Music, MessageCircle, Loader2,
-  Globe, Building2, Star, Headphones, User
+  Globe, Building2, User, Users, FileText,
 } from 'lucide-react';
 import { userAPI } from '../lib/api';
 
@@ -57,12 +57,43 @@ export default function UserProfilePage() {
     );
   }
 
-  const servicesByProfession: Record<string, any[]> = (user.userServices ?? []).reduce((acc: Record<string, any[]>, us: any) => {
-    const key = us.professionId;
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(us);
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
+  const servicesByField = (user.userServices ?? []).reduce((acc: Record<string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }>, us: any) => {
+    const fId = us.profession?.fieldOfActivity?.id || 'unknown';
+    const fName = us.profession?.fieldOfActivity?.name || '';
+    const pId = us.professionId;
+    const pName = us.profession?.name || '';
+    if (!acc[fId]) acc[fId] = { fieldName: fName, byProfession: {} };
+    if (!acc[fId].byProfession[pId]) acc[fId].byProfession[pId] = { profName: pName, services: [] };
+    acc[fId].byProfession[pId].services.push(us);
     return acc;
-  }, {});
+  }, {} as Record<string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }>);
+
+  const friendCount = (user._count?.sentRequests ?? 0) + (user._count?.receivedRequests ?? 0);
+  const rating = (() => {
+    let s = 0;
+    if (user.firstName) s += 5;
+    if (user.lastName) s += 5;
+    if (user.nickname) s += 5;
+    if (user.bio) s += 15;
+    if (user.avatar) s += 15;
+    if (user.country) s += 5;
+    if (user.city) s += 5;
+    if (user.vkLink) s += 5;
+    if (user.youtubeLink) s += 5;
+    if (user.telegramLink) s += 5;
+    if (user.employer) s += 5;
+    if (user.userArtists?.length > 0) s += 5;
+    if (user.userServices?.length > 0) s += 15;
+    if (user.portfolioFiles?.length > 0) s += 5;
+    return Math.min(100, s);
+  })();
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
@@ -105,6 +136,39 @@ export default function UserProfilePage() {
                 <div className="flex flex-wrap gap-x-3 gap-y-1">
                   {user.country && <span className="flex items-center gap-1 text-slate-400 text-xs"><Globe size={10} />{user.country}</span>}
                   {user.city    && <span className="flex items-center gap-1 text-slate-400 text-xs"><MapPin size={10} />{user.city}</span>}
+                </div>
+                {(user.vkLink || user.youtubeLink || user.telegramLink) && (
+                  <div className="flex flex-col gap-1 mt-2">
+                    {user.vkLink && (
+                      <a href={user.vkLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors">
+                        <span className="font-bold shrink-0">VK</span>
+                        <span className="truncate">{user.vkLink.replace(/^https?:\/\/(www\.)?vk\.com\//, '')}</span>
+                      </a>
+                    )}
+                    {user.youtubeLink && (
+                      <a href={user.youtubeLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition-colors">
+                        <span className="font-bold shrink-0">YT</span>
+                        <span className="truncate">{user.youtubeLink.replace(/^https?:\/\/(www\.)?youtube\.com\//, '')}</span>
+                      </a>
+                    )}
+                    {user.telegramLink && (
+                      <a href={user.telegramLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 transition-colors">
+                        <span className="font-bold shrink-0">TG</span>
+                        <span className="truncate">{user.telegramLink.replace(/^https?:\/\/(www\.)?t\.me\//, '')}</span>
+                      </a>
+                    )}
+                  </div>
+                )}
+                <div className="flex items-center gap-3 mt-2">
+                  <span className="flex items-center gap-1 text-xs text-slate-400">
+                    <Users size={11} />{friendCount} друзей
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-14 h-1 bg-slate-700 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-primary-500 to-purple-500 rounded-full" style={{ width: `${rating}%` }} />
+                    </div>
+                    <span className="text-xs text-slate-500">{rating}</span>
+                  </div>
                 </div>
               </div>
 
@@ -161,15 +225,51 @@ export default function UserProfilePage() {
                   )}
                 </div>
               )}
+              {/* Groups */}
+              {user.userArtists?.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-700/50">
+                  <span className="w-full text-xs text-slate-500 font-semibold">Группы / Артисты</span>
+                  {user.userArtists.map((ua: any) => (
+                    <span key={ua.id} className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/10 rounded-xl text-purple-300 text-xs border border-purple-500/20">
+                      <Music size={11} />{ua.artist?.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {/* Employer */}
+              {user.employer && (
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-700/50">
+                  <span className="w-full text-xs text-slate-500 font-semibold">Работодатель</span>
+                  <span className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 rounded-xl text-green-300 text-xs border border-green-500/20">
+                    <Building2 size={11} />{user.employer.name}
+                  </span>
+                </div>
+              )}
+              {/* Portfolio */}
+              {user.portfolioFiles?.length > 0 && (
+                <div className="pt-2 border-t border-slate-700/50">
+                  <p className="text-xs text-slate-500 font-semibold mb-2">Портфолио</p>
+                  <div className="space-y-1.5">
+                    {user.portfolioFiles.map((f: any) => (
+                      <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center gap-2 px-3 py-2 bg-slate-700/20 rounded-xl border border-slate-600/30 hover:border-primary-500/30 transition-colors">
+                        <FileText size={13} className="text-slate-400 flex-shrink-0" />
+                        <span className="flex-1 text-xs text-slate-300 truncate">{f.originalName}</span>
+                        <span className="text-xs text-slate-500">{formatFileSize(f.size)}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
           {/* ПРОФЕССИЯ */}
           {activeTab === 'profession' && (
-            <div className="p-4 space-y-4">
+            <div className="p-4">
               {/* Field + Employer chips */}
               {(user.fieldOfActivity || user.employer) && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2 mb-4">
                   {user.fieldOfActivity && (
                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/50 rounded-xl border border-slate-600/30 text-slate-300 text-xs font-medium">
                       <Briefcase size={12} className="text-primary-400" />{user.fieldOfActivity.name}
@@ -178,94 +278,57 @@ export default function UserProfilePage() {
                   {user.employer && (
                     <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/50 rounded-xl border border-slate-600/30 text-slate-300 text-xs font-medium">
                       <Building2 size={12} className="text-green-400" />{user.employer.name}
-                      {user.employer.inn && <span className="text-slate-500 font-normal">· ИНН {user.employer.inn}</span>}
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Professions */}
-              {user.userProfessions?.length > 0 ? (
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                    <Star size={11} className="text-primary-400" />Профессии
-                  </p>
-                  <div className="space-y-2">
-                    {user.userProfessions.map((up: any) => (
-                      <div key={up.id} className="bg-slate-700/20 rounded-xl border border-slate-600/30 p-3">
-                        <p className="text-sm font-semibold text-white mb-2">{up.profession?.name}</p>
-                        {up.features?.length > 0 ? (
-                          <div className="flex flex-wrap gap-1.5">
-                            {up.features.map((f: string) => (
-                              <span key={f} className="px-2.5 py-1 bg-primary-500/10 text-primary-300 rounded-lg text-xs border border-primary-500/20">{f}</span>
-                            ))}
+              {/* Services grouped by field → profession */}
+              {Object.keys(servicesByField).length > 0 ? (
+                <div className="space-y-4">
+                  {(Object.entries(servicesByField) as [string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }][]).map(([fieldId, { fieldName, byProfession }]) => (
+                    <div key={fieldId}>
+                      <p className="text-xs font-bold text-primary-400 uppercase tracking-wider mb-2">{fieldName}</p>
+                      <div className="space-y-3 pl-2 border-l border-primary-500/20">
+                        {(Object.entries(byProfession) as [string, { profName: string; services: any[] }][]).map(([professionId, { profName, services }]) => (
+                          <div key={professionId}>
+                            <p className="text-xs text-slate-500 font-semibold mb-1.5">{profName}</p>
+                            <div className="space-y-2">
+                              {services.map((us: any) => {
+                                const tags = [
+                                  ...(us.genres?.map((g: any) => g.name) ?? []),
+                                  ...(us.workFormats?.map((w: any) => w.name) ?? []),
+                                  ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
+                                  ...(us.skillLevels?.map((s: any) => s.name) ?? []),
+                                  ...(us.availabilities?.map((a: any) => a.name) ?? []),
+                                  ...(us.priceRanges?.map((p: any) => p.name) ?? []),
+                                  ...(us.geographies?.map((g: any) => g.name) ?? []),
+                                ];
+                                return (
+                                  <div key={us.id} className="bg-slate-700/20 rounded-xl border border-slate-600/30 p-3">
+                                    <p className="text-sm font-semibold text-white mb-1.5">{us.service?.name}</p>
+                                    {tags.length > 0 ? (
+                                      <div className="flex flex-wrap gap-1.5">
+                                        {tags.map((t: string, i: number) => (
+                                          <span key={i} className="px-2 py-0.5 bg-slate-600/40 text-slate-300 rounded-md text-xs border border-slate-600/30">{t}</span>
+                                        ))}
+                                      </div>
+                                    ) : (
+                                      <p className="text-slate-500 text-xs">Фильтры не настроены</p>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
-                        ) : (
-                          <p className="text-slate-500 text-xs">Без специализации</p>
-                        )}
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              ) : !user.fieldOfActivity && !user.employer && <EmptyState text="Профессиональная информация не заполнена" />}
-
-              {/* Artists */}
-              {user.userArtists?.length > 0 && (
-                <div>
-                  <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                    <Music size={11} className="text-purple-400" />Артисты / Группы
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {user.userArtists.map((ua: any) => (
-                      <span key={ua.id} className="px-2.5 py-1 bg-purple-500/15 text-purple-300 rounded-lg text-xs font-medium border border-purple-500/30">{ua.artist?.name}</span>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* User Services grouped by profession */}
-          {activeTab === 'profession' && Object.keys(servicesByProfession).length > 0 && (
-            <div className="px-4 pb-4">
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                <Headphones size={11} className="text-primary-400" />Услуги
-              </p>
-              {Object.entries(servicesByProfession).map(([professionId, services]) => {
-                const profName = (services as any[])[0]?.profession?.name ?? '';
-                return (
-                  <div key={professionId} className="mb-3">
-                    <p className="text-xs text-slate-500 font-semibold mb-1.5">{profName}</p>
-                    <div className="space-y-2">
-                      {(services as any[]).map((us: any) => {
-                        const tags = [
-                          ...(us.genres?.map((g: any) => g.name) ?? []),
-                          ...(us.workFormats?.map((w: any) => w.name) ?? []),
-                          ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
-                          ...(us.skillLevels?.map((s: any) => s.name) ?? []),
-                          ...(us.availabilities?.map((a: any) => a.name) ?? []),
-                          ...(us.priceRanges?.map((p: any) => p.name) ?? []),
-                          ...(us.geographies?.map((g: any) => g.name) ?? []),
-                        ];
-                        return (
-                          <div key={us.id} className="bg-slate-700/20 rounded-xl border border-slate-600/30 p-3">
-                            <p className="text-sm font-semibold text-white mb-1.5">{us.service?.name}</p>
-                            {tags.length > 0 ? (
-                              <div className="flex flex-wrap gap-1.5">
-                                {tags.map((t: string, i: number) => (
-                                  <span key={i} className="px-2 py-0.5 bg-slate-600/40 text-slate-300 rounded-md text-xs border border-slate-600/30">{t}</span>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-slate-500 text-xs">Фильтры не настроены</p>
-                            )}
-                          </div>
-                        );
-                      })}
                     </div>
-                  </div>
-                );
-              })}
+                  ))}
+                </div>
+              ) : (
+                <EmptyState text="Профессиональная информация не заполнена" />
+              )}
             </div>
           )}
 
