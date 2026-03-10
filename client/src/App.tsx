@@ -14,6 +14,7 @@ import FriendsPage from './pages/FriendsPage';
 import MessagesPage from './pages/MessagesPage';
 import ChatPage from './pages/ChatPage';
 import Layout from './components/Layout';
+import AdminPage from './pages/AdminPage';
 
 function showNotification(title: string, body: string, icon?: string) {
   if (Notification.permission !== 'granted') return;
@@ -21,7 +22,7 @@ function showNotification(title: string, body: string, icon?: string) {
 }
 
 function App() {
-  const { token } = useAuthStore();
+  const { token, user } = useAuthStore();
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -113,6 +114,7 @@ function App() {
         <Route path="/messages" element={<MessagesPage />} />
         <Route path="/messages/:userId" element={<ChatPage />} />
         <Route path="/chat/:userId" element={<ChatPage />} />
+        {user?.isAdmin && <Route path="/admin" element={<AdminPage />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

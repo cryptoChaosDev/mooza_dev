@@ -1,7 +1,8 @@
 import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Search, Users, User, MessageCircle, Menu, X, Music, Bell } from 'lucide-react';
+import { Home, Search, Users, User, MessageCircle, Menu, X, Music, Bell, ShieldCheck } from 'lucide-react';
 import BottomNav from './BottomNav';
+import { useAuthStore } from '../stores/authStore';
 
 interface LayoutProps {
   children: ReactNode;
@@ -11,6 +12,7 @@ export default function Layout({ children }: LayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifDismissed, setNotifDismissed] = useState(false);
   const location = useLocation();
+  const { user } = useAuthStore();
 
   const notifPending = 'Notification' in window && Notification.permission === 'default' && !notifDismissed;
 
@@ -95,6 +97,19 @@ export default function Layout({ children }: LayoutProps) {
               </Link>
             );
           })}
+          {user?.isAdmin && (
+            <Link
+              to="/admin"
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                isActive('/admin')
+                  ? 'bg-primary-500/10 text-primary-400 shadow-glow'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              <ShieldCheck size={22} strokeWidth={isActive('/admin') ? 2.5 : 2} />
+              <span className="font-medium">Администрирование</span>
+            </Link>
+          )}
         </nav>
 
         <div className="p-4 border-t border-slate-800/50">
@@ -140,6 +155,20 @@ export default function Layout({ children }: LayoutProps) {
               </Link>
             );
           })}
+          {user?.isAdmin && (
+            <Link
+              to="/admin"
+              onClick={() => setSidebarOpen(false)}
+              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
+                isActive('/admin')
+                  ? 'bg-primary-500/10 text-primary-400'
+                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+              }`}
+            >
+              <ShieldCheck size={22} strokeWidth={isActive('/admin') ? 2.5 : 2} />
+              <span className="font-medium">Администрирование</span>
+            </Link>
+          )}
         </nav>
       </aside>
 

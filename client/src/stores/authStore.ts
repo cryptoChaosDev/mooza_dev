@@ -13,6 +13,7 @@ interface User {
   country?: string;
   city?: string;
   role?: string;
+  isAdmin?: boolean;
   genres?: string[];
   fieldOfActivityId?: string;
   fieldOfActivity?: { id: string; name: string };
