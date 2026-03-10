@@ -57,7 +57,7 @@ router.get('/services', async (req, res) => {
       where,
       include: {
         profession: { select: { id: true, name: true } },
-        _count: { select: { users: true } },
+        _count: { select: { userServices: true } },
       },
       orderBy: { sortOrder: 'asc' },
     });
@@ -69,7 +69,7 @@ router.get('/services', async (req, res) => {
       professionId: s.professionId,
       professionName: s.profession.name,
       sortOrder: s.sortOrder,
-      userCount: s._count.users,
+      userCount: s._count.userServices,
     })));
   } catch (error) {
     console.error('Get services error:', error);
@@ -82,9 +82,9 @@ router.get('/genres', async (_req, res) => {
   try {
     const genres = await prisma.genre.findMany({
       orderBy: { sortOrder: 'asc' },
-      include: { _count: { select: { users: true } } },
+      include: { _count: { select: { userServices: true } } },
     });
-    res.json(genres.map(g => ({ id: g.id, name: g.name, nameEn: g.nameEn, sortOrder: g.sortOrder, userCount: g._count.users })));
+    res.json(genres.map(g => ({ id: g.id, name: g.name, nameEn: g.nameEn, sortOrder: g.sortOrder, userCount: g._count.userServices })));
   } catch (error) {
     console.error('Get genres error:', error);
     res.status(500).json({ error: 'Failed to get genres' });
@@ -96,9 +96,9 @@ router.get('/work-formats', async (_req, res) => {
   try {
     const workFormats = await prisma.workFormat.findMany({
       orderBy: { sortOrder: 'asc' },
-      include: { _count: { select: { users: true } } },
+      include: { _count: { select: { userServices: true } } },
     });
-    res.json(workFormats.map(w => ({ id: w.id, name: w.name, nameEn: w.nameEn, sortOrder: w.sortOrder, userCount: w._count.users })));
+    res.json(workFormats.map(w => ({ id: w.id, name: w.name, nameEn: w.nameEn, sortOrder: w.sortOrder, userCount: w._count.userServices })));
   } catch (error) {
     console.error('Get work formats error:', error);
     res.status(500).json({ error: 'Failed to get work formats' });
@@ -110,9 +110,9 @@ router.get('/employment-types', async (_req, res) => {
   try {
     const employmentTypes = await prisma.employmentType.findMany({
       orderBy: { sortOrder: 'asc' },
-      include: { _count: { select: { users: true } } },
+      include: { _count: { select: { userServices: true } } },
     });
-    res.json(employmentTypes.map(e => ({ id: e.id, name: e.name, nameEn: e.nameEn, sortOrder: e.sortOrder, userCount: e._count.users })));
+    res.json(employmentTypes.map(e => ({ id: e.id, name: e.name, nameEn: e.nameEn, sortOrder: e.sortOrder, userCount: e._count.userServices })));
   } catch (error) {
     console.error('Get employment types error:', error);
     res.status(500).json({ error: 'Failed to get employment types' });
@@ -124,9 +124,9 @@ router.get('/skill-levels', async (_req, res) => {
   try {
     const skillLevels = await prisma.skillLevel.findMany({
       orderBy: { sortOrder: 'asc' },
-      include: { _count: { select: { users: true } } },
+      include: { _count: { select: { userServices: true } } },
     });
-    res.json(skillLevels.map(s => ({ id: s.id, name: s.name, nameEn: s.nameEn, sortOrder: s.sortOrder, userCount: s._count.users })));
+    res.json(skillLevels.map(s => ({ id: s.id, name: s.name, nameEn: s.nameEn, sortOrder: s.sortOrder, userCount: s._count.userServices })));
   } catch (error) {
     console.error('Get skill levels error:', error);
     res.status(500).json({ error: 'Failed to get skill levels' });
@@ -138,9 +138,9 @@ router.get('/availabilities', async (_req, res) => {
   try {
     const availabilities = await prisma.availability.findMany({
       orderBy: { sortOrder: 'asc' },
-      include: { _count: { select: { users: true } } },
+      include: { _count: { select: { userServices: true } } },
     });
-    res.json(availabilities.map(a => ({ id: a.id, name: a.name, nameEn: a.nameEn, sortOrder: a.sortOrder, userCount: a._count.users })));
+    res.json(availabilities.map(a => ({ id: a.id, name: a.name, nameEn: a.nameEn, sortOrder: a.sortOrder, userCount: a._count.userServices })));
   } catch (error) {
     console.error('Get availabilities error:', error);
     res.status(500).json({ error: 'Failed to get availabilities' });
@@ -152,9 +152,9 @@ router.get('/geographies', async (_req, res) => {
   try {
     const geographies = await prisma.geography.findMany({
       orderBy: { sortOrder: 'asc' },
-      include: { _count: { select: { users: true } } },
+      include: { _count: { select: { userServices: true } } },
     });
-    res.json(geographies.map(g => ({ id: g.id, name: g.name, nameEn: g.nameEn, sortOrder: g.sortOrder, userCount: g._count.users })));
+    res.json(geographies.map(g => ({ id: g.id, name: g.name, nameEn: g.nameEn, sortOrder: g.sortOrder, userCount: g._count.userServices })));
   } catch (error) {
     console.error('Get geographies error:', error);
     res.status(500).json({ error: 'Failed to get geographies' });
@@ -166,12 +166,12 @@ router.get('/price-ranges', async (_req, res) => {
   try {
     const priceRanges = await prisma.priceRange.findMany({
       orderBy: { sortOrder: 'asc' },
-      include: { _count: { select: { users: true } } },
+      include: { _count: { select: { userServices: true } } },
     });
     res.json(priceRanges.map(p => ({
       id: p.id, name: p.name, nameEn: p.nameEn,
       minValue: p.minValue, maxValue: p.maxValue,
-      sortOrder: p.sortOrder, userCount: p._count.users,
+      sortOrder: p.sortOrder, userCount: p._count.userServices,
     })));
   } catch (error) {
     console.error('Get price ranges error:', error);
@@ -179,7 +179,7 @@ router.get('/price-ranges', async (_req, res) => {
   }
 });
 
-// Search users by search profile filters
+// Search users by service filters
 router.get('/search', async (req, res) => {
   try {
     const {
@@ -202,19 +202,22 @@ router.get('/search', async (req, res) => {
     const limitNum = parseInt(limit as string, 10);
     const skip = (pageNum - 1) * limitNum;
 
-    const profileWhere: any = {};
-    if (serviceId) profileWhere.services = { some: { id: serviceId } };
-    if (genreId) profileWhere.genres = { some: { id: genreId } };
-    if (workFormatId) profileWhere.workFormats = { some: { id: workFormatId } };
-    if (employmentTypeId) profileWhere.employmentTypes = { some: { id: employmentTypeId } };
-    if (skillLevelId) profileWhere.skillLevels = { some: { id: skillLevelId } };
-    if (availabilityId) profileWhere.availabilities = { some: { id: availabilityId } };
-    if (geographyId) profileWhere.geographies = { some: { id: geographyId } };
-    if (priceRangeId) profileWhere.priceRanges = { some: { id: priceRangeId } };
+    const userServiceWhere: any = {};
+    if (serviceId) userServiceWhere.serviceId = serviceId;
+    if (professionId) userServiceWhere.professionId = professionId;
+    if (genreId) userServiceWhere.genres = { some: { id: genreId } };
+    if (workFormatId) userServiceWhere.workFormats = { some: { id: workFormatId } };
+    if (employmentTypeId) userServiceWhere.employmentTypes = { some: { id: employmentTypeId } };
+    if (skillLevelId) userServiceWhere.skillLevels = { some: { id: skillLevelId } };
+    if (availabilityId) userServiceWhere.availabilities = { some: { id: availabilityId } };
+    if (geographyId) userServiceWhere.geographies = { some: { id: geographyId } };
+    if (priceRangeId) userServiceWhere.priceRanges = { some: { id: priceRangeId } };
 
     const userWhere: any = {};
     if (fieldId) userWhere.fieldOfActivityId = fieldId;
-    if (professionId) userWhere.userProfessions = { some: { professionId } };
+    if (Object.keys(userServiceWhere).length > 0) {
+      userWhere.userServices = { some: userServiceWhere };
+    }
     if (query) {
       userWhere.OR = [
         { firstName: { contains: query as string, mode: 'insensitive' } },
@@ -222,58 +225,55 @@ router.get('/search', async (req, res) => {
         { nickname: { contains: query as string, mode: 'insensitive' } },
       ];
     }
-    if (Object.keys(userWhere).length > 0) profileWhere.user = userWhere;
 
-    const searchProfileInclude = {
-      user: {
-        select: {
-          id: true,
-          firstName: true,
-          lastName: true,
-          nickname: true,
-          avatar: true,
-          city: true,
-          fieldOfActivity: { select: { id: true, name: true } },
-          userProfessions: {
-            select: { id: true, profession: { select: { id: true, name: true } } },
-          },
+    const userSelect = {
+      id: true,
+      firstName: true,
+      lastName: true,
+      nickname: true,
+      avatar: true,
+      city: true,
+      fieldOfActivity: { select: { id: true, name: true } },
+      userProfessions: { select: { id: true, profession: { select: { id: true, name: true } } } },
+      userServices: {
+        include: {
+          service: { select: { id: true, name: true } },
+          genres: { select: { id: true, name: true } },
+          workFormats: { select: { id: true, name: true } },
+          employmentTypes: { select: { id: true, name: true } },
+          skillLevels: { select: { id: true, name: true } },
+          availabilities: { select: { id: true, name: true } },
+          geographies: { select: { id: true, name: true } },
+          priceRanges: { select: { id: true, name: true } },
         },
       },
-      services: { select: { id: true, name: true } },
-      genres: { select: { id: true, name: true } },
-      workFormats: { select: { id: true, name: true } },
-      employmentTypes: { select: { id: true, name: true } },
-      skillLevels: { select: { id: true, name: true } },
-      availabilities: { select: { id: true, name: true } },
-      geographies: { select: { id: true, name: true } },
-      priceRanges: { select: { id: true, name: true } },
     };
 
-    const [userProfiles, totalCount] = await Promise.all([
-      prisma.userSearchProfile.findMany({
-        where: profileWhere,
-        include: searchProfileInclude,
-        skip,
-        take: limitNum,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.userSearchProfile.count({ where: profileWhere }),
+    const [users, totalCount] = await Promise.all([
+      prisma.user.findMany({ where: userWhere, select: userSelect, skip, take: limitNum, orderBy: { createdAt: 'desc' } }),
+      prisma.user.count({ where: userWhere }),
     ]);
 
-    const results = userProfiles.map(profile => ({
-      id: profile.id,
-      user: profile.user,
-      searchProfile: {
-        services: profile.services,
-        genres: profile.genres,
-        workFormats: profile.workFormats,
-        employmentTypes: profile.employmentTypes,
-        skillLevels: profile.skillLevels,
-        availabilities: profile.availabilities,
-        geographies: profile.geographies,
-        priceRanges: profile.priceRanges,
-      },
-    }));
+    const dedup = <T extends { id: string }>(arr: T[]) =>
+      [...new Map(arr.map(x => [x.id, x])).values()];
+
+    const results = users.map(user => {
+      const { userServices, ...userData } = user;
+      return {
+        id: user.id,
+        user: userData,
+        searchProfile: {
+          services: dedup(userServices.map(us => us.service)),
+          genres: dedup(userServices.flatMap(us => us.genres)),
+          workFormats: dedup(userServices.flatMap(us => us.workFormats)),
+          employmentTypes: dedup(userServices.flatMap(us => us.employmentTypes)),
+          skillLevels: dedup(userServices.flatMap(us => us.skillLevels)),
+          availabilities: dedup(userServices.flatMap(us => us.availabilities)),
+          geographies: dedup(userServices.flatMap(us => us.geographies)),
+          priceRanges: dedup(userServices.flatMap(us => us.priceRanges)),
+        },
+      };
+    });
 
     res.json({
       results,
