@@ -6,7 +6,7 @@ import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, DollarSign, Calendar,
   Headphones, Edit3, User, Plus, ChevronDown, ChevronLeft, ChevronRight,
-  Users, Building2, FileText, Trash2,
+  Building2, FileText, Trash2,
 } from 'lucide-react';
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
