@@ -283,6 +283,49 @@ router.delete('/price-ranges/:id', async (req, res) => {
   catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
+// ─── Direction ─────────────────────────────────────────────────────────────
+router.get('/directions', async (_req, res) => {
+  const items = await prisma.direction.findMany({
+    include: { fieldOfActivity: { select: { id: true, name: true } } },
+    orderBy: { name: 'asc' },
+  });
+  res.json(items);
+});
+router.post('/directions', async (req, res) => {
+  try {
+    const item = await prisma.direction.create({
+      data: { name: req.body.name, fieldOfActivityId: req.body.fieldOfActivityId },
+      include: { fieldOfActivity: { select: { id: true, name: true } } },
+    });
+    res.json(item);
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+router.put('/directions/:id', async (req, res) => {
+  try {
+    const data: any = {};
+    if (req.body.name !== undefined) data.name = req.body.name;
+    if (req.body.fieldOfActivityId !== undefined) data.fieldOfActivityId = req.body.fieldOfActivityId;
+    const item = await prisma.direction.update({
+      where: { id: req.params.id },
+      data,
+      include: { fieldOfActivity: { select: { id: true, name: true } } },
+    });
+    res.json(item);
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+router.delete('/directions/:id', async (req, res) => {
+  try {
+    await prisma.direction.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 // ─── Artist ────────────────────────────────────────────────────────────────
 router.get('/artists', async (_req, res) => {
   res.json(await prisma.artist.findMany({ orderBy: { name: 'asc' } }));

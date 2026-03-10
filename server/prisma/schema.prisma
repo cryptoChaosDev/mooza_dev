@@ -14,9 +14,22 @@ model FieldOfActivity {
   name String @unique
 
   professions Profession[]
+  directions  Direction[]
   users       User[]
 
   createdAt DateTime @default(now())
+}
+
+model Direction {
+  id                String          @id @default(uuid())
+  name              String
+  fieldOfActivityId String
+  fieldOfActivity   FieldOfActivity @relation(fields: [fieldOfActivityId], references: [id])
+
+  createdAt DateTime @default(now())
+
+  @@unique([name, fieldOfActivityId])
+  @@index([fieldOfActivityId])
 }
 
 model Profession {
