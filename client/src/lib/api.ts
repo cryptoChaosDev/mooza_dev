@@ -42,16 +42,17 @@ export const authAPI = {
 export const userAPI = {
   getMe: () => api.get('/users/me'),
   updateMe: (data: any) => api.put('/users/me', data),
-  updateSearchProfile: (data: {
-    serviceIds?: string[];
+  updateServices: (services: Array<{
+    professionId: string;
+    serviceId: string;
     genreIds?: string[];
     workFormatIds?: string[];
     employmentTypeIds?: string[];
     skillLevelIds?: string[];
     availabilityIds?: string[];
-    geographyIds?: string[];
     priceRangeIds?: string[];
-  }) => api.put('/users/me/search-profile', data),
+    geographyIds?: string[];
+  }>) => api.put('/users/me/services', services),
   uploadAvatar: (formData: FormData) =>
     api.post('/users/me/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
