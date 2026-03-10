@@ -3,18 +3,15 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, Briefcase, Music, MessageCircle, Loader2,
-  Globe, Building2, Star, DollarSign, Clock, Headphones,
-  Settings, ChevronRight, User
+  Globe, Building2, Star, Headphones, User
 } from 'lucide-react';
 import { userAPI } from '../lib/api';
 
-type Tab = 'basic' | 'profession' | 'search' | 'social';
+type Tab = 'basic' | 'profession';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'basic',      label: 'Основное',  icon: <User size={14} /> },
   { id: 'profession', label: 'Профессия', icon: <Briefcase size={14} /> },
-  { id: 'search',     label: 'Поиск',     icon: <Settings size={14} /> },
-  { id: 'social',     label: 'Соцсети',   icon: <Globe size={14} /> },
 ];
 
 const EmptyState = ({ text }: { text: string }) => (
@@ -60,11 +57,12 @@ export default function UserProfilePage() {
     );
   }
 
-  const sp = user.userSearchProfiles?.[0];
-  const hasSearchProfile = sp && (
-    sp.service || sp.genre || sp.workFormat || sp.employmentType ||
-    sp.skillLevel || sp.availability || sp.pricePerHour || sp.pricePerEvent
-  );
+  const servicesByProfession: Record<string, any[]> = (user.userServices ?? []).reduce((acc: Record<string, any[]>, us: any) => {
+    const key = us.professionId;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(us);
+    return acc;
+  }, {});
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
@@ -227,76 +225,47 @@ export default function UserProfilePage() {
             </div>
           )}
 
-          {/* ПОИСК */}
-          {activeTab === 'search' && (
-            <div className="p-4">
-              {hasSearchProfile ? (
-                <div className="flex flex-wrap gap-2">
-                  {sp?.service && (
-                    <div className="flex items-center gap-1 px-2.5 py-1 bg-primary-500/10 rounded-lg border border-primary-500/20">
-                      <Headphones size={11} className="text-primary-400" /><span className="text-primary-300 text-xs">{sp.service.name}</span>
+          {/* User Services grouped by profession */}
+          {activeTab === 'profession' && Object.keys(servicesByProfession).length > 0 && (
+            <div className="px-4 pb-4">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <Headphones size={11} className="text-primary-400" />Услуги
+              </p>
+              {Object.entries(servicesByProfession).map(([professionId, services]) => {
+                const profName = (services as any[])[0]?.profession?.name ?? '';
+                return (
+                  <div key={professionId} className="mb-3">
+                    <p className="text-xs text-slate-500 font-semibold mb-1.5">{profName}</p>
+                    <div className="space-y-2">
+                      {(services as any[]).map((us: any) => {
+                        const tags = [
+                          ...(us.genres?.map((g: any) => g.name) ?? []),
+                          ...(us.workFormats?.map((w: any) => w.name) ?? []),
+                          ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
+                          ...(us.skillLevels?.map((s: any) => s.name) ?? []),
+                          ...(us.availabilities?.map((a: any) => a.name) ?? []),
+                          ...(us.priceRanges?.map((p: any) => p.name) ?? []),
+                          ...(us.geographies?.map((g: any) => g.name) ?? []),
+                        ];
+                        return (
+                          <div key={us.id} className="bg-slate-700/20 rounded-xl border border-slate-600/30 p-3">
+                            <p className="text-sm font-semibold text-white mb-1.5">{us.service?.name}</p>
+                            {tags.length > 0 ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {tags.map((t: string, i: number) => (
+                                  <span key={i} className="px-2 py-0.5 bg-slate-600/40 text-slate-300 rounded-md text-xs border border-slate-600/30">{t}</span>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-slate-500 text-xs">Фильтры не настроены</p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  )}
-                  {sp?.genre && (
-                    <div className="flex items-center gap-1 px-2.5 py-1 bg-primary-500/10 rounded-lg border border-primary-500/20">
-                      <Music size={11} className="text-primary-400" /><span className="text-primary-300 text-xs">{sp.genre.name}</span>
-                    </div>
-                  )}
-                  {sp?.workFormat     && <span className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{sp.workFormat.name}</span>}
-                  {sp?.employmentType && <span className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{sp.employmentType.name}</span>}
-                  {sp?.skillLevel     && <span className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{sp.skillLevel.name}</span>}
-                  {sp?.availability   && <span className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{sp.availability.name}</span>}
-                  {(sp?.pricePerHour || sp?.pricePerEvent) && (
-                    <div className="w-full flex flex-wrap gap-3 pt-2 mt-1 border-t border-slate-700/50">
-                      {sp?.pricePerHour  && <div className="flex items-center gap-1 text-green-300 text-xs font-semibold"><DollarSign size={11} />{sp.pricePerHour} ₽/час</div>}
-                      {sp?.pricePerEvent && <div className="flex items-center gap-1 text-green-300 text-xs font-semibold"><Clock size={11} />{sp.pricePerEvent} ₽/выступление</div>}
-                    </div>
-                  )}
-                </div>
-              ) : <EmptyState text="Параметры поиска не заполнены" />}
-            </div>
-          )}
-
-          {/* СОЦСЕТИ */}
-          {activeTab === 'social' && (
-            <div className="p-4">
-              {(user.vkLink || user.youtubeLink || user.telegramLink || user.role) ? (
-                <div className="space-y-2">
-                  {user.role && (
-                    <div className="flex items-center gap-2 pb-2 mb-2 border-b border-slate-700/50">
-                      <span className="text-slate-400 text-xs">Роль:</span>
-                      <span className="px-2 py-0.5 bg-primary-500/15 text-primary-300 text-xs font-medium rounded-md border border-primary-500/30">{user.role}</span>
-                    </div>
-                  )}
-                  {user.vkLink && (
-                    <a href={user.vkLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 py-2 text-slate-300 hover:text-white transition-colors group">
-                      <div className="w-7 h-7 bg-blue-500/15 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-blue-500/25 transition-colors">
-                        <span className="text-blue-400 text-xs font-bold">VK</span>
-                      </div>
-                      <span className="text-sm flex-1 truncate">{user.vkLink}</span>
-                      <ChevronRight size={14} className="text-slate-500 flex-shrink-0" />
-                    </a>
-                  )}
-                  {user.youtubeLink && (
-                    <a href={user.youtubeLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 py-2 text-slate-300 hover:text-white transition-colors group">
-                      <div className="w-7 h-7 bg-red-500/15 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-red-500/25 transition-colors">
-                        <span className="text-red-400 text-xs font-bold">YT</span>
-                      </div>
-                      <span className="text-sm flex-1 truncate">{user.youtubeLink}</span>
-                      <ChevronRight size={14} className="text-slate-500 flex-shrink-0" />
-                    </a>
-                  )}
-                  {user.telegramLink && (
-                    <a href={user.telegramLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 py-2 text-slate-300 hover:text-white transition-colors group">
-                      <div className="w-7 h-7 bg-sky-500/15 rounded-lg flex items-center justify-center flex-shrink-0 group-hover:bg-sky-500/25 transition-colors">
-                        <span className="text-sky-400 text-xs font-bold">TG</span>
-                      </div>
-                      <span className="text-sm flex-1 truncate">{user.telegramLink}</span>
-                      <ChevronRight size={14} className="text-slate-500 flex-shrink-0" />
-                    </a>
-                  )}
-                </div>
-              ) : <EmptyState text="Соцсети не добавлены" />}
+                  </div>
+                );
+              })}
             </div>
           )}
 

@@ -5,20 +5,39 @@ import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, Building2, Search, Check, DollarSign, Calendar,
-  Headphones, Settings, Edit3, User, Plus, ChevronDown
+  Headphones, Edit3, User, Plus, ChevronDown, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
-type Tab = 'basic' | 'profession' | 'search';
+type Tab = 'basic' | 'profession';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'basic',      label: 'Основное',  icon: <User size={14} /> },
   { id: 'profession', label: 'Профессия', icon: <Briefcase size={14} /> },
-  { id: 'search',     label: 'Поиск',     icon: <Settings size={14} /> },
 ];
+
+type UserServiceEntry = {
+  professionId: string;
+  professionName: string;
+  serviceId: string;
+  serviceName: string;
+  genreIds: string[];
+  workFormatIds: string[];
+  employmentTypeIds: string[];
+  skillLevelIds: string[];
+  availabilityIds: string[];
+  priceRangeIds: string[];
+  geographyIds: string[];
+};
+
+const emptyEntry = (): UserServiceEntry => ({
+  professionId: '', professionName: '', serviceId: '', serviceName: '',
+  genreIds: [], workFormatIds: [], employmentTypeIds: [], skillLevelIds: [],
+  availabilityIds: [], priceRangeIds: [], geographyIds: [],
+});
 
 export default function ProfilePage() {
   const { logout } = useAuthStore();
@@ -26,15 +45,6 @@ export default function ProfilePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('basic');
-  const [expandedProfessions, setExpandedProfessions] = useState<Set<string>>(new Set());
-  const [showAddProfession, setShowAddProfession] = useState(false);
-
-  const toggleProfExpand = (id: string) =>
-    setExpandedProfessions(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
 
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', nickname: '', bio: '',
@@ -45,6 +55,7 @@ export default function ProfilePage() {
     artistIds: [] as string[],
   });
 
+  // Reference lists
   const [fieldsOfActivity, setFieldsOfActivity] = useState<any[]>([]);
   const [professions, setProfessions] = useState<any[]>([]);
   const [professionFeatures, setProfessionFeatures] = useState<any[]>([]);
@@ -52,7 +63,6 @@ export default function ProfilePage() {
   const [employers, setEmployers] = useState<any[]>([]);
   const [searchArtist, setSearchArtist] = useState('');
   const [searchEmployer, setSearchEmployer] = useState('');
-  const [services, setServices] = useState<any[]>([]);
   const [genres, setGenres] = useState<any[]>([]);
   const [workFormats, setWorkFormats] = useState<any[]>([]);
   const [employmentTypes, setEmploymentTypes] = useState<any[]>([]);
@@ -60,25 +70,25 @@ export default function ProfilePage() {
   const [availabilities, setAvailabilities] = useState<any[]>([]);
   const [geographies, setGeographies] = useState<any[]>([]);
   const [priceRanges, setPriceRanges] = useState<any[]>([]);
+  const [expandedProfessions, setExpandedProfessions] = useState<Set<string>>(new Set());
+  const [showAddProfession, setShowAddProfession] = useState(false);
 
-  const [searchProfile, setSearchProfile] = useState({
-    serviceIds: [] as string[],
-    genreIds: [] as string[],
-    workFormatIds: [] as string[],
-    employmentTypeIds: [] as string[],
-    skillLevelIds: [] as string[],
-    availabilityIds: [] as string[],
-    geographyIds: [] as string[],
-    priceRangeIds: [] as string[],
-  });
+  // User services state
+  const [userServices, setUserServices] = useState<UserServiceEntry[]>([]);
+  const [expandedSvcIdx, setExpandedSvcIdx] = useState<number | null>(null);
+  const [openFilterSheet, setOpenFilterSheet] = useState<string | null>(null);
 
-  const [searchSheets, setSearchSheets] = useState({
-    service: false, genre: false, workFormat: false,
-    employmentType: false, skillLevel: false, availability: false,
-    geography: false, priceRange: false,
-  });
-  const openSheet  = (k: keyof typeof searchSheets) => setSearchSheets(s => ({ ...s, [k]: true }));
-  const closeSheet = (k: keyof typeof searchSheets) => setSearchSheets(s => ({ ...s, [k]: false }));
+  // Add-service multi-step flow
+  const [addStep, setAddStep] = useState<'profession' | 'service' | 'filters' | null>(null);
+  const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
+  const [addFlowServices, setAddFlowServices] = useState<any[]>([]);
+
+  const toggleProfExpand = (id: string) =>
+    setExpandedProfessions(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   useEffect(() => {
     if (isEditing) {
@@ -99,7 +109,6 @@ export default function ProfilePage() {
   useEffect(() => {
     if (isEditing && formData.fieldOfActivityId) {
       referenceAPI.getProfessions({ fieldOfActivityId: formData.fieldOfActivityId }).then(r => setProfessions(r.data));
-      referenceAPI.getServices({ fieldOfActivityId: formData.fieldOfActivityId }).then(r => setServices(r.data));
     }
   }, [isEditing, formData.fieldOfActivityId]);
 
@@ -130,19 +139,21 @@ export default function ProfilePage() {
         })) || [],
         artistIds: data.userArtists?.map((ua: any) => ua.artistId || ua.artist?.id) || [],
       });
-      if (data.userSearchProfile) {
-        const sp = data.userSearchProfile;
-        setSearchProfile({
-          serviceIds: sp.services?.map((s: any) => s.id) || [],
-          genreIds: sp.genres?.map((g: any) => g.id) || [],
-          workFormatIds: sp.workFormats?.map((w: any) => w.id) || [],
-          employmentTypeIds: sp.employmentTypes?.map((e: any) => e.id) || [],
-          skillLevelIds: sp.skillLevels?.map((s: any) => s.id) || [],
-          availabilityIds: sp.availabilities?.map((a: any) => a.id) || [],
-          geographyIds: sp.geographies?.map((g: any) => g.id) || [],
-          priceRangeIds: sp.priceRanges?.map((p: any) => p.id) || [],
-        });
-      }
+      setUserServices(
+        data.userServices?.map((us: any) => ({
+          professionId: us.professionId,
+          professionName: us.profession?.name || '',
+          serviceId: us.serviceId,
+          serviceName: us.service?.name || '',
+          genreIds: us.genres?.map((g: any) => g.id) || [],
+          workFormatIds: us.workFormats?.map((w: any) => w.id) || [],
+          employmentTypeIds: us.employmentTypes?.map((e: any) => e.id) || [],
+          skillLevelIds: us.skillLevels?.map((s: any) => s.id) || [],
+          availabilityIds: us.availabilities?.map((a: any) => a.id) || [],
+          priceRangeIds: us.priceRanges?.map((p: any) => p.id) || [],
+          geographyIds: us.geographies?.map((g: any) => g.id) || [],
+        })) || []
+      );
       return data;
     },
   });
@@ -165,23 +176,26 @@ export default function ProfilePage() {
     },
   });
 
-  const updateSearchProfileMutation = useMutation({
-    mutationFn: userAPI.updateSearchProfile,
+  const updateServicesMutation = useMutation({
+    mutationFn: () => userAPI.updateServices(
+      userServices.map(us => ({
+        professionId: us.professionId,
+        serviceId: us.serviceId,
+        genreIds: us.genreIds,
+        workFormatIds: us.workFormatIds,
+        employmentTypeIds: us.employmentTypeIds,
+        skillLevelIds: us.skillLevelIds,
+        availabilityIds: us.availabilityIds,
+        priceRangeIds: us.priceRangeIds,
+        geographyIds: us.geographyIds,
+      }))
+    ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['profile'] }),
   });
 
   const handleSave = () => {
     updateMutation.mutate(formData);
-    updateSearchProfileMutation.mutate({
-      serviceIds: searchProfile.serviceIds,
-      genreIds: searchProfile.genreIds,
-      workFormatIds: searchProfile.workFormatIds,
-      employmentTypeIds: searchProfile.employmentTypeIds,
-      skillLevelIds: searchProfile.skillLevelIds,
-      availabilityIds: searchProfile.availabilityIds,
-      geographyIds: searchProfile.geographyIds,
-      priceRangeIds: searchProfile.priceRangeIds,
-    });
+    updateServicesMutation.mutate();
   };
 
   if (isLoading) {
@@ -196,22 +210,158 @@ export default function ProfilePage() {
   }
 
   const avatarUrl = profile?.avatar ? `${API_URL}${profile.avatar}` : null;
-  const sp = profile?.userSearchProfile;
-  const hasSearchProfile = sp && (
-    sp.services?.length > 0 || sp.genres?.length > 0 || sp.workFormats?.length > 0 ||
-    sp.employmentTypes?.length > 0 || sp.skillLevels?.length > 0 || sp.availabilities?.length > 0 ||
-    sp.geographies?.length > 0 || sp.priceRanges?.length > 0
-  );
 
   const inputCls = "w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white placeholder-slate-500";
   const labelCls = "block text-xs font-semibold mb-1 text-slate-400";
 
-  // ── helpers ──────────────────────────────────────────────────────────────
   const EmptyState = ({ text }: { text: string }) => (
     <div className="py-8 text-center">
       <p className="text-slate-500 text-sm">{text}</p>
     </div>
   );
+
+  // Group userServices by profession for view mode
+  const servicesByProfession = profile?.userServices?.reduce((acc: Record<string, any[]>, us: any) => {
+    const key = us.professionId;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(us);
+    return acc;
+  }, {} as Record<string, any[]>) ?? {};
+
+  // Helper: get name from list by id
+  const getName = (list: any[], id: string) => list.find(x => x.id === id)?.name ?? id;
+  const getNames = (list: any[], ids: string[]) => ids.map(id => getName(list, id)).filter(Boolean);
+
+  // Update field of a userService entry
+  const updateSvc = (idx: number, patch: Partial<UserServiceEntry>) =>
+    setUserServices(prev => prev.map((us, i) => i === idx ? { ...us, ...patch } : us));
+
+  // Filter selectors for a service entry (edit mode expanded)
+  const ServiceFilterEditors = ({ idx }: { idx: number }) => {
+    const us = userServices[idx];
+    const key = (k: string) => `${k}-${idx}`;
+    return (
+      <div className="px-3 pb-3 border-t border-slate-600/30 space-y-2 pt-2">
+        <SelectField label="Жанры" value={getNames(genres, us.genreIds).join(', ')} placeholder="Выберите жанры" icon={<Music size={13} />} onClick={() => setOpenFilterSheet(key('genre'))} badge={us.genreIds.length || undefined} />
+        <SelectField label="Формат работы" value={getNames(workFormats, us.workFormatIds).join(', ')} placeholder="Не указан" icon={<Globe size={13} />} onClick={() => setOpenFilterSheet(key('workFormat'))} badge={us.workFormatIds.length || undefined} />
+        <SelectField label="Тип занятости" value={getNames(employmentTypes, us.employmentTypeIds).join(', ')} placeholder="Не указан" icon={<Briefcase size={13} />} onClick={() => setOpenFilterSheet(key('employmentType'))} badge={us.employmentTypeIds.length || undefined} />
+        <SelectField label="Уровень" value={getNames(skillLevels, us.skillLevelIds).join(', ')} placeholder="Не указан" icon={<Star size={13} />} onClick={() => setOpenFilterSheet(key('skillLevel'))} badge={us.skillLevelIds.length || undefined} />
+        <SelectField label="Доступность" value={getNames(availabilities, us.availabilityIds).join(', ')} placeholder="Не указана" icon={<Calendar size={13} />} onClick={() => setOpenFilterSheet(key('availability'))} badge={us.availabilityIds.length || undefined} />
+        <SelectField label="Бюджет" value={getNames(priceRanges, us.priceRangeIds).join(', ')} placeholder="Не указан" icon={<DollarSign size={13} />} onClick={() => setOpenFilterSheet(key('priceRange'))} badge={us.priceRangeIds.length || undefined} />
+        <SelectField label="Город / Регион" value={getNames(geographies, us.geographyIds).join(', ')} placeholder="Не указан" icon={<MapPin size={13} />} onClick={() => setOpenFilterSheet(key('geography'))} badge={us.geographyIds.length || undefined} />
+
+        <SelectSheet isOpen={openFilterSheet === key('genre')} onClose={() => setOpenFilterSheet(null)} title="Жанры" options={genres.map(g => ({ id: g.id, name: g.name }))} selectedIds={us.genreIds} onSelect={ids => updateSvc(idx, { genreIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />
+        <SelectSheet isOpen={openFilterSheet === key('workFormat')} onClose={() => setOpenFilterSheet(null)} title="Формат работы" options={workFormats.map(w => ({ id: w.id, name: w.name }))} selectedIds={us.workFormatIds} onSelect={ids => updateSvc(idx, { workFormatIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
+        <SelectSheet isOpen={openFilterSheet === key('employmentType')} onClose={() => setOpenFilterSheet(null)} title="Тип занятости" options={employmentTypes.map(e => ({ id: e.id, name: e.name }))} selectedIds={us.employmentTypeIds} onSelect={ids => updateSvc(idx, { employmentTypeIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
+        <SelectSheet isOpen={openFilterSheet === key('skillLevel')} onClose={() => setOpenFilterSheet(null)} title="Уровень" options={skillLevels.map(s => ({ id: s.id, name: s.name }))} selectedIds={us.skillLevelIds} onSelect={ids => updateSvc(idx, { skillLevelIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
+        <SelectSheet isOpen={openFilterSheet === key('availability')} onClose={() => setOpenFilterSheet(null)} title="Доступность" options={availabilities.map(a => ({ id: a.id, name: a.name }))} selectedIds={us.availabilityIds} onSelect={ids => updateSvc(idx, { availabilityIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
+        <SelectSheet isOpen={openFilterSheet === key('priceRange')} onClose={() => setOpenFilterSheet(null)} title="Бюджет" options={priceRanges.map(p => ({ id: p.id, name: p.name }))} selectedIds={us.priceRangeIds} onSelect={ids => updateSvc(idx, { priceRangeIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
+        <SelectSheet isOpen={openFilterSheet === key('geography')} onClose={() => setOpenFilterSheet(null)} title="Город / Регион" options={geographies.map(g => ({ id: g.id, name: g.name }))} selectedIds={us.geographyIds} onSelect={ids => updateSvc(idx, { geographyIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />
+      </div>
+    );
+  };
+
+  // Add-service flow UI
+  const AddServiceFlow = () => {
+    if (addStep === 'profession') return (
+      <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
+        <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите профессию:</p>
+        {professions.length === 0
+          ? <p className="text-slate-500 text-xs">Сначала выберите сферу деятельности на вкладке «Основное»</p>
+          : <div className="flex flex-wrap gap-1.5">
+              {professions.map((p: any) => (
+                <button key={p.id} type="button"
+                  onClick={() => {
+                    setPending({ ...emptyEntry(), professionId: p.id, professionName: p.name });
+                    referenceAPI.getServices({ professionId: p.id }).then(r => setAddFlowServices(r.data));
+                    setAddStep('service');
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
+                >
+                  <ChevronRight size={11} />{p.name}
+                </button>
+              ))}
+            </div>
+        }
+        <button onClick={() => setAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
+      </div>
+    );
+
+    if (addStep === 'service') return (
+      <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
+        <button onClick={() => setAddStep('profession')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors">
+          <ChevronLeft size={11} />{pending.professionName}
+        </button>
+        <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Headphones size={11} /> Выберите услугу:</p>
+        {addFlowServices.length === 0
+          ? <p className="text-slate-500 text-xs">Нет доступных услуг</p>
+          : <div className="flex flex-wrap gap-1.5">
+              {addFlowServices
+                .filter((s: any) => !userServices.some(us => us.serviceId === s.id))
+                .map((s: any) => (
+                  <button key={s.id} type="button"
+                    onClick={() => {
+                      setPending(prev => ({ ...prev, serviceId: s.id, serviceName: s.name }));
+                      setAddStep('filters');
+                    }}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
+                  >
+                    <ChevronRight size={11} />{s.name}
+                  </button>
+                ))
+              }
+            </div>
+        }
+        <button onClick={() => setAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
+      </div>
+    );
+
+    if (addStep === 'filters') return (
+      <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <button onClick={() => setAddStep('service')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors">
+              <ChevronLeft size={11} />{pending.professionName}
+            </button>
+            <p className="text-sm font-semibold text-white mt-0.5">{pending.serviceName}</p>
+          </div>
+        </div>
+        <p className="text-xs text-slate-400 mb-2">Настройте фильтры для этой услуги (необязательно):</p>
+        <div className="space-y-2">
+          <SelectField label="Жанры" value={getNames(genres, pending.genreIds).join(', ')} placeholder="Выберите жанры" icon={<Music size={13} />} onClick={() => setOpenFilterSheet('pending-genre')} badge={pending.genreIds.length || undefined} />
+          <SelectField label="Формат работы" value={getNames(workFormats, pending.workFormatIds).join(', ')} placeholder="Не указан" icon={<Globe size={13} />} onClick={() => setOpenFilterSheet('pending-workFormat')} badge={pending.workFormatIds.length || undefined} />
+          <SelectField label="Тип занятости" value={getNames(employmentTypes, pending.employmentTypeIds).join(', ')} placeholder="Не указан" icon={<Briefcase size={13} />} onClick={() => setOpenFilterSheet('pending-employmentType')} badge={pending.employmentTypeIds.length || undefined} />
+          <SelectField label="Уровень" value={getNames(skillLevels, pending.skillLevelIds).join(', ')} placeholder="Не указан" icon={<Star size={13} />} onClick={() => setOpenFilterSheet('pending-skillLevel')} badge={pending.skillLevelIds.length || undefined} />
+          <SelectField label="Доступность" value={getNames(availabilities, pending.availabilityIds).join(', ')} placeholder="Не указана" icon={<Calendar size={13} />} onClick={() => setOpenFilterSheet('pending-availability')} badge={pending.availabilityIds.length || undefined} />
+          <SelectField label="Бюджет" value={getNames(priceRanges, pending.priceRangeIds).join(', ')} placeholder="Не указан" icon={<DollarSign size={13} />} onClick={() => setOpenFilterSheet('pending-priceRange')} badge={pending.priceRangeIds.length || undefined} />
+          <SelectField label="Город / Регион" value={getNames(geographies, pending.geographyIds).join(', ')} placeholder="Не указан" icon={<MapPin size={13} />} onClick={() => setOpenFilterSheet('pending-geography')} badge={pending.geographyIds.length || undefined} />
+        </div>
+        <div className="flex gap-2 mt-3">
+          <button onClick={() => setAddStep(null)} className="flex-1 py-2 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors">Отмена</button>
+          <button
+            onClick={() => {
+              setUserServices(prev => [...prev, { ...pending }]);
+              setPending(emptyEntry());
+              setAddStep(null);
+            }}
+            className="flex-1 py-2 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold transition-colors"
+          >
+            Добавить
+          </button>
+        </div>
+
+        <SelectSheet isOpen={openFilterSheet === 'pending-genre'} onClose={() => setOpenFilterSheet(null)} title="Жанры" options={genres.map(g => ({ id: g.id, name: g.name }))} selectedIds={pending.genreIds} onSelect={ids => setPending(p => ({ ...p, genreIds: ids as string[] }))} mode="multiple" showConfirm searchable height="half" />
+        <SelectSheet isOpen={openFilterSheet === 'pending-workFormat'} onClose={() => setOpenFilterSheet(null)} title="Формат работы" options={workFormats.map(w => ({ id: w.id, name: w.name }))} selectedIds={pending.workFormatIds} onSelect={ids => setPending(p => ({ ...p, workFormatIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} height="auto" />
+        <SelectSheet isOpen={openFilterSheet === 'pending-employmentType'} onClose={() => setOpenFilterSheet(null)} title="Тип занятости" options={employmentTypes.map(e => ({ id: e.id, name: e.name }))} selectedIds={pending.employmentTypeIds} onSelect={ids => setPending(p => ({ ...p, employmentTypeIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} height="auto" />
+        <SelectSheet isOpen={openFilterSheet === 'pending-skillLevel'} onClose={() => setOpenFilterSheet(null)} title="Уровень" options={skillLevels.map(s => ({ id: s.id, name: s.name }))} selectedIds={pending.skillLevelIds} onSelect={ids => setPending(p => ({ ...p, skillLevelIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} height="auto" />
+        <SelectSheet isOpen={openFilterSheet === 'pending-availability'} onClose={() => setOpenFilterSheet(null)} title="Доступность" options={availabilities.map(a => ({ id: a.id, name: a.name }))} selectedIds={pending.availabilityIds} onSelect={ids => setPending(p => ({ ...p, availabilityIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} height="auto" />
+        <SelectSheet isOpen={openFilterSheet === 'pending-priceRange'} onClose={() => setOpenFilterSheet(null)} title="Бюджет" options={priceRanges.map(p => ({ id: p.id, name: p.name }))} selectedIds={pending.priceRangeIds} onSelect={ids => setPending(p => ({ ...p, priceRangeIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} height="auto" />
+        <SelectSheet isOpen={openFilterSheet === 'pending-geography'} onClose={() => setOpenFilterSheet(null)} title="Город / Регион" options={geographies.map(g => ({ id: g.id, name: g.name }))} selectedIds={pending.geographyIds} onSelect={ids => setPending(p => ({ ...p, geographyIds: ids as string[] }))} mode="multiple" showConfirm searchable height="half" />
+      </div>
+    );
+
+    return null;
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
@@ -307,7 +457,7 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* ── TAB BAR (always visible) ──────────────────────────────────── */}
+        {/* ── TAB BAR ───────────────────────────────────────────────────── */}
         <div className="flex gap-1 p-1 bg-slate-800/80 rounded-xl border border-slate-700/50 mb-3">
           {TABS.map(tab => (
             <button
@@ -320,7 +470,7 @@ export default function ProfilePage() {
               }`}
             >
               {tab.icon}
-              <span className="hidden sm:inline">{tab.label}</span>
+              <span>{tab.label}</span>
             </button>
           ))}
         </div>
@@ -393,12 +543,10 @@ export default function ProfilePage() {
               </div>
             ) : (
               <div className="p-4 space-y-4">
-                {/* Bio */}
                 {profile?.bio
                   ? <p className="text-slate-300 text-sm leading-relaxed">{profile.bio}</p>
                   : <EmptyState text="Биография не заполнена" />
                 }
-                {/* Location */}
                 {(profile?.country || profile?.city) && (
                   <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-700/50">
                     {profile?.country && (
@@ -417,7 +565,7 @@ export default function ProfilePage() {
             )
           )}
 
-          {/* ── ПРОФЕССИЯ ── */}
+          {/* ── ПРОФЕССИЯ (edit + view) ────────────────────────────────── */}
           {activeTab === 'profession' && (
             isEditing ? (
               <div className="p-4 space-y-4">
@@ -445,8 +593,6 @@ export default function ProfilePage() {
                 {formData.fieldOfActivityId && (
                   <div className="space-y-2">
                     <label className={`${labelCls} flex items-center gap-1`}><Star size={11} /> Профессии</label>
-
-                    {/* Selected professions */}
                     {formData.userProfessions.map(up => {
                       const prof = professions.find((p: any) => p.id === up.professionId);
                       const isExpanded = expandedProfessions.has(up.professionId);
@@ -494,16 +640,13 @@ export default function ProfilePage() {
                         </div>
                       );
                     })}
-
-                    {/* Add profession button */}
                     {professions.filter((p: any) => !formData.userProfessions.some(up => up.professionId === p.id)).length > 0 && (
                       <>
                         <button type="button"
                           onClick={() => setShowAddProfession(s => !s)}
                           className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm"
                         >
-                          <Plus size={14} />
-                          Добавить профессию
+                          <Plus size={14} />Добавить профессию
                         </button>
                         {showAddProfession && (
                           <div className="flex flex-wrap gap-2 p-3 bg-slate-700/20 rounded-xl border border-slate-600/30">
@@ -520,8 +663,7 @@ export default function ProfilePage() {
                                   }}
                                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
                                 >
-                                  <Plus size={11} />
-                                  {prof.name}
+                                  <Plus size={11} />{prof.name}
                                 </button>
                               ))
                             }
@@ -589,8 +731,54 @@ export default function ProfilePage() {
                     })}
                   </div>
                 </div>
+
+                {/* ── User Services ── */}
+                <div>
+                  <label className={`${labelCls} flex items-center gap-1`}><Headphones size={11} /> Мои услуги и параметры поиска</label>
+                  <p className="text-xs text-slate-500 mb-2">Выберите услуги, по которым вас можно найти. Для каждой услуги настройте жанры, формат и другие параметры.</p>
+
+                  {/* Existing service cards */}
+                  <div className="space-y-2 mb-2">
+                    {userServices.map((us, idx) => (
+                      <div key={us.serviceId} className="bg-slate-700/30 rounded-xl border border-slate-600/50 overflow-hidden">
+                        <div className="flex items-center gap-2 px-3 py-2.5">
+                          <button type="button" onClick={() => setExpandedSvcIdx(expandedSvcIdx === idx ? null : idx)} className="flex-1 flex items-center justify-between text-left">
+                            <div>
+                              <p className="text-xs text-slate-500">{us.professionName}</p>
+                              <p className="text-sm font-semibold text-white">{us.serviceName}</p>
+                            </div>
+                            <ChevronDown size={15} className={`text-slate-400 transition-transform mr-1 ${expandedSvcIdx === idx ? 'rotate-180' : ''}`} />
+                          </button>
+                          <button type="button"
+                            onClick={() => {
+                              setUserServices(prev => prev.filter((_, i) => i !== idx));
+                              if (expandedSvcIdx === idx) setExpandedSvcIdx(null);
+                            }}
+                            className="flex-shrink-0 p-1 rounded-lg hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                        {expandedSvcIdx === idx && <ServiceFilterEditors idx={idx} />}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Add service flow */}
+                  {addStep ? (
+                    <AddServiceFlow />
+                  ) : (
+                    <button type="button"
+                      onClick={() => setAddStep('profession')}
+                      className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm"
+                    >
+                      <Plus size={14} />Добавить услугу
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
+              /* ── view mode ── */
               <div className="p-4 space-y-4">
                 {/* Field + Employer chips */}
                 {(profile?.fieldOfActivity || profile?.employer) && (
@@ -608,8 +796,9 @@ export default function ProfilePage() {
                     )}
                   </div>
                 )}
+
                 {/* Professions */}
-                {profile?.userProfessions?.length > 0 ? (
+                {profile?.userProfessions?.length > 0 && (
                   <div>
                     <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
                       <Star size={11} className="text-primary-400" />Профессии
@@ -631,7 +820,8 @@ export default function ProfilePage() {
                       ))}
                     </div>
                   </div>
-                ) : !profile?.fieldOfActivity && !profile?.employer && <EmptyState text="Профессиональная информация не заполнена" />}
+                )}
+
                 {/* Artists */}
                 {profile?.userArtists?.length > 0 && (
                   <div>
@@ -643,64 +833,53 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 )}
-              </div>
-            )
-          )}
 
-          {/* ── ПОИСК ── */}
-          {activeTab === 'search' && (
-            isEditing ? (
-              <div className="p-4 space-y-4">
-                <p className="text-slate-400 text-xs leading-relaxed">Заполни параметры, чтобы другие пользователи могли найти тебя по фильтрам в поиске.</p>
-
-                <SelectField label="Услуги" value={searchProfile.serviceIds.length > 0 ? services.filter((s: any) => searchProfile.serviceIds.includes(s.id)).map((s: any) => s.name).join(', ') : ''} placeholder="Выберите услуги" icon={<Headphones size={14} />} onClick={() => openSheet('service')} badge={searchProfile.serviceIds.length || undefined} />
-                <SelectField label="Жанры" value={searchProfile.genreIds.length > 0 ? genres.filter((g: any) => searchProfile.genreIds.includes(g.id)).map((g: any) => g.name).join(', ') : ''} placeholder="Выберите жанры" icon={<Music size={14} />} onClick={() => openSheet('genre')} badge={searchProfile.genreIds.length || undefined} />
-                <SelectField label="Формат работы" value={searchProfile.workFormatIds.length > 0 ? workFormats.filter((w: any) => searchProfile.workFormatIds.includes(w.id)).map((w: any) => w.name).join(', ') : ''} placeholder="Не указан" icon={<Globe size={14} />} onClick={() => openSheet('workFormat')} badge={searchProfile.workFormatIds.length || undefined} />
-                <SelectField label="Тип занятости" value={searchProfile.employmentTypeIds.length > 0 ? employmentTypes.filter((e: any) => searchProfile.employmentTypeIds.includes(e.id)).map((e: any) => e.name).join(', ') : ''} placeholder="Не указан" icon={<Briefcase size={14} />} onClick={() => openSheet('employmentType')} badge={searchProfile.employmentTypeIds.length || undefined} />
-                <SelectField label="Уровень навыка" value={searchProfile.skillLevelIds.length > 0 ? skillLevels.filter((s: any) => searchProfile.skillLevelIds.includes(s.id)).map((s: any) => s.name).join(', ') : ''} placeholder="Не указан" icon={<Star size={14} />} onClick={() => openSheet('skillLevel')} badge={searchProfile.skillLevelIds.length || undefined} />
-                <SelectField label="Доступность" value={searchProfile.availabilityIds.length > 0 ? availabilities.filter((a: any) => searchProfile.availabilityIds.includes(a.id)).map((a: any) => a.name).join(', ') : ''} placeholder="Не указана" icon={<Calendar size={14} />} onClick={() => openSheet('availability')} badge={searchProfile.availabilityIds.length || undefined} />
-                <SelectField label="Город / Регион" value={searchProfile.geographyIds.length > 0 ? geographies.filter((g: any) => searchProfile.geographyIds.includes(g.id)).map((g: any) => g.name).join(', ') : ''} placeholder="Не указан" icon={<MapPin size={14} />} onClick={() => openSheet('geography')} badge={searchProfile.geographyIds.length || undefined} />
-                <SelectField label="Бюджет" value={searchProfile.priceRangeIds.length > 0 ? priceRanges.filter((p: any) => searchProfile.priceRangeIds.includes(p.id)).map((p: any) => p.name).join(', ') : ''} placeholder="Не указан" icon={<DollarSign size={14} />} onClick={() => openSheet('priceRange')} badge={searchProfile.priceRangeIds.length || undefined} />
-
-                <SelectSheet isOpen={searchSheets.service} onClose={() => closeSheet('service')} title="Выберите услуги" options={services.map((s: any) => ({ id: s.id, name: s.name }))} selectedIds={searchProfile.serviceIds} onSelect={ids => setSearchProfile({ ...searchProfile, serviceIds: ids as string[] })} mode="multiple" showConfirm searchable searchPlaceholder="Поиск услуги..." height="half" />
-                <SelectSheet isOpen={searchSheets.genre} onClose={() => closeSheet('genre')} title="Выберите жанры" options={genres.map((g: any) => ({ id: g.id, name: g.name }))} selectedIds={searchProfile.genreIds} onSelect={ids => setSearchProfile({ ...searchProfile, genreIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />
-                <SelectSheet isOpen={searchSheets.workFormat} onClose={() => closeSheet('workFormat')} title="Формат работы" options={workFormats.map((w: any) => ({ id: w.id, name: w.name }))} selectedIds={searchProfile.workFormatIds} onSelect={ids => setSearchProfile({ ...searchProfile, workFormatIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
-                <SelectSheet isOpen={searchSheets.employmentType} onClose={() => closeSheet('employmentType')} title="Тип занятости" options={employmentTypes.map((e: any) => ({ id: e.id, name: e.name }))} selectedIds={searchProfile.employmentTypeIds} onSelect={ids => setSearchProfile({ ...searchProfile, employmentTypeIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
-                <SelectSheet isOpen={searchSheets.skillLevel} onClose={() => closeSheet('skillLevel')} title="Уровень навыка" options={skillLevels.map((s: any) => ({ id: s.id, name: s.name }))} selectedIds={searchProfile.skillLevelIds} onSelect={ids => setSearchProfile({ ...searchProfile, skillLevelIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
-                <SelectSheet isOpen={searchSheets.availability} onClose={() => closeSheet('availability')} title="Доступность" options={availabilities.map((a: any) => ({ id: a.id, name: a.name }))} selectedIds={searchProfile.availabilityIds} onSelect={ids => setSearchProfile({ ...searchProfile, availabilityIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
-                <SelectSheet isOpen={searchSheets.geography} onClose={() => closeSheet('geography')} title="Город / Регион" options={geographies.map((g: any) => ({ id: g.id, name: g.name }))} selectedIds={searchProfile.geographyIds} onSelect={ids => setSearchProfile({ ...searchProfile, geographyIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="half" />
-                <SelectSheet isOpen={searchSheets.priceRange} onClose={() => closeSheet('priceRange')} title="Бюджет" options={priceRanges.map((p: any) => ({ id: p.id, name: p.name }))} selectedIds={searchProfile.priceRangeIds} onSelect={ids => setSearchProfile({ ...searchProfile, priceRangeIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
-              </div>
-            ) : (
-              <div className="p-4">
-                {hasSearchProfile ? (
-                  <div className="flex flex-wrap gap-2">
-                    {sp?.services?.map((s: any) => (
-                      <div key={s.id} className="flex items-center gap-1 px-2.5 py-1 bg-primary-500/10 rounded-lg border border-primary-500/20">
-                        <Headphones size={11} className="text-primary-400" /><span className="text-primary-300 text-xs">{s.name}</span>
-                      </div>
-                    ))}
-                    {sp?.genres?.map((g: any) => (
-                      <div key={g.id} className="flex items-center gap-1 px-2.5 py-1 bg-purple-500/10 rounded-lg border border-purple-500/20">
-                        <Music size={11} className="text-purple-400" /><span className="text-purple-300 text-xs">{g.name}</span>
-                      </div>
-                    ))}
-                    {sp?.workFormats?.map((w: any) => <span key={w.id} className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{w.name}</span>)}
-                    {sp?.employmentTypes?.map((e: any) => <span key={e.id} className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{e.name}</span>)}
-                    {sp?.skillLevels?.map((s: any) => <span key={s.id} className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{s.name}</span>)}
-                    {sp?.availabilities?.map((a: any) => <span key={a.id} className="px-2.5 py-1 bg-slate-700/50 text-slate-300 rounded-lg text-xs border border-slate-600/30">{a.name}</span>)}
-                    {sp?.geographies?.map((g: any) => (
-                      <div key={g.id} className="flex items-center gap-1 px-2.5 py-1 bg-slate-700/50 rounded-lg border border-slate-600/30">
-                        <MapPin size={11} className="text-slate-400" /><span className="text-slate-300 text-xs">{g.name}</span>
-                      </div>
-                    ))}
-                    {sp?.priceRanges?.map((p: any) => (
-                      <div key={p.id} className="flex items-center gap-1 px-2.5 py-1 bg-green-500/10 rounded-lg border border-green-500/20">
-                        <DollarSign size={11} className="text-green-400" /><span className="text-green-300 text-xs">{p.name}</span>
-                      </div>
-                    ))}
+                {/* User Services grouped by profession */}
+                {Object.keys(servicesByProfession).length > 0 ? (
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                      <Headphones size={11} className="text-primary-400" />Услуги
+                    </p>
+                    {Object.entries(servicesByProfession).map(([professionId, services]) => {
+                      const profName = (services as any[])[0]?.profession?.name ?? '';
+                      return (
+                        <div key={professionId} className="mb-3">
+                          <p className="text-xs text-slate-500 font-semibold mb-1.5">{profName}</p>
+                          <div className="space-y-2">
+                            {(services as any[]).map((us: any) => {
+                              const tags = [
+                                ...(us.genres?.map((g: any) => g.name) ?? []),
+                                ...(us.workFormats?.map((w: any) => w.name) ?? []),
+                                ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
+                                ...(us.skillLevels?.map((s: any) => s.name) ?? []),
+                                ...(us.availabilities?.map((a: any) => a.name) ?? []),
+                                ...(us.priceRanges?.map((p: any) => p.name) ?? []),
+                                ...(us.geographies?.map((g: any) => g.name) ?? []),
+                              ];
+                              return (
+                                <div key={us.id} className="bg-slate-700/20 rounded-xl border border-slate-600/30 p-3">
+                                  <p className="text-sm font-semibold text-white mb-1.5">{us.service?.name}</p>
+                                  {tags.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {tags.map((t: string, i: number) => (
+                                        <span key={i} className="px-2 py-0.5 bg-slate-600/40 text-slate-300 rounded-md text-xs border border-slate-600/30">{t}</span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-slate-500 text-xs">Фильтры не настроены</p>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                ) : <EmptyState text="Параметры поиска не заполнены" />}
+                ) : (
+                  !profile?.fieldOfActivity && !profile?.employer && !profile?.userProfessions?.length &&
+                  <EmptyState text="Профессиональная информация не заполнена" />
+                )}
               </div>
             )
           )}

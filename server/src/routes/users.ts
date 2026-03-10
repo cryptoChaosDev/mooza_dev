@@ -7,6 +7,18 @@ import fs from 'fs';
 
 const router = Router();
 
+const userServiceInclude = {
+  profession: { select: { id: true, name: true } },
+  service:    { select: { id: true, name: true } },
+  genres:          { select: { id: true, name: true } },
+  workFormats:     { select: { id: true, name: true } },
+  employmentTypes: { select: { id: true, name: true } },
+  skillLevels:     { select: { id: true, name: true } },
+  availabilities:  { select: { id: true, name: true } },
+  geographies:     { select: { id: true, name: true } },
+  priceRanges:     { select: { id: true, name: true } },
+} as const;
+
 const userSelect = {
   id: true,
   email: true,
@@ -22,13 +34,7 @@ const userSelect = {
   genres: true,
   fieldOfActivityId: true,
   fieldOfActivity: { select: { id: true, name: true } },
-  userProfessions: {
-    include: {
-      profession: {
-        include: { fieldOfActivity: { select: { id: true, name: true } } },
-      },
-    },
-  },
+  userServices: { include: userServiceInclude },
   userArtists: {
     include: { artist: { select: { id: true, name: true } } },
   },
@@ -37,18 +43,6 @@ const userSelect = {
   vkLink: true,
   youtubeLink: true,
   telegramLink: true,
-  userSearchProfile: {
-    include: {
-      services: { select: { id: true, name: true } },
-      genres: { select: { id: true, name: true } },
-      workFormats: { select: { id: true, name: true } },
-      employmentTypes: { select: { id: true, name: true } },
-      skillLevels: { select: { id: true, name: true } },
-      availabilities: { select: { id: true, name: true } },
-      geographies: { select: { id: true, name: true } },
-      priceRanges: { select: { id: true, name: true } },
-    },
-  },
   createdAt: true,
 } as const;
 
@@ -169,67 +163,61 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
-// Update search profile
-router.put('/me/search-profile', authenticate, async (req: AuthRequest, res) => {
+// Update user services (profession → service → filter axes)
+router.put('/me/services', authenticate, async (req: AuthRequest, res) => {
   try {
     if (!req.userId) {
       return res.status(401).json({ error: 'User not authenticated' });
     }
 
-    const {
-      serviceIds = [],
-      genreIds = [],
-      workFormatIds = [],
-      employmentTypeIds = [],
-      skillLevelIds = [],
-      availabilityIds = [],
-      geographyIds = [],
-      priceRangeIds = [],
-    } = req.body;
+    const services: Array<{
+      professionId: string;
+      serviceId: string;
+      genreIds?: string[];
+      workFormatIds?: string[];
+      employmentTypeIds?: string[];
+      skillLevelIds?: string[];
+      availabilityIds?: string[];
+      priceRangeIds?: string[];
+      geographyIds?: string[];
+    }> = req.body;
 
-    const toConnect = (ids: string[]) => ids.map((id: string) => ({ id }));
+    if (!Array.isArray(services)) {
+      return res.status(400).json({ error: 'Body must be an array of service entries' });
+    }
 
-    const searchProfileInclude = {
-      services: { select: { id: true, name: true } },
-      genres: { select: { id: true, name: true } },
-      workFormats: { select: { id: true, name: true } },
-      employmentTypes: { select: { id: true, name: true } },
-      skillLevels: { select: { id: true, name: true } },
-      availabilities: { select: { id: true, name: true } },
-      geographies: { select: { id: true, name: true } },
-      priceRanges: { select: { id: true, name: true } },
-    };
+    const toConnect = (ids: string[] = []) => ids.map((id) => ({ id }));
 
-    const searchProfile = await prisma.userSearchProfile.upsert({
+    // Delete all existing user services and recreate
+    await prisma.userService.deleteMany({ where: { userId: req.userId } });
+
+    for (const us of services) {
+      await prisma.userService.create({
+        data: {
+          userId: req.userId!,
+          professionId: us.professionId,
+          serviceId: us.serviceId,
+          genres:          { connect: toConnect(us.genreIds) },
+          workFormats:     { connect: toConnect(us.workFormatIds) },
+          employmentTypes: { connect: toConnect(us.employmentTypeIds) },
+          skillLevels:     { connect: toConnect(us.skillLevelIds) },
+          availabilities:  { connect: toConnect(us.availabilityIds) },
+          priceRanges:     { connect: toConnect(us.priceRangeIds) },
+          geographies:     { connect: toConnect(us.geographyIds) },
+        },
+      });
+    }
+
+    // Return updated user services
+    const userServices = await prisma.userService.findMany({
       where: { userId: req.userId },
-      create: {
-        userId: req.userId,
-        services: { connect: toConnect(serviceIds) },
-        genres: { connect: toConnect(genreIds) },
-        workFormats: { connect: toConnect(workFormatIds) },
-        employmentTypes: { connect: toConnect(employmentTypeIds) },
-        skillLevels: { connect: toConnect(skillLevelIds) },
-        availabilities: { connect: toConnect(availabilityIds) },
-        geographies: { connect: toConnect(geographyIds) },
-        priceRanges: { connect: toConnect(priceRangeIds) },
-      },
-      update: {
-        services: { set: toConnect(serviceIds) },
-        genres: { set: toConnect(genreIds) },
-        workFormats: { set: toConnect(workFormatIds) },
-        employmentTypes: { set: toConnect(employmentTypeIds) },
-        skillLevels: { set: toConnect(skillLevelIds) },
-        availabilities: { set: toConnect(availabilityIds) },
-        geographies: { set: toConnect(geographyIds) },
-        priceRanges: { set: toConnect(priceRangeIds) },
-      },
-      include: searchProfileInclude,
+      include: userServiceInclude,
     });
 
-    res.json(searchProfile);
+    res.json(userServices);
   } catch (error) {
-    console.error('Update search profile error:', error);
-    res.status(500).json({ error: 'Failed to update search profile' });
+    console.error('Update user services error:', error);
+    res.status(500).json({ error: 'Failed to update user services' });
   }
 });
 

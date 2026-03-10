@@ -27,6 +27,7 @@ model Profession {
 
   userProfessions UserProfession[]
   services        Service[]
+  userServices    UserService[]
 
   createdAt DateTime @default(now())
 
@@ -45,7 +46,7 @@ model Service {
   professionId String
   profession   Profession @relation(fields: [professionId], references: [id])
 
-  users UserSearchProfile[]
+  userServices UserService[]
 
   createdAt DateTime @default(now())
 }
@@ -57,7 +58,7 @@ model Genre {
   nameEn    String?
   sortOrder Int    @default(0)
 
-  users UserSearchProfile[]
+  userServices UserService[]
 
   createdAt DateTime @default(now())
 }
@@ -69,7 +70,7 @@ model WorkFormat {
   nameEn    String?
   sortOrder Int    @default(0)
 
-  users UserSearchProfile[]
+  userServices UserService[]
 
   createdAt DateTime @default(now())
 }
@@ -81,7 +82,7 @@ model EmploymentType {
   nameEn    String?
   sortOrder Int    @default(0)
 
-  users UserSearchProfile[]
+  userServices UserService[]
 
   createdAt DateTime @default(now())
 }
@@ -93,7 +94,7 @@ model SkillLevel {
   nameEn    String?
   sortOrder Int    @default(0)
 
-  users UserSearchProfile[]
+  userServices UserService[]
 
   createdAt DateTime @default(now())
 }
@@ -105,7 +106,7 @@ model Availability {
   nameEn    String?
   sortOrder Int    @default(0)
 
-  users UserSearchProfile[]
+  userServices UserService[]
 
   createdAt DateTime @default(now())
 }
@@ -117,7 +118,7 @@ model Geography {
   nameEn    String?
   sortOrder Int    @default(0)
 
-  users UserSearchProfile[]
+  userServices UserService[]
 
   createdAt DateTime @default(now())
 }
@@ -131,18 +132,22 @@ model PriceRange {
   maxValue  Int?
   sortOrder Int    @default(0)
 
-  users UserSearchProfile[]
+  userServices UserService[]
 
   createdAt DateTime @default(now())
 }
 
-// One search profile per user — all filter axes are many-to-many
-model UserSearchProfile {
-  id     String @id @default(uuid())
-  userId String @unique
-  user   User   @relation(fields: [userId], references: [id])
+// Per-user service offering: profession → service → own filter set
+model UserService {
+  id           String     @id @default(uuid())
+  userId       String
+  professionId String
+  serviceId    String
 
-  services        Service[]
+  user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  profession Profession @relation(fields: [professionId], references: [id])
+  service    Service    @relation(fields: [serviceId], references: [id])
+
   genres          Genre[]
   workFormats     WorkFormat[]
   employmentTypes EmploymentType[]
@@ -153,6 +158,11 @@ model UserSearchProfile {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([userId, serviceId])
+  @@index([userId])
+  @@index([professionId])
+  @@index([serviceId])
 }
 
 // ============ OTHER REFERENCE TABLES ============
@@ -209,8 +219,8 @@ model User {
   // Multi-level professions (relational)
   userProfessions UserProfession[]
 
-  // Search profile (one per user)
-  userSearchProfile UserSearchProfile?
+  // Per-service offerings with own filter sets
+  userServices UserService[]
 
   // Artist / Group (many-to-many)
   userArtists UserArtist[]
