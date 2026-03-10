@@ -26,6 +26,8 @@ model Direction {
   fieldOfActivityId String
   fieldOfActivity   FieldOfActivity @relation(fields: [fieldOfActivityId], references: [id])
 
+  professions Profession[]
+
   createdAt DateTime @default(now())
 
   @@unique([name, fieldOfActivityId])
@@ -33,10 +35,10 @@ model Direction {
 }
 
 model Profession {
-  id                String          @id @default(uuid())
-  name              String
-  fieldOfActivityId String
-  fieldOfActivity   FieldOfActivity @relation(fields: [fieldOfActivityId], references: [id])
+  id          String    @id @default(uuid())
+  name        String
+  directionId String
+  direction   Direction @relation(fields: [directionId], references: [id])
 
   userProfessions UserProfession[]
   services        Service[]
@@ -44,8 +46,8 @@ model Profession {
 
   createdAt DateTime @default(now())
 
-  @@unique([name, fieldOfActivityId])
-  @@index([fieldOfActivityId])
+  @@unique([name, directionId])
+  @@index([directionId])
 }
 
 // ============ SEARCH FILTER MODELS ============
