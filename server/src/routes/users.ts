@@ -123,11 +123,11 @@ router.post('/me/banner', authenticate, uploadBanner.single('banner'), async (re
     });
 
     if (currentUser?.bannerImage) {
-      const oldPath = path.join(process.cwd(), 'uploads', 'banners', path.basename(currentUser.bannerImage));
+      const oldPath = path.join(process.cwd(), 'uploads', 'covers', path.basename(currentUser.bannerImage));
       if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
     }
 
-    const bannerUrl = `/uploads/banners/${req.file.filename}`;
+    const bannerUrl = `/uploads/covers/${req.file.filename}`;
     const user = await prisma.user.update({
       where: { id: req.userId },
       data: { bannerImage: bannerUrl },
