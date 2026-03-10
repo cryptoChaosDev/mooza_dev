@@ -194,6 +194,21 @@ model Employer {
   createdAt DateTime @default(now())
 }
 
+model PortfolioFile {
+  id           String  @id @default(uuid())
+  userId       String
+  url          String
+  originalName String
+  size         Int
+  mimeType     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
 // ============ USER MODEL ============
 
 model User {
@@ -224,6 +239,8 @@ model User {
 
   // Artist / Group (many-to-many)
   userArtists UserArtist[]
+
+  portfolioFiles PortfolioFile[]
 
   // Employer (many-to-one)
   employerId String?
