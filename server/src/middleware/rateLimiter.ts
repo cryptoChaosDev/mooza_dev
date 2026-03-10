@@ -57,7 +57,7 @@ export const apiLimiter = rateLimit({
  */
 export const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 час
-  max: 3, // максимум 3 регистрации с одного IP в час
+  max: 2000, // максимум 2000 регистраций с одного IP в час
   message: {
     error: 'Слишком много попыток регистрации. Пожалуйста, попробуйте позже.',
     retryAfter: '1 час'
