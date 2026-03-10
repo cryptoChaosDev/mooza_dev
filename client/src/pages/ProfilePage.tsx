@@ -20,6 +20,8 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
 ];
 
 type UserServiceEntry = {
+  fieldOfActivityId: string;
+  fieldOfActivityName: string;
   professionId: string;
   professionName: string;
   serviceId: string;
@@ -34,6 +36,7 @@ type UserServiceEntry = {
 };
 
 const emptyEntry = (): UserServiceEntry => ({
+  fieldOfActivityId: '', fieldOfActivityName: '',
   professionId: '', professionName: '', serviceId: '', serviceName: '',
   genreIds: [], workFormatIds: [], employmentTypeIds: [], skillLevelIds: [],
   availabilityIds: [], priceRangeIds: [], geographyIds: [],
@@ -110,6 +113,8 @@ export default function ProfilePage() {
       });
       setUserServices(
         data.userServices?.map((us: any) => ({
+          fieldOfActivityId: us.profession?.fieldOfActivity?.id || '',
+          fieldOfActivityName: us.profession?.fieldOfActivity?.name || '',
           professionId: us.professionId,
           professionName: us.profession?.name || '',
           serviceId: us.serviceId,
@@ -189,13 +194,17 @@ export default function ProfilePage() {
     </div>
   );
 
-  // Group userServices by profession for view mode
-  const servicesByProfession = profile?.userServices?.reduce((acc: Record<string, any[]>, us: any) => {
-    const key = us.professionId;
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(us);
+  // Group userServices by field → profession for view mode
+  const servicesByField = profile?.userServices?.reduce((acc: Record<string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }>, us: any) => {
+    const fId = us.profession?.fieldOfActivity?.id || 'unknown';
+    const fName = us.profession?.fieldOfActivity?.name || '';
+    const pId = us.professionId;
+    const pName = us.profession?.name || '';
+    if (!acc[fId]) acc[fId] = { fieldName: fName, byProfession: {} };
+    if (!acc[fId].byProfession[pId]) acc[fId].byProfession[pId] = { profName: pName, services: [] };
+    acc[fId].byProfession[pId].services.push(us);
     return acc;
-  }, {} as Record<string, any[]>) ?? {};
+  }, {} as Record<string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }>) ?? {};
 
   // Helper: get name from list by id
   const getName = (list: any[], id: string) => list.find(x => x.id === id)?.name ?? id;
@@ -239,6 +248,7 @@ export default function ProfilePage() {
           {fieldsOfActivity.map((f: any) => (
             <button key={f.id} type="button"
               onClick={() => {
+                setPending(prev => ({ ...prev, fieldOfActivityId: f.id, fieldOfActivityName: f.name }));
                 referenceAPI.getProfessions({ fieldOfActivityId: f.id }).then(r => setAddFlowProfessions(r.data));
                 setAddStep('profession');
               }}
@@ -264,7 +274,7 @@ export default function ProfilePage() {
               {addFlowProfessions.map((p: any) => (
                 <button key={p.id} type="button"
                   onClick={() => {
-                    setPending({ ...emptyEntry(), professionId: p.id, professionName: p.name });
+                    setPending(prev => ({ ...emptyEntry(), fieldOfActivityId: prev.fieldOfActivityId, fieldOfActivityName: prev.fieldOfActivityName, professionId: p.id, professionName: p.name }));
                     referenceAPI.getServices({ professionId: p.id }).then(r => setAddFlowServices(r.data));
                     setAddStep('service');
                   }}
@@ -566,32 +576,49 @@ export default function ProfilePage() {
                   <label className={`${labelCls} flex items-center gap-1`}><Headphones size={11} /> Мои услуги и параметры поиска</label>
                   <p className="text-xs text-slate-500 mb-2">Выберите услуги, по которым вас можно найти. Для каждой услуги настройте жанры, формат и другие параметры.</p>
 
-                  {/* Existing service cards */}
-                  <div className="space-y-2 mb-2">
-                    {userServices.map((us, idx) => (
-                      <div key={us.serviceId} className="bg-slate-700/30 rounded-xl border border-slate-600/50 overflow-hidden">
-                        <div className="flex items-center gap-2 px-3 py-2.5">
-                          <button type="button" onClick={() => setExpandedSvcIdx(expandedSvcIdx === idx ? null : idx)} className="flex-1 flex items-center justify-between text-left">
-                            <div>
-                              <p className="text-xs text-slate-500">{us.professionName}</p>
-                              <p className="text-sm font-semibold text-white">{us.serviceName}</p>
+                  {/* Existing service cards grouped by field */}
+                  {(() => {
+                    const byField: Record<string, { fieldName: string; entries: { us: UserServiceEntry; idx: number }[] }> = {};
+                    userServices.forEach((us, idx) => {
+                      const fId = us.fieldOfActivityId || 'unknown';
+                      if (!byField[fId]) byField[fId] = { fieldName: us.fieldOfActivityName, entries: [] };
+                      byField[fId].entries.push({ us, idx });
+                    });
+                    return (
+                      <div className="space-y-3 mb-2">
+                        {Object.entries(byField).map(([fId, { fieldName, entries }]) => (
+                          <div key={fId}>
+                            <p className="text-xs font-bold text-primary-400 uppercase tracking-wider mb-1.5">{fieldName}</p>
+                            <div className="space-y-2 pl-2 border-l border-primary-500/20">
+                              {entries.map(({ us, idx }) => (
+                                <div key={us.serviceId} className="bg-slate-700/30 rounded-xl border border-slate-600/50 overflow-hidden">
+                                  <div className="flex items-center gap-2 px-3 py-2.5">
+                                    <button type="button" onClick={() => setExpandedSvcIdx(expandedSvcIdx === idx ? null : idx)} className="flex-1 flex items-center justify-between text-left">
+                                      <div>
+                                        <p className="text-xs text-slate-500">{us.professionName}</p>
+                                        <p className="text-sm font-semibold text-white">{us.serviceName}</p>
+                                      </div>
+                                      <ChevronDown size={15} className={`text-slate-400 transition-transform mr-1 ${expandedSvcIdx === idx ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    <button type="button"
+                                      onClick={() => {
+                                        setUserServices(prev => prev.filter((_, i) => i !== idx));
+                                        if (expandedSvcIdx === idx) setExpandedSvcIdx(null);
+                                      }}
+                                      className="flex-shrink-0 p-1 rounded-lg hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  </div>
+                                  {expandedSvcIdx === idx && <ServiceFilterEditors idx={idx} />}
+                                </div>
+                              ))}
                             </div>
-                            <ChevronDown size={15} className={`text-slate-400 transition-transform mr-1 ${expandedSvcIdx === idx ? 'rotate-180' : ''}`} />
-                          </button>
-                          <button type="button"
-                            onClick={() => {
-                              setUserServices(prev => prev.filter((_, i) => i !== idx));
-                              if (expandedSvcIdx === idx) setExpandedSvcIdx(null);
-                            }}
-                            className="flex-shrink-0 p-1 rounded-lg hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all"
-                          >
-                            <X size={14} />
-                          </button>
-                        </div>
-                        {expandedSvcIdx === idx && <ServiceFilterEditors idx={idx} />}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
 
                   {/* Add service flow */}
                   {addStep ? (
@@ -609,43 +636,48 @@ export default function ProfilePage() {
             ) : (
               /* ── view mode ── */
               <div className="p-4">
-                {Object.keys(servicesByProfession).length > 0 ? (
-                  <div className="space-y-3">
-                    {Object.entries(servicesByProfession).map(([professionId, services]) => {
-                      const profName = (services as any[])[0]?.profession?.name ?? '';
-                      return (
-                        <div key={professionId}>
-                          <p className="text-xs text-slate-500 font-semibold mb-1.5">{profName}</p>
-                          <div className="space-y-2">
-                            {(services as any[]).map((us: any) => {
-                              const tags = [
-                                ...(us.genres?.map((g: any) => g.name) ?? []),
-                                ...(us.workFormats?.map((w: any) => w.name) ?? []),
-                                ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
-                                ...(us.skillLevels?.map((s: any) => s.name) ?? []),
-                                ...(us.availabilities?.map((a: any) => a.name) ?? []),
-                                ...(us.priceRanges?.map((p: any) => p.name) ?? []),
-                                ...(us.geographies?.map((g: any) => g.name) ?? []),
-                              ];
-                              return (
-                                <div key={us.id} className="bg-slate-700/20 rounded-xl border border-slate-600/30 p-3">
-                                  <p className="text-sm font-semibold text-white mb-1.5">{us.service?.name}</p>
-                                  {tags.length > 0 ? (
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {tags.map((t: string, i: number) => (
-                                        <span key={i} className="px-2 py-0.5 bg-slate-600/40 text-slate-300 rounded-md text-xs border border-slate-600/30">{t}</span>
-                                      ))}
+                {Object.keys(servicesByField).length > 0 ? (
+                  <div className="space-y-4">
+                    {(Object.entries(servicesByField) as [string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }][]).map(([fieldId, { fieldName, byProfession }]) => (
+                      <div key={fieldId}>
+                        {/* Field of activity header */}
+                        <p className="text-xs font-bold text-primary-400 uppercase tracking-wider mb-2">{fieldName}</p>
+                        <div className="space-y-3 pl-2 border-l border-primary-500/20">
+                          {(Object.entries(byProfession) as [string, { profName: string; services: any[] }][]).map(([professionId, { profName, services }]) => (
+                            <div key={professionId}>
+                              <p className="text-xs text-slate-500 font-semibold mb-1.5">{profName}</p>
+                              <div className="space-y-2">
+                                {services.map((us: any) => {
+                                  const tags = [
+                                    ...(us.genres?.map((g: any) => g.name) ?? []),
+                                    ...(us.workFormats?.map((w: any) => w.name) ?? []),
+                                    ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
+                                    ...(us.skillLevels?.map((s: any) => s.name) ?? []),
+                                    ...(us.availabilities?.map((a: any) => a.name) ?? []),
+                                    ...(us.priceRanges?.map((p: any) => p.name) ?? []),
+                                    ...(us.geographies?.map((g: any) => g.name) ?? []),
+                                  ];
+                                  return (
+                                    <div key={us.id} className="bg-slate-700/20 rounded-xl border border-slate-600/30 p-3">
+                                      <p className="text-sm font-semibold text-white mb-1.5">{us.service?.name}</p>
+                                      {tags.length > 0 ? (
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {tags.map((t: string, i: number) => (
+                                            <span key={i} className="px-2 py-0.5 bg-slate-600/40 text-slate-300 rounded-md text-xs border border-slate-600/30">{t}</span>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <p className="text-slate-500 text-xs">Фильтры не настроены</p>
+                                      )}
                                     </div>
-                                  ) : (
-                                    <p className="text-slate-500 text-xs">Фильтры не настроены</p>
-                                  )}
-                                </div>
-                              );
-                            })}
-                          </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      );
-                    })}
+                      </div>
+                    ))}
                   </div>
                 ) : (
                   <EmptyState text="Услуги не добавлены" />
