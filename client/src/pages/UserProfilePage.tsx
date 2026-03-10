@@ -11,7 +11,7 @@ type Tab = 'basic' | 'profession';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'basic',      label: 'Основное',  icon: <User size={14} /> },
-  { id: 'profession', label: 'Профессия', icon: <Briefcase size={14} /> },
+  { id: 'profession', label: 'Услуги', icon: <Briefcase size={14} /> },
 ];
 
 const EmptyState = ({ text }: { text: string }) => (
