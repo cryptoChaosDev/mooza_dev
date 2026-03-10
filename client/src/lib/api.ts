@@ -137,6 +137,29 @@ export const messageAPI = {
   getUnreadCount: () => api.get('/messages/unread/count'),
 };
 
+// Admin API
+const adminBase = '/admin';
+const crudFor = (path: string) => ({
+  list: () => api.get(`${adminBase}/${path}`),
+  create: (data: any) => api.post(`${adminBase}/${path}`, data),
+  update: (id: string, data: any) => api.put(`${adminBase}/${path}/${id}`, data),
+  remove: (id: string) => api.delete(`${adminBase}/${path}/${id}`),
+});
+export const adminAPI = {
+  fieldsOfActivity: crudFor('fields-of-activity'),
+  professions: crudFor('professions'),
+  services: crudFor('services'),
+  genres: crudFor('genres'),
+  workFormats: crudFor('work-formats'),
+  employmentTypes: crudFor('employment-types'),
+  skillLevels: crudFor('skill-levels'),
+  availabilities: crudFor('availabilities'),
+  geographies: crudFor('geographies'),
+  priceRanges: crudFor('price-ranges'),
+  artists: crudFor('artists'),
+  employers: crudFor('employers'),
+};
+
 // Search Filters Type
 export interface SearchFilters {
   fieldId?: string;

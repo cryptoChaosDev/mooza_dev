@@ -224,6 +224,7 @@ model User {
   country   String?
   city      String?
   role      String?
+  isAdmin   Boolean  @default(false)
   genres    String[]
   professions String[] // legacy flat list, kept for backward compat
 

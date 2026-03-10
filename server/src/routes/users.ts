@@ -31,6 +31,7 @@ const userSelect = {
   country: true,
   city: true,
   role: true,
+  isAdmin: true,
   genres: true,
   fieldOfActivityId: true,
   fieldOfActivity: { select: { id: true, name: true } },
