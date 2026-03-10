@@ -427,13 +427,36 @@ export default function ProfilePage() {
       <div className="max-w-2xl mx-auto px-4 pt-4 pb-28">
 
         {/* ── HERO CARD ────────────────────────────────────────────────── */}
-        <div className="relative bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl border border-slate-700/50 shadow-lg overflow-hidden mb-4">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-purple-500/5 pointer-events-none" />
-          <div className="relative p-4">
-            <div className="flex items-start gap-4">
-              {/* Avatar */}
-              <div className="relative flex-shrink-0">
-                <div className="w-[72px] h-[72px] rounded-2xl overflow-hidden ring-2 ring-primary-500/30 shadow-xl">
+        <div className="rounded-2xl border border-slate-700/50 shadow-xl overflow-hidden mb-4 bg-slate-900">
+          {/* Banner */}
+          <div className="relative h-24 bg-gradient-to-br from-primary-900/70 via-purple-900/50 to-slate-900">
+            <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle at 15% 60%, rgba(99,102,241,0.5) 0%, transparent 55%), radial-gradient(circle at 85% 20%, rgba(168,85,247,0.5) 0%, transparent 55%)' }} />
+            {/* Actions */}
+            <div className="absolute top-3 right-3 flex gap-1.5 z-10">
+              {isEditing ? (
+                <>
+                  <button onClick={() => setIsEditing(false)} className="p-1.5 bg-slate-800/80 backdrop-blur-sm hover:bg-slate-700 rounded-lg border border-slate-600/50 transition-all">
+                    <X size={14} className="text-slate-300" />
+                  </button>
+                  <button onClick={handleSave} disabled={updateMutation.isPending} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 hover:bg-primary-600 rounded-lg text-white text-xs font-medium transition-all disabled:opacity-60 shadow-lg shadow-primary-500/30">
+                    <Save size={12} />Сохранить
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button onClick={() => setIsEditing(true)} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800/80 backdrop-blur-sm hover:bg-slate-700 rounded-lg border border-slate-600/50 hover:border-primary-500/50 text-slate-300 hover:text-white text-xs font-medium transition-all">
+                    <Edit3 size={12} />Изменить
+                  </button>
+                  <button onClick={logout} className="p-1.5 bg-slate-800/80 backdrop-blur-sm hover:bg-slate-700 rounded-lg border border-slate-600/50 text-slate-400 hover:text-red-400 transition-all">
+                    <LogOut size={14} />
+                  </button>
+                </>
+              )}
+            </div>
+            {/* Avatar overlapping banner */}
+            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2">
+              <div className="relative">
+                <div className="w-20 h-20 rounded-2xl overflow-hidden ring-2 ring-primary-500/40 ring-offset-2 ring-offset-slate-900 shadow-xl shadow-primary-500/20">
                   {avatarUrl
                     ? <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
                     : <div className="w-full h-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center">
@@ -441,89 +464,79 @@ export default function ProfilePage() {
                       </div>
                   }
                 </div>
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  className="absolute -bottom-1 -right-1 bg-primary-500 hover:bg-primary-600 text-white p-1.5 rounded-lg shadow-lg transition-all"
-                >
-                  <Camera size={12} />
+                <button onClick={() => fileInputRef.current?.click()} className="absolute -bottom-1.5 -right-1.5 bg-primary-500 hover:bg-primary-600 text-white p-1.5 rounded-lg shadow-lg transition-all">
+                  <Camera size={11} />
                 </button>
                 <input ref={fileInputRef} type="file" accept="image/*"
                   onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatarMutation.mutate(f); }}
                   className="hidden" />
               </div>
+            </div>
+          </div>
 
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <h2 className="text-base font-bold text-white leading-tight truncate">
-                  {profile?.firstName} {profile?.lastName}
-                </h2>
-                {profile?.nickname && <p className="text-slate-400 text-xs mt-0.5 mb-1.5">@{profile.nickname}</p>}
-                {profile?.role && (
-                  <span className="inline-block px-2 py-0.5 bg-primary-500/15 text-primary-300 text-xs font-medium rounded-md border border-primary-500/30 mb-1.5">
-                    {profile.role}
+          {/* Info */}
+          <div className="pt-12 pb-4 px-4 text-center">
+            <h2 className="text-lg font-bold text-white leading-tight">
+              {profile?.firstName} {profile?.lastName}
+            </h2>
+            {profile?.nickname && <p className="text-slate-400 text-sm mt-0.5">@{profile.nickname}</p>}
+            {profile?.role && (
+              <span className="inline-block mt-1.5 px-2.5 py-0.5 bg-primary-500/15 text-primary-300 text-xs font-medium rounded-full border border-primary-500/30">
+                {profile.role}
+              </span>
+            )}
+
+            {/* Location chips */}
+            {(profile?.city || profile?.country) && (
+              <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
+                {profile?.city && (
+                  <span className="flex items-center gap-1 text-xs text-slate-400 bg-slate-800/60 px-2.5 py-1 rounded-full border border-slate-700/50">
+                    <MapPin size={10} className="text-primary-400" />{profile.city}
                   </span>
                 )}
-                <div className="flex flex-wrap gap-x-3 gap-y-1">
-                  {profile?.country && <span className="flex items-center gap-1 text-slate-400 text-xs"><Globe size={10} />{profile.country}</span>}
-                  {profile?.city    && <span className="flex items-center gap-1 text-slate-400 text-xs"><MapPin size={10} />{profile.city}</span>}
-                </div>
-                {(profile?.vkLink || profile?.youtubeLink || profile?.telegramLink) && (
-                  <div className="flex flex-col gap-1 mt-2">
-                    {profile?.vkLink && (
-                      <a href={profile.vkLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                        <span className="font-bold shrink-0">VK</span>
-                        <span className="truncate">{profile.vkLink.replace(/^https?:\/\/(www\.)?vk\.com\//, '')}</span>
-                      </a>
-                    )}
-                    {profile?.youtubeLink && (
-                      <a href={profile.youtubeLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition-colors">
-                        <span className="font-bold shrink-0">YT</span>
-                        <span className="truncate">{profile.youtubeLink.replace(/^https?:\/\/(www\.)?youtube\.com\//, '')}</span>
-                      </a>
-                    )}
-                    {profile?.telegramLink && (
-                      <a href={profile.telegramLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 transition-colors">
-                        <span className="font-bold shrink-0">TG</span>
-                        <span className="truncate">{profile.telegramLink.replace(/^https?:\/\/(www\.)?t\.me\//, '')}</span>
-                      </a>
-                    )}
-                  </div>
-                )}
-                <div className="flex items-center gap-3 mt-2">
-                  <span className="flex items-center gap-1 text-xs text-slate-400">
-                    <Users size={11} />{friendCount} друзей
+                {profile?.country && (
+                  <span className="flex items-center gap-1 text-xs text-slate-400 bg-slate-800/60 px-2.5 py-1 rounded-full border border-slate-700/50">
+                    <Globe size={10} className="text-slate-500" />{profile.country}
                   </span>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-14 h-1 bg-slate-700 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-primary-500 to-purple-500 rounded-full transition-all" style={{ width: `${rating}%` }} />
-                    </div>
-                    <span className="text-xs text-slate-500">{rating}</span>
-                  </div>
-                </div>
+                )}
               </div>
+            )}
 
-              {/* Edit / Save buttons */}
-              <div className="flex-shrink-0">
-                {isEditing ? (
-                  <div className="flex gap-1.5">
-                    <button onClick={() => setIsEditing(false)} className="p-2 bg-slate-700/50 hover:bg-slate-600/50 rounded-lg border border-slate-600/50 transition-all">
-                      <X size={15} className="text-slate-300" />
-                    </button>
-                    <button onClick={handleSave} disabled={updateMutation.isPending} className="p-2 bg-primary-500 hover:bg-primary-600 rounded-lg shadow-lg shadow-primary-500/30 disabled:opacity-60 transition-all">
-                      <Save size={15} className="text-white" />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setIsEditing(true)}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-700/50 hover:bg-slate-700 rounded-lg border border-slate-600/50 hover:border-primary-500/50 transition-all text-slate-300 hover:text-white text-xs font-medium"
-                  >
-                    <Edit3 size={12} />
-                    Изменить
-                  </button>
-                )}
+            {/* Stats */}
+            <div className="flex items-center justify-center mt-3 bg-slate-800/50 rounded-xl border border-slate-700/50 divide-x divide-slate-700/50">
+              <div className="flex-1 py-2.5 text-center">
+                <div className="text-base font-bold text-white">{friendCount}</div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wide mt-0.5">Друзья</div>
+              </div>
+              <div className="flex-1 py-2.5 text-center">
+                <div className="text-base font-bold text-white">{rating}<span className="text-xs text-slate-500 font-normal">/100</span></div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wide mt-0.5">Профиль</div>
               </div>
             </div>
+            <div className="mt-1.5 h-1 bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-primary-500 to-purple-500 rounded-full transition-all" style={{ width: `${rating}%` }} />
+            </div>
+
+            {/* Social links */}
+            {(profile?.vkLink || profile?.youtubeLink || profile?.telegramLink) && (
+              <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+                {profile?.vkLink && (
+                  <a href={profile.vkLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:text-blue-300 text-xs font-semibold rounded-full transition-all">
+                    VK
+                  </a>
+                )}
+                {profile?.youtubeLink && (
+                  <a href={profile.youtubeLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-full transition-all">
+                    YT
+                  </a>
+                )}
+                {profile?.telegramLink && (
+                  <a href={profile.telegramLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-400 hover:text-sky-300 text-xs font-semibold rounded-full transition-all">
+                    TG
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

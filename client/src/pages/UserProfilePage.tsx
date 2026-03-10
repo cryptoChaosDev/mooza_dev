@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, Briefcase, Music, MessageCircle, Loader2,
-  Globe, Building2, User, Users, FileText,
+  Globe, Building2, User, FileText,
 } from 'lucide-react';
 import { userAPI } from '../lib/api';
 
@@ -108,80 +108,92 @@ export default function UserProfilePage() {
         </button>
 
         {/* ── HERO CARD ── */}
-        <div className="relative bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-2xl border border-slate-700/50 shadow-lg overflow-hidden mb-4">
-          <div className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-purple-500/5 pointer-events-none" />
-          <div className="relative p-4">
-            <div className="flex items-start gap-4">
-              {/* Avatar */}
-              <div className="flex-shrink-0">
-                <div className="w-[72px] h-[72px] rounded-2xl overflow-hidden ring-2 ring-primary-500/30 shadow-xl">
-                  {user.avatar
-                    ? <img src={`${import.meta.env.VITE_API_URL}${user.avatar}`} alt={`${user.firstName} ${user.lastName}`} className="w-full h-full object-cover" />
-                    : <div className="w-full h-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center">
-                        <span className="text-2xl font-bold text-white">{user.firstName[0]}{user.lastName[0]}</span>
-                      </div>
-                  }
-                </div>
-              </div>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <h1 className="text-base font-bold text-white leading-tight truncate">{user.firstName} {user.lastName}</h1>
-                {user.nickname && <p className="text-slate-400 text-xs mt-0.5 mb-1.5">@{user.nickname}</p>}
-                {user.role && (
-                  <span className="inline-block px-2 py-0.5 bg-primary-500/15 text-primary-300 text-xs font-medium rounded-md border border-primary-500/30 mb-1.5">
-                    {user.role}
-                  </span>
-                )}
-                <div className="flex flex-wrap gap-x-3 gap-y-1">
-                  {user.country && <span className="flex items-center gap-1 text-slate-400 text-xs"><Globe size={10} />{user.country}</span>}
-                  {user.city    && <span className="flex items-center gap-1 text-slate-400 text-xs"><MapPin size={10} />{user.city}</span>}
-                </div>
-                {(user.vkLink || user.youtubeLink || user.telegramLink) && (
-                  <div className="flex flex-col gap-1 mt-2">
-                    {user.vkLink && (
-                      <a href={user.vkLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300 transition-colors">
-                        <span className="font-bold shrink-0">VK</span>
-                        <span className="truncate">{user.vkLink.replace(/^https?:\/\/(www\.)?vk\.com\//, '')}</span>
-                      </a>
-                    )}
-                    {user.youtubeLink && (
-                      <a href={user.youtubeLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-red-400 hover:text-red-300 transition-colors">
-                        <span className="font-bold shrink-0">YT</span>
-                        <span className="truncate">{user.youtubeLink.replace(/^https?:\/\/(www\.)?youtube\.com\//, '')}</span>
-                      </a>
-                    )}
-                    {user.telegramLink && (
-                      <a href={user.telegramLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 text-xs text-sky-400 hover:text-sky-300 transition-colors">
-                        <span className="font-bold shrink-0">TG</span>
-                        <span className="truncate">{user.telegramLink.replace(/^https?:\/\/(www\.)?t\.me\//, '')}</span>
-                      </a>
-                    )}
-                  </div>
-                )}
-                <div className="flex items-center gap-3 mt-2">
-                  <span className="flex items-center gap-1 text-xs text-slate-400">
-                    <Users size={11} />{friendCount} друзей
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <div className="w-14 h-1 bg-slate-700 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-primary-500 to-purple-500 rounded-full" style={{ width: `${rating}%` }} />
+        <div className="rounded-2xl border border-slate-700/50 shadow-xl overflow-hidden mb-4 bg-slate-900">
+          {/* Banner */}
+          <div className="relative h-24 bg-gradient-to-br from-primary-900/70 via-purple-900/50 to-slate-900">
+            <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle at 15% 60%, rgba(99,102,241,0.5) 0%, transparent 55%), radial-gradient(circle at 85% 20%, rgba(168,85,247,0.5) 0%, transparent 55%)' }} />
+            {/* Message button */}
+            <div className="absolute top-3 right-3 z-10">
+              <button onClick={() => navigate(`/messages/${user.id}`)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 hover:bg-primary-600 rounded-lg transition-all shadow-lg shadow-primary-500/30 text-white text-xs font-medium"
+              >
+                <MessageCircle size={13} />Написать
+              </button>
+            </div>
+            {/* Avatar overlapping banner */}
+            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2">
+              <div className="w-20 h-20 rounded-2xl overflow-hidden ring-2 ring-primary-500/40 ring-offset-2 ring-offset-slate-900 shadow-xl shadow-primary-500/20">
+                {user.avatar
+                  ? <img src={`${API_URL}${user.avatar}`} alt={`${user.firstName} ${user.lastName}`} className="w-full h-full object-cover" />
+                  : <div className="w-full h-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center">
+                      <span className="text-2xl font-bold text-white">{user.firstName[0]}{user.lastName[0]}</span>
                     </div>
-                    <span className="text-xs text-slate-500">{rating}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Message */}
-              <div className="flex-shrink-0">
-                <button onClick={() => navigate(`/messages/${user.id}`)}
-                  className="flex items-center gap-1.5 px-2.5 py-1.5 bg-primary-500 hover:bg-primary-600 rounded-lg transition-all shadow-lg shadow-primary-500/30 text-white text-xs font-medium"
-                >
-                  <MessageCircle size={13} />
-                  <span className="hidden sm:inline">Написать</span>
-                </button>
+                }
               </div>
             </div>
+          </div>
+
+          {/* Info */}
+          <div className="pt-12 pb-4 px-4 text-center">
+            <h1 className="text-lg font-bold text-white leading-tight">{user.firstName} {user.lastName}</h1>
+            {user.nickname && <p className="text-slate-400 text-sm mt-0.5">@{user.nickname}</p>}
+            {user.role && (
+              <span className="inline-block mt-1.5 px-2.5 py-0.5 bg-primary-500/15 text-primary-300 text-xs font-medium rounded-full border border-primary-500/30">
+                {user.role}
+              </span>
+            )}
+
+            {/* Location chips */}
+            {(user.city || user.country) && (
+              <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
+                {user.city && (
+                  <span className="flex items-center gap-1 text-xs text-slate-400 bg-slate-800/60 px-2.5 py-1 rounded-full border border-slate-700/50">
+                    <MapPin size={10} className="text-primary-400" />{user.city}
+                  </span>
+                )}
+                {user.country && (
+                  <span className="flex items-center gap-1 text-xs text-slate-400 bg-slate-800/60 px-2.5 py-1 rounded-full border border-slate-700/50">
+                    <Globe size={10} className="text-slate-500" />{user.country}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {/* Stats */}
+            <div className="flex items-center justify-center mt-3 bg-slate-800/50 rounded-xl border border-slate-700/50 divide-x divide-slate-700/50">
+              <div className="flex-1 py-2.5 text-center">
+                <div className="text-base font-bold text-white">{friendCount}</div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wide mt-0.5">Друзья</div>
+              </div>
+              <div className="flex-1 py-2.5 text-center">
+                <div className="text-base font-bold text-white">{rating}<span className="text-xs text-slate-500 font-normal">/100</span></div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wide mt-0.5">Профиль</div>
+              </div>
+            </div>
+            <div className="mt-1.5 h-1 bg-slate-800 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-primary-500 to-purple-500 rounded-full" style={{ width: `${rating}%` }} />
+            </div>
+
+            {/* Social links */}
+            {(user.vkLink || user.youtubeLink || user.telegramLink) && (
+              <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
+                {user.vkLink && (
+                  <a href={user.vkLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:text-blue-300 text-xs font-semibold rounded-full transition-all">
+                    VK
+                  </a>
+                )}
+                {user.youtubeLink && (
+                  <a href={user.youtubeLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-full transition-all">
+                    YT
+                  </a>
+                )}
+                {user.telegramLink && (
+                  <a href={user.telegramLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-400 hover:text-sky-300 text-xs font-semibold rounded-full transition-all">
+                    TG
+                  </a>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
