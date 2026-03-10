@@ -44,7 +44,7 @@ services:
         condition: service_healthy
     networks:
       - mooza-network
-    command: sh -c "npm install && npx prisma generate && npx prisma migrate deploy && npx prisma db seed || true && npm run dev"
+    command: sh -c "npm install && npx prisma generate && npx prisma migrate deploy && npx prisma db seed || true && npx tsx src/index.ts"
 
   # Frontend Web App
   web:
