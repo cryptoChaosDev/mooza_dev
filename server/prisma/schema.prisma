@@ -13,7 +13,6 @@ model FieldOfActivity {
   id   String @id @default(uuid())
   name String @unique
 
-  professions Profession[]
   directions  Direction[]
   users       User[]
 
