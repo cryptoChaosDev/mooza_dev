@@ -909,7 +909,7 @@ export default function RegisterPage() {
           <div className="inline-flex items-center justify-center w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-primary-500 to-purple-600 shadow-glow mb-3">
             <Music className="text-white w-6 h-6 sm:w-7 sm:h-7" />
           </div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-white mb-1">Mooza</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-white mb-1">Moooza</h1>
           <p className="text-slate-400 text-sm sm:text-base">Регистрация нового аккаунта</p>
         </div>
 
