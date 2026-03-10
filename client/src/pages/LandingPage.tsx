@@ -107,7 +107,7 @@ export default function LandingPage() {
             className="text-6xl sm:text-7xl md:text-8xl font-extrabold tracking-tight mb-6"
           >
             <span className="bg-gradient-to-r from-primary-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Mooza
+              Moooza
             </span>
           </motion.h1>
 
@@ -175,7 +175,7 @@ export default function LandingPage() {
           <SectionHeading
             label="Возможности"
             title="Всё для вашей музыкальной карьеры"
-            subtitle="Mooza — это платформа, созданная музыкантами для музыкантов"
+            subtitle="Moooza — это платформа, созданная музыкантами для музыкантов"
           />
 
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-16">
@@ -336,7 +336,7 @@ export default function LandingPage() {
             transition={{ duration: 0.6, delay: 0.15 }}
             className="text-slate-400 text-lg mb-10 max-w-xl mx-auto"
           >
-            Присоединяйтесь к Mooza — регистрация занимает всего пару минут
+            Присоединяйтесь к Moooza — регистрация занимает всего пару минут
           </motion.p>
 
           <motion.button
@@ -364,11 +364,11 @@ export default function LandingPage() {
           <div className="flex items-center gap-2">
             <Music size={20} className="text-primary-400" />
             <span className="font-bold text-lg bg-gradient-to-r from-primary-400 to-purple-400 bg-clip-text text-transparent">
-              Mooza
+              Moooza
             </span>
           </div>
           <p className="text-slate-500 text-sm">
-            &copy; {new Date().getFullYear()} Mooza. Все права защищены.
+            &copy; {new Date().getFullYear()} Moooza. Все права защищены.
           </p>
         </div>
       </footer>
