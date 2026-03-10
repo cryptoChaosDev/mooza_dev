@@ -47,7 +47,7 @@ router.delete('/fields-of-activity/:id', async (req, res) => {
 // ─── Profession ────────────────────────────────────────────────────────────
 router.get('/professions', async (_req, res) => {
   const items = await prisma.profession.findMany({
-    include: { fieldOfActivity: { select: { id: true, name: true } } },
+    include: { direction: { select: { id: true, name: true } } },
     orderBy: { name: 'asc' },
   });
   res.json(items);
@@ -55,8 +55,8 @@ router.get('/professions', async (_req, res) => {
 router.post('/professions', async (req, res) => {
   try {
     const item = await prisma.profession.create({
-      data: { name: req.body.name, fieldOfActivityId: req.body.fieldOfActivityId },
-      include: { fieldOfActivity: { select: { id: true, name: true } } },
+      data: { name: req.body.name, directionId: req.body.directionId },
+      include: { direction: { select: { id: true, name: true } } },
     });
     res.json(item);
   } catch (e: any) {
@@ -67,11 +67,11 @@ router.put('/professions/:id', async (req, res) => {
   try {
     const data: any = {};
     if (req.body.name !== undefined) data.name = req.body.name;
-    if (req.body.fieldOfActivityId !== undefined) data.fieldOfActivityId = req.body.fieldOfActivityId;
+    if (req.body.directionId !== undefined) data.directionId = req.body.directionId;
     const item = await prisma.profession.update({
       where: { id: req.params.id },
       data,
-      include: { fieldOfActivity: { select: { id: true, name: true } } },
+      include: { direction: { select: { id: true, name: true } } },
     });
     res.json(item);
   } catch (e: any) {
