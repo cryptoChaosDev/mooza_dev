@@ -141,6 +141,84 @@ function SimpleTable({
   );
 }
 
+// ─── Direction table (needs fieldOfActivity select) ──────────────────────────
+
+function DirectionTable() {
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState<{ name: string; fieldOfActivityId: string }>({ name: '', fieldOfActivityId: '' });
+
+  const { data: items = [] } = useQuery<Item[]>({
+    queryKey: ['admin-directions'],
+    queryFn: () => adminAPI.directions.list().then((r: any) => r.data),
+  });
+  const { data: fields = [] } = useQuery<Item[]>({
+    queryKey: ['admin-fields-of-activity'],
+    queryFn: () => adminAPI.fieldsOfActivity.list().then((r: any) => r.data),
+  });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['admin-directions'] });
+
+  const createMut = useMutation({ mutationFn: (d: any) => adminAPI.directions.create(d), onSuccess: () => { invalidate(); setAdding(false); setForm({ name: '', fieldOfActivityId: '' }); } });
+  const updateMut = useMutation({ mutationFn: ({ id, data }: { id: string; data: any }) => adminAPI.directions.update(id, data), onSuccess: () => { invalidate(); setEditId(null); } });
+  const deleteMut = useMutation({ mutationFn: (id: string) => adminAPI.directions.remove(id), onSuccess: invalidate });
+
+  const startEdit = (item: Item) => {
+    setEditId(item.id);
+    setForm({ name: item.name, fieldOfActivityId: item.fieldOfActivity?.id ?? '' });
+  };
+
+  return (
+    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+        <h3 className="font-semibold text-white">Направления</h3>
+        <button onClick={() => { setAdding(true); setForm({ name: '', fieldOfActivityId: '' }); }} className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+          <Plus size={14} /> Добавить
+        </button>
+      </div>
+      <div className="divide-y divide-slate-800">
+        {adding && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/50">
+            <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Название" className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500" />
+            <select value={form.fieldOfActivityId} onChange={e => setForm(f => ({ ...f, fieldOfActivityId: e.target.value }))} className="bg-slate-700 text-white text-sm px-2 py-1 rounded border border-slate-600 focus:border-primary-500 outline-none">
+              <option value="">— Сфера —</option>
+              {fields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+            </select>
+            <button onClick={() => createMut.mutate(form)} className="text-green-400 hover:text-green-300"><Check size={16} /></button>
+            <button onClick={() => { setAdding(false); }} className="text-slate-400 hover:text-white"><X size={16} /></button>
+          </div>
+        )}
+        {items.map(item => (
+          <div key={item.id} className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800/30 group">
+            {editId === item.id ? (
+              <>
+                <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500" />
+                <select value={form.fieldOfActivityId} onChange={e => setForm(f => ({ ...f, fieldOfActivityId: e.target.value }))} className="bg-slate-700 text-white text-sm px-2 py-1 rounded border border-slate-600 focus:border-primary-500 outline-none">
+                  <option value="">— Сфера —</option>
+                  {fields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+                </select>
+                <button onClick={() => updateMut.mutate({ id: item.id, data: form })} className="text-green-400 hover:text-green-300"><Check size={16} /></button>
+                <button onClick={() => setEditId(null)} className="text-slate-400 hover:text-white"><X size={16} /></button>
+              </>
+            ) : (
+              <>
+                <span className="flex-1 text-sm text-slate-200">{item.name}</span>
+                <span className="text-xs text-slate-500">{item.fieldOfActivity?.name ?? '—'}</span>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => startEdit(item)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
+                  <button onClick={() => deleteMut.mutate(item.id)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+        {items.length === 0 && !adding && <div className="px-4 py-4 text-sm text-slate-500 text-center">Нет записей</div>}
+      </div>
+    </div>
+  );
+}
+
 // ─── Profession table (needs fieldOfActivity select) ─────────────────────────
 
 function ProfessionTable() {
@@ -182,7 +260,7 @@ function ProfessionTable() {
           <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/50">
             <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Название" className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500" />
             <select value={form.fieldOfActivityId} onChange={e => setForm(f => ({ ...f, fieldOfActivityId: e.target.value }))} className="bg-slate-700 text-white text-sm px-2 py-1 rounded border border-slate-600 focus:border-primary-500 outline-none">
-              <option value="">— Область —</option>
+              <option value="">— Сфера —</option>
               {fields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
             <button onClick={() => createMut.mutate(form)} className="text-green-400 hover:text-green-300"><Check size={16} /></button>
@@ -195,7 +273,7 @@ function ProfessionTable() {
               <>
                 <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500" />
                 <select value={form.fieldOfActivityId} onChange={e => setForm(f => ({ ...f, fieldOfActivityId: e.target.value }))} className="bg-slate-700 text-white text-sm px-2 py-1 rounded border border-slate-600 focus:border-primary-500 outline-none">
-                  <option value="">— Область —</option>
+                  <option value="">— Сфера —</option>
                   {fields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
                 </select>
                 <button onClick={() => updateMut.mutate({ id: item.id, data: form })} className="text-green-400 hover:text-green-300"><Check size={16} /></button>
@@ -332,7 +410,8 @@ export default function AdminPage() {
 
         {tab === 'structure' && (
           <div className="grid gap-4 md:grid-cols-2">
-            <SimpleTable title="Области деятельности" queryKey="admin-fields-of-activity" apiModule={adminAPI.fieldsOfActivity} />
+            <SimpleTable title="Сферы деятельности" queryKey="admin-fields-of-activity" apiModule={adminAPI.fieldsOfActivity} />
+            <DirectionTable />
             <ProfessionTable />
             <div className="md:col-span-2">
               <ServiceTable />

@@ -151,6 +151,7 @@ const crudFor = (path: string) => ({
 });
 export const adminAPI = {
   fieldsOfActivity: crudFor('fields-of-activity'),
+  directions: crudFor('directions'),
   professions: crudFor('professions'),
   services: crudFor('services'),
   genres: crudFor('genres'),
