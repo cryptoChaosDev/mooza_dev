@@ -4,7 +4,7 @@ import { userAPI, referenceAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
-  Globe, Building2, Search, Check, DollarSign, Calendar,
+  Globe, DollarSign, Calendar,
   Headphones, Edit3, User, Plus, ChevronDown, ChevronLeft, ChevronRight,
 } from 'lucide-react';
 import SelectField from '../components/SelectField';
@@ -57,12 +57,6 @@ export default function ProfilePage() {
 
   // Reference lists
   const [fieldsOfActivity, setFieldsOfActivity] = useState<any[]>([]);
-  const [professions, setProfessions] = useState<any[]>([]);
-  const [professionFeatures, setProfessionFeatures] = useState<any[]>([]);
-  const [artists, setArtists] = useState<any[]>([]);
-  const [employers, setEmployers] = useState<any[]>([]);
-  const [searchArtist, setSearchArtist] = useState('');
-  const [searchEmployer, setSearchEmployer] = useState('');
   const [genres, setGenres] = useState<any[]>([]);
   const [workFormats, setWorkFormats] = useState<any[]>([]);
   const [employmentTypes, setEmploymentTypes] = useState<any[]>([]);
@@ -70,8 +64,6 @@ export default function ProfilePage() {
   const [availabilities, setAvailabilities] = useState<any[]>([]);
   const [geographies, setGeographies] = useState<any[]>([]);
   const [priceRanges, setPriceRanges] = useState<any[]>([]);
-  const [expandedProfessions, setExpandedProfessions] = useState<Set<string>>(new Set());
-  const [showAddProfession, setShowAddProfession] = useState(false);
 
   // User services state
   const [userServices, setUserServices] = useState<UserServiceEntry[]>([]);
@@ -79,23 +71,14 @@ export default function ProfilePage() {
   const [openFilterSheet, setOpenFilterSheet] = useState<string | null>(null);
 
   // Add-service multi-step flow
-  const [addStep, setAddStep] = useState<'profession' | 'service' | 'filters' | null>(null);
+  const [addStep, setAddStep] = useState<'field' | 'profession' | 'service' | 'filters' | null>(null);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
+  const [addFlowProfessions, setAddFlowProfessions] = useState<any[]>([]);
   const [addFlowServices, setAddFlowServices] = useState<any[]>([]);
-
-  const toggleProfExpand = (id: string) =>
-    setExpandedProfessions(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
 
   useEffect(() => {
     if (isEditing) {
       referenceAPI.getFieldsOfActivity().then(r => setFieldsOfActivity(r.data));
-      referenceAPI.getProfessionFeatures().then(r => setProfessionFeatures(r.data));
-      referenceAPI.getArtists({}).then(r => setArtists(r.data));
-      referenceAPI.getEmployers({}).then(r => setEmployers(r.data));
       referenceAPI.getWorkFormats().then(r => setWorkFormats(r.data));
       referenceAPI.getEmploymentTypes().then(r => setEmploymentTypes(r.data));
       referenceAPI.getSkillLevels().then(r => setSkillLevels(r.data));
@@ -105,20 +88,6 @@ export default function ProfilePage() {
       referenceAPI.getPriceRanges().then(r => setPriceRanges(r.data));
     }
   }, [isEditing]);
-
-  useEffect(() => {
-    if (isEditing && formData.fieldOfActivityId) {
-      referenceAPI.getProfessions({ fieldOfActivityId: formData.fieldOfActivityId }).then(r => setProfessions(r.data));
-    }
-  }, [isEditing, formData.fieldOfActivityId]);
-
-  useEffect(() => {
-    if (isEditing) referenceAPI.getArtists({ search: searchArtist }).then(r => setArtists(r.data));
-  }, [searchArtist, isEditing]);
-
-  useEffect(() => {
-    if (isEditing) referenceAPI.getEmployers({ search: searchEmployer }).then(r => setEmployers(r.data));
-  }, [searchEmployer, isEditing]);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],
@@ -263,13 +232,36 @@ export default function ProfilePage() {
 
   // Add-service flow UI
   const AddServiceFlow = () => {
+    if (addStep === 'field') return (
+      <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
+        <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите сферу деятельности:</p>
+        <div className="flex flex-wrap gap-1.5">
+          {fieldsOfActivity.map((f: any) => (
+            <button key={f.id} type="button"
+              onClick={() => {
+                referenceAPI.getProfessions({ fieldOfActivityId: f.id }).then(r => setAddFlowProfessions(r.data));
+                setAddStep('profession');
+              }}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
+            >
+              <ChevronRight size={11} />{f.name}
+            </button>
+          ))}
+        </div>
+        <button onClick={() => setAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
+      </div>
+    );
+
     if (addStep === 'profession') return (
       <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
+        <button onClick={() => setAddStep('field')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors">
+          <ChevronLeft size={11} />Назад
+        </button>
         <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите профессию:</p>
-        {professions.length === 0
-          ? <p className="text-slate-500 text-xs">Сначала выберите сферу деятельности на вкладке «Основное»</p>
+        {addFlowProfessions.length === 0
+          ? <p className="text-slate-500 text-xs">Нет профессий в этой сфере</p>
           : <div className="flex flex-wrap gap-1.5">
-              {professions.map((p: any) => (
+              {addFlowProfessions.map((p: any) => (
                 <button key={p.id} type="button"
                   onClick={() => {
                     setPending({ ...emptyEntry(), professionId: p.id, professionName: p.name });
@@ -569,169 +561,6 @@ export default function ProfilePage() {
           {activeTab === 'profession' && (
             isEditing ? (
               <div className="p-4 space-y-4">
-                {/* Field of Activity */}
-                <div>
-                  <label className={`${labelCls} flex items-center gap-1`}><Briefcase size={11} /> Сфера деятельности</label>
-                  <div className="flex flex-wrap gap-2">
-                    {fieldsOfActivity.map((field: any) => (
-                      <button key={field.id} type="button"
-                        onClick={() => setFormData({ ...formData, fieldOfActivityId: formData.fieldOfActivityId === field.id ? '' : field.id, userProfessions: [] })}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium ${
-                          formData.fieldOfActivityId === field.id
-                            ? 'bg-primary-500/20 border-primary-500/50 text-primary-300'
-                            : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:border-slate-500'
-                        }`}
-                      >
-                        {formData.fieldOfActivityId === field.id && <Check size={11} className="text-primary-400" />}
-                        {field.name}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Professions – accordion cards */}
-                {formData.fieldOfActivityId && (
-                  <div className="space-y-2">
-                    <label className={`${labelCls} flex items-center gap-1`}><Star size={11} /> Профессии</label>
-                    {formData.userProfessions.map(up => {
-                      const prof = professions.find((p: any) => p.id === up.professionId);
-                      const isExpanded = expandedProfessions.has(up.professionId);
-                      return (
-                        <div key={up.professionId} className="bg-slate-700/30 rounded-xl border border-slate-600/50 overflow-hidden">
-                          <div className="flex items-center gap-2 px-3 py-2.5">
-                            <button type="button" onClick={() => toggleProfExpand(up.professionId)} className="flex-1 flex items-center justify-between text-left">
-                              <span className="text-sm font-semibold text-white">{prof?.name ?? '...'}</span>
-                              <div className="flex items-center gap-2 mr-1">
-                                {up.features.length > 0 && (
-                                  <span className="text-xs text-slate-400">{up.features.length} навык{up.features.length > 1 ? 'а' : ''}</span>
-                                )}
-                                <ChevronDown size={15} className={`text-slate-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
-                              </div>
-                            </button>
-                            <button type="button"
-                              onClick={() => {
-                                setFormData({ ...formData, userProfessions: formData.userProfessions.filter(p => p.professionId !== up.professionId) });
-                                setExpandedProfessions(prev => { const n = new Set(prev); n.delete(up.professionId); return n; });
-                              }}
-                              className="flex-shrink-0 p-1 rounded-lg hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                          {isExpanded && (
-                            <div className="px-3 pb-3 border-t border-slate-600/30">
-                              <p className="text-xs text-slate-400 mt-2 mb-2">Специализация:</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {professionFeatures.map((feat: any) => {
-                                  const isSel = up.features.includes(feat.name);
-                                  return (
-                                    <button key={feat.id} type="button"
-                                      onClick={() => setFormData({ ...formData, userProfessions: formData.userProfessions.map(p => p.professionId !== up.professionId ? p : { ...p, features: isSel ? p.features.filter(f => f !== feat.name) : [...p.features, feat.name] }) })}
-                                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${isSel ? 'bg-primary-500/20 border-primary-500/50 text-primary-300' : 'bg-slate-600/20 border-slate-600/50 text-slate-400 hover:text-slate-300'}`}
-                                    >
-                                      {isSel && <Check size={10} className="text-primary-400" />}
-                                      {feat.name}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                    {professions.filter((p: any) => !formData.userProfessions.some(up => up.professionId === p.id)).length > 0 && (
-                      <>
-                        <button type="button"
-                          onClick={() => setShowAddProfession(s => !s)}
-                          className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm"
-                        >
-                          <Plus size={14} />Добавить профессию
-                        </button>
-                        {showAddProfession && (
-                          <div className="flex flex-wrap gap-2 p-3 bg-slate-700/20 rounded-xl border border-slate-600/30">
-                            {professions
-                              .filter((p: any) => !formData.userProfessions.some(up => up.professionId === p.id))
-                              .map((prof: any) => (
-                                <button key={prof.id} type="button"
-                                  onClick={() => {
-                                    const newProfs = [...formData.userProfessions, { professionId: prof.id, features: [] }];
-                                    setFormData({ ...formData, userProfessions: newProfs });
-                                    setExpandedProfessions(prev => new Set([...prev, prof.id]));
-                                    const remaining = professions.filter((p: any) => !newProfs.some(up => up.professionId === p.id));
-                                    if (remaining.length === 0) setShowAddProfession(false);
-                                  }}
-                                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
-                                >
-                                  <Plus size={11} />{prof.name}
-                                </button>
-                              ))
-                            }
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-                )}
-
-                {/* Artists */}
-                <div>
-                  <label className={`${labelCls} flex items-center gap-1`}><Music size={11} /> Мой артист / Группа</label>
-                  <div className="relative mb-2">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
-                    <input type="text" value={searchArtist} onChange={e => setSearchArtist(e.target.value)} placeholder="Поиск артиста..."
-                      className="w-full pl-9 pr-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm" />
-                  </div>
-                  <div className="space-y-0.5 max-h-36 overflow-y-auto rounded-lg">
-                    {artists.map((artist: any) => {
-                      const selected = formData.artistIds.includes(artist.id);
-                      return (
-                        <button key={artist.id} type="button"
-                          onClick={() => {
-                            if (selected) setFormData({ ...formData, artistIds: formData.artistIds.filter(id => id !== artist.id) });
-                            else setFormData({ ...formData, artistIds: [...formData.artistIds, artist.id] });
-                          }}
-                          className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all text-left text-sm ${selected ? 'bg-primary-500/15 text-primary-300' : 'text-slate-300 hover:bg-slate-700/50'}`}
-                        >
-                          <div className={`w-3.5 h-3.5 rounded border-2 flex-shrink-0 flex items-center justify-center ${selected ? 'bg-primary-500 border-primary-500' : 'border-slate-500'}`}>
-                            {selected && <Check size={9} className="text-white" />}
-                          </div>
-                          {artist.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Employer */}
-                <div>
-                  <label className={`${labelCls} flex items-center gap-1`}><Building2 size={11} /> Работодатель</label>
-                  <div className="relative mb-2">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={13} />
-                    <input type="text" value={searchEmployer} onChange={e => setSearchEmployer(e.target.value)} placeholder="Поиск по ИНН или названию..."
-                      className="w-full pl-9 pr-4 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm" />
-                  </div>
-                  <div className="space-y-0.5 max-h-36 overflow-y-auto rounded-lg">
-                    {employers.map((emp: any) => {
-                      const selected = formData.employerId === emp.id;
-                      return (
-                        <button key={emp.id} type="button"
-                          onClick={() => setFormData({ ...formData, employerId: selected ? '' : emp.id })}
-                          className={`w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg transition-all text-left text-sm ${selected ? 'bg-green-500/15 text-green-300' : 'text-slate-300 hover:bg-slate-700/50'}`}
-                        >
-                          <div className="flex items-center gap-2">
-                            <div className={`w-3.5 h-3.5 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${selected ? 'bg-green-500 border-green-500' : 'border-slate-500'}`}>
-                              {selected && <Check size={9} className="text-white" />}
-                            </div>
-                            {emp.name}
-                          </div>
-                          {emp.inn && <span className="text-xs text-slate-500 flex-shrink-0">ИНН: {emp.inn}</span>}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 {/* ── User Services ── */}
                 <div>
                   <label className={`${labelCls} flex items-center gap-1`}><Headphones size={11} /> Мои услуги и параметры поиска</label>
@@ -769,7 +598,7 @@ export default function ProfilePage() {
                     <AddServiceFlow />
                   ) : (
                     <button type="button"
-                      onClick={() => setAddStep('profession')}
+                      onClick={() => setAddStep('field')}
                       className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm"
                     >
                       <Plus size={14} />Добавить услугу
@@ -779,71 +608,13 @@ export default function ProfilePage() {
               </div>
             ) : (
               /* ── view mode ── */
-              <div className="p-4 space-y-4">
-                {/* Field + Employer chips */}
-                {(profile?.fieldOfActivity || profile?.employer) && (
-                  <div className="flex flex-wrap gap-2">
-                    {profile?.fieldOfActivity && (
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/50 rounded-xl border border-slate-600/30 text-slate-300 text-xs font-medium">
-                        <Briefcase size={12} className="text-primary-400" />{profile.fieldOfActivity.name}
-                      </div>
-                    )}
-                    {profile?.employer && (
-                      <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/50 rounded-xl border border-slate-600/30 text-slate-300 text-xs font-medium">
-                        <Building2 size={12} className="text-green-400" />{profile.employer.name}
-                        {profile.employer.inn && <span className="text-slate-500 font-normal">· ИНН {profile.employer.inn}</span>}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Professions */}
-                {profile?.userProfessions?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                      <Star size={11} className="text-primary-400" />Профессии
-                    </p>
-                    <div className="space-y-2">
-                      {profile.userProfessions.map((up: any) => (
-                        <div key={up.id} className="bg-slate-700/20 rounded-xl border border-slate-600/30 p-3">
-                          <p className="text-sm font-semibold text-white mb-2">{up.profession?.name}</p>
-                          {up.features?.length > 0 ? (
-                            <div className="flex flex-wrap gap-1.5">
-                              {up.features.map((f: string) => (
-                                <span key={f} className="px-2.5 py-1 bg-primary-500/10 text-primary-300 rounded-lg text-xs border border-primary-500/20">{f}</span>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-slate-500 text-xs">Без специализации</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Artists */}
-                {profile?.userArtists?.length > 0 && (
-                  <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5"><Music size={11} className="text-purple-400" />Артисты / Группы</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {profile.userArtists.map((ua: any) => (
-                        <span key={ua.id} className="px-2.5 py-1 bg-purple-500/15 text-purple-300 rounded-lg text-xs font-medium border border-purple-500/30">{ua.artist?.name}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* User Services grouped by profession */}
+              <div className="p-4">
                 {Object.keys(servicesByProfession).length > 0 ? (
-                  <div>
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                      <Headphones size={11} className="text-primary-400" />Услуги
-                    </p>
+                  <div className="space-y-3">
                     {Object.entries(servicesByProfession).map(([professionId, services]) => {
                       const profName = (services as any[])[0]?.profession?.name ?? '';
                       return (
-                        <div key={professionId} className="mb-3">
+                        <div key={professionId}>
                           <p className="text-xs text-slate-500 font-semibold mb-1.5">{profName}</p>
                           <div className="space-y-2">
                             {(services as any[]).map((us: any) => {
@@ -877,8 +648,7 @@ export default function ProfilePage() {
                     })}
                   </div>
                 ) : (
-                  !profile?.fieldOfActivity && !profile?.employer && !profile?.userProfessions?.length &&
-                  <EmptyState text="Профессиональная информация не заполнена" />
+                  <EmptyState text="Услуги не добавлены" />
                 )}
               </div>
             )
