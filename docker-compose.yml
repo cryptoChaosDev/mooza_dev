@@ -64,7 +64,7 @@ services:
       - api
     networks:
       - mooza-network
-    command: sh -c "npm install --force && npx vite build && npx vite preview"
+    command: sh -c "npm install --force --include=optional && npx vite build && npx vite preview"
 
 volumes:
   postgres_data:
