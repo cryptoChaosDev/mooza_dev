@@ -35,7 +35,7 @@ export const authLimiter = rateLimit({
  */
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 минут
-  max: 500, // максимум 500 запросов с одного IP
+  max: 2000, // максимум 2000 запросов с одного IP
   message: {
     error: 'Слишком много запросов. Пожалуйста, попробуйте позже.',
     retryAfter: '15 минут'
