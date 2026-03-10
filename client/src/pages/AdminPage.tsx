@@ -311,7 +311,7 @@ export default function AdminPage() {
   const [tab, setTab] = useState<TabId>('structure');
 
   return (
-    <div className="min-h-screen bg-slate-950 p-4 lg:p-8">
+    <div className="min-h-screen bg-slate-950 p-4 pb-24 lg:p-8 lg:pb-16">
       <div className="max-w-5xl mx-auto space-y-6">
         <h1 className="text-2xl font-bold text-white">Администрирование справочников</h1>
 
