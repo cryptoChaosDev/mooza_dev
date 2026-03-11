@@ -108,14 +108,14 @@ export default function UserProfilePage() {
         </button>
 
         {/* ── HERO CARD ── */}
-        <div className="rounded-2xl border border-slate-700/50 shadow-xl overflow-hidden mb-4 bg-slate-900">
+        <div className="rounded-2xl border border-slate-700/50 shadow-xl overflow-hidden mb-4 bg-slate-900 relative">
+          {/* Full-bleed cover image */}
+          {user.bannerImage && <img src={`${API_URL}${user.bannerImage}`} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />}
+          {user.bannerImage && <div className="absolute inset-0 bg-black/50 z-0" />}
           {/* Banner */}
-          <div
-            className="relative h-28 bg-gradient-to-br from-primary-900/70 via-purple-900/50 to-slate-900"
-          >
+          <div className="relative h-28 z-10">
+            {!user.bannerImage && <div className="absolute inset-0 bg-gradient-to-br from-primary-900/70 via-purple-900/50 to-slate-900" />}
             {!user.bannerImage && <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle at 15% 60%, rgba(99,102,241,0.5) 0%, transparent 55%), radial-gradient(circle at 85% 20%, rgba(168,85,247,0.5) 0%, transparent 55%)' }} />}
-            {user.bannerImage && <img src={`${API_URL}${user.bannerImage}`} alt="" className="absolute inset-0 w-full h-full object-cover" />}
-            {user.bannerImage && <div className="absolute inset-0 bg-black/20" />}
             {/* Message button */}
             <div className="absolute top-3 right-3 z-10">
               <button onClick={() => navigate(`/messages/${user.id}`)}
@@ -138,7 +138,7 @@ export default function UserProfilePage() {
           </div>
 
           {/* Info */}
-          <div className="pt-12 pb-4 px-4 text-center">
+          <div className="pt-12 pb-4 px-4 text-center relative z-10">
             <h1 className="text-lg font-bold text-white leading-tight">{user.firstName} {user.lastName}</h1>
             {user.nickname && <p className="text-slate-400 text-sm mt-0.5">@{user.nickname}</p>}
             {user.role && (
