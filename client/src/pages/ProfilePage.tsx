@@ -507,7 +507,7 @@ export default function ProfilePage() {
             </h2>
             {profile?.nickname && <p className="text-slate-400 text-sm mt-0.5">@{profile.nickname}</p>}
             {profile?.role && (
-              <span className="inline-block mt-1.5 px-2.5 py-0.5 bg-primary-500/15 text-primary-300 text-xs font-medium rounded-full border border-primary-500/30">
+              <span className="block mt-1.5 px-2.5 py-0.5 bg-primary-500/15 text-primary-300 text-xs font-medium rounded-full border border-primary-500/30 text-center">
                 {profile.role}
               </span>
             )}

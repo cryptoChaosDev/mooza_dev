@@ -142,7 +142,7 @@ export default function UserProfilePage() {
             <h1 className="text-lg font-bold text-white leading-tight">{user.firstName} {user.lastName}</h1>
             {user.nickname && <p className="text-slate-400 text-sm mt-0.5">@{user.nickname}</p>}
             {user.role && (
-              <span className="inline-block mt-1.5 px-2.5 py-0.5 bg-primary-500/15 text-primary-300 text-xs font-medium rounded-full border border-primary-500/30">
+              <span className="block mt-1.5 px-2.5 py-0.5 bg-primary-500/15 text-primary-300 text-xs font-medium rounded-full border border-primary-500/30 text-center">
                 {user.role}
               </span>
             )}
