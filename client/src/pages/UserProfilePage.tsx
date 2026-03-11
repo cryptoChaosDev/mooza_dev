@@ -112,9 +112,9 @@ export default function UserProfilePage() {
           {/* Banner */}
           <div
             className="relative h-28 bg-gradient-to-br from-primary-900/70 via-purple-900/50 to-slate-900"
-            style={user.bannerImage ? { backgroundImage: `url(${API_URL}${user.bannerImage})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
           >
             {!user.bannerImage && <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle at 15% 60%, rgba(99,102,241,0.5) 0%, transparent 55%), radial-gradient(circle at 85% 20%, rgba(168,85,247,0.5) 0%, transparent 55%)' }} />}
+            {user.bannerImage && <img src={`${API_URL}${user.bannerImage}`} alt="" className="absolute inset-0 w-full h-full object-cover" />}
             {user.bannerImage && <div className="absolute inset-0 bg-black/20" />}
             {/* Message button */}
             <div className="absolute top-3 right-3 z-10">

@@ -443,9 +443,9 @@ export default function ProfilePage() {
           {/* Banner */}
           <div
             className="relative h-28 bg-gradient-to-br from-primary-900/70 via-purple-900/50 to-slate-900 group"
-            style={bannerUrl ? { backgroundImage: `url(${bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' } : {}}
           >
             {!bannerUrl && <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle at 15% 60%, rgba(99,102,241,0.5) 0%, transparent 55%), radial-gradient(circle at 85% 20%, rgba(168,85,247,0.5) 0%, transparent 55%)' }} />}
+            {bannerUrl && <img src={bannerUrl} alt="" className="absolute inset-0 w-full h-full object-cover" />}
             {bannerUrl && <div className="absolute inset-0 bg-black/20" />}
             {/* Banner upload button */}
             <button
