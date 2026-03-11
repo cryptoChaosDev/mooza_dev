@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="512" y2="512" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#a855f7"/>
+    </linearGradient>
+  </defs>
+  <!-- Music note shape -->
+  <g fill="white">
+    <!-- Note head 1 -->
+    <ellipse cx="172" cy="340" rx="52" ry="36" transform="rotate(-15 172 340)"/>
+    <!-- Note head 2 -->
+    <ellipse cx="340" cy="300" rx="52" ry="36" transform="rotate(-15 340 300)"/>
+    <!-- Stem 1 -->
+    <rect x="214" y="168" width="18" height="178" rx="9"/>
+    <!-- Stem 2 -->
+    <rect x="382" y="128" width="18" height="178" rx="9"/>
+    <!-- Beam connecting stems -->
+    <rect x="214" y="168" width="186" height="28" rx="14"/>
+  </g>
+</svg>
