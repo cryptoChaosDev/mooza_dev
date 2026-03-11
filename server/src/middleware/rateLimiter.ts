@@ -7,7 +7,7 @@ import { logSecurity } from '../utils/logger';
  */
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 минут
-  max: 5, // максимум 5 попыток с одного IP
+  max: 100, // максимум 100 попыток с одного IP
   message: {
     error: 'Слишком много попыток входа. Пожалуйста, попробуйте позже.',
     retryAfter: '15 минут'
