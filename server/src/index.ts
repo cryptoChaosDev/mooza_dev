@@ -25,6 +25,7 @@ import friendshipRoutes from './routes/friendships';
 import messageRoutes from './routes/messages';
 import referenceRoutes from './routes/references';
 import adminRoutes from './routes/admin';
+import notificationRoutes from './routes/notifications';
 
 // Load environment variables
 dotenv.config();
@@ -113,6 +114,7 @@ app.use('/api/friendships', friendshipRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/references', referenceRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

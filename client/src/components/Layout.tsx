@@ -2,6 +2,7 @@ import { ReactNode, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Search, Users, User, MessageCircle, Menu, X, Music, Bell, ShieldCheck } from 'lucide-react';
 import BottomNav from './BottomNav';
+import NotificationBell from './NotificationBell';
 import { useAuthStore } from '../stores/authStore';
 
 interface LayoutProps {
@@ -59,24 +60,30 @@ export default function Layout({ children }: LayoutProps) {
               Moooza
             </span>
           </Link>
-          <button
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
-          >
-            {sidebarOpen ? <X size={24} className="text-slate-300" /> : <Menu size={24} className="text-slate-300" />}
-          </button>
+          <div className="flex items-center gap-1">
+            <NotificationBell />
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
+            >
+              {sidebarOpen ? <X size={24} className="text-slate-300" /> : <Menu size={24} className="text-slate-300" />}
+            </button>
+          </div>
         </div>
       </header>
 
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-64 flex-col bg-slate-950 border-r border-slate-800/50 z-40">
         <div className="p-6 border-b border-slate-800/50">
-          <Link to="/" className="flex items-center gap-3">
-            <Music size={32} className="text-primary-400" />
-            <span className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-purple-400 bg-clip-text text-transparent">
-              Moooza
-            </span>
-          </Link>
+          <div className="flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-3">
+              <Music size={32} className="text-primary-400" />
+              <span className="text-2xl font-bold bg-gradient-to-r from-primary-400 to-purple-400 bg-clip-text text-transparent">
+                Moooza
+              </span>
+            </Link>
+            <NotificationBell />
+          </div>
         </div>
         
         <nav className="flex-1 p-4 space-y-2">

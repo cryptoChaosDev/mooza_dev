@@ -192,8 +192,22 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
       }
     });
 
+    // Save notification to DB
+    const notification = await prisma.notification.create({
+      data: {
+        userId: receiverId,
+        actorId: senderId!,
+        type: 'message',
+        title: `${message.sender.firstName} ${message.sender.lastName}`,
+        body: content.length > 80 ? content.slice(0, 80) + '…' : content,
+        link: `/messages/${senderId}`,
+      },
+      include: { actor: { select: { id: true, firstName: true, lastName: true, avatar: true } } },
+    });
+
     // Emit real-time event to receiver
     emitToUser(receiverId, 'new_message', message);
+    emitToUser(receiverId, 'new_notification', notification);
 
     res.status(201).json(message);
   } catch (error) {
