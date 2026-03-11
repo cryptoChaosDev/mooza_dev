@@ -370,6 +370,7 @@ model Comment {
 
   @@index([postId])
   @@index([authorId])
+  @@index([postId, createdAt])
 }
 
 model Message {

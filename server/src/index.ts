@@ -1,4 +1,5 @@
 import express from 'express';
+import compression from 'compression';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
@@ -47,6 +48,9 @@ const PORT = process.env.PORT || 4000;
 
 // Trust proxy - необходимо для корректной работы rate limiting в Docker
 app.set('trust proxy', 1);
+
+// Gzip compression — reduces response size 3-5x
+app.use(compression());
 
 // Middleware
 app.use(helmet({

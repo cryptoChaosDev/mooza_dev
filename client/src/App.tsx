@@ -1,20 +1,29 @@
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from './stores/authStore';
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket';
-import LandingPage from './pages/LandingPage';
-import LoginPage from './pages/LoginPage';
-import RegisterPage from './pages/RegisterPage';
-import FeedPage from './pages/FeedPage';
-import ProfilePage from './pages/ProfilePage';
-import UserProfilePage from './pages/UserProfilePage';
-import SearchPage from './pages/SearchPage';
-import FriendsPage from './pages/FriendsPage';
-import MessagesPage from './pages/MessagesPage';
-import ChatPage from './pages/ChatPage';
 import Layout from './components/Layout';
-import AdminPage from './pages/AdminPage';
+
+const LandingPage    = lazy(() => import('./pages/LandingPage'));
+const LoginPage      = lazy(() => import('./pages/LoginPage'));
+const RegisterPage   = lazy(() => import('./pages/RegisterPage'));
+const FeedPage       = lazy(() => import('./pages/FeedPage'));
+const ProfilePage    = lazy(() => import('./pages/ProfilePage'));
+const UserProfilePage = lazy(() => import('./pages/UserProfilePage'));
+const SearchPage     = lazy(() => import('./pages/SearchPage'));
+const FriendsPage    = lazy(() => import('./pages/FriendsPage'));
+const MessagesPage   = lazy(() => import('./pages/MessagesPage'));
+const ChatPage       = lazy(() => import('./pages/ChatPage'));
+const AdminPage      = lazy(() => import('./pages/AdminPage'));
+
+function PageLoader() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-slate-900">
+      <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent" />
+    </div>
+  );
+}
 
 function showNotification(title: string, body: string, icon?: string) {
   if (Notification.permission !== 'granted') return;
@@ -34,9 +43,7 @@ function App() {
     const socket = connectSocket(token);
 
     socket.on('new_message', (message: any) => {
-      // Refresh conversations list
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
-
       const senderName = message.sender
         ? `${message.sender.firstName} ${message.sender.lastName}`
         : 'Новое сообщение';
@@ -44,9 +51,7 @@ function App() {
     });
 
     socket.on('friend_request', ({ requester }: any) => {
-      // Refresh incoming requests so badge/list updates immediately
       queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
-
       if (!requester) return;
       showNotification(
         'Заявка в друзья',
@@ -56,10 +61,8 @@ function App() {
     });
 
     socket.on('friend_accepted', ({ friendship }: any) => {
-      // Refresh friends list and sent requests
       queryClient.invalidateQueries({ queryKey: ['friends'] });
       queryClient.invalidateQueries({ queryKey: ['friend-requests-sent'] });
-
       const accepter = friendship?.requester;
       if (!accepter) return;
       showNotification(
@@ -71,7 +74,6 @@ function App() {
 
     socket.on('post_reply', ({ comment }: any) => {
       queryClient.invalidateQueries({ queryKey: ['posts'] });
-
       const commenter = comment?.author;
       if (!commenter) return;
       showNotification(
@@ -94,29 +96,33 @@ function App() {
 
   if (!token) {
     return (
-      <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<LoginPage />} />
-        <Route path="/register" element={<RegisterPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     );
   }
 
   return (
     <Layout>
-      <Routes>
-        <Route path="/" element={<FeedPage />} />
-        <Route path="/profile" element={<ProfilePage />} />
-        <Route path="/profile/:userId" element={<UserProfilePage />} />
-        <Route path="/search" element={<SearchPage />} />
-        <Route path="/friends" element={<FriendsPage />} />
-        <Route path="/messages" element={<MessagesPage />} />
-        <Route path="/messages/:userId" element={<ChatPage />} />
-        <Route path="/chat/:userId" element={<ChatPage />} />
-        {user?.isAdmin && <Route path="/admin" element={<AdminPage />} />}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/" element={<FeedPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
+          <Route path="/profile/:userId" element={<UserProfilePage />} />
+          <Route path="/search" element={<SearchPage />} />
+          <Route path="/friends" element={<FriendsPage />} />
+          <Route path="/messages" element={<MessagesPage />} />
+          <Route path="/messages/:userId" element={<ChatPage />} />
+          <Route path="/chat/:userId" element={<ChatPage />} />
+          {user?.isAdmin && <Route path="/admin" element={<AdminPage />} />}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
     </Layout>
   );
 }
