@@ -113,7 +113,7 @@ router.post('/register', registerLimiter, async (req, res) => {
         userProfessions: {
           include: {
             profession: {
-              include: { fieldOfActivity: { select: { id: true, name: true } } },
+              include: { direction: { select: { id: true, name: true } } },
             },
           },
         },
@@ -152,7 +152,7 @@ router.post('/login', authLimiter, async (req, res) => {
         userProfessions: {
           include: {
             profession: {
-              include: { fieldOfActivity: { select: { id: true, name: true } } },
+              include: { direction: { select: { id: true, name: true } } },
             },
           },
         },
