@@ -58,7 +58,8 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
               }
             }
           },
-          orderBy: { createdAt: 'asc' }
+          orderBy: { createdAt: 'asc' },
+          take: 3,
         },
         _count: {
           select: { likes: true, comments: true }
