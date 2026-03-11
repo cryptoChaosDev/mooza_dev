@@ -275,6 +275,8 @@ model User {
   receivedRequests Friendship[] @relation("ReceivedRequests")
   sentMessages Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
+  notifications        Notification[] @relation("NotificationRecipient")
+  triggeredNotifications Notification[] @relation("NotificationActor")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -415,4 +417,28 @@ model Friendship {
   @@index([status])
   @@index([receiverId, status])
   @@index([requesterId, status])
+}
+
+// ============ NOTIFICATIONS ============
+
+model Notification {
+  id      String  @id @default(uuid())
+  // Recipient
+  userId  String
+  user    User    @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  // Who triggered
+  actorId String?
+  actor   User?   @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+  // Content
+  type    String  // message | friend_request | friend_accepted | post_reply
+  title   String
+  body    String
+  link    String? // route to navigate on click
+  read    Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([userId, read])
+  @@index([userId, createdAt])
 }

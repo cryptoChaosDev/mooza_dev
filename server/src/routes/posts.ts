@@ -260,7 +260,19 @@ router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
 
     // Notify post author (unless they commented on their own post)
     if (post && post.authorId !== req.userId) {
+      const notification = await prisma.notification.create({
+        data: {
+          userId: post.authorId,
+          actorId: req.userId!,
+          type: 'post_reply',
+          title: 'Новый комментарий',
+          body: `${comment.author.firstName} ${comment.author.lastName}: ${comment.content.length > 60 ? comment.content.slice(0, 60) + '…' : comment.content}`,
+          link: `/`,
+        },
+        include: { actor: { select: { id: true, firstName: true, lastName: true, avatar: true } } },
+      });
       emitToUser(post.authorId, 'post_reply', { comment, postId: req.params.id });
+      emitToUser(post.authorId, 'new_notification', notification);
     }
 
     res.status(201).json(comment);
