@@ -94,7 +94,7 @@ app.use(morgan('combined', { stream: morganStream }));
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Health check (без rate limiting)
-app.get('/health', (req, res) => {
+app.get(['/health', '/api/health'], (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
