@@ -1,21 +1,24 @@
-import { lazy, Suspense, useEffect } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useRef } from 'react';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from './stores/authStore';
+import { useBadgeStore } from './stores/badgeStore';
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket';
 import Layout from './components/Layout';
 
-const LandingPage    = lazy(() => import('./pages/LandingPage'));
-const LoginPage      = lazy(() => import('./pages/LoginPage'));
-const RegisterPage   = lazy(() => import('./pages/RegisterPage'));
-const FeedPage       = lazy(() => import('./pages/FeedPage'));
-const ProfilePage    = lazy(() => import('./pages/ProfilePage'));
+const LandingPage     = lazy(() => import('./pages/LandingPage'));
+const LoginPage       = lazy(() => import('./pages/LoginPage'));
+const RegisterPage    = lazy(() => import('./pages/RegisterPage'));
+const FeedPage        = lazy(() => import('./pages/FeedPage'));
+const ProfilePage     = lazy(() => import('./pages/ProfilePage'));
 const UserProfilePage = lazy(() => import('./pages/UserProfilePage'));
-const SearchPage     = lazy(() => import('./pages/SearchPage'));
-const FriendsPage    = lazy(() => import('./pages/FriendsPage'));
-const MessagesPage   = lazy(() => import('./pages/MessagesPage'));
-const ChatPage       = lazy(() => import('./pages/ChatPage'));
-const AdminPage      = lazy(() => import('./pages/AdminPage'));
+const SearchPage      = lazy(() => import('./pages/SearchPage'));
+const FriendsPage     = lazy(() => import('./pages/FriendsPage'));
+const MessagesPage    = lazy(() => import('./pages/MessagesPage'));
+const ChatPage        = lazy(() => import('./pages/ChatPage'));
+const AdminPage       = lazy(() => import('./pages/AdminPage'));
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 function PageLoader() {
   return (
@@ -25,14 +28,72 @@ function PageLoader() {
   );
 }
 
-function showNotification(title: string, body: string, icon?: string) {
-  if (Notification.permission !== 'granted') return;
-  new Notification(title, { body, icon: icon || '/vite.svg' });
+function showBrowserNotification(title: string, body: string, icon?: string) {
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  const n = new Notification(title, {
+    body,
+    icon: icon ? `${API_URL}${icon}` : '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
+    tag: title,
+  });
+  n.onclick = () => { window.focus(); n.close(); };
+}
+
+async function apiFetch(path: string, token: string) {
+  const res = await fetch(`${API_URL}${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error(`${path} failed`);
+  return res.json();
+}
+
+// ─── Clears badge counts when user navigates to relevant pages ───────────────
+function BadgeClearer() {
+  const location = useLocation();
+  const { clearMessages, clearFriendRequests } = useBadgeStore();
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/messages') || location.pathname.startsWith('/chat')) {
+      clearMessages();
+    }
+    if (location.pathname === '/friends') {
+      clearFriendRequests();
+    }
+  }, [location.pathname, clearMessages, clearFriendRequests]);
+
+  return null;
+}
+
+function AppRoutes() {
+  const { user } = useAuthStore();
+  return (
+    <Layout>
+      <BadgeClearer />
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route path="/"                 element={<FeedPage />} />
+          <Route path="/profile"          element={<ProfilePage />} />
+          <Route path="/profile/:userId"  element={<UserProfilePage />} />
+          <Route path="/search"           element={<SearchPage />} />
+          <Route path="/friends"          element={<FriendsPage />} />
+          <Route path="/messages"         element={<MessagesPage />} />
+          <Route path="/messages/:userId" element={<ChatPage />} />
+          <Route path="/chat/:userId"     element={<ChatPage />} />
+          {user?.isAdmin && <Route path="/admin" element={<AdminPage />} />}
+          <Route path="*"                 element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
+    </Layout>
+  );
 }
 
 function App() {
-  const { token, user } = useAuthStore();
+  const { token } = useAuthStore();
   const queryClient = useQueryClient();
+  const badges = useBadgeStore();
+  // ref prevents stale closure in socket handlers
+  const badgesRef = useRef(badges);
+  badgesRef.current = badges;
 
   useEffect(() => {
     if (!token) {
@@ -40,20 +101,59 @@ function App() {
       return;
     }
 
+    // Request browser push permission
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+
+    // ── Connect socket ──────────────────────────────────────────────────────
     const socket = connectSocket(token);
+
+    // ── Initial badge counts ────────────────────────────────────────────────
+    const fetchCounts = () => {
+      Promise.allSettled([
+        apiFetch('/api/messages/unread/count', token),
+        apiFetch('/api/notifications/unread/count', token),
+        apiFetch('/api/friends/requests', token),
+      ]).then(([msgs, notifs, reqs]) => {
+        if (msgs.status    === 'fulfilled') badgesRef.current.setUnreadMessages(msgs.value.count ?? 0);
+        if (notifs.status  === 'fulfilled') badgesRef.current.setUnreadNotifications(notifs.value.count ?? 0);
+        if (reqs.status    === 'fulfilled') {
+          const arr = Array.isArray(reqs.value) ? reqs.value : [];
+          badgesRef.current.setPendingFriendRequests(arr.length);
+        }
+      });
+    };
+    fetchCounts();
+
+    // ── Socket handlers ─────────────────────────────────────────────────────
+
+    socket.on('new_notification', (notif: any) => {
+      // Instant prepend to cached list — no waiting for server round-trip
+      queryClient.setQueryData<any[]>(['notifications'], (prev) =>
+        prev ? [notif, ...prev] : [notif]
+      );
+      badgesRef.current.incrementNotifications();
+    });
 
     socket.on('new_message', (message: any) => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      const inChat = window.location.pathname.startsWith('/messages') ||
+                     window.location.pathname.startsWith('/chat');
+      if (!inChat) {
+        badgesRef.current.incrementMessages();
+      }
       const senderName = message.sender
         ? `${message.sender.firstName} ${message.sender.lastName}`
         : 'Новое сообщение';
-      showNotification(senderName, message.content, message.sender?.avatar);
+      showBrowserNotification(senderName, message.content, message.sender?.avatar);
     });
 
     socket.on('friend_request', ({ requester }: any) => {
       queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
+      badgesRef.current.incrementFriendRequests();
       if (!requester) return;
-      showNotification(
+      showBrowserNotification(
         'Заявка в друзья',
         `${requester.firstName} ${requester.lastName} хочет добавить вас в друзья`,
         requester.avatar,
@@ -63,12 +163,12 @@ function App() {
     socket.on('friend_accepted', ({ friendship }: any) => {
       queryClient.invalidateQueries({ queryKey: ['friends'] });
       queryClient.invalidateQueries({ queryKey: ['friend-requests-sent'] });
-      const accepter = friendship?.requester;
-      if (!accepter) return;
-      showNotification(
-        'Вас добавили в друзья',
-        `${accepter.firstName} ${accepter.lastName} принял(а) вашу заявку`,
-        accepter.avatar,
+      const other = friendship?.receiver ?? friendship?.requester;
+      if (!other) return;
+      showBrowserNotification(
+        'Заявка принята',
+        `${other.firstName} ${other.lastName} принял(а) вашу заявку в друзья`,
+        other.avatar,
       );
     });
 
@@ -76,21 +176,30 @@ function App() {
       queryClient.invalidateQueries({ queryKey: ['posts'] });
       const commenter = comment?.author;
       if (!commenter) return;
-      showNotification(
+      showBrowserNotification(
         'Новый комментарий',
         `${commenter.firstName} ${commenter.lastName} прокомментировал(а) вашу запись`,
         commenter.avatar,
       );
     });
 
+    // Re-sync counts when tab regains focus (catches missed events)
+    const handleFocus = () => {
+      fetchCounts();
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+    };
+    window.addEventListener('focus', handleFocus);
+
     return () => {
       const s = getSocket();
       if (s) {
+        s.off('new_notification');
         s.off('new_message');
         s.off('friend_request');
         s.off('friend_accepted');
         s.off('post_reply');
       }
+      window.removeEventListener('focus', handleFocus);
     };
   }, [token, queryClient]);
 
@@ -98,33 +207,16 @@ function App() {
     return (
       <Suspense fallback={<PageLoader />}>
         <Routes>
-          <Route path="/" element={<LandingPage />} />
-          <Route path="/login" element={<LoginPage />} />
+          <Route path="/"         element={<LandingPage />} />
+          <Route path="/login"    element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*"         element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
     );
   }
 
-  return (
-    <Layout>
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
-          <Route path="/" element={<FeedPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route path="/profile/:userId" element={<UserProfilePage />} />
-          <Route path="/search" element={<SearchPage />} />
-          <Route path="/friends" element={<FriendsPage />} />
-          <Route path="/messages" element={<MessagesPage />} />
-          <Route path="/messages/:userId" element={<ChatPage />} />
-          <Route path="/chat/:userId" element={<ChatPage />} />
-          {user?.isAdmin && <Route path="/admin" element={<AdminPage />} />}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
-    </Layout>
-  );
+  return <AppRoutes />;
 }
 
 export default App;
