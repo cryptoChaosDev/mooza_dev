@@ -72,11 +72,11 @@ export default function NotificationBell() {
     refetchInterval: 60_000,
   });
 
-  // Keep badge store in sync with actual server data
-  useEffect(() => {
-    const count = notifications.filter(n => !n.read).length;
-    setUnreadNotifications(count);
-  }, [notifications, setUnreadNotifications]);
+  // Keep badge store in sync with actual server data.
+  // setUnreadNotifications is a stable zustand action — excluded from deps intentionally
+  // to avoid a dependency cycle (store update → re-render → effect → store update → ...)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setUnreadNotifications(notifications.filter(n => !n.read).length); }, [notifications]);
 
   const readOneMutation = useMutation({
     mutationFn: markRead,

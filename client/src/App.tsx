@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from './stores/authStore';
@@ -90,10 +90,8 @@ function AppRoutes() {
 function App() {
   const { token } = useAuthStore();
   const queryClient = useQueryClient();
-  const badges = useBadgeStore();
-  // ref prevents stale closure in socket handlers
-  const badgesRef = useRef(badges);
-  badgesRef.current = badges;
+  // useBadgeStore.getState() is called inside callbacks — no subscription, no re-renders
+  const bs = () => useBadgeStore.getState();
 
   useEffect(() => {
     if (!token) {
@@ -116,11 +114,11 @@ function App() {
         apiFetch('/api/notifications/unread/count', token),
         apiFetch('/api/friendships/requests', token),
       ]).then(([msgs, notifs, reqs]) => {
-        if (msgs.status    === 'fulfilled') badgesRef.current.setUnreadMessages(msgs.value.count ?? 0);
-        if (notifs.status  === 'fulfilled') badgesRef.current.setUnreadNotifications(notifs.value.count ?? 0);
+        if (msgs.status    === 'fulfilled') bs().setUnreadMessages(msgs.value.count ?? 0);
+        if (notifs.status  === 'fulfilled') bs().setUnreadNotifications(notifs.value.count ?? 0);
         if (reqs.status    === 'fulfilled') {
           const arr = Array.isArray(reqs.value) ? reqs.value : [];
-          badgesRef.current.setPendingFriendRequests(arr.length);
+          bs().setPendingFriendRequests(arr.length);
         }
       });
     };
@@ -133,7 +131,7 @@ function App() {
       queryClient.setQueryData<any[]>(['notifications'], (prev) =>
         prev ? [notif, ...prev] : [notif]
       );
-      badgesRef.current.incrementNotifications();
+      bs().incrementNotifications();
     });
 
     socket.on('new_message', (message: any) => {
@@ -141,7 +139,7 @@ function App() {
       const inChat = window.location.pathname.startsWith('/messages') ||
                      window.location.pathname.startsWith('/chat');
       if (!inChat) {
-        badgesRef.current.incrementMessages();
+        bs().incrementMessages();
       }
       const senderName = message.sender
         ? `${message.sender.firstName} ${message.sender.lastName}`
@@ -151,7 +149,7 @@ function App() {
 
     socket.on('friend_request', ({ requester }: any) => {
       queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
-      badgesRef.current.incrementFriendRequests();
+      bs().incrementFriendRequests();
       if (!requester) return;
       showBrowserNotification(
         'Заявка в друзья',
@@ -201,6 +199,7 @@ function App() {
       }
       window.removeEventListener('focus', handleFocus);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, queryClient]);
 
   if (!token) {
