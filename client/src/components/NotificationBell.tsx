@@ -17,6 +17,11 @@ interface Notification {
   actor?: { id: string; firstName: string; lastName: string; avatar?: string };
 }
 
+// Stable empty-array reference — prevents useEffect from looping when query data is undefined.
+// `data = []` inside a component creates a new array reference on EVERY render, causing
+// the [notifications] effect dep to appear "changed" and re-trigger setState infinitely.
+const EMPTY_NOTIFICATIONS: Notification[] = [];
+
 async function fetchNotifications(): Promise<Notification[]> {
   const token = localStorage.getItem('token') || sessionStorage.getItem('token');
   const res = await fetch(`${API_URL}/api/notifications`, {
@@ -66,7 +71,7 @@ export default function NotificationBell() {
   const queryClient = useQueryClient();
   const { unreadNotifications, setUnreadNotifications, clearNotifications } = useBadgeStore();
 
-  const { data: notifications = [] } = useQuery({
+  const { data: notifications = EMPTY_NOTIFICATIONS } = useQuery({
     queryKey: ['notifications'],
     queryFn: fetchNotifications,
     refetchInterval: 60_000,
