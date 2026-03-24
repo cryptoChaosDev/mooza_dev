@@ -82,8 +82,9 @@ export default function ProfilePage() {
   const [openBasicSheet, setOpenBasicSheet] = useState<string | null>(null);
 
   // Add-service multi-step flow
-  const [addStep, setAddStep] = useState<'field' | 'profession' | 'service' | 'filters' | null>(null);
+  const [addStep, setAddStep] = useState<'field' | 'direction' | 'profession' | 'service' | 'filters' | null>(null);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
+  const [addFlowDirections, setAddFlowDirections] = useState<any[]>([]);
   const [addFlowProfessions, setAddFlowProfessions] = useState<any[]>([]);
   const [addFlowServices, setAddFlowServices] = useState<any[]>([]);
 
@@ -318,8 +319,8 @@ export default function ProfilePage() {
             <button key={f.id} type="button"
               onClick={() => {
                 setPending(prev => ({ ...prev, fieldOfActivityId: f.id, fieldOfActivityName: f.name }));
-                referenceAPI.getProfessions({ fieldOfActivityId: f.id }).then(r => setAddFlowProfessions(r.data));
-                setAddStep('profession');
+                referenceAPI.getDirections({ fieldOfActivityId: f.id }).then(r => setAddFlowDirections(r.data));
+                setAddStep('direction');
               }}
               className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
             >
@@ -331,14 +332,40 @@ export default function ProfilePage() {
       </div>
     );
 
-    if (addStep === 'profession') return (
+    if (addStep === 'direction') return (
       <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
         <button onClick={() => setAddStep('field')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors">
           <ChevronLeft size={11} />Назад
         </button>
+        <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите направление:</p>
+        {addFlowDirections.length === 0
+          ? <p className="text-slate-500 text-xs">Нет направлений в этой сфере</p>
+          : <div className="flex flex-wrap gap-1.5">
+              {addFlowDirections.map((d: any) => (
+                <button key={d.id} type="button"
+                  onClick={() => {
+                    referenceAPI.getProfessions({ directionId: d.id }).then(r => setAddFlowProfessions(r.data));
+                    setAddStep('profession');
+                  }}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
+                >
+                  <ChevronRight size={11} />{d.name}
+                </button>
+              ))}
+            </div>
+        }
+        <button onClick={() => setAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
+      </div>
+    );
+
+    if (addStep === 'profession') return (
+      <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
+        <button onClick={() => setAddStep('direction')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors">
+          <ChevronLeft size={11} />Назад
+        </button>
         <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите профессию:</p>
         {addFlowProfessions.length === 0
-          ? <p className="text-slate-500 text-xs">Нет профессий в этой сфере</p>
+          ? <p className="text-slate-500 text-xs">Нет профессий в этом направлении</p>
           : <div className="flex flex-wrap gap-1.5">
               {addFlowProfessions.map((p: any) => (
                 <button key={p.id} type="button"

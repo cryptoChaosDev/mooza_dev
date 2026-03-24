@@ -73,7 +73,9 @@ export const userAPI = {
 // Reference API
 export const referenceAPI = {
   getFieldsOfActivity: () => api.get('/references/fields-of-activity'),
-  getProfessions: (params?: { fieldOfActivityId?: string; search?: string }) =>
+  getDirections: (params?: { fieldOfActivityId?: string }) =>
+    api.get('/references/directions', { params }),
+  getProfessions: (params?: { directionId?: string; search?: string }) =>
     api.get('/references/professions', { params }),
   getProfessionFeatures: () => api.get('/references/profession-features'),
   getArtists: (params?: { search?: string }) =>
@@ -93,6 +95,7 @@ export const referenceAPI = {
   getAllReferences: () => api.get('/references/all'),
   searchMusicians: (params: {
     fieldId?: string;
+    directionId?: string;
     professionId?: string;
     serviceId?: string;
     genreId?: string;
@@ -168,6 +171,7 @@ export const adminAPI = {
 // Search Filters Type
 export interface SearchFilters {
   fieldId?: string;
+  directionId?: string;
   professionId?: string;
   serviceId?: string;
   genreId?: string;

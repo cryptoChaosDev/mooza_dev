@@ -9,13 +9,21 @@ export interface FieldOfActivity {
   userCount?: number;
 }
 
-export interface Profession {
+export interface Direction {
   id: string;
   name: string;
   fieldOfActivityId: string;
-  fieldOfActivity?: {
+  professionCount?: number;
+}
+
+export interface Profession {
+  id: string;
+  name: string;
+  directionId: string;
+  direction?: {
     id: string;
     name: string;
+    fieldOfActivityId: string;
   };
 }
 
@@ -91,8 +99,11 @@ export interface PriceRange {
 interface SearchFilterState {
   // Level 1: Field of Activity
   fieldId: string | null;
-  
-  // Level 2: Profession
+
+  // Level 2: Direction
+  directionId: string | null;
+
+  // Level 3: Profession
   professionId: string | null;
   
   // Level 3: Service
@@ -132,6 +143,7 @@ interface SearchFilterState {
 interface SearchFilterActions {
   // Setters for each filter level
   setFieldId: (id: string | null) => void;
+  setDirectionId: (id: string | null) => void;
   setProfessionId: (id: string | null) => void;
   setServiceId: (id: string | null) => void;
   setGenreId: (id: string | null) => void;
@@ -149,6 +161,7 @@ interface SearchFilterActions {
   
   // Reset functions
   resetField: () => void;
+  resetDirection: () => void;
   resetProfession: () => void;
   resetService: () => void;
   resetGenre: () => void;
@@ -167,6 +180,7 @@ interface SearchStore extends SearchFilterState, SearchFilterActions {}
 
 const initialState: SearchFilterState = {
   fieldId: null,
+  directionId: null,
   professionId: null,
   serviceId: null,
   genreId: null,
@@ -189,9 +203,18 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   setFieldId: (id) => {
     set((state) => ({
       fieldId: id,
-      // Reset downstream filters when field changes
-      professionId: state.professionId && state.fieldId !== id ? null : state.professionId,
-      serviceId: state.serviceId,
+      directionId: state.fieldId !== id ? null : state.directionId,
+      professionId: state.fieldId !== id ? null : state.professionId,
+      serviceId: state.fieldId !== id ? null : state.serviceId,
+      genreId: null,
+    }));
+  },
+
+  setDirectionId: (id) => {
+    set((state) => ({
+      directionId: id,
+      professionId: state.directionId !== id ? null : state.professionId,
+      serviceId: state.directionId !== id ? null : state.serviceId,
       genreId: null,
     }));
   },
@@ -199,8 +222,7 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   setProfessionId: (id) => {
     set((state) => ({
       professionId: id,
-      // Reset downstream filters when profession changes
-      serviceId: state.serviceId && state.professionId !== id ? null : state.serviceId,
+      serviceId: state.professionId !== id ? null : state.serviceId,
       genreId: null,
     }));
   },
@@ -227,13 +249,15 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   prevPage: () => set((state) => ({ page: Math.max(1, state.page - 1) })),
 
   // Reset functions
-  resetField: () => set({ fieldId: null, professionId: null, serviceId: null, genreId: null }),
+  resetField: () => set({ fieldId: null, directionId: null, professionId: null, serviceId: null, genreId: null }),
+  resetDirection: () => set({ directionId: null, professionId: null, serviceId: null, genreId: null }),
   resetProfession: () => set({ professionId: null, serviceId: null, genreId: null }),
   resetService: () => set({ serviceId: null, genreId: null }),
   resetGenre: () => set({ genreId: null }),
   
   resetAllFilters: () => set({
     fieldId: null,
+    directionId: null,
     professionId: null,
     serviceId: null,
     genreId: null,
@@ -256,6 +280,7 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
     const state = get();
     return {
       fieldId: state.fieldId || undefined,
+      directionId: state.directionId || undefined,
       professionId: state.professionId || undefined,
       serviceId: state.serviceId || undefined,
       genreId: state.genreId || undefined,
@@ -282,14 +307,25 @@ export function useFieldsOfActivity() {
   });
 }
 
-export function useProfessions(fieldOfActivityId?: string) {
+export function useDirections(fieldOfActivityId?: string) {
   return useQuery({
-    queryKey: ['professions', fieldOfActivityId],
+    queryKey: ['directions', fieldOfActivityId],
     queryFn: async () => {
-      const { data } = await referenceAPI.getProfessions({ fieldOfActivityId });
-      return data as Profession[];
+      const { data } = await referenceAPI.getDirections({ fieldOfActivityId });
+      return data as Direction[];
     },
     enabled: !!fieldOfActivityId,
+  });
+}
+
+export function useProfessions(directionId?: string) {
+  return useQuery({
+    queryKey: ['professions', directionId],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getProfessions({ directionId });
+      return data as Profession[];
+    },
+    enabled: !!directionId,
   });
 }
 

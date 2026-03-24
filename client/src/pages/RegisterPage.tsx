@@ -26,6 +26,8 @@ interface FormData {
   nickname: string;
   fieldOfActivityId: string;
   fieldOfActivityName: string;
+  directionId: string;
+  directionName: string;
   userProfessions: ProfessionEntry[];
   artistIds: string[];
   artistNames: string[];
@@ -109,6 +111,8 @@ export default function RegisterPage() {
     nickname: '',
     fieldOfActivityId: '',
     fieldOfActivityName: '',
+    directionId: '',
+    directionName: '',
     userProfessions: [],
     artistIds: [],
     artistNames: [],
@@ -124,6 +128,7 @@ export default function RegisterPage() {
   const { setAuth } = useAuthStore();
 
   const [fieldsOfActivity, setFieldsOfActivity] = useState<any[]>([]);
+  const [directions, setDirections] = useState<any[]>([]);
   const [professions, setProfessions] = useState<any[]>([]);
   const [professionFeatures, setProfessionFeatures] = useState<any[]>([]);
   const [artists, setArtists] = useState<any[]>([]);
@@ -141,10 +146,19 @@ export default function RegisterPage() {
 
   useEffect(() => {
     if (formData.fieldOfActivityId) {
-      referenceAPI.getProfessions({ fieldOfActivityId: formData.fieldOfActivityId })
-        .then(r => setProfessions(r.data));
+      referenceAPI.getDirections({ fieldOfActivityId: formData.fieldOfActivityId })
+        .then(r => setDirections(r.data));
+      setFormData(prev => ({ ...prev, directionId: '', directionName: '', userProfessions: [] }));
+      setProfessions([]);
     }
   }, [formData.fieldOfActivityId]);
+
+  useEffect(() => {
+    if (formData.directionId) {
+      referenceAPI.getProfessions({ directionId: formData.directionId })
+        .then(r => setProfessions(r.data));
+    }
+  }, [formData.directionId]);
 
   useEffect(() => {
     referenceAPI.getArtists({ search: searchArtist }).then(r => setArtists(r.data));
@@ -540,8 +554,37 @@ export default function RegisterPage() {
                   Вернуться назад
                 </button>
               </div>
+            ) : !formData.directionId ? (
+              <>
+                <p className="text-sm text-slate-400 mb-2">Выберите направление в сфере «{formData.fieldOfActivityName}»:</p>
+                <div className="space-y-2 max-h-[50vh] overflow-y-auto pr-2">
+                  {directions.length === 0 ? (
+                    <p className="text-slate-500 text-sm text-center py-4">Нет направлений в этой сфере</p>
+                  ) : directions.map((dir: any) => (
+                    <button
+                      key={dir.id}
+                      type="button"
+                      onClick={() => setFormData(prev => ({ ...prev, directionId: dir.id, directionName: dir.name, userProfessions: [] }))}
+                      className="w-full flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3 sm:py-4 rounded-xl border transition-all text-left bg-slate-800/50 border-slate-700/50 text-slate-300 hover:bg-slate-700/50 hover:border-slate-600/50"
+                    >
+                      <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-slate-700/50">
+                        <Briefcase className="text-slate-400 w-5 h-5 sm:w-[22px] sm:h-[22px]" />
+                      </div>
+                      <span className="font-medium text-sm sm:text-base">{dir.name}</span>
+                      <ChevronRight className="ml-auto text-slate-500 w-4 h-4 flex-shrink-0" />
+                    </button>
+                  ))}
+                </div>
+              </>
             ) : (
               <>
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, directionId: '', directionName: '', userProfessions: [] }))}
+                  className="flex items-center gap-1 text-sm text-slate-400 hover:text-slate-200 transition-colors mb-1"
+                >
+                  <ChevronLeft size={15} /> {formData.directionName}
+                </button>
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                   <input
@@ -791,6 +834,12 @@ export default function RegisterPage() {
                   <>
                     <span className="text-slate-400">Сфера:</span>
                     <span className="text-white">{formData.fieldOfActivityName}</span>
+                  </>
+                )}
+                {formData.directionName && (
+                  <>
+                    <span className="text-slate-400">Направление:</span>
+                    <span className="text-white">{formData.directionName}</span>
                   </>
                 )}
                 {formData.employerName && (
