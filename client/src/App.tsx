@@ -114,7 +114,7 @@ function App() {
       Promise.allSettled([
         apiFetch('/api/messages/unread/count', token),
         apiFetch('/api/notifications/unread/count', token),
-        apiFetch('/api/friends/requests', token),
+        apiFetch('/api/friendships/requests', token),
       ]).then(([msgs, notifs, reqs]) => {
         if (msgs.status    === 'fulfilled') badgesRef.current.setUnreadMessages(msgs.value.count ?? 0);
         if (notifs.status  === 'fulfilled') badgesRef.current.setUnreadNotifications(notifs.value.count ?? 0);
