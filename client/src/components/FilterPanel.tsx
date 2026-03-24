@@ -3,6 +3,7 @@ import { ChevronDown, X, Loader2, Check } from 'lucide-react';
 import {
   useSearchStore,
   useFieldsOfActivity,
+  useDirections,
   useProfessions,
   useServices,
   useGenres,
@@ -109,6 +110,7 @@ function FilterSection({ title, value, items, loading, disabled, onSelect }: Fil
 export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
   const {
     fieldId,
+    directionId,
     professionId,
     serviceId,
     genreId,
@@ -119,6 +121,7 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
     geographyId,
     priceRangeId,
     setFieldId,
+    setDirectionId,
     setProfessionId,
     setServiceId,
     setGenreId,
@@ -133,7 +136,8 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
   } = useSearchStore();
 
   const { data: fields, isLoading: fieldsLoading } = useFieldsOfActivity();
-  const { data: professions, isLoading: professionsLoading } = useProfessions(fieldId || undefined);
+  const { data: directions, isLoading: directionsLoading } = useDirections(fieldId || undefined);
+  const { data: professions, isLoading: professionsLoading } = useProfessions(directionId || undefined);
   const { data: services, isLoading: servicesLoading } = useServices(
     professionId || undefined,
     fieldId || undefined
@@ -147,7 +151,7 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
   const { data: priceRanges, isLoading: priceRangesLoading } = usePriceRanges();
 
   const activeCount = [
-    fieldId, professionId, serviceId, genreId,
+    fieldId, directionId, professionId, serviceId, genreId,
     workFormatId, employmentTypeId, skillLevelId, availabilityId,
     geographyId, priceRangeId,
   ].filter(Boolean).length;
@@ -202,6 +206,20 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
           items={fields || []}
           loading={fieldsLoading}
           onSelect={wrap(setFieldId, () => {
+            setDirectionId(null);
+            setProfessionId(null);
+            setServiceId(null);
+            setGenreId(null);
+          })}
+        />
+
+        <FilterSection
+          title="Направление"
+          value={directionId}
+          items={directions || []}
+          loading={directionsLoading}
+          disabled={!fieldId}
+          onSelect={wrap(setDirectionId, () => {
             setProfessionId(null);
             setServiceId(null);
             setGenreId(null);
@@ -213,7 +231,7 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
           value={professionId}
           items={professions || []}
           loading={professionsLoading}
-          disabled={!fieldId}
+          disabled={!directionId}
           onSelect={wrap(setProfessionId, () => {
             setServiceId(null);
             setGenreId(null);

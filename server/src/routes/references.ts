@@ -17,17 +17,41 @@ router.get('/fields-of-activity', async (_req, res) => {
   }
 });
 
-// Get professions by field of activity
-router.get('/professions', async (req, res) => {
+// Get directions by field of activity
+router.get('/directions', async (req, res) => {
   try {
-    const { fieldOfActivityId, search } = req.query;
+    const { fieldOfActivityId } = req.query;
     const where: any = {};
     if (fieldOfActivityId) where.fieldOfActivityId = fieldOfActivityId as string;
+
+    const directions = await prisma.direction.findMany({
+      where,
+      include: { _count: { select: { professions: true } } },
+      orderBy: { name: 'asc' },
+    });
+    res.json(directions.map(d => ({
+      id: d.id,
+      name: d.name,
+      fieldOfActivityId: d.fieldOfActivityId,
+      professionCount: d._count.professions,
+    })));
+  } catch (error) {
+    console.error('Get directions error:', error);
+    res.status(500).json({ error: 'Failed to get directions' });
+  }
+});
+
+// Get professions by direction
+router.get('/professions', async (req, res) => {
+  try {
+    const { directionId, search } = req.query;
+    const where: any = {};
+    if (directionId) where.directionId = directionId as string;
     if (search) where.name = { contains: search as string, mode: 'insensitive' };
 
     const professions = await prisma.profession.findMany({
       where,
-      include: { fieldOfActivity: { select: { id: true, name: true } } },
+      include: { direction: { select: { id: true, name: true, fieldOfActivityId: true } } },
       orderBy: { name: 'asc' },
     });
     res.json(professions);
@@ -47,7 +71,7 @@ router.get('/services', async (req, res) => {
       where.professionId = professionId as string;
     } else if (fieldOfActivityId) {
       const professions = await prisma.profession.findMany({
-        where: { fieldOfActivityId: fieldOfActivityId as string },
+        where: { direction: { fieldOfActivityId: fieldOfActivityId as string } },
         select: { id: true },
       });
       where.professionId = { in: professions.map(p => p.id) };
@@ -184,6 +208,7 @@ router.get('/search', async (req, res) => {
   try {
     const {
       fieldId,
+      directionId,
       professionId,
       serviceId,
       genreId,
@@ -215,6 +240,16 @@ router.get('/search', async (req, res) => {
 
     const userWhere: any = {};
     if (fieldId) userWhere.fieldOfActivityId = fieldId;
+    if (directionId) {
+      const profsByDir = await prisma.profession.findMany({
+        where: { directionId: directionId as string },
+        select: { id: true },
+      });
+      const dirFilter = { professionId: { in: profsByDir.map(p => p.id) } };
+      userWhere.userServices = userWhere.userServices
+        ? { some: { ...userWhere.userServices.some, ...dirFilter } }
+        : { some: dirFilter };
+    }
     if (Object.keys(userServiceWhere).length > 0) {
       userWhere.userServices = { some: userServiceWhere };
     }
@@ -291,7 +326,7 @@ router.get('/all', async (_req, res) => {
     const [fields, services, genres, workFormats, employmentTypes, skillLevels, availabilities, geographies, priceRanges] = await Promise.all([
       prisma.fieldOfActivity.findMany({ orderBy: { name: 'asc' } }),
       prisma.service.findMany({
-        include: { profession: { select: { id: true, name: true, fieldOfActivityId: true } } },
+        include: { profession: { select: { id: true, name: true, directionId: true } } },
         orderBy: { sortOrder: 'asc' },
       }),
       prisma.genre.findMany({ orderBy: { sortOrder: 'asc' } }),
