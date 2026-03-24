@@ -38,8 +38,10 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // Кэшируем статику приложения (JS/CSS/HTML)
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // НЕ кэшируем index.html — иначе после деплоя SW отдаёт старый HTML со старыми хешами JS
+        globPatterns: ['**/*.{js,css,ico,png,svg,woff2}'],
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//],
         // Стратегия: сначала сеть, при недоступности — кэш
         runtimeCaching: [
           {
