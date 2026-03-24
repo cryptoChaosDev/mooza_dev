@@ -166,15 +166,11 @@ export default function ProfilePage() {
 
   const updateMutation = useMutation({
     mutationFn: userAPI.updateMe,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
-      setIsEditing(false);
-    },
   });
 
   const updateServicesMutation = useMutation({
-    mutationFn: () => userAPI.updateServices(
-      userServices.map(us => ({
+    mutationFn: (services: typeof userServices) => userAPI.updateServices(
+      services.map(us => ({
         professionId: us.professionId,
         serviceId: us.serviceId,
         genreIds: us.genreIds,
@@ -186,12 +182,18 @@ export default function ProfilePage() {
         geographyIds: us.geographyIds,
       }))
     ),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['profile'] }),
   });
 
-  const handleSave = () => {
-    updateMutation.mutate(formData);
-    updateServicesMutation.mutate();
+  const handleSave = async () => {
+    try {
+      await Promise.all([
+        updateMutation.mutateAsync(formData),
+        updateServicesMutation.mutateAsync(userServices),
+      ]);
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      setIsEditing(false);
+    }
   };
 
   if (isLoading) {
