@@ -125,8 +125,8 @@ export default function ProfilePage() {
       setPortfolioFiles(data.portfolioFiles ?? []);
       setUserServices(
         data.userServices?.map((us: any) => ({
-          fieldOfActivityId: us.profession?.fieldOfActivity?.id || '',
-          fieldOfActivityName: us.profession?.fieldOfActivity?.name || '',
+          fieldOfActivityId: us.profession?.direction?.fieldOfActivity?.id || '',
+          fieldOfActivityName: us.profession?.direction?.fieldOfActivity?.name || '',
           professionId: us.professionId,
           professionName: us.profession?.name || '',
           serviceId: us.serviceId,
@@ -240,8 +240,8 @@ export default function ProfilePage() {
 
   // Group userServices by field → profession for view mode
   const servicesByField = profile?.userServices?.reduce((acc: Record<string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }>, us: any) => {
-    const fId = us.profession?.fieldOfActivity?.id || 'unknown';
-    const fName = us.profession?.fieldOfActivity?.name || '';
+    const fId = us.profession?.direction?.fieldOfActivity?.id || 'unknown';
+    const fName = us.profession?.direction?.fieldOfActivity?.name || '';
     const pId = us.professionId;
     const pName = us.profession?.name || '';
     if (!acc[fId]) acc[fId] = { fieldName: fName, byProfession: {} };

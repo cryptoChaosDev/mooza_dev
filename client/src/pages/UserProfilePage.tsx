@@ -60,8 +60,8 @@ export default function UserProfilePage() {
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
   const servicesByField = (user.userServices ?? []).reduce((acc: Record<string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }>, us: any) => {
-    const fId = us.profession?.fieldOfActivity?.id || 'unknown';
-    const fName = us.profession?.fieldOfActivity?.name || '';
+    const fId = us.profession?.direction?.fieldOfActivity?.id || 'unknown';
+    const fName = us.profession?.direction?.fieldOfActivity?.name || '';
     const pId = us.professionId;
     const pName = us.profession?.name || '';
     if (!acc[fId]) acc[fId] = { fieldName: fName, byProfession: {} };
