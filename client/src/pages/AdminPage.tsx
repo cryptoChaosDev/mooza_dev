@@ -612,8 +612,9 @@ export default function AdminPage() {
 
         {tab === 'orgs' && (
           <div className="grid gap-4 md:grid-cols-2">
-            <SimpleTable title="Группы / Артисты" queryKey="admin-artists" apiModule={adminAPI.artists} />
+            <SimpleTable collapsible title="Группы / Артисты" queryKey="admin-artists" apiModule={adminAPI.artists} />
             <SimpleTable
+              collapsible
               title="Работодатели"
               queryKey="admin-employers"
               apiModule={adminAPI.employers}
