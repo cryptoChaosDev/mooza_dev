@@ -14,13 +14,16 @@ function SimpleTable({
   queryKey,
   apiModule,
   extraFields,
+  collapsible = false,
 }: {
   title: string;
   queryKey: string;
   apiModule: { list: () => any; create: (d: any) => any; update: (id: string, d: any) => any; remove: (id: string) => any };
   extraFields?: { key: string; label: string; placeholder?: string }[];
+  collapsible?: boolean;
 }) {
   const qc = useQueryClient();
+  const [open, setOpen] = useState(true);
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
@@ -55,16 +58,25 @@ function SimpleTable({
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-        <h3 className="font-semibold text-white">{title}</h3>
-        <button
-          onClick={() => { setAdding(true); setForm({}); }}
-          className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors"
-        >
-          <Plus size={14} /> Добавить
-        </button>
+        <div className="flex items-center gap-2">
+          {collapsible && (
+            <button onClick={() => setOpen(o => !o)} className="text-slate-400 hover:text-white">
+              <ChevronRight size={15} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
+            </button>
+          )}
+          <h3 className="font-semibold text-white">{title}</h3>
+        </div>
+        {(!collapsible || open) && (
+          <button
+            onClick={() => { setAdding(true); setForm({}); }}
+            className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors"
+          >
+            <Plus size={14} /> Добавить
+          </button>
+        )}
       </div>
 
-      <div className="divide-y divide-slate-800">
+      {(!collapsible || open) && <div className="divide-y divide-slate-800">
         {adding && (
           <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/50">
             <input
@@ -128,7 +140,7 @@ function SimpleTable({
         {items.length === 0 && !adding && (
           <div className="px-4 py-4 text-sm text-slate-500 text-center">Нет записей</div>
         )}
-      </div>
+      </div>}
     </div>
   );
 }
@@ -579,13 +591,14 @@ export default function AdminPage() {
 
         {tab === 'filters' && (
           <div className="grid gap-4 md:grid-cols-2">
-            <SimpleTable title="Жанры" queryKey="admin-genres" apiModule={adminAPI.genres} />
-            <SimpleTable title="Формат работы" queryKey="admin-work-formats" apiModule={adminAPI.workFormats} />
-            <SimpleTable title="Тип занятости" queryKey="admin-employment-types" apiModule={adminAPI.employmentTypes} />
-            <SimpleTable title="Уровень мастерства" queryKey="admin-skill-levels" apiModule={adminAPI.skillLevels} />
-            <SimpleTable title="Готовность к работе" queryKey="admin-availabilities" apiModule={adminAPI.availabilities} />
-            <SimpleTable title="География" queryKey="admin-geographies" apiModule={adminAPI.geographies} />
+            <SimpleTable collapsible title="Жанры" queryKey="admin-genres" apiModule={adminAPI.genres} />
+            <SimpleTable collapsible title="Формат работы" queryKey="admin-work-formats" apiModule={adminAPI.workFormats} />
+            <SimpleTable collapsible title="Тип занятости" queryKey="admin-employment-types" apiModule={adminAPI.employmentTypes} />
+            <SimpleTable collapsible title="Уровень мастерства" queryKey="admin-skill-levels" apiModule={adminAPI.skillLevels} />
+            <SimpleTable collapsible title="Готовность к работе" queryKey="admin-availabilities" apiModule={adminAPI.availabilities} />
+            <SimpleTable collapsible title="География" queryKey="admin-geographies" apiModule={adminAPI.geographies} />
             <SimpleTable
+              collapsible
               title="Ценовые диапазоны"
               queryKey="admin-price-ranges"
               apiModule={adminAPI.priceRanges}
