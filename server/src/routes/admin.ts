@@ -37,7 +37,25 @@ router.put('/fields-of-activity/:id', async (req, res) => {
 });
 router.delete('/fields-of-activity/:id', async (req, res) => {
   try {
-    await prisma.fieldOfActivity.delete({ where: { id: req.params.id } });
+    const db = prisma as any;
+    const directions = await db.direction.findMany({
+      where: { fieldOfActivityId: req.params.id },
+      select: { id: true },
+    });
+    const directionIds = directions.map((d: any) => d.id as string);
+    const professions = await db.profession.findMany({
+      where: { directionId: { in: directionIds } },
+      select: { id: true },
+    });
+    const professionIds = professions.map((p: any) => p.id as string);
+    await prisma.$transaction([
+      prisma.userService.deleteMany({ where: { professionId: { in: professionIds } } }),
+      prisma.userProfession.deleteMany({ where: { professionId: { in: professionIds } } }),
+      prisma.service.deleteMany({ where: { professionId: { in: professionIds } } }),
+      db.profession.deleteMany({ where: { directionId: { in: directionIds } } }),
+      db.direction.deleteMany({ where: { fieldOfActivityId: req.params.id } }),
+      prisma.fieldOfActivity.delete({ where: { id: req.params.id } }),
+    ]);
     res.json({ ok: true });
   } catch (e: any) {
     res.status(400).json({ error: e.message });
@@ -80,7 +98,13 @@ router.put('/professions/:id', async (req, res) => {
 });
 router.delete('/professions/:id', async (req, res) => {
   try {
-    await prisma.profession.delete({ where: { id: req.params.id } });
+    const db = prisma as any;
+    await prisma.$transaction([
+      prisma.userService.deleteMany({ where: { professionId: req.params.id } }),
+      prisma.userProfession.deleteMany({ where: { professionId: req.params.id } }),
+      prisma.service.deleteMany({ where: { professionId: req.params.id } }),
+      db.profession.delete({ where: { id: req.params.id } }),
+    ]);
     res.json({ ok: true });
   } catch (e: any) {
     res.status(400).json({ error: e.message });
@@ -124,7 +148,10 @@ router.put('/services/:id', async (req, res) => {
 });
 router.delete('/services/:id', async (req, res) => {
   try {
-    await prisma.service.delete({ where: { id: req.params.id } });
+    await prisma.$transaction([
+      prisma.userService.deleteMany({ where: { serviceId: req.params.id } }),
+      prisma.service.delete({ where: { id: req.params.id } }),
+    ]);
     res.json({ ok: true });
   } catch (e: any) {
     res.status(400).json({ error: e.message });
@@ -319,7 +346,19 @@ router.put('/directions/:id', async (req, res) => {
 });
 router.delete('/directions/:id', async (req, res) => {
   try {
-    await prisma.direction.delete({ where: { id: req.params.id } });
+    const db = prisma as any;
+    const professions = await db.profession.findMany({
+      where: { directionId: req.params.id },
+      select: { id: true },
+    });
+    const professionIds = professions.map((p: any) => p.id as string);
+    await prisma.$transaction([
+      prisma.userService.deleteMany({ where: { professionId: { in: professionIds } } }),
+      prisma.userProfession.deleteMany({ where: { professionId: { in: professionIds } } }),
+      prisma.service.deleteMany({ where: { professionId: { in: professionIds } } }),
+      db.profession.deleteMany({ where: { directionId: req.params.id } }),
+      db.direction.delete({ where: { id: req.params.id } }),
+    ]);
     res.json({ ok: true });
   } catch (e: any) {
     res.status(400).json({ error: e.message });
