@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { MessageCircle, Search, Plus, Users, X, Check } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import { getSocket } from '../lib/socket';
+import { useAuthStore } from '../stores/authStore';
 
 interface ConvItem {
   id: string;
@@ -68,9 +69,9 @@ export default function MessagesPage() {
     setSelectedIds([]);
     try {
       const res = await friendshipAPI.getFriends();
+      const myId = useAuthStore.getState().user?.id;
       const list: Friend[] = (res.data as any[]).map((f: any) => {
-        const other = f.requester?.id === undefined ? f.receiver : f.requester;
-        // friendship object has requester + receiver; pick the one that's not current user
+        const other = f.requester.id === myId ? f.receiver : f.requester;
         return { id: other.id, firstName: other.firstName, lastName: other.lastName, avatar: other.avatar ?? null };
       });
       setFriends(list);
