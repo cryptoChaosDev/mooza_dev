@@ -407,4 +407,50 @@ router.delete('/employers/:id', async (req, res) => {
   catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
+// ─── Custom Filters ────────────────────────────────────────────────────────
+router.get('/custom-filters', async (_req, res) => {
+  const filters = await prisma.customFilter.findMany({
+    include: { values: { orderBy: { sortOrder: 'asc' } } },
+    orderBy: { createdAt: 'asc' },
+  });
+  res.json(filters);
+});
+router.post('/custom-filters', async (req, res) => {
+  try {
+    const { name, values = [] } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name required' });
+    const filter = await prisma.customFilter.create({
+      data: {
+        name,
+        values: { create: (values as string[]).map((v, i) => ({ value: v, sortOrder: i })) },
+      },
+      include: { values: { orderBy: { sortOrder: 'asc' } } },
+    });
+    res.status(201).json(filter);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+router.put('/custom-filters/:id', async (req, res) => {
+  try {
+    const { name, values } = req.body;
+    const data: any = {};
+    if (name !== undefined) data.name = name;
+    if (values !== undefined) {
+      data.values = {
+        deleteMany: {},
+        create: (values as string[]).map((v, i) => ({ value: v, sortOrder: i })),
+      };
+    }
+    const filter = await prisma.customFilter.update({
+      where: { id: req.params.id },
+      data,
+      include: { values: { orderBy: { sortOrder: 'asc' } } },
+    });
+    res.json(filter);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+router.delete('/custom-filters/:id', async (req, res) => {
+  try { await prisma.customFilter.delete({ where: { id: req.params.id } }); res.json({ ok: true }); }
+  catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
 export default router;
