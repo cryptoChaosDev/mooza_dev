@@ -473,7 +473,7 @@ export default function ProfilePage() {
           {bannerUrl && <img src={bannerUrl} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />}
           {bannerUrl && <div className="absolute inset-0 bg-black/50 z-0" />}
           {/* Banner */}
-          <div className="relative h-28 group z-10">
+          <div className="relative h-28 group z-20">
             {!bannerUrl && <div className="absolute inset-0 bg-gradient-to-br from-primary-900/70 via-purple-900/50 to-slate-900 opacity-100" />}
             {!bannerUrl && <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle at 15% 60%, rgba(99,102,241,0.5) 0%, transparent 55%), radial-gradient(circle at 85% 20%, rgba(168,85,247,0.5) 0%, transparent 55%)' }} />}
             {/* Banner upload button */}
@@ -523,7 +523,7 @@ export default function ProfilePage() {
                   <Camera size={11} />
                 </button>
                 <input ref={fileInputRef} type="file" accept="image/*"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatarMutation.mutate(f); }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatarMutation.mutate(f); e.target.value = ''; }}
                   className="hidden" />
               </div>
             </div>
