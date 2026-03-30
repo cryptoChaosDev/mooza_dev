@@ -363,6 +363,34 @@ router.post('/conversations/:id/members', authenticate, async (req: AuthRequest,
   }
 });
 
+// ─── DELETE /conversations/:id — delete entire group ─────────────────────────
+router.delete('/conversations/:id', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const { id } = req.params;
+
+    const conv = await db.conversation.findUnique({
+      where: { id },
+      include: { members: { select: { userId: true, isAdmin: true } } },
+    });
+    if (!conv) return res.status(404).json({ error: 'Not found' });
+    if (!conv.isGroup) return res.status(400).json({ error: 'Not a group' });
+
+    const me = conv.members.find((m: any) => m.userId === userId);
+    if (!me?.isAdmin) return res.status(403).json({ error: 'Only admins can delete the group' });
+
+    for (const m of conv.members) {
+      if (m.userId !== userId) emitToUser(m.userId, 'group_deleted', { conversationId: id });
+    }
+
+    await db.conversation.delete({ where: { id } });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Delete group error:', err);
+    res.status(500).json({ error: 'Failed to delete group' });
+  }
+});
+
 // ─── DELETE /conversations/:id/members/:memberId ─────────────────────────────
 router.delete('/conversations/:id/members/:memberId', authenticate, async (req: AuthRequest, res) => {
   try {

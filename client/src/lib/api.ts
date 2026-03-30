@@ -149,6 +149,12 @@ export const messageAPI = {
   markRead: (conversationId: string) => api.patch(`/messages/conversations/${conversationId}/read`),
   createGroup: (name: string, memberIds: string[]) =>
     api.post('/messages/conversations/group', { name, memberIds }),
+  deleteConversation: (conversationId: string) =>
+    api.delete(`/messages/conversations/${conversationId}`),
+  addMember: (conversationId: string, memberId: string) =>
+    api.post(`/messages/conversations/${conversationId}/members`, { memberId }),
+  removeMember: (conversationId: string, memberId: string) =>
+    api.delete(`/messages/conversations/${conversationId}/members/${memberId}`),
 };
 
 // Admin API

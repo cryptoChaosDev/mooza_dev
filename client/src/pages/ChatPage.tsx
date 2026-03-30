@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check } from 'lucide-react';
-import { messageAPI } from '../lib/api';
+import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, Settings, UserPlus, LogOut, Crown } from 'lucide-react';
+import { messageAPI, friendshipAPI } from '../lib/api';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
 
@@ -61,6 +61,11 @@ export default function ChatPage() {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Group settings panel
+  const [showSettings, setShowSettings] = useState(false);
+  const [friends, setFriends] = useState<{ id: string; firstName: string; lastName: string; avatar: string | null }[]>([]);
+  const [loadingFriends, setLoadingFriends] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -113,13 +118,19 @@ export default function ChatPage() {
       );
     };
 
+    const onGroupDeleted = ({ conversationId: cid }: { conversationId: string }) => {
+      if (cid === conversationId) navigate('/messages');
+    };
+
     socket.on('new_message', onNew);
     socket.on('message_edited', onEdited);
     socket.on('message_deleted', onDeleted);
+    socket.on('group_deleted', onGroupDeleted);
     return () => {
       socket.off('new_message', onNew);
       socket.off('message_edited', onEdited);
       socket.off('message_deleted', onDeleted);
+      socket.off('group_deleted', onGroupDeleted);
     };
   }, [conversationId]);
 
@@ -176,6 +187,59 @@ export default function ChatPage() {
       );
     } catch (err) {
       console.error('Failed to delete:', err);
+    }
+  };
+
+  // ── Group management ───────────────────────────────────────────────────────
+  const openSettings = async () => {
+    setShowSettings(true);
+    setLoadingFriends(true);
+    try {
+      const res = await friendshipAPI.getFriends();
+      const memberIds = new Set(conversation?.members.map(m => m.userId) ?? []);
+      const list = (res.data as any[])
+        .map((f: any) => f.user)
+        .filter((u: any) => !memberIds.has(u.id));
+      setFriends(list);
+    } catch {
+      setFriends([]);
+    } finally {
+      setLoadingFriends(false);
+    }
+  };
+
+  const handleAddMember = async (memberId: string) => {
+    if (!conversationId) return;
+    try {
+      await messageAPI.addMember(conversationId, memberId);
+      setFriends(prev => prev.filter(f => f.id !== memberId));
+      await loadChat();
+    } catch (err: any) {
+      console.error('Failed to add member:', err);
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string) => {
+    if (!conversationId) return;
+    try {
+      await messageAPI.removeMember(conversationId, memberId);
+      if (memberId === me?.id) {
+        navigate('/messages');
+      } else {
+        await loadChat();
+      }
+    } catch (err) {
+      console.error('Failed to remove member:', err);
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    if (!conversationId || !window.confirm('Удалить группу для всех участников?')) return;
+    try {
+      await messageAPI.deleteConversation(conversationId);
+      navigate('/messages');
+    } catch (err) {
+      console.error('Failed to delete group:', err);
     }
   };
 
@@ -277,9 +341,147 @@ export default function ChatPage() {
                 )}
               </div>
             </div>
+
+            {/* Settings button for group chats */}
+            {conversation.isGroup && (
+              <button
+                onClick={openSettings}
+                className="p-2 bg-slate-800/80 hover:bg-slate-700/80 rounded-xl transition-all border border-slate-700/50 hover:border-primary-500/50 flex-shrink-0"
+              >
+                <Settings size={18} className="text-slate-300" />
+              </button>
+            )}
           </div>
         </div>
       </div>
+
+      {/* Group Settings Panel */}
+      {showSettings && conversation.isGroup && (() => {
+        const amIAdmin = conversation.members.find(m => m.userId === me?.id)?.isAdmin ?? false;
+        return (
+          <div className="fixed inset-0 z-40 flex">
+            {/* Backdrop */}
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowSettings(false)} />
+            {/* Panel */}
+            <div className="relative ml-auto w-full max-w-sm bg-gradient-to-b from-slate-800 to-slate-900 border-l border-slate-700/50 shadow-2xl flex flex-col overflow-hidden">
+              {/* Panel header */}
+              <div className="flex items-center justify-between p-4 border-b border-slate-700/50 flex-shrink-0">
+                <div className="flex items-center gap-2">
+                  <Users size={18} className="text-primary-400" />
+                  <h3 className="font-semibold text-white text-sm">Управление группой</h3>
+                </div>
+                <button onClick={() => setShowSettings(false)} className="p-1.5 hover:bg-slate-700/50 rounded-lg">
+                  <X size={16} className="text-slate-400" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-24">
+                {/* Group name */}
+                <div className="flex items-center gap-3 p-3 bg-slate-700/30 rounded-xl">
+                  <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Users size={18} className="text-white" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-white text-sm">{chatName}</p>
+                    <p className="text-xs text-slate-400">{conversation.members.length} участников</p>
+                  </div>
+                </div>
+
+                {/* Members */}
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Участники</p>
+                  <div className="space-y-1">
+                    {conversation.members.map(m => {
+                      const isMe = m.userId === me?.id;
+                      return (
+                        <div key={m.userId} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-700/30 transition-colors">
+                          {m.user.avatar ? (
+                            <img src={`${API_URL}${m.user.avatar}`} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" />
+                          ) : (
+                            <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <span className="text-white text-xs font-bold">{m.user.firstName[0]}</span>
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-white text-sm truncate">{m.user.firstName} {m.user.lastName}{isMe ? ' (Вы)' : ''}</p>
+                          </div>
+                          {m.isAdmin && (
+                            <Crown size={13} className="text-amber-400 flex-shrink-0" />
+                          )}
+                          {/* Remove button: admin can remove others, anyone can leave */}
+                          {(amIAdmin && !isMe) ? (
+                            <button
+                              onClick={() => handleRemoveMember(m.userId)}
+                              className="p-1.5 hover:bg-red-500/20 rounded-lg text-slate-500 hover:text-red-400 transition-all flex-shrink-0"
+                              title="Удалить из группы"
+                            >
+                              <X size={14} />
+                            </button>
+                          ) : isMe ? (
+                            <button
+                              onClick={() => handleRemoveMember(m.userId)}
+                              className="flex items-center gap-1 px-2 py-1 text-xs text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all flex-shrink-0"
+                              title="Покинуть группу"
+                            >
+                              <LogOut size={12} />
+                              <span>Выйти</span>
+                            </button>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Add members */}
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Добавить участников</p>
+                  {loadingFriends ? (
+                    <div className="flex justify-center py-4"><Loader2 size={20} className="text-primary-500 animate-spin" /></div>
+                  ) : friends.length === 0 ? (
+                    <p className="text-slate-500 text-sm text-center py-3">Все друзья уже в группе</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {friends.map(f => (
+                        <div key={f.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-700/30 transition-colors">
+                          {f.avatar ? (
+                            <img src={`${API_URL}${f.avatar}`} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" />
+                          ) : (
+                            <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <span className="text-white text-xs font-bold">{f.firstName[0]}</span>
+                            </div>
+                          )}
+                          <p className="text-white text-sm flex-1 truncate">{f.firstName} {f.lastName}</p>
+                          {amIAdmin && (
+                            <button
+                              onClick={() => handleAddMember(f.id)}
+                              className="p-1.5 bg-primary-500/20 hover:bg-primary-500/40 text-primary-400 rounded-lg transition-all flex-shrink-0"
+                              title="Добавить"
+                            >
+                              <UserPlus size={14} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Delete group (admin only) */}
+                {amIAdmin && (
+                  <button
+                    onClick={handleDeleteGroup}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-xl text-sm transition-all border border-red-500/20 hover:border-red-500/40"
+                  >
+                    <Trash2 size={15} />
+                    Удалить группу для всех
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto">
