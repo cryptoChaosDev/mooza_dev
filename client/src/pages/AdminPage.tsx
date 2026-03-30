@@ -821,8 +821,7 @@ function CustomFiltersSection() {
 
 const TABS = [
   { id: 'structure', label: 'Структура' },
-  { id: 'filters', label: 'Фильтры поиска' },
-  { id: 'custom', label: 'Доп. фильтры' },
+  { id: 'filters', label: 'Фильтры' },
   { id: 'orgs', label: 'Организации' },
 ] as const;
 
@@ -854,27 +853,39 @@ export default function AdminPage() {
         {tab === 'structure' && <StructureTree />}
 
         {tab === 'filters' && (
-          <div className="grid gap-4 md:grid-cols-2">
-            <SimpleTable collapsible title="Жанры" queryKey="admin-genres" apiModule={adminAPI.genres} />
-            <SimpleTable collapsible title="Формат работы" queryKey="admin-work-formats" apiModule={adminAPI.workFormats} />
-            <SimpleTable collapsible title="Тип занятости" queryKey="admin-employment-types" apiModule={adminAPI.employmentTypes} />
-            <SimpleTable collapsible title="Уровень мастерства" queryKey="admin-skill-levels" apiModule={adminAPI.skillLevels} />
-            <SimpleTable collapsible title="Готовность к работе" queryKey="admin-availabilities" apiModule={adminAPI.availabilities} />
-            <SimpleTable collapsible title="География" queryKey="admin-geographies" apiModule={adminAPI.geographies} />
-            <SimpleTable
-              collapsible
-              title="Ценовые диапазоны"
-              queryKey="admin-price-ranges"
-              apiModule={adminAPI.priceRanges}
-              extraFields={[
-                { key: 'minValue', label: 'Мин', placeholder: 'Мин' },
-                { key: 'maxValue', label: 'Макс', placeholder: 'Макс' },
-              ]}
-            />
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 px-1">
+                Системные фильтры поиска
+              </h2>
+              <div className="grid gap-3 md:grid-cols-2">
+                <SimpleTable collapsible title="Жанры" queryKey="admin-genres" apiModule={adminAPI.genres} />
+                <SimpleTable collapsible title="Формат работы" queryKey="admin-work-formats" apiModule={adminAPI.workFormats} />
+                <SimpleTable collapsible title="Тип занятости" queryKey="admin-employment-types" apiModule={adminAPI.employmentTypes} />
+                <SimpleTable collapsible title="Уровень мастерства" queryKey="admin-skill-levels" apiModule={adminAPI.skillLevels} />
+                <SimpleTable collapsible title="Готовность к работе" queryKey="admin-availabilities" apiModule={adminAPI.availabilities} />
+                <SimpleTable collapsible title="География" queryKey="admin-geographies" apiModule={adminAPI.geographies} />
+                <SimpleTable
+                  collapsible
+                  title="Ценовые диапазоны"
+                  queryKey="admin-price-ranges"
+                  apiModule={adminAPI.priceRanges}
+                  extraFields={[
+                    { key: 'minValue', label: 'Мин', placeholder: 'Мин' },
+                    { key: 'maxValue', label: 'Макс', placeholder: 'Макс' },
+                  ]}
+                />
+              </div>
+            </div>
+
+            <div className="border-t border-slate-800 pt-6">
+              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-3 px-1">
+                Пользовательские фильтры
+              </h2>
+              <CustomFiltersSection />
+            </div>
           </div>
         )}
-
-        {tab === 'custom' && <CustomFiltersSection />}
 
         {tab === 'orgs' && (
           <div className="grid gap-4 md:grid-cols-2">
