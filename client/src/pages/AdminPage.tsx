@@ -23,7 +23,7 @@ function SimpleTable({
   collapsible?: boolean;
 }) {
   const qc = useQueryClient();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
@@ -57,7 +57,7 @@ function SimpleTable({
 
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+      <div className={`flex items-center justify-between px-4 py-3 ${(!collapsible || open) ? 'border-b border-slate-800' : ''}`}>
         <div className="flex items-center gap-2">
           {collapsible && (
             <button onClick={() => setOpen(o => !o)} className="text-slate-400 hover:text-white">
@@ -65,6 +65,7 @@ function SimpleTable({
             </button>
           )}
           <h3 className="font-semibold text-white">{title}</h3>
+          <span className="text-xs text-slate-500">{items.length}</span>
         </div>
         {(!collapsible || open) && (
           <button
