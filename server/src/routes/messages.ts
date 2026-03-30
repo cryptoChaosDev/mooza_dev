@@ -4,7 +4,8 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser } from '../socket';
 
 const router = Router();
-const db = prisma as any;
+// Lazy proxy — avoids circular-import TDZ when this module loads before prisma is initialized
+const db: any = new Proxy({} as any, { get: (_: any, key: string | symbol) => (prisma as any)[key] });
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
