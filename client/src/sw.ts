@@ -25,7 +25,6 @@ self.addEventListener('push', (event) => {
       icon: payload.icon || '/pwa-192x192.png',
       badge: '/pwa-192x192.png',
       data: { link: payload.link || '/' },
-      vibrate: [100, 50, 100],
     }),
   );
 });
