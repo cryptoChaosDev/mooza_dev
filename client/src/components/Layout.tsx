@@ -1,4 +1,4 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Search, Users, User, MessageCircle, Menu, X, Music, Bell, ShieldCheck } from 'lucide-react';
 import BottomNav from './BottomNav';
@@ -21,6 +21,11 @@ export default function Layout({ children }: LayoutProps) {
     Notification.requestPermission().then(() => setNotifDismissed(true));
   }
 
+  // Scroll to top on route change
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
   const navItems = [
     { path: '/', icon: Home, label: 'Главная' },
     { path: '/search', icon: Search, label: 'Поиск' },
@@ -33,27 +38,26 @@ export default function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-slate-950">
-      {/* Notification permission banner */}
-      {notifPending && (
-        <div className="fixed top-0 left-0 right-0 z-50 bg-primary-600/90 backdrop-blur-sm px-4 py-2 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-sm text-white">
-            <Bell size={16} />
-            <span>Разрешите уведомления, чтобы получать сообщения и события</span>
+      {/* Mobile Header (sticky — stays in document flow so content flows naturally below it) */}
+      <div className="lg:hidden sticky top-0 z-40 bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/50">
+        {/* Notification permission banner */}
+        {notifPending && (
+          <div className="bg-primary-600/90 px-4 py-2 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-sm text-white">
+              <Bell size={16} />
+              <span>Разрешите уведомления, чтобы получать сообщения и события</span>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button onClick={requestNotifications} className="text-xs bg-white text-primary-700 font-semibold px-3 py-1 rounded-full hover:bg-primary-50 transition-colors">
+                Разрешить
+              </button>
+              <button onClick={() => setNotifDismissed(true)} className="text-white/70 hover:text-white transition-colors">
+                <X size={16} />
+              </button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button onClick={requestNotifications} className="text-xs bg-white text-primary-700 font-semibold px-3 py-1 rounded-full hover:bg-primary-50 transition-colors">
-              Разрешить
-            </button>
-            <button onClick={() => setNotifDismissed(true)} className="text-white/70 hover:text-white transition-colors">
-              <X size={16} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Mobile Header */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/50">
-        <div className="flex items-center justify-between px-4 h-16">
+        )}
+        <header className="flex items-center justify-between px-4 h-16">
           <Link to="/" className="flex items-center gap-2">
             <Music size={24} className="text-primary-400" />
             <span className="text-xl font-bold bg-gradient-to-r from-primary-400 to-purple-400 bg-clip-text text-transparent">
@@ -69,8 +73,8 @@ export default function Layout({ children }: LayoutProps) {
               {sidebarOpen ? <X size={24} className="text-slate-300" /> : <Menu size={24} className="text-slate-300" />}
             </button>
           </div>
-        </div>
-      </header>
+        </header>
+      </div>
 
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-64 flex-col bg-slate-950 border-r border-slate-800/50 z-40">
@@ -180,7 +184,7 @@ export default function Layout({ children }: LayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="lg:ml-64 min-h-screen pt-16 lg:pt-0">
+      <main className="lg:ml-64 min-h-screen">
         <div className="max-w-7xl mx-auto">
           {children}
         </div>
