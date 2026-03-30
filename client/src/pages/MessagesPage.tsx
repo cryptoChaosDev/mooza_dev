@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { MessageCircle, Search, Plus, Users, X, Check } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import { getSocket } from '../lib/socket';
-import { useAuthStore } from '../stores/authStore';
 
 interface ConvItem {
   id: string;
@@ -69,11 +68,12 @@ export default function MessagesPage() {
     setSelectedIds([]);
     try {
       const res = await friendshipAPI.getFriends();
-      const myId = useAuthStore.getState().user?.id;
-      const list: Friend[] = (res.data as any[]).map((f: any) => {
-        const other = f.requester.id === myId ? f.receiver : f.requester;
-        return { id: other.id, firstName: other.firstName, lastName: other.lastName, avatar: other.avatar ?? null };
-      });
+      const list: Friend[] = (res.data as any[]).map((f: any) => ({
+        id: f.user.id,
+        firstName: f.user.firstName,
+        lastName: f.user.lastName,
+        avatar: f.user.avatar ?? null,
+      }));
       setFriends(list);
     } catch {
       setFriends([]);
