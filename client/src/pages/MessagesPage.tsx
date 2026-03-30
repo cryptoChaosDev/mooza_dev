@@ -243,8 +243,8 @@ export default function MessagesPage() {
 
       {/* New Group Modal */}
       {showNewGroup && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm px-4 pb-4 sm:pb-0">
-          <div className="w-full max-w-md bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl border border-slate-700/50 shadow-2xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="w-full max-w-md bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl border border-slate-700/50 shadow-2xl mb-20">
             {/* Modal header */}
             <div className="flex items-center justify-between p-4 border-b border-slate-700/50">
               <div className="flex items-center gap-2">
