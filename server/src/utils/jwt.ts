@@ -29,9 +29,9 @@ export function getJwtSecret(): string {
 /**
  * Генерирует JWT токен
  * @param payload - Данные для включения в токен
- * @param expiresIn - Время жизни токена (по умолчанию 7 дней)
+ * @param expiresIn - Время жизни токена (по умолчанию 90 дней)
  */
-export function generateToken(payload: { userId: string }, expiresIn: number = 60 * 60 * 24 * 7): string {
+export function generateToken(payload: { userId: string }, expiresIn: number = 60 * 60 * 24 * 90): string {
   return jwt.sign(
     payload,
     getJwtSecret(),
