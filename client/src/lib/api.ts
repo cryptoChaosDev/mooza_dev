@@ -182,7 +182,11 @@ export const adminAPI = {
   fieldsOfActivity: crudFor('fields-of-activity'),
   directions: crudFor('directions'),
   professions: crudFor('professions'),
-  services: crudFor('services'),
+  services: {
+    ...crudFor('services'),
+    setFilters: (id: string, filterIds: string[]) =>
+      api.put(`${adminBase}/services/${id}/custom-filters`, { filterIds }),
+  },
   genres: crudFor('genres'),
   workFormats: crudFor('work-formats'),
   employmentTypes: crudFor('employment-types'),

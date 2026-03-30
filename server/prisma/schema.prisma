@@ -60,7 +60,8 @@ model Service {
   professionId String
   profession   Profession @relation(fields: [professionId], references: [id])
 
-  userServices UserService[]
+  userServices  UserService[]
+  customFilters CustomFilter[] @relation("ServiceCustomFilters")
 
   createdAt DateTime @default(now())
 }
@@ -476,6 +477,7 @@ model CustomFilter {
   id        String              @id @default(uuid())
   name      String
   values    CustomFilterValue[]
+  services  Service[]           @relation("ServiceCustomFilters")
   createdAt DateTime            @default(now())
 }
 

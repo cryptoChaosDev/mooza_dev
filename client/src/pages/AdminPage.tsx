@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { adminAPI } from '../lib/api';
-import { Plus, Pencil, Trash2, Check, X, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, ChevronRight, Filter } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -188,27 +188,84 @@ function AddRow({ placeholder, onAdd, onCancel }: {
 
 // ─── Service (leaf node) ─────────────────────────────────────────────────────
 
-function ServiceRow({ service, onUpdate, onDelete }: {
-  service: Item; onUpdate: (name: string) => void; onDelete: () => void;
+function ServiceRow({ service, allCustomFilters, onUpdate, onDelete }: {
+  service: Item;
+  allCustomFilters: CFilter[];
+  onUpdate: (name: string) => void;
+  onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const qc = useQueryClient();
+
+  const attachedIds: string[] = (service.customFilters ?? []).map((f: any) => f.id);
+
+  const setFiltersMut = useMutation({
+    mutationFn: (filterIds: string[]) => adminAPI.services.setFilters(service.id, filterIds),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-services'] }),
+  });
+
+  const toggleFilter = (filterId: string) => {
+    const newIds = attachedIds.includes(filterId)
+      ? attachedIds.filter(id => id !== filterId)
+      : [...attachedIds, filterId];
+    setFiltersMut.mutate(newIds);
+  };
+
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-700/30 group rounded">
-      {editing ? (
-        <InlineEdit
-          value={service.name}
-          onSave={name => { onUpdate(name); setEditing(false); }}
-          onCancel={() => setEditing(false)}
-        />
-      ) : (
-        <>
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-600 flex-shrink-0 ml-1" />
-          <span className="flex-1 text-sm text-slate-300">{service.name}</span>
-          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={12} /></button>
-            <button onClick={onDelete} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={12} /></button>
-          </div>
-        </>
+    <div className="rounded">
+      <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-700/30 group">
+        {editing ? (
+          <InlineEdit
+            value={service.name}
+            onSave={name => { onUpdate(name); setEditing(false); }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <>
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-600 flex-shrink-0 ml-1" />
+            <span className="flex-1 text-sm text-slate-300">{service.name}</span>
+            {attachedIds.length > 0 && (
+              <span className="text-xs text-primary-400 flex-shrink-0">{attachedIds.length} ф.</span>
+            )}
+            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={() => setFiltersOpen(o => !o)}
+                className={`p-1 ${filtersOpen ? 'text-primary-400' : 'text-slate-400 hover:text-primary-400'}`}
+                title="Управление фильтрами"
+              >
+                <Filter size={12} />
+              </button>
+              <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={12} /></button>
+              <button onClick={onDelete} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={12} /></button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {filtersOpen && (
+        <div className="mx-3 mb-2 p-2 bg-slate-800/60 rounded border border-slate-700/50">
+          {allCustomFilters.length === 0 ? (
+            <p className="text-xs text-slate-500">Нет доступных фильтров. Создайте их во вкладке «Доп. фильтры».</p>
+          ) : (
+            <>
+              <p className="text-xs text-slate-500 mb-1.5">Фильтры для этой услуги:</p>
+              <div className="space-y-0.5">
+                {allCustomFilters.map(f => (
+                  <label key={f.id} className="flex items-center gap-2 cursor-pointer hover:bg-slate-700/30 px-1 py-0.5 rounded">
+                    <input
+                      type="checkbox"
+                      checked={attachedIds.includes(f.id)}
+                      onChange={() => toggleFilter(f.id)}
+                      className="accent-primary-500"
+                    />
+                    <span className="text-xs text-slate-300">{f.name}</span>
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
       )}
     </div>
   );
@@ -216,8 +273,8 @@ function ServiceRow({ service, onUpdate, onDelete }: {
 
 // ─── Profession node ─────────────────────────────────────────────────────────
 
-function ProfessionNode({ profession, services, qc }: {
-  profession: Item; services: Item[]; qc: QueryClient;
+function ProfessionNode({ profession, services, allCustomFilters, qc }: {
+  profession: Item; services: Item[]; allCustomFilters: CFilter[]; qc: QueryClient;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -278,6 +335,7 @@ function ProfessionNode({ profession, services, qc }: {
             <ServiceRow
               key={service.id}
               service={service}
+              allCustomFilters={allCustomFilters}
               onUpdate={name => updateServiceMut.mutate({ id: service.id, name })}
               onDelete={() => deleteServiceMut.mutate(service.id)}
             />
@@ -311,8 +369,8 @@ function ProfessionNode({ profession, services, qc }: {
 
 // ─── Direction node ──────────────────────────────────────────────────────────
 
-function DirectionNode({ direction, professions, allServices, qc }: {
-  direction: Item; professions: Item[]; allServices: Item[]; qc: QueryClient;
+function DirectionNode({ direction, professions, allServices, allCustomFilters, qc }: {
+  direction: Item; professions: Item[]; allServices: Item[]; allCustomFilters: CFilter[]; qc: QueryClient;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -365,6 +423,7 @@ function DirectionNode({ direction, professions, allServices, qc }: {
               key={prof.id}
               profession={prof}
               services={allServices.filter(s => s.profession?.id === prof.id)}
+              allCustomFilters={allCustomFilters}
               qc={qc}
             />
           ))}
@@ -395,8 +454,8 @@ function DirectionNode({ direction, professions, allServices, qc }: {
 
 // ─── Field of activity node ──────────────────────────────────────────────────
 
-function FieldNode({ field, directions, allProfessions, allServices, qc }: {
-  field: Item; directions: Item[]; allProfessions: Item[]; allServices: Item[]; qc: QueryClient;
+function FieldNode({ field, directions, allProfessions, allServices, allCustomFilters, qc }: {
+  field: Item; directions: Item[]; allProfessions: Item[]; allServices: Item[]; allCustomFilters: CFilter[]; qc: QueryClient;
 }) {
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -459,6 +518,7 @@ function FieldNode({ field, directions, allProfessions, allServices, qc }: {
               direction={dir}
               professions={allProfessions.filter(p => p.direction?.id === dir.id)}
               allServices={allServices}
+              allCustomFilters={allCustomFilters}
               qc={qc}
             />
           ))}
@@ -509,6 +569,10 @@ function StructureTree() {
     queryKey: ['admin-services'],
     queryFn: () => adminAPI.services.list().then((r: any) => r.data),
   });
+  const { data: allCustomFilters = [] } = useQuery<CFilter[]>({
+    queryKey: ['admin-custom-filters'],
+    queryFn: () => adminAPI.customFilters.list().then((r: any) => r.data),
+  });
 
   const invalidateF = () => qc.invalidateQueries({ queryKey: ['admin-fields-of-activity'] });
 
@@ -526,6 +590,7 @@ function StructureTree() {
           directions={directions.filter(d => d.fieldOfActivity?.id === field.id)}
           allProfessions={professions}
           allServices={services}
+          allCustomFilters={allCustomFilters}
           qc={qc}
         />
       ))}

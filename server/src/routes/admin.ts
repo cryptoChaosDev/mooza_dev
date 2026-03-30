@@ -114,7 +114,10 @@ router.delete('/professions/:id', async (req, res) => {
 // ─── Service ───────────────────────────────────────────────────────────────
 router.get('/services', async (_req, res) => {
   const items = await prisma.service.findMany({
-    include: { profession: { select: { id: true, name: true } } },
+    include: {
+      profession: { select: { id: true, name: true } },
+      customFilters: { select: { id: true, name: true } },
+    },
     orderBy: { name: 'asc' },
   });
   res.json(items);
@@ -153,6 +156,25 @@ router.delete('/services/:id', async (req, res) => {
       prisma.service.delete({ where: { id: req.params.id } }),
     ]);
     res.json({ ok: true });
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// Set custom filters for a service (replaces current assignment)
+router.put('/services/:id/custom-filters', async (req, res) => {
+  try {
+    const { filterIds = [] } = req.body;
+    const item = await prisma.service.update({
+      where: { id: req.params.id },
+      data: {
+        customFilters: {
+          set: (filterIds as string[]).map((id) => ({ id })),
+        },
+      },
+      include: { customFilters: { select: { id: true, name: true } } },
+    });
+    res.json(item);
   } catch (e: any) {
     res.status(400).json({ error: e.message });
   }
