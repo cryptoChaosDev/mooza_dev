@@ -3,6 +3,14 @@ import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 
 const router = Router();
+
+// GET /api/push/vapid-public-key — expose public key to client (no auth required)
+router.get('/vapid-public-key', (_req, res) => {
+  const key = process.env.VAPID_PUBLIC_KEY;
+  if (!key) return res.status(503).json({ error: 'Push not configured' });
+  res.json({ key });
+});
+
 router.use(authenticate);
 
 // POST /api/push/subscribe — save push subscription
@@ -38,13 +46,6 @@ router.delete('/subscribe', async (req: AuthRequest, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
-});
-
-// GET /api/push/vapid-public-key — expose public key to client
-router.get('/vapid-public-key', (_req, res) => {
-  const key = process.env.VAPID_PUBLIC_KEY;
-  if (!key) return res.status(503).json({ error: 'Push not configured' });
-  res.json({ key });
 });
 
 export default router;
