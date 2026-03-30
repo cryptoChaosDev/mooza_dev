@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { emitToUser } from '../socket';
+import { emitToUser, notifyUser } from '../socket';
 
 const router = Router();
 
@@ -74,7 +74,11 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
       include: { actor: { select: { id: true, firstName: true, lastName: true, avatar: true } } },
     });
 
-    emitToUser(receiverId, 'friend_request', { friendship, requester });
+    notifyUser(receiverId, 'friend_request', { friendship, requester }, {
+      title: 'Заявка в друзья',
+      body: `${requester?.firstName} ${requester?.lastName} хочет добавить вас в друзья`,
+      link: '/friends',
+    });
     emitToUser(receiverId, 'new_notification', notification);
 
     res.status(201).json(friendship);
@@ -181,7 +185,11 @@ router.put('/:id/accept', authenticate, async (req: AuthRequest, res) => {
     });
 
     // Notify the original requester that their request was accepted
-    emitToUser(updated.requester.id, 'friend_accepted', { friendship: updated });
+    notifyUser(updated.requester.id, 'friend_accepted', { friendship: updated }, {
+      title: 'Вас добавили в друзья',
+      body: `${accepter?.firstName} ${accepter?.lastName} принял(а) вашу заявку`,
+      link: `/profile/${req.userId}`,
+    });
     emitToUser(updated.requester.id, 'new_notification', notification);
 
     res.json(updated);

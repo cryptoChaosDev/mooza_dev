@@ -7,6 +7,9 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
       includeAssets: ['icon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: 'Moooza — Музыкальная социальная сеть',
@@ -37,39 +40,10 @@ export default defineConfig({
           },
         ],
       },
-      workbox: {
+      injectManifest: {
         // НЕ кэшируем index.html — иначе после деплоя SW отдаёт старый HTML со старыми хешами JS
         globPatterns: ['**/*.{js,css,ico,png,svg,woff2}'],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//],
-        // Стратегия: сначала сеть, при недоступности — кэш
-        runtimeCaching: [
-          {
-            // API запросы — network-first (свежие данные важнее)
-            urlPattern: /^https:\/\/moooza\.ru\/api\/.*/i,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 5, // 5 минут
-              },
-              networkTimeoutSeconds: 10,
-            },
-          },
-          {
-            // Аватарки и обложки — cache-first (редко меняются)
-            urlPattern: /^https:\/\/moooza\.ru\/uploads\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'images-cache',
-              expiration: {
-                maxEntries: 200,
-                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 дней
-              },
-            },
-          },
-        ],
+        globIgnores: ['**/index.html'],
       },
     }),
   ],

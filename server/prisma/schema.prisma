@@ -276,6 +276,7 @@ model User {
   sentMessages Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
   conversationMembers ConversationMember[]
+  pushSubscriptions    PushSubscription[]
   notifications        Notification[] @relation("NotificationRecipient")
   triggeredNotifications Notification[] @relation("NotificationActor")
 
@@ -453,6 +454,20 @@ model Friendship {
   @@index([status])
   @@index([receiverId, status])
   @@index([requesterId, status])
+}
+
+// ============ PUSH SUBSCRIPTIONS ============
+
+model PushSubscription {
+  id       String @id @default(uuid())
+  userId   String
+  endpoint String @unique
+  p256dh   String
+  auth     String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 // ============ CUSTOM FILTERS ============

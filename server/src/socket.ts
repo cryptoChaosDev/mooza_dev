@@ -3,6 +3,7 @@ import { createServer } from 'http';
 import type { Express } from 'express';
 import { verifyToken } from './utils/jwt';
 import logger from './utils/logger';
+import { sendPushToUser, type PushPayload } from './utils/webpush';
 
 export let io: Server;
 
@@ -56,5 +57,19 @@ export function emitToUser(userId: string, event: string, data: unknown) {
   const socketId = userSockets.get(userId);
   if (socketId) {
     io.to(socketId).emit(event, data);
+  }
+}
+
+/**
+ * Emit socket event to online user AND send push notification to offline users.
+ * push payload is only sent if user has no active socket connection.
+ */
+export function notifyUser(userId: string, event: string, data: unknown, push: PushPayload) {
+  const socketId = userSockets.get(userId);
+  if (socketId) {
+    io.to(socketId).emit(event, data);
+  } else {
+    // User is offline — send push notification
+    sendPushToUser(userId, push).catch(() => {});
   }
 }
