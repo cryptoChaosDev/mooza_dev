@@ -275,6 +275,7 @@ model User {
   receivedRequests Friendship[] @relation("ReceivedRequests")
   sentMessages Message[] @relation("SentMessages")
   receivedMessages Message[] @relation("ReceivedMessages")
+  conversationMembers ConversationMember[]
   notifications        Notification[] @relation("NotificationRecipient")
   triggeredNotifications Notification[] @relation("NotificationActor")
 
@@ -375,21 +376,56 @@ model Comment {
   @@index([postId, createdAt])
 }
 
+model Conversation {
+  id        String   @id @default(uuid())
+  name      String?
+  avatar    String?
+  isGroup   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members  ConversationMember[]
+  messages Message[]
+
+  @@index([updatedAt])
+}
+
+model ConversationMember {
+  id             String    @id @default(uuid())
+  conversationId String
+  userId         String
+  isAdmin        Boolean   @default(false)
+  joinedAt       DateTime  @default(now())
+  lastReadAt     DateTime?
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([conversationId, userId])
+  @@index([userId])
+}
+
 model Message {
-  id String @id @default(uuid())
+  id             String    @id @default(uuid())
+  conversationId String?
+  senderId       String
+  receiverId     String?
+  content        String
+  replyToId      String?
+  isEdited       Boolean   @default(false)
+  deletedAt      DateTime?
+  readAt         DateTime?
 
-  sender   User   @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-  senderId String
-
-  receiver   User   @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
-  receiverId String
-
-  content String
-  readAt DateTime?
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User          @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver     User?         @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  replyTo      Message?      @relation("MessageReplies", fields: [replyToId], references: [id])
+  replies      Message[]     @relation("MessageReplies")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@index([conversationId, createdAt])
   @@index([senderId])
   @@index([receiverId])
   @@index([createdAt])

@@ -137,11 +137,18 @@ export const friendshipAPI = {
 
 // Message API
 export const messageAPI = {
-  getConversations: () => api.get('/messages/conversations'),
-  getMessages: (userId: string) => api.get(`/messages/${userId}`),
-  sendMessage: (receiverId: string, content: string) =>
-    api.post('/messages', { receiverId, content }),
   getUnreadCount: () => api.get('/messages/unread/count'),
+  getConversations: () => api.get('/messages/conversations'),
+  resolve: (id: string) => api.get(`/messages/resolve/${id}`),
+  getConversation: (conversationId: string) => api.get(`/messages/conversations/${conversationId}`),
+  sendMessage: (conversationId: string, content: string, replyToId?: string) =>
+    api.post(`/messages/conversations/${conversationId}/messages`, { content, replyToId }),
+  editMessage: (messageId: string, content: string) =>
+    api.patch(`/messages/messages/${messageId}`, { content }),
+  deleteMessage: (messageId: string) => api.delete(`/messages/messages/${messageId}`),
+  markRead: (conversationId: string) => api.patch(`/messages/conversations/${conversationId}/read`),
+  createGroup: (name: string, memberIds: string[]) =>
+    api.post('/messages/conversations/group', { name, memberIds }),
 };
 
 // Admin API
