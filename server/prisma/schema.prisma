@@ -455,6 +455,26 @@ model Friendship {
   @@index([requesterId, status])
 }
 
+// ============ CUSTOM FILTERS ============
+
+model CustomFilter {
+  id        String              @id @default(uuid())
+  name      String
+  values    CustomFilterValue[]
+  createdAt DateTime            @default(now())
+}
+
+model CustomFilterValue {
+  id        String       @id @default(uuid())
+  value     String
+  sortOrder Int          @default(0)
+  filterId  String
+  filter    CustomFilter @relation(fields: [filterId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+
+  @@index([filterId])
+}
+
 // ============ NOTIFICATIONS ============
 
 model Notification {

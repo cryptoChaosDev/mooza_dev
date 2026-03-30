@@ -179,6 +179,12 @@ export const adminAPI = {
   priceRanges: crudFor('price-ranges'),
   artists: crudFor('artists'),
   employers: crudFor('employers'),
+  customFilters: {
+    list: () => api.get(`${adminBase}/custom-filters`),
+    create: (data: { name: string; values: string[] }) => api.post(`${adminBase}/custom-filters`, data),
+    update: (id: string, data: { name?: string; values?: string[] }) => api.put(`${adminBase}/custom-filters/${id}`, data),
+    remove: (id: string) => api.delete(`${adminBase}/custom-filters/${id}`),
+  },
 };
 
 // Search Filters Type

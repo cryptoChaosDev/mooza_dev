@@ -554,11 +554,210 @@ function StructureTree() {
   );
 }
 
+// ─── Custom filter card ──────────────────────────────────────────────────────
+
+interface CFilter { id: string; name: string; values: { id: string; value: string; sortOrder: number }[] }
+
+function CustomFilterCard({ filter, onUpdate, onDelete }: {
+  filter: CFilter;
+  onUpdate: (name: string, values: string[]) => void;
+  onDelete: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [addingValue, setAddingValue] = useState(false);
+  const [newValue, setNewValue] = useState('');
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState('');
+
+  const vals = filter.values.map(v => v.value);
+
+  const saveValues = (newVals: string[]) => onUpdate(filter.name, newVals);
+  const saveName = () => { onUpdate(editName.trim() || filter.name, vals); setEditingName(false); };
+
+  const addValue = () => {
+    if (!newValue.trim()) return;
+    saveValues([...vals, newValue.trim()]);
+    setNewValue(''); setAddingValue(false);
+  };
+  const deleteValue = (idx: number) => saveValues(vals.filter((_, i) => i !== idx));
+  const saveValueEdit = (idx: number) => {
+    if (!editingText.trim()) return;
+    saveValues(vals.map((v, i) => i === idx ? editingText.trim() : v));
+    setEditingIdx(null);
+  };
+
+  return (
+    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 bg-slate-800/30 hover:bg-slate-800/50 group">
+        <button onClick={() => setOpen(o => !o)} className="text-slate-400 hover:text-white flex-shrink-0">
+          <ChevronRight size={16} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
+        </button>
+        {editingName ? (
+          <div className="flex items-center gap-2 flex-1">
+            <input
+              autoFocus value={editName}
+              onChange={e => setEditName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false); }}
+              className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500"
+            />
+            <button onClick={saveName} className="text-green-400 hover:text-green-300"><Check size={14} /></button>
+            <button onClick={() => setEditingName(false)} className="text-slate-400 hover:text-white"><X size={14} /></button>
+          </div>
+        ) : (
+          <>
+            <span className="flex-1 font-semibold text-white">{filter.name}</span>
+            <span className="text-xs text-slate-500 flex-shrink-0">{filter.values.length} зн.</span>
+            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => { setEditName(filter.name); setEditingName(true); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
+              <button onClick={onDelete} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {open && (
+        <div className="p-3 space-y-0.5">
+          {vals.map((v, idx) => (
+            <div key={idx} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-800/30 group/v rounded">
+              {editingIdx === idx ? (
+                <>
+                  <input
+                    autoFocus value={editingText}
+                    onChange={e => setEditingText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveValueEdit(idx); if (e.key === 'Escape') setEditingIdx(null); }}
+                    className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500"
+                  />
+                  <button onClick={() => saveValueEdit(idx)} className="text-green-400 hover:text-green-300"><Check size={14} /></button>
+                  <button onClick={() => setEditingIdx(null)} className="text-slate-400 hover:text-white"><X size={14} /></button>
+                </>
+              ) : (
+                <>
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-600 flex-shrink-0" />
+                  <span className="flex-1 text-sm text-slate-300">{v}</span>
+                  <div className="flex gap-0.5 opacity-0 group-hover/v:opacity-100 transition-opacity">
+                    <button onClick={() => { setEditingIdx(idx); setEditingText(v); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={12} /></button>
+                    <button onClick={() => deleteValue(idx)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={12} /></button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+
+          {vals.length === 0 && !addingValue && (
+            <p className="text-xs text-slate-600 px-2 py-1">Нет значений</p>
+          )}
+
+          {addingValue ? (
+            <div className="flex items-center gap-2 px-2 pt-1">
+              <input
+                autoFocus value={newValue}
+                onChange={e => setNewValue(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addValue(); if (e.key === 'Escape') { setNewValue(''); setAddingValue(false); } }}
+                placeholder="Новое значение"
+                className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500"
+              />
+              <button onClick={addValue} className="text-green-400 hover:text-green-300"><Check size={14} /></button>
+              <button onClick={() => { setNewValue(''); setAddingValue(false); }} className="text-slate-400 hover:text-white"><X size={14} /></button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setAddingValue(true)}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-primary-400 transition-colors px-2 pt-1.5 pb-0.5"
+            >
+              <Plus size={11} /> Добавить значение
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Custom filters section ───────────────────────────────────────────────────
+
+function CustomFiltersSection() {
+  const qc = useQueryClient();
+  const [addingFilter, setAddingFilter] = useState(false);
+  const [newFilterName, setNewFilterName] = useState('');
+
+  const { data: filters = [] } = useQuery<CFilter[]>({
+    queryKey: ['admin-custom-filters'],
+    queryFn: () => adminAPI.customFilters.list().then((r: any) => r.data),
+  });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['admin-custom-filters'] });
+
+  const createMut = useMutation({
+    mutationFn: (data: { name: string; values: string[] }) => adminAPI.customFilters.create(data),
+    onSuccess: () => { invalidate(); setAddingFilter(false); setNewFilterName(''); },
+  });
+  const updateMut = useMutation({
+    mutationFn: ({ id, name, values }: { id: string; name: string; values: string[] }) =>
+      adminAPI.customFilters.update(id, { name, values }),
+    onSuccess: invalidate,
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => adminAPI.customFilters.remove(id),
+    onSuccess: invalidate,
+  });
+
+  return (
+    <div className="space-y-3">
+      {filters.map(filter => (
+        <CustomFilterCard
+          key={filter.id}
+          filter={filter}
+          onUpdate={(name, values) => updateMut.mutate({ id: filter.id, name, values })}
+          onDelete={() => deleteMut.mutate(filter.id)}
+        />
+      ))}
+
+      {filters.length === 0 && !addingFilter && (
+        <div className="text-center py-8 text-slate-500 text-sm">Нет пользовательских фильтров</div>
+      )}
+
+      {addingFilter ? (
+        <div className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus value={newFilterName}
+              onChange={e => setNewFilterName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && newFilterName.trim()) createMut.mutate({ name: newFilterName.trim(), values: [] });
+                if (e.key === 'Escape') { setAddingFilter(false); setNewFilterName(''); }
+              }}
+              placeholder="Название фильтра"
+              className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500"
+            />
+            <button
+              onClick={() => newFilterName.trim() && createMut.mutate({ name: newFilterName.trim(), values: [] })}
+              className="text-green-400 hover:text-green-300"
+            ><Check size={16} /></button>
+            <button onClick={() => { setAddingFilter(false); setNewFilterName(''); }} className="text-slate-400 hover:text-white">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          onClick={() => setAddingFilter(true)}
+          className="flex items-center gap-2 text-sm bg-primary-600 hover:bg-primary-500 text-white px-4 py-2 rounded-lg transition-colors"
+        >
+          <Plus size={15} /> Добавить фильтр
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Tabs ────────────────────────────────────────────────────────────────────
 
 const TABS = [
   { id: 'structure', label: 'Структура' },
   { id: 'filters', label: 'Фильтры поиска' },
+  { id: 'custom', label: 'Доп. фильтры' },
   { id: 'orgs', label: 'Организации' },
 ] as const;
 
@@ -609,6 +808,8 @@ export default function AdminPage() {
             />
           </div>
         )}
+
+        {tab === 'custom' && <CustomFiltersSection />}
 
         {tab === 'orgs' && (
           <div className="grid gap-4 md:grid-cols-2">
