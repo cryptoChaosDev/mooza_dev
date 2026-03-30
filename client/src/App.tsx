@@ -76,9 +76,9 @@ function AppRoutes() {
           <Route path="/profile/:userId"  element={<UserProfilePage />} />
           <Route path="/search"           element={<SearchPage />} />
           <Route path="/friends"          element={<FriendsPage />} />
-          <Route path="/messages"         element={<MessagesPage />} />
-          <Route path="/messages/:userId" element={<ChatPage />} />
-          <Route path="/chat/:userId"     element={<ChatPage />} />
+          <Route path="/messages"     element={<MessagesPage />} />
+          <Route path="/messages/:id" element={<ChatPage />} />
+          <Route path="/chat/:id"     element={<ChatPage />} />
           {user?.isAdmin && <Route path="/admin" element={<AdminPage />} />}
           <Route path="*"                 element={<Navigate to="/" replace />} />
         </Routes>
@@ -135,7 +135,6 @@ function App() {
     });
 
     socket.on('new_message', (message: any) => {
-      queryClient.invalidateQueries({ queryKey: ['conversations'] });
       const inChat = window.location.pathname.startsWith('/messages') ||
                      window.location.pathname.startsWith('/chat');
       if (!inChat) {
@@ -145,6 +144,14 @@ function App() {
         ? `${message.sender.firstName} ${message.sender.lastName}`
         : 'Новое сообщение';
       showBrowserNotification(senderName, message.content, message.sender?.avatar);
+    });
+
+    socket.on('message_edited', () => {
+      // handled locally in ChatPage
+    });
+
+    socket.on('message_deleted', () => {
+      // handled locally in ChatPage
     });
 
     socket.on('friend_request', ({ requester }: any) => {
@@ -193,6 +200,8 @@ function App() {
       if (s) {
         s.off('new_notification');
         s.off('new_message');
+        s.off('message_edited');
+        s.off('message_deleted');
         s.off('friend_request');
         s.off('friend_accepted');
         s.off('post_reply');
