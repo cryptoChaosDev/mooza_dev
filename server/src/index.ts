@@ -13,6 +13,7 @@ import { apiLimiter } from './middleware/rateLimiter';
 
 // Import JWT utilities
 import { getJwtSecret } from './utils/jwt';
+import { initWebPush } from './utils/webpush';
 
 // Import logger
 import logger, { morganStream } from './utils/logger';
@@ -26,6 +27,7 @@ import messageRoutes from './routes/messages';
 import referenceRoutes from './routes/references';
 import adminRoutes from './routes/admin';
 import notificationRoutes from './routes/notifications';
+import pushRoutes from './routes/push';
 
 // Load environment variables
 dotenv.config();
@@ -115,6 +117,7 @@ app.use('/api/messages', messageRoutes);
 app.use('/api/references', referenceRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/push', pushRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -143,6 +146,9 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     });
   }
 });
+
+// Initialize Web Push
+initWebPush();
 
 // Start server with Socket.io
 const httpServer = initSocket(app);

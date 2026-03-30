@@ -20,6 +20,13 @@ const AdminPage       = lazy(() => import('./pages/AdminPage'));
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  return Uint8Array.from([...raw].map(c => c.charCodeAt(0)));
+}
+
 function PageLoader() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-900">
@@ -99,9 +106,43 @@ function App() {
       return;
     }
 
-    // Request browser push permission
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      Notification.requestPermission();
+    // Request push permission and subscribe
+    if (typeof Notification !== 'undefined' && 'serviceWorker' in navigator) {
+      const setupPush = async () => {
+        try {
+          if (Notification.permission === 'default') {
+            await Notification.requestPermission();
+          }
+          if (Notification.permission !== 'granted') return;
+
+          const reg = await navigator.serviceWorker.ready;
+          if (!reg.pushManager) return;
+
+          // Get VAPID public key from server
+          const keyRes = await fetch(`${API_URL}/api/push/vapid-public-key`);
+          if (!keyRes.ok) return;
+          const { key } = await keyRes.json();
+
+          // Subscribe to push
+          const sub = await reg.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: urlBase64ToUint8Array(key),
+          });
+
+          // Send subscription to server
+          await fetch(`${API_URL}/api/push/subscribe`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+            body: JSON.stringify(sub.toJSON()),
+          });
+        } catch {
+          // Push not supported or blocked — silent fail
+        }
+      };
+      setupPush();
     }
 
     // ── Connect socket ──────────────────────────────────────────────────────

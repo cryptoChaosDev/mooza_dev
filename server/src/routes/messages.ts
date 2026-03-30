@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { emitToUser } from '../socket';
+import { emitToUser, notifyUser } from '../socket';
 
 const router = Router();
 // Lazy proxy — avoids circular-import TDZ when this module loads before prisma is initialized
@@ -290,25 +290,37 @@ router.post('/conversations/:id/messages', authenticate, async (req: AuthRequest
       data: { lastReadAt: new Date() },
     });
 
+    const sender = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { firstName: true, lastName: true, avatar: true },
+    });
+    const senderName = sender ? `${sender.firstName} ${sender.lastName}` : 'Сообщение';
+    const preview = content.length > 80 ? content.slice(0, 80) + '…' : content;
+
     const otherMembers = conv.members.filter((m: any) => m.userId !== userId);
     for (const member of otherMembers) {
-      emitToUser(member.userId, 'new_message', { ...message, conversationId });
+      notifyUser(
+        member.userId,
+        'new_message',
+        { ...message, conversationId },
+        {
+          title: conv.isGroup ? `${conv.name} — ${senderName}` : senderName,
+          body: preview,
+          link: `/messages/${conversationId}`,
+        },
+      );
     }
 
-    // DM notification
+    // DM notification (DB record for notification centre)
     if (!conv.isGroup && otherMembers.length === 1) {
       const receiverId = otherMembers[0].userId;
-      const sender = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { firstName: true, lastName: true, avatar: true },
-      });
       const notification = await db.notification.create({
         data: {
           userId: receiverId,
           actorId: userId,
           type: 'message',
-          title: `${sender?.firstName} ${sender?.lastName}`,
-          body: content.length > 80 ? content.slice(0, 80) + '…' : content,
+          title: senderName,
+          body: preview,
           link: `/messages/${conversationId}`,
         },
         include: { actor: { select: { id: true, firstName: true, lastName: true, avatar: true } } },

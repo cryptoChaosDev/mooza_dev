@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { emitToUser } from '../socket';
+import { emitToUser, notifyUser } from '../socket';
 
 const router = Router();
 
@@ -271,7 +271,11 @@ router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
         },
         include: { actor: { select: { id: true, firstName: true, lastName: true, avatar: true } } },
       });
-      emitToUser(post.authorId, 'post_reply', { comment, postId: req.params.id });
+      notifyUser(post.authorId, 'post_reply', { comment, postId: req.params.id }, {
+        title: 'Новый комментарий',
+        body: `${comment.author.firstName} ${comment.author.lastName}: ${comment.content.length > 60 ? comment.content.slice(0, 60) + '…' : comment.content}`,
+        link: '/',
+      });
       emitToUser(post.authorId, 'new_notification', notification);
     }
 
