@@ -70,9 +70,16 @@ interface UserCardProps {
 }
 function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: UserCardProps) {
   const isSent = sentRequests.has(user.id);
+  const match = user.matchPercent as number | undefined;
+  const matchColor = match == null ? '' : match === 100 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : match >= 70 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-slate-700/50 text-slate-400 border-slate-600/30';
   return (
     <div className="group relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-3.5 border border-slate-700/50 hover:border-primary-500/50 transition-all duration-300 shadow-md hover:shadow-primary-500/10">
       <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+      {match != null && (
+        <div className={`absolute top-2.5 right-2.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${matchColor}`}>
+          {match}%
+        </div>
+      )}
       <div className="flex items-start gap-3">
         <button onClick={() => onNavigate(user.id)} className="flex-shrink-0">
           {user.avatar ? (
@@ -336,18 +343,36 @@ export default function SearchPage() {
   const isLoading = hasProfileFilters ? searchLoading : defaultLoading;
   const isFetching = hasProfileFilters ? searchFetching : false;
 
+  // Compute match % for a search result (only when profile filters are active)
+  const computeMatch = (sp: any): number | null => {
+    if (!sp) return null;
+    const checks: boolean[] = [];
+    if (serviceId) checks.push(sp.services?.some((s: any) => s.id === serviceId) ?? false);
+    if (genreId) checks.push(sp.genres?.some((g: any) => g.id === genreId) ?? false);
+    if (workFormatId) checks.push(sp.workFormats?.some((w: any) => w.id === workFormatId) ?? false);
+    if (employmentTypeId) checks.push(sp.employmentTypes?.some((e: any) => e.id === employmentTypeId) ?? false);
+    if (skillLevelId) checks.push(sp.skillLevels?.some((s: any) => s.id === skillLevelId) ?? false);
+    if (availabilityId) checks.push(sp.availabilities?.some((a: any) => a.id === availabilityId) ?? false);
+    if (geographyId) checks.push(sp.geographies?.some((g: any) => g.id === geographyId) ?? false);
+    if (checks.length === 0) return null;
+    return Math.round(checks.filter(Boolean).length / checks.length * 100);
+  };
+
   // Sort results client-side
   const results = useMemo(() => {
     let list: any[];
     if (hasProfileFilters) {
-      list = (searchData?.results || []).map((r: any) => r.user ?? r).filter((u: any) => u.id !== currentUser?.id);
+      list = (searchData?.results || [])
+        .filter((r: any) => (r.user ?? r).id !== currentUser?.id)
+        .map((r: any) => ({ ...(r.user ?? r), matchPercent: computeMatch(r.searchProfile) }));
     } else {
       list = defaultUsers || [];
     }
     if (sortBy === 'name_asc') return [...list].sort((a, b) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`));
     if (sortBy === 'name_desc') return [...list].sort((a, b) => `${b.firstName} ${b.lastName}`.localeCompare(`${a.firstName} ${a.lastName}`));
     return list;
-  }, [searchData, defaultUsers, hasProfileFilters, sortBy, currentUser?.id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchData, defaultUsers, hasProfileFilters, sortBy, currentUser?.id, serviceId, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId]);
 
   const totalCount = hasProfileFilters ? (searchData?.pagination?.totalCount ?? 0) : (defaultUsers?.length ?? 0);
   const totalPages = hasProfileFilters ? (searchData?.pagination?.totalPages ?? 1) : 1;
