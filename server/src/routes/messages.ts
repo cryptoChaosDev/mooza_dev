@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser, notifyUser } from '../socket';
+import { uploadChatAttachment } from '../middleware/upload';
 
 const router = Router();
 // Lazy proxy — avoids circular-import TDZ when this module loads before prisma is initialized
@@ -15,6 +16,7 @@ const MSG_INCLUDE = {
     select: {
       id: true,
       content: true,
+      attachmentName: true,
       deletedAt: true,
       sender: { select: { id: true, firstName: true, lastName: true } },
     },
@@ -98,7 +100,7 @@ router.get('/conversations', authenticate, async (req: AuthRequest, res) => {
               where: { deletedAt: null },
               orderBy: { createdAt: 'desc' },
               take: 1,
-              include: { sender: { select: { id: true, firstName: true, lastName: true } } },
+              include: { sender: { select: { id: true, firstName: true, lastName: true } }, },
             },
           },
         },
@@ -132,7 +134,7 @@ router.get('/conversations', authenticate, async (req: AuthRequest, res) => {
           otherUser: conv.isGroup ? null : (others[0]?.user ?? null),
           lastMessage: lastMsg
             ? {
-                content: lastMsg.deletedAt ? 'Сообщение удалено' : lastMsg.content,
+                content: lastMsg.deletedAt ? 'Сообщение удалено' : (lastMsg.content || (lastMsg.attachmentName ? `📎 ${lastMsg.attachmentName}` : '📎 Вложение')),
                 createdAt: lastMsg.createdAt,
                 senderId: lastMsg.senderId,
                 senderName: `${lastMsg.sender.firstName} ${lastMsg.sender.lastName}`,
@@ -218,6 +220,35 @@ router.post('/conversations/group', authenticate, async (req: AuthRequest, res) 
   }
 });
 
+// ─── POST /conversations/:id/upload ──────────────────────────────────────────
+router.post('/conversations/:id/upload', authenticate, uploadChatAttachment.single('file'), async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const { id: conversationId } = req.params;
+
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const conv = await db.conversation.findUnique({
+      where: { id: conversationId },
+      include: { members: { select: { userId: true } } },
+    });
+    if (!conv) return res.status(404).json({ error: 'Conversation not found' });
+    if (!conv.members.some((m: any) => m.userId === userId)) {
+      return res.status(403).json({ error: 'Not a member' });
+    }
+
+    res.json({
+      url: `/uploads/chat/${req.file.filename}`,
+      name: req.file.originalname,
+      size: req.file.size,
+      type: req.file.mimetype,
+    });
+  } catch (error) {
+    console.error('Upload chat attachment error:', error);
+    res.status(500).json({ error: 'Failed to upload file' });
+  }
+});
+
 // ─── GET /conversations/:id ──────────────────────────────────────────────────
 router.get('/conversations/:id', authenticate, async (req: AuthRequest, res) => {
   try {
@@ -257,9 +288,9 @@ router.post('/conversations/:id/messages', authenticate, async (req: AuthRequest
   try {
     const userId = req.userId!;
     const { id: conversationId } = req.params;
-    const { content, replyToId } = req.body;
+    const { content, replyToId, attachmentUrl, attachmentName, attachmentSize, attachmentType } = req.body;
 
-    if (!content?.trim()) return res.status(400).json({ error: 'Content is required' });
+    if (!content?.trim() && !attachmentUrl) return res.status(400).json({ error: 'Content or attachment is required' });
 
     const conv = await db.conversation.findUnique({
       where: { id: conversationId },
@@ -274,8 +305,9 @@ router.post('/conversations/:id/messages', authenticate, async (req: AuthRequest
       data: {
         conversationId,
         senderId: userId,
-        content: content.trim(),
+        content: content?.trim() || '',
         ...(replyToId ? { replyToId } : {}),
+        ...(attachmentUrl ? { attachmentUrl, attachmentName: attachmentName || null, attachmentSize: attachmentSize ? Number(attachmentSize) : null, attachmentType: attachmentType || null } : {}),
       },
       include: MSG_INCLUDE,
     });
@@ -295,7 +327,10 @@ router.post('/conversations/:id/messages', authenticate, async (req: AuthRequest
       select: { firstName: true, lastName: true, avatar: true },
     });
     const senderName = sender ? `${sender.firstName} ${sender.lastName}` : 'Сообщение';
-    const preview = content.length > 80 ? content.slice(0, 80) + '…' : content;
+    const rawContent = content?.trim() || '';
+    const preview = rawContent
+      ? (rawContent.length > 80 ? rawContent.slice(0, 80) + '…' : rawContent)
+      : (attachmentName ? `📎 ${attachmentName}` : '📎 Вложение');
 
     const otherMembers = conv.members.filter((m: any) => m.userId !== userId);
     for (const member of otherMembers) {

@@ -413,9 +413,13 @@ model Message {
   conversationId String?
   senderId       String
   receiverId     String?
-  content        String
+  content        String    @default("")
   replyToId      String?
   isEdited       Boolean   @default(false)
+  attachmentUrl  String?
+  attachmentName String?
+  attachmentSize Int?
+  attachmentType String?
   deletedAt      DateTime?
   readAt         DateTime?
 
