@@ -8,6 +8,7 @@ import { friendshipAPI, userAPI } from '../lib/api';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
+import { usePresenceStore } from '../stores/presenceStore';
 import {
   useSearchStore,
   useSearchResults,
@@ -72,6 +73,7 @@ function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: Us
   const isSent = sentRequests.has(user.id);
   const match = user.matchPercent as number | undefined;
   const matchColor = match == null ? '' : match === 100 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : match >= 70 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-slate-700/50 text-slate-400 border-slate-600/30';
+  const isOnline = usePresenceStore((s) => s.onlineUsers.has(user.id));
   return (
     <div className="group relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-3.5 border border-slate-700/50 hover:border-primary-500/50 transition-all duration-300 shadow-md hover:shadow-primary-500/10">
       <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
@@ -81,7 +83,7 @@ function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: Us
         </div>
       )}
       <div className="flex items-start gap-3">
-        <button onClick={() => onNavigate(user.id)} className="flex-shrink-0">
+        <button onClick={() => onNavigate(user.id)} className="flex-shrink-0 relative">
           {user.avatar ? (
             <img
               src={`${import.meta.env.VITE_API_URL}${user.avatar}`}
@@ -94,6 +96,9 @@ function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: Us
                 {user.firstName?.[0]}{user.lastName?.[0]}
               </span>
             </div>
+          )}
+          {isOnline && (
+            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-800 rounded-full" />
           )}
         </button>
         <div className="flex-1 min-w-0">

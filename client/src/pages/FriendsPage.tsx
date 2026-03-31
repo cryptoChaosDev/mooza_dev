@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Users, Check, X, MessageCircle, UserX, Clock } from 'lucide-react';
 import { friendshipAPI } from '../lib/api';
+import { usePresenceStore } from '../stores/presenceStore';
 
 type Tab = 'friends' | 'requests' | 'sent';
 
@@ -70,14 +71,25 @@ export default function FriendsPage() {
     { id: 'sent' as Tab, label: 'Отправленные', count: sentRequests.length },
   ];
 
-  const Avatar = ({ user, size = 10 }: { user: any; size?: number }) => {
+  const onlineUsers = usePresenceStore((s) => s.onlineUsers);
+
+  const Avatar = ({ user, size = 10, showPresence = false }: { user: any; size?: number; showPresence?: boolean }) => {
     const cls = `w-${size} h-${size} rounded-xl object-cover ring-2 ring-slate-700/50 group-hover:ring-primary-500/50 transition-all`;
-    if (user.avatar) {
-      return <img src={`${import.meta.env.VITE_API_URL}${user.avatar}`} alt={`${user.firstName} ${user.lastName}`} className={cls} />;
-    }
-    return (
+    const isOnline = showPresence && onlineUsers.has(user.id);
+    const inner = user.avatar ? (
+      <img src={`${import.meta.env.VITE_API_URL}${user.avatar}`} alt={`${user.firstName} ${user.lastName}`} className={cls} />
+    ) : (
       <div className={`w-${size} h-${size} bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl flex items-center justify-center ring-2 ring-slate-700/50 group-hover:ring-primary-500/50 transition-all`}>
         <span className="text-white font-bold text-sm">{user.firstName[0]}{user.lastName[0]}</span>
+      </div>
+    );
+    if (!showPresence) return inner;
+    return (
+      <div className="relative inline-block">
+        {inner}
+        {isOnline && (
+          <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-slate-800 rounded-full" />
+        )}
       </div>
     );
   };
@@ -150,7 +162,7 @@ export default function FriendsPage() {
                     <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
                     <div className="flex flex-col items-center text-center">
                       <button onClick={() => navigate(`/profile/${friend.id}`)} className="mb-2">
-                        <Avatar user={friend} size={14} />
+                        <Avatar user={friend} size={14} showPresence />
                       </button>
                       <button onClick={() => navigate(`/profile/${friend.id}`)} className="font-semibold text-white text-sm hover:text-primary-400 transition-colors truncate w-full">
                         {friend.firstName} {friend.lastName}

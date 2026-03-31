@@ -4,6 +4,7 @@ import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, Setti
 import { messageAPI, friendshipAPI } from '../lib/api';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
+import { usePresenceStore } from '../stores/presenceStore';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -54,6 +55,7 @@ export default function ChatPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user: me } = useAuthStore();
+  const onlineUsers = usePresenceStore((s) => s.onlineUsers);
 
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversation, setConversation] = useState<Conversation | null>(null);
@@ -319,6 +321,7 @@ export default function ChatPage() {
   const otherMember = !conversation?.isGroup
     ? conversation?.members.find(m => m.userId !== me?.id)?.user
     : null;
+  const otherOnline = otherMember ? onlineUsers.has(otherMember.id) : false;
   const chatName = conversation?.isGroup
     ? (conversation.name ?? 'Группа')
     : otherMember
@@ -381,8 +384,13 @@ export default function ChatPage() {
 
               <div className="flex-1 min-w-0">
                 <h2 className="font-semibold text-white text-sm truncate">{chatName}</h2>
-                {conversation.isGroup && (
+                {conversation.isGroup ? (
                   <p className="text-xs text-slate-400">{conversation.members.length} участников</p>
+                ) : (
+                  <p className={`text-xs flex items-center gap-1 ${otherOnline ? 'text-emerald-400' : 'text-slate-500'}`}>
+                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${otherOnline ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+                    {otherOnline ? 'В сети' : 'Не в сети'}
+                  </p>
                 )}
               </div>
             </div>
