@@ -162,14 +162,15 @@ model UserService {
   profession Profession @relation(fields: [professionId], references: [id])
   service    Service    @relation(fields: [serviceId], references: [id])
 
-  genres          Genre[]
-  workFormats     WorkFormat[]
-  employmentTypes EmploymentType[]
-  skillLevels     SkillLevel[]
-  availabilities  Availability[]
-  geographies     Geography[]
-  priceFrom       Int?
-  priceTo         Int?
+  genres                     Genre[]
+  workFormats                WorkFormat[]
+  employmentTypes            EmploymentType[]
+  skillLevels                SkillLevel[]
+  availabilities             Availability[]
+  geographies                Geography[]
+  priceFrom                  Int?
+  priceTo                    Int?
+  selectedCustomFilterValues CustomFilterValue[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -488,6 +489,8 @@ model CustomFilterValue {
   filterId  String
   filter    CustomFilter @relation(fields: [filterId], references: [id], onDelete: Cascade)
   createdAt DateTime     @default(now())
+
+  userServices UserService[]
 
   @@index([filterId])
 }
