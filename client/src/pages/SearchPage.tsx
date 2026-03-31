@@ -373,7 +373,7 @@ export default function SearchPage() {
     if (sortBy === 'name_desc') return [...list].sort((a, b) => `${b.firstName} ${b.lastName}`.localeCompare(`${a.firstName} ${a.lastName}`));
     return list;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchData, defaultUsers, hasProfileFilters, sortBy, currentUser?.id, fieldId, directionId, professionId, serviceId, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId]);
+  }, [searchData, defaultUsers, hasProfileFilters, sortBy, currentUser?.id, fieldId, professionId, serviceId, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId]);
 
   const totalCount = hasProfileFilters ? (searchData?.pagination?.totalCount ?? 0) : (defaultUsers?.length ?? 0);
   const totalPages = hasProfileFilters ? (searchData?.pagination?.totalPages ?? 1) : 1;
