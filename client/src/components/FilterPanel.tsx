@@ -150,6 +150,11 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
   const { data: availabilities, isLoading: availabilitiesLoading } = useAvailabilities();
   const { data: geographies, isLoading: geographiesLoading } = useGeographies();
 
+  // Derive allowed filter types from selected service
+  const selectedService = serviceId ? services?.find(s => s.id === serviceId) : null;
+  const allowedTypes = selectedService?.allowedFilterTypes ?? null; // null = no service selected = show all
+  const showFilter = (key: string) => allowedTypes === null || allowedTypes.includes(key);
+
   const activeCount = [
     fieldId, directionId, professionId, serviceId, genreId,
     workFormatId, employmentTypeId, skillLevelId, availabilityId,
@@ -247,74 +252,38 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
           onSelect={wrap(setServiceId, () => setGenreId(null))}
         />
 
-        <FilterSection
-          title="Жанр"
-          value={genreId}
-          items={genres || []}
-          loading={genresLoading}
-          onSelect={wrap(setGenreId)}
-        />
+        {showFilter('genre') && (
+          <FilterSection title="Жанр" value={genreId} items={genres || []} loading={genresLoading} onSelect={wrap(setGenreId)} />
+        )}
+        {showFilter('workFormat') && (
+          <FilterSection title="Формат работы" value={workFormatId} items={workFormats || []} loading={workFormatsLoading} onSelect={wrap(setWorkFormatId)} />
+        )}
+        {showFilter('employmentType') && (
+          <FilterSection title="Тип занятости" value={employmentTypeId} items={employmentTypes || []} loading={employmentTypesLoading} onSelect={wrap(setEmploymentTypeId)} />
+        )}
+        {showFilter('skillLevel') && (
+          <FilterSection title="Уровень навыка" value={skillLevelId} items={skillLevels || []} loading={skillLevelsLoading} onSelect={wrap(setSkillLevelId)} />
+        )}
+        {showFilter('availability') && (
+          <FilterSection title="Доступность" value={availabilityId} items={availabilities || []} loading={availabilitiesLoading} onSelect={wrap(setAvailabilityId)} />
+        )}
+        {showFilter('geography') && (
+          <FilterSection title="География" value={geographyId} items={geographies || []} loading={geographiesLoading} onSelect={wrap(setGeographyId)} />
+        )}
 
-        <FilterSection
-          title="Формат работы"
-          value={workFormatId}
-          items={workFormats || []}
-          loading={workFormatsLoading}
-          onSelect={wrap(setWorkFormatId)}
-        />
-
-        <FilterSection
-          title="Тип занятости"
-          value={employmentTypeId}
-          items={employmentTypes || []}
-          loading={employmentTypesLoading}
-          onSelect={wrap(setEmploymentTypeId)}
-        />
-
-        <FilterSection
-          title="Уровень навыка"
-          value={skillLevelId}
-          items={skillLevels || []}
-          loading={skillLevelsLoading}
-          onSelect={wrap(setSkillLevelId)}
-        />
-
-        <FilterSection
-          title="Доступность"
-          value={availabilityId}
-          items={availabilities || []}
-          loading={availabilitiesLoading}
-          onSelect={wrap(setAvailabilityId)}
-        />
-
-        <FilterSection
-          title="География"
-          value={geographyId}
-          items={geographies || []}
-          loading={geographiesLoading}
-          onSelect={wrap(setGeographyId)}
-        />
-
-        {/* Budget — manual range input */}
-        <div className="border-b border-slate-700/50 last:border-0 py-2.5">
-          <span className={`text-sm font-medium ${priceMin || priceMax ? 'text-primary-400' : 'text-slate-300'}`}>
-            Бюджет (₽)
-          </span>
-          <div className="flex gap-2 mt-2">
-            <input
-              type="number" min={0} placeholder="От"
-              value={priceMin}
-              onChange={e => { setPriceMin(e.target.value); setPage(1); }}
-              className="flex-1 px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-            />
-            <input
-              type="number" min={0} placeholder="До"
-              value={priceMax}
-              onChange={e => { setPriceMax(e.target.value); setPage(1); }}
-              className="flex-1 px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-            />
+        {showFilter('priceRange') && (
+          <div className="border-b border-slate-700/50 last:border-0 py-2.5">
+            <span className={`text-sm font-medium ${priceMin || priceMax ? 'text-primary-400' : 'text-slate-300'}`}>Бюджет (₽)</span>
+            <div className="flex gap-2 mt-2">
+              <input type="number" min={0} placeholder="От" value={priceMin} onChange={e => { setPriceMin(e.target.value); setPage(1); }} className="flex-1 px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+              <input type="number" min={0} placeholder="До" value={priceMax} onChange={e => { setPriceMax(e.target.value); setPage(1); }} className="flex-1 px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+            </div>
           </div>
-        </div>
+        )}
+
+        {serviceId && allowedTypes !== null && allowedTypes.length === 0 && (
+          <p className="text-xs text-slate-500 py-3 text-center">Для выбранной услуги фильтры не настроены</p>
+        )}
       </div>
     </div>
   );
