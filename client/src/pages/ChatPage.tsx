@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, Settings, UserPlus, LogOut, Crown } from 'lucide-react';
+import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, Settings, UserPlus, LogOut, Crown, Paperclip, Camera, FileText, Download } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
@@ -23,9 +23,14 @@ interface Message {
   deletedAt: string | null;
   createdAt: string;
   sender: MsgSender;
+  attachmentUrl?: string | null;
+  attachmentName?: string | null;
+  attachmentSize?: number | null;
+  attachmentType?: string | null;
   replyTo: {
     id: string;
     content: string;
+    attachmentName?: string | null;
     deletedAt: string | null;
     sender: { id: string; firstName: string; lastName: string };
   } | null;
@@ -66,8 +71,15 @@ export default function ChatPage() {
   const [friends, setFriends] = useState<{ id: string; firstName: string; lastName: string; avatar: string | null }[]>([]);
   const [loadingFriends, setLoadingFriends] = useState(false);
 
+  // Attachment state
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreview, setPendingPreview] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // ── Load chat ──────────────────────────────────────────────────────────────
   const loadChat = useCallback(async () => {
@@ -135,12 +147,34 @@ export default function ChatPage() {
   }, [conversationId]);
 
   // ── Send / Edit ────────────────────────────────────────────────────────────
+  const pickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setPendingFile(file);
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = ev => setPendingPreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    } else {
+      setPendingPreview(null);
+    }
+    e.target.value = '';
+  };
+
+  const clearAttachment = () => {
+    setPendingFile(null);
+    setPendingPreview(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const text = newMessage.trim();
-    if (!text || !conversationId || sending) return;
+    if ((!text && !pendingFile) || !conversationId || sending) return;
 
+    const fileToSend = pendingFile;
     setNewMessage('');
+    setPendingFile(null);
+    setPendingPreview(null);
     setSending(true);
 
     try {
@@ -149,15 +183,26 @@ export default function ChatPage() {
         setMessages(prev => prev.map(m => m.id === editingId ? res.data : m));
         setEditingId(null);
       } else {
-        const res = await messageAPI.sendMessage(conversationId, text, replyTo?.id);
+        let attachment: { url: string; name: string; size: number; type: string } | undefined;
+        if (fileToSend) {
+          setUploading(true);
+          const fd = new FormData();
+          fd.append('file', fileToSend);
+          const up = await messageAPI.uploadAttachment(conversationId, fd);
+          attachment = up.data;
+          setUploading(false);
+        }
+        const res = await messageAPI.sendMessage(conversationId, text, replyTo?.id, attachment);
         setMessages(prev => [...prev, res.data]);
         setReplyTo(null);
       }
     } catch (err) {
       console.error('Failed:', err);
       setNewMessage(text);
+      if (fileToSend) setPendingFile(fileToSend);
     } finally {
       setSending(false);
+      setUploading(false);
     }
   };
 
@@ -556,7 +601,7 @@ export default function ChatPage() {
                                 {msg.replyTo.sender.firstName} {msg.replyTo.sender.lastName}
                               </p>
                               <p className={`truncate ${isMine ? 'text-white/60' : 'text-slate-400'}`}>
-                                {msg.replyTo.deletedAt ? 'Сообщение удалено' : msg.replyTo.content}
+                                {msg.replyTo.deletedAt ? 'Сообщение удалено' : (msg.replyTo.content || (msg.replyTo.attachmentName ? `📎 ${msg.replyTo.attachmentName}` : '📎 Вложение'))}
                               </p>
                             </div>
                           )}
@@ -565,7 +610,23 @@ export default function ChatPage() {
                           {msg.deletedAt ? (
                             <p className="text-sm italic opacity-70">Сообщение удалено</p>
                           ) : (
-                            <p className="text-sm leading-relaxed break-words">{msg.content}</p>
+                            <>
+                              {msg.attachmentUrl && (() => {
+                                const isImage = msg.attachmentType?.startsWith('image/');
+                                return isImage ? (
+                                  <a href={`${API_URL}${msg.attachmentUrl}`} target="_blank" rel="noreferrer" className="block mb-2">
+                                    <img src={`${API_URL}${msg.attachmentUrl}`} alt={msg.attachmentName || 'image'} className="rounded-lg max-w-full max-h-60 object-cover" />
+                                  </a>
+                                ) : (
+                                  <a href={`${API_URL}${msg.attachmentUrl}`} target="_blank" rel="noreferrer" download={msg.attachmentName || true} className={`flex items-center gap-2 mb-2 px-3 py-2 rounded-lg ${isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-slate-600/50 hover:bg-slate-600'} transition-colors`}>
+                                    <FileText size={16} className="flex-shrink-0" />
+                                    <span className="text-xs truncate flex-1">{msg.attachmentName || 'Файл'}</span>
+                                    <Download size={14} className="flex-shrink-0 opacity-60" />
+                                  </a>
+                                );
+                              })()}
+                              {msg.content && <p className="text-sm leading-relaxed break-words">{msg.content}</p>}
+                            </>
                           )}
 
                           {/* Time + edited */}
@@ -619,6 +680,10 @@ export default function ChatPage() {
         </div>
       </div>
 
+      {/* Hidden file inputs */}
+      <input ref={fileInputRef} type="file" className="hidden" accept="*/*" onChange={pickFile} />
+      <input ref={cameraInputRef} type="file" className="hidden" accept="image/*" capture="environment" onChange={pickFile} />
+
       {/* Input area */}
       <div className="border-t border-slate-700/50 backdrop-blur-sm bg-slate-900/80 pb-20">
         <div className="max-w-4xl mx-auto px-4 py-3">
@@ -639,7 +704,7 @@ export default function ChatPage() {
                   {editingId ? 'Редактирование' : `${replyTo!.sender.firstName} ${replyTo!.sender.lastName}`}
                 </p>
                 {replyTo && !editingId && (
-                  <p className="text-xs text-slate-400 truncate">{replyTo.content}</p>
+                  <p className="text-xs text-slate-400 truncate">{replyTo.content || (replyTo.attachmentName ? `📎 ${replyTo.attachmentName}` : '')}</p>
                 )}
               </div>
               <button
@@ -651,7 +716,47 @@ export default function ChatPage() {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="flex items-center gap-3">
+          {/* Attachment preview */}
+          {pendingFile && (
+            <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-xl bg-slate-700/40 border border-slate-600/50">
+              {pendingPreview ? (
+                <img src={pendingPreview} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
+              ) : (
+                <div className="w-10 h-10 rounded-lg bg-slate-600/60 flex items-center justify-center flex-shrink-0">
+                  <FileText size={18} className="text-slate-300" />
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-white truncate">{pendingFile.name}</p>
+                <p className="text-xs text-slate-400">{(pendingFile.size / 1024 / 1024).toFixed(2)} МБ</p>
+              </div>
+              <button onClick={clearAttachment} className="p-1 hover:bg-slate-600/50 rounded-lg transition-colors flex-shrink-0">
+                <X size={14} className="text-slate-400" />
+              </button>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="flex items-center gap-2">
+            {!editingId && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Прикрепить файл"
+                  className="p-2.5 bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-white rounded-xl border border-slate-700/50 transition-all flex-shrink-0"
+                >
+                  <Paperclip size={18} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cameraInputRef.current?.click()}
+                  title="Камера / галерея"
+                  className="p-2.5 bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-white rounded-xl border border-slate-700/50 transition-all flex-shrink-0"
+                >
+                  <Camera size={18} />
+                </button>
+              </>
+            )}
             <input
               ref={inputRef}
               type="text"
@@ -662,10 +767,10 @@ export default function ChatPage() {
             />
             <button
               type="submit"
-              disabled={!newMessage.trim() || sending}
-              className="group p-2.5 bg-gradient-to-br from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 disabled:from-slate-700 disabled:to-slate-800 text-white rounded-xl transition-all disabled:cursor-not-allowed shadow-lg shadow-primary-500/25 hover:scale-105 disabled:scale-100"
+              disabled={(!newMessage.trim() && !pendingFile) || sending || uploading}
+              className="group p-2.5 bg-gradient-to-br from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 disabled:from-slate-700 disabled:to-slate-800 text-white rounded-xl transition-all disabled:cursor-not-allowed shadow-lg shadow-primary-500/25 hover:scale-105 disabled:scale-100 flex-shrink-0"
             >
-              {editingId ? <Check size={18} /> : <Send size={18} />}
+              {uploading ? <Loader2 size={18} className="animate-spin" /> : editingId ? <Check size={18} /> : <Send size={18} />}
             </button>
           </form>
         </div>

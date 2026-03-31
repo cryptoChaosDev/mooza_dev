@@ -90,3 +90,43 @@ export const uploadPortfolio = multer({
     fileSize: 5 * 1024 * 1024, // 5MB max
   },
 });
+
+// ── Chat attachment upload ─────────────────────────────────────────────────────
+
+const chatDir = path.join(process.cwd(), 'uploads', 'chat');
+if (!fs.existsSync(chatDir)) {
+  fs.mkdirSync(chatDir, { recursive: true });
+}
+
+const chatStorage = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, chatDir); },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `chat-${uniqueSuffix}${ext}`);
+  },
+});
+
+const BLOCKED_EXTENSIONS = [
+  '.exe', '.bat', '.cmd', '.com', '.msi', '.msp', '.msc',
+  '.sh', '.bash', '.zsh', '.fish',
+  '.app', '.dmg', '.pkg',
+  '.vbs', '.vbe', '.js', '.jse', '.wsf', '.wsh', '.ps1', '.ps2',
+  '.jar', '.pif', '.scr', '.reg', '.dll', '.sys', '.drv',
+  '.lnk', '.cpl', '.inf',
+];
+
+const chatFileFilter = (req: any, file: any, cb: any) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (BLOCKED_EXTENSIONS.includes(ext)) {
+    cb(new Error('Executable files are not allowed'), false);
+  } else {
+    cb(null, true);
+  }
+};
+
+export const uploadChatAttachment = multer({
+  storage: chatStorage,
+  fileFilter: chatFileFilter,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+});

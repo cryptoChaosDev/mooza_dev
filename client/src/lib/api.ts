@@ -157,8 +157,16 @@ export const messageAPI = {
   getConversations: () => api.get('/messages/conversations'),
   resolve: (id: string) => api.get(`/messages/resolve/${id}`),
   getConversation: (conversationId: string) => api.get(`/messages/conversations/${conversationId}`),
-  sendMessage: (conversationId: string, content: string, replyToId?: string) =>
-    api.post(`/messages/conversations/${conversationId}/messages`, { content, replyToId }),
+  sendMessage: (conversationId: string, content: string, replyToId?: string, attachment?: { url: string; name: string; size: number; type: string }) =>
+    api.post(`/messages/conversations/${conversationId}/messages`, {
+      content,
+      replyToId,
+      ...(attachment ? { attachmentUrl: attachment.url, attachmentName: attachment.name, attachmentSize: attachment.size, attachmentType: attachment.type } : {}),
+    }),
+  uploadAttachment: (conversationId: string, formData: FormData) =>
+    api.post(`/messages/conversations/${conversationId}/upload`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
   editMessage: (messageId: string, content: string) =>
     api.patch(`/messages/messages/${messageId}`, { content }),
   deleteMessage: (messageId: string) => api.delete(`/messages/messages/${messageId}`),
