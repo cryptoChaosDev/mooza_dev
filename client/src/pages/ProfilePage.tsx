@@ -20,6 +20,8 @@ const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'profession', label: 'Услуги', icon: <Briefcase size={14} /> },
 ];
 
+type ServiceCustomFilter = { id: string; name: string; values: { id: string; value: string }[] };
+
 type UserServiceEntry = {
   fieldOfActivityId: string;
   fieldOfActivityName: string;
@@ -27,6 +29,8 @@ type UserServiceEntry = {
   professionName: string;
   serviceId: string;
   serviceName: string;
+  allowedFilterTypes: string[];
+  serviceCustomFilters: ServiceCustomFilter[];
   genreIds: string[];
   workFormatIds: string[];
   employmentTypeIds: string[];
@@ -39,6 +43,7 @@ type UserServiceEntry = {
 const emptyEntry = (): UserServiceEntry => ({
   fieldOfActivityId: '', fieldOfActivityName: '',
   professionId: '', professionName: '', serviceId: '', serviceName: '',
+  allowedFilterTypes: [], serviceCustomFilters: [],
   genreIds: [], workFormatIds: [], employmentTypeIds: [], skillLevelIds: [],
   availabilityIds: [], priceRangeIds: [], geographyIds: [],
 });
@@ -131,6 +136,8 @@ export default function ProfilePage() {
           professionName: us.profession?.name || '',
           serviceId: us.serviceId,
           serviceName: us.service?.name || '',
+          allowedFilterTypes: us.service?.allowedFilterTypes || [],
+          serviceCustomFilters: us.service?.customFilters || [],
           genreIds: us.genres?.map((g: any) => g.id) || [],
           workFormatIds: us.workFormats?.map((w: any) => w.id) || [],
           employmentTypeIds: us.employmentTypes?.map((e: any) => e.id) || [],
@@ -290,23 +297,34 @@ export default function ProfilePage() {
   const ServiceFilterEditors = ({ idx }: { idx: number }) => {
     const us = userServices[idx];
     const key = (k: string) => `${k}-${idx}`;
+    const allowed = us.allowedFilterTypes;
+    const show = (k: string) => allowed.length === 0 || allowed.includes(k);
+    const hasAny = show('genre') || show('workFormat') || show('employmentType') || show('skillLevel') || show('availability') || show('priceRange') || show('geography') || us.serviceCustomFilters.length > 0;
+    if (!hasAny) return (
+      <div className="px-3 pb-3 border-t border-slate-600/30 pt-2">
+        <p className="text-xs text-slate-500">Фильтры не настроены для этой услуги</p>
+      </div>
+    );
     return (
       <div className="px-3 pb-3 border-t border-slate-600/30 space-y-2 pt-2">
-        <SelectField label="Жанры" value={getNames(genres, us.genreIds).join(', ')} placeholder="Выберите жанры" icon={<Music size={13} />} onClick={() => setOpenFilterSheet(key('genre'))} badge={us.genreIds.length || undefined} />
-        <SelectField label="Формат работы" value={getNames(workFormats, us.workFormatIds).join(', ')} placeholder="Не указан" icon={<Globe size={13} />} onClick={() => setOpenFilterSheet(key('workFormat'))} badge={us.workFormatIds.length || undefined} />
-        <SelectField label="Тип занятости" value={getNames(employmentTypes, us.employmentTypeIds).join(', ')} placeholder="Не указан" icon={<Briefcase size={13} />} onClick={() => setOpenFilterSheet(key('employmentType'))} badge={us.employmentTypeIds.length || undefined} />
-        <SelectField label="Уровень" value={getNames(skillLevels, us.skillLevelIds).join(', ')} placeholder="Не указан" icon={<Star size={13} />} onClick={() => setOpenFilterSheet(key('skillLevel'))} badge={us.skillLevelIds.length || undefined} />
-        <SelectField label="Доступность" value={getNames(availabilities, us.availabilityIds).join(', ')} placeholder="Не указана" icon={<Calendar size={13} />} onClick={() => setOpenFilterSheet(key('availability'))} badge={us.availabilityIds.length || undefined} />
-        <SelectField label="Бюджет" value={getNames(priceRanges, us.priceRangeIds).join(', ')} placeholder="Не указан" icon={<DollarSign size={13} />} onClick={() => setOpenFilterSheet(key('priceRange'))} badge={us.priceRangeIds.length || undefined} />
-        <SelectField label="Город / Регион" value={getNames(geographies, us.geographyIds).join(', ')} placeholder="Не указан" icon={<MapPin size={13} />} onClick={() => setOpenFilterSheet(key('geography'))} badge={us.geographyIds.length || undefined} />
+        {show('genre') && <SelectField label="Жанры" value={getNames(genres, us.genreIds).join(', ')} placeholder="Выберите жанры" icon={<Music size={13} />} onClick={() => setOpenFilterSheet(key('genre'))} badge={us.genreIds.length || undefined} />}
+        {show('workFormat') && <SelectField label="Формат работы" value={getNames(workFormats, us.workFormatIds).join(', ')} placeholder="Не указан" icon={<Globe size={13} />} onClick={() => setOpenFilterSheet(key('workFormat'))} badge={us.workFormatIds.length || undefined} />}
+        {show('employmentType') && <SelectField label="Тип занятости" value={getNames(employmentTypes, us.employmentTypeIds).join(', ')} placeholder="Не указан" icon={<Briefcase size={13} />} onClick={() => setOpenFilterSheet(key('employmentType'))} badge={us.employmentTypeIds.length || undefined} />}
+        {show('skillLevel') && <SelectField label="Уровень" value={getNames(skillLevels, us.skillLevelIds).join(', ')} placeholder="Не указан" icon={<Star size={13} />} onClick={() => setOpenFilterSheet(key('skillLevel'))} badge={us.skillLevelIds.length || undefined} />}
+        {show('availability') && <SelectField label="Доступность" value={getNames(availabilities, us.availabilityIds).join(', ')} placeholder="Не указана" icon={<Calendar size={13} />} onClick={() => setOpenFilterSheet(key('availability'))} badge={us.availabilityIds.length || undefined} />}
+        {show('priceRange') && <SelectField label="Бюджет" value={getNames(priceRanges, us.priceRangeIds).join(', ')} placeholder="Не указан" icon={<DollarSign size={13} />} onClick={() => setOpenFilterSheet(key('priceRange'))} badge={us.priceRangeIds.length || undefined} />}
+        {show('geography') && <SelectField label="Город / Регион" value={getNames(geographies, us.geographyIds).join(', ')} placeholder="Не указан" icon={<MapPin size={13} />} onClick={() => setOpenFilterSheet(key('geography'))} badge={us.geographyIds.length || undefined} />}
+        {us.serviceCustomFilters.map(cf => (
+          <SelectField key={cf.id} label={cf.name} value="" placeholder="Выберите значение" icon={<Star size={13} />} onClick={() => {}} />
+        ))}
 
-        <SelectSheet isOpen={openFilterSheet === key('genre')} onClose={() => setOpenFilterSheet(null)} title="Жанры" options={genres.map(g => ({ id: g.id, name: g.name }))} selectedIds={us.genreIds} onSelect={ids => updateSvc(idx, { genreIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />
-        <SelectSheet isOpen={openFilterSheet === key('workFormat')} onClose={() => setOpenFilterSheet(null)} title="Формат работы" options={workFormats.map(w => ({ id: w.id, name: w.name }))} selectedIds={us.workFormatIds} onSelect={ids => updateSvc(idx, { workFormatIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
-        <SelectSheet isOpen={openFilterSheet === key('employmentType')} onClose={() => setOpenFilterSheet(null)} title="Тип занятости" options={employmentTypes.map(e => ({ id: e.id, name: e.name }))} selectedIds={us.employmentTypeIds} onSelect={ids => updateSvc(idx, { employmentTypeIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
-        <SelectSheet isOpen={openFilterSheet === key('skillLevel')} onClose={() => setOpenFilterSheet(null)} title="Уровень" options={skillLevels.map(s => ({ id: s.id, name: s.name }))} selectedIds={us.skillLevelIds} onSelect={ids => updateSvc(idx, { skillLevelIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
-        <SelectSheet isOpen={openFilterSheet === key('availability')} onClose={() => setOpenFilterSheet(null)} title="Доступность" options={availabilities.map(a => ({ id: a.id, name: a.name }))} selectedIds={us.availabilityIds} onSelect={ids => updateSvc(idx, { availabilityIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
-        <SelectSheet isOpen={openFilterSheet === key('priceRange')} onClose={() => setOpenFilterSheet(null)} title="Бюджет" options={priceRanges.map(p => ({ id: p.id, name: p.name }))} selectedIds={us.priceRangeIds} onSelect={ids => updateSvc(idx, { priceRangeIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />
-        <SelectSheet isOpen={openFilterSheet === key('geography')} onClose={() => setOpenFilterSheet(null)} title="Город / Регион" options={geographies.map(g => ({ id: g.id, name: g.name }))} selectedIds={us.geographyIds} onSelect={ids => updateSvc(idx, { geographyIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />
+        {show('genre') && <SelectSheet isOpen={openFilterSheet === key('genre')} onClose={() => setOpenFilterSheet(null)} title="Жанры" options={genres.map(g => ({ id: g.id, name: g.name }))} selectedIds={us.genreIds} onSelect={ids => updateSvc(idx, { genreIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />}
+        {show('workFormat') && <SelectSheet isOpen={openFilterSheet === key('workFormat')} onClose={() => setOpenFilterSheet(null)} title="Формат работы" options={workFormats.map(w => ({ id: w.id, name: w.name }))} selectedIds={us.workFormatIds} onSelect={ids => updateSvc(idx, { workFormatIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />}
+        {show('employmentType') && <SelectSheet isOpen={openFilterSheet === key('employmentType')} onClose={() => setOpenFilterSheet(null)} title="Тип занятости" options={employmentTypes.map(e => ({ id: e.id, name: e.name }))} selectedIds={us.employmentTypeIds} onSelect={ids => updateSvc(idx, { employmentTypeIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />}
+        {show('skillLevel') && <SelectSheet isOpen={openFilterSheet === key('skillLevel')} onClose={() => setOpenFilterSheet(null)} title="Уровень" options={skillLevels.map(s => ({ id: s.id, name: s.name }))} selectedIds={us.skillLevelIds} onSelect={ids => updateSvc(idx, { skillLevelIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />}
+        {show('availability') && <SelectSheet isOpen={openFilterSheet === key('availability')} onClose={() => setOpenFilterSheet(null)} title="Доступность" options={availabilities.map(a => ({ id: a.id, name: a.name }))} selectedIds={us.availabilityIds} onSelect={ids => updateSvc(idx, { availabilityIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />}
+        {show('priceRange') && <SelectSheet isOpen={openFilterSheet === key('priceRange')} onClose={() => setOpenFilterSheet(null)} title="Бюджет" options={priceRanges.map(p => ({ id: p.id, name: p.name }))} selectedIds={us.priceRangeIds} onSelect={ids => updateSvc(idx, { priceRangeIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />}
+        {show('geography') && <SelectSheet isOpen={openFilterSheet === key('geography')} onClose={() => setOpenFilterSheet(null)} title="Город / Регион" options={geographies.map(g => ({ id: g.id, name: g.name }))} selectedIds={us.geographyIds} onSelect={ids => updateSvc(idx, { geographyIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />}
       </div>
     );
   };
@@ -401,7 +419,7 @@ export default function ProfilePage() {
                 .map((s: any) => (
                   <button key={s.id} type="button"
                     onClick={() => {
-                      setPending(prev => ({ ...prev, serviceId: s.id, serviceName: s.name }));
+                      setPending(prev => ({ ...prev, serviceId: s.id, serviceName: s.name, allowedFilterTypes: s.allowedFilterTypes || [], serviceCustomFilters: s.customFilters || [] }));
                       setAddStep('filters');
                     }}
                     className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
@@ -427,15 +445,26 @@ export default function ProfilePage() {
           </div>
         </div>
         <p className="text-xs text-slate-400 mb-2">Настройте фильтры для этой услуги (необязательно):</p>
-        <div className="space-y-2">
-          <SelectField label="Жанры" value={getNames(genres, pending.genreIds).join(', ')} placeholder="Выберите жанры" icon={<Music size={13} />} onClick={() => setOpenFilterSheet('pending-genre')} badge={pending.genreIds.length || undefined} />
-          <SelectField label="Формат работы" value={getNames(workFormats, pending.workFormatIds).join(', ')} placeholder="Не указан" icon={<Globe size={13} />} onClick={() => setOpenFilterSheet('pending-workFormat')} badge={pending.workFormatIds.length || undefined} />
-          <SelectField label="Тип занятости" value={getNames(employmentTypes, pending.employmentTypeIds).join(', ')} placeholder="Не указан" icon={<Briefcase size={13} />} onClick={() => setOpenFilterSheet('pending-employmentType')} badge={pending.employmentTypeIds.length || undefined} />
-          <SelectField label="Уровень" value={getNames(skillLevels, pending.skillLevelIds).join(', ')} placeholder="Не указан" icon={<Star size={13} />} onClick={() => setOpenFilterSheet('pending-skillLevel')} badge={pending.skillLevelIds.length || undefined} />
-          <SelectField label="Доступность" value={getNames(availabilities, pending.availabilityIds).join(', ')} placeholder="Не указана" icon={<Calendar size={13} />} onClick={() => setOpenFilterSheet('pending-availability')} badge={pending.availabilityIds.length || undefined} />
-          <SelectField label="Бюджет" value={getNames(priceRanges, pending.priceRangeIds).join(', ')} placeholder="Не указан" icon={<DollarSign size={13} />} onClick={() => setOpenFilterSheet('pending-priceRange')} badge={pending.priceRangeIds.length || undefined} />
-          <SelectField label="Город / Регион" value={getNames(geographies, pending.geographyIds).join(', ')} placeholder="Не указан" icon={<MapPin size={13} />} onClick={() => setOpenFilterSheet('pending-geography')} badge={pending.geographyIds.length || undefined} />
-        </div>
+        {(() => {
+          const pAllowed = pending.allowedFilterTypes;
+          const pShow = (k: string) => pAllowed.length === 0 || pAllowed.includes(k);
+          const pHasAny = pShow('genre') || pShow('workFormat') || pShow('employmentType') || pShow('skillLevel') || pShow('availability') || pShow('priceRange') || pShow('geography') || pending.serviceCustomFilters.length > 0;
+          if (!pHasAny) return <p className="text-xs text-slate-500">Фильтры не настроены для этой услуги</p>;
+          return (
+            <div className="space-y-2">
+              {pShow('genre') && <SelectField label="Жанры" value={getNames(genres, pending.genreIds).join(', ')} placeholder="Выберите жанры" icon={<Music size={13} />} onClick={() => setOpenFilterSheet('pending-genre')} badge={pending.genreIds.length || undefined} />}
+              {pShow('workFormat') && <SelectField label="Формат работы" value={getNames(workFormats, pending.workFormatIds).join(', ')} placeholder="Не указан" icon={<Globe size={13} />} onClick={() => setOpenFilterSheet('pending-workFormat')} badge={pending.workFormatIds.length || undefined} />}
+              {pShow('employmentType') && <SelectField label="Тип занятости" value={getNames(employmentTypes, pending.employmentTypeIds).join(', ')} placeholder="Не указан" icon={<Briefcase size={13} />} onClick={() => setOpenFilterSheet('pending-employmentType')} badge={pending.employmentTypeIds.length || undefined} />}
+              {pShow('skillLevel') && <SelectField label="Уровень" value={getNames(skillLevels, pending.skillLevelIds).join(', ')} placeholder="Не указан" icon={<Star size={13} />} onClick={() => setOpenFilterSheet('pending-skillLevel')} badge={pending.skillLevelIds.length || undefined} />}
+              {pShow('availability') && <SelectField label="Доступность" value={getNames(availabilities, pending.availabilityIds).join(', ')} placeholder="Не указана" icon={<Calendar size={13} />} onClick={() => setOpenFilterSheet('pending-availability')} badge={pending.availabilityIds.length || undefined} />}
+              {pShow('priceRange') && <SelectField label="Бюджет" value={getNames(priceRanges, pending.priceRangeIds).join(', ')} placeholder="Не указан" icon={<DollarSign size={13} />} onClick={() => setOpenFilterSheet('pending-priceRange')} badge={pending.priceRangeIds.length || undefined} />}
+              {pShow('geography') && <SelectField label="Город / Регион" value={getNames(geographies, pending.geographyIds).join(', ')} placeholder="Не указан" icon={<MapPin size={13} />} onClick={() => setOpenFilterSheet('pending-geography')} badge={pending.geographyIds.length || undefined} />}
+              {pending.serviceCustomFilters.map(cf => (
+                <SelectField key={cf.id} label={cf.name} value="" placeholder="Выберите значение" icon={<Star size={13} />} onClick={() => {}} />
+              ))}
+            </div>
+          );
+        })()}
         <div className="flex gap-2 mt-3">
           <button onClick={() => setAddStep(null)} className="flex-1 py-2 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors">Отмена</button>
           <button
