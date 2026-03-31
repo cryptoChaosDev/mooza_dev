@@ -184,8 +184,8 @@ export const adminAPI = {
   professions: crudFor('professions'),
   services: {
     ...crudFor('services'),
-    setFilters: (id: string, filterIds: string[]) =>
-      api.put(`${adminBase}/services/${id}/custom-filters`, { filterIds }),
+    setFilters: (id: string, filterIds: string[], filterTypes: string[]) =>
+      api.put(`${adminBase}/services/${id}/filters`, { filterIds, filterTypes }),
   },
   genres: crudFor('genres'),
   workFormats: crudFor('work-formats'),
