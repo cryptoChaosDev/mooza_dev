@@ -35,6 +35,7 @@ export interface Service {
   professionName?: string;
   sortOrder: number;
   userCount?: number;
+  allowedFilterTypes?: string[];
 }
 
 export interface Genre {

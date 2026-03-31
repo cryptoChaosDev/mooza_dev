@@ -304,6 +304,11 @@ export default function SearchPage() {
   const { data: availabilities, isLoading: availabilitiesLoading } = useAvailabilities();
   const { data: geographies, isLoading: geographiesLoading } = useGeographies();
 
+  // Derive allowed filter types from selected service
+  const selectedService = serviceId ? services?.find(s => s.id === serviceId) : null;
+  const allowedTypes = selectedService?.allowedFilterTypes ?? null; // null = no service selected = show all
+  const showFilter = (key: string) => allowedTypes === null || allowedTypes.includes(key);
+
   // Whether any profile-based filter is active
   const hasProfileFilters = !!(fieldId || professionId || serviceId || genreId || workFormatId || employmentTypeId || skillLevelId || availabilityId || geographyId || priceMin || priceMax);
 
@@ -386,13 +391,13 @@ export default function SearchPage() {
     { key: 'field', label: 'Сфера', disabled: false },
     { key: 'profession', label: 'Профессия', disabled: !fieldId },
     { key: 'service', label: 'Услуга', disabled: !fieldId },
-    { key: 'genre', label: 'Жанр', disabled: false },
-    { key: 'workFormat', label: 'Формат', disabled: false },
-    { key: 'employmentType', label: 'Занятость', disabled: false },
-    { key: 'skillLevel', label: 'Уровень', disabled: false },
-    { key: 'availability', label: 'Доступность', disabled: false },
-    { key: 'geography', label: 'Город', disabled: false },
-    { key: 'priceRange', label: 'Бюджет', disabled: false },
+    { key: 'genre', label: 'Жанр', disabled: !showFilter('genre') },
+    { key: 'workFormat', label: 'Формат', disabled: !showFilter('workFormat') },
+    { key: 'employmentType', label: 'Занятость', disabled: !showFilter('employmentType') },
+    { key: 'skillLevel', label: 'Уровень', disabled: !showFilter('skillLevel') },
+    { key: 'availability', label: 'Доступность', disabled: !showFilter('availability') },
+    { key: 'geography', label: 'Город', disabled: !showFilter('geography') },
+    { key: 'priceRange', label: 'Бюджет', disabled: !showFilter('priceRange') },
   ];
 
   const activeCount = CHIPS.filter((c) => chipLabel(c.key) !== null).length;
