@@ -63,8 +63,9 @@ export const userAPI = {
     employmentTypeIds?: string[];
     skillLevelIds?: string[];
     availabilityIds?: string[];
-    priceRangeIds?: string[];
     geographyIds?: string[];
+    priceFrom?: number;
+    priceTo?: number;
   }>) => api.put('/users/me/services', services),
   uploadAvatar: (formData: FormData) =>
     api.post('/users/me/avatar', formData, {

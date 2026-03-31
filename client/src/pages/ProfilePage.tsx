@@ -36,8 +36,9 @@ type UserServiceEntry = {
   employmentTypeIds: string[];
   skillLevelIds: string[];
   availabilityIds: string[];
-  priceRangeIds: string[];
   geographyIds: string[];
+  priceFrom: string;
+  priceTo: string;
 };
 
 const emptyEntry = (): UserServiceEntry => ({
@@ -45,7 +46,7 @@ const emptyEntry = (): UserServiceEntry => ({
   professionId: '', professionName: '', serviceId: '', serviceName: '',
   allowedFilterTypes: [], serviceCustomFilters: [],
   genreIds: [], workFormatIds: [], employmentTypeIds: [], skillLevelIds: [],
-  availabilityIds: [], priceRangeIds: [], geographyIds: [],
+  availabilityIds: [], geographyIds: [], priceFrom: '', priceTo: '',
 });
 
 export default function ProfilePage() {
@@ -73,7 +74,6 @@ export default function ProfilePage() {
   const [skillLevels, setSkillLevels] = useState<any[]>([]);
   const [availabilities, setAvailabilities] = useState<any[]>([]);
   const [geographies, setGeographies] = useState<any[]>([]);
-  const [priceRanges, setPriceRanges] = useState<any[]>([]);
 
   // User services state
   const [userServices, setUserServices] = useState<UserServiceEntry[]>([]);
@@ -102,7 +102,6 @@ export default function ProfilePage() {
       referenceAPI.getAvailabilities().then(r => setAvailabilities(r.data));
       referenceAPI.getGenres().then(r => setGenres(r.data));
       referenceAPI.getGeographies().then(r => setGeographies(r.data));
-      referenceAPI.getPriceRanges().then(r => setPriceRanges(r.data));
       referenceAPI.getArtists().then(r => setArtists(r.data));
       referenceAPI.getEmployers().then(r => setEmployers(r.data));
     }
@@ -143,8 +142,9 @@ export default function ProfilePage() {
           employmentTypeIds: us.employmentTypes?.map((e: any) => e.id) || [],
           skillLevelIds: us.skillLevels?.map((s: any) => s.id) || [],
           availabilityIds: us.availabilities?.map((a: any) => a.id) || [],
-          priceRangeIds: us.priceRanges?.map((p: any) => p.id) || [],
           geographyIds: us.geographies?.map((g: any) => g.id) || [],
+          priceFrom: us.priceFrom != null ? String(us.priceFrom) : '',
+          priceTo: us.priceTo != null ? String(us.priceTo) : '',
         })) || []
       );
       return data;
@@ -185,8 +185,9 @@ export default function ProfilePage() {
         employmentTypeIds: us.employmentTypeIds,
         skillLevelIds: us.skillLevelIds,
         availabilityIds: us.availabilityIds,
-        priceRangeIds: us.priceRangeIds,
         geographyIds: us.geographyIds,
+        priceFrom: us.priceFrom !== '' ? Number(us.priceFrom) : undefined,
+        priceTo: us.priceTo !== '' ? Number(us.priceTo) : undefined,
       }))
     ),
   });
@@ -312,7 +313,15 @@ export default function ProfilePage() {
         {show('employmentType') && <SelectField label="Тип занятости" value={getNames(employmentTypes, us.employmentTypeIds).join(', ')} placeholder="Не указан" icon={<Briefcase size={13} />} onClick={() => setOpenFilterSheet(key('employmentType'))} badge={us.employmentTypeIds.length || undefined} />}
         {show('skillLevel') && <SelectField label="Уровень" value={getNames(skillLevels, us.skillLevelIds).join(', ')} placeholder="Не указан" icon={<Star size={13} />} onClick={() => setOpenFilterSheet(key('skillLevel'))} badge={us.skillLevelIds.length || undefined} />}
         {show('availability') && <SelectField label="Доступность" value={getNames(availabilities, us.availabilityIds).join(', ')} placeholder="Не указана" icon={<Calendar size={13} />} onClick={() => setOpenFilterSheet(key('availability'))} badge={us.availabilityIds.length || undefined} />}
-        {show('priceRange') && <SelectField label="Бюджет" value={getNames(priceRanges, us.priceRangeIds).join(', ')} placeholder="Не указан" icon={<DollarSign size={13} />} onClick={() => setOpenFilterSheet(key('priceRange'))} badge={us.priceRangeIds.length || undefined} />}
+        {show('priceRange') && (
+          <div>
+            <p className="text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1"><DollarSign size={13} />Бюджет (₽)</p>
+            <div className="flex gap-2">
+              <input type="number" min={0} placeholder="От" value={us.priceFrom} onChange={e => updateSvc(idx, { priceFrom: e.target.value })} className="flex-1 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+              <input type="number" min={0} placeholder="До" value={us.priceTo} onChange={e => updateSvc(idx, { priceTo: e.target.value })} className="flex-1 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+            </div>
+          </div>
+        )}
         {show('geography') && <SelectField label="Город / Регион" value={getNames(geographies, us.geographyIds).join(', ')} placeholder="Не указан" icon={<MapPin size={13} />} onClick={() => setOpenFilterSheet(key('geography'))} badge={us.geographyIds.length || undefined} />}
         {us.serviceCustomFilters.map(cf => (
           <SelectField key={cf.id} label={cf.name} value="" placeholder="Выберите значение" icon={<Star size={13} />} onClick={() => {}} />
@@ -323,7 +332,6 @@ export default function ProfilePage() {
         {show('employmentType') && <SelectSheet isOpen={openFilterSheet === key('employmentType')} onClose={() => setOpenFilterSheet(null)} title="Тип занятости" options={employmentTypes.map(e => ({ id: e.id, name: e.name }))} selectedIds={us.employmentTypeIds} onSelect={ids => updateSvc(idx, { employmentTypeIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />}
         {show('skillLevel') && <SelectSheet isOpen={openFilterSheet === key('skillLevel')} onClose={() => setOpenFilterSheet(null)} title="Уровень" options={skillLevels.map(s => ({ id: s.id, name: s.name }))} selectedIds={us.skillLevelIds} onSelect={ids => updateSvc(idx, { skillLevelIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />}
         {show('availability') && <SelectSheet isOpen={openFilterSheet === key('availability')} onClose={() => setOpenFilterSheet(null)} title="Доступность" options={availabilities.map(a => ({ id: a.id, name: a.name }))} selectedIds={us.availabilityIds} onSelect={ids => updateSvc(idx, { availabilityIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />}
-        {show('priceRange') && <SelectSheet isOpen={openFilterSheet === key('priceRange')} onClose={() => setOpenFilterSheet(null)} title="Бюджет" options={priceRanges.map(p => ({ id: p.id, name: p.name }))} selectedIds={us.priceRangeIds} onSelect={ids => updateSvc(idx, { priceRangeIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />}
         {show('geography') && <SelectSheet isOpen={openFilterSheet === key('geography')} onClose={() => setOpenFilterSheet(null)} title="Город / Регион" options={geographies.map(g => ({ id: g.id, name: g.name }))} selectedIds={us.geographyIds} onSelect={ids => updateSvc(idx, { geographyIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />}
       </div>
     );
@@ -457,7 +465,15 @@ export default function ProfilePage() {
               {pShow('employmentType') && <SelectField label="Тип занятости" value={getNames(employmentTypes, pending.employmentTypeIds).join(', ')} placeholder="Не указан" icon={<Briefcase size={13} />} onClick={() => setOpenFilterSheet('pending-employmentType')} badge={pending.employmentTypeIds.length || undefined} />}
               {pShow('skillLevel') && <SelectField label="Уровень" value={getNames(skillLevels, pending.skillLevelIds).join(', ')} placeholder="Не указан" icon={<Star size={13} />} onClick={() => setOpenFilterSheet('pending-skillLevel')} badge={pending.skillLevelIds.length || undefined} />}
               {pShow('availability') && <SelectField label="Доступность" value={getNames(availabilities, pending.availabilityIds).join(', ')} placeholder="Не указана" icon={<Calendar size={13} />} onClick={() => setOpenFilterSheet('pending-availability')} badge={pending.availabilityIds.length || undefined} />}
-              {pShow('priceRange') && <SelectField label="Бюджет" value={getNames(priceRanges, pending.priceRangeIds).join(', ')} placeholder="Не указан" icon={<DollarSign size={13} />} onClick={() => setOpenFilterSheet('pending-priceRange')} badge={pending.priceRangeIds.length || undefined} />}
+              {pShow('priceRange') && (
+                <div>
+                  <p className="text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1"><DollarSign size={13} />Бюджет (₽)</p>
+                  <div className="flex gap-2">
+                    <input type="number" min={0} placeholder="От" value={pending.priceFrom} onChange={e => setPending(p => ({ ...p, priceFrom: e.target.value }))} className="flex-1 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                    <input type="number" min={0} placeholder="До" value={pending.priceTo} onChange={e => setPending(p => ({ ...p, priceTo: e.target.value }))} className="flex-1 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                  </div>
+                </div>
+              )}
               {pShow('geography') && <SelectField label="Город / Регион" value={getNames(geographies, pending.geographyIds).join(', ')} placeholder="Не указан" icon={<MapPin size={13} />} onClick={() => setOpenFilterSheet('pending-geography')} badge={pending.geographyIds.length || undefined} />}
               {pending.serviceCustomFilters.map(cf => (
                 <SelectField key={cf.id} label={cf.name} value="" placeholder="Выберите значение" icon={<Star size={13} />} onClick={() => {}} />
@@ -484,7 +500,6 @@ export default function ProfilePage() {
         <SelectSheet isOpen={openFilterSheet === 'pending-employmentType'} onClose={() => setOpenFilterSheet(null)} title="Тип занятости" options={employmentTypes.map(e => ({ id: e.id, name: e.name }))} selectedIds={pending.employmentTypeIds} onSelect={ids => setPending(p => ({ ...p, employmentTypeIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} height="auto" />
         <SelectSheet isOpen={openFilterSheet === 'pending-skillLevel'} onClose={() => setOpenFilterSheet(null)} title="Уровень" options={skillLevels.map(s => ({ id: s.id, name: s.name }))} selectedIds={pending.skillLevelIds} onSelect={ids => setPending(p => ({ ...p, skillLevelIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} height="auto" />
         <SelectSheet isOpen={openFilterSheet === 'pending-availability'} onClose={() => setOpenFilterSheet(null)} title="Доступность" options={availabilities.map(a => ({ id: a.id, name: a.name }))} selectedIds={pending.availabilityIds} onSelect={ids => setPending(p => ({ ...p, availabilityIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} height="auto" />
-        <SelectSheet isOpen={openFilterSheet === 'pending-priceRange'} onClose={() => setOpenFilterSheet(null)} title="Бюджет" options={priceRanges.map(p => ({ id: p.id, name: p.name }))} selectedIds={pending.priceRangeIds} onSelect={ids => setPending(p => ({ ...p, priceRangeIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} height="auto" />
         <SelectSheet isOpen={openFilterSheet === 'pending-geography'} onClose={() => setOpenFilterSheet(null)} title="Город / Регион" options={geographies.map(g => ({ id: g.id, name: g.name }))} selectedIds={pending.geographyIds} onSelect={ids => setPending(p => ({ ...p, geographyIds: ids as string[] }))} mode="multiple" showConfirm searchable height="half" />
       </div>
     );

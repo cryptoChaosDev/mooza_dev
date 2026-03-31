@@ -29,7 +29,6 @@ const userServiceInclude = {
   skillLevels:     { select: { id: true, name: true } },
   availabilities:  { select: { id: true, name: true } },
   geographies:     { select: { id: true, name: true } },
-  priceRanges:     { select: { id: true, name: true } },
 } as const;
 
 const userSelect = {
@@ -231,8 +230,9 @@ router.put('/me/services', authenticate, async (req: AuthRequest, res) => {
       employmentTypeIds?: string[];
       skillLevelIds?: string[];
       availabilityIds?: string[];
-      priceRangeIds?: string[];
       geographyIds?: string[];
+      priceFrom?: number;
+      priceTo?: number;
     }> = req.body;
 
     if (!Array.isArray(services)) {
@@ -255,8 +255,9 @@ router.put('/me/services', authenticate, async (req: AuthRequest, res) => {
           employmentTypes: { connect: toConnect(us.employmentTypeIds) },
           skillLevels:     { connect: toConnect(us.skillLevelIds) },
           availabilities:  { connect: toConnect(us.availabilityIds) },
-          priceRanges:     { connect: toConnect(us.priceRangeIds) },
           geographies:     { connect: toConnect(us.geographyIds) },
+          priceFrom:       us.priceFrom ?? null,
+          priceTo:         us.priceTo ?? null,
         },
       });
     }
