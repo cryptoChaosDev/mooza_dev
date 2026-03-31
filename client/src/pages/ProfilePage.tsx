@@ -298,7 +298,7 @@ export default function ProfilePage() {
     const us = userServices[idx];
     const key = (k: string) => `${k}-${idx}`;
     const allowed = us.allowedFilterTypes;
-    const show = (k: string) => allowed.length === 0 || allowed.includes(k);
+    const show = (k: string) => allowed.includes(k);
     const hasAny = show('genre') || show('workFormat') || show('employmentType') || show('skillLevel') || show('availability') || show('priceRange') || show('geography') || us.serviceCustomFilters.length > 0;
     if (!hasAny) return (
       <div className="px-3 pb-3 border-t border-slate-600/30 pt-2">
@@ -447,7 +447,7 @@ export default function ProfilePage() {
         <p className="text-xs text-slate-400 mb-2">Настройте фильтры для этой услуги (необязательно):</p>
         {(() => {
           const pAllowed = pending.allowedFilterTypes;
-          const pShow = (k: string) => pAllowed.length === 0 || pAllowed.includes(k);
+          const pShow = (k: string) => pAllowed.includes(k);
           const pHasAny = pShow('genre') || pShow('workFormat') || pShow('employmentType') || pShow('skillLevel') || pShow('availability') || pShow('priceRange') || pShow('geography') || pending.serviceCustomFilters.length > 0;
           if (!pHasAny) return <p className="text-xs text-slate-500">Фильтры не настроены для этой услуги</p>;
           return (
