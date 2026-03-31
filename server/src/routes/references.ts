@@ -225,7 +225,8 @@ router.get('/search', async (req, res) => {
       skillLevelId,
       availabilityId,
       geographyId,
-      priceRangeId,
+      priceMin,
+      priceMax,
       query,
       page = '1',
       limit = '20',
@@ -244,7 +245,8 @@ router.get('/search', async (req, res) => {
     if (skillLevelId) userServiceWhere.skillLevels = { some: { id: skillLevelId } };
     if (availabilityId) userServiceWhere.availabilities = { some: { id: availabilityId } };
     if (geographyId) userServiceWhere.geographies = { some: { id: geographyId } };
-    if (priceRangeId) userServiceWhere.priceRanges = { some: { id: priceRangeId } };
+    if (priceMin) userServiceWhere.priceFrom = { gte: parseInt(priceMin as string, 10) };
+    if (priceMax) userServiceWhere.priceTo = { lte: parseInt(priceMax as string, 10) };
 
     const userWhere: any = {};
     if (fieldId) userWhere.fieldOfActivityId = fieldId;
@@ -287,7 +289,6 @@ router.get('/search', async (req, res) => {
           skillLevels: { select: { id: true, name: true } },
           availabilities: { select: { id: true, name: true } },
           geographies: { select: { id: true, name: true } },
-          priceRanges: { select: { id: true, name: true } },
         },
       },
     };
@@ -313,7 +314,6 @@ router.get('/search', async (req, res) => {
           skillLevels: dedup(userServices.flatMap(us => us.skillLevels)),
           availabilities: dedup(userServices.flatMap(us => us.availabilities)),
           geographies: dedup(userServices.flatMap(us => us.geographies)),
-          priceRanges: dedup(userServices.flatMap(us => us.priceRanges)),
         },
       };
     });

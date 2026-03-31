@@ -20,7 +20,6 @@ import {
   useSkillLevels,
   useAvailabilities,
   useGeographies,
-  usePriceRanges,
 } from '../stores/searchStore';
 import FilterPanel from '../components/FilterPanel';
 import BottomSheet from '../components/BottomSheet';
@@ -287,10 +286,10 @@ export default function SearchPage() {
   const {
     fieldId, professionId, serviceId, genreId,
     workFormatId, employmentTypeId, skillLevelId, availabilityId,
-    geographyId, priceRangeId,
+    geographyId, priceMin, priceMax,
     setFieldId, setProfessionId, setServiceId, setGenreId,
     setWorkFormatId, setEmploymentTypeId, setSkillLevelId, setAvailabilityId,
-    setGeographyId, setPriceRangeId,
+    setGeographyId, setPriceMin, setPriceMax,
     resetAllFilters, getFilters, setPage, page,
   } = useSearchStore();
 
@@ -304,10 +303,9 @@ export default function SearchPage() {
   const { data: skillLevels, isLoading: skillLevelsLoading } = useSkillLevels();
   const { data: availabilities, isLoading: availabilitiesLoading } = useAvailabilities();
   const { data: geographies, isLoading: geographiesLoading } = useGeographies();
-  const { data: priceRanges, isLoading: priceRangesLoading } = usePriceRanges();
 
   // Whether any profile-based filter is active
-  const hasProfileFilters = !!(fieldId || professionId || serviceId || genreId || workFormatId || employmentTypeId || skillLevelId || availabilityId || geographyId || priceRangeId);
+  const hasProfileFilters = !!(fieldId || professionId || serviceId || genreId || workFormatId || employmentTypeId || skillLevelId || availabilityId || geographyId || priceMin || priceMax);
 
   // ── Default: all users (or name search) — no profile filters needed ──
   const { data: defaultUsers, isLoading: defaultLoading } = useQuery({
@@ -325,7 +323,7 @@ export default function SearchPage() {
   const filters = useMemo(() => ({
     ...getFilters(),
     ...(debouncedName.trim() ? { query: debouncedName.trim() } : {}),
-  }), [fieldId, professionId, serviceId, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId, priceRangeId, debouncedName, page]);
+  }), [fieldId, professionId, serviceId, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId, priceMin, priceMax, debouncedName, page]);
 
   const { data: searchData, isLoading: searchLoading, isFetching: searchFetching } = useSearchResults(filters);
 
@@ -362,7 +360,7 @@ export default function SearchPage() {
       case 'skillLevel': return skillLevels?.find((s) => s.id === skillLevelId)?.name ?? null;
       case 'availability': return availabilities?.find((a) => a.id === availabilityId)?.name ?? null;
       case 'geography': return geographies?.find((g) => g.id === geographyId)?.name ?? null;
-      case 'priceRange': return priceRanges?.find((p) => p.id === priceRangeId)?.name ?? null;
+      case 'priceRange': return (priceMin || priceMax) ? `${priceMin || '0'} — ${priceMax || '∞'} ₽` : null;
       default: return null;
     }
   };
@@ -378,7 +376,7 @@ export default function SearchPage() {
       case 'skillLevel': setSkillLevelId(null); break;
       case 'availability': setAvailabilityId(null); break;
       case 'geography': setGeographyId(null); break;
-      case 'priceRange': setPriceRangeId(null); break;
+      case 'priceRange': setPriceMin(''); setPriceMax(''); break;
     }
     setPage(1);
   };
@@ -410,14 +408,13 @@ export default function SearchPage() {
     skillLevel: { items: skillLevels || [], loading: skillLevelsLoading, value: skillLevelId, setter: setSkillLevelId },
     availability: { items: availabilities || [], loading: availabilitiesLoading, value: availabilityId, setter: setAvailabilityId },
     geography: { items: geographies || [], loading: geographiesLoading, value: geographyId, setter: setGeographyId },
-    priceRange: { items: priceRanges || [], loading: priceRangesLoading, value: priceRangeId, setter: setPriceRangeId },
   };
 
   const chipTitles: Record<string, string> = {
     field: 'Сфера деятельности', profession: 'Профессия', service: 'Услуга',
     genre: 'Жанр', workFormat: 'Формат работы', employmentType: 'Тип занятости',
     skillLevel: 'Уровень навыка', availability: 'Доступность',
-    geography: 'Город / Регион', priceRange: 'Бюджет',
+    geography: 'Город / Регион',
   };
 
   // Friend request
@@ -676,7 +673,7 @@ export default function SearchPage() {
       </BottomSheet>
 
       {/* ── Quick filter sheets (one per chip) ── */}
-      {CHIPS.map((chip) => {
+      {CHIPS.filter(c => c.key !== 'priceRange').map((chip) => {
         const sd = sheetData[chip.key];
         return (
           <QuickFilterSheet
@@ -695,6 +692,23 @@ export default function SearchPage() {
           />
         );
       })}
+
+      {/* ── Budget filter sheet ── */}
+      <BottomSheet isOpen={openChip === 'priceRange'} onClose={() => setOpenChip(null)} title="Бюджет (₽)" height="auto">
+        <div className="px-4 pb-4 space-y-3">
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <p className="text-xs text-slate-400 mb-1">От</p>
+              <input type="number" min={0} placeholder="0" value={priceMin} onChange={e => { setPriceMin(e.target.value); setPage(1); }} className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500" />
+            </div>
+            <div className="flex-1">
+              <p className="text-xs text-slate-400 mb-1">До</p>
+              <input type="number" min={0} placeholder="∞" value={priceMax} onChange={e => { setPriceMax(e.target.value); setPage(1); }} className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500" />
+            </div>
+          </div>
+          <button onClick={() => { setPriceMin(''); setPriceMax(''); setPage(1); setOpenChip(null); }} className="w-full py-2 text-sm text-slate-400 hover:text-white transition-colors">Сбросить</button>
+        </div>
+      </BottomSheet>
     </div>
   );
 }

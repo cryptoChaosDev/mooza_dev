@@ -127,8 +127,9 @@ interface SearchFilterState {
   // Geography
   geographyId: string | null;
 
-  // Price Range
-  priceRangeId: string | null;
+  // Price Range (manual input)
+  priceMin: string;
+  priceMax: string;
 
   // Pagination
   page: number;
@@ -152,7 +153,8 @@ interface SearchFilterActions {
   setSkillLevelId: (id: string | null) => void;
   setAvailabilityId: (id: string | null) => void;
   setGeographyId: (id: string | null) => void;
-  setPriceRangeId: (id: string | null) => void;
+  setPriceMin: (v: string) => void;
+  setPriceMax: (v: string) => void;
 
   // Pagination
   setPage: (page: number) => void;
@@ -189,7 +191,8 @@ const initialState: SearchFilterState = {
   skillLevelId: null,
   availabilityId: null,
   geographyId: null,
-  priceRangeId: null,
+  priceMin: '',
+  priceMax: '',
   page: 1,
   limit: 20,
   resultCount: 0,
@@ -241,7 +244,8 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   setSkillLevelId: (id) => set({ skillLevelId: id }),
   setAvailabilityId: (id) => set({ availabilityId: id }),
   setGeographyId: (id) => set({ geographyId: id }),
-  setPriceRangeId: (id) => set({ priceRangeId: id }),
+  setPriceMin: (v) => set({ priceMin: v }),
+  setPriceMax: (v) => set({ priceMax: v }),
 
   // Pagination
   setPage: (page) => set({ page }),
@@ -266,7 +270,8 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
     skillLevelId: null,
     availabilityId: null,
     geographyId: null,
-    priceRangeId: null,
+    priceMin: '',
+    priceMax: '',
     page: 1,
     resultCount: 0,
   }),
@@ -289,7 +294,8 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
       skillLevelId: state.skillLevelId || undefined,
       availabilityId: state.availabilityId || undefined,
       geographyId: state.geographyId || undefined,
-      priceRangeId: state.priceRangeId || undefined,
+      priceMin: state.priceMin || undefined,
+      priceMax: state.priceMax || undefined,
       page: state.page,
       limit: state.limit,
     };
@@ -396,16 +402,6 @@ export function useGeographies() {
     queryFn: async () => {
       const { data } = await referenceAPI.getGeographies();
       return data as Geography[];
-    },
-  });
-}
-
-export function usePriceRanges() {
-  return useQuery({
-    queryKey: ['priceRanges'],
-    queryFn: async () => {
-      const { data } = await referenceAPI.getPriceRanges();
-      return data as PriceRange[];
     },
   });
 }

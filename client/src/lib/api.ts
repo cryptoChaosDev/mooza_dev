@@ -118,7 +118,8 @@ export const referenceAPI = {
     skillLevelId?: string;
     availabilityId?: string;
     geographyId?: string;
-    priceRangeId?: string;
+    priceMin?: string;
+    priceMax?: string;
     query?: string;
     page?: number;
     limit?: number;
@@ -217,7 +218,8 @@ export interface SearchFilters {
   skillLevelId?: string;
   availabilityId?: string;
   geographyId?: string;
-  priceRangeId?: string;
+  priceMin?: string;
+  priceMax?: string;
   query?: string;
   page?: number;
   limit?: number;
