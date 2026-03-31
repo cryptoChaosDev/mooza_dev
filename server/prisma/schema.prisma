@@ -53,12 +53,13 @@ model Profession {
 
 // Services offered — linked to Profession (hierarchical filter level 3)
 model Service {
-  id           String     @id @default(uuid())
-  name         String     @unique
-  nameEn       String?
-  sortOrder    Int        @default(0)
-  professionId String
-  profession   Profession @relation(fields: [professionId], references: [id])
+  id                 String     @id @default(uuid())
+  name               String     @unique
+  nameEn             String?
+  sortOrder          Int        @default(0)
+  professionId       String
+  profession         Profession @relation(fields: [professionId], references: [id])
+  allowedFilterTypes String[]   // system filter type keys, e.g. ["genre", "workFormat"]
 
   userServices  UserService[]
   customFilters CustomFilter[] @relation("ServiceCustomFilters")

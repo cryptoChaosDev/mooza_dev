@@ -187,6 +187,18 @@ function AddRow({ placeholder, onAdd, onCancel }: {
   );
 }
 
+// ─── System filter type definitions ─────────────────────────────────────────
+
+const SYSTEM_FILTER_TYPES = [
+  { key: 'genre',          label: 'Жанры' },
+  { key: 'workFormat',     label: 'Формат работы' },
+  { key: 'employmentType', label: 'Тип занятости' },
+  { key: 'skillLevel',     label: 'Уровень мастерства' },
+  { key: 'availability',   label: 'Готовность к работе' },
+  { key: 'geography',      label: 'География' },
+  { key: 'priceRange',     label: 'Ценовые диапазоны' },
+];
+
 // ─── Service (leaf node) ─────────────────────────────────────────────────────
 
 function ServiceRow({ service, allCustomFilters, onUpdate, onDelete }: {
@@ -200,9 +212,12 @@ function ServiceRow({ service, allCustomFilters, onUpdate, onDelete }: {
   const qc = useQueryClient();
 
   const attachedIds: string[] = (service.customFilters ?? []).map((f: any) => f.id);
+  const attachedTypes: string[] = service.allowedFilterTypes ?? [];
+  const totalAttached = attachedIds.length + attachedTypes.length;
 
   const setFiltersMut = useMutation({
-    mutationFn: (filterIds: string[]) => adminAPI.services.setFilters(service.id, filterIds),
+    mutationFn: ({ filterIds, filterTypes }: { filterIds: string[]; filterTypes: string[] }) =>
+      adminAPI.services.setFilters(service.id, filterIds, filterTypes),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-services'] }),
   });
 
@@ -210,7 +225,14 @@ function ServiceRow({ service, allCustomFilters, onUpdate, onDelete }: {
     const newIds = attachedIds.includes(filterId)
       ? attachedIds.filter(id => id !== filterId)
       : [...attachedIds, filterId];
-    setFiltersMut.mutate(newIds);
+    setFiltersMut.mutate({ filterIds: newIds, filterTypes: attachedTypes });
+  };
+
+  const toggleType = (typeKey: string) => {
+    const newTypes = attachedTypes.includes(typeKey)
+      ? attachedTypes.filter(t => t !== typeKey)
+      : [...attachedTypes, typeKey];
+    setFiltersMut.mutate({ filterIds: attachedIds, filterTypes: newTypes });
   };
 
   return (
@@ -226,8 +248,8 @@ function ServiceRow({ service, allCustomFilters, onUpdate, onDelete }: {
           <>
             <span className="w-1.5 h-1.5 rounded-full bg-slate-600 flex-shrink-0 ml-1" />
             <span className="flex-1 text-sm text-slate-300">{service.name}</span>
-            {attachedIds.length > 0 && (
-              <span className="text-xs text-primary-400 flex-shrink-0">{attachedIds.length} ф.</span>
+            {totalAttached > 0 && (
+              <span className="text-xs text-primary-400 flex-shrink-0">{totalAttached} ф.</span>
             )}
             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
@@ -245,12 +267,27 @@ function ServiceRow({ service, allCustomFilters, onUpdate, onDelete }: {
       </div>
 
       {filtersOpen && (
-        <div className="mx-3 mb-2 p-2 bg-slate-800/60 rounded border border-slate-700/50">
-          {allCustomFilters.length === 0 ? (
-            <p className="text-xs text-slate-500">Нет доступных фильтров. Создайте их во вкладке «Доп. фильтры».</p>
-          ) : (
-            <>
-              <p className="text-xs text-slate-500 mb-1.5">Фильтры для этой услуги:</p>
+        <div className="mx-3 mb-2 p-2 bg-slate-800/60 rounded border border-slate-700/50 space-y-2">
+          <div>
+            <p className="text-xs text-slate-500 mb-1">Системные фильтры:</p>
+            <div className="space-y-0.5">
+              {SYSTEM_FILTER_TYPES.map(f => (
+                <label key={f.key} className="flex items-center gap-2 cursor-pointer hover:bg-slate-700/30 px-1 py-0.5 rounded">
+                  <input
+                    type="checkbox"
+                    checked={attachedTypes.includes(f.key)}
+                    onChange={() => toggleType(f.key)}
+                    className="accent-primary-500"
+                  />
+                  <span className="text-xs text-slate-300">{f.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {allCustomFilters.length > 0 && (
+            <div className="border-t border-slate-700/50 pt-2">
+              <p className="text-xs text-slate-500 mb-1">Пользовательские фильтры:</p>
               <div className="space-y-0.5">
                 {allCustomFilters.map(f => (
                   <label key={f.id} className="flex items-center gap-2 cursor-pointer hover:bg-slate-700/30 px-1 py-0.5 rounded">
@@ -264,7 +301,7 @@ function ServiceRow({ service, allCustomFilters, onUpdate, onDelete }: {
                   </label>
                 ))}
               </div>
-            </>
+            </div>
           )}
         </div>
       )}

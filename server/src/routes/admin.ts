@@ -161,13 +161,14 @@ router.delete('/services/:id', async (req, res) => {
   }
 });
 
-// Set custom filters for a service (replaces current assignment)
-router.put('/services/:id/custom-filters', async (req, res) => {
+// Set all filters for a service (system filter types + custom filter ids)
+router.put('/services/:id/filters', async (req, res) => {
   try {
-    const { filterIds = [] } = req.body;
+    const { filterIds = [], filterTypes = [] } = req.body;
     const item = await prisma.service.update({
       where: { id: req.params.id },
       data: {
+        allowedFilterTypes: filterTypes as string[],
         customFilters: {
           set: (filterIds as string[]).map((id) => ({ id })),
         },
