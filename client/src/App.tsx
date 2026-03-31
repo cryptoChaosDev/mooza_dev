@@ -3,6 +3,7 @@ import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from './stores/authStore';
 import { useBadgeStore } from './stores/badgeStore';
+import { usePresenceStore } from './stores/presenceStore';
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket';
 import Layout from './components/Layout';
 
@@ -101,6 +102,7 @@ function App() {
   const queryClient = useQueryClient();
   // useBadgeStore.getState() is called inside callbacks — no subscription, no re-renders
   const bs = () => useBadgeStore.getState();
+  const presence = () => usePresenceStore.getState();
 
   useEffect(() => {
     if (!token) {
@@ -220,6 +222,18 @@ function App() {
       );
     });
 
+    socket.on('user:online_list', (userIds: string[]) => {
+      presence().setOnlineUsers(userIds);
+    });
+
+    socket.on('user:online', ({ userId }: { userId: string }) => {
+      presence().addOnline(userId);
+    });
+
+    socket.on('user:offline', ({ userId }: { userId: string }) => {
+      presence().removeOnline(userId);
+    });
+
     socket.on('post_reply', ({ comment }: any) => {
       queryClient.invalidateQueries({ queryKey: ['posts'] });
       const commenter = comment?.author;
@@ -248,6 +262,9 @@ function App() {
         s.off('friend_request');
         s.off('friend_accepted');
         s.off('post_reply');
+        s.off('user:online_list');
+        s.off('user:online');
+        s.off('user:offline');
       }
       window.removeEventListener('focus', handleFocus);
     };

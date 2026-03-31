@@ -43,9 +43,17 @@ export function initSocket(app: Express) {
     userSockets.set(userId, socket.id);
     logger.info(`Socket connected: user=${userId} socket=${socket.id}`);
 
+    // Send current online list to the newly connected user
+    socket.emit('user:online_list', Array.from(userSockets.keys()));
+
+    // Broadcast this user's presence to everyone else
+    socket.broadcast.emit('user:online', { userId });
+
     socket.on('disconnect', () => {
       userSockets.delete(userId);
       logger.info(`Socket disconnected: user=${userId}`);
+      // Broadcast offline status
+      io.emit('user:offline', { userId });
     });
   });
 
