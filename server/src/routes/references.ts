@@ -81,6 +81,12 @@ router.get('/services', async (req, res) => {
       where,
       include: {
         profession: { select: { id: true, name: true } },
+        customFilters: {
+          select: {
+            id: true, name: true,
+            values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } },
+          },
+        },
         _count: { select: { userServices: true } },
       },
       orderBy: { sortOrder: 'asc' },
@@ -94,6 +100,8 @@ router.get('/services', async (req, res) => {
       professionName: s.profession.name,
       sortOrder: s.sortOrder,
       userCount: s._count.userServices,
+      allowedFilterTypes: s.allowedFilterTypes,
+      customFilters: s.customFilters,
     })));
   } catch (error) {
     console.error('Get services error:', error);
