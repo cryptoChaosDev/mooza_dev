@@ -12,7 +12,6 @@ import {
   useSkillLevels,
   useAvailabilities,
   useGeographies,
-  usePriceRanges,
 } from '../stores/searchStore';
 
 interface FilterPanelProps {
@@ -119,7 +118,8 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
     skillLevelId,
     availabilityId,
     geographyId,
-    priceRangeId,
+    priceMin,
+    priceMax,
     setFieldId,
     setDirectionId,
     setProfessionId,
@@ -130,7 +130,8 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
     setSkillLevelId,
     setAvailabilityId,
     setGeographyId,
-    setPriceRangeId,
+    setPriceMin,
+    setPriceMax,
     resetAllFilters,
     setPage,
   } = useSearchStore();
@@ -148,12 +149,11 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
   const { data: skillLevels, isLoading: skillLevelsLoading } = useSkillLevels();
   const { data: availabilities, isLoading: availabilitiesLoading } = useAvailabilities();
   const { data: geographies, isLoading: geographiesLoading } = useGeographies();
-  const { data: priceRanges, isLoading: priceRangesLoading } = usePriceRanges();
 
   const activeCount = [
     fieldId, directionId, professionId, serviceId, genreId,
     workFormatId, employmentTypeId, skillLevelId, availabilityId,
-    geographyId, priceRangeId,
+    geographyId, priceMin || null, priceMax || null,
   ].filter(Boolean).length;
 
   const wrap = (setter: (v: string | null) => void, downstream?: () => void) =>
@@ -295,13 +295,26 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
           onSelect={wrap(setGeographyId)}
         />
 
-        <FilterSection
-          title="Бюджет"
-          value={priceRangeId}
-          items={priceRanges || []}
-          loading={priceRangesLoading}
-          onSelect={wrap(setPriceRangeId)}
-        />
+        {/* Budget — manual range input */}
+        <div className="border-b border-slate-700/50 last:border-0 py-2.5">
+          <span className={`text-sm font-medium ${priceMin || priceMax ? 'text-primary-400' : 'text-slate-300'}`}>
+            Бюджет (₽)
+          </span>
+          <div className="flex gap-2 mt-2">
+            <input
+              type="number" min={0} placeholder="От"
+              value={priceMin}
+              onChange={e => { setPriceMin(e.target.value); setPage(1); }}
+              className="flex-1 px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            />
+            <input
+              type="number" min={0} placeholder="До"
+              value={priceMax}
+              onChange={e => { setPriceMax(e.target.value); setPage(1); }}
+              className="flex-1 px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
