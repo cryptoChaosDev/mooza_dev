@@ -148,8 +148,6 @@ model PriceRange {
   maxValue  Int?
   sortOrder Int    @default(0)
 
-  userServices UserService[]
-
   createdAt DateTime @default(now())
 }
 
@@ -170,7 +168,8 @@ model UserService {
   skillLevels     SkillLevel[]
   availabilities  Availability[]
   geographies     Geography[]
-  priceRanges     PriceRange[]
+  priceFrom       Int?
+  priceTo         Int?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
