@@ -31,6 +31,7 @@ type UserServiceEntry = {
   serviceName: string;
   allowedFilterTypes: string[];
   serviceCustomFilters: ServiceCustomFilter[];
+  customFilterValueIds: Record<string, string[]>; // filterId → [valueId, ...]
   genreIds: string[];
   workFormatIds: string[];
   employmentTypeIds: string[];
@@ -44,7 +45,7 @@ type UserServiceEntry = {
 const emptyEntry = (): UserServiceEntry => ({
   fieldOfActivityId: '', fieldOfActivityName: '',
   professionId: '', professionName: '', serviceId: '', serviceName: '',
-  allowedFilterTypes: [], serviceCustomFilters: [],
+  allowedFilterTypes: [], serviceCustomFilters: [], customFilterValueIds: {},
   genreIds: [], workFormatIds: [], employmentTypeIds: [], skillLevelIds: [],
   availabilityIds: [], geographyIds: [], priceFrom: '', priceTo: '',
 });
@@ -137,6 +138,11 @@ export default function ProfilePage() {
           serviceName: us.service?.name || '',
           allowedFilterTypes: us.service?.allowedFilterTypes || [],
           serviceCustomFilters: us.service?.customFilters || [],
+          customFilterValueIds: (us.selectedCustomFilterValues || []).reduce((acc: Record<string, string[]>, v: any) => {
+            if (!acc[v.filterId]) acc[v.filterId] = [];
+            acc[v.filterId].push(v.id);
+            return acc;
+          }, {}),
           genreIds: us.genres?.map((g: any) => g.id) || [],
           workFormatIds: us.workFormats?.map((w: any) => w.id) || [],
           employmentTypeIds: us.employmentTypes?.map((e: any) => e.id) || [],
@@ -188,6 +194,7 @@ export default function ProfilePage() {
         geographyIds: us.geographyIds,
         priceFrom: us.priceFrom !== '' ? Number(us.priceFrom) : undefined,
         priceTo: us.priceTo !== '' ? Number(us.priceTo) : undefined,
+        customFilterValueIds: Object.values(us.customFilterValueIds).flat(),
       }))
     ),
   });
@@ -324,7 +331,7 @@ export default function ProfilePage() {
         )}
         {show('geography') && <SelectField label="Город / Регион" value={getNames(geographies, us.geographyIds).join(', ')} placeholder="Не указан" icon={<MapPin size={13} />} onClick={() => setOpenFilterSheet(key('geography'))} badge={us.geographyIds.length || undefined} />}
         {us.serviceCustomFilters.map(cf => (
-          <SelectField key={cf.id} label={cf.name} value="" placeholder="Выберите значение" icon={<Star size={13} />} onClick={() => {}} />
+          <SelectField key={cf.id} label={cf.name} value={(us.customFilterValueIds[cf.id] || []).map(vid => cf.values.find(v => v.id === vid)?.value || vid).join(', ')} placeholder="Выберите значение" icon={<Star size={13} />} onClick={() => setOpenFilterSheet(key(`cf-${cf.id}`))} badge={(us.customFilterValueIds[cf.id] || []).length || undefined} />
         ))}
 
         {show('genre') && <SelectSheet isOpen={openFilterSheet === key('genre')} onClose={() => setOpenFilterSheet(null)} title="Жанры" options={genres.map(g => ({ id: g.id, name: g.name }))} selectedIds={us.genreIds} onSelect={ids => updateSvc(idx, { genreIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />}
@@ -333,6 +340,9 @@ export default function ProfilePage() {
         {show('skillLevel') && <SelectSheet isOpen={openFilterSheet === key('skillLevel')} onClose={() => setOpenFilterSheet(null)} title="Уровень" options={skillLevels.map(s => ({ id: s.id, name: s.name }))} selectedIds={us.skillLevelIds} onSelect={ids => updateSvc(idx, { skillLevelIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />}
         {show('availability') && <SelectSheet isOpen={openFilterSheet === key('availability')} onClose={() => setOpenFilterSheet(null)} title="Доступность" options={availabilities.map(a => ({ id: a.id, name: a.name }))} selectedIds={us.availabilityIds} onSelect={ids => updateSvc(idx, { availabilityIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />}
         {show('geography') && <SelectSheet isOpen={openFilterSheet === key('geography')} onClose={() => setOpenFilterSheet(null)} title="Город / Регион" options={geographies.map(g => ({ id: g.id, name: g.name }))} selectedIds={us.geographyIds} onSelect={ids => updateSvc(idx, { geographyIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />}
+        {us.serviceCustomFilters.map(cf => (
+          <SelectSheet key={cf.id} isOpen={openFilterSheet === key(`cf-${cf.id}`)} onClose={() => setOpenFilterSheet(null)} title={cf.name} options={cf.values.map(v => ({ id: v.id, name: v.value }))} selectedIds={us.customFilterValueIds[cf.id] || []} onSelect={ids => updateSvc(idx, { customFilterValueIds: { ...us.customFilterValueIds, [cf.id]: ids as string[] } })} mode="multiple" showConfirm searchable={false} height="auto" />
+        ))}
       </div>
     );
   };
@@ -476,7 +486,7 @@ export default function ProfilePage() {
               )}
               {pShow('geography') && <SelectField label="Город / Регион" value={getNames(geographies, pending.geographyIds).join(', ')} placeholder="Не указан" icon={<MapPin size={13} />} onClick={() => setOpenFilterSheet('pending-geography')} badge={pending.geographyIds.length || undefined} />}
               {pending.serviceCustomFilters.map(cf => (
-                <SelectField key={cf.id} label={cf.name} value="" placeholder="Выберите значение" icon={<Star size={13} />} onClick={() => {}} />
+                <SelectField key={cf.id} label={cf.name} value={(pending.customFilterValueIds[cf.id] || []).map(vid => cf.values.find(v => v.id === vid)?.value || vid).join(', ')} placeholder="Выберите значение" icon={<Star size={13} />} onClick={() => setOpenFilterSheet(`pending-cf-${cf.id}`)} badge={(pending.customFilterValueIds[cf.id] || []).length || undefined} />
               ))}
             </div>
           );
@@ -501,6 +511,9 @@ export default function ProfilePage() {
         <SelectSheet isOpen={openFilterSheet === 'pending-skillLevel'} onClose={() => setOpenFilterSheet(null)} title="Уровень" options={skillLevels.map(s => ({ id: s.id, name: s.name }))} selectedIds={pending.skillLevelIds} onSelect={ids => setPending(p => ({ ...p, skillLevelIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} height="auto" />
         <SelectSheet isOpen={openFilterSheet === 'pending-availability'} onClose={() => setOpenFilterSheet(null)} title="Доступность" options={availabilities.map(a => ({ id: a.id, name: a.name }))} selectedIds={pending.availabilityIds} onSelect={ids => setPending(p => ({ ...p, availabilityIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} height="auto" />
         <SelectSheet isOpen={openFilterSheet === 'pending-geography'} onClose={() => setOpenFilterSheet(null)} title="Город / Регион" options={geographies.map(g => ({ id: g.id, name: g.name }))} selectedIds={pending.geographyIds} onSelect={ids => setPending(p => ({ ...p, geographyIds: ids as string[] }))} mode="multiple" showConfirm searchable height="half" />
+        {pending.serviceCustomFilters.map(cf => (
+          <SelectSheet key={cf.id} isOpen={openFilterSheet === `pending-cf-${cf.id}`} onClose={() => setOpenFilterSheet(null)} title={cf.name} options={cf.values.map(v => ({ id: v.id, name: v.value }))} selectedIds={pending.customFilterValueIds[cf.id] || []} onSelect={ids => setPending(p => ({ ...p, customFilterValueIds: { ...p.customFilterValueIds, [cf.id]: ids as string[] } }))} mode="multiple" showConfirm searchable={false} height="auto" />
+        ))}
       </div>
     );
 

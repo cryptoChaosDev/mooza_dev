@@ -66,6 +66,7 @@ export const userAPI = {
     geographyIds?: string[];
     priceFrom?: number;
     priceTo?: number;
+    customFilterValueIds?: string[];
   }>) => api.put('/users/me/services', services),
   uploadAvatar: (formData: FormData) =>
     api.post('/users/me/avatar', formData, {
