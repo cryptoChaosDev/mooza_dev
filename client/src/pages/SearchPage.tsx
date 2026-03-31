@@ -344,16 +344,17 @@ export default function SearchPage() {
   const isFetching = hasProfileFilters ? searchFetching : false;
 
   // Compute match % for a search result (only when profile filters are active)
-  const computeMatch = (sp: any): number | null => {
-    if (!sp) return null;
+  const computeMatch = (sp: any, userData: any): number | null => {
     const checks: boolean[] = [];
-    if (serviceId) checks.push(sp.services?.some((s: any) => s.id === serviceId) ?? false);
-    if (genreId) checks.push(sp.genres?.some((g: any) => g.id === genreId) ?? false);
-    if (workFormatId) checks.push(sp.workFormats?.some((w: any) => w.id === workFormatId) ?? false);
-    if (employmentTypeId) checks.push(sp.employmentTypes?.some((e: any) => e.id === employmentTypeId) ?? false);
-    if (skillLevelId) checks.push(sp.skillLevels?.some((s: any) => s.id === skillLevelId) ?? false);
-    if (availabilityId) checks.push(sp.availabilities?.some((a: any) => a.id === availabilityId) ?? false);
-    if (geographyId) checks.push(sp.geographies?.some((g: any) => g.id === geographyId) ?? false);
+    if (fieldId) checks.push(userData?.fieldOfActivity?.id === fieldId);
+    if (professionId) checks.push(userData?.userProfessions?.some((up: any) => up.profession?.id === professionId) ?? false);
+    if (serviceId) checks.push(sp?.services?.some((s: any) => s.id === serviceId) ?? false);
+    if (genreId) checks.push(sp?.genres?.some((g: any) => g.id === genreId) ?? false);
+    if (workFormatId) checks.push(sp?.workFormats?.some((w: any) => w.id === workFormatId) ?? false);
+    if (employmentTypeId) checks.push(sp?.employmentTypes?.some((e: any) => e.id === employmentTypeId) ?? false);
+    if (skillLevelId) checks.push(sp?.skillLevels?.some((s: any) => s.id === skillLevelId) ?? false);
+    if (availabilityId) checks.push(sp?.availabilities?.some((a: any) => a.id === availabilityId) ?? false);
+    if (geographyId) checks.push(sp?.geographies?.some((g: any) => g.id === geographyId) ?? false);
     if (checks.length === 0) return null;
     return Math.round(checks.filter(Boolean).length / checks.length * 100);
   };
@@ -364,7 +365,7 @@ export default function SearchPage() {
     if (hasProfileFilters) {
       list = (searchData?.results || [])
         .filter((r: any) => (r.user ?? r).id !== currentUser?.id)
-        .map((r: any) => ({ ...(r.user ?? r), matchPercent: computeMatch(r.searchProfile) }));
+        .map((r: any) => ({ ...(r.user ?? r), matchPercent: computeMatch(r.searchProfile, r.user) }));
     } else {
       list = defaultUsers || [];
     }
@@ -372,7 +373,7 @@ export default function SearchPage() {
     if (sortBy === 'name_desc') return [...list].sort((a, b) => `${b.firstName} ${b.lastName}`.localeCompare(`${a.firstName} ${a.lastName}`));
     return list;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchData, defaultUsers, hasProfileFilters, sortBy, currentUser?.id, serviceId, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId]);
+  }, [searchData, defaultUsers, hasProfileFilters, sortBy, currentUser?.id, fieldId, directionId, professionId, serviceId, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId]);
 
   const totalCount = hasProfileFilters ? (searchData?.pagination?.totalCount ?? 0) : (defaultUsers?.length ?? 0);
   const totalPages = hasProfileFilters ? (searchData?.pagination?.totalPages ?? 1) : 1;
