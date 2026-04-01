@@ -155,20 +155,42 @@ export default function ChatPage() {
     }
   };
 
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const BACK_THRESHOLD = 80;
+
   const onBackTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0];
-    if (t.clientX < window.innerWidth * 0.25) {
+    if (t.clientX < window.innerWidth * 0.28) {
       backSwipe.current = { startX: t.clientX, startY: t.clientY };
     }
   };
-  const onBackTouchEnd = (e: React.TouchEvent) => {
+  const onBackTouchMove = (e: React.TouchEvent) => {
     const bs = backSwipe.current;
     if (!bs) return;
-    backSwipe.current = null;
-    const t = e.changedTouches[0];
+    const t = e.touches[0];
     const dx = t.clientX - bs.startX;
     const dy = Math.abs(t.clientY - bs.startY);
-    if (dx > 72 && dy < 60) navigate('/messages');
+    if (dy > Math.abs(dx) + 8) { backSwipe.current = null; return; }
+    if (dx <= 0) return;
+    const el = chatContainerRef.current;
+    if (el) el.style.transform = `translateX(${dx}px)`;
+  };
+  const onBackTouchEnd = (e: React.TouchEvent) => {
+    const bs = backSwipe.current;
+    backSwipe.current = null;
+    const el = chatContainerRef.current;
+    if (!bs || !el) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - bs.startX;
+    if (dx > BACK_THRESHOLD) {
+      el.style.transition = 'transform 0.28s cubic-bezier(0.4, 0, 1, 1)';
+      el.style.transform  = `translateX(100%)`;
+      setTimeout(() => navigate('/messages'), 270);
+    } else {
+      el.style.transition = 'transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)';
+      el.style.transform  = 'translateX(0)';
+      setTimeout(() => { if (el) el.style.transition = ''; }, 370);
+    }
   };
 
   // ── Load chat ──────────────────────────────────────────────────────────────
@@ -444,8 +466,10 @@ export default function ChatPage() {
 
   return (
     <div
+      ref={chatContainerRef}
       className="fixed inset-x-0 top-16 bottom-16 z-10 lg:static lg:h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col"
       onTouchStart={onBackTouchStart}
+      onTouchMove={onBackTouchMove}
       onTouchEnd={onBackTouchEnd}
     >
       {/* Chat Header */}
