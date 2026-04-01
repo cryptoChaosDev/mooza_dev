@@ -596,7 +596,7 @@ export default function ChatPage() {
       })()}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" onClick={() => inputRef.current?.blur()}>
         <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
           {grouped.length === 0 ? (
             <div className="text-center py-10">
