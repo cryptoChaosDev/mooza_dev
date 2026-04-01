@@ -577,7 +577,7 @@ export default function ChatPage() {
                   return (
                     <div
                       key={msg.id}
-                      className={`flex ${isMine ? 'justify-end' : 'justify-start'} ${showSender ? 'mt-3' : 'mt-1'}`}
+                      className={`flex items-end ${isMine ? 'justify-end' : 'justify-start'} ${showSender ? 'mt-3' : 'mt-1'} group/row`}
                     >
                       {/* Avatar for group non-mine */}
                       {conversation.isGroup && !isMine && (
@@ -596,6 +596,16 @@ export default function ChatPage() {
                             )
                           ) : null}
                         </div>
+                      )}
+
+                      {/* Menu button LEFT of bubble (my messages) */}
+                      {isMine && !msg.deletedAt && (
+                        <button
+                          onClick={() => setActiveMenuId(activeMenuId === msg.id ? null : msg.id)}
+                          className="flex-shrink-0 self-center mr-1 p-1.5 opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100 transition-opacity text-slate-500 hover:text-slate-300"
+                        >
+                          <span className="text-sm leading-none">•••</span>
+                        </button>
                       )}
 
                       <div className="max-w-xs md:max-w-md lg:max-w-lg relative group/msg">
@@ -661,16 +671,6 @@ export default function ChatPage() {
                           </div>
                         </div>
 
-                        {/* Tap to open context menu */}
-                        {!msg.deletedAt && (
-                          <button
-                            onClick={() => setActiveMenuId(activeMenuId === msg.id ? null : msg.id)}
-                            className={`absolute top-1 ${isMine ? 'left-0 -translate-x-full pr-1' : 'right-0 translate-x-full pl-1'} opacity-100 sm:opacity-0 sm:group-hover/msg:opacity-100 transition-opacity p-1 text-slate-500 hover:text-slate-300`}
-                          >
-                            <span className="text-base leading-none">•••</span>
-                          </button>
-                        )}
-
                         {/* Context menu */}
                         {activeMenuId === msg.id && !msg.deletedAt && (
                           <div
@@ -702,6 +702,16 @@ export default function ChatPage() {
                           </div>
                         )}
                       </div>
+
+                      {/* Menu button RIGHT of bubble (others' messages) */}
+                      {!isMine && !msg.deletedAt && (
+                        <button
+                          onClick={() => setActiveMenuId(activeMenuId === msg.id ? null : msg.id)}
+                          className="flex-shrink-0 self-center ml-1 p-1.5 opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100 transition-opacity text-slate-500 hover:text-slate-300"
+                        >
+                          <span className="text-sm leading-none">•••</span>
+                        </button>
+                      )}
                     </div>
                   );
                 })}
