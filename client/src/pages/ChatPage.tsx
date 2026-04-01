@@ -355,7 +355,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="h-[calc(100dvh-64px-64px)] lg:h-[calc(100dvh-0px)] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+    <div className="fixed inset-x-0 top-16 bottom-16 z-10 lg:static lg:h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col">
       {/* Chat Header */}
       <div className="relative border-b border-slate-700/50 backdrop-blur-sm bg-slate-900/80 flex-shrink-0 z-30">
         <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 via-purple-500/5 to-pink-500/5" />
