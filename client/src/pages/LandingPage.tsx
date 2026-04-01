@@ -16,31 +16,6 @@ import {
   Radio,
 } from 'lucide-react';
 
-/* ───────── animated counter hook ───────── */
-function useCounter(target: number, duration = 2000) {
-  const [count, setCount] = useState(0);
-  const ref = useRef<HTMLDivElement>(null);
-  const inView = useInView(ref, { once: true, margin: '-60px' });
-
-  useEffect(() => {
-    if (!inView) return;
-    let start = 0;
-    const step = target / (duration / 16);
-    const id = setInterval(() => {
-      start += step;
-      if (start >= target) {
-        setCount(target);
-        clearInterval(id);
-      } else {
-        setCount(Math.floor(start));
-      }
-    }, 16);
-    return () => clearInterval(id);
-  }, [inView, target, duration]);
-
-  return { count, ref };
-}
-
 /* ───────── floating note component ───────── */
 function FloatingNote({
   icon: Icon,
@@ -96,20 +71,22 @@ export default function LandingPage() {
             className="inline-flex items-center gap-2 px-4 py-1.5 mb-8 rounded-full border border-primary-500/30 bg-primary-500/10 text-primary-300 text-sm"
           >
             <Music size={14} />
-            Социальная сеть для музыкантов
+            Платформа для музыкантов и креативной индустрии
           </motion.div>
 
-          {/* headline */}
-          <motion.h1
+          {/* logo */}
+          <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.15 }}
-            className="text-6xl sm:text-7xl md:text-8xl font-extrabold tracking-tight mb-6"
+            className="flex justify-center mb-6"
           >
-            <span className="bg-gradient-to-r from-primary-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Moooza
-            </span>
-          </motion.h1>
+            <img
+              src="/logo.jpg"
+              alt="Moooza"
+              className="h-28 sm:h-36 md:h-44 w-auto object-contain drop-shadow-2xl"
+            />
+          </motion.div>
 
           {/* sub-headline */}
           <motion.p
@@ -118,9 +95,9 @@ export default function LandingPage() {
             transition={{ duration: 0.7, delay: 0.3 }}
             className="text-lg sm:text-xl md:text-2xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed"
           >
-            Объединяем музыкантов, звукорежиссёров и продюсеров.
+            Объединяем музыкантов и все творческие профессии в одном месте.
             <br className="hidden sm:block" />
-            Находите коллег, создавайте проекты, стройте карьеру.
+            Находите работу, создавайте проекты, стройте карьеру.
           </motion.p>
 
           {/* CTA buttons */}
@@ -284,30 +261,6 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ── STATS ── */}
-      <section className="relative py-24 sm:py-32 px-4">
-        <div className="max-w-5xl mx-auto">
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="rounded-3xl bg-gradient-to-br from-primary-600/10 via-purple-600/10 to-pink-600/10 border border-slate-800 p-10 sm:p-14"
-          >
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-              {[
-                { value: 25, suffix: '+', label: 'Профессий' },
-                { value: 5, suffix: '+', label: 'Сфер деятельности' },
-                { value: 100, suffix: '%', label: 'Бесплатно' },
-                { value: 24, suffix: '/7', label: 'Доступность' },
-              ].map((s) => (
-                <StatItem key={s.label} value={s.value} suffix={s.suffix} label={s.label} />
-              ))}
-            </div>
-          </motion.div>
-        </div>
-      </section>
-
       {/* ── FINAL CTA ── */}
       <section className="relative py-24 sm:py-32 px-4">
         <div className="absolute inset-0 pointer-events-none">
@@ -315,29 +268,30 @@ export default function LandingPage() {
         </div>
 
         <div className="relative max-w-3xl mx-auto text-center">
-          <motion.h2
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6 }}
-            className="text-3xl sm:text-4xl md:text-5xl font-bold mb-6"
-          >
-            Готовы стать частью{' '}
-            <span className="bg-gradient-to-r from-primary-400 to-purple-400 bg-clip-text text-transparent">
-              музыкального сообщества
-            </span>
-            ?
-          </motion.h2>
-
           <motion.p
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.15 }}
-            className="text-slate-400 text-lg mb-10 max-w-xl mx-auto"
+            transition={{ duration: 0.5 }}
+            className="text-primary-400 text-sm font-semibold tracking-widest uppercase mb-4"
           >
-            Присоединяйтесь к Moooza — регистрация занимает всего пару минут
+            Стань частью
           </motion.p>
+          <motion.h2
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight mb-8"
+          >
+            <span className="bg-gradient-to-r from-primary-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+              МУЗЫКАЛЬНОГО
+            </span>
+            <br />
+            <span className="bg-gradient-to-r from-pink-400 via-purple-400 to-primary-400 bg-clip-text text-transparent">
+              СООБЩЕСТВА
+            </span>
+          </motion.h2>
 
           <motion.button
             initial={{ opacity: 0, y: 20 }}
@@ -361,12 +315,7 @@ export default function LandingPage() {
       {/* ── FOOTER ── */}
       <footer className="border-t border-slate-800/60 py-8 px-4">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Music size={20} className="text-primary-400" />
-            <span className="font-bold text-lg bg-gradient-to-r from-primary-400 to-purple-400 bg-clip-text text-transparent">
-              Moooza
-            </span>
-          </div>
+          <img src="/logo.jpg" alt="Moooza" className="h-8 w-auto object-contain" />
           <p className="text-slate-500 text-sm">
             &copy; {new Date().getFullYear()} Moooza. Все права защищены.
           </p>
@@ -402,27 +351,5 @@ function SectionHeading({
         <p className="mt-4 text-slate-400 max-w-xl mx-auto">{subtitle}</p>
       )}
     </motion.div>
-  );
-}
-
-/* ───────── stat counter item ───────── */
-function StatItem({
-  value,
-  suffix,
-  label,
-}: {
-  value: number;
-  suffix: string;
-  label: string;
-}) {
-  const { count, ref } = useCounter(value);
-  return (
-    <div ref={ref} className="text-center">
-      <div className="text-3xl sm:text-4xl font-bold bg-gradient-to-r from-primary-400 to-purple-400 bg-clip-text text-transparent">
-        {count}
-        {suffix}
-      </div>
-      <div className="text-slate-400 text-sm mt-1">{label}</div>
-    </div>
   );
 }
