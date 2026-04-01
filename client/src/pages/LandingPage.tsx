@@ -1,6 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { motion, useInView } from 'framer-motion';
-import { useRef, useEffect, useState } from 'react';
+import { motion } from 'framer-motion';
 import {
   Music,
   Users,
