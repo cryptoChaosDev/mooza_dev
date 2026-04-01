@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Search, Plus, Users, X, Check } from 'lucide-react';
+import { MessageCircle, Search, Plus, Users, X, Check, User, FolderKanban } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import { getSocket } from '../lib/socket';
 
@@ -26,6 +26,7 @@ export default function MessagesPage() {
   const [conversations, setConversations] = useState<ConvItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'personal' | 'projects'>('personal');
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -108,6 +109,7 @@ export default function MessagesPage() {
   };
 
   const filtered = conversations.filter(c =>
+    (activeTab === 'personal' ? !c.isGroup : c.isGroup) &&
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -126,12 +128,40 @@ export default function MessagesPage() {
                 Сообщения
               </h2>
             </div>
+            {activeTab === 'projects' && (
+              <button
+                onClick={openNewGroup}
+                className="flex items-center gap-1.5 px-3 py-2 bg-primary-500/20 hover:bg-primary-500/30 text-primary-400 rounded-xl text-sm transition-all border border-primary-500/20 hover:border-primary-500/40"
+              >
+                <Plus size={15} />
+                <span className="hidden sm:inline">Проект</span>
+              </button>
+            )}
+          </div>
+
+          {/* Tabs */}
+          <div className="flex mt-3 bg-slate-800/60 rounded-xl p-1 gap-1">
             <button
-              onClick={openNewGroup}
-              className="flex items-center gap-1.5 px-3 py-2 bg-primary-500/20 hover:bg-primary-500/30 text-primary-400 rounded-xl text-sm transition-all border border-primary-500/20 hover:border-primary-500/40"
+              onClick={() => setActiveTab('personal')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'personal'
+                  ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
             >
-              <Plus size={15} />
-              <span className="hidden sm:inline">Группа</span>
+              <User size={15} />
+              Личные
+            </button>
+            <button
+              onClick={() => setActiveTab('projects')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === 'projects'
+                  ? 'bg-primary-500/20 text-primary-400 border border-primary-500/30'
+                  : 'text-slate-400 hover:text-slate-300'
+              }`}
+            >
+              <FolderKanban size={15} />
+              Проекты
             </button>
           </div>
         </div>
@@ -234,9 +264,19 @@ export default function MessagesPage() {
           </div>
         ) : (
           <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-2xl border border-slate-700/50 text-center py-10 px-6">
-            <MessageCircle size={36} className="text-slate-500 mx-auto mb-4" />
-            <h3 className="text-base font-bold text-white mb-2">Нет сообщений</h3>
-            <p className="text-slate-400 text-sm">Начните общение с друзьями</p>
+            {activeTab === 'projects' ? (
+              <>
+                <FolderKanban size={36} className="text-slate-500 mx-auto mb-4" />
+                <h3 className="text-base font-bold text-white mb-2">Нет проектов</h3>
+                <p className="text-slate-400 text-sm">Создайте новый проект с друзьями</p>
+              </>
+            ) : (
+              <>
+                <MessageCircle size={36} className="text-slate-500 mx-auto mb-4" />
+                <h3 className="text-base font-bold text-white mb-2">Нет сообщений</h3>
+                <p className="text-slate-400 text-sm">Начните общение с друзьями</p>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -248,8 +288,8 @@ export default function MessagesPage() {
             {/* Modal header */}
             <div className="flex items-center justify-between p-4 border-b border-slate-700/50">
               <div className="flex items-center gap-2">
-                <Users size={18} className="text-primary-400" />
-                <h3 className="font-semibold text-white">Новая группа</h3>
+                <FolderKanban size={18} className="text-primary-400" />
+                <h3 className="font-semibold text-white">Новый проект</h3>
               </div>
               <button onClick={() => setShowNewGroup(false)} className="p-1.5 hover:bg-slate-700/50 rounded-lg transition-colors">
                 <X size={18} className="text-slate-400" />
@@ -262,7 +302,7 @@ export default function MessagesPage() {
                 type="text"
                 value={groupName}
                 onChange={e => setGroupName(e.target.value)}
-                placeholder="Название группы..."
+                placeholder="Название проекта..."
                 className="w-full px-4 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
               />
 
@@ -303,7 +343,7 @@ export default function MessagesPage() {
                 disabled={!groupName.trim() || selectedIds.length === 0 || creatingGroup}
                 className="w-full py-2.5 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 disabled:from-slate-700 disabled:to-slate-800 text-white rounded-xl text-sm font-medium transition-all disabled:cursor-not-allowed"
               >
-                {creatingGroup ? 'Создание...' : `Создать группу${selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}`}
+                {creatingGroup ? 'Создание...' : `Создать проект${selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}`}
               </button>
             </div>
           </div>
