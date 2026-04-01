@@ -355,7 +355,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="h-[calc(100dvh-64px)] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+    <div className="h-[calc(100dvh-64px-64px)] lg:h-[calc(100dvh-0px)] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col">
       {/* Chat Header */}
       <div className="relative border-b border-slate-700/50 backdrop-blur-sm bg-slate-900/80 flex-shrink-0 z-30">
         <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 via-purple-500/5 to-pink-500/5" />
@@ -696,101 +696,83 @@ export default function ChatPage() {
       <input ref={cameraInputRef} type="file" className="hidden" accept="image/*" capture="environment" onChange={pickFile} />
 
       {/* Input area */}
-      <div className="border-t border-slate-700/50 backdrop-blur-sm bg-slate-900/80 flex-shrink-0 pb-safe">
-        <div className="max-w-4xl mx-auto px-4 py-3">
-          {/* Reply / Edit bar */}
-          {(replyTo || editingId) && (
-            <div className={`flex items-center gap-2 mb-2 px-3 py-2 rounded-xl border ${
-              editingId
-                ? 'bg-amber-500/10 border-amber-500/30'
-                : 'bg-primary-500/10 border-primary-500/30'
-            }`}>
-              {editingId ? (
-                <Pencil size={14} className="text-amber-400 flex-shrink-0" />
-              ) : (
-                <Reply size={14} className="text-primary-400 flex-shrink-0" />
+      <div className="flex-shrink-0 bg-slate-900 border-t border-slate-800">
+        {/* Reply / Edit bar */}
+        {(replyTo || editingId) && (
+          <div className={`flex items-center gap-2 px-3 py-2 border-b ${
+            editingId ? 'bg-amber-500/10 border-amber-500/20' : 'bg-primary-500/10 border-primary-500/20'
+          }`}>
+            {editingId ? <Pencil size={13} className="text-amber-400 flex-shrink-0" /> : <Reply size={13} className="text-primary-400 flex-shrink-0" />}
+            <div className="flex-1 min-w-0">
+              <p className={`text-xs font-semibold ${editingId ? 'text-amber-400' : 'text-primary-400'}`}>
+                {editingId ? 'Редактирование' : `${replyTo!.sender.firstName} ${replyTo!.sender.lastName}`}
+              </p>
+              {replyTo && !editingId && (
+                <p className="text-xs text-slate-400 truncate">{replyTo.content || (replyTo.attachmentName ? `📎 ${replyTo.attachmentName}` : '')}</p>
               )}
-              <div className="flex-1 min-w-0">
-                <p className={`text-xs font-semibold ${editingId ? 'text-amber-400' : 'text-primary-400'}`}>
-                  {editingId ? 'Редактирование' : `${replyTo!.sender.firstName} ${replyTo!.sender.lastName}`}
-                </p>
-                {replyTo && !editingId && (
-                  <p className="text-xs text-slate-400 truncate">{replyTo.content || (replyTo.attachmentName ? `📎 ${replyTo.attachmentName}` : '')}</p>
-                )}
-              </div>
-              <button
-                onClick={() => { cancelEdit(); setReplyTo(null); }}
-                className="p-1 hover:bg-slate-700/50 rounded-lg transition-colors flex-shrink-0"
-              >
-                <X size={14} className="text-slate-400" />
-              </button>
             </div>
-          )}
-
-          {/* Attachment preview */}
-          {pendingFile && (
-            <div className="flex items-center gap-2 mb-2 px-3 py-2 rounded-xl bg-slate-700/40 border border-slate-600/50">
-              {pendingPreview ? (
-                <img src={pendingPreview} alt="" className="w-10 h-10 rounded-lg object-cover flex-shrink-0" />
-              ) : (
-                <div className="w-10 h-10 rounded-lg bg-slate-600/60 flex items-center justify-center flex-shrink-0">
-                  <FileText size={18} className="text-slate-300" />
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-white truncate">{pendingFile.name}</p>
-                <p className="text-xs text-slate-400">{(pendingFile.size / 1024 / 1024).toFixed(2)} МБ</p>
-              </div>
-              <button onClick={clearAttachment} className="p-1 hover:bg-slate-600/50 rounded-lg transition-colors flex-shrink-0">
-                <X size={14} className="text-slate-400" />
-              </button>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="flex items-center gap-2">
-            {!editingId && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  title="Прикрепить файл"
-                  className="p-2.5 bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-white rounded-xl border border-slate-700/50 transition-all flex-shrink-0"
-                >
-                  <Paperclip size={18} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => cameraInputRef.current?.click()}
-                  title="Камера / галерея"
-                  className="p-2.5 bg-slate-800/80 hover:bg-slate-700/80 text-slate-400 hover:text-white rounded-xl border border-slate-700/50 transition-all flex-shrink-0"
-                >
-                  <Camera size={18} />
-                </button>
-              </>
-            )}
-            <textarea
-              ref={inputRef}
-              value={newMessage}
-              onChange={e => setNewMessage(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                  e.preventDefault();
-                  e.currentTarget.form?.requestSubmit();
-                }
-              }}
-              placeholder={editingId ? 'Редактировать сообщение...' : 'Введите сообщение... (Ctrl+Enter — отправить)'}
-              rows={1}
-              className="flex-1 bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 text-sm text-white rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-slate-400 resize-none max-h-32 overflow-y-auto"
-            />
-            <button
-              type="submit"
-              disabled={(!newMessage.trim() && !pendingFile) || sending || uploading}
-              className="group p-2.5 bg-gradient-to-br from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 disabled:from-slate-700 disabled:to-slate-800 text-white rounded-xl transition-all disabled:cursor-not-allowed shadow-lg shadow-primary-500/25 hover:scale-105 disabled:scale-100 flex-shrink-0"
-            >
-              {uploading ? <Loader2 size={18} className="animate-spin" /> : editingId ? <Check size={18} /> : <Send size={18} />}
+            <button onClick={() => { cancelEdit(); setReplyTo(null); }} className="p-1 hover:bg-slate-700/50 rounded-lg transition-colors flex-shrink-0">
+              <X size={13} className="text-slate-400" />
             </button>
-          </form>
-        </div>
+          </div>
+        )}
+
+        {/* Attachment preview */}
+        {pendingFile && (
+          <div className="flex items-center gap-2 px-3 py-2 border-b border-slate-800 bg-slate-800/40">
+            {pendingPreview ? (
+              <img src={pendingPreview} alt="" className="w-9 h-9 rounded-lg object-cover flex-shrink-0" />
+            ) : (
+              <div className="w-9 h-9 rounded-lg bg-slate-700 flex items-center justify-center flex-shrink-0">
+                <FileText size={16} className="text-slate-300" />
+              </div>
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-white truncate">{pendingFile.name}</p>
+              <p className="text-xs text-slate-500">{(pendingFile.size / 1024 / 1024).toFixed(2)} МБ</p>
+            </div>
+            <button onClick={clearAttachment} className="p-1 hover:bg-slate-700 rounded-lg transition-colors flex-shrink-0">
+              <X size={13} className="text-slate-400" />
+            </button>
+          </div>
+        )}
+
+        {/* Message form */}
+        <form onSubmit={handleSubmit} className="flex items-end gap-2 px-3 py-2">
+          {!editingId && (
+            <>
+              <button type="button" onClick={() => fileInputRef.current?.click()} title="Прикрепить файл"
+                className="p-2 text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0">
+                <Paperclip size={20} />
+              </button>
+              <button type="button" onClick={() => cameraInputRef.current?.click()} title="Камера / галерея"
+                className="p-2 text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0">
+                <Camera size={20} />
+              </button>
+            </>
+          )}
+          <textarea
+            ref={inputRef}
+            value={newMessage}
+            onChange={e => setNewMessage(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                e.currentTarget.form?.requestSubmit();
+              }
+            }}
+            placeholder={editingId ? 'Редактировать...' : 'Сообщение...'}
+            rows={1}
+            className="flex-1 bg-slate-800 border border-slate-700 text-sm text-white rounded-2xl px-4 py-2.5 focus:outline-none focus:border-primary-500/50 placeholder-slate-500 resize-none max-h-28 overflow-y-auto"
+          />
+          <button
+            type="submit"
+            disabled={(!newMessage.trim() && !pendingFile) || sending || uploading}
+            className="p-2.5 bg-primary-500 hover:bg-primary-600 disabled:bg-slate-700 text-white rounded-full transition-all disabled:cursor-not-allowed flex-shrink-0"
+          >
+            {uploading ? <Loader2 size={18} className="animate-spin" /> : editingId ? <Check size={18} /> : <Send size={18} />}
+          </button>
+        </form>
       </div>
     </div>
   );
