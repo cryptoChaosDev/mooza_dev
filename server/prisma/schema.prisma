@@ -25,7 +25,9 @@ model Direction {
   fieldOfActivityId String
   fieldOfActivity   FieldOfActivity @relation(fields: [fieldOfActivityId], references: [id])
 
-  professions Profession[]
+  professions        Profession[]
+  allowedFilterTypes String[]
+  customFilters      CustomFilter[] @relation("DirectionCustomFilters")
 
   createdAt DateTime @default(now())
 
@@ -53,16 +55,14 @@ model Profession {
 
 // Services offered — linked to Profession (hierarchical filter level 3)
 model Service {
-  id                 String     @id @default(uuid())
-  name               String     @unique
-  nameEn             String?
-  sortOrder          Int        @default(0)
-  professionId       String
-  profession         Profession @relation(fields: [professionId], references: [id])
-  allowedFilterTypes String[]   // system filter type keys, e.g. ["genre", "workFormat"]
+  id           String     @id @default(uuid())
+  name         String     @unique
+  nameEn       String?
+  sortOrder    Int        @default(0)
+  professionId String
+  profession   Profession @relation(fields: [professionId], references: [id])
 
-  userServices  UserService[]
-  customFilters CustomFilter[] @relation("ServiceCustomFilters")
+  userServices UserService[]
 
   createdAt DateTime @default(now())
 }
@@ -479,11 +479,11 @@ model PushSubscription {
 // ============ CUSTOM FILTERS ============
 
 model CustomFilter {
-  id        String              @id @default(uuid())
-  name      String
-  values    CustomFilterValue[]
-  services  Service[]           @relation("ServiceCustomFilters")
-  createdAt DateTime            @default(now())
+  id         String              @id @default(uuid())
+  name       String
+  values     CustomFilterValue[]
+  directions Direction[]         @relation("DirectionCustomFilters")
+  createdAt  DateTime            @default(now())
 }
 
 model CustomFilterValue {

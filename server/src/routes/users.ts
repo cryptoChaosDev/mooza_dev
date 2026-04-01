@@ -8,19 +8,32 @@ import fs from 'fs';
 const router = Router();
 
 const userServiceInclude = {
-  profession: { select: { id: true, name: true, directionId: true, direction: { select: { id: true, name: true, fieldOfActivity: { select: { id: true, name: true } } } } } },
+  profession: {
+    select: {
+      id: true,
+      name: true,
+      directionId: true,
+      direction: {
+        select: {
+          id: true,
+          name: true,
+          allowedFilterTypes: true,
+          customFilters: {
+            select: {
+              id: true,
+              name: true,
+              values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } },
+            },
+          },
+          fieldOfActivity: { select: { id: true, name: true } },
+        },
+      },
+    },
+  },
   service: {
     select: {
       id: true,
       name: true,
-      allowedFilterTypes: true,
-      customFilters: {
-        select: {
-          id: true,
-          name: true,
-          values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } },
-        },
-      },
     },
   },
   genres:          { select: { id: true, name: true } },

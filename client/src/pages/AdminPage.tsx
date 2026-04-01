@@ -201,39 +201,12 @@ const SYSTEM_FILTER_TYPES = [
 
 // ─── Service (leaf node) ─────────────────────────────────────────────────────
 
-function ServiceRow({ service, allCustomFilters, onUpdate, onDelete }: {
+function ServiceRow({ service, onUpdate, onDelete }: {
   service: Item;
-  allCustomFilters: CFilter[];
   onUpdate: (name: string) => void;
   onDelete: () => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const qc = useQueryClient();
-
-  const attachedIds: string[] = (service.customFilters ?? []).map((f: any) => f.id);
-  const attachedTypes: string[] = service.allowedFilterTypes ?? [];
-  const totalAttached = attachedIds.length + attachedTypes.length;
-
-  const setFiltersMut = useMutation({
-    mutationFn: ({ filterIds, filterTypes }: { filterIds: string[]; filterTypes: string[] }) =>
-      adminAPI.services.setFilters(service.id, filterIds, filterTypes),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-services'] }),
-  });
-
-  const toggleFilter = (filterId: string) => {
-    const newIds = attachedIds.includes(filterId)
-      ? attachedIds.filter(id => id !== filterId)
-      : [...attachedIds, filterId];
-    setFiltersMut.mutate({ filterIds: newIds, filterTypes: attachedTypes });
-  };
-
-  const toggleType = (typeKey: string) => {
-    const newTypes = attachedTypes.includes(typeKey)
-      ? attachedTypes.filter(t => t !== typeKey)
-      : [...attachedTypes, typeKey];
-    setFiltersMut.mutate({ filterIds: attachedIds, filterTypes: newTypes });
-  };
 
   return (
     <div className="rounded">
@@ -248,71 +221,21 @@ function ServiceRow({ service, allCustomFilters, onUpdate, onDelete }: {
           <>
             <span className="w-1.5 h-1.5 rounded-full bg-slate-600 flex-shrink-0 ml-1" />
             <span className="flex-1 text-sm text-slate-300">{service.name}</span>
-            {totalAttached > 0 && (
-              <span className="text-xs text-primary-400 flex-shrink-0">{totalAttached} ф.</span>
-            )}
             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={() => setFiltersOpen(o => !o)}
-                className={`p-1 ${filtersOpen ? 'text-primary-400' : 'text-slate-400 hover:text-primary-400'}`}
-                title="Управление фильтрами"
-              >
-                <Filter size={12} />
-              </button>
               <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={12} /></button>
               <button onClick={onDelete} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={12} /></button>
             </div>
           </>
         )}
       </div>
-
-      {filtersOpen && (
-        <div className="mx-3 mb-2 p-2 bg-slate-800/60 rounded border border-slate-700/50 space-y-2">
-          <div>
-            <p className="text-xs text-slate-500 mb-1">Системные фильтры:</p>
-            <div className="space-y-0.5">
-              {SYSTEM_FILTER_TYPES.map(f => (
-                <label key={f.key} className="flex items-center gap-2 cursor-pointer hover:bg-slate-700/30 px-1 py-0.5 rounded">
-                  <input
-                    type="checkbox"
-                    checked={attachedTypes.includes(f.key)}
-                    onChange={() => toggleType(f.key)}
-                    className="accent-primary-500"
-                  />
-                  <span className="text-xs text-slate-300">{f.label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {allCustomFilters.length > 0 && (
-            <div className="border-t border-slate-700/50 pt-2">
-              <p className="text-xs text-slate-500 mb-1">Пользовательские фильтры:</p>
-              <div className="space-y-0.5">
-                {allCustomFilters.map(f => (
-                  <label key={f.id} className="flex items-center gap-2 cursor-pointer hover:bg-slate-700/30 px-1 py-0.5 rounded">
-                    <input
-                      type="checkbox"
-                      checked={attachedIds.includes(f.id)}
-                      onChange={() => toggleFilter(f.id)}
-                      className="accent-primary-500"
-                    />
-                    <span className="text-xs text-slate-300">{f.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
 // ─── Profession node ─────────────────────────────────────────────────────────
 
-function ProfessionNode({ profession, services, allCustomFilters, qc }: {
-  profession: Item; services: Item[]; allCustomFilters: CFilter[]; qc: QueryClient;
+function ProfessionNode({ profession, services, qc }: {
+  profession: Item; services: Item[]; qc: QueryClient;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -373,7 +296,6 @@ function ProfessionNode({ profession, services, allCustomFilters, qc }: {
             <ServiceRow
               key={service.id}
               service={service}
-              allCustomFilters={allCustomFilters}
               onUpdate={name => updateServiceMut.mutate({ id: service.id, name })}
               onDelete={() => deleteServiceMut.mutate(service.id)}
             />
@@ -412,10 +334,15 @@ function DirectionNode({ direction, professions, allServices, allCustomFilters, 
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [addingProfession, setAddingProfession] = useState(false);
 
   const invalidateD = () => qc.invalidateQueries({ queryKey: ['admin-directions'] });
   const invalidateP = () => qc.invalidateQueries({ queryKey: ['admin-professions'] });
+
+  const attachedIds: string[] = (direction.customFilters ?? []).map((f: any) => f.id);
+  const attachedTypes: string[] = direction.allowedFilterTypes ?? [];
+  const totalAttached = attachedIds.length + attachedTypes.length;
 
   const updateMut = useMutation({
     mutationFn: (name: string) => adminAPI.directions.update(direction.id, { name, fieldOfActivityId: direction.fieldOfActivity?.id }),
@@ -425,10 +352,28 @@ function DirectionNode({ direction, professions, allServices, allCustomFilters, 
     mutationFn: () => adminAPI.directions.remove(direction.id),
     onSuccess: invalidateD,
   });
+  const setFiltersMut = useMutation({
+    mutationFn: ({ filterIds, filterTypes }: { filterIds: string[]; filterTypes: string[] }) =>
+      adminAPI.directions.setFilters(direction.id, filterIds, filterTypes),
+    onSuccess: invalidateD,
+  });
   const addProfessionMut = useMutation({
     mutationFn: (name: string) => adminAPI.professions.create({ name, directionId: direction.id }),
     onSuccess: () => { invalidateP(); setAddingProfession(false); },
   });
+
+  const toggleType = (typeKey: string) => {
+    const newTypes = attachedTypes.includes(typeKey)
+      ? attachedTypes.filter(t => t !== typeKey)
+      : [...attachedTypes, typeKey];
+    setFiltersMut.mutate({ filterIds: attachedIds, filterTypes: newTypes });
+  };
+  const toggleFilter = (filterId: string) => {
+    const newIds = attachedIds.includes(filterId)
+      ? attachedIds.filter(id => id !== filterId)
+      : [...attachedIds, filterId];
+    setFiltersMut.mutate({ filterIds: newIds, filterTypes: attachedTypes });
+  };
 
   return (
     <div className="border border-slate-700/40 rounded-lg overflow-hidden">
@@ -445,14 +390,64 @@ function DirectionNode({ direction, professions, allServices, allCustomFilters, 
         ) : (
           <>
             <span className="flex-1 text-sm font-semibold text-slate-100">{direction.name}</span>
+            {totalAttached > 0 && (
+              <span className="text-xs text-primary-400 flex-shrink-0 mr-1">{totalAttached} ф.</span>
+            )}
             <span className="text-xs text-slate-600 flex-shrink-0">{professions.length} проф.</span>
             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={() => setFiltersOpen(o => !o)}
+                className={`p-1 ${filtersOpen ? 'text-primary-400' : 'text-slate-400 hover:text-primary-400'}`}
+                title="Фильтры направления"
+              >
+                <Filter size={13} />
+              </button>
               <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={13} /></button>
               <button onClick={() => deleteMut.mutate()} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={13} /></button>
             </div>
           </>
         )}
       </div>
+
+      {filtersOpen && (
+        <div className="mx-3 mb-2 mt-1 p-3 bg-slate-800/60 rounded-lg border border-slate-700/50 space-y-3">
+          <p className="text-xs font-medium text-slate-400">Фильтры для всех профессий и услуг этого направления:</p>
+          <div>
+            <p className="text-xs text-slate-500 mb-1.5">Системные фильтры:</p>
+            <div className="grid grid-cols-2 gap-0.5">
+              {SYSTEM_FILTER_TYPES.map(f => (
+                <label key={f.key} className="flex items-center gap-2 cursor-pointer hover:bg-slate-700/30 px-2 py-1 rounded">
+                  <input
+                    type="checkbox"
+                    checked={attachedTypes.includes(f.key)}
+                    onChange={() => toggleType(f.key)}
+                    className="accent-primary-500"
+                  />
+                  <span className="text-xs text-slate-300">{f.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+          {allCustomFilters.length > 0 && (
+            <div className="border-t border-slate-700/50 pt-2">
+              <p className="text-xs text-slate-500 mb-1.5">Пользовательские фильтры:</p>
+              <div className="space-y-0.5">
+                {allCustomFilters.map(f => (
+                  <label key={f.id} className="flex items-center gap-2 cursor-pointer hover:bg-slate-700/30 px-2 py-1 rounded">
+                    <input
+                      type="checkbox"
+                      checked={attachedIds.includes(f.id)}
+                      onChange={() => toggleFilter(f.id)}
+                      className="accent-primary-500"
+                    />
+                    <span className="text-xs text-slate-300">{f.name}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {open && (
         <div className="px-3 py-2 space-y-1.5 bg-slate-900/40">
@@ -461,7 +456,6 @@ function DirectionNode({ direction, professions, allServices, allCustomFilters, 
               key={prof.id}
               profession={prof}
               services={allServices.filter(s => s.profession?.id === prof.id)}
-              allCustomFilters={allCustomFilters}
               qc={qc}
             />
           ))}

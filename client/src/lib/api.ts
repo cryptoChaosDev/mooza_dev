@@ -191,13 +191,13 @@ const crudFor = (path: string) => ({
 });
 export const adminAPI = {
   fieldsOfActivity: crudFor('fields-of-activity'),
-  directions: crudFor('directions'),
-  professions: crudFor('professions'),
-  services: {
-    ...crudFor('services'),
+  directions: {
+    ...crudFor('directions'),
     setFilters: (id: string, filterIds: string[], filterTypes: string[]) =>
-      api.put(`${adminBase}/services/${id}/filters`, { filterIds, filterTypes }),
+      api.put(`${adminBase}/directions/${id}/filters`, { filterIds, filterTypes }),
   },
+  professions: crudFor('professions'),
+  services: crudFor('services'),
   genres: crudFor('genres'),
   workFormats: crudFor('work-formats'),
   employmentTypes: crudFor('employment-types'),
