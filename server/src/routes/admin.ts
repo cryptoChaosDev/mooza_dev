@@ -114,10 +114,7 @@ router.delete('/professions/:id', async (req, res) => {
 // ─── Service ───────────────────────────────────────────────────────────────
 router.get('/services', async (_req, res) => {
   const items = await prisma.service.findMany({
-    include: {
-      profession: { select: { id: true, name: true } },
-      customFilters: { select: { id: true, name: true } },
-    },
+    include: { profession: { select: { id: true, name: true } } },
     orderBy: { name: 'asc' },
   });
   res.json(items);
@@ -161,25 +158,6 @@ router.delete('/services/:id', async (req, res) => {
   }
 });
 
-// Set all filters for a service (system filter types + custom filter ids)
-router.put('/services/:id/filters', async (req, res) => {
-  try {
-    const { filterIds = [], filterTypes = [] } = req.body;
-    const item = await prisma.service.update({
-      where: { id: req.params.id },
-      data: {
-        allowedFilterTypes: filterTypes as string[],
-        customFilters: {
-          set: (filterIds as string[]).map((id) => ({ id })),
-        },
-      },
-      include: { customFilters: { select: { id: true, name: true } } },
-    });
-    res.json(item);
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
-});
 
 // ─── Genre ─────────────────────────────────────────────────────────────────
 router.get('/genres', async (_req, res) => {
@@ -336,7 +314,10 @@ router.delete('/price-ranges/:id', async (req, res) => {
 // ─── Direction ─────────────────────────────────────────────────────────────
 router.get('/directions', async (_req, res) => {
   const items = await prisma.direction.findMany({
-    include: { fieldOfActivity: { select: { id: true, name: true } } },
+    include: {
+      fieldOfActivity: { select: { id: true, name: true } },
+      customFilters: { select: { id: true, name: true } },
+    },
     orderBy: { name: 'asc' },
   });
   res.json(items);
@@ -367,6 +348,26 @@ router.put('/directions/:id', async (req, res) => {
     res.status(400).json({ error: e.message });
   }
 });
+// Set filters for a direction (system filter types + custom filter ids)
+router.put('/directions/:id/filters', async (req, res) => {
+  try {
+    const { filterIds = [], filterTypes = [] } = req.body;
+    const item = await prisma.direction.update({
+      where: { id: req.params.id },
+      data: {
+        allowedFilterTypes: filterTypes as string[],
+        customFilters: {
+          set: (filterIds as string[]).map((id) => ({ id })),
+        },
+      },
+      include: { customFilters: { select: { id: true, name: true } } },
+    });
+    res.json(item);
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 router.delete('/directions/:id', async (req, res) => {
   try {
     const db = prisma as any;

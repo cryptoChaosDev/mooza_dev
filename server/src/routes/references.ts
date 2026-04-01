@@ -80,11 +80,21 @@ router.get('/services', async (req, res) => {
     const services = await prisma.service.findMany({
       where,
       include: {
-        profession: { select: { id: true, name: true } },
-        customFilters: {
+        profession: {
           select: {
-            id: true, name: true,
-            values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } },
+            id: true,
+            name: true,
+            direction: {
+              select: {
+                allowedFilterTypes: true,
+                customFilters: {
+                  select: {
+                    id: true, name: true,
+                    values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } },
+                  },
+                },
+              },
+            },
           },
         },
         _count: { select: { userServices: true } },
@@ -100,8 +110,8 @@ router.get('/services', async (req, res) => {
       professionName: s.profession.name,
       sortOrder: s.sortOrder,
       userCount: s._count.userServices,
-      allowedFilterTypes: s.allowedFilterTypes,
-      customFilters: s.customFilters,
+      allowedFilterTypes: s.profession.direction.allowedFilterTypes,
+      customFilters: s.profession.direction.customFilters,
     })));
   } catch (error) {
     console.error('Get services error:', error);

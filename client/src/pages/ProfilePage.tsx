@@ -136,8 +136,8 @@ export default function ProfilePage() {
           professionName: us.profession?.name || '',
           serviceId: us.serviceId,
           serviceName: us.service?.name || '',
-          allowedFilterTypes: us.service?.allowedFilterTypes || [],
-          serviceCustomFilters: us.service?.customFilters || [],
+          allowedFilterTypes: us.profession?.direction?.allowedFilterTypes || [],
+          serviceCustomFilters: us.profession?.direction?.customFilters || [],
           customFilterValueIds: (us.selectedCustomFilterValues || []).reduce((acc: Record<string, string[]>, v: any) => {
             if (!acc[v.filterId]) acc[v.filterId] = [];
             acc[v.filterId].push(v.id);
