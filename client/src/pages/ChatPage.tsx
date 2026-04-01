@@ -665,7 +665,7 @@ export default function ChatPage() {
                         {!msg.deletedAt && (
                           <button
                             onClick={() => setActiveMenuId(activeMenuId === msg.id ? null : msg.id)}
-                            className={`absolute top-1 ${isMine ? 'left-0 -translate-x-full pr-1' : 'right-0 translate-x-full pl-1'} opacity-0 group-hover/msg:opacity-100 transition-opacity p-1 text-slate-500 hover:text-slate-300`}
+                            className={`absolute top-1 ${isMine ? 'left-0 -translate-x-full pr-1' : 'right-0 translate-x-full pl-1'} opacity-100 sm:opacity-0 sm:group-hover/msg:opacity-100 transition-opacity p-1 text-slate-500 hover:text-slate-300`}
                           >
                             <span className="text-base leading-none">•••</span>
                           </button>
