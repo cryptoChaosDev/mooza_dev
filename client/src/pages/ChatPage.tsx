@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, Settings, UserPlus, LogOut, Crown, Paperclip, Camera, FileText, Download } from 'lucide-react';
+import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, Camera, FileText, Download, Smile } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
@@ -77,6 +77,14 @@ export default function ChatPage() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // Message context menu
+  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+
+  // Emoji picker
+  const [showEmoji, setShowEmoji] = useState(false);
+
+  const EMOJIS = ['😊','😂','❤️','👍','👎','🔥','🎵','🎸','🎹','🎤','🙏','😍','🤔','😅','🥹','💯','✨','🚀','👏','🎉'];
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -540,7 +548,7 @@ export default function ChatPage() {
       })()}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto" onClick={() => setActiveMenuId(null)}>
         <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
           {grouped.length === 0 ? (
             <div className="text-center py-10">
@@ -640,41 +648,53 @@ export default function ChatPage() {
                             </>
                           )}
 
-                          {/* Time + edited */}
+                          {/* Time + edited + read status */}
                           <div className={`flex items-center justify-end gap-1 mt-1 ${isMine ? 'text-primary-100' : 'text-slate-400'} text-xs`}>
                             {msg.isEdited && !msg.deletedAt && <span className="opacity-70">изм.</span>}
                             <span>{formatTime(msg.createdAt)}</span>
+                            {isMine && !msg.deletedAt && (
+                              msg.readAt
+                                ? <CheckCheck size={13} className="text-primary-200" />
+                                : <Check size={13} className="opacity-60" />
+                            )}
                           </div>
                         </div>
 
-                        {/* Action buttons — hover */}
+                        {/* Tap to open context menu */}
                         {!msg.deletedAt && (
+                          <button
+                            onClick={() => setActiveMenuId(activeMenuId === msg.id ? null : msg.id)}
+                            className={`absolute top-1 ${isMine ? 'left-0 -translate-x-full pr-1' : 'right-0 translate-x-full pl-1'} opacity-0 group-hover/msg:opacity-100 transition-opacity p-1 text-slate-500 hover:text-slate-300`}
+                          >
+                            <span className="text-base leading-none">•••</span>
+                          </button>
+                        )}
+
+                        {/* Context menu */}
+                        {activeMenuId === msg.id && !msg.deletedAt && (
                           <div
-                            className={`absolute top-0 ${isMine ? 'left-0 -translate-x-full pr-2' : 'right-0 translate-x-full pl-2'} flex items-center gap-1 opacity-0 group-hover/msg:opacity-100 transition-opacity`}
+                            className={`absolute top-full mt-1 z-20 ${isMine ? 'right-0' : 'left-0'} bg-slate-800 border border-slate-700 rounded-xl shadow-xl overflow-hidden min-w-[140px]`}
                             onClick={e => e.stopPropagation()}
                           >
                             <button
-                              onClick={() => startReply(msg)}
-                              title="Ответить"
-                              className="p-1.5 bg-slate-700/90 hover:bg-slate-600 rounded-lg text-slate-300 hover:text-white transition-all"
+                              onClick={() => { startReply(msg); setActiveMenuId(null); }}
+                              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
                             >
-                              <Reply size={13} />
+                              <Reply size={14} /> Ответить
                             </button>
                             {isMine && (
                               <>
                                 <button
-                                  onClick={() => startEdit(msg)}
-                                  title="Редактировать"
-                                  className="p-1.5 bg-slate-700/90 hover:bg-slate-600 rounded-lg text-slate-300 hover:text-white transition-all"
+                                  onClick={() => { startEdit(msg); setActiveMenuId(null); }}
+                                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
                                 >
-                                  <Pencil size={13} />
+                                  <Pencil size={14} /> Редактировать
                                 </button>
                                 <button
-                                  onClick={() => handleDelete(msg.id)}
-                                  title="Удалить"
-                                  className="p-1.5 bg-slate-700/90 hover:bg-red-500/80 rounded-lg text-slate-300 hover:text-white transition-all"
+                                  onClick={() => { handleDelete(msg.id); setActiveMenuId(null); }}
+                                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
                                 >
-                                  <Trash2 size={13} />
+                                  <Trash2 size={14} /> Удалить
                                 </button>
                               </>
                             )}
@@ -737,6 +757,22 @@ export default function ChatPage() {
           </div>
         )}
 
+        {/* Emoji picker */}
+        {showEmoji && (
+          <div className="px-3 py-2 border-b border-slate-800">
+            <div className="flex flex-wrap gap-1">
+              {EMOJIS.map(e => (
+                <button key={e} type="button"
+                  onClick={() => { setNewMessage(p => p + e); setShowEmoji(false); inputRef.current?.focus(); }}
+                  className="text-xl hover:scale-125 transition-transform p-0.5"
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Message form */}
         <form onSubmit={handleSubmit} className="flex items-end gap-2 px-3 py-2">
           {!editingId && (
@@ -751,6 +787,10 @@ export default function ChatPage() {
               </button>
             </>
           )}
+          <button type="button" onClick={() => setShowEmoji(p => !p)}
+            className={`p-2 transition-colors flex-shrink-0 ${showEmoji ? 'text-primary-400' : 'text-slate-500 hover:text-slate-300'}`}>
+            <Smile size={20} />
+          </button>
           <textarea
             ref={inputRef}
             value={newMessage}
