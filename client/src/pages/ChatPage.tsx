@@ -28,6 +28,7 @@ interface Message {
   attachmentName?: string | null;
   attachmentSize?: number | null;
   attachmentType?: string | null;
+  readAt?: string | null;
   replyTo: {
     id: string;
     content: string;
