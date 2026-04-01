@@ -1,124 +1,66 @@
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
-  Music,
-  Users,
-  Briefcase,
-  Search,
-  UserPlus,
-  Handshake,
-  Rocket,
   ChevronRight,
-  Mic2,
-  Guitar,
-  Headphones,
-  Radio,
+  Search,
+  MessageCircle,
+  Briefcase,
+  Users,
+  CheckCircle2,
+  Star,
+  Zap,
+  Globe,
 } from 'lucide-react';
 
-/* ───────── floating note component ───────── */
-function FloatingNote({
-  icon: Icon,
-  className,
-  delay = 0,
-}: {
-  icon: typeof Music;
-  className: string;
-  delay?: number;
-}) {
-  return (
-    <motion.div
-      className={`absolute text-primary-500/20 ${className}`}
-      animate={{ y: [0, -20, 0], rotate: [0, 10, -10, 0] }}
-      transition={{ duration: 6, repeat: Infinity, delay, ease: 'easeInOut' }}
-    >
-      <Icon size={48} />
-    </motion.div>
-  );
-}
+const fadeUp = (delay = 0) => ({
+  initial: { opacity: 0, y: 24 },
+  whileInView: { opacity: 1, y: 0 },
+  viewport: { once: true },
+  transition: { duration: 0.55, delay, ease: [0.22, 1, 0.36, 1] },
+});
 
-/* ═══════════════════════════════════════════
-   LANDING PAGE
-   ═══════════════════════════════════════════ */
 export default function LandingPage() {
   const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 overflow-x-hidden">
-      {/* ── HERO ── */}
-      <section className="relative min-h-screen flex items-center justify-center px-4">
-        {/* gradient blobs */}
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-primary-600/15 blur-[120px]" />
-          <div className="absolute -bottom-60 -right-40 w-[500px] h-[500px] rounded-full bg-purple-600/10 blur-[100px]" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full bg-pink-600/5 blur-[140px]" />
 
-          {/* floating icons */}
-          <FloatingNote icon={Music} className="top-[15%] left-[10%]" delay={0} />
-          <FloatingNote icon={Mic2} className="top-[25%] right-[12%]" delay={1.5} />
-          <FloatingNote icon={Guitar} className="bottom-[20%] left-[18%]" delay={3} />
-          <FloatingNote icon={Headphones} className="top-[60%] right-[8%]" delay={2} />
-          <FloatingNote icon={Radio} className="top-[10%] right-[35%]" delay={4} />
-          <FloatingNote icon={Music} className="bottom-[15%] right-[30%]" delay={1} />
+      {/* ── HERO ── */}
+      <section className="relative flex flex-col items-center justify-center min-h-screen px-4 text-center">
+        {/* ambient glow */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <div className="absolute top-[-20%] left-1/2 -translate-x-1/2 w-[800px] h-[500px] rounded-full bg-primary-600/20 blur-[140px]" />
         </div>
 
-        <div className="relative z-10 max-w-4xl mx-auto text-center">
-          {/* badge */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 mb-8 rounded-full border border-primary-500/30 bg-primary-500/10 text-primary-300 text-sm"
-          >
-            <Music size={14} />
-            Платформа для музыкантов и креативной индустрии
+        <div className="relative z-10 max-w-3xl mx-auto">
+          {/* Logo */}
+          <motion.div {...fadeUp(0)} className="flex justify-center mb-8">
+            <img src="/logo.jpg" alt="Moooza" className="h-20 sm:h-28 w-auto object-contain" />
           </motion.div>
 
-          {/* logo */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.15 }}
-            className="flex justify-center mb-6"
-          >
-            <img
-              src="/logo.jpg"
-              alt="Moooza"
-              className="h-28 sm:h-36 md:h-44 w-auto object-contain drop-shadow-2xl"
-            />
-          </motion.div>
+          {/* Headline */}
+          <motion.h1 {...fadeUp(0.1)} className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight tracking-tight mb-5">
+            Платформа для{' '}
+            <span className="bg-gradient-to-r from-primary-400 to-purple-400 bg-clip-text text-transparent">
+              музыкантов
+            </span>{' '}
+            и&nbsp;творческих профессий
+          </motion.h1>
 
-          {/* sub-headline */}
-          <motion.p
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.3 }}
-            className="text-lg sm:text-xl md:text-2xl text-slate-400 max-w-2xl mx-auto mb-10 leading-relaxed"
-          >
-            Объединяем музыкантов и все творческие профессии в одном месте.
-            <br className="hidden sm:block" />
-            Находите работу, создавайте проекты, стройте карьеру.
+          {/* Sub */}
+          <motion.p {...fadeUp(0.2)} className="text-slate-400 text-lg sm:text-xl max-w-xl mx-auto mb-10 leading-relaxed">
+            Находите работу, создавайте проекты и стройте карьеру вместе с теми, кто живёт музыкой.
           </motion.p>
 
-          {/* CTA buttons */}
-          <motion.div
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.45 }}
-            className="flex flex-col sm:flex-row items-center justify-center gap-4"
-          >
+          {/* CTA */}
+          <motion.div {...fadeUp(0.3)} className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
               onClick={() => navigate('/register')}
-              className="group relative w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-white bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-500 hover:to-purple-500 shadow-lg shadow-primary-600/25 hover:shadow-primary-500/40 transition-all duration-300"
+              className="group w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-white bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-500 hover:to-purple-500 shadow-lg shadow-primary-900/40 transition-all duration-300 flex items-center justify-center gap-2"
             >
-              <span className="flex items-center justify-center gap-2">
-                Создать аккаунт
-                <ChevronRight
-                  size={18}
-                  className="group-hover:translate-x-1 transition-transform"
-                />
-              </span>
+              Начать бесплатно
+              <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
             </button>
-
             <button
               onClick={() => navigate('/login')}
               className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-slate-300 border border-slate-700 hover:border-primary-500/50 hover:text-white hover:bg-slate-800/60 transition-all duration-300"
@@ -128,227 +70,156 @@ export default function LandingPage() {
           </motion.div>
         </div>
 
-        {/* scroll indicator */}
+        {/* scroll cue */}
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.5 }}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.2 }}
           className="absolute bottom-8 left-1/2 -translate-x-1/2"
         >
-          <motion.div
-            animate={{ y: [0, 10, 0] }}
-            transition={{ duration: 2, repeat: Infinity }}
-            className="w-6 h-10 rounded-full border-2 border-slate-600 flex items-start justify-center p-1.5"
-          >
-            <motion.div className="w-1.5 h-1.5 rounded-full bg-primary-400" />
+          <motion.div animate={{ y: [0, 8, 0] }} transition={{ duration: 2, repeat: Infinity }}
+            className="w-6 h-10 rounded-full border-2 border-slate-700 flex items-start justify-center pt-1.5">
+            <div className="w-1.5 h-1.5 rounded-full bg-primary-400" />
           </motion.div>
         </motion.div>
       </section>
 
-      {/* ── FEATURES ── */}
-      <section className="relative py-24 sm:py-32 px-4">
-        <div className="max-w-6xl mx-auto">
-          <SectionHeading
-            label="Возможности"
-            title="Всё для вашей музыкальной карьеры"
-            subtitle="Moooza — это платформа, созданная музыкантами для музыкантов"
-          />
+      {/* ── ADVANTAGES ── */}
+      <section className="py-24 px-4">
+        <div className="max-w-5xl mx-auto">
+          <motion.div {...fadeUp()} className="text-center mb-14">
+            <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold tracking-widest uppercase text-primary-400 bg-primary-500/10 border border-primary-500/20 mb-4">
+              Преимущества
+            </span>
+            <h2 className="text-3xl sm:text-4xl font-bold">Всё, что нужно для карьеры в музыке</h2>
+          </motion.div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mt-16">
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
             {[
               {
-                icon: Briefcase,
-                title: 'Портфолио',
-                desc: 'Расскажите о своих навыках, опыте и проектах в профессиональном профиле',
-              },
-              {
                 icon: Search,
-                title: 'Поиск коллег',
-                desc: 'Находите музыкантов по профессии, навыкам и сфере деятельности',
+                title: 'Умный поиск',
+                desc: 'Фильтруйте музыкантов и специалистов по профессии, жанру, формату работы и бюджету.',
               },
               {
-                icon: Handshake,
-                title: 'Коллаборации',
-                desc: 'Объединяйтесь с другими профессионалами для совместных проектов',
+                icon: Briefcase,
+                title: 'Профессиональный профиль',
+                desc: 'Портфолио, услуги, навыки и опыт — всё в одном месте для работодателей и коллег.',
               },
               {
-                icon: Rocket,
-                title: 'Карьерный рост',
-                desc: 'Получайте предложения о работе и развивайте свою музыкальную карьеру',
+                icon: MessageCircle,
+                title: 'Личные сообщения',
+                desc: 'Общайтесь напрямую, создавайте групповые чаты для совместных проектов.',
               },
-            ].map((f, i) => (
-              <motion.div
-                key={f.title}
-                initial={{ opacity: 0, y: 40 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: '-40px' }}
-                transition={{ duration: 0.5, delay: i * 0.12 }}
-                className="group p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-primary-500/40 hover:bg-slate-800/50 backdrop-blur-sm transition-all duration-300"
+              {
+                icon: Users,
+                title: 'Сообщество',
+                desc: 'Друзья, коллаборации, лента событий — стройте профессиональную сеть контактов.',
+              },
+            ].map((item, i) => (
+              <motion.div key={item.title} {...fadeUp(i * 0.1)}
+                className="group p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-primary-500/30 hover:bg-slate-800/50 transition-all duration-300"
               >
-                <div className="w-12 h-12 rounded-xl bg-primary-500/10 flex items-center justify-center mb-4 group-hover:bg-primary-500/20 transition-colors">
-                  <f.icon size={24} className="text-primary-400" />
+                <div className="w-11 h-11 rounded-xl bg-primary-500/10 flex items-center justify-center mb-4 group-hover:bg-primary-500/20 transition-colors">
+                  <item.icon size={22} className="text-primary-400" />
                 </div>
-                <h3 className="text-lg font-semibold mb-2">{f.title}</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">{f.desc}</p>
+                <h3 className="font-semibold text-white mb-2">{item.title}</h3>
+                <p className="text-slate-400 text-sm leading-relaxed">{item.desc}</p>
               </motion.div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── HOW IT WORKS ── */}
-      <section className="relative py-24 sm:py-32 px-4">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute top-0 right-0 w-[400px] h-[400px] rounded-full bg-purple-600/5 blur-[120px]" />
-        </div>
+      {/* ── BULLETS / WHY ── */}
+      <section className="py-24 px-4">
+        <div className="max-w-5xl mx-auto">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            {/* left: text */}
+            <motion.div {...fadeUp()}>
+              <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold tracking-widest uppercase text-primary-400 bg-primary-500/10 border border-primary-500/20 mb-5">
+                Почему Moooza
+              </span>
+              <h2 className="text-3xl sm:text-4xl font-bold mb-8 leading-tight">
+                Создана специально для&nbsp;творческой индустрии
+              </h2>
+              <ul className="space-y-4">
+                {[
+                  'Профили с поддержкой услуг, кастомных фильтров и ценовых диапазонов',
+                  'Умный алгоритм подбора — видите % совпадения с нужным специалистом',
+                  'Реальное время: онлайн-статус, мгновенные сообщения, уведомления',
+                  'Проекты и групповые чаты — вся коммуникация в одном месте',
+                  'Полностью бесплатно — без скрытых платежей и ограничений',
+                ].map((text, i) => (
+                  <motion.li key={i} {...fadeUp(i * 0.08)} className="flex items-start gap-3">
+                    <CheckCircle2 size={20} className="text-primary-400 flex-shrink-0 mt-0.5" />
+                    <span className="text-slate-300 text-sm leading-relaxed">{text}</span>
+                  </motion.li>
+                ))}
+              </ul>
+            </motion.div>
 
-        <div className="relative max-w-4xl mx-auto">
-          <SectionHeading
-            label="Как это работает"
-            title="Три шага к музыкальному сообществу"
-          />
-
-          <div className="mt-16 space-y-0">
-            {[
-              {
-                step: 1,
-                icon: UserPlus,
-                title: 'Создайте профиль',
-                desc: 'Зарегистрируйтесь и заполните информацию о себе: профессия, навыки, любимые артисты и работодатель',
-              },
-              {
-                step: 2,
-                icon: Users,
-                title: 'Найдите единомышленников',
-                desc: 'Ищите музыкантов по профессии и навыкам, добавляйте в друзья, обменивайтесь сообщениями',
-              },
-              {
-                step: 3,
-                icon: Rocket,
-                title: 'Создавайте вместе',
-                desc: 'Делитесь идеями в ленте, участвуйте в обсуждениях и запускайте совместные проекты',
-              },
-            ].map((s, i) => (
-              <motion.div
-                key={s.step}
-                initial={{ opacity: 0, x: i % 2 === 0 ? -40 : 40 }}
-                whileInView={{ opacity: 1, x: 0 }}
-                viewport={{ once: true, margin: '-40px' }}
-                transition={{ duration: 0.6, delay: i * 0.15 }}
-                className="relative flex items-start gap-6 py-8"
-              >
-                {/* timeline line */}
-                {i < 2 && (
-                  <div className="absolute left-[27px] top-[72px] w-px h-[calc(100%-40px)] bg-gradient-to-b from-primary-500/40 to-transparent" />
-                )}
-
-                {/* step number circle */}
-                <div className="flex-shrink-0 w-14 h-14 rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center text-xl font-bold shadow-lg shadow-primary-600/20">
-                  {s.step}
-                </div>
-
-                <div className="pt-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <s.icon size={20} className="text-primary-400" />
-                    <h3 className="text-xl font-semibold">{s.title}</h3>
-                  </div>
-                  <p className="text-slate-400 leading-relaxed max-w-lg">{s.desc}</p>
-                </div>
-              </motion.div>
-            ))}
+            {/* right: achievement cards */}
+            <div className="grid grid-cols-2 gap-4">
+              {[
+                { icon: Star, value: '25+', label: 'Профессий', color: 'from-primary-500/20 to-purple-500/20 border-primary-500/20' },
+                { icon: Globe, value: '100%', label: 'Бесплатно', color: 'from-emerald-500/20 to-teal-500/20 border-emerald-500/20' },
+                { icon: Zap, value: '24/7', label: 'Доступность', color: 'from-yellow-500/20 to-orange-500/20 border-yellow-500/20' },
+                { icon: Users, value: '5+', label: 'Сфер деятельности', color: 'from-pink-500/20 to-rose-500/20 border-pink-500/20' },
+              ].map((item, i) => (
+                <motion.div key={i} {...fadeUp(i * 0.1)}
+                  className={`p-5 rounded-2xl bg-gradient-to-br border ${item.color} flex flex-col gap-2`}
+                >
+                  <item.icon size={20} className="text-slate-300" />
+                  <div className="text-2xl font-extrabold text-white">{item.value}</div>
+                  <div className="text-slate-400 text-xs">{item.label}</div>
+                </motion.div>
+              ))}
+            </div>
           </div>
         </div>
       </section>
 
       {/* ── FINAL CTA ── */}
-      <section className="relative py-24 sm:py-32 px-4">
-        <div className="absolute inset-0 pointer-events-none">
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full bg-primary-600/10 blur-[140px]" />
-        </div>
+      <section className="py-24 px-4">
+        <div className="max-w-2xl mx-auto text-center">
+          <div className="relative rounded-3xl overflow-hidden border border-slate-800 bg-slate-900/60 px-8 py-14">
+            {/* glow inside card */}
+            <div className="pointer-events-none absolute inset-0">
+              <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[400px] h-[200px] rounded-full bg-primary-600/15 blur-[80px]" />
+            </div>
 
-        <div className="relative max-w-3xl mx-auto text-center">
-          <motion.p
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="text-primary-400 text-sm font-semibold tracking-widest uppercase mb-4"
-          >
-            Стань частью
-          </motion.p>
-          <motion.h2
-            initial={{ opacity: 0, y: 30 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight mb-8"
-          >
-            <span className="bg-gradient-to-r from-primary-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              МУЗЫКАЛЬНОГО
-            </span>
-            <br />
-            <span className="bg-gradient-to-r from-pink-400 via-purple-400 to-primary-400 bg-clip-text text-transparent">
-              СООБЩЕСТВА
-            </span>
-          </motion.h2>
-
-          <motion.button
-            initial={{ opacity: 0, y: 20 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            onClick={() => navigate('/register')}
-            className="group px-10 py-4 rounded-xl font-semibold text-white bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-500 hover:to-purple-500 shadow-lg shadow-primary-600/25 hover:shadow-primary-500/40 transition-all duration-300 text-lg"
-          >
-            <span className="flex items-center gap-2">
+            <motion.p {...fadeUp()} className="text-xs font-semibold tracking-widest uppercase text-primary-400 mb-3">
+              Стань частью
+            </motion.p>
+            <motion.h2 {...fadeUp(0.1)} className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-6">
+              <span className="bg-gradient-to-r from-primary-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+                МУЗЫКАЛЬНОГО
+              </span>
+              <br />
+              <span className="text-white">СООБЩЕСТВА</span>
+            </motion.h2>
+            <motion.p {...fadeUp(0.2)} className="text-slate-400 mb-8">
+              Регистрация занимает меньше минуты. Начни прямо сейчас.
+            </motion.p>
+            <motion.button {...fadeUp(0.3)}
+              onClick={() => navigate('/register')}
+              className="group px-10 py-3.5 rounded-xl font-semibold text-white bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-500 hover:to-purple-500 shadow-lg shadow-primary-900/40 transition-all duration-300 flex items-center gap-2 mx-auto"
+            >
               Зарегистрироваться бесплатно
-              <ChevronRight
-                size={20}
-                className="group-hover:translate-x-1 transition-transform"
-              />
-            </span>
-          </motion.button>
+              <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
+            </motion.button>
+          </div>
         </div>
       </section>
 
       {/* ── FOOTER ── */}
-      <footer className="border-t border-slate-800/60 py-8 px-4">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <img src="/logo.jpg" alt="Moooza" className="h-8 w-auto object-contain" />
-          <p className="text-slate-500 text-sm">
+      <footer className="border-t border-slate-800/60 py-6 px-4">
+        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
+          <img src="/logo.jpg" alt="Moooza" className="h-7 w-auto object-contain" />
+          <p className="text-slate-500 text-xs">
             &copy; {new Date().getFullYear()} Moooza. Все права защищены.
           </p>
         </div>
       </footer>
     </div>
-  );
-}
-
-/* ───────── section heading helper ───────── */
-function SectionHeading({
-  label,
-  title,
-  subtitle,
-}: {
-  label: string;
-  title: string;
-  subtitle?: string;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 30 }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true }}
-      transition={{ duration: 0.6 }}
-      className="text-center"
-    >
-      <span className="inline-block px-3 py-1 rounded-full text-xs font-medium tracking-wider uppercase text-primary-400 bg-primary-500/10 border border-primary-500/20 mb-4">
-        {label}
-      </span>
-      <h2 className="text-3xl sm:text-4xl font-bold">{title}</h2>
-      {subtitle && (
-        <p className="mt-4 text-slate-400 max-w-xl mx-auto">{subtitle}</p>
-      )}
-    </motion.div>
   );
 }
