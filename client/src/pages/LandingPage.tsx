@@ -7,9 +7,6 @@ import {
   Briefcase,
   Users,
   CheckCircle2,
-  Star,
-  Zap,
-  Globe,
 } from 'lucide-react';
 
 const fadeUp = (delay = 0) => ({
@@ -134,7 +131,7 @@ export default function LandingPage() {
       {/* ── BULLETS / WHY ── */}
       <section className="py-24 px-4">
         <div className="max-w-5xl mx-auto">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
+          <div className="max-w-2xl">
             {/* left: text */}
             <motion.div {...fadeUp()}>
               <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold tracking-widest uppercase text-primary-400 bg-primary-500/10 border border-primary-500/20 mb-5">
@@ -149,7 +146,6 @@ export default function LandingPage() {
                   'Умный алгоритм подбора — видите % совпадения с нужным специалистом',
                   'Реальное время: онлайн-статус, мгновенные сообщения, уведомления',
                   'Проекты и групповые чаты — вся коммуникация в одном месте',
-                  'Полностью бесплатно — без скрытых платежей и ограничений',
                 ].map((text, i) => (
                   <motion.li key={i} {...fadeUp(i * 0.08)} className="flex items-start gap-3">
                     <CheckCircle2 size={20} className="text-primary-400 flex-shrink-0 mt-0.5" />
@@ -159,23 +155,6 @@ export default function LandingPage() {
               </ul>
             </motion.div>
 
-            {/* right: achievement cards */}
-            <div className="grid grid-cols-2 gap-4">
-              {[
-                { icon: Star, value: '25+', label: 'Профессий', color: 'from-primary-500/20 to-purple-500/20 border-primary-500/20' },
-                { icon: Globe, value: '100%', label: 'Бесплатно', color: 'from-emerald-500/20 to-teal-500/20 border-emerald-500/20' },
-                { icon: Zap, value: '24/7', label: 'Доступность', color: 'from-yellow-500/20 to-orange-500/20 border-yellow-500/20' },
-                { icon: Users, value: '5+', label: 'Сфер деятельности', color: 'from-pink-500/20 to-rose-500/20 border-pink-500/20' },
-              ].map((item, i) => (
-                <motion.div key={i} {...fadeUp(i * 0.1)}
-                  className={`p-5 rounded-2xl bg-gradient-to-br border ${item.color} flex flex-col gap-2`}
-                >
-                  <item.icon size={20} className="text-slate-300" />
-                  <div className="text-2xl font-extrabold text-white">{item.value}</div>
-                  <div className="text-slate-400 text-xs">{item.label}</div>
-                </motion.div>
-              ))}
-            </div>
           </div>
         </div>
       </section>
