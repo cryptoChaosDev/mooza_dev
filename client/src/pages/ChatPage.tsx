@@ -105,8 +105,11 @@ export default function ChatPage() {
   useEffect(() => { loadChat(); }, [loadChat]);
 
   // ── Auto-scroll ────────────────────────────────────────────────────────────
+  const isFirstLoad = useRef(true);
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (!messages.length) return;
+    messagesEndRef.current?.scrollIntoView({ behavior: isFirstLoad.current ? 'instant' : 'smooth' });
+    isFirstLoad.current = false;
   }, [messages]);
 
   // ── Socket ─────────────────────────────────────────────────────────────────
@@ -352,9 +355,9 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+    <div className="h-[calc(100dvh-64px)] bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col">
       {/* Chat Header */}
-      <div className="relative border-b border-slate-700/50 backdrop-blur-sm bg-slate-900/80 sticky top-[64px] z-30">
+      <div className="relative border-b border-slate-700/50 backdrop-blur-sm bg-slate-900/80 flex-shrink-0 z-30">
         <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 via-purple-500/5 to-pink-500/5" />
         <div className="relative max-w-4xl mx-auto px-4 py-4">
           <div className="flex items-center gap-3">
@@ -693,7 +696,7 @@ export default function ChatPage() {
       <input ref={cameraInputRef} type="file" className="hidden" accept="image/*" capture="environment" onChange={pickFile} />
 
       {/* Input area */}
-      <div className="border-t border-slate-700/50 backdrop-blur-sm bg-slate-900/80 pb-20">
+      <div className="border-t border-slate-700/50 backdrop-blur-sm bg-slate-900/80 flex-shrink-0 pb-safe">
         <div className="max-w-4xl mx-auto px-4 py-3">
           {/* Reply / Edit bar */}
           {(replyTo || editingId) && (
