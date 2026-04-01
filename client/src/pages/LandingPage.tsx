@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import { motion, type Transition } from 'framer-motion';
 import {
   ChevronRight,
   Search,
@@ -15,8 +15,8 @@ import {
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 24 },
   whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true },
-  transition: { duration: 0.55, delay, ease: 'easeOut' },
+  viewport: { once: true as const },
+  transition: { duration: 0.55, delay } as Transition,
 });
 
 export default function LandingPage() {
