@@ -156,7 +156,7 @@ export default function ChatPage() {
   };
 
   const chatContainerRef = useRef<HTMLDivElement>(null);
-  const BACK_THRESHOLD = 80;
+  const BACK_THRESHOLD = 60;
 
   const onBackTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0];
