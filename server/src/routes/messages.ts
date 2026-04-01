@@ -270,10 +270,16 @@ router.get('/conversations/:id', authenticate, async (req: AuthRequest, res) => 
       include: MSG_INCLUDE,
     });
 
-    // Mark as read
+    // Mark messages as read
     await db.conversationMember.updateMany({
       where: { conversationId: id, userId },
       data: { lastReadAt: new Date() },
+    });
+
+    // Mark message notifications for this conversation as read in the bell
+    await db.notification.updateMany({
+      where: { userId, type: 'message', link: `/messages/${id}`, read: false },
+      data: { read: true },
     });
 
     res.json({ conversation: conv, messages });
