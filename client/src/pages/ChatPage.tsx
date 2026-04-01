@@ -89,15 +89,20 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  // Swipe gestures
-  const [swipeOffset, setSwipeOffset] = useState<{ id: string; dx: number } | null>(null);
-  const msgSwipe = useRef<{ id: string; startX: number; startY: number; locked: boolean } | null>(null);
+  // Swipe gestures — DOM-ref approach (no re-renders during drag)
+  const swipeEls = useRef<Record<string, HTMLDivElement | null>>({});
+  const hintEls  = useRef<Record<string, HTMLDivElement | null>>({});
+  const msgSwipe = useRef<{ id: string; startX: number; startY: number; locked: boolean; reachedThreshold: boolean } | null>(null);
   const backSwipe = useRef<{ startX: number; startY: number } | null>(null);
+
+  const SWIPE_THRESHOLD = 60;
+  const SWIPE_MAX = 80;
 
   const onMsgTouchStart = (e: React.TouchEvent, msgId: string) => {
     const t = e.touches[0];
-    msgSwipe.current = { id: msgId, startX: t.clientX, startY: t.clientY, locked: false };
+    msgSwipe.current = { id: msgId, startX: t.clientX, startY: t.clientY, locked: false, reachedThreshold: false };
   };
+
   const onMsgTouchMove = (e: React.TouchEvent, msgId: string) => {
     const sw = msgSwipe.current;
     if (!sw || sw.id !== msgId) return;
@@ -105,18 +110,49 @@ export default function ChatPage() {
     const dx = t.clientX - sw.startX;
     const dy = t.clientY - sw.startY;
     if (!sw.locked) {
-      if (Math.abs(dy) > Math.abs(dx)) { msgSwipe.current = null; return; }
+      if (Math.abs(dy) > Math.abs(dx) + 5) { msgSwipe.current = null; return; }
       sw.locked = true;
     }
-    if (dx < 0) setSwipeOffset({ id: msgId, dx: Math.max(dx, -72) });
+    if (dx >= 0) return;
+    e.preventDefault();
+    // rubber-band resistance past threshold
+    const clamped = dx < -SWIPE_MAX
+      ? -SWIPE_MAX - Math.sqrt(Math.abs(dx) - SWIPE_MAX) * 2
+      : dx;
+    sw.reachedThreshold = clamped <= -SWIPE_THRESHOLD;
+
+    const el   = swipeEls.current[msgId];
+    const hint = hintEls.current[msgId];
+    if (el) el.style.transform = `translateX(${clamped}px)`;
+    if (hint) {
+      const ratio = Math.min(1, Math.abs(clamped) / SWIPE_THRESHOLD);
+      hint.style.opacity = String(ratio);
+      hint.style.transform = `translateX(${sw.reachedThreshold ? 0 : (1 - ratio) * 12}px) scale(${0.6 + ratio * 0.4})`;
+    }
   };
+
   const onMsgTouchEnd = (msg: Message) => {
     const sw = msgSwipe.current;
-    if (sw && sw.id === msg.id && swipeOffset && swipeOffset.id === msg.id && swipeOffset.dx < -55) {
-      startReply(msg);
-    }
-    setSwipeOffset(null);
     msgSwipe.current = null;
+    if (!sw || sw.id !== msg.id) return;
+
+    const el   = swipeEls.current[msg.id];
+    const hint = hintEls.current[msg.id];
+
+    if (sw.reachedThreshold) startReply(msg);
+
+    // Snap back with spring feel
+    if (el) {
+      el.style.transition = 'transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)';
+      el.style.transform  = 'translateX(0)';
+      setTimeout(() => { if (el) el.style.transition = ''; }, 370);
+    }
+    if (hint) {
+      hint.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+      hint.style.opacity    = '0';
+      hint.style.transform  = 'scale(0.6)';
+      setTimeout(() => { if (hint) hint.style.transition = ''; }, 220);
+    }
   };
 
   const onBackTouchStart = (e: React.TouchEvent) => {
@@ -629,20 +665,19 @@ export default function ChatPage() {
                       onTouchMove={e => !msg.deletedAt && onMsgTouchMove(e, msg.id)}
                       onTouchEnd={() => !msg.deletedAt && onMsgTouchEnd(msg)}
                     >
-                      {/* Reply hint icon shown during left-swipe */}
-                      {swipeOffset?.id === msg.id && (
-                        <div className={`absolute ${isMine ? 'right-0' : 'left-0'} top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 rounded-full bg-primary-500/20`}
-                          style={{ opacity: Math.min(1, Math.abs(swipeOffset.dx) / 55) }}>
-                          <Reply size={16} className="text-primary-400" />
-                        </div>
-                      )}
+                      {/* Reply hint icon — always rendered, opacity/scale controlled via ref */}
+                      <div
+                        ref={el => { hintEls.current[msg.id] = el; }}
+                        className={`absolute ${isMine ? 'right-2' : 'left-2'} top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 rounded-full bg-primary-500/20`}
+                        style={{ opacity: 0, transform: 'scale(0.6)', pointerEvents: 'none' }}
+                      >
+                        <Reply size={16} className="text-primary-400" />
+                      </div>
+
                       {/* Swipe-animated content */}
                       <div
+                        ref={el => { swipeEls.current[msg.id] = el; }}
                         className="flex items-end"
-                        style={{
-                          transform: swipeOffset?.id === msg.id ? `translateX(${swipeOffset.dx}px)` : 'translateX(0)',
-                          transition: swipeOffset?.id === msg.id ? 'none' : 'transform 0.25s ease',
-                        }}
                       >
                       {/* Avatar for group non-mine */}
                       {conversation.isGroup && !isMine && (
