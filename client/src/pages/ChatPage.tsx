@@ -79,7 +79,7 @@ export default function ChatPage() {
   const [uploading, setUploading] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
@@ -765,13 +765,19 @@ export default function ChatPage() {
                 </button>
               </>
             )}
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
               value={newMessage}
               onChange={e => setNewMessage(e.target.value)}
-              placeholder={editingId ? 'Редактировать сообщение...' : 'Введите сообщение...'}
-              className="flex-1 bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 text-sm text-white rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-slate-400"
+              onKeyDown={e => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
+              placeholder={editingId ? 'Редактировать сообщение...' : 'Введите сообщение... (Ctrl+Enter — отправить)'}
+              rows={1}
+              className="flex-1 bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 text-sm text-white rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-primary-500 placeholder-slate-400 resize-none max-h-32 overflow-y-auto"
             />
             <button
               type="submit"
