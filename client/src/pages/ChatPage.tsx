@@ -79,9 +79,6 @@ export default function ChatPage() {
   const [pendingPreview, setPendingPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  // Message context menu
-  const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
-
   // Emoji picker
   const [showEmoji, setShowEmoji] = useState(false);
 
@@ -549,7 +546,7 @@ export default function ChatPage() {
       })()}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto" onClick={() => setActiveMenuId(null)}>
+      <div className="flex-1 overflow-y-auto">
         <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
           {grouped.length === 0 ? (
             <div className="text-center py-10">
@@ -596,16 +593,6 @@ export default function ChatPage() {
                             )
                           ) : null}
                         </div>
-                      )}
-
-                      {/* Menu button LEFT of bubble (my messages) */}
-                      {isMine && !msg.deletedAt && (
-                        <button
-                          onClick={() => setActiveMenuId(activeMenuId === msg.id ? null : msg.id)}
-                          className="flex-shrink-0 self-center mr-1 p-1.5 opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100 transition-opacity text-slate-500 hover:text-slate-300"
-                        >
-                          <span className="text-sm leading-none">•••</span>
-                        </button>
                       )}
 
                       <div className="max-w-xs md:max-w-md lg:max-w-lg relative group/msg">
@@ -671,47 +658,37 @@ export default function ChatPage() {
                           </div>
                         </div>
 
-                        {/* Context menu */}
-                        {activeMenuId === msg.id && !msg.deletedAt && (
-                          <div
-                            className={`absolute top-full mt-1 z-20 ${isMine ? 'right-0' : 'left-0'} bg-slate-800 border border-slate-700 rounded-xl shadow-xl overflow-hidden min-w-[140px]`}
-                            onClick={e => e.stopPropagation()}
-                          >
+                        {/* Action icons under bubble */}
+                        {!msg.deletedAt && (
+                          <div className={`flex items-center gap-1 mt-1 opacity-100 sm:opacity-0 sm:group-hover/msg:opacity-100 transition-opacity ${isMine ? 'justify-end' : 'justify-start'}`}>
                             <button
-                              onClick={() => { startReply(msg); setActiveMenuId(null); }}
-                              className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                              onClick={() => startReply(msg)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-700/60 transition-colors"
+                              title="Ответить"
                             >
-                              <Reply size={14} /> Ответить
+                              <Reply size={14} />
                             </button>
                             {isMine && (
                               <>
                                 <button
-                                  onClick={() => { startEdit(msg); setActiveMenuId(null); }}
-                                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                                  onClick={() => startEdit(msg)}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-700/60 transition-colors"
+                                  title="Редактировать"
                                 >
-                                  <Pencil size={14} /> Редактировать
+                                  <Pencil size={14} />
                                 </button>
                                 <button
-                                  onClick={() => { handleDelete(msg.id); setActiveMenuId(null); }}
-                                  className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+                                  onClick={() => handleDelete(msg.id)}
+                                  className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                                  title="Удалить"
                                 >
-                                  <Trash2 size={14} /> Удалить
+                                  <Trash2 size={14} />
                                 </button>
                               </>
                             )}
                           </div>
                         )}
                       </div>
-
-                      {/* Menu button RIGHT of bubble (others' messages) */}
-                      {!isMine && !msg.deletedAt && (
-                        <button
-                          onClick={() => setActiveMenuId(activeMenuId === msg.id ? null : msg.id)}
-                          className="flex-shrink-0 self-center ml-1 p-1.5 opacity-100 sm:opacity-0 sm:group-hover/row:opacity-100 transition-opacity text-slate-500 hover:text-slate-300"
-                        >
-                          <span className="text-sm leading-none">•••</span>
-                        </button>
-                      )}
                     </div>
                   );
                 })}
