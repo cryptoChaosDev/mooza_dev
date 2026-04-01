@@ -89,6 +89,52 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
+  // Swipe gestures
+  const [swipeOffset, setSwipeOffset] = useState<{ id: string; dx: number } | null>(null);
+  const msgSwipe = useRef<{ id: string; startX: number; startY: number; locked: boolean } | null>(null);
+  const backSwipe = useRef<{ startX: number; startY: number } | null>(null);
+
+  const onMsgTouchStart = (e: React.TouchEvent, msgId: string) => {
+    const t = e.touches[0];
+    msgSwipe.current = { id: msgId, startX: t.clientX, startY: t.clientY, locked: false };
+  };
+  const onMsgTouchMove = (e: React.TouchEvent, msgId: string) => {
+    const sw = msgSwipe.current;
+    if (!sw || sw.id !== msgId) return;
+    const t = e.touches[0];
+    const dx = t.clientX - sw.startX;
+    const dy = t.clientY - sw.startY;
+    if (!sw.locked) {
+      if (Math.abs(dy) > Math.abs(dx)) { msgSwipe.current = null; return; }
+      sw.locked = true;
+    }
+    if (dx < 0) setSwipeOffset({ id: msgId, dx: Math.max(dx, -72) });
+  };
+  const onMsgTouchEnd = (msg: Message) => {
+    const sw = msgSwipe.current;
+    if (sw && sw.id === msg.id && swipeOffset && swipeOffset.id === msg.id && swipeOffset.dx < -55) {
+      startReply(msg);
+    }
+    setSwipeOffset(null);
+    msgSwipe.current = null;
+  };
+
+  const onBackTouchStart = (e: React.TouchEvent) => {
+    const t = e.touches[0];
+    if (t.clientX < window.innerWidth * 0.25) {
+      backSwipe.current = { startX: t.clientX, startY: t.clientY };
+    }
+  };
+  const onBackTouchEnd = (e: React.TouchEvent) => {
+    const bs = backSwipe.current;
+    if (!bs) return;
+    backSwipe.current = null;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - bs.startX;
+    const dy = Math.abs(t.clientY - bs.startY);
+    if (dx > 72 && dy < 60) navigate('/messages');
+  };
+
   // ── Load chat ──────────────────────────────────────────────────────────────
   const loadChat = useCallback(async () => {
     if (!id) return;
@@ -361,7 +407,11 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="fixed inset-x-0 top-16 bottom-16 z-10 lg:static lg:h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col">
+    <div
+      className="fixed inset-x-0 top-16 bottom-16 z-10 lg:static lg:h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex flex-col"
+      onTouchStart={onBackTouchStart}
+      onTouchEnd={onBackTouchEnd}
+    >
       {/* Chat Header */}
       <div className="relative border-b border-slate-700/50 backdrop-blur-sm bg-slate-900/80 flex-shrink-0 z-30">
         <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 via-purple-500/5 to-pink-500/5" />
@@ -574,8 +624,26 @@ export default function ChatPage() {
                   return (
                     <div
                       key={msg.id}
-                      className={`flex items-end ${isMine ? 'justify-end' : 'justify-start'} ${showSender ? 'mt-3' : 'mt-1'} group/row`}
+                      className={`flex items-end ${isMine ? 'justify-end' : 'justify-start'} ${showSender ? 'mt-3' : 'mt-1'} group/row relative overflow-hidden`}
+                      onTouchStart={e => !msg.deletedAt && onMsgTouchStart(e, msg.id)}
+                      onTouchMove={e => !msg.deletedAt && onMsgTouchMove(e, msg.id)}
+                      onTouchEnd={() => !msg.deletedAt && onMsgTouchEnd(msg)}
                     >
+                      {/* Reply hint icon shown during left-swipe */}
+                      {swipeOffset?.id === msg.id && (
+                        <div className={`absolute ${isMine ? 'right-0' : 'left-0'} top-1/2 -translate-y-1/2 flex items-center justify-center w-10 h-10 rounded-full bg-primary-500/20`}
+                          style={{ opacity: Math.min(1, Math.abs(swipeOffset.dx) / 55) }}>
+                          <Reply size={16} className="text-primary-400" />
+                        </div>
+                      )}
+                      {/* Swipe-animated content */}
+                      <div
+                        className="flex items-end"
+                        style={{
+                          transform: swipeOffset?.id === msg.id ? `translateX(${swipeOffset.dx}px)` : 'translateX(0)',
+                          transition: swipeOffset?.id === msg.id ? 'none' : 'transform 0.25s ease',
+                        }}
+                      >
                       {/* Avatar for group non-mine */}
                       {conversation.isGroup && !isMine && (
                         <div className="mr-2 flex-shrink-0 self-end w-7">
@@ -689,6 +757,7 @@ export default function ChatPage() {
                           </div>
                         )}
                       </div>
+                      </div>{/* end swipe-animated content */}
                     </div>
                   );
                 })}
