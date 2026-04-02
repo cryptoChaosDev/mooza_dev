@@ -66,7 +66,7 @@ router.get('/professions', async (req, res) => {
   }
 });
 
-// Get services for a profession (via its serviceSet) or by serviceSetId
+// Get services for a profession (via its direction's serviceSet) or by serviceSetId
 router.get('/services', async (req, res) => {
   try {
     const db = prisma as any;
@@ -79,14 +79,19 @@ router.get('/services', async (req, res) => {
       const prof = await db.profession.findUnique({
         where: { id: professionId as string },
         select: {
-          serviceSetId: true,
-          direction: { select: { allowedFilterTypes: true, customFilters: { select: { id: true, name: true, values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } } } } } },
+          direction: {
+            select: {
+              serviceSetId: true,
+              allowedFilterTypes: true,
+              customFilters: { select: { id: true, name: true, values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } } } },
+            },
+          },
         },
       });
-      if (!prof?.serviceSetId) return res.json([]);
+      if (!prof?.direction?.serviceSetId) return res.json([]);
       // Return services with direction's filter config
       const services = await db.service.findMany({
-        where: { serviceSetId: prof.serviceSetId },
+        where: { serviceSetId: prof.direction.serviceSetId },
         include: { _count: { select: { userServices: true } } },
         orderBy: { sortOrder: 'asc' },
       });
@@ -100,12 +105,12 @@ router.get('/services', async (req, res) => {
         customFilters: prof.direction?.customFilters ?? [],
       })));
     } else if (fieldOfActivityId) {
-      const profs = await db.profession.findMany({
-        where: { direction: { fieldOfActivityId: fieldOfActivityId as string }, serviceSetId: { not: null } },
+      const dirs = await db.direction.findMany({
+        where: { fieldOfActivityId: fieldOfActivityId as string, serviceSetId: { not: null } },
         select: { serviceSetId: true },
         distinct: ['serviceSetId'],
       });
-      serviceSetIds = profs.map((p: any) => p.serviceSetId).filter(Boolean);
+      serviceSetIds = dirs.map((d: any) => d.serviceSetId).filter(Boolean);
     }
 
     const where: any = serviceSetIds ? { serviceSetId: { in: serviceSetIds } } : {};

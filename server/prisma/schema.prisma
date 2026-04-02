@@ -29,10 +29,14 @@ model Direction {
   allowedFilterTypes String[]
   customFilters      CustomFilter[] @relation("DirectionCustomFilters")
 
+  serviceSetId String?
+  serviceSet   ServiceSet? @relation(fields: [serviceSetId], references: [id], onDelete: SetNull)
+
   createdAt DateTime @default(now())
 
   @@unique([name, fieldOfActivityId])
   @@index([fieldOfActivityId])
+  @@index([serviceSetId])
 }
 
 model Profession {
@@ -41,9 +45,6 @@ model Profession {
   directionId String
   direction   Direction  @relation(fields: [directionId], references: [id])
 
-  serviceSetId String?
-  serviceSet   ServiceSet? @relation(fields: [serviceSetId], references: [id], onDelete: SetNull)
-
   userProfessions UserProfession[]
   userServices    UserService[]
 
@@ -51,18 +52,17 @@ model Profession {
 
   @@unique([name, directionId])
   @@index([directionId])
-  @@index([serviceSetId])
 }
 
 // ============ SEARCH FILTER MODELS ============
 
 // Named set of services (e.g. "Набор для вокалистов")
 model ServiceSet {
-  id        String     @id @default(uuid())
-  name      String     @unique
-  services  Service[]
-  professions Profession[]
-  createdAt DateTime   @default(now())
+  id         String      @id @default(uuid())
+  name       String      @unique
+  services   Service[]
+  directions Direction[]
+  createdAt  DateTime    @default(now())
 }
 
 // Individual service value within a set

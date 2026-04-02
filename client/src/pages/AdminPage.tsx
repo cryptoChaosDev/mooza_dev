@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { adminAPI } from '../lib/api';
-import { Plus, Pencil, Trash2, Check, X, ChevronRight, Filter } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, ChevronRight, Filter, Package } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -201,11 +201,10 @@ const SYSTEM_FILTER_TYPES = [
 
 // ─── Profession node ─────────────────────────────────────────────────────────
 
-function ProfessionNode({ profession, allServiceSets, qc }: {
-  profession: Item; allServiceSets: SSet[]; qc: QueryClient;
+function ProfessionNode({ profession, qc }: {
+  profession: Item; qc: QueryClient;
 }) {
   const [editing, setEditing] = useState(false);
-  const [setsOpen, setSetsOpen] = useState(false);
 
   const invalidateP = () => qc.invalidateQueries({ queryKey: ['admin-professions'] });
 
@@ -217,12 +216,6 @@ function ProfessionNode({ profession, allServiceSets, qc }: {
     mutationFn: () => adminAPI.professions.remove(profession.id),
     onSuccess: invalidateP,
   });
-  const setServiceSetMut = useMutation({
-    mutationFn: (serviceSetId: string | null) => adminAPI.professions.setServiceSet(profession.id, serviceSetId),
-    onSuccess: invalidateP,
-  });
-
-  const attachedSet = profession.serviceSet as SSet | null | undefined;
 
   return (
     <div className="border border-slate-700/50 rounded-lg overflow-hidden">
@@ -236,55 +229,13 @@ function ProfessionNode({ profession, allServiceSets, qc }: {
         ) : (
           <>
             <span className="flex-1 text-sm font-medium text-slate-200">{profession.name}</span>
-            {attachedSet && (
-              <span className="text-xs text-primary-400 flex-shrink-0 mr-1">{attachedSet.name}</span>
-            )}
             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={() => setSetsOpen(o => !o)}
-                className={`p-1 ${setsOpen ? 'text-primary-400' : 'text-slate-400 hover:text-primary-400'}`}
-                title="Набор услуг"
-              >
-                <Filter size={12} />
-              </button>
               <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={12} /></button>
               <button onClick={() => deleteMut.mutate()} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={12} /></button>
             </div>
           </>
         )}
       </div>
-
-      {setsOpen && (
-        <div className="mx-3 mb-2 mt-1 p-3 bg-slate-800/60 rounded-lg border border-slate-700/50 space-y-2">
-          <p className="text-xs font-medium text-slate-400">Набор услуг для этой профессии:</p>
-          <div className="space-y-1">
-            {attachedSet && (
-              <button
-                onClick={() => setServiceSetMut.mutate(null)}
-                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-slate-400 hover:text-red-400 hover:bg-slate-700/30 transition-colors text-left"
-              >
-                <X size={11} /> Открепить набор
-              </button>
-            )}
-            {allServiceSets.map(ss => (
-              <label key={ss.id} className="flex items-center gap-2 cursor-pointer hover:bg-slate-700/30 px-2 py-1.5 rounded">
-                <input
-                  type="radio"
-                  name={`sset-${profession.id}`}
-                  checked={attachedSet?.id === ss.id}
-                  onChange={() => setServiceSetMut.mutate(ss.id)}
-                  className="accent-primary-500"
-                />
-                <span className="text-xs text-slate-300 flex-1">{ss.name}</span>
-                <span className="text-xs text-slate-600">{ss.services.length} усл.</span>
-              </label>
-            ))}
-            {allServiceSets.length === 0 && (
-              <p className="text-xs text-slate-600 py-1">Сначала создайте наборы во вкладке «Услуги»</p>
-            )}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -297,6 +248,7 @@ function DirectionNode({ direction, professions, allCustomFilters, allServiceSet
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [setsOpen, setSetsOpen] = useState(false);
   const [addingProfession, setAddingProfession] = useState(false);
 
   const invalidateD = () => qc.invalidateQueries({ queryKey: ['admin-directions'] });
@@ -305,6 +257,7 @@ function DirectionNode({ direction, professions, allCustomFilters, allServiceSet
   const attachedIds: string[] = (direction.customFilters ?? []).map((f: any) => f.id);
   const attachedTypes: string[] = direction.allowedFilterTypes ?? [];
   const totalAttached = attachedIds.length + attachedTypes.length;
+  const attachedSet = direction.serviceSet as SSet | null | undefined;
 
   const updateMut = useMutation({
     mutationFn: (name: string) => adminAPI.directions.update(direction.id, { name, fieldOfActivityId: direction.fieldOfActivity?.id }),
@@ -317,6 +270,10 @@ function DirectionNode({ direction, professions, allCustomFilters, allServiceSet
   const setFiltersMut = useMutation({
     mutationFn: ({ filterIds, filterTypes }: { filterIds: string[]; filterTypes: string[] }) =>
       adminAPI.directions.setFilters(direction.id, filterIds, filterTypes),
+    onSuccess: invalidateD,
+  });
+  const setServiceSetMut = useMutation({
+    mutationFn: (serviceSetId: string | null) => adminAPI.directions.setServiceSet(direction.id, serviceSetId),
     onSuccess: invalidateD,
   });
   const addProfessionMut = useMutation({
@@ -352,13 +309,23 @@ function DirectionNode({ direction, professions, allCustomFilters, allServiceSet
         ) : (
           <>
             <span className="flex-1 text-sm font-semibold text-slate-100">{direction.name}</span>
+            {attachedSet && (
+              <span className="text-xs text-emerald-400 flex-shrink-0 mr-1">{attachedSet.name}</span>
+            )}
             {totalAttached > 0 && (
               <span className="text-xs text-primary-400 flex-shrink-0 mr-1">{totalAttached} ф.</span>
             )}
             <span className="text-xs text-slate-600 flex-shrink-0">{professions.length} проф.</span>
             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button
-                onClick={() => setFiltersOpen(o => !o)}
+                onClick={() => { setSetsOpen(o => !o); setFiltersOpen(false); }}
+                className={`p-1 ${setsOpen ? 'text-emerald-400' : 'text-slate-400 hover:text-emerald-400'}`}
+                title="Набор услуг"
+              >
+                <Package size={13} />
+              </button>
+              <button
+                onClick={() => { setFiltersOpen(o => !o); setSetsOpen(false); }}
                 className={`p-1 ${filtersOpen ? 'text-primary-400' : 'text-slate-400 hover:text-primary-400'}`}
                 title="Фильтры направления"
               >
@@ -411,13 +378,44 @@ function DirectionNode({ direction, professions, allCustomFilters, allServiceSet
         </div>
       )}
 
+      {setsOpen && (
+        <div className="mx-3 mb-2 mt-1 p-3 bg-slate-800/60 rounded-lg border border-slate-700/50 space-y-2">
+          <p className="text-xs font-medium text-slate-400">Набор услуг для всех профессий этого направления:</p>
+          <div className="space-y-1">
+            {attachedSet && (
+              <button
+                onClick={() => setServiceSetMut.mutate(null)}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-slate-400 hover:text-red-400 hover:bg-slate-700/30 transition-colors text-left"
+              >
+                <X size={11} /> Открепить набор
+              </button>
+            )}
+            {allServiceSets.map(ss => (
+              <label key={ss.id} className="flex items-center gap-2 cursor-pointer hover:bg-slate-700/30 px-2 py-1.5 rounded">
+                <input
+                  type="radio"
+                  name={`sset-${direction.id}`}
+                  checked={attachedSet?.id === ss.id}
+                  onChange={() => setServiceSetMut.mutate(ss.id)}
+                  className="accent-primary-500"
+                />
+                <span className="text-xs text-slate-300 flex-1">{ss.name}</span>
+                <span className="text-xs text-slate-600">{ss.services.length} усл.</span>
+              </label>
+            ))}
+            {allServiceSets.length === 0 && (
+              <p className="text-xs text-slate-600 py-1">Сначала создайте наборы во вкладке «Услуги»</p>
+            )}
+          </div>
+        </div>
+      )}
+
       {open && (
         <div className="px-3 py-2 space-y-1.5 bg-slate-900/40">
           {professions.map(prof => (
             <ProfessionNode
               key={prof.id}
               profession={prof}
-              allServiceSets={allServiceSets}
               qc={qc}
             />
           ))}
