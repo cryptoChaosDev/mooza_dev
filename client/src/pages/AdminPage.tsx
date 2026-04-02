@@ -989,13 +989,245 @@ function ServicesTab() {
   );
 }
 
+// ─── Directions reference tab ────────────────────────────────────────────────
+
+function DirectionsTab() {
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState<{ name: string; fieldOfActivityId: string }>({ name: '', fieldOfActivityId: '' });
+
+  const { data: directions = [] } = useQuery<Item[]>({
+    queryKey: ['admin-directions'],
+    queryFn: () => adminAPI.directions.list().then((r: any) => r.data),
+  });
+  const { data: fields = [] } = useQuery<Item[]>({
+    queryKey: ['admin-fields-of-activity'],
+    queryFn: () => adminAPI.fieldsOfActivity.list().then((r: any) => r.data),
+  });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['admin-directions'] });
+
+  const createMut = useMutation({
+    mutationFn: (d: any) => adminAPI.directions.create(d),
+    onSuccess: () => { invalidate(); setAdding(false); setForm({ name: '', fieldOfActivityId: '' }); },
+  });
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => adminAPI.directions.update(id, data),
+    onSuccess: () => { invalidate(); setEditId(null); },
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => adminAPI.directions.remove(id),
+    onSuccess: invalidate,
+  });
+
+  const startEdit = (dir: Item) => {
+    setEditId(dir.id);
+    setForm({ name: dir.name, fieldOfActivityId: dir.fieldOfActivity?.id ?? '' });
+  };
+  const startAdd = () => {
+    setAdding(true);
+    setForm({ name: '', fieldOfActivityId: fields[0]?.id ?? '' });
+  };
+
+  const FieldSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      className="bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500 max-w-[160px]"
+    >
+      <option value="">— Сфера —</option>
+      {fields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+    </select>
+  );
+
+  return (
+    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-white">Направления</h3>
+          <span className="text-xs text-slate-500">{directions.length}</span>
+        </div>
+        <button onClick={startAdd} className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+          <Plus size={14} /> Добавить
+        </button>
+      </div>
+      <div className="divide-y divide-slate-800">
+        {adding && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/50">
+            <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              placeholder="Название" className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500" />
+            <FieldSelect value={form.fieldOfActivityId} onChange={v => setForm(f => ({ ...f, fieldOfActivityId: v }))} />
+            <button onClick={() => form.name.trim() && form.fieldOfActivityId && createMut.mutate(form)} className="text-green-400 hover:text-green-300"><Check size={16} /></button>
+            <button onClick={() => setAdding(false)} className="text-slate-400 hover:text-white"><X size={16} /></button>
+          </div>
+        )}
+        {directions.map(dir => (
+          <div key={dir.id} className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800/30 group">
+            {editId === dir.id ? (
+              <>
+                <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500" />
+                <FieldSelect value={form.fieldOfActivityId} onChange={v => setForm(f => ({ ...f, fieldOfActivityId: v }))} />
+                <button onClick={() => updateMut.mutate({ id: dir.id, data: form })} className="text-green-400 hover:text-green-300"><Check size={16} /></button>
+                <button onClick={() => setEditId(null)} className="text-slate-400 hover:text-white"><X size={16} /></button>
+              </>
+            ) : (
+              <>
+                <span className="flex-1 text-sm text-slate-200">{dir.name}</span>
+                <span className="text-xs text-slate-500 w-36 truncate text-right">{dir.fieldOfActivity?.name ?? '—'}</span>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => startEdit(dir)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
+                  <button onClick={() => deleteMut.mutate(dir.id)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+        {directions.length === 0 && !adding && (
+          <div className="px-4 py-4 text-sm text-slate-500 text-center">Нет записей</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Professions reference tab ───────────────────────────────────────────────
+
+function ProfessionsTab() {
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [form, setForm] = useState<{ name: string; directionId: string }>({ name: '', directionId: '' });
+  const [fieldFilter, setFieldFilter] = useState('');
+
+  const { data: professions = [] } = useQuery<Item[]>({
+    queryKey: ['admin-professions'],
+    queryFn: () => adminAPI.professions.list().then((r: any) => r.data),
+  });
+  const { data: directions = [] } = useQuery<Item[]>({
+    queryKey: ['admin-directions'],
+    queryFn: () => adminAPI.directions.list().then((r: any) => r.data),
+  });
+  const { data: fields = [] } = useQuery<Item[]>({
+    queryKey: ['admin-fields-of-activity'],
+    queryFn: () => adminAPI.fieldsOfActivity.list().then((r: any) => r.data),
+  });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['admin-professions'] });
+
+  const createMut = useMutation({
+    mutationFn: (d: any) => adminAPI.professions.create(d),
+    onSuccess: () => { invalidate(); setAdding(false); setForm({ name: '', directionId: '' }); },
+  });
+  const updateMut = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: any }) => adminAPI.professions.update(id, data),
+    onSuccess: () => { invalidate(); setEditId(null); },
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => adminAPI.professions.remove(id),
+    onSuccess: invalidate,
+  });
+
+  const startEdit = (p: Item) => {
+    setEditId(p.id);
+    setForm({ name: p.name, directionId: p.direction?.id ?? '' });
+  };
+  const startAdd = () => {
+    setAdding(true);
+    const firstDir = fieldFilter
+      ? directions.find(d => d.fieldOfActivity?.id === fieldFilter)
+      : directions[0];
+    setForm({ name: '', directionId: firstDir?.id ?? '' });
+  };
+
+  const visibleDirections = fieldFilter
+    ? directions.filter(d => d.fieldOfActivity?.id === fieldFilter)
+    : directions;
+
+  const visibleProfessions = fieldFilter
+    ? professions.filter(p => {
+        const dir = directions.find(d => d.id === p.direction?.id);
+        return dir?.fieldOfActivity?.id === fieldFilter;
+      })
+    : professions;
+
+  const DirSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
+    <select value={value} onChange={e => onChange(e.target.value)}
+      className="bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500 max-w-[180px]">
+      <option value="">— Направление —</option>
+      {visibleDirections.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+    </select>
+  );
+
+  return (
+    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-white">Профессии</h3>
+          <span className="text-xs text-slate-500">{professions.length}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <select value={fieldFilter} onChange={e => setFieldFilter(e.target.value)}
+            className="bg-slate-800 text-slate-300 text-xs px-2 py-1.5 rounded-lg outline-none border border-slate-700 focus:border-primary-500">
+            <option value="">Все сферы</option>
+            {fields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
+          </select>
+          <button onClick={startAdd} className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+            <Plus size={14} /> Добавить
+          </button>
+        </div>
+      </div>
+      <div className="divide-y divide-slate-800">
+        {adding && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/50">
+            <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              placeholder="Название" className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500" />
+            <DirSelect value={form.directionId} onChange={v => setForm(f => ({ ...f, directionId: v }))} />
+            <button onClick={() => form.name.trim() && form.directionId && createMut.mutate(form)} className="text-green-400 hover:text-green-300"><Check size={16} /></button>
+            <button onClick={() => setAdding(false)} className="text-slate-400 hover:text-white"><X size={16} /></button>
+          </div>
+        )}
+        {visibleProfessions.map(p => (
+          <div key={p.id} className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800/30 group">
+            {editId === p.id ? (
+              <>
+                <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                  className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500" />
+                <DirSelect value={form.directionId} onChange={v => setForm(f => ({ ...f, directionId: v }))} />
+                <button onClick={() => updateMut.mutate({ id: p.id, data: form })} className="text-green-400 hover:text-green-300"><Check size={16} /></button>
+                <button onClick={() => setEditId(null)} className="text-slate-400 hover:text-white"><X size={16} /></button>
+              </>
+            ) : (
+              <>
+                <span className="flex-1 text-sm text-slate-200">{p.name}</span>
+                <span className="text-xs text-slate-500 w-40 truncate text-right">{p.direction?.name ?? '—'}</span>
+                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button onClick={() => startEdit(p)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
+                  <button onClick={() => deleteMut.mutate(p.id)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+                </div>
+              </>
+            )}
+          </div>
+        ))}
+        {visibleProfessions.length === 0 && !adding && (
+          <div className="px-4 py-4 text-sm text-slate-500 text-center">Нет записей</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Tabs ────────────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: 'structure', label: 'Структура' },
-  { id: 'services', label: 'Услуги' },
-  { id: 'filters', label: 'Фильтры' },
-  { id: 'orgs', label: 'Организации' },
+  { id: 'structure',   label: 'Структура' },
+  { id: 'spheres',     label: 'Сферы' },
+  { id: 'directions',  label: 'Направления' },
+  { id: 'professions', label: 'Профессии' },
+  { id: 'services',    label: 'Услуги' },
+  { id: 'filters',     label: 'Фильтры' },
+  { id: 'orgs',        label: 'Организации' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -1008,22 +1240,36 @@ export default function AdminPage() {
       <div className="max-w-3xl mx-auto space-y-6">
         <h1 className="text-2xl font-bold text-white">Администрирование справочников</h1>
 
-        {/* Tab bar */}
-        <div className="flex gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 w-fit">
-          {TABS.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                tab === t.id ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* Tab bar — scrollable on narrow screens */}
+        <div className="overflow-x-auto pb-0.5">
+          <div className="flex gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 w-max min-w-full">
+            {TABS.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
+                  tab === t.id ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {tab === 'structure' && <StructureTree />}
+
+        {tab === 'spheres' && (
+          <SimpleTable
+            title="Сферы деятельности"
+            queryKey="admin-fields-of-activity"
+            apiModule={adminAPI.fieldsOfActivity}
+          />
+        )}
+
+        {tab === 'directions' && <DirectionsTab />}
+
+        {tab === 'professions' && <ProfessionsTab />}
 
         {tab === 'services' && <ServicesTab />}
 
