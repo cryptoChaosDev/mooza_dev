@@ -1,39 +1,43 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Users, Check, X, MessageCircle, UserX, Clock } from 'lucide-react';
+import { Users, Check, X, MessageCircle, UserX, Clock, Pin, PinOff, Search, Wifi } from 'lucide-react';
 import { friendshipAPI } from '../lib/api';
 import { usePresenceStore } from '../stores/presenceStore';
 
 type Tab = 'friends' | 'requests' | 'sent';
 
+const PINNED_KEY = 'mooza_pinned_friends';
+
+function getPinned(): string[] {
+  try { return JSON.parse(localStorage.getItem(PINNED_KEY) ?? '[]'); }
+  catch { return []; }
+}
+function setPinned(ids: string[]) {
+  localStorage.setItem(PINNED_KEY, JSON.stringify(ids));
+}
+
 export default function FriendsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('friends');
+  const [search, setSearch] = useState('');
+  const [onlineOnly, setOnlineOnly] = useState(false);
+  const [pinnedIds, setPinnedIds] = useState<string[]>(getPinned);
+
+  const onlineUsers = usePresenceStore((s) => s.onlineUsers);
 
   const { data: friends = [], isLoading: friendsLoading } = useQuery({
     queryKey: ['friends'],
-    queryFn: async () => {
-      const { data } = await friendshipAPI.getFriends();
-      return data;
-    },
+    queryFn: async () => { const { data } = await friendshipAPI.getFriends(); return data; },
   });
-
   const { data: requests = [] } = useQuery({
     queryKey: ['friend-requests'],
-    queryFn: async () => {
-      const { data } = await friendshipAPI.getRequests();
-      return data;
-    },
+    queryFn: async () => { const { data } = await friendshipAPI.getRequests(); return data; },
   });
-
   const { data: sentRequests = [] } = useQuery({
     queryKey: ['friend-requests-sent'],
-    queryFn: async () => {
-      const { data } = await friendshipAPI.getSentRequests();
-      return data;
-    },
+    queryFn: async () => { const { data } = await friendshipAPI.getSentRequests(); return data; },
   });
 
   const acceptMutation = useMutation({
@@ -43,27 +47,48 @@ export default function FriendsPage() {
       queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
     },
   });
-
   const rejectMutation = useMutation({
     mutationFn: friendshipAPI.rejectRequest,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['friend-requests'] }); },
   });
-
   const cancelMutation = useMutation({
     mutationFn: friendshipAPI.rejectRequest,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['friend-requests-sent'] });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['friend-requests-sent'] }); },
   });
-
   const removeMutation = useMutation({
     mutationFn: friendshipAPI.removeFriend,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['friends'] });
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['friends'] }); },
   });
+
+  const togglePin = (friendId: string) => {
+    setPinnedIds(prev => {
+      const next = prev.includes(friendId)
+        ? prev.filter(id => id !== friendId)
+        : [...prev, friendId];
+      setPinned(next);
+      return next;
+    });
+  };
+
+  const filteredFriends = useMemo(() => {
+    return friends
+      .map((item: any) => ({ ...item, friend: item.user ?? item }))
+      .filter(({ friend }: any) => {
+        const q = search.toLowerCase();
+        const matchesSearch = !q ||
+          `${friend.firstName} ${friend.lastName}`.toLowerCase().includes(q) ||
+          (friend.role ?? '').toLowerCase().includes(q) ||
+          (friend.city ?? '').toLowerCase().includes(q);
+        const matchesOnline = !onlineOnly || onlineUsers.has(friend.id);
+        return matchesSearch && matchesOnline;
+      })
+      .sort((a: any, b: any) => {
+        const aPin = pinnedIds.includes(a.friend.id);
+        const bPin = pinnedIds.includes(b.friend.id);
+        if (aPin !== bPin) return aPin ? -1 : 1;
+        return `${a.friend.firstName} ${a.friend.lastName}`.localeCompare(`${b.friend.firstName} ${b.friend.lastName}`);
+      });
+  }, [friends, search, onlineOnly, pinnedIds, onlineUsers]);
 
   const TABS = [
     { id: 'friends' as Tab, label: 'Друзья', count: friends.length },
@@ -71,242 +96,298 @@ export default function FriendsPage() {
     { id: 'sent' as Tab, label: 'Отправленные', count: sentRequests.length },
   ];
 
-  const onlineUsers = usePresenceStore((s) => s.onlineUsers);
-
   const Avatar = ({ user, size = 10, showPresence = false }: { user: any; size?: number; showPresence?: boolean }) => {
-    const cls = `w-${size} h-${size} rounded-xl object-cover ring-2 ring-slate-700/50 group-hover:ring-primary-500/50 transition-all`;
+    const cls = `w-${size} h-${size} rounded-full object-cover`;
     const isOnline = showPresence && onlineUsers.has(user.id);
     const inner = user.avatar ? (
       <img src={`${import.meta.env.VITE_API_URL}${user.avatar}`} alt={`${user.firstName} ${user.lastName}`} className={cls} />
     ) : (
-      <div className={`w-${size} h-${size} bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl flex items-center justify-center ring-2 ring-slate-700/50 group-hover:ring-primary-500/50 transition-all`}>
+      <div className={`w-${size} h-${size} bg-gradient-to-br from-primary-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0`}>
         <span className="text-white font-bold text-sm">{user.firstName[0]}{user.lastName[0]}</span>
       </div>
     );
     if (!showPresence) return inner;
     return (
-      <div className="relative inline-block">
+      <div className="relative inline-block flex-shrink-0">
         {inner}
         {isOnline && (
-          <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 border-2 border-slate-800 rounded-full" />
+          <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full" />
         )}
       </div>
     );
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
-      <div className="relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary-500/10 via-purple-500/10 to-pink-500/10 blur-3xl"></div>
-        <div className="relative max-w-4xl mx-auto px-4 pt-4 pb-4">
-          <div className="flex items-center gap-2 mb-4">
-            <div className="p-2 bg-primary-500/20 rounded-xl">
+    <div className="min-h-screen bg-slate-950">
+      <div className="max-w-2xl mx-auto">
+
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+          <div className="px-4 pt-4 pb-3">
+            <div className="flex items-center gap-2 mb-3">
               <Users size={20} className="text-primary-400" />
+              <h2 className="text-lg font-bold text-white">Друзья</h2>
             </div>
-            <h2 className="text-xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-              Друзья
-            </h2>
-          </div>
 
-          {/* Tabs */}
-          <div className="flex gap-1 p-1 bg-slate-800/80 rounded-xl border border-slate-700/50">
-            {TABS.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${
-                  activeTab === tab.id
-                    ? 'bg-primary-500 text-white shadow-md shadow-primary-500/30'
-                    : 'text-slate-400 hover:text-slate-300'
-                }`}
-              >
-                <span>{tab.label}</span>
-                {tab.count > 0 && (
-                  <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${
-                    activeTab === tab.id ? 'bg-white/20 text-white' : 'bg-slate-700 text-slate-300'
-                  }`}>
-                    {tab.count}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="max-w-4xl mx-auto px-4 pb-24">
-
-        {/* Friends Tab */}
-        {activeTab === 'friends' && (
-          friendsLoading ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {[1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className="bg-slate-800/80 rounded-xl p-3.5 border border-slate-700/50 animate-pulse">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-slate-700/50 rounded-xl"></div>
-                    <div className="flex-1">
-                      <div className="h-4 bg-slate-700/50 rounded w-2/3 mb-2"></div>
-                      <div className="h-3 bg-slate-700/50 rounded w-1/2"></div>
-                    </div>
-                  </div>
-                </div>
+            {/* Tabs */}
+            <div className="flex gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800 mb-3">
+              {TABS.map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    activeTab === tab.id
+                      ? 'bg-primary-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  {tab.count > 0 && (
+                    <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${
+                      activeTab === tab.id ? 'bg-white/20' : 'bg-slate-800 text-slate-400'
+                    }`}>
+                      {tab.count}
+                    </span>
+                  )}
+                </button>
               ))}
             </div>
-          ) : friends.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {friends.map((item: any) => {
-                const friend = item.user ?? item; // backward compat
-                const friendshipId = item.friendshipId;
-                return (
-                  <div key={friend.id} className="group relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-3.5 border border-slate-700/50 hover:border-primary-500/50 transition-all duration-300">
-                    <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"></div>
-                    <div className="flex flex-col items-center text-center">
-                      <button onClick={() => navigate(`/profile/${friend.id}`)} className="mb-2">
-                        <Avatar user={friend} size={14} showPresence />
+
+            {/* Search + filters (friends tab only) */}
+            {activeTab === 'friends' && (
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                  <input
+                    value={search}
+                    onChange={e => setSearch(e.target.value)}
+                    placeholder="Поиск по имени, роли, городу..."
+                    className="w-full bg-slate-900 border border-slate-800 text-sm text-white placeholder-slate-500 pl-8 pr-3 py-2 rounded-xl outline-none focus:border-primary-600 transition-colors"
+                  />
+                </div>
+                <button
+                  onClick={() => setOnlineOnly(o => !o)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
+                    onlineOnly
+                      ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-400'
+                      : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-white'
+                  }`}
+                  title="Только онлайн"
+                >
+                  <Wifi size={13} />
+                  Онлайн
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="pb-24">
+
+          {/* ── Friends tab ── */}
+          {activeTab === 'friends' && (
+            friendsLoading ? (
+              <div className="divide-y divide-slate-800/60">
+                {[1,2,3,4,5].map(i => (
+                  <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse">
+                    <div className="w-11 h-11 rounded-full bg-slate-800 flex-shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3.5 bg-slate-800 rounded w-2/5" />
+                      <div className="h-3 bg-slate-800 rounded w-1/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filteredFriends.length > 0 ? (
+              <div className="divide-y divide-slate-800/60">
+                {filteredFriends.map(({ friend, friendshipId }: any) => {
+                  const isPinned = pinnedIds.includes(friend.id);
+                  const isOnline = onlineUsers.has(friend.id);
+                  return (
+                    <div
+                      key={friend.id}
+                      className="group flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors"
+                    >
+                      {/* Avatar */}
+                      <button onClick={() => navigate(`/profile/${friend.id}`)} className="flex-shrink-0">
+                        <Avatar user={friend} size={11} showPresence />
                       </button>
-                      <button onClick={() => navigate(`/profile/${friend.id}`)} className="font-semibold text-white text-sm hover:text-primary-400 transition-colors truncate w-full">
-                        {friend.firstName} {friend.lastName}
+
+                      {/* Info */}
+                      <button
+                        onClick={() => navigate(`/profile/${friend.id}`)}
+                        className="flex-1 min-w-0 text-left"
+                      >
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-semibold text-white truncate">
+                            {friend.firstName} {friend.lastName}
+                          </span>
+                          {isPinned && <Pin size={11} className="text-primary-400 flex-shrink-0" />}
+                          {isOnline && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />
+                          )}
+                        </div>
+                        {(friend.role || friend.city) && (
+                          <p className="text-xs text-slate-500 truncate mt-0.5">
+                            {[friend.role, friend.city].filter(Boolean).join(' · ')}
+                          </p>
+                        )}
                       </button>
-                      {friend.role && <p className="text-xs text-primary-400 truncate w-full mb-2">{friend.role}</p>}
-                      {friend.city && <p className="text-xs text-slate-500 truncate w-full mb-3">{friend.city}</p>}
-                      <div className="flex gap-2 w-full">
+
+                      {/* Actions */}
+                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
                         <button
                           onClick={() => navigate(`/messages/${friend.id}`)}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-2 py-2 bg-primary-500/10 hover:bg-primary-500/20 text-primary-400 rounded-lg text-xs font-medium transition-all"
+                          className="p-2 text-slate-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg transition-all"
+                          title="Написать"
                         >
-                          <MessageCircle size={14} />
-                          <span>Написать</span>
+                          <MessageCircle size={16} />
+                        </button>
+                        <button
+                          onClick={() => togglePin(friend.id)}
+                          className={`p-2 rounded-lg transition-all ${
+                            isPinned
+                              ? 'text-primary-400 hover:text-slate-400 hover:bg-slate-700/50'
+                              : 'text-slate-400 hover:text-primary-400 hover:bg-primary-500/10'
+                          }`}
+                          title={isPinned ? 'Открепить' : 'Закрепить'}
+                        >
+                          {isPinned ? <PinOff size={15} /> : <Pin size={15} />}
                         </button>
                         {friendshipId && (
                           <button
                             onClick={() => removeMutation.mutate(friendshipId)}
                             disabled={removeMutation.isPending}
-                            className="flex items-center justify-center p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-all disabled:opacity-50"
+                            className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-50"
                             title="Удалить из друзей"
                           >
-                            <UserX size={14} />
+                            <UserX size={15} />
                           </button>
                         )}
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-2xl border border-slate-700/50 text-center py-12 px-6">
-              <div className="inline-flex p-4 bg-slate-700/30 rounded-2xl mb-4">
-                <Users size={36} className="text-slate-500" />
-              </div>
-              <h3 className="text-base font-bold text-white mb-2">У вас пока нет друзей</h3>
-              <p className="text-slate-400 text-sm mb-4">Найдите музыкантов в поиске</p>
-              <button
-                onClick={() => navigate('/search')}
-                className="px-4 py-2 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white rounded-lg text-sm font-medium transition-all"
-              >
-                Найти друзей
-              </button>
-            </div>
-          )
-        )}
 
-        {/* Requests Tab */}
-        {activeTab === 'requests' && (
-          requests.length > 0 ? (
-            <div className="grid gap-4 sm:grid-cols-2">
-              {requests.map((request: any) => (
-                <div key={request.id} className="group relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl p-3.5 border border-slate-700/50 hover:border-primary-500/50 transition-all duration-300">
-                  <div className="flex items-center gap-3 mb-3">
-                    <button onClick={() => navigate(`/profile/${request.requester.id}`)} className="flex-shrink-0">
-                      <Avatar user={request.requester} />
-                    </button>
-                    <div className="flex-1 min-w-0">
-                      <button onClick={() => navigate(`/profile/${request.requester.id}`)} className="font-bold text-white text-sm hover:text-primary-400 transition-colors truncate block">
-                        {request.requester.firstName} {request.requester.lastName}
+                      {/* Message button always visible on mobile */}
+                      <button
+                        onClick={() => navigate(`/messages/${friend.id}`)}
+                        className="p-2 text-slate-600 hover:text-primary-400 rounded-lg transition-colors flex-shrink-0 sm:hidden"
+                      >
+                        <MessageCircle size={16} />
                       </button>
-                      <p className="text-xs text-slate-400 truncate">
-                        {request.requester.role && `${request.requester.role}`}
-                        {request.requester.role && request.requester.city && ' • '}
-                        {request.requester.city}
-                      </p>
                     </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => acceptMutation.mutate(request.id)}
-                      disabled={acceptMutation.isPending}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-green-500/10 hover:bg-green-500/20 text-green-400 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
-                    >
-                      <Check size={16} />
-                      Принять
-                    </button>
-                    <button
-                      onClick={() => rejectMutation.mutate(request.id)}
-                      disabled={rejectMutation.isPending}
-                      className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
-                    >
-                      <X size={16} />
-                      Отклонить
-                    </button>
-                  </div>
+                  );
+                })}
+              </div>
+            ) : friends.length === 0 ? (
+              <div className="flex flex-col items-center py-16 px-6 text-center">
+                <div className="p-4 bg-slate-800/50 rounded-2xl mb-4">
+                  <Users size={32} className="text-slate-600" />
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-2xl border border-slate-700/50 text-center py-12 px-6">
-              <div className="inline-flex p-4 bg-slate-700/30 rounded-2xl mb-4">
-                <Check size={36} className="text-slate-500" />
+                <p className="text-white font-semibold mb-1">У вас пока нет друзей</p>
+                <p className="text-slate-500 text-sm mb-5">Найдите музыкантов в поиске</p>
+                <button
+                  onClick={() => navigate('/search')}
+                  className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-medium transition-colors"
+                >
+                  Найти друзей
+                </button>
               </div>
-              <p className="text-slate-400 text-sm">Нет входящих заявок</p>
-            </div>
-          )
-        )}
+            ) : (
+              <div className="flex flex-col items-center py-12 px-6 text-center">
+                <Search size={28} className="text-slate-600 mb-3" />
+                <p className="text-slate-500 text-sm">Никого не найдено по вашему запросу</p>
+              </div>
+            )
+          )}
 
-        {/* Sent Tab */}
-        {activeTab === 'sent' && (
-          sentRequests.length > 0 ? (
-            <div className="grid gap-3 sm:grid-cols-2">
-              {sentRequests.map((request: any) => (
-                <div key={request.id} className="group relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl p-3.5 border border-slate-700/50 hover:border-slate-600/50 transition-all duration-300">
-                  <div className="flex items-center gap-3">
-                    <button onClick={() => navigate(`/profile/${request.receiver.id}`)} className="flex-shrink-0">
-                      <Avatar user={request.receiver} />
+          {/* ── Requests tab ── */}
+          {activeTab === 'requests' && (
+            requests.length > 0 ? (
+              <div className="divide-y divide-slate-800/60">
+                {requests.map((request: any) => (
+                  <div key={request.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors">
+                    <button onClick={() => navigate(`/profile/${request.requester.id}`)} className="flex-shrink-0">
+                      <Avatar user={request.requester} size={11} />
                     </button>
-                    <div className="flex-1 min-w-0">
-                      <button onClick={() => navigate(`/profile/${request.receiver.id}`)} className="font-semibold text-white text-sm hover:text-primary-400 transition-colors truncate block">
-                        {request.receiver.firstName} {request.receiver.lastName}
-                      </button>
-                      <p className="text-xs text-slate-400 truncate">
-                        {request.receiver.role && `${request.receiver.role}`}
-                        {request.receiver.role && request.receiver.city && ' • '}
-                        {request.receiver.city}
+                    <button onClick={() => navigate(`/profile/${request.requester.id}`)} className="flex-1 min-w-0 text-left">
+                      <p className="text-sm font-semibold text-white truncate">
+                        {request.requester.firstName} {request.requester.lastName}
                       </p>
-                      <div className="flex items-center gap-1 mt-1">
-                        <Clock size={11} className="text-slate-500" />
-                        <span className="text-xs text-slate-500">Ожидает ответа</span>
-                      </div>
+                      {(request.requester.role || request.requester.city) && (
+                        <p className="text-xs text-slate-500 truncate mt-0.5">
+                          {[request.requester.role, request.requester.city].filter(Boolean).join(' · ')}
+                        </p>
+                      )}
+                    </button>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button
+                        onClick={() => acceptMutation.mutate(request.id)}
+                        disabled={acceptMutation.isPending}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
+                      >
+                        <Check size={13} /> Принять
+                      </button>
+                      <button
+                        onClick={() => rejectMutation.mutate(request.id)}
+                        disabled={rejectMutation.isPending}
+                        className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-50"
+                        title="Отклонить"
+                      >
+                        <X size={15} />
+                      </button>
                     </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center py-16 text-center">
+                <div className="p-4 bg-slate-800/50 rounded-2xl mb-3">
+                  <Check size={28} className="text-slate-600" />
+                </div>
+                <p className="text-slate-500 text-sm">Нет входящих заявок</p>
+              </div>
+            )
+          )}
+
+          {/* ── Sent tab ── */}
+          {activeTab === 'sent' && (
+            sentRequests.length > 0 ? (
+              <div className="divide-y divide-slate-800/60">
+                {sentRequests.map((request: any) => (
+                  <div key={request.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors">
+                    <button onClick={() => navigate(`/profile/${request.receiver.id}`)} className="flex-shrink-0">
+                      <Avatar user={request.receiver} size={11} />
+                    </button>
+                    <button onClick={() => navigate(`/profile/${request.receiver.id}`)} className="flex-1 min-w-0 text-left">
+                      <p className="text-sm font-semibold text-white truncate">
+                        {request.receiver.firstName} {request.receiver.lastName}
+                      </p>
+                      <div className="flex items-center gap-1 mt-0.5">
+                        <Clock size={11} className="text-slate-600" />
+                        <span className="text-xs text-slate-500">
+                          {[request.receiver.role, request.receiver.city].filter(Boolean).join(' · ') || 'Ожидает ответа'}
+                        </span>
+                      </div>
+                    </button>
                     <button
                       onClick={() => cancelMutation.mutate(request.id)}
                       disabled={cancelMutation.isPending}
-                      className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-slate-700/50 hover:bg-red-500/15 text-slate-400 hover:text-red-400 rounded-lg text-xs font-medium transition-all disabled:opacity-50"
+                      className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-red-500/10 text-slate-400 hover:text-red-400 rounded-xl text-xs font-medium border border-slate-700 hover:border-red-500/30 transition-all disabled:opacity-50 flex-shrink-0"
                     >
-                      <X size={13} />
-                      Отменить
+                      <X size={12} /> Отменить
                     </button>
                   </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-2xl border border-slate-700/50 text-center py-12 px-6">
-              <div className="inline-flex p-4 bg-slate-700/30 rounded-2xl mb-4">
-                <Clock size={36} className="text-slate-500" />
+                ))}
               </div>
-              <p className="text-slate-400 text-sm">Нет отправленных заявок</p>
-            </div>
-          )
-        )}
+            ) : (
+              <div className="flex flex-col items-center py-16 text-center">
+                <div className="p-4 bg-slate-800/50 rounded-2xl mb-3">
+                  <Clock size={28} className="text-slate-600" />
+                </div>
+                <p className="text-slate-500 text-sm">Нет отправленных заявок</p>
+              </div>
+            )
+          )}
+        </div>
       </div>
     </div>
   );
