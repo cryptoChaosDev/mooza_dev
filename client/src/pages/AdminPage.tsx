@@ -199,50 +199,14 @@ const SYSTEM_FILTER_TYPES = [
   { key: 'priceRange',     label: 'Ценовые диапазоны' },
 ];
 
-// ─── Service (leaf node) ─────────────────────────────────────────────────────
-
-function ServiceRow({ service, onUpdate, onDelete }: {
-  service: Item;
-  onUpdate: (name: string) => void;
-  onDelete: () => void;
-}) {
-  const [editing, setEditing] = useState(false);
-
-  return (
-    <div className="rounded">
-      <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-700/30 group">
-        {editing ? (
-          <InlineEdit
-            value={service.name}
-            onSave={name => { onUpdate(name); setEditing(false); }}
-            onCancel={() => setEditing(false)}
-          />
-        ) : (
-          <>
-            <span className="w-1.5 h-1.5 rounded-full bg-slate-600 flex-shrink-0 ml-1" />
-            <span className="flex-1 text-sm text-slate-300">{service.name}</span>
-            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={12} /></button>
-              <button onClick={onDelete} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={12} /></button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Profession node ─────────────────────────────────────────────────────────
 
-function ProfessionNode({ profession, services, qc }: {
-  profession: Item; services: Item[]; qc: QueryClient;
+function ProfessionNode({ profession, qc }: {
+  profession: Item; qc: QueryClient;
 }) {
-  const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [addingService, setAddingService] = useState(false);
 
   const invalidateP = () => qc.invalidateQueries({ queryKey: ['admin-professions'] });
-  const invalidateS = () => qc.invalidateQueries({ queryKey: ['admin-services'] });
 
   const updateMut = useMutation({
     mutationFn: (name: string) => adminAPI.professions.update(profession.id, { name, directionId: profession.direction?.id }),
@@ -252,26 +216,10 @@ function ProfessionNode({ profession, services, qc }: {
     mutationFn: () => adminAPI.professions.remove(profession.id),
     onSuccess: invalidateP,
   });
-  const addServiceMut = useMutation({
-    mutationFn: (name: string) => adminAPI.services.create({ name, professionId: profession.id }),
-    onSuccess: () => { invalidateS(); setAddingService(false); },
-  });
-  const updateServiceMut = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) =>
-      adminAPI.services.update(id, { name, professionId: profession.id }),
-    onSuccess: invalidateS,
-  });
-  const deleteServiceMut = useMutation({
-    mutationFn: (id: string) => adminAPI.services.remove(id),
-    onSuccess: invalidateS,
-  });
 
   return (
     <div className="border border-slate-700/50 rounded-lg overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/40 hover:bg-slate-800/70 group">
-        <button onClick={() => setOpen(o => !o)} className="text-slate-500 hover:text-white flex-shrink-0">
-          <ChevronRight size={13} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
-        </button>
         {editing ? (
           <InlineEdit
             value={profession.name}
@@ -281,7 +229,6 @@ function ProfessionNode({ profession, services, qc }: {
         ) : (
           <>
             <span className="flex-1 text-sm font-medium text-slate-200">{profession.name}</span>
-            <span className="text-xs text-slate-600 flex-shrink-0">{services.length} усл.</span>
             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={12} /></button>
               <button onClick={() => deleteMut.mutate()} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={12} /></button>
@@ -289,48 +236,14 @@ function ProfessionNode({ profession, services, qc }: {
           </>
         )}
       </div>
-
-      {open && (
-        <div className="px-3 py-2 space-y-0.5 bg-slate-900/60">
-          {services.map(service => (
-            <ServiceRow
-              key={service.id}
-              service={service}
-              onUpdate={name => updateServiceMut.mutate({ id: service.id, name })}
-              onDelete={() => deleteServiceMut.mutate(service.id)}
-            />
-          ))}
-
-          {services.length === 0 && !addingService && (
-            <p className="text-xs text-slate-600 px-2 py-1">Нет услуг</p>
-          )}
-
-          {addingService ? (
-            <div className="px-2 pt-1">
-              <AddRow
-                placeholder="Название услуги"
-                onAdd={name => addServiceMut.mutate(name)}
-                onCancel={() => setAddingService(false)}
-              />
-            </div>
-          ) : (
-            <button
-              onClick={() => setAddingService(true)}
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-primary-400 transition-colors px-2 pt-1.5 pb-0.5"
-            >
-              <Plus size={11} /> Добавить услугу
-            </button>
-          )}
-        </div>
-      )}
     </div>
   );
 }
 
 // ─── Direction node ──────────────────────────────────────────────────────────
 
-function DirectionNode({ direction, professions, allServices, allCustomFilters, qc }: {
-  direction: Item; professions: Item[]; allServices: Item[]; allCustomFilters: CFilter[]; qc: QueryClient;
+function DirectionNode({ direction, professions, allCustomFilters, qc }: {
+  direction: Item; professions: Item[]; allCustomFilters: CFilter[]; qc: QueryClient;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -455,7 +368,6 @@ function DirectionNode({ direction, professions, allServices, allCustomFilters, 
             <ProfessionNode
               key={prof.id}
               profession={prof}
-              services={allServices.filter(s => s.profession?.id === prof.id)}
               qc={qc}
             />
           ))}
@@ -486,8 +398,8 @@ function DirectionNode({ direction, professions, allServices, allCustomFilters, 
 
 // ─── Field of activity node ──────────────────────────────────────────────────
 
-function FieldNode({ field, directions, allProfessions, allServices, allCustomFilters, qc }: {
-  field: Item; directions: Item[]; allProfessions: Item[]; allServices: Item[]; allCustomFilters: CFilter[]; qc: QueryClient;
+function FieldNode({ field, directions, allProfessions, allCustomFilters, qc }: {
+  field: Item; directions: Item[]; allProfessions: Item[]; allCustomFilters: CFilter[]; qc: QueryClient;
 }) {
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -549,7 +461,6 @@ function FieldNode({ field, directions, allProfessions, allServices, allCustomFi
               key={dir.id}
               direction={dir}
               professions={allProfessions.filter(p => p.direction?.id === dir.id)}
-              allServices={allServices}
               allCustomFilters={allCustomFilters}
               qc={qc}
             />
@@ -597,10 +508,6 @@ function StructureTree() {
     queryKey: ['admin-professions'],
     queryFn: () => adminAPI.professions.list().then((r: any) => r.data),
   });
-  const { data: services = [] } = useQuery<Item[]>({
-    queryKey: ['admin-services'],
-    queryFn: () => adminAPI.services.list().then((r: any) => r.data),
-  });
   const { data: allCustomFilters = [] } = useQuery<CFilter[]>({
     queryKey: ['admin-custom-filters'],
     queryFn: () => adminAPI.customFilters.list().then((r: any) => r.data),
@@ -621,7 +528,6 @@ function StructureTree() {
           field={field}
           directions={directions.filter(d => d.fieldOfActivity?.id === field.id)}
           allProfessions={professions}
-          allServices={services}
           allCustomFilters={allCustomFilters}
           qc={qc}
         />
@@ -849,15 +755,167 @@ function CustomFiltersSection() {
   );
 }
 
+// ─── Services tab ────────────────────────────────────────────────────────────
+
+function ServicesTab() {
+  const qc = useQueryClient();
+
+  const { data: fields = [] } = useQuery<Item[]>({
+    queryKey: ['admin-fields-of-activity'],
+    queryFn: () => adminAPI.fieldsOfActivity.list().then((r: any) => r.data),
+  });
+  const { data: directions = [] } = useQuery<Item[]>({
+    queryKey: ['admin-directions'],
+    queryFn: () => adminAPI.directions.list().then((r: any) => r.data),
+  });
+  const { data: services = [] } = useQuery<Item[]>({
+    queryKey: ['admin-services'],
+    queryFn: () => adminAPI.services.list().then((r: any) => r.data),
+  });
+
+  const invalidateS = () => qc.invalidateQueries({ queryKey: ['admin-services'] });
+
+  const addMut = useMutation({
+    mutationFn: ({ name, directionId }: { name: string; directionId: string }) =>
+      adminAPI.services.create({ name, directionId }),
+    onSuccess: invalidateS,
+  });
+  const updateMut = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => adminAPI.services.update(id, { name }),
+    onSuccess: invalidateS,
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => adminAPI.services.remove(id),
+    onSuccess: invalidateS,
+  });
+
+  return (
+    <div className="space-y-4">
+      {fields.map(field => {
+        const fieldDirs = directions.filter(d => d.fieldOfActivity?.id === field.id);
+        if (fieldDirs.length === 0) return null;
+        return (
+          <div key={field.id} className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+            <div className="px-4 py-3 bg-slate-800/60 border-b border-slate-800">
+              <span className="text-sm font-bold text-slate-200">{field.name}</span>
+            </div>
+            <div className="divide-y divide-slate-800/60">
+              {fieldDirs.map(dir => {
+                const dirServices = services.filter((s: Item) => s.direction?.id === dir.id);
+                return (
+                  <DirectionServicesGroup
+                    key={dir.id}
+                    direction={dir}
+                    services={dirServices}
+                    onAdd={name => addMut.mutate({ name, directionId: dir.id })}
+                    onUpdate={(id, name) => updateMut.mutate({ id, name })}
+                    onDelete={id => deleteMut.mutate(id)}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+      {fields.length === 0 && (
+        <p className="text-slate-500 text-sm text-center py-8">
+          Сначала создайте сферы и направления во вкладке «Структура»
+        </p>
+      )}
+    </div>
+  );
+}
+
+function DirectionServicesGroup({ direction, services, onAdd, onUpdate, onDelete }: {
+  direction: Item;
+  services: Item[];
+  onAdd: (name: string) => void;
+  onUpdate: (id: string, name: string) => void;
+  onDelete: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+
+  return (
+    <div>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-slate-800/40 transition-colors group text-left"
+      >
+        <ChevronRight size={13} className={`text-slate-500 transition-transform flex-shrink-0 ${open ? 'rotate-90' : ''}`} />
+        <span className="flex-1 text-sm font-medium text-slate-300">{direction.name}</span>
+        <span className="text-xs text-slate-600">{services.length} усл.</span>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-3 space-y-0.5 bg-slate-900/60">
+          {services.map((service: Item) => (
+            <ServiceEditRow
+              key={service.id}
+              service={service}
+              onUpdate={name => onUpdate(service.id, name)}
+              onDelete={() => onDelete(service.id)}
+            />
+          ))}
+          {services.length === 0 && !adding && (
+            <p className="text-xs text-slate-600 py-1 px-2">Нет услуг</p>
+          )}
+          {adding ? (
+            <AddRow
+              placeholder="Название услуги"
+              onAdd={name => { onAdd(name); setAdding(false); }}
+              onCancel={() => setAdding(false)}
+            />
+          ) : (
+            <button
+              onClick={() => setAdding(true)}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-primary-400 transition-colors px-2 pt-1.5 pb-0.5"
+            >
+              <Plus size={11} /> Добавить услугу
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ServiceEditRow({ service, onUpdate, onDelete }: {
+  service: Item; onUpdate: (name: string) => void; onDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-700/30 rounded group">
+      {editing ? (
+        <InlineEdit
+          value={service.name}
+          onSave={name => { onUpdate(name); setEditing(false); }}
+          onCancel={() => setEditing(false)}
+        />
+      ) : (
+        <>
+          <span className="w-1.5 h-1.5 rounded-full bg-slate-600 flex-shrink-0 ml-1" />
+          <span className="flex-1 text-sm text-slate-300">{service.name}</span>
+          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={12} /></button>
+            <button onClick={onDelete} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={12} /></button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ─── Tabs ────────────────────────────────────────────────────────────────────
 
 const TABS = [
   { id: 'structure', label: 'Структура' },
+  { id: 'services', label: 'Услуги' },
   { id: 'filters', label: 'Фильтры' },
   { id: 'orgs', label: 'Организации' },
 ] as const;
 
-type TabId = typeof TABS[number]['id'];
+type TabId = (typeof TABS)[number]['id'];
 
 export default function AdminPage() {
   const [tab, setTab] = useState<TabId>('structure');
@@ -883,6 +941,8 @@ export default function AdminPage() {
         </div>
 
         {tab === 'structure' && <StructureTree />}
+
+        {tab === 'services' && <ServicesTab />}
 
         {tab === 'filters' && (
           <div className="space-y-6">

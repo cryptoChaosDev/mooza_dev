@@ -249,7 +249,7 @@ export default function SearchPage() {
   const { data: fields }          = useFieldsOfActivity();
   const { data: directions }      = useDirections(fieldId || undefined);
   const { data: professions }     = useProfessions(directionId || undefined);
-  const { data: services }        = useServices(professionId || undefined, fieldId || undefined);
+  const { data: services }        = useServices(directionId || undefined);
   const { data: genres }          = useGenres();
   const { data: workFormats }     = useWorkFormats();
   const { data: employmentTypes } = useEmploymentTypes();
