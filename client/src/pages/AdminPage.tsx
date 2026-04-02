@@ -815,7 +815,7 @@ interface SSet { id: string; name: string; services: { id: string; name: string;
 
 function ServiceSetCard({ sset, onUpdate, onDelete }: {
   sset: SSet;
-  onUpdate: (name: string, values: string[]) => void;
+  onUpdate: (name: string, values?: string[]) => void;
   onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -828,7 +828,7 @@ function ServiceSetCard({ sset, onUpdate, onDelete }: {
 
   const vals = sset.services.map(s => s.name);
   const save = (newVals: string[]) => onUpdate(sset.name, newVals);
-  const saveName = () => { onUpdate(editName.trim() || sset.name, vals); setEditingName(false); };
+  const saveName = () => { onUpdate(editName.trim() || sset.name); setEditingName(false); };
   const addValue = () => {
     if (!newValue.trim()) return;
     save([...vals, newValue.trim()]);
@@ -938,7 +938,7 @@ function ServicesTab() {
     onSuccess: () => { invalidate(); setAdding(false); setNewName(''); },
   });
   const updateMut = useMutation({
-    mutationFn: ({ id, name, values }: { id: string; name: string; values: string[] }) =>
+    mutationFn: ({ id, name, values }: { id: string; name: string; values?: string[] }) =>
       adminAPI.serviceSets.update(id, { name, values }),
     onSuccess: invalidate,
   });
