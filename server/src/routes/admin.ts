@@ -65,7 +65,10 @@ router.delete('/fields-of-activity/:id', async (req, res) => {
 // ─── Profession ────────────────────────────────────────────────────────────
 router.get('/professions', async (_req, res) => {
   const items = await prisma.profession.findMany({
-    include: { direction: { select: { id: true, name: true } } },
+    include: {
+      direction: { select: { id: true, name: true } },
+      serviceSet: { select: { id: true, name: true, services: { select: { id: true, name: true, sortOrder: true } } } },
+    },
     orderBy: { name: 'asc' },
   });
   res.json(items);
@@ -108,6 +111,74 @@ router.delete('/professions/:id', async (req, res) => {
   } catch (e: any) {
     res.status(400).json({ error: e.message });
   }
+});
+
+// Attach / detach a ServiceSet from a Profession
+router.put('/professions/:id/service-set', async (req, res) => {
+  try {
+    const db = prisma as any;
+    const item = await db.profession.update({
+      where: { id: req.params.id },
+      data: { serviceSetId: req.body.serviceSetId ?? null },
+      include: {
+        direction: { select: { id: true, name: true } },
+        serviceSet: { select: { id: true, name: true, services: { orderBy: { sortOrder: 'asc' } } } },
+      },
+    });
+    res.json(item);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+// ─── ServiceSet ────────────────────────────────────────────────────────────
+router.get('/service-sets', async (_req, res) => {
+  const db = prisma as any;
+  const items = await db.serviceSet.findMany({
+    include: { services: { orderBy: { sortOrder: 'asc' } } },
+    orderBy: { createdAt: 'asc' },
+  });
+  res.json(items);
+});
+router.post('/service-sets', async (req, res) => {
+  try {
+    const db = prisma as any;
+    const { name, values = [] } = req.body;
+    if (!name) return res.status(400).json({ error: 'Name required' });
+    const item = await db.serviceSet.create({
+      data: {
+        name,
+        services: { create: (values as string[]).map((v: string, i: number) => ({ name: v, sortOrder: i })) },
+      },
+      include: { services: { orderBy: { sortOrder: 'asc' } } },
+    });
+    res.status(201).json(item);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+router.put('/service-sets/:id', async (req, res) => {
+  try {
+    const db = prisma as any;
+    const { name, values } = req.body;
+    const data: any = {};
+    if (name !== undefined) data.name = name;
+    if (values !== undefined) {
+      data.services = {
+        deleteMany: {},
+        create: (values as string[]).map((v: string, i: number) => ({ name: v, sortOrder: i })),
+      };
+    }
+    const item = await db.serviceSet.update({
+      where: { id: req.params.id },
+      data,
+      include: { services: { orderBy: { sortOrder: 'asc' } } },
+    });
+    res.json(item);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+router.delete('/service-sets/:id', async (req, res) => {
+  try {
+    const db = prisma as any;
+    await db.serviceSet.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
 // ─── Service ───────────────────────────────────────────────────────────────
