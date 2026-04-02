@@ -32,6 +32,7 @@ export default function MultiLevelSearch({ compact = false, onSearch }: MultiLev
   // Store state and actions
   const {
     fieldId,
+    directionId,
     professionId,
     serviceId,
     genreId,
@@ -61,7 +62,7 @@ export default function MultiLevelSearch({ compact = false, onSearch }: MultiLev
   // Fetch reference data
   const { data: fields, isLoading: fieldsLoading } = useFieldsOfActivity();
   const { data: professions, isLoading: professionsLoading } = useProfessions(fieldId || undefined);
-  const { data: services, isLoading: servicesLoading } = useServices(professionId || undefined, fieldId || undefined);
+  const { data: services, isLoading: servicesLoading } = useServices(directionId || undefined);
   const { data: genres, isLoading: genresLoading } = useGenres();
   const { data: workFormats, isLoading: workFormatsLoading } = useWorkFormats();
   const { data: employmentTypes, isLoading: employmentTypesLoading } = useEmploymentTypes();
