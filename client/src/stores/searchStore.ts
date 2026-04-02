@@ -338,14 +338,14 @@ export function useProfessions(directionId?: string) {
   });
 }
 
-export function useServices(professionId?: string, fieldOfActivityId?: string) {
+export function useServices(directionId?: string) {
   return useQuery({
-    queryKey: ['services', professionId, fieldOfActivityId],
+    queryKey: ['services', directionId],
     queryFn: async () => {
-      const { data } = await referenceAPI.getServices({ professionId, fieldOfActivityId });
+      const { data } = await referenceAPI.getServices({ directionId });
       return data as Service[];
     },
-    enabled: !!(professionId || fieldOfActivityId),
+    enabled: !!directionId,
   });
 }
 

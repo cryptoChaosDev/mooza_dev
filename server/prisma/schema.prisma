@@ -26,6 +26,7 @@ model Direction {
   fieldOfActivity   FieldOfActivity @relation(fields: [fieldOfActivityId], references: [id])
 
   professions        Profession[]
+  services           Service[]
   allowedFilterTypes String[]
   customFilters      CustomFilter[] @relation("DirectionCustomFilters")
 
@@ -42,7 +43,6 @@ model Profession {
   direction   Direction @relation(fields: [directionId], references: [id])
 
   userProfessions UserProfession[]
-  services        Service[]
   userServices    UserService[]
 
   createdAt DateTime @default(now())
@@ -53,18 +53,20 @@ model Profession {
 
 // ============ SEARCH FILTER MODELS ============
 
-// Services offered — linked to Profession (hierarchical filter level 3)
+// Services offered — linked to Direction (replicated to all its professions)
 model Service {
-  id           String     @id @default(uuid())
-  name         String     @unique
-  nameEn       String?
-  sortOrder    Int        @default(0)
-  professionId String
-  profession   Profession @relation(fields: [professionId], references: [id])
+  id          String    @id @default(uuid())
+  name        String    @unique
+  nameEn      String?
+  sortOrder   Int       @default(0)
+  directionId String
+  direction   Direction @relation(fields: [directionId], references: [id], onDelete: Cascade)
 
   userServices UserService[]
 
   createdAt DateTime @default(now())
+
+  @@index([directionId])
 }
 
 // Independent filter: music genres

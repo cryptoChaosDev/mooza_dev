@@ -51,8 +51,8 @@ router.delete('/fields-of-activity/:id', async (req, res) => {
     await prisma.$transaction([
       prisma.userService.deleteMany({ where: { professionId: { in: professionIds } } }),
       prisma.userProfession.deleteMany({ where: { professionId: { in: professionIds } } }),
-      prisma.service.deleteMany({ where: { professionId: { in: professionIds } } }),
       db.profession.deleteMany({ where: { directionId: { in: directionIds } } }),
+      // Services cascade-delete via FK when direction is deleted
       db.direction.deleteMany({ where: { fieldOfActivityId: req.params.id } }),
       prisma.fieldOfActivity.delete({ where: { id: req.params.id } }),
     ]);
@@ -102,7 +102,6 @@ router.delete('/professions/:id', async (req, res) => {
     await prisma.$transaction([
       prisma.userService.deleteMany({ where: { professionId: req.params.id } }),
       prisma.userProfession.deleteMany({ where: { professionId: req.params.id } }),
-      prisma.service.deleteMany({ where: { professionId: req.params.id } }),
       db.profession.delete({ where: { id: req.params.id } }),
     ]);
     res.json({ ok: true });
@@ -113,17 +112,17 @@ router.delete('/professions/:id', async (req, res) => {
 
 // ─── Service ───────────────────────────────────────────────────────────────
 router.get('/services', async (_req, res) => {
-  const items = await prisma.service.findMany({
-    include: { profession: { select: { id: true, name: true } } },
-    orderBy: { name: 'asc' },
+  const items = await (prisma as any).service.findMany({
+    include: { direction: { select: { id: true, name: true, fieldOfActivity: { select: { id: true, name: true } } } } },
+    orderBy: [{ direction: { name: 'asc' } }, { sortOrder: 'asc' }, { name: 'asc' }],
   });
   res.json(items);
 });
 router.post('/services', async (req, res) => {
   try {
-    const item = await prisma.service.create({
-      data: { name: req.body.name, professionId: req.body.professionId, sortOrder: req.body.sortOrder ?? 0 },
-      include: { profession: { select: { id: true, name: true } } },
+    const item = await (prisma as any).service.create({
+      data: { name: req.body.name, directionId: req.body.directionId, sortOrder: req.body.sortOrder ?? 0 },
+      include: { direction: { select: { id: true, name: true } } },
     });
     res.json(item);
   } catch (e: any) {
@@ -134,12 +133,12 @@ router.put('/services/:id', async (req, res) => {
   try {
     const data: any = {};
     if (req.body.name !== undefined) data.name = req.body.name;
-    if (req.body.professionId !== undefined) data.professionId = req.body.professionId;
+    if (req.body.directionId !== undefined) data.directionId = req.body.directionId;
     if (req.body.sortOrder !== undefined) data.sortOrder = req.body.sortOrder;
-    const item = await prisma.service.update({
+    const item = await (prisma as any).service.update({
       where: { id: req.params.id },
       data,
-      include: { profession: { select: { id: true, name: true } } },
+      include: { direction: { select: { id: true, name: true } } },
     });
     res.json(item);
   } catch (e: any) {
@@ -150,7 +149,7 @@ router.delete('/services/:id', async (req, res) => {
   try {
     await prisma.$transaction([
       prisma.userService.deleteMany({ where: { serviceId: req.params.id } }),
-      prisma.service.delete({ where: { id: req.params.id } }),
+      (prisma as any).service.delete({ where: { id: req.params.id } }),
     ]);
     res.json({ ok: true });
   } catch (e: any) {
@@ -379,8 +378,8 @@ router.delete('/directions/:id', async (req, res) => {
     await prisma.$transaction([
       prisma.userService.deleteMany({ where: { professionId: { in: professionIds } } }),
       prisma.userProfession.deleteMany({ where: { professionId: { in: professionIds } } }),
-      prisma.service.deleteMany({ where: { professionId: { in: professionIds } } }),
       db.profession.deleteMany({ where: { directionId: req.params.id } }),
+      // Services cascade-delete via FK (directionId ON DELETE CASCADE)
       db.direction.delete({ where: { id: req.params.id } }),
     ]);
     res.json({ ok: true });

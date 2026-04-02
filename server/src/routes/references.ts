@@ -66,38 +66,43 @@ router.get('/professions', async (req, res) => {
   }
 });
 
-// Get services filtered by profession or field of activity
+// Get services filtered by directionId (or by professionId/fieldOfActivityId for backward compat)
 router.get('/services', async (req, res) => {
   try {
-    const { professionId, fieldOfActivityId } = req.query;
+    const db = prisma as any;
+    const { directionId, professionId, fieldOfActivityId } = req.query;
     const where: any = {};
 
-    if (professionId) {
-      where.professionId = professionId as string;
+    if (directionId) {
+      where.directionId = directionId as string;
+    } else if (professionId) {
+      // Backward compat: resolve profession → direction
+      const profession = await prisma.profession.findUnique({
+        where: { id: professionId as string },
+        select: { directionId: true },
+      });
+      if (!profession) return res.json([]);
+      where.directionId = profession.directionId;
     } else if (fieldOfActivityId) {
-      const professions = await prisma.profession.findMany({
-        where: { direction: { fieldOfActivityId: fieldOfActivityId as string } },
+      const dirs = await prisma.direction.findMany({
+        where: { fieldOfActivityId: fieldOfActivityId as string },
         select: { id: true },
       });
-      where.professionId = { in: professions.map(p => p.id) };
+      where.directionId = { in: dirs.map(d => d.id) };
     }
 
-    const services = await prisma.service.findMany({
+    const services = await db.service.findMany({
       where,
       include: {
-        profession: {
+        direction: {
           select: {
             id: true,
             name: true,
-            direction: {
+            allowedFilterTypes: true,
+            customFilters: {
               select: {
-                allowedFilterTypes: true,
-                customFilters: {
-                  select: {
-                    id: true, name: true,
-                    values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } },
-                  },
-                },
+                id: true, name: true,
+                values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } },
               },
             },
           },
@@ -107,16 +112,15 @@ router.get('/services', async (req, res) => {
       orderBy: { sortOrder: 'asc' },
     });
 
-    res.json(services.map(s => ({
+    res.json(services.map((s: any) => ({
       id: s.id,
       name: s.name,
       nameEn: s.nameEn,
-      professionId: s.professionId,
-      professionName: s.profession.name,
+      directionId: s.directionId,
       sortOrder: s.sortOrder,
       userCount: s._count.userServices,
-      allowedFilterTypes: s.profession.direction.allowedFilterTypes,
-      customFilters: s.profession.direction.customFilters,
+      allowedFilterTypes: s.direction.allowedFilterTypes,
+      customFilters: s.direction.customFilters,
     })));
   } catch (error) {
     console.error('Get services error:', error);
