@@ -561,10 +561,6 @@ function StructureTree() {
     queryKey: ['admin-services'],
     queryFn: () => adminAPI.services.list().then((r: any) => r.data),
   });
-  const { data: allServiceSets = [] } = useQuery<SSet[]>({
-    queryKey: ['admin-service-sets'],
-    queryFn: () => adminAPI.serviceSets.list().then((r: any) => r.data),
-  });
 
   const invalidateF = () => qc.invalidateQueries({ queryKey: ['admin-fields-of-activity'] });
 
