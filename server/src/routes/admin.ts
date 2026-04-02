@@ -65,10 +65,7 @@ router.delete('/fields-of-activity/:id', async (req, res) => {
 // ─── Profession ────────────────────────────────────────────────────────────
 router.get('/professions', async (_req, res) => {
   const items = await prisma.profession.findMany({
-    include: {
-      direction: { select: { id: true, name: true } },
-      serviceSet: { select: { id: true, name: true, services: { select: { id: true, name: true, sortOrder: true } } } },
-    },
+    include: { direction: { select: { id: true, name: true } } },
     orderBy: { name: 'asc' },
   });
   res.json(items);
@@ -111,22 +108,6 @@ router.delete('/professions/:id', async (req, res) => {
   } catch (e: any) {
     res.status(400).json({ error: e.message });
   }
-});
-
-// Attach / detach a ServiceSet from a Profession
-router.put('/professions/:id/service-set', async (req, res) => {
-  try {
-    const db = prisma as any;
-    const item = await db.profession.update({
-      where: { id: req.params.id },
-      data: { serviceSetId: req.body.serviceSetId ?? null },
-      include: {
-        direction: { select: { id: true, name: true } },
-        serviceSet: { select: { id: true, name: true, services: { orderBy: { sortOrder: 'asc' } } } },
-      },
-    });
-    res.json(item);
-  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
 // ─── ServiceSet ────────────────────────────────────────────────────────────
@@ -387,6 +368,7 @@ router.get('/directions', async (_req, res) => {
     include: {
       fieldOfActivity: { select: { id: true, name: true } },
       customFilters: { select: { id: true, name: true } },
+      serviceSet: { select: { id: true, name: true, services: { select: { id: true, name: true, sortOrder: true }, orderBy: { sortOrder: 'asc' } } } },
     },
     orderBy: { name: 'asc' },
   });
@@ -418,6 +400,24 @@ router.put('/directions/:id', async (req, res) => {
     res.status(400).json({ error: e.message });
   }
 });
+// Attach / detach ServiceSet for a direction
+router.put('/directions/:id/service-set', async (req, res) => {
+  try {
+    const db = prisma as any;
+    const item = await db.direction.update({
+      where: { id: req.params.id },
+      data: { serviceSetId: req.body.serviceSetId ?? null },
+      include: {
+        fieldOfActivity: { select: { id: true, name: true } },
+        serviceSet: { select: { id: true, name: true, services: { select: { id: true, name: true, sortOrder: true } } } },
+      },
+    });
+    res.json(item);
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 // Set filters for a direction (system filter types + custom filter ids)
 router.put('/directions/:id/filters', async (req, res) => {
   try {
