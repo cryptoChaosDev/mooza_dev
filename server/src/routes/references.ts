@@ -26,7 +26,10 @@ router.get('/directions', async (req, res) => {
 
     const directions = await prisma.direction.findMany({
       where,
-      include: { _count: { select: { professions: true } } },
+      include: {
+        _count: { select: { professions: true } },
+        customFilters: { select: { id: true, name: true, values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } } } },
+      },
       orderBy: { name: 'asc' },
     });
     res.json(directions.map(d => ({
@@ -34,6 +37,8 @@ router.get('/directions', async (req, res) => {
       name: d.name,
       fieldOfActivityId: d.fieldOfActivityId,
       professionCount: d._count.professions,
+      allowedFilterTypes: d.allowedFilterTypes,
+      customFilters: d.customFilters,
     })));
   } catch (error) {
     console.error('Get directions error:', error);
