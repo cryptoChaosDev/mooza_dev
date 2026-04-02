@@ -66,61 +66,63 @@ router.get('/professions', async (req, res) => {
   }
 });
 
-// Get services filtered by directionId (or by professionId/fieldOfActivityId for backward compat)
+// Get services for a profession (via its serviceSet) or by serviceSetId
 router.get('/services', async (req, res) => {
   try {
     const db = prisma as any;
-    const { directionId, professionId, fieldOfActivityId } = req.query;
-    const where: any = {};
+    const { professionId, serviceSetId, fieldOfActivityId } = req.query;
+    let serviceSetIds: string[] | null = null;
 
-    if (directionId) {
-      where.directionId = directionId as string;
+    if (serviceSetId) {
+      serviceSetIds = [serviceSetId as string];
     } else if (professionId) {
-      // Backward compat: resolve profession → direction
-      const profession = await prisma.profession.findUnique({
+      const prof = await db.profession.findUnique({
         where: { id: professionId as string },
-        select: { directionId: true },
+        select: {
+          serviceSetId: true,
+          direction: { select: { allowedFilterTypes: true, customFilters: { select: { id: true, name: true, values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } } } } } },
+        },
       });
-      if (!profession) return res.json([]);
-      where.directionId = profession.directionId;
+      if (!prof?.serviceSetId) return res.json([]);
+      // Return services with direction's filter config
+      const services = await db.service.findMany({
+        where: { serviceSetId: prof.serviceSetId },
+        include: { _count: { select: { userServices: true } } },
+        orderBy: { sortOrder: 'asc' },
+      });
+      return res.json(services.map((s: any) => ({
+        id: s.id,
+        name: s.name,
+        serviceSetId: s.serviceSetId,
+        sortOrder: s.sortOrder,
+        userCount: s._count.userServices,
+        allowedFilterTypes: prof.direction?.allowedFilterTypes ?? [],
+        customFilters: prof.direction?.customFilters ?? [],
+      })));
     } else if (fieldOfActivityId) {
-      const dirs = await prisma.direction.findMany({
-        where: { fieldOfActivityId: fieldOfActivityId as string },
-        select: { id: true },
+      const profs = await db.profession.findMany({
+        where: { direction: { fieldOfActivityId: fieldOfActivityId as string }, serviceSetId: { not: null } },
+        select: { serviceSetId: true },
+        distinct: ['serviceSetId'],
       });
-      where.directionId = { in: dirs.map(d => d.id) };
+      serviceSetIds = profs.map((p: any) => p.serviceSetId).filter(Boolean);
     }
 
+    const where: any = serviceSetIds ? { serviceSetId: { in: serviceSetIds } } : {};
     const services = await db.service.findMany({
       where,
-      include: {
-        direction: {
-          select: {
-            id: true,
-            name: true,
-            allowedFilterTypes: true,
-            customFilters: {
-              select: {
-                id: true, name: true,
-                values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } },
-              },
-            },
-          },
-        },
-        _count: { select: { userServices: true } },
-      },
+      include: { _count: { select: { userServices: true } } },
       orderBy: { sortOrder: 'asc' },
     });
 
     res.json(services.map((s: any) => ({
       id: s.id,
       name: s.name,
-      nameEn: s.nameEn,
-      directionId: s.directionId,
+      serviceSetId: s.serviceSetId,
       sortOrder: s.sortOrder,
       userCount: s._count.userServices,
-      allowedFilterTypes: s.direction.allowedFilterTypes,
-      customFilters: s.direction.customFilters,
+      allowedFilterTypes: [],
+      customFilters: [],
     })));
   } catch (error) {
     console.error('Get services error:', error);

@@ -26,7 +26,6 @@ model Direction {
   fieldOfActivity   FieldOfActivity @relation(fields: [fieldOfActivityId], references: [id])
 
   professions        Profession[]
-  services           Service[]
   allowedFilterTypes String[]
   customFilters      CustomFilter[] @relation("DirectionCustomFilters")
 
@@ -37,10 +36,13 @@ model Direction {
 }
 
 model Profession {
-  id          String    @id @default(uuid())
+  id          String     @id @default(uuid())
   name        String
   directionId String
-  direction   Direction @relation(fields: [directionId], references: [id])
+  direction   Direction  @relation(fields: [directionId], references: [id])
+
+  serviceSetId String?
+  serviceSet   ServiceSet? @relation(fields: [serviceSetId], references: [id], onDelete: SetNull)
 
   userProfessions UserProfession[]
   userServices    UserService[]
@@ -49,24 +51,34 @@ model Profession {
 
   @@unique([name, directionId])
   @@index([directionId])
+  @@index([serviceSetId])
 }
 
 // ============ SEARCH FILTER MODELS ============
 
-// Services offered — linked to Direction (replicated to all its professions)
+// Named set of services (e.g. "Набор для вокалистов")
+model ServiceSet {
+  id        String     @id @default(uuid())
+  name      String     @unique
+  services  Service[]
+  professions Profession[]
+  createdAt DateTime   @default(now())
+}
+
+// Individual service value within a set
 model Service {
-  id          String    @id @default(uuid())
-  name        String    @unique
-  nameEn      String?
-  sortOrder   Int       @default(0)
-  directionId String
-  direction   Direction @relation(fields: [directionId], references: [id], onDelete: Cascade)
+  id           String     @id @default(uuid())
+  name         String
+  sortOrder    Int        @default(0)
+  serviceSetId String
+  serviceSet   ServiceSet @relation(fields: [serviceSetId], references: [id], onDelete: Cascade)
 
   userServices UserService[]
 
   createdAt DateTime @default(now())
 
-  @@index([directionId])
+  @@unique([name, serviceSetId])
+  @@index([serviceSetId])
 }
 
 // Independent filter: music genres

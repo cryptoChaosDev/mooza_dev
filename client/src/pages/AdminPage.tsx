@@ -201,10 +201,11 @@ const SYSTEM_FILTER_TYPES = [
 
 // ─── Profession node ─────────────────────────────────────────────────────────
 
-function ProfessionNode({ profession, qc }: {
-  profession: Item; qc: QueryClient;
+function ProfessionNode({ profession, allServiceSets, qc }: {
+  profession: Item; allServiceSets: SSet[]; qc: QueryClient;
 }) {
   const [editing, setEditing] = useState(false);
+  const [setsOpen, setSetsOpen] = useState(false);
 
   const invalidateP = () => qc.invalidateQueries({ queryKey: ['admin-professions'] });
 
@@ -216,6 +217,12 @@ function ProfessionNode({ profession, qc }: {
     mutationFn: () => adminAPI.professions.remove(profession.id),
     onSuccess: invalidateP,
   });
+  const setServiceSetMut = useMutation({
+    mutationFn: (serviceSetId: string | null) => adminAPI.professions.setServiceSet(profession.id, serviceSetId),
+    onSuccess: invalidateP,
+  });
+
+  const attachedSet = profession.serviceSet as SSet | null | undefined;
 
   return (
     <div className="border border-slate-700/50 rounded-lg overflow-hidden">
@@ -229,21 +236,63 @@ function ProfessionNode({ profession, qc }: {
         ) : (
           <>
             <span className="flex-1 text-sm font-medium text-slate-200">{profession.name}</span>
+            {attachedSet && (
+              <span className="text-xs text-primary-400 flex-shrink-0 mr-1">{attachedSet.name}</span>
+            )}
             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                onClick={() => setSetsOpen(o => !o)}
+                className={`p-1 ${setsOpen ? 'text-primary-400' : 'text-slate-400 hover:text-primary-400'}`}
+                title="Набор услуг"
+              >
+                <Filter size={12} />
+              </button>
               <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={12} /></button>
               <button onClick={() => deleteMut.mutate()} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={12} /></button>
             </div>
           </>
         )}
       </div>
+
+      {setsOpen && (
+        <div className="mx-3 mb-2 mt-1 p-3 bg-slate-800/60 rounded-lg border border-slate-700/50 space-y-2">
+          <p className="text-xs font-medium text-slate-400">Набор услуг для этой профессии:</p>
+          <div className="space-y-1">
+            {attachedSet && (
+              <button
+                onClick={() => setServiceSetMut.mutate(null)}
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs text-slate-400 hover:text-red-400 hover:bg-slate-700/30 transition-colors text-left"
+              >
+                <X size={11} /> Открепить набор
+              </button>
+            )}
+            {allServiceSets.map(ss => (
+              <label key={ss.id} className="flex items-center gap-2 cursor-pointer hover:bg-slate-700/30 px-2 py-1.5 rounded">
+                <input
+                  type="radio"
+                  name={`sset-${profession.id}`}
+                  checked={attachedSet?.id === ss.id}
+                  onChange={() => setServiceSetMut.mutate(ss.id)}
+                  className="accent-primary-500"
+                />
+                <span className="text-xs text-slate-300 flex-1">{ss.name}</span>
+                <span className="text-xs text-slate-600">{ss.services.length} усл.</span>
+              </label>
+            ))}
+            {allServiceSets.length === 0 && (
+              <p className="text-xs text-slate-600 py-1">Сначала создайте наборы во вкладке «Услуги»</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Direction node ──────────────────────────────────────────────────────────
 
-function DirectionNode({ direction, professions, allCustomFilters, qc }: {
-  direction: Item; professions: Item[]; allCustomFilters: CFilter[]; qc: QueryClient;
+function DirectionNode({ direction, professions, allCustomFilters, allServiceSets, qc }: {
+  direction: Item; professions: Item[]; allCustomFilters: CFilter[]; allServiceSets: SSet[]; qc: QueryClient;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -368,6 +417,7 @@ function DirectionNode({ direction, professions, allCustomFilters, qc }: {
             <ProfessionNode
               key={prof.id}
               profession={prof}
+              allServiceSets={allServiceSets}
               qc={qc}
             />
           ))}
@@ -398,8 +448,8 @@ function DirectionNode({ direction, professions, allCustomFilters, qc }: {
 
 // ─── Field of activity node ──────────────────────────────────────────────────
 
-function FieldNode({ field, directions, allProfessions, allCustomFilters, qc }: {
-  field: Item; directions: Item[]; allProfessions: Item[]; allCustomFilters: CFilter[]; qc: QueryClient;
+function FieldNode({ field, directions, allProfessions, allCustomFilters, allServiceSets, qc }: {
+  field: Item; directions: Item[]; allProfessions: Item[]; allCustomFilters: CFilter[]; allServiceSets: SSet[]; qc: QueryClient;
 }) {
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState(false);
@@ -462,6 +512,7 @@ function FieldNode({ field, directions, allProfessions, allCustomFilters, qc }: 
               direction={dir}
               professions={allProfessions.filter(p => p.direction?.id === dir.id)}
               allCustomFilters={allCustomFilters}
+              allServiceSets={allServiceSets}
               qc={qc}
             />
           ))}
@@ -512,6 +563,10 @@ function StructureTree() {
     queryKey: ['admin-custom-filters'],
     queryFn: () => adminAPI.customFilters.list().then((r: any) => r.data),
   });
+  const { data: allServiceSets = [] } = useQuery<SSet[]>({
+    queryKey: ['admin-service-sets'],
+    queryFn: () => adminAPI.serviceSets.list().then((r: any) => r.data),
+  });
 
   const invalidateF = () => qc.invalidateQueries({ queryKey: ['admin-fields-of-activity'] });
 
@@ -529,6 +584,7 @@ function StructureTree() {
           directions={directions.filter(d => d.fieldOfActivity?.id === field.id)}
           allProfessions={professions}
           allCustomFilters={allCustomFilters}
+          allServiceSets={allServiceSets}
           qc={qc}
         />
       ))}
@@ -755,120 +811,105 @@ function CustomFiltersSection() {
   );
 }
 
-// ─── Services tab ────────────────────────────────────────────────────────────
+// ─── ServiceSet card (identical pattern to CustomFilterCard) ─────────────────
 
-function ServicesTab() {
-  const qc = useQueryClient();
+interface SSet { id: string; name: string; services: { id: string; name: string; sortOrder: number }[] }
 
-  const { data: fields = [] } = useQuery<Item[]>({
-    queryKey: ['admin-fields-of-activity'],
-    queryFn: () => adminAPI.fieldsOfActivity.list().then((r: any) => r.data),
-  });
-  const { data: directions = [] } = useQuery<Item[]>({
-    queryKey: ['admin-directions'],
-    queryFn: () => adminAPI.directions.list().then((r: any) => r.data),
-  });
-  const { data: services = [] } = useQuery<Item[]>({
-    queryKey: ['admin-services'],
-    queryFn: () => adminAPI.services.list().then((r: any) => r.data),
-  });
-
-  const invalidateS = () => qc.invalidateQueries({ queryKey: ['admin-services'] });
-
-  const addMut = useMutation({
-    mutationFn: ({ name, directionId }: { name: string; directionId: string }) =>
-      adminAPI.services.create({ name, directionId }),
-    onSuccess: invalidateS,
-  });
-  const updateMut = useMutation({
-    mutationFn: ({ id, name }: { id: string; name: string }) => adminAPI.services.update(id, { name }),
-    onSuccess: invalidateS,
-  });
-  const deleteMut = useMutation({
-    mutationFn: (id: string) => adminAPI.services.remove(id),
-    onSuccess: invalidateS,
-  });
-
-  return (
-    <div className="space-y-4">
-      {fields.map(field => {
-        const fieldDirs = directions.filter(d => d.fieldOfActivity?.id === field.id);
-        if (fieldDirs.length === 0) return null;
-        return (
-          <div key={field.id} className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
-            <div className="px-4 py-3 bg-slate-800/60 border-b border-slate-800">
-              <span className="text-sm font-bold text-slate-200">{field.name}</span>
-            </div>
-            <div className="divide-y divide-slate-800/60">
-              {fieldDirs.map(dir => {
-                const dirServices = services.filter((s: Item) => s.direction?.id === dir.id);
-                return (
-                  <DirectionServicesGroup
-                    key={dir.id}
-                    direction={dir}
-                    services={dirServices}
-                    onAdd={name => addMut.mutate({ name, directionId: dir.id })}
-                    onUpdate={(id, name) => updateMut.mutate({ id, name })}
-                    onDelete={id => deleteMut.mutate(id)}
-                  />
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-      {fields.length === 0 && (
-        <p className="text-slate-500 text-sm text-center py-8">
-          Сначала создайте сферы и направления во вкладке «Структура»
-        </p>
-      )}
-    </div>
-  );
-}
-
-function DirectionServicesGroup({ direction, services, onAdd, onUpdate, onDelete }: {
-  direction: Item;
-  services: Item[];
-  onAdd: (name: string) => void;
-  onUpdate: (id: string, name: string) => void;
-  onDelete: (id: string) => void;
+function ServiceSetCard({ sset, onUpdate, onDelete }: {
+  sset: SSet;
+  onUpdate: (name: string, values: string[]) => void;
+  onDelete: () => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [addingValue, setAddingValue] = useState(false);
+  const [newValue, setNewValue] = useState('');
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editingText, setEditingText] = useState('');
+
+  const vals = sset.services.map(s => s.name);
+  const save = (newVals: string[]) => onUpdate(sset.name, newVals);
+  const saveName = () => { onUpdate(editName.trim() || sset.name, vals); setEditingName(false); };
+  const addValue = () => {
+    if (!newValue.trim()) return;
+    save([...vals, newValue.trim()]);
+    setNewValue(''); setAddingValue(false);
+  };
+  const deleteValue = (idx: number) => save(vals.filter((_, i) => i !== idx));
+  const saveEdit = (idx: number) => {
+    if (!editingText.trim()) return;
+    save(vals.map((v, i) => i === idx ? editingText.trim() : v));
+    setEditingIdx(null);
+  };
 
   return (
-    <div>
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-slate-800/40 transition-colors group text-left"
-      >
-        <ChevronRight size={13} className={`text-slate-500 transition-transform flex-shrink-0 ${open ? 'rotate-90' : ''}`} />
-        <span className="flex-1 text-sm font-medium text-slate-300">{direction.name}</span>
-        <span className="text-xs text-slate-600">{services.length} усл.</span>
-      </button>
+    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 bg-slate-800/30 hover:bg-slate-800/50 group">
+        <button onClick={() => setOpen(o => !o)} className="text-slate-400 hover:text-white flex-shrink-0">
+          <ChevronRight size={16} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
+        </button>
+        {editingName ? (
+          <div className="flex items-center gap-2 flex-1">
+            <input autoFocus value={editName} onChange={e => setEditName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') saveName(); if (e.key === 'Escape') setEditingName(false); }}
+              className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500"
+            />
+            <button onClick={saveName} className="text-green-400 hover:text-green-300"><Check size={14} /></button>
+            <button onClick={() => setEditingName(false)} className="text-slate-400 hover:text-white"><X size={14} /></button>
+          </div>
+        ) : (
+          <>
+            <span className="flex-1 font-semibold text-white">{sset.name}</span>
+            <span className="text-xs text-slate-500 flex-shrink-0">{sset.services.length} усл.</span>
+            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={() => { setEditName(sset.name); setEditingName(true); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
+              <button onClick={onDelete} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+            </div>
+          </>
+        )}
+      </div>
 
       {open && (
-        <div className="px-4 pb-3 space-y-0.5 bg-slate-900/60">
-          {services.map((service: Item) => (
-            <ServiceEditRow
-              key={service.id}
-              service={service}
-              onUpdate={name => onUpdate(service.id, name)}
-              onDelete={() => onDelete(service.id)}
-            />
+        <div className="p-3 space-y-0.5">
+          {vals.map((v, idx) => (
+            <div key={idx} className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-800/30 group/v rounded">
+              {editingIdx === idx ? (
+                <>
+                  <input autoFocus value={editingText} onChange={e => setEditingText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') saveEdit(idx); if (e.key === 'Escape') setEditingIdx(null); }}
+                    className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500"
+                  />
+                  <button onClick={() => saveEdit(idx)} className="text-green-400 hover:text-green-300"><Check size={14} /></button>
+                  <button onClick={() => setEditingIdx(null)} className="text-slate-400 hover:text-white"><X size={14} /></button>
+                </>
+              ) : (
+                <>
+                  <span className="w-1.5 h-1.5 rounded-full bg-slate-600 flex-shrink-0" />
+                  <span className="flex-1 text-sm text-slate-300">{v}</span>
+                  <div className="flex gap-0.5 opacity-0 group-hover/v:opacity-100 transition-opacity">
+                    <button onClick={() => { setEditingIdx(idx); setEditingText(v); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={12} /></button>
+                    <button onClick={() => deleteValue(idx)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={12} /></button>
+                  </div>
+                </>
+              )}
+            </div>
           ))}
-          {services.length === 0 && !adding && (
-            <p className="text-xs text-slate-600 py-1 px-2">Нет услуг</p>
+          {vals.length === 0 && !addingValue && (
+            <p className="text-xs text-slate-600 px-2 py-1">Нет значений</p>
           )}
-          {adding ? (
-            <AddRow
-              placeholder="Название услуги"
-              onAdd={name => { onAdd(name); setAdding(false); }}
-              onCancel={() => setAdding(false)}
-            />
+          {addingValue ? (
+            <div className="flex items-center gap-2 px-2 pt-1">
+              <input autoFocus value={newValue} onChange={e => setNewValue(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') addValue(); if (e.key === 'Escape') { setNewValue(''); setAddingValue(false); } }}
+                placeholder="Название услуги"
+                className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500"
+              />
+              <button onClick={addValue} className="text-green-400 hover:text-green-300"><Check size={14} /></button>
+              <button onClick={() => { setNewValue(''); setAddingValue(false); }} className="text-slate-400 hover:text-white"><X size={14} /></button>
+            </div>
           ) : (
-            <button
-              onClick={() => setAdding(true)}
+            <button onClick={() => setAddingValue(true)}
               className="flex items-center gap-1 text-xs text-slate-500 hover:text-primary-400 transition-colors px-2 pt-1.5 pb-0.5"
             >
               <Plus size={11} /> Добавить услугу
@@ -880,27 +921,71 @@ function DirectionServicesGroup({ direction, services, onAdd, onUpdate, onDelete
   );
 }
 
-function ServiceEditRow({ service, onUpdate, onDelete }: {
-  service: Item; onUpdate: (name: string) => void; onDelete: () => void;
-}) {
-  const [editing, setEditing] = useState(false);
+// ─── Services tab ────────────────────────────────────────────────────────────
+
+function ServicesTab() {
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [newName, setNewName] = useState('');
+
+  const { data: ssets = [] } = useQuery<SSet[]>({
+    queryKey: ['admin-service-sets'],
+    queryFn: () => adminAPI.serviceSets.list().then((r: any) => r.data),
+  });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['admin-service-sets'] });
+
+  const createMut = useMutation({
+    mutationFn: (data: { name: string; values: string[] }) => adminAPI.serviceSets.create(data),
+    onSuccess: () => { invalidate(); setAdding(false); setNewName(''); },
+  });
+  const updateMut = useMutation({
+    mutationFn: ({ id, name, values }: { id: string; name: string; values: string[] }) =>
+      adminAPI.serviceSets.update(id, { name, values }),
+    onSuccess: invalidate,
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => adminAPI.serviceSets.remove(id),
+    onSuccess: invalidate,
+  });
+
   return (
-    <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-slate-700/30 rounded group">
-      {editing ? (
-        <InlineEdit
-          value={service.name}
-          onSave={name => { onUpdate(name); setEditing(false); }}
-          onCancel={() => setEditing(false)}
+    <div className="space-y-3">
+      {ssets.map(sset => (
+        <ServiceSetCard
+          key={sset.id}
+          sset={sset}
+          onUpdate={(name, values) => updateMut.mutate({ id: sset.id, name, values })}
+          onDelete={() => deleteMut.mutate(sset.id)}
         />
-      ) : (
-        <>
-          <span className="w-1.5 h-1.5 rounded-full bg-slate-600 flex-shrink-0 ml-1" />
-          <span className="flex-1 text-sm text-slate-300">{service.name}</span>
-          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={12} /></button>
-            <button onClick={onDelete} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={12} /></button>
+      ))}
+
+      {ssets.length === 0 && !adding && (
+        <div className="text-center py-8 text-slate-500 text-sm">Нет наборов услуг</div>
+      )}
+
+      {adding ? (
+        <div className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+          <div className="flex items-center gap-2">
+            <input autoFocus value={newName} onChange={e => setNewName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && newName.trim()) createMut.mutate({ name: newName.trim(), values: [] });
+                if (e.key === 'Escape') { setAdding(false); setNewName(''); }
+              }}
+              placeholder="Название набора услуг"
+              className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500"
+            />
+            <button onClick={() => newName.trim() && createMut.mutate({ name: newName.trim(), values: [] })}
+              className="text-green-400 hover:text-green-300"><Check size={16} /></button>
+            <button onClick={() => { setAdding(false); setNewName(''); }} className="text-slate-400 hover:text-white"><X size={16} /></button>
           </div>
-        </>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)}
+          className="flex items-center gap-2 text-sm bg-primary-600 hover:bg-primary-500 text-white px-4 py-2 rounded-lg transition-colors"
+        >
+          <Plus size={15} /> Добавить набор услуг
+        </button>
       )}
     </div>
   );
