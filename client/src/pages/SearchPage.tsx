@@ -13,6 +13,7 @@ import {
   useSearchStore,
   useSearchResults,
   useFieldsOfActivity,
+  useDirections,
   useProfessions,
   useServices,
   useGenres,
@@ -148,65 +149,6 @@ function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: Us
   );
 }
 
-// ─── Quick filter sheet (single filter options list) ──────────────────────────
-interface QuickFilterSheetProps {
-  isOpen: boolean;
-  onClose: () => void;
-  title: string;
-  value: string | null;
-  items: { id: string; name: string; userCount?: number }[];
-  loading?: boolean;
-  onSelect: (id: string | null) => void;
-}
-function QuickFilterSheet({ isOpen, onClose, title, value, items, loading, onSelect }: QuickFilterSheetProps) {
-  return (
-    <BottomSheet isOpen={isOpen} onClose={onClose} title={title} height="half">
-      <div className="px-4 py-2">
-        {loading ? (
-          <div className="space-y-2">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-10 bg-slate-700/40 rounded-xl animate-pulse" />
-            ))}
-          </div>
-        ) : items.length === 0 ? (
-          <p className="text-slate-400 text-center py-6">Нет вариантов</p>
-        ) : (
-          <div className="space-y-1">
-            {/* Clear option */}
-            {value && (
-              <button
-                onClick={() => { onSelect(null); onClose(); }}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-slate-400 hover:bg-slate-700/40 hover:text-white transition-colors text-sm"
-              >
-                <X size={15} />
-                Сбросить выбор
-              </button>
-            )}
-            {items.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => { onSelect(value === item.id ? null : item.id); onClose(); }}
-                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-sm transition-colors ${
-                  value === item.id
-                    ? 'bg-primary-500/20 text-primary-300'
-                    : 'text-slate-200 hover:bg-slate-700/40 hover:text-white'
-                }`}
-              >
-                <span>{item.name}</span>
-                <div className="flex items-center gap-2">
-                  {item.userCount !== undefined && item.userCount > 0 && (
-                    <span className="text-xs text-slate-500">{item.userCount}</span>
-                  )}
-                  {value === item.id && <Check size={14} className="text-primary-400 flex-shrink-0" />}
-                </div>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    </BottomSheet>
-  );
-}
 
 // ─── Sort sheet ────────────────────────────────────────────────────────────────
 function SortSheet({ isOpen, onClose, value, onChange }: {
@@ -282,8 +224,6 @@ export default function SearchPage() {
   const [sortBy, setSortBy] = useState<SortOption>('relevance');
   const [allFiltersOpen, setAllFiltersOpen] = useState(false);
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
-  // Which quick-filter chip is open: 'field' | 'profession' | 'service' | 'genre' | 'workFormat' | 'employmentType' | 'skillLevel' | 'availability' | null
-  const [openChip, setOpenChip] = useState<string | null>(null);
   const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -296,33 +236,29 @@ export default function SearchPage() {
 
   // Store
   const {
-    fieldId, professionId, serviceId, genreId,
+    fieldId, directionId, professionId, serviceId, genreId,
     workFormatId, employmentTypeId, skillLevelId, availabilityId,
     geographyId, priceMin, priceMax,
-    setFieldId, setProfessionId, setServiceId, setGenreId,
+    setFieldId, setDirectionId, setProfessionId, setServiceId, setGenreId,
     setWorkFormatId, setEmploymentTypeId, setSkillLevelId, setAvailabilityId,
     setGeographyId, setPriceMin, setPriceMax,
     resetAllFilters, getFilters, setPage, page,
   } = useSearchStore();
 
-  // Reference data (for chip labels + sheets)
-  const { data: fields, isLoading: fieldsLoading } = useFieldsOfActivity();
-  const { data: professions, isLoading: professionsLoading } = useProfessions(fieldId || undefined);
-  const { data: services, isLoading: servicesLoading } = useServices(professionId || undefined, fieldId || undefined);
-  const { data: genres, isLoading: genresLoading } = useGenres();
-  const { data: workFormats, isLoading: workFormatsLoading } = useWorkFormats();
-  const { data: employmentTypes, isLoading: employmentTypesLoading } = useEmploymentTypes();
-  const { data: skillLevels, isLoading: skillLevelsLoading } = useSkillLevels();
-  const { data: availabilities, isLoading: availabilitiesLoading } = useAvailabilities();
-  const { data: geographies, isLoading: geographiesLoading } = useGeographies();
-
-  // Derive allowed filter types from selected service
-  const selectedService = serviceId ? services?.find(s => s.id === serviceId) : null;
-  const allowedTypes = selectedService?.allowedFilterTypes ?? null; // null = no service selected = show all
-  const showFilter = (key: string) => allowedTypes === null || allowedTypes.includes(key);
+  // Reference data (for active chip labels only — FilterPanel fetches its own copy via React Query cache)
+  const { data: fields }          = useFieldsOfActivity();
+  const { data: directions }      = useDirections(fieldId || undefined);
+  const { data: professions }     = useProfessions(directionId || undefined);
+  const { data: services }        = useServices(professionId || undefined, fieldId || undefined);
+  const { data: genres }          = useGenres();
+  const { data: workFormats }     = useWorkFormats();
+  const { data: employmentTypes } = useEmploymentTypes();
+  const { data: skillLevels }     = useSkillLevels();
+  const { data: availabilities }  = useAvailabilities();
+  const { data: geographies }     = useGeographies();
 
   // Whether any profile-based filter is active
-  const hasProfileFilters = !!(fieldId || professionId || serviceId || genreId || workFormatId || employmentTypeId || skillLevelId || availabilityId || geographyId || priceMin || priceMax);
+  const hasProfileFilters = !!(fieldId || directionId || professionId || serviceId || genreId || workFormatId || employmentTypeId || skillLevelId || availabilityId || geographyId || priceMin || priceMax);
 
   // ── Default: all users (or name search) — no profile filters needed ──
   const { data: defaultUsers, isLoading: defaultLoading } = useQuery({
@@ -340,7 +276,7 @@ export default function SearchPage() {
   const filters = useMemo(() => ({
     ...getFilters(),
     ...(debouncedName.trim() ? { query: debouncedName.trim() } : {}),
-  }), [fieldId, professionId, serviceId, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId, priceMin, priceMax, debouncedName, page]);
+  }), [fieldId, directionId, professionId, serviceId, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId, priceMin, priceMax, debouncedName, page]);
 
   const { data: searchData, isLoading: searchLoading, isFetching: searchFetching } = useSearchResults(filters);
 
@@ -352,6 +288,7 @@ export default function SearchPage() {
   const computeMatch = (sp: any, userData: any): number | null => {
     const checks: boolean[] = [];
     if (fieldId) checks.push(userData?.fieldOfActivity?.id === fieldId);
+    if (directionId) checks.push(userData?.userProfessions?.some((up: any) => up.profession?.directionId === directionId) ?? false);
     if (professionId) checks.push(userData?.userProfessions?.some((up: any) => up.profession?.id === professionId) ?? false);
     if (serviceId) checks.push(sp?.services?.some((s: any) => s.id === serviceId) ?? false);
     if (genreId) checks.push(sp?.genres?.some((g: any) => g.id === genreId) ?? false);
@@ -378,80 +315,44 @@ export default function SearchPage() {
     if (sortBy === 'name_desc') return [...list].sort((a, b) => `${b.firstName} ${b.lastName}`.localeCompare(`${a.firstName} ${a.lastName}`));
     return list;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchData, defaultUsers, hasProfileFilters, sortBy, currentUser?.id, fieldId, professionId, serviceId, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId]);
+  }, [searchData, defaultUsers, hasProfileFilters, sortBy, currentUser?.id, fieldId, directionId, professionId, serviceId, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId]);
 
   const totalCount = hasProfileFilters ? (searchData?.pagination?.totalCount ?? 0) : (defaultUsers?.length ?? 0);
   const totalPages = hasProfileFilters ? (searchData?.pagination?.totalPages ?? 1) : 1;
   const anyLoading = isLoading || isFetching;
 
-  // Helper: label for a filter chip
-  const chipLabel = (key: string): string | null => {
-    switch (key) {
-      case 'field': return fields?.find((f) => f.id === fieldId)?.name ?? null;
-      case 'profession': return professions?.find((p) => p.id === professionId)?.name ?? null;
-      case 'service': return services?.find((s) => s.id === serviceId)?.name ?? null;
-      case 'genre': return genres?.find((g) => g.id === genreId)?.name ?? null;
-      case 'workFormat': return workFormats?.find((w) => w.id === workFormatId)?.name ?? null;
-      case 'employmentType': return employmentTypes?.find((e) => e.id === employmentTypeId)?.name ?? null;
-      case 'skillLevel': return skillLevels?.find((s) => s.id === skillLevelId)?.name ?? null;
-      case 'availability': return availabilities?.find((a) => a.id === availabilityId)?.name ?? null;
-      case 'geography': return geographies?.find((g) => g.id === geographyId)?.name ?? null;
-      case 'priceRange': return (priceMin || priceMax) ? `${priceMin || '0'} — ${priceMax || '∞'} ₽` : null;
-      default: return null;
-    }
-  };
-
-  const clearChip = (key: string) => {
-    switch (key) {
-      case 'field': setFieldId(null); setProfessionId(null); setServiceId(null); setGenreId(null); break;
-      case 'profession': setProfessionId(null); setServiceId(null); setGenreId(null); break;
-      case 'service': setServiceId(null); setGenreId(null); break;
-      case 'genre': setGenreId(null); break;
-      case 'workFormat': setWorkFormatId(null); break;
-      case 'employmentType': setEmploymentTypeId(null); break;
-      case 'skillLevel': setSkillLevelId(null); break;
-      case 'availability': setAvailabilityId(null); break;
-      case 'geography': setGeographyId(null); break;
-      case 'priceRange': setPriceMin(''); setPriceMax(''); break;
-    }
-    setPage(1);
-  };
-
-  // Filter chips config
-  const CHIPS = [
-    { key: 'field', label: 'Сфера', disabled: false },
-    { key: 'profession', label: 'Профессия', disabled: !fieldId },
-    { key: 'service', label: 'Услуга', disabled: !fieldId },
-    { key: 'genre', label: 'Жанр', disabled: !showFilter('genre') },
-    { key: 'workFormat', label: 'Формат', disabled: !showFilter('workFormat') },
-    { key: 'employmentType', label: 'Занятость', disabled: !showFilter('employmentType') },
-    { key: 'skillLevel', label: 'Уровень', disabled: !showFilter('skillLevel') },
-    { key: 'availability', label: 'Доступность', disabled: !showFilter('availability') },
-    { key: 'geography', label: 'Город', disabled: !showFilter('geography') },
-    { key: 'priceRange', label: 'Бюджет', disabled: !showFilter('priceRange') },
-  ];
-
-  const activeCount = CHIPS.filter((c) => chipLabel(c.key) !== null).length;
-
-  // Quick filter sheets data
-  const sheetData: Record<string, { items: any[]; loading?: boolean; value: string | null; setter: (v: string | null) => void; downstream?: () => void }> = {
-    field: { items: fields || [], loading: fieldsLoading, value: fieldId, setter: setFieldId, downstream: () => { setProfessionId(null); setServiceId(null); setGenreId(null); } },
-    profession: { items: professions || [], loading: professionsLoading, value: professionId, setter: setProfessionId, downstream: () => { setServiceId(null); setGenreId(null); } },
-    service: { items: services || [], loading: servicesLoading, value: serviceId, setter: setServiceId, downstream: () => setGenreId(null) },
-    genre: { items: genres || [], loading: genresLoading, value: genreId, setter: setGenreId },
-    workFormat: { items: workFormats || [], loading: workFormatsLoading, value: workFormatId, setter: setWorkFormatId },
-    employmentType: { items: employmentTypes || [], loading: employmentTypesLoading, value: employmentTypeId, setter: setEmploymentTypeId },
-    skillLevel: { items: skillLevels || [], loading: skillLevelsLoading, value: skillLevelId, setter: setSkillLevelId },
-    availability: { items: availabilities || [], loading: availabilitiesLoading, value: availabilityId, setter: setAvailabilityId },
-    geography: { items: geographies || [], loading: geographiesLoading, value: geographyId, setter: setGeographyId },
-  };
-
-  const chipTitles: Record<string, string> = {
-    field: 'Сфера деятельности', profession: 'Профессия', service: 'Услуга',
-    genre: 'Жанр', workFormat: 'Формат работы', employmentType: 'Тип занятости',
-    skillLevel: 'Уровень навыка', availability: 'Доступность',
-    geography: 'Город / Регион',
-  };
+  // Active filter chips — only selected values, each with its own clear action
+  const activeChips = useMemo(() => {
+    const chips: { key: string; label: string; clear: () => void }[] = [];
+    const clearAttrs = () => {
+      setWorkFormatId(null); setEmploymentTypeId(null); setSkillLevelId(null);
+      setAvailabilityId(null); setGeographyId(null); setPriceMin(''); setPriceMax('');
+    };
+    const p1 = () => setPage(1);
+    if (fieldId && fields?.find(f => f.id === fieldId))
+      chips.push({ key: 'field', label: fields!.find(f => f.id === fieldId)!.name, clear: () => { setFieldId(null); setDirectionId(null); setProfessionId(null); setServiceId(null); setGenreId(null); clearAttrs(); p1(); } });
+    if (directionId && directions?.find(d => d.id === directionId))
+      chips.push({ key: 'direction', label: directions!.find(d => d.id === directionId)!.name, clear: () => { setDirectionId(null); setProfessionId(null); setServiceId(null); setGenreId(null); clearAttrs(); p1(); } });
+    if (professionId && professions?.find(p => p.id === professionId))
+      chips.push({ key: 'profession', label: professions!.find(p => p.id === professionId)!.name, clear: () => { setProfessionId(null); setServiceId(null); setGenreId(null); p1(); } });
+    if (serviceId && services?.find(s => s.id === serviceId))
+      chips.push({ key: 'service', label: services!.find(s => s.id === serviceId)!.name, clear: () => { setServiceId(null); setGenreId(null); p1(); } });
+    if (genreId && genres?.find(g => g.id === genreId))
+      chips.push({ key: 'genre', label: genres!.find(g => g.id === genreId)!.name, clear: () => { setGenreId(null); p1(); } });
+    if (workFormatId && workFormats?.find(w => w.id === workFormatId))
+      chips.push({ key: 'workFormat', label: workFormats!.find(w => w.id === workFormatId)!.name, clear: () => { setWorkFormatId(null); p1(); } });
+    if (employmentTypeId && employmentTypes?.find(e => e.id === employmentTypeId))
+      chips.push({ key: 'employmentType', label: employmentTypes!.find(e => e.id === employmentTypeId)!.name, clear: () => { setEmploymentTypeId(null); p1(); } });
+    if (skillLevelId && skillLevels?.find(s => s.id === skillLevelId))
+      chips.push({ key: 'skillLevel', label: skillLevels!.find(s => s.id === skillLevelId)!.name, clear: () => { setSkillLevelId(null); p1(); } });
+    if (availabilityId && availabilities?.find(a => a.id === availabilityId))
+      chips.push({ key: 'availability', label: availabilities!.find(a => a.id === availabilityId)!.name, clear: () => { setAvailabilityId(null); p1(); } });
+    if (geographyId && geographies?.find(g => g.id === geographyId))
+      chips.push({ key: 'geography', label: geographies!.find(g => g.id === geographyId)!.name, clear: () => { setGeographyId(null); p1(); } });
+    if (priceMin || priceMax)
+      chips.push({ key: 'price', label: `${priceMin || '0'} — ${priceMax || '∞'} ₽`, clear: () => { setPriceMin(''); setPriceMax(''); p1(); } });
+    return chips;
+  }, [fieldId, directionId, professionId, serviceId, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId, priceMin, priceMax, fields, directions, professions, services, genres, workFormats, employmentTypes, skillLevels, availabilities, geographies]);
 
   // Friend request
   const addFriendMutation = useMutation({
@@ -503,9 +404,27 @@ export default function SearchPage() {
             )}
           </div>
 
-          {/* ── Mobile filter bar (Ozon-style) ── */}
+          {/* ── Mobile filter bar ── */}
           <div className="flex items-center gap-2 mt-3 lg:hidden">
-            {/* Sort icon */}
+            {/* Filters button */}
+            <button
+              onClick={() => setAllFiltersOpen(true)}
+              className={`relative flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-sm font-medium transition-all ${
+                activeChips.length > 0
+                  ? 'bg-primary-500/20 border-primary-500/50 text-primary-400'
+                  : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'
+              }`}
+            >
+              <SlidersHorizontal size={15} />
+              <span>Фильтры</span>
+              {activeChips.length > 0 && (
+                <span className="bg-primary-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center leading-none">
+                  {activeChips.length}
+                </span>
+              )}
+            </button>
+
+            {/* Sort button */}
             <button
               onClick={() => setSortSheetOpen(true)}
               title={SORT_LABELS[sortBy]}
@@ -518,64 +437,22 @@ export default function SearchPage() {
               <ArrowUpDown size={16} />
             </button>
 
-            {/* All-filters icon */}
-            <div className="relative flex-shrink-0">
-              <button
-                onClick={() => setAllFiltersOpen(true)}
-                className={`w-9 h-9 flex items-center justify-center rounded-xl border transition-all ${
-                  activeCount > 0
-                    ? 'bg-primary-500/20 border-primary-500/50 text-primary-400'
-                    : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'
-                }`}
-              >
-                <SlidersHorizontal size={16} />
-              </button>
-              {activeCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-primary-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center leading-none">
-                  {activeCount}
-                </span>
-              )}
-            </div>
-
-            {/* Vertical divider */}
-            <div className="w-px h-6 bg-slate-700/60 flex-shrink-0" />
-
-            {/* Scrollable filter chips */}
-            <div className="flex items-center gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
-              {CHIPS.filter((c) => !c.disabled).map((chip) => {
-                const selected = chipLabel(chip.key);
-                return (
-                  <div key={chip.key} className="flex-shrink-0">
-                    {selected ? (
-                      /* Active chip: shows selected value + X */
-                      <div className="flex items-center gap-1 pl-3 pr-2 py-1.5 bg-primary-500/20 border border-primary-500/50 rounded-full">
-                        <button
-                          onClick={() => setOpenChip(chip.key)}
-                          className="text-primary-300 text-sm font-medium whitespace-nowrap leading-none"
-                        >
-                          {selected}
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); clearChip(chip.key); }}
-                          className="text-primary-400 hover:text-white transition-colors ml-0.5"
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    ) : (
-                      /* Inactive chip: category label + chevron */
-                      <button
-                        onClick={() => setOpenChip(chip.key)}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-slate-800/60 border border-slate-600/60 hover:border-slate-500 rounded-full text-slate-300 hover:text-white text-sm transition-all whitespace-nowrap"
-                      >
-                        {chip.label}
-                        <ChevronDown size={13} className="text-slate-500" />
+            {/* Active filter chips */}
+            {activeChips.length > 0 && (
+              <>
+                <div className="w-px h-6 bg-slate-700/60 flex-shrink-0" />
+                <div className="flex items-center gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+                  {activeChips.map((chip) => (
+                    <div key={chip.key} className="flex items-center gap-1 pl-3 pr-2 py-1.5 bg-primary-500/20 border border-primary-500/50 rounded-full flex-shrink-0">
+                      <span className="text-primary-300 text-sm font-medium whitespace-nowrap leading-none">{chip.label}</span>
+                      <button onClick={chip.clear} className="text-primary-400 hover:text-white transition-colors ml-0.5">
+                        <X size={13} />
                       </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -675,7 +552,7 @@ export default function SearchPage() {
                   <p className="text-slate-400 text-sm">
                     Попробуйте изменить фильтры или поисковый запрос
                   </p>
-                  {(activeCount > 0 || nameQuery) && (
+                  {(activeChips.length > 0 || nameQuery) && (
                     <button
                       onClick={() => { resetAllFilters(); setNameQuery(''); }}
                       className="mt-3 px-4 py-1.5 bg-primary-500/20 hover:bg-primary-500/30 text-primary-400 rounded-lg text-sm transition-all"
@@ -708,43 +585,6 @@ export default function SearchPage() {
         <FilterPanel showHeader={false} />
       </BottomSheet>
 
-      {/* ── Quick filter sheets (one per chip) ── */}
-      {CHIPS.filter(c => c.key !== 'priceRange').map((chip) => {
-        const sd = sheetData[chip.key];
-        return (
-          <QuickFilterSheet
-            key={chip.key}
-            isOpen={openChip === chip.key}
-            onClose={() => setOpenChip(null)}
-            title={chipTitles[chip.key]}
-            value={sd.value}
-            items={sd.items}
-            loading={sd.loading}
-            onSelect={(id) => {
-              sd.setter(id);
-              sd.downstream?.();
-              setPage(1);
-            }}
-          />
-        );
-      })}
-
-      {/* ── Budget filter sheet ── */}
-      <BottomSheet isOpen={openChip === 'priceRange'} onClose={() => setOpenChip(null)} title="Бюджет (₽)" height="auto">
-        <div className="px-4 pb-4 space-y-3">
-          <div className="flex gap-3">
-            <div className="flex-1">
-              <p className="text-xs text-slate-400 mb-1">От</p>
-              <input type="number" min={0} placeholder="0" value={priceMin} onChange={e => { setPriceMin(e.target.value); setPage(1); }} className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500" />
-            </div>
-            <div className="flex-1">
-              <p className="text-xs text-slate-400 mb-1">До</p>
-              <input type="number" min={0} placeholder="∞" value={priceMax} onChange={e => { setPriceMax(e.target.value); setPage(1); }} className="w-full px-3 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500" />
-            </div>
-          </div>
-          <button onClick={() => { setPriceMin(''); setPriceMax(''); setPage(1); setOpenChip(null); }} className="w-full py-2 text-sm text-slate-400 hover:text-white transition-colors">Сбросить</button>
-        </div>
-      </BottomSheet>
     </div>
   );
 }

@@ -14,6 +14,8 @@ export interface Direction {
   name: string;
   fieldOfActivityId: string;
   professionCount?: number;
+  allowedFilterTypes?: string[];
+  customFilters?: { id: string; name: string; values: { id: string; value: string }[] }[];
 }
 
 export interface Profession {
