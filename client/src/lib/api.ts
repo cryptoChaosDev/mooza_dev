@@ -195,11 +195,10 @@ export const adminAPI = {
     ...crudFor('directions'),
     setFilters: (id: string, filterIds: string[], filterTypes: string[]) =>
       api.put(`${adminBase}/directions/${id}/filters`, { filterIds, filterTypes }),
-    setServiceSet: (id: string, serviceSetId: string | null) =>
-      api.put(`${adminBase}/directions/${id}/service-set`, { serviceSetId }),
+    setServices: (id: string, serviceIds: string[]) =>
+      api.put(`${adminBase}/directions/${id}/services`, { serviceIds }),
   },
   professions: crudFor('professions'),
-  serviceSets: crudFor('service-sets'),
   services: crudFor('services'),
   genres: crudFor('genres'),
   workFormats: crudFor('work-formats'),
