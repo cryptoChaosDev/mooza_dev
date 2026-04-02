@@ -20,10 +20,10 @@ model FieldOfActivity {
 }
 
 model Direction {
-  id                String          @id @default(uuid())
-  name              String
-  fieldOfActivityId String
-  fieldOfActivity   FieldOfActivity @relation(fields: [fieldOfActivityId], references: [id])
+  id                String           @id @default(uuid())
+  name              String           @unique
+  fieldOfActivityId String?
+  fieldOfActivity   FieldOfActivity? @relation(fields: [fieldOfActivityId], references: [id], onDelete: SetNull)
 
   professions        Profession[]
   allowedFilterTypes String[]
@@ -32,22 +32,20 @@ model Direction {
 
   createdAt DateTime @default(now())
 
-  @@unique([name, fieldOfActivityId])
   @@index([fieldOfActivityId])
 }
 
 model Profession {
   id          String     @id @default(uuid())
-  name        String
-  directionId String
-  direction   Direction  @relation(fields: [directionId], references: [id])
+  name        String     @unique
+  directionId String?
+  direction   Direction? @relation(fields: [directionId], references: [id], onDelete: SetNull)
 
   userProfessions UserProfession[]
   userServices    UserService[]
 
   createdAt DateTime @default(now())
 
-  @@unique([name, directionId])
   @@index([directionId])
 }
 
