@@ -66,69 +66,65 @@ router.get('/professions', async (req, res) => {
   }
 });
 
-// Get services for a profession (via its direction's serviceSet) or by serviceSetId
+// Get services for a direction/profession (via M2M) or all services
 router.get('/services', async (req, res) => {
   try {
-    const db = prisma as any;
-    const { professionId, serviceSetId, fieldOfActivityId } = req.query;
-    let serviceSetIds: string[] | null = null;
+    const { directionId, professionId, fieldOfActivityId } = req.query;
 
-    if (serviceSetId) {
-      serviceSetIds = [serviceSetId as string];
-    } else if (professionId) {
-      const prof = await db.profession.findUnique({
+    if (directionId) {
+      const dir = await prisma.direction.findUnique({
+        where: { id: directionId as string },
+        include: {
+          services: { orderBy: { sortOrder: 'asc' } },
+          customFilters: { select: { id: true, name: true, values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } } } },
+        },
+      });
+      if (!dir) return res.json([]);
+      return res.json(dir.services.map(s => ({
+        id: s.id, name: s.name, sortOrder: s.sortOrder,
+        allowedFilterTypes: dir.allowedFilterTypes,
+        customFilters: dir.customFilters,
+      })));
+    }
+
+    if (professionId) {
+      const prof = await prisma.profession.findUnique({
         where: { id: professionId as string },
         select: {
           direction: {
-            select: {
-              serviceSetId: true,
-              allowedFilterTypes: true,
+            include: {
+              services: { orderBy: { sortOrder: 'asc' } },
               customFilters: { select: { id: true, name: true, values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } } } },
             },
           },
         },
       });
-      if (!prof?.direction?.serviceSetId) return res.json([]);
-      // Return services with direction's filter config
-      const services = await db.service.findMany({
-        where: { serviceSetId: prof.direction.serviceSetId },
-        include: { _count: { select: { userServices: true } } },
-        orderBy: { sortOrder: 'asc' },
-      });
-      return res.json(services.map((s: any) => ({
-        id: s.id,
-        name: s.name,
-        serviceSetId: s.serviceSetId,
-        sortOrder: s.sortOrder,
-        userCount: s._count.userServices,
-        allowedFilterTypes: prof.direction?.allowedFilterTypes ?? [],
-        customFilters: prof.direction?.customFilters ?? [],
+      if (!prof?.direction?.services?.length) return res.json([]);
+      return res.json(prof.direction.services.map(s => ({
+        id: s.id, name: s.name, sortOrder: s.sortOrder,
+        allowedFilterTypes: prof.direction!.allowedFilterTypes,
+        customFilters: prof.direction!.customFilters,
       })));
-    } else if (fieldOfActivityId) {
-      const dirs = await db.direction.findMany({
-        where: { fieldOfActivityId: fieldOfActivityId as string, serviceSetId: { not: null } },
-        select: { serviceSetId: true },
-        distinct: ['serviceSetId'],
-      });
-      serviceSetIds = dirs.map((d: any) => d.serviceSetId).filter(Boolean);
     }
 
-    const where: any = serviceSetIds ? { serviceSetId: { in: serviceSetIds } } : {};
-    const services = await db.service.findMany({
-      where,
-      include: { _count: { select: { userServices: true } } },
-      orderBy: { sortOrder: 'asc' },
-    });
+    if (fieldOfActivityId) {
+      const dirs = await prisma.direction.findMany({
+        where: { fieldOfActivityId: fieldOfActivityId as string },
+        include: { services: { orderBy: { sortOrder: 'asc' } } },
+      });
+      const seen = new Set<string>();
+      const services: any[] = [];
+      for (const dir of dirs) {
+        for (const s of dir.services) {
+          if (!seen.has(s.id)) { seen.add(s.id); services.push({ id: s.id, name: s.name, sortOrder: s.sortOrder, allowedFilterTypes: [], customFilters: [] }); }
+        }
+      }
+      return res.json(services.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)));
+    }
 
-    res.json(services.map((s: any) => ({
-      id: s.id,
-      name: s.name,
-      serviceSetId: s.serviceSetId,
-      sortOrder: s.sortOrder,
-      userCount: s._count.userServices,
-      allowedFilterTypes: [],
-      customFilters: [],
-    })));
+    // All services (no filter)
+    const all = await prisma.service.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] });
+    res.json(all);
   } catch (error) {
     console.error('Get services error:', error);
     res.status(500).json({ error: 'Failed to get services' });

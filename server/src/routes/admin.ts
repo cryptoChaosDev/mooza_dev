@@ -110,103 +110,35 @@ router.delete('/professions/:id', async (req, res) => {
   }
 });
 
-// ─── ServiceSet ────────────────────────────────────────────────────────────
-router.get('/service-sets', async (_req, res) => {
-  const db = prisma as any;
-  const items = await db.serviceSet.findMany({
-    include: { services: { orderBy: { sortOrder: 'asc' } } },
-    orderBy: { createdAt: 'asc' },
-  });
-  res.json(items);
-});
-router.post('/service-sets', async (req, res) => {
-  try {
-    const db = prisma as any;
-    const { name, values = [] } = req.body;
-    if (!name) return res.status(400).json({ error: 'Name required' });
-    const item = await db.serviceSet.create({
-      data: {
-        name,
-        services: { create: (values as string[]).map((v: string, i: number) => ({ name: v, sortOrder: i })) },
-      },
-      include: { services: { orderBy: { sortOrder: 'asc' } } },
-    });
-    res.status(201).json(item);
-  } catch (e: any) { res.status(400).json({ error: e.message }); }
-});
-router.put('/service-sets/:id', async (req, res) => {
-  try {
-    const db = prisma as any;
-    const { name, values } = req.body;
-    const data: any = {};
-    if (name !== undefined) data.name = name;
-    if (values !== undefined) {
-      data.services = {
-        deleteMany: {},
-        create: (values as string[]).map((v: string, i: number) => ({ name: v, sortOrder: i })),
-      };
-    }
-    const item = await db.serviceSet.update({
-      where: { id: req.params.id },
-      data,
-      include: { services: { orderBy: { sortOrder: 'asc' } } },
-    });
-    res.json(item);
-  } catch (e: any) { res.status(400).json({ error: e.message }); }
-});
-router.delete('/service-sets/:id', async (req, res) => {
-  try {
-    const db = prisma as any;
-    await db.serviceSet.delete({ where: { id: req.params.id } });
-    res.json({ ok: true });
-  } catch (e: any) { res.status(400).json({ error: e.message }); }
-});
-
-// ─── Service ───────────────────────────────────────────────────────────────
+// ─── Service (flat reference list) ─────────────────────────────────────────
 router.get('/services', async (_req, res) => {
-  const items = await (prisma as any).service.findMany({
-    include: { direction: { select: { id: true, name: true, fieldOfActivity: { select: { id: true, name: true } } } } },
-    orderBy: [{ direction: { name: 'asc' } }, { sortOrder: 'asc' }, { name: 'asc' }],
-  });
+  const items = await prisma.service.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] });
   res.json(items);
 });
 router.post('/services', async (req, res) => {
   try {
-    const item = await (prisma as any).service.create({
-      data: { name: req.body.name, directionId: req.body.directionId, sortOrder: req.body.sortOrder ?? 0 },
-      include: { direction: { select: { id: true, name: true } } },
-    });
-    res.json(item);
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
+    if (!req.body.name) return res.status(400).json({ error: 'Name required' });
+    const item = await prisma.service.create({ data: { name: req.body.name, sortOrder: req.body.sortOrder ?? 0 } });
+    res.status(201).json(item);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 router.put('/services/:id', async (req, res) => {
   try {
     const data: any = {};
     if (req.body.name !== undefined) data.name = req.body.name;
-    if (req.body.directionId !== undefined) data.directionId = req.body.directionId;
     if (req.body.sortOrder !== undefined) data.sortOrder = req.body.sortOrder;
-    const item = await (prisma as any).service.update({
-      where: { id: req.params.id },
-      data,
-      include: { direction: { select: { id: true, name: true } } },
-    });
+    const item = await prisma.service.update({ where: { id: req.params.id }, data });
     res.json(item);
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 router.delete('/services/:id', async (req, res) => {
   try {
     await prisma.$transaction([
       prisma.userService.deleteMany({ where: { serviceId: req.params.id } }),
-      (prisma as any).service.delete({ where: { id: req.params.id } }),
+      prisma.service.delete({ where: { id: req.params.id } }),
     ]);
     res.json({ ok: true });
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
 
@@ -368,7 +300,7 @@ router.get('/directions', async (_req, res) => {
     include: {
       fieldOfActivity: { select: { id: true, name: true } },
       customFilters: { select: { id: true, name: true } },
-      serviceSet: { select: { id: true, name: true, services: { select: { id: true, name: true, sortOrder: true }, orderBy: { sortOrder: 'asc' } } } },
+      services: { select: { id: true, name: true, sortOrder: true }, orderBy: { sortOrder: 'asc' } },
     },
     orderBy: { name: 'asc' },
   });
@@ -400,16 +332,16 @@ router.put('/directions/:id', async (req, res) => {
     res.status(400).json({ error: e.message });
   }
 });
-// Attach / detach ServiceSet for a direction
-router.put('/directions/:id/service-set', async (req, res) => {
+// Attach services to a direction (M2M set)
+router.put('/directions/:id/services', async (req, res) => {
   try {
-    const db = prisma as any;
-    const item = await db.direction.update({
+    const { serviceIds = [] } = req.body;
+    const item = await prisma.direction.update({
       where: { id: req.params.id },
-      data: { serviceSetId: req.body.serviceSetId ?? null },
+      data: { services: { set: (serviceIds as string[]).map(id => ({ id })) } },
       include: {
         fieldOfActivity: { select: { id: true, name: true } },
-        serviceSet: { select: { id: true, name: true, services: { select: { id: true, name: true, sortOrder: true } } } },
+        services: { select: { id: true, name: true, sortOrder: true }, orderBy: { sortOrder: 'asc' } },
       },
     });
     res.json(item);
