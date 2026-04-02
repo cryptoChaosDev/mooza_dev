@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { adminAPI } from '../lib/api';
-import { Plus, Pencil, Trash2, Check, X, ChevronRight, Filter, Package } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, ChevronRight } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -101,8 +101,9 @@ function SimpleTable({
           </div>
         )}
 
-        {items.map((item) => (
+        {items.map((item, idx) => (
           <div key={item.id} className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800/30 group">
+            <span className="text-xs text-slate-600 w-5 text-right flex-shrink-0">{idx + 1}</span>
             {editId === item.id ? (
               <>
                 <input
@@ -247,8 +248,6 @@ function DirectionNode({ direction, professions, allCustomFilters, allServices, 
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [setsOpen, setSetsOpen] = useState(false);
   const [addingProfession, setAddingProfession] = useState(false);
 
   const invalidateD = () => qc.invalidateQueries({ queryKey: ['admin-directions'] });
@@ -316,27 +315,13 @@ function DirectionNode({ direction, professions, allCustomFilters, allServices, 
           <>
             <span className="flex-1 text-sm font-semibold text-slate-100">{direction.name}</span>
             {attachedServiceIds.length > 0 && (
-              <span className="text-xs text-emerald-400 flex-shrink-0 mr-1">{attachedServiceIds.length} усл.</span>
+              <span className="text-xs text-emerald-500/80 flex-shrink-0">{attachedServiceIds.length} усл.</span>
             )}
             {totalAttached > 0 && (
-              <span className="text-xs text-primary-400 flex-shrink-0 mr-1">{totalAttached} ф.</span>
+              <span className="text-xs text-primary-500/80 flex-shrink-0">{totalAttached} ф.</span>
             )}
             <span className="text-xs text-slate-600 flex-shrink-0">{professions.length} проф.</span>
             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button
-                onClick={() => { setSetsOpen(o => !o); setFiltersOpen(false); }}
-                className={`p-1 ${setsOpen ? 'text-emerald-400' : 'text-slate-400 hover:text-emerald-400'}`}
-                title="Набор услуг"
-              >
-                <Package size={13} />
-              </button>
-              <button
-                onClick={() => { setFiltersOpen(o => !o); setSetsOpen(false); }}
-                className={`p-1 ${filtersOpen ? 'text-primary-400' : 'text-slate-400 hover:text-primary-400'}`}
-                title="Фильтры направления"
-              >
-                <Filter size={13} />
-              </button>
               <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={13} /></button>
               <button onClick={() => deleteMut.mutate()} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={13} /></button>
             </div>
@@ -344,96 +329,89 @@ function DirectionNode({ direction, professions, allCustomFilters, allServices, 
         )}
       </div>
 
-      {filtersOpen && (
-        <div className="mx-3 mb-2 mt-1 p-3 bg-slate-800/60 rounded-lg border border-slate-700/50 space-y-3">
-          <p className="text-xs font-medium text-slate-400">Фильтры для всех профессий и услуг этого направления:</p>
-          <div>
-            <p className="text-xs text-slate-500 mb-1.5">Системные фильтры:</p>
-            <div className="grid grid-cols-2 gap-0.5">
-              {SYSTEM_FILTER_TYPES.map(f => (
-                <label key={f.key} className="flex items-center gap-2 cursor-pointer hover:bg-slate-700/30 px-2 py-1 rounded">
-                  <input
-                    type="checkbox"
-                    checked={attachedTypes.includes(f.key)}
-                    onChange={() => toggleType(f.key)}
-                    className="accent-primary-500"
-                  />
-                  <span className="text-xs text-slate-300">{f.label}</span>
-                </label>
+      {open && (
+        <div className="bg-slate-900/50 divide-y divide-slate-800/60">
+
+          {/* ── Профессии ── */}
+          <div className="px-4 py-2.5">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Профессии</p>
+            <div className="space-y-1">
+              {professions.map(prof => (
+                <ProfessionNode key={prof.id} profession={prof} qc={qc} />
               ))}
+              {professions.length === 0 && !addingProfession && (
+                <p className="text-xs text-slate-600 mb-1">Нет профессий</p>
+              )}
+              {addingProfession ? (
+                <AddRow placeholder="Название профессии" onAdd={name => addProfessionMut.mutate(name)} onCancel={() => setAddingProfession(false)} />
+              ) : (
+                <button onClick={() => setAddingProfession(true)} className="flex items-center gap-1 text-xs text-slate-500 hover:text-primary-400 transition-colors mt-1">
+                  <Plus size={12} /> Добавить профессию
+                </button>
+              )}
             </div>
           </div>
-          {allCustomFilters.length > 0 && (
-            <div className="border-t border-slate-700/50 pt-2">
-              <p className="text-xs text-slate-500 mb-1.5">Пользовательские фильтры:</p>
-              <div className="space-y-0.5">
-                {allCustomFilters.map(f => (
-                  <label key={f.id} className="flex items-center gap-2 cursor-pointer hover:bg-slate-700/30 px-2 py-1 rounded">
-                    <input
-                      type="checkbox"
-                      checked={attachedIds.includes(f.id)}
-                      onChange={() => toggleFilter(f.id)}
-                      className="accent-primary-500"
-                    />
-                    <span className="text-xs text-slate-300">{f.name}</span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
 
-      {setsOpen && (
-        <div className="mx-3 mb-2 mt-1 p-3 bg-slate-800/60 rounded-lg border border-slate-700/50 space-y-2">
-          <p className="text-xs font-medium text-slate-400">Услуги для всех профессий этого направления:</p>
-          <div className="space-y-0.5">
-            {allServices.map(s => (
-              <label key={s.id} className="flex items-center gap-2 cursor-pointer hover:bg-slate-700/30 px-2 py-1.5 rounded">
-                <input
-                  type="checkbox"
-                  checked={attachedServiceIds.includes(s.id)}
-                  onChange={() => toggleService(s.id)}
-                  className="accent-primary-500"
-                />
-                <span className="text-xs text-slate-300 flex-1">{s.name}</span>
-              </label>
-            ))}
-            {allServices.length === 0 && (
-              <p className="text-xs text-slate-600 py-1">Сначала создайте услуги во вкладке «Услуги»</p>
+          {/* ── Услуги ── */}
+          <div className="px-4 py-2.5">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Услуги</p>
+            {allServices.length === 0 ? (
+              <p className="text-xs text-slate-600">Добавьте услуги во вкладке «Услуги»</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {allServices.map(s => {
+                  const on = attachedServiceIds.includes(s.id);
+                  return (
+                    <button key={s.id} onClick={() => toggleService(s.id)}
+                      className={`px-2.5 py-1 rounded-md text-xs border transition-all ${
+                        on ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40' : 'text-slate-500 border-slate-700 hover:border-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      {s.name}
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
-        </div>
-      )}
 
-      {open && (
-        <div className="px-3 py-2 space-y-1.5 bg-slate-900/40">
-          {professions.map(prof => (
-            <ProfessionNode
-              key={prof.id}
-              profession={prof}
-              qc={qc}
-            />
-          ))}
+          {/* ── Фильтры ── */}
+          <div className="px-4 py-2.5">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Фильтры</p>
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-1.5">
+                {SYSTEM_FILTER_TYPES.map(f => {
+                  const on = attachedTypes.includes(f.key);
+                  return (
+                    <button key={f.key} onClick={() => toggleType(f.key)}
+                      className={`px-2.5 py-1 rounded-md text-xs border transition-all ${
+                        on ? 'bg-primary-500/15 text-primary-400 border-primary-500/40' : 'text-slate-500 border-slate-700 hover:border-slate-500 hover:text-slate-300'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  );
+                })}
+              </div>
+              {allCustomFilters.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 pt-0.5 border-t border-slate-800/60">
+                  {allCustomFilters.map(f => {
+                    const on = attachedIds.includes(f.id);
+                    return (
+                      <button key={f.id} onClick={() => toggleFilter(f.id)}
+                        className={`px-2.5 py-1 rounded-md text-xs border transition-all ${
+                          on ? 'bg-primary-500/15 text-primary-400 border-primary-500/40' : 'text-slate-500 border-slate-700 hover:border-slate-500 hover:text-slate-300'
+                        }`}
+                      >
+                        {f.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
 
-          {professions.length === 0 && !addingProfession && (
-            <p className="text-xs text-slate-600 py-1">Нет профессий</p>
-          )}
-
-          {addingProfession ? (
-            <AddRow
-              placeholder="Название профессии"
-              onAdd={name => addProfessionMut.mutate(name)}
-              onCancel={() => setAddingProfession(false)}
-            />
-          ) : (
-            <button
-              onClick={() => setAddingProfession(true)}
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-primary-400 transition-colors"
-            >
-              <Plus size={12} /> Добавить профессию
-            </button>
-          )}
         </div>
       )}
     </div>
@@ -878,8 +856,9 @@ function DirectionsTab() {
             <button onClick={() => setAdding(false)} className="text-slate-400 hover:text-white"><X size={16} /></button>
           </div>
         )}
-        {directions.map(dir => (
+        {directions.map((dir, idx) => (
           <div key={dir.id} className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800/30 group">
+            <span className="text-xs text-slate-600 w-5 text-right flex-shrink-0">{idx + 1}</span>
             {editId === dir.id ? (
               <>
                 <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
@@ -1004,8 +983,9 @@ function ProfessionsTab() {
             <button onClick={() => setAdding(false)} className="text-slate-400 hover:text-white"><X size={16} /></button>
           </div>
         )}
-        {visibleProfessions.map(p => (
+        {visibleProfessions.map((p, idx) => (
           <div key={p.id} className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800/30 group">
+            <span className="text-xs text-slate-600 w-5 text-right flex-shrink-0">{idx + 1}</span>
             {editId === p.id ? (
               <>
                 <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
