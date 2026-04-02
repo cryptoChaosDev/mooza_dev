@@ -197,8 +197,14 @@ export const adminAPI = {
       api.put(`${adminBase}/directions/${id}/filters`, { filterIds, filterTypes }),
     setServices: (id: string, serviceIds: string[]) =>
       api.put(`${adminBase}/directions/${id}/services`, { serviceIds }),
+    setSphere: (id: string, fieldOfActivityId: string | null) =>
+      api.put(`${adminBase}/directions/${id}`, { fieldOfActivityId }),
   },
-  professions: crudFor('professions'),
+  professions: {
+    ...crudFor('professions'),
+    setDirection: (id: string, directionId: string | null) =>
+      api.put(`${adminBase}/professions/${id}`, { directionId }),
+  },
   services: crudFor('services'),
   genres: crudFor('genres'),
   workFormats: crudFor('work-formats'),

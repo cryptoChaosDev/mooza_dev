@@ -72,29 +72,23 @@ router.get('/professions', async (_req, res) => {
 });
 router.post('/professions', async (req, res) => {
   try {
-    const item = await prisma.profession.create({
-      data: { name: req.body.name, directionId: req.body.directionId },
-      include: { direction: { select: { id: true, name: true } } },
-    });
+    if (!req.body.name) return res.status(400).json({ error: 'Name required' });
+    const item = await prisma.profession.create({ data: { name: req.body.name } });
     res.json(item);
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 router.put('/professions/:id', async (req, res) => {
   try {
     const data: any = {};
     if (req.body.name !== undefined) data.name = req.body.name;
-    if (req.body.directionId !== undefined) data.directionId = req.body.directionId;
+    if ('directionId' in req.body) data.directionId = req.body.directionId ?? null;
     const item = await prisma.profession.update({
       where: { id: req.params.id },
       data,
       include: { direction: { select: { id: true, name: true } } },
     });
     res.json(item);
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 router.delete('/professions/:id', async (req, res) => {
   try {
@@ -308,20 +302,16 @@ router.get('/directions', async (_req, res) => {
 });
 router.post('/directions', async (req, res) => {
   try {
-    const item = await prisma.direction.create({
-      data: { name: req.body.name, fieldOfActivityId: req.body.fieldOfActivityId },
-      include: { fieldOfActivity: { select: { id: true, name: true } } },
-    });
+    if (!req.body.name) return res.status(400).json({ error: 'Name required' });
+    const item = await prisma.direction.create({ data: { name: req.body.name } });
     res.json(item);
-  } catch (e: any) {
-    res.status(400).json({ error: e.message });
-  }
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 router.put('/directions/:id', async (req, res) => {
   try {
     const data: any = {};
     if (req.body.name !== undefined) data.name = req.body.name;
-    if (req.body.fieldOfActivityId !== undefined) data.fieldOfActivityId = req.body.fieldOfActivityId;
+    if ('fieldOfActivityId' in req.body) data.fieldOfActivityId = req.body.fieldOfActivityId ?? null;
     const item = await prisma.direction.update({
       where: { id: req.params.id },
       data,

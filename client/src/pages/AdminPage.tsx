@@ -200,55 +200,13 @@ const SYSTEM_FILTER_TYPES = [
   { key: 'priceRange',     label: 'Ценовые диапазоны' },
 ];
 
-// ─── Profession node ─────────────────────────────────────────────────────────
-
-function ProfessionNode({ profession, qc }: {
-  profession: Item; qc: QueryClient;
-}) {
-  const [editing, setEditing] = useState(false);
-
-  const invalidateP = () => qc.invalidateQueries({ queryKey: ['admin-professions'] });
-
-  const updateMut = useMutation({
-    mutationFn: (name: string) => adminAPI.professions.update(profession.id, { name, directionId: profession.direction?.id }),
-    onSuccess: () => { invalidateP(); setEditing(false); },
-  });
-  const deleteMut = useMutation({
-    mutationFn: () => adminAPI.professions.remove(profession.id),
-    onSuccess: invalidateP,
-  });
-
-  return (
-    <div className="border border-slate-700/50 rounded-lg overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 bg-slate-800/40 hover:bg-slate-800/70 group">
-        {editing ? (
-          <InlineEdit
-            value={profession.name}
-            onSave={name => updateMut.mutate(name)}
-            onCancel={() => setEditing(false)}
-          />
-        ) : (
-          <>
-            <span className="flex-1 text-sm font-medium text-slate-200">{profession.name}</span>
-            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-              <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={12} /></button>
-              <button onClick={() => deleteMut.mutate()} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={12} /></button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Direction node ──────────────────────────────────────────────────────────
 
-function DirectionNode({ direction, professions, allCustomFilters, allServices, qc }: {
-  direction: Item; professions: Item[]; allCustomFilters: CFilter[]; allServices: { id: string; name: string }[]; qc: QueryClient;
+function DirectionNode({ direction, allProfessions, allCustomFilters, allServices, onUnlink, qc }: {
+  direction: Item; allProfessions: Item[]; allCustomFilters: CFilter[]; allServices: { id: string; name: string }[]; onUnlink: () => void; qc: QueryClient;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [addingProfession, setAddingProfession] = useState(false);
 
   const invalidateD = () => qc.invalidateQueries({ queryKey: ['admin-directions'] });
   const invalidateP = () => qc.invalidateQueries({ queryKey: ['admin-professions'] });
@@ -257,9 +215,10 @@ function DirectionNode({ direction, professions, allCustomFilters, allServices, 
   const attachedTypes: string[] = direction.allowedFilterTypes ?? [];
   const totalAttached = attachedIds.length + attachedTypes.length;
   const attachedServiceIds: string[] = (direction.services ?? []).map((s: any) => s.id);
+  const attachedProfessions = allProfessions.filter(p => p.direction?.id === direction.id);
 
   const updateMut = useMutation({
-    mutationFn: (name: string) => adminAPI.directions.update(direction.id, { name, fieldOfActivityId: direction.fieldOfActivity?.id }),
+    mutationFn: (name: string) => adminAPI.directions.update(direction.id, { name }),
     onSuccess: () => { invalidateD(); setEditing(false); },
   });
   const deleteMut = useMutation({
@@ -275,28 +234,29 @@ function DirectionNode({ direction, professions, allCustomFilters, allServices, 
     mutationFn: (serviceIds: string[]) => adminAPI.directions.setServices(direction.id, serviceIds),
     onSuccess: invalidateD,
   });
+  const setProfMut = useMutation({
+    mutationFn: ({ profId, dirId }: { profId: string; dirId: string | null }) =>
+      adminAPI.professions.setDirection(profId, dirId),
+    onSuccess: invalidateP,
+  });
+
   const toggleService = (serviceId: string) => {
     const next = attachedServiceIds.includes(serviceId)
       ? attachedServiceIds.filter(id => id !== serviceId)
       : [...attachedServiceIds, serviceId];
     setServicesMut.mutate(next);
   };
-  const addProfessionMut = useMutation({
-    mutationFn: (name: string) => adminAPI.professions.create({ name, directionId: direction.id }),
-    onSuccess: () => { invalidateP(); setAddingProfession(false); },
-  });
-
   const toggleType = (typeKey: string) => {
-    const newTypes = attachedTypes.includes(typeKey)
-      ? attachedTypes.filter(t => t !== typeKey)
-      : [...attachedTypes, typeKey];
+    const newTypes = attachedTypes.includes(typeKey) ? attachedTypes.filter(t => t !== typeKey) : [...attachedTypes, typeKey];
     setFiltersMut.mutate({ filterIds: attachedIds, filterTypes: newTypes });
   };
   const toggleFilter = (filterId: string) => {
-    const newIds = attachedIds.includes(filterId)
-      ? attachedIds.filter(id => id !== filterId)
-      : [...attachedIds, filterId];
+    const newIds = attachedIds.includes(filterId) ? attachedIds.filter(id => id !== filterId) : [...attachedIds, filterId];
     setFiltersMut.mutate({ filterIds: newIds, filterTypes: attachedTypes });
+  };
+  const toggleProfession = (prof: Item) => {
+    const isAttached = prof.direction?.id === direction.id;
+    setProfMut.mutate({ profId: prof.id, dirId: isAttached ? null : direction.id });
   };
 
   return (
@@ -306,22 +266,15 @@ function DirectionNode({ direction, professions, allCustomFilters, allServices, 
           <ChevronRight size={14} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
         </button>
         {editing ? (
-          <InlineEdit
-            value={direction.name}
-            onSave={name => updateMut.mutate(name)}
-            onCancel={() => setEditing(false)}
-          />
+          <InlineEdit value={direction.name} onSave={name => updateMut.mutate(name)} onCancel={() => setEditing(false)} />
         ) : (
           <>
             <span className="flex-1 text-sm font-semibold text-slate-100">{direction.name}</span>
-            {attachedServiceIds.length > 0 && (
-              <span className="text-xs text-emerald-500/80 flex-shrink-0">{attachedServiceIds.length} усл.</span>
-            )}
-            {totalAttached > 0 && (
-              <span className="text-xs text-primary-500/80 flex-shrink-0">{totalAttached} ф.</span>
-            )}
-            <span className="text-xs text-slate-600 flex-shrink-0">{professions.length} проф.</span>
+            {attachedProfessions.length > 0 && <span className="text-xs text-slate-500/80 flex-shrink-0">{attachedProfessions.length} проф.</span>}
+            {attachedServiceIds.length > 0 && <span className="text-xs text-emerald-500/80 flex-shrink-0">{attachedServiceIds.length} усл.</span>}
+            {totalAttached > 0 && <span className="text-xs text-primary-500/80 flex-shrink-0">{totalAttached} ф.</span>}
             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button onClick={onUnlink} className="text-slate-400 hover:text-amber-400 p-1" title="Открепить от сферы"><X size={12} /></button>
               <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={13} /></button>
               <button onClick={() => deleteMut.mutate()} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={13} /></button>
             </div>
@@ -335,21 +288,24 @@ function DirectionNode({ direction, professions, allCustomFilters, allServices, 
           {/* ── Профессии ── */}
           <div className="px-4 py-2.5">
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Профессии</p>
-            <div className="space-y-1">
-              {professions.map(prof => (
-                <ProfessionNode key={prof.id} profession={prof} qc={qc} />
-              ))}
-              {professions.length === 0 && !addingProfession && (
-                <p className="text-xs text-slate-600 mb-1">Нет профессий</p>
-              )}
-              {addingProfession ? (
-                <AddRow placeholder="Название профессии" onAdd={name => addProfessionMut.mutate(name)} onCancel={() => setAddingProfession(false)} />
-              ) : (
-                <button onClick={() => setAddingProfession(true)} className="flex items-center gap-1 text-xs text-slate-500 hover:text-primary-400 transition-colors mt-1">
-                  <Plus size={12} /> Добавить профессию
-                </button>
-              )}
-            </div>
+            {allProfessions.length === 0 ? (
+              <p className="text-xs text-slate-600">Добавьте профессии во вкладке «Профессии»</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {allProfessions.map(p => {
+                  const on = p.direction?.id === direction.id;
+                  return (
+                    <button key={p.id} onClick={() => toggleProfession(p)}
+                      className={`px-2.5 py-1 rounded-md text-xs border transition-all ${
+                        on ? 'bg-slate-500/20 text-slate-200 border-slate-500/40' : 'text-slate-600 border-slate-800 hover:border-slate-600 hover:text-slate-400'
+                      }`}
+                    >
+                      {p.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* ── Услуги ── */}
@@ -364,7 +320,7 @@ function DirectionNode({ direction, professions, allCustomFilters, allServices, 
                   return (
                     <button key={s.id} onClick={() => toggleService(s.id)}
                       className={`px-2.5 py-1 rounded-md text-xs border transition-all ${
-                        on ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40' : 'text-slate-500 border-slate-700 hover:border-slate-500 hover:text-slate-300'
+                        on ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40' : 'text-slate-600 border-slate-800 hover:border-slate-600 hover:text-slate-400'
                       }`}
                     >
                       {s.name}
@@ -385,7 +341,7 @@ function DirectionNode({ direction, professions, allCustomFilters, allServices, 
                   return (
                     <button key={f.key} onClick={() => toggleType(f.key)}
                       className={`px-2.5 py-1 rounded-md text-xs border transition-all ${
-                        on ? 'bg-primary-500/15 text-primary-400 border-primary-500/40' : 'text-slate-500 border-slate-700 hover:border-slate-500 hover:text-slate-300'
+                        on ? 'bg-primary-500/15 text-primary-400 border-primary-500/40' : 'text-slate-600 border-slate-800 hover:border-slate-600 hover:text-slate-400'
                       }`}
                     >
                       {f.label}
@@ -400,7 +356,7 @@ function DirectionNode({ direction, professions, allCustomFilters, allServices, 
                     return (
                       <button key={f.id} onClick={() => toggleFilter(f.id)}
                         className={`px-2.5 py-1 rounded-md text-xs border transition-all ${
-                          on ? 'bg-primary-500/15 text-primary-400 border-primary-500/40' : 'text-slate-500 border-slate-700 hover:border-slate-500 hover:text-slate-300'
+                          on ? 'bg-primary-500/15 text-primary-400 border-primary-500/40' : 'text-slate-600 border-slate-800 hover:border-slate-600 hover:text-slate-400'
                         }`}
                       >
                         {f.name}
@@ -420,12 +376,15 @@ function DirectionNode({ direction, professions, allCustomFilters, allServices, 
 
 // ─── Field of activity node ──────────────────────────────────────────────────
 
-function FieldNode({ field, directions, allProfessions, allCustomFilters, allServices, qc }: {
-  field: Item; directions: Item[]; allProfessions: Item[]; allCustomFilters: CFilter[]; allServices: { id: string; name: string }[]; qc: QueryClient;
+function FieldNode({ field, allDirections, allProfessions, allCustomFilters, allServices, qc }: {
+  field: Item; allDirections: Item[]; allProfessions: Item[]; allCustomFilters: CFilter[]; allServices: { id: string; name: string }[]; qc: QueryClient;
 }) {
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState(false);
-  const [addingDirection, setAddingDirection] = useState(false);
+  const [linkDirId, setLinkDirId] = useState('');
+
+  const linkedDirections = allDirections.filter(d => d.fieldOfActivity?.id === field.id);
+  const unlinkedDirections = allDirections.filter(d => !d.fieldOfActivity?.id);
 
   const invalidateF = () => qc.invalidateQueries({ queryKey: ['admin-fields-of-activity'] });
   const invalidateD = () => qc.invalidateQueries({ queryKey: ['admin-directions'] });
@@ -438,34 +397,28 @@ function FieldNode({ field, directions, allProfessions, allCustomFilters, allSer
     mutationFn: () => adminAPI.fieldsOfActivity.remove(field.id),
     onSuccess: invalidateF,
   });
-  const addDirectionMut = useMutation({
-    mutationFn: (name: string) => adminAPI.directions.create({ name, fieldOfActivityId: field.id }),
-    onSuccess: () => { invalidateD(); setAddingDirection(false); },
+  const linkDirMut = useMutation({
+    mutationFn: (dirId: string) => adminAPI.directions.setSphere(dirId, field.id),
+    onSuccess: () => { invalidateD(); setLinkDirId(''); },
   });
 
-  const profCount = directions.reduce(
-    (acc, dir) => acc + allProfessions.filter(p => p.direction?.id === dir.id).length,
-    0
+  const profCount = linkedDirections.reduce(
+    (acc, dir) => acc + allProfessions.filter(p => p.direction?.id === dir.id).length, 0
   );
 
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
-      {/* Field header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-800 bg-slate-800/30 hover:bg-slate-800/50 group">
         <button onClick={() => setOpen(o => !o)} className="text-slate-400 hover:text-white flex-shrink-0">
           <ChevronRight size={16} className={`transition-transform ${open ? 'rotate-90' : ''}`} />
         </button>
         {editing ? (
-          <InlineEdit
-            value={field.name}
-            onSave={name => updateMut.mutate(name)}
-            onCancel={() => setEditing(false)}
-          />
+          <InlineEdit value={field.name} onSave={name => updateMut.mutate(name)} onCancel={() => setEditing(false)} />
         ) : (
           <>
             <span className="flex-1 font-bold text-white">{field.name}</span>
             <span className="text-xs text-slate-500 flex-shrink-0">
-              {directions.length} напр. · {profCount} проф.
+              {linkedDirections.length} напр. · {profCount} проф.
             </span>
             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
@@ -475,37 +428,44 @@ function FieldNode({ field, directions, allProfessions, allCustomFilters, allSer
         )}
       </div>
 
-      {/* Directions */}
       {open && (
         <div className="p-3 space-y-2">
-          {directions.map(dir => (
+          {linkedDirections.map(dir => (
             <DirectionNode
               key={dir.id}
               direction={dir}
-              professions={allProfessions.filter(p => p.direction?.id === dir.id)}
+              allProfessions={allProfessions}
               allCustomFilters={allCustomFilters}
               allServices={allServices}
+              onUnlink={() => adminAPI.directions.setSphere(dir.id, null).then(invalidateD)}
               qc={qc}
             />
           ))}
 
-          {directions.length === 0 && !addingDirection && (
-            <p className="text-sm text-slate-600 py-1 px-1">Нет направлений</p>
+          {linkedDirections.length === 0 && unlinkedDirections.length === 0 && (
+            <p className="text-sm text-slate-600 py-1 px-1">Нет направлений. Создайте их во вкладке «Направления»</p>
           )}
 
-          {addingDirection ? (
-            <AddRow
-              placeholder="Название направления"
-              onAdd={name => addDirectionMut.mutate(name)}
-              onCancel={() => setAddingDirection(false)}
-            />
-          ) : (
-            <button
-              onClick={() => setAddingDirection(true)}
-              className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-primary-400 transition-colors px-1"
-            >
-              <Plus size={13} /> Добавить направление
-            </button>
+          {/* Link existing direction */}
+          {unlinkedDirections.length > 0 && (
+            <div className="flex items-center gap-2 pt-1">
+              <select
+                value={linkDirId}
+                onChange={e => setLinkDirId(e.target.value)}
+                className="flex-1 bg-slate-800 text-slate-300 text-xs px-2 py-1.5 rounded-lg outline-none border border-slate-700 focus:border-primary-500"
+              >
+                <option value="">— Привязать направление —</option>
+                {unlinkedDirections.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </select>
+              {linkDirId && (
+                <button
+                  onClick={() => linkDirMut.mutate(linkDirId)}
+                  className="text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors flex-shrink-0"
+                >
+                  Привязать
+                </button>
+              )}
+            </div>
           )}
         </div>
       )}
@@ -553,7 +513,7 @@ function StructureTree() {
         <FieldNode
           key={field.id}
           field={field}
-          directions={directions.filter(d => d.fieldOfActivity?.id === field.id)}
+          allDirections={directions}
           allProfessions={professions}
           allCustomFilters={allCustomFilters}
           allServices={allServices}
@@ -787,27 +747,17 @@ function CustomFiltersSection() {
 
 function DirectionsTab() {
   const qc = useQueryClient();
-  const [adding, setAdding] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<{ name: string; fieldOfActivityId: string }>({ name: '', fieldOfActivityId: '' });
-
   const { data: directions = [] } = useQuery<Item[]>({
     queryKey: ['admin-directions'],
     queryFn: () => adminAPI.directions.list().then((r: any) => r.data),
   });
-  const { data: fields = [] } = useQuery<Item[]>({
-    queryKey: ['admin-fields-of-activity'],
-    queryFn: () => adminAPI.fieldsOfActivity.list().then((r: any) => r.data),
-  });
-
   const invalidate = () => qc.invalidateQueries({ queryKey: ['admin-directions'] });
-
   const createMut = useMutation({
-    mutationFn: (d: any) => adminAPI.directions.create(d),
-    onSuccess: () => { invalidate(); setAdding(false); setForm({ name: '', fieldOfActivityId: '' }); },
+    mutationFn: (name: string) => adminAPI.directions.create({ name }),
+    onSuccess: invalidate,
   });
   const updateMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => adminAPI.directions.update(id, data),
+    mutationFn: ({ id, name }: { id: string; name: string }) => adminAPI.directions.update(id, { name }),
     onSuccess: () => { invalidate(); setEditId(null); },
   });
   const deleteMut = useMutation({
@@ -815,25 +765,9 @@ function DirectionsTab() {
     onSuccess: invalidate,
   });
 
-  const startEdit = (dir: Item) => {
-    setEditId(dir.id);
-    setForm({ name: dir.name, fieldOfActivityId: dir.fieldOfActivity?.id ?? '' });
-  };
-  const startAdd = () => {
-    setAdding(true);
-    setForm({ name: '', fieldOfActivityId: fields[0]?.id ?? '' });
-  };
-
-  const FieldSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      className="bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500 max-w-[160px]"
-    >
-      <option value="">— Сфера —</option>
-      {fields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-    </select>
-  );
+  const [adding, setAdding] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
 
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
@@ -842,46 +776,33 @@ function DirectionsTab() {
           <h3 className="font-semibold text-white">Направления</h3>
           <span className="text-xs text-slate-500">{directions.length}</span>
         </div>
-        <button onClick={startAdd} className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+        <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
           <Plus size={14} /> Добавить
         </button>
       </div>
       <div className="divide-y divide-slate-800">
         {adding && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/50">
-            <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              placeholder="Название" className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500" />
-            <FieldSelect value={form.fieldOfActivityId} onChange={v => setForm(f => ({ ...f, fieldOfActivityId: v }))} />
-            <button onClick={() => form.name.trim() && form.fieldOfActivityId && createMut.mutate(form)} className="text-green-400 hover:text-green-300"><Check size={16} /></button>
-            <button onClick={() => setAdding(false)} className="text-slate-400 hover:text-white"><X size={16} /></button>
+          <div className="px-4 py-2 bg-slate-800/50">
+            <AddRow placeholder="Название направления" onAdd={name => { createMut.mutate(name); setAdding(false); }} onCancel={() => setAdding(false)} />
           </div>
         )}
         {directions.map((dir, idx) => (
           <div key={dir.id} className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800/30 group">
             <span className="text-xs text-slate-600 w-5 text-right flex-shrink-0">{idx + 1}</span>
             {editId === dir.id ? (
-              <>
-                <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500" />
-                <FieldSelect value={form.fieldOfActivityId} onChange={v => setForm(f => ({ ...f, fieldOfActivityId: v }))} />
-                <button onClick={() => updateMut.mutate({ id: dir.id, data: form })} className="text-green-400 hover:text-green-300"><Check size={16} /></button>
-                <button onClick={() => setEditId(null)} className="text-slate-400 hover:text-white"><X size={16} /></button>
-              </>
+              <InlineEdit value={editName} onSave={name => updateMut.mutate({ id: dir.id, name })} onCancel={() => setEditId(null)} />
             ) : (
               <>
                 <span className="flex-1 text-sm text-slate-200">{dir.name}</span>
-                <span className="text-xs text-slate-500 w-36 truncate text-right">{dir.fieldOfActivity?.name ?? '—'}</span>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => startEdit(dir)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
+                  <button onClick={() => { setEditId(dir.id); setEditName(dir.name); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
                   <button onClick={() => deleteMut.mutate(dir.id)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
                 </div>
               </>
             )}
           </div>
         ))}
-        {directions.length === 0 && !adding && (
-          <div className="px-4 py-4 text-sm text-slate-500 text-center">Нет записей</div>
-        )}
+        {directions.length === 0 && !adding && <div className="px-4 py-4 text-sm text-slate-500 text-center">Нет записей</div>}
       </div>
     </div>
   );
@@ -891,32 +812,17 @@ function DirectionsTab() {
 
 function ProfessionsTab() {
   const qc = useQueryClient();
-  const [adding, setAdding] = useState(false);
-  const [editId, setEditId] = useState<string | null>(null);
-  const [form, setForm] = useState<{ name: string; directionId: string }>({ name: '', directionId: '' });
-  const [fieldFilter, setFieldFilter] = useState('');
-
   const { data: professions = [] } = useQuery<Item[]>({
     queryKey: ['admin-professions'],
     queryFn: () => adminAPI.professions.list().then((r: any) => r.data),
   });
-  const { data: directions = [] } = useQuery<Item[]>({
-    queryKey: ['admin-directions'],
-    queryFn: () => adminAPI.directions.list().then((r: any) => r.data),
-  });
-  const { data: fields = [] } = useQuery<Item[]>({
-    queryKey: ['admin-fields-of-activity'],
-    queryFn: () => adminAPI.fieldsOfActivity.list().then((r: any) => r.data),
-  });
-
   const invalidate = () => qc.invalidateQueries({ queryKey: ['admin-professions'] });
-
   const createMut = useMutation({
-    mutationFn: (d: any) => adminAPI.professions.create(d),
-    onSuccess: () => { invalidate(); setAdding(false); setForm({ name: '', directionId: '' }); },
+    mutationFn: (name: string) => adminAPI.professions.create({ name }),
+    onSuccess: invalidate,
   });
   const updateMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: any }) => adminAPI.professions.update(id, data),
+    mutationFn: ({ id, name }: { id: string; name: string }) => adminAPI.professions.update(id, { name }),
     onSuccess: () => { invalidate(); setEditId(null); },
   });
   const deleteMut = useMutation({
@@ -924,36 +830,9 @@ function ProfessionsTab() {
     onSuccess: invalidate,
   });
 
-  const startEdit = (p: Item) => {
-    setEditId(p.id);
-    setForm({ name: p.name, directionId: p.direction?.id ?? '' });
-  };
-  const startAdd = () => {
-    setAdding(true);
-    const firstDir = fieldFilter
-      ? directions.find(d => d.fieldOfActivity?.id === fieldFilter)
-      : directions[0];
-    setForm({ name: '', directionId: firstDir?.id ?? '' });
-  };
-
-  const visibleDirections = fieldFilter
-    ? directions.filter(d => d.fieldOfActivity?.id === fieldFilter)
-    : directions;
-
-  const visibleProfessions = fieldFilter
-    ? professions.filter(p => {
-        const dir = directions.find(d => d.id === p.direction?.id);
-        return dir?.fieldOfActivity?.id === fieldFilter;
-      })
-    : professions;
-
-  const DirSelect = ({ value, onChange }: { value: string; onChange: (v: string) => void }) => (
-    <select value={value} onChange={e => onChange(e.target.value)}
-      className="bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500 max-w-[180px]">
-      <option value="">— Направление —</option>
-      {visibleDirections.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-    </select>
-  );
+  const [adding, setAdding] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
 
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
@@ -962,53 +841,33 @@ function ProfessionsTab() {
           <h3 className="font-semibold text-white">Профессии</h3>
           <span className="text-xs text-slate-500">{professions.length}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <select value={fieldFilter} onChange={e => setFieldFilter(e.target.value)}
-            className="bg-slate-800 text-slate-300 text-xs px-2 py-1.5 rounded-lg outline-none border border-slate-700 focus:border-primary-500">
-            <option value="">Все сферы</option>
-            {fields.map(f => <option key={f.id} value={f.id}>{f.name}</option>)}
-          </select>
-          <button onClick={startAdd} className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
-            <Plus size={14} /> Добавить
-          </button>
-        </div>
+        <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+          <Plus size={14} /> Добавить
+        </button>
       </div>
       <div className="divide-y divide-slate-800">
         {adding && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/50">
-            <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              placeholder="Название" className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500" />
-            <DirSelect value={form.directionId} onChange={v => setForm(f => ({ ...f, directionId: v }))} />
-            <button onClick={() => form.name.trim() && form.directionId && createMut.mutate(form)} className="text-green-400 hover:text-green-300"><Check size={16} /></button>
-            <button onClick={() => setAdding(false)} className="text-slate-400 hover:text-white"><X size={16} /></button>
+          <div className="px-4 py-2 bg-slate-800/50">
+            <AddRow placeholder="Название профессии" onAdd={name => { createMut.mutate(name); setAdding(false); }} onCancel={() => setAdding(false)} />
           </div>
         )}
-        {visibleProfessions.map((p, idx) => (
+        {professions.map((p, idx) => (
           <div key={p.id} className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800/30 group">
             <span className="text-xs text-slate-600 w-5 text-right flex-shrink-0">{idx + 1}</span>
             {editId === p.id ? (
-              <>
-                <input autoFocus value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500" />
-                <DirSelect value={form.directionId} onChange={v => setForm(f => ({ ...f, directionId: v }))} />
-                <button onClick={() => updateMut.mutate({ id: p.id, data: form })} className="text-green-400 hover:text-green-300"><Check size={16} /></button>
-                <button onClick={() => setEditId(null)} className="text-slate-400 hover:text-white"><X size={16} /></button>
-              </>
+              <InlineEdit value={editName} onSave={name => updateMut.mutate({ id: p.id, name })} onCancel={() => setEditId(null)} />
             ) : (
               <>
                 <span className="flex-1 text-sm text-slate-200">{p.name}</span>
-                <span className="text-xs text-slate-500 w-40 truncate text-right">{p.direction?.name ?? '—'}</span>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => startEdit(p)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
+                  <button onClick={() => { setEditId(p.id); setEditName(p.name); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
                   <button onClick={() => deleteMut.mutate(p.id)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
                 </div>
               </>
             )}
           </div>
         ))}
-        {visibleProfessions.length === 0 && !adding && (
-          <div className="px-4 py-4 text-sm text-slate-500 text-center">Нет записей</div>
-        )}
+        {professions.length === 0 && !adding && <div className="px-4 py-4 text-sm text-slate-500 text-center">Нет записей</div>}
       </div>
     </div>
   );
