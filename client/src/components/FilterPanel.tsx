@@ -138,10 +138,10 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
   const {
     fieldId, directionId, professionId, serviceId, genreId,
     workFormatId, employmentTypeId, skillLevelId, availabilityId,
-    geographyId, priceMin, priceMax,
+    geographyId, priceMin, priceMax, customFilterValues,
     setFieldId, setDirectionId, setProfessionId, setServiceId, setGenreId,
     setWorkFormatId, setEmploymentTypeId, setSkillLevelId, setAvailabilityId,
-    setGeographyId, setPriceMin, setPriceMax,
+    setGeographyId, setPriceMin, setPriceMax, setCustomFilterValue,
     resetAllFilters, setPage,
   } = useSearchStore();
 
@@ -165,11 +165,15 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
   const hasAttributes = !!directionId;
   const showAttr = (key: string) => hasAttributes && (allowedTypes === null || allowedTypes.includes(key));
 
+  // Custom filters from the selected direction
+  const directionCustomFilters = selectedDirection?.customFilters ?? [];
+  const customFilterCount = Object.keys(customFilterValues).length;
+
   const activeCount = [
     fieldId, directionId, professionId, serviceId, genreId,
     workFormatId, employmentTypeId, skillLevelId, availabilityId,
     geographyId, priceMin || null, priceMax || null,
-  ].filter(Boolean).length;
+  ].filter(Boolean).length + customFilterCount;
 
   const wrap = (setter: (v: string | null) => void, downstream?: () => void) =>
     (id: string | null) => { setter(id); downstream?.(); setPage(1); };
@@ -231,6 +235,7 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
             setProfessionId(null); setServiceId(null); setGenreId(null);
             setWorkFormatId(null); setEmploymentTypeId(null); setSkillLevelId(null);
             setAvailabilityId(null); setGeographyId(null); setPriceMin(''); setPriceMax('');
+            directionCustomFilters.forEach(cf => setCustomFilterValue(cf.id, null));
           })}
         />
 
@@ -297,7 +302,22 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
               </div>
             )}
 
-            {allowedTypes !== null && allowedTypes.length === 0 && (
+            {directionCustomFilters.length > 0 && (
+              <>
+                <SectionLabel>Дополнительные</SectionLabel>
+                {directionCustomFilters.map(cf => (
+                  <FilterSection
+                    key={cf.id}
+                    title={cf.name}
+                    value={customFilterValues[cf.id] ?? null}
+                    items={cf.values.map(v => ({ id: v.id, name: v.value }))}
+                    onSelect={id => { setCustomFilterValue(cf.id, id); setPage(1); }}
+                  />
+                ))}
+              </>
+            )}
+
+            {allowedTypes !== null && allowedTypes.length === 0 && directionCustomFilters.length === 0 && (
               <p className="text-xs text-slate-500 py-4 text-center">
                 Для выбранного направления характеристики не настроены
               </p>
