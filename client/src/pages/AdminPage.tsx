@@ -220,7 +220,6 @@ function DirectionNode({ direction, allDirections, allProfessions, allCustomFilt
   const otherDirs = allDirections.filter(d => d.id !== direction.id);
   const takenServiceIds = new Set(otherDirs.flatMap((d: any) => (d.services ?? []).map((s: any) => s.id)));
   const takenFilterIds = new Set(otherDirs.flatMap((d: any) => (d.customFilters ?? []).map((f: any) => f.id)));
-  const takenFilterTypes = new Set(otherDirs.flatMap((d: any) => d.allowedFilterTypes ?? []));
 
   const updateMut = useMutation({
     mutationFn: (name: string) => adminAPI.directions.update(direction.id, { name }),
