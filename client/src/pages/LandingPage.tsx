@@ -32,9 +32,7 @@ export default function LandingPage() {
         <div className="relative z-10 max-w-3xl mx-auto">
           {/* Logo */}
           <motion.div {...fadeUp(0)} className="flex justify-center mb-8">
-            <span className="text-6xl sm:text-7xl md:text-8xl font-extrabold tracking-tight bg-gradient-to-r from-primary-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Moooza
-            </span>
+            <img src="/logo.png" alt="Moooza" className="h-20 sm:h-24 md:h-28 w-auto" />
           </motion.div>
 
           {/* Headline */}
