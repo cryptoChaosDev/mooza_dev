@@ -32,7 +32,7 @@ export default function LandingPage() {
         <div className="relative z-10 max-w-3xl mx-auto">
           {/* Logo */}
           <motion.div {...fadeUp(0)} className="flex justify-center mb-8">
-            <img src="/logo.png" alt="Moooza" className="h-20 sm:h-24 md:h-28 w-auto" />
+            <img src="/logo.png" alt="Moooza" className="h-40 sm:h-48 md:h-56 w-auto" />
           </motion.div>
 
           {/* Headline */}
@@ -193,7 +193,7 @@ export default function LandingPage() {
       {/* ── FOOTER ── */}
       <footer className="border-t border-slate-800/60 py-6 px-4">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-          <span className="font-extrabold text-lg bg-gradient-to-r from-primary-400 to-purple-400 bg-clip-text text-transparent">Moooza</span>
+          <img src="/logo.png" alt="Moooza" className="h-7 w-auto" />
           <p className="text-slate-500 text-xs">
             &copy; {new Date().getFullYear()} Moooza. Все права защищены.
           </p>
