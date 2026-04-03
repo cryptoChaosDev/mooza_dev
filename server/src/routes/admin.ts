@@ -16,7 +16,7 @@ router.use(authenticate, requireAdmin);
 
 // ─── FieldOfActivity ───────────────────────────────────────────────────────
 router.get('/fields-of-activity', async (_req, res) => {
-  const items = await prisma.fieldOfActivity.findMany({ orderBy: { name: 'asc' } });
+  const items = await prisma.fieldOfActivity.findMany({ orderBy: { createdAt: 'asc' } });
   res.json(items);
 });
 router.post('/fields-of-activity', async (req, res) => {
@@ -66,7 +66,7 @@ router.delete('/fields-of-activity/:id', async (req, res) => {
 router.get('/professions', async (_req, res) => {
   const items = await prisma.profession.findMany({
     include: { direction: { select: { id: true, name: true } } },
-    orderBy: { name: 'asc' },
+    orderBy: { createdAt: 'asc' },
   });
   res.json(items);
 });
@@ -296,7 +296,7 @@ router.get('/directions', async (_req, res) => {
       customFilters: { select: { id: true, name: true } },
       services: { select: { id: true, name: true, sortOrder: true }, orderBy: { sortOrder: 'asc' } },
     },
-    orderBy: { name: 'asc' },
+    orderBy: { createdAt: 'asc' },
   });
   res.json(items);
 });
