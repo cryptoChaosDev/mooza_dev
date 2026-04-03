@@ -45,7 +45,7 @@ function getUserCountText(n: number): string {
 // ─── Skeleton card ─────────────────────────────────────────────────────────────
 function SkeletonCard() {
   return (
-    <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 rounded-xl p-3.5 border border-slate-700/50 animate-pulse">
+    <div className="bg-slate-900 rounded-xl p-3.5 border border-slate-800 animate-pulse">
       <div className="flex items-center gap-3 mb-3">
         <div className="w-10 h-10 bg-slate-700/50 rounded-xl flex-shrink-0" />
         <div className="flex-1 space-y-1.5">
@@ -76,8 +76,7 @@ function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: Us
   const matchColor = match == null ? '' : match === 100 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : match >= 70 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-slate-700/50 text-slate-400 border-slate-600/30';
   const isOnline = usePresenceStore((s) => s.onlineUsers.has(user.id));
   return (
-    <div className="group relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-3.5 border border-slate-700/50 hover:border-primary-500/50 transition-all duration-300 shadow-md hover:shadow-primary-500/10">
-      <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
+    <div className="group relative bg-slate-900 rounded-xl p-3.5 border border-slate-800 hover:bg-slate-800/50 transition-colors">
       {match != null && (
         <div className={`absolute top-2.5 right-2.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${matchColor}`}>
           {match}%
@@ -372,27 +371,22 @@ export default function SearchPage() {
   return (
     <div className="min-h-screen bg-slate-950">
       {/* ── Header ── */}
-      <div className="relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary-500/10 via-purple-500/10 to-pink-500/10 blur-3xl" />
-        <div className="relative max-w-7xl mx-auto px-4 pt-4 pb-2">
+      <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 pt-4 pb-3">
           <div className="flex items-center gap-2 mb-3">
-            <div className="p-2 bg-primary-500/20 rounded-xl">
-              <Search size={20} className="text-primary-400" />
-            </div>
-            <h2 className="text-xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-              Поиск
-            </h2>
+            <Search size={20} className="text-primary-400" />
+            <h2 className="text-lg font-bold text-white">Поиск</h2>
           </div>
 
           {/* Search input */}
           <div className="relative">
-            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
             <input
               type="text"
               value={nameQuery}
               onChange={(e) => setNameQuery(e.target.value)}
               placeholder="Поиск по имени или нику..."
-              className="w-full pl-10 pr-9 py-2.5 bg-slate-800/80 border border-slate-700/50 rounded-xl text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500/50 transition-all"
+              className="w-full pl-8 pr-9 py-2 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
             />
             {nameQuery && (
               <button
@@ -463,7 +457,7 @@ export default function SearchPage() {
 
           {/* Desktop sidebar */}
           <aside className="hidden lg:block w-64 flex-shrink-0">
-            <div className="sticky top-4 bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 rounded-2xl p-4">
+            <div className="sticky top-20 bg-slate-900 border border-slate-800 rounded-2xl p-4">
               <FilterPanel />
             </div>
           </aside>
@@ -541,9 +535,8 @@ export default function SearchPage() {
                 )}
               </>
             ) : !anyLoading ? (
-              <div className="relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-700/50 shadow-xl">
-                <div className="relative text-center py-10 px-6">
-                  <div className="inline-flex p-4 bg-slate-700/30 rounded-2xl mb-4">
+              <div className="flex flex-col items-center py-16 px-6 text-center">
+                  <div className="p-4 bg-slate-800/50 rounded-2xl mb-4">
                     <Search size={32} className="text-slate-500" />
                   </div>
                   <h3 className="text-base font-bold text-white mb-2">
@@ -560,7 +553,6 @@ export default function SearchPage() {
                       Сбросить всё
                     </button>
                   )}
-                </div>
               </div>
             ) : null}
           </main>
