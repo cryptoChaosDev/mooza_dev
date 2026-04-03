@@ -202,8 +202,8 @@ const SYSTEM_FILTER_TYPES = [
 
 // ─── Direction node ──────────────────────────────────────────────────────────
 
-function DirectionNode({ direction, allProfessions, allCustomFilters, allServices, onUnlink, qc }: {
-  direction: Item; allProfessions: Item[]; allCustomFilters: CFilter[]; allServices: { id: string; name: string }[]; onUnlink: () => void; qc: QueryClient;
+function DirectionNode({ direction, allDirections, allProfessions, allCustomFilters, allServices, onUnlink, qc }: {
+  direction: Item; allDirections: Item[]; allProfessions: Item[]; allCustomFilters: CFilter[]; allServices: { id: string; name: string }[]; onUnlink: () => void; qc: QueryClient;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -216,6 +216,12 @@ function DirectionNode({ direction, allProfessions, allCustomFilters, allService
   const totalAttached = attachedIds.length + attachedTypes.length;
   const attachedServiceIds: string[] = (direction.services ?? []).map((s: any) => s.id);
   const attachedProfessions = allProfessions.filter(p => p.direction?.id === direction.id);
+
+  // IDs/types already used by OTHER directions
+  const otherDirs = allDirections.filter(d => d.id !== direction.id);
+  const takenServiceIds = new Set(otherDirs.flatMap((d: any) => (d.services ?? []).map((s: any) => s.id)));
+  const takenFilterIds = new Set(otherDirs.flatMap((d: any) => (d.customFilters ?? []).map((f: any) => f.id)));
+  const takenFilterTypes = new Set(otherDirs.flatMap((d: any) => d.allowedFilterTypes ?? []));
 
   const updateMut = useMutation({
     mutationFn: (name: string) => adminAPI.directions.update(direction.id, { name }),
@@ -328,7 +334,7 @@ function DirectionNode({ direction, allProfessions, allCustomFilters, allService
               <p className="text-xs text-slate-600">Добавьте услуги во вкладке «Услуги»</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
-                {allServices.map(s => {
+                {allServices.filter(s => !takenServiceIds.has(s.id) || attachedServiceIds.includes(s.id)).map(s => {
                   const on = attachedServiceIds.includes(s.id);
                   return (
                     <button key={s.id} onClick={() => toggleService(s.id)}
@@ -349,7 +355,7 @@ function DirectionNode({ direction, allProfessions, allCustomFilters, allService
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Фильтры</p>
             <div className="space-y-2">
               <div className="flex flex-wrap gap-1.5">
-                {SYSTEM_FILTER_TYPES.map(f => {
+                {SYSTEM_FILTER_TYPES.filter(f => !takenFilterTypes.has(f.key) || attachedTypes.includes(f.key)).map(f => {
                   const on = attachedTypes.includes(f.key);
                   return (
                     <button key={f.key} onClick={() => toggleType(f.key)}
@@ -362,9 +368,9 @@ function DirectionNode({ direction, allProfessions, allCustomFilters, allService
                   );
                 })}
               </div>
-              {allCustomFilters.length > 0 && (
+              {allCustomFilters.filter(f => !takenFilterIds.has(f.id) || attachedIds.includes(f.id)).length > 0 && (
                 <div className="flex flex-wrap gap-1.5 pt-0.5 border-t border-slate-800/60">
-                  {allCustomFilters.map(f => {
+                  {allCustomFilters.filter(f => !takenFilterIds.has(f.id) || attachedIds.includes(f.id)).map(f => {
                     const on = attachedIds.includes(f.id);
                     return (
                       <button key={f.id} onClick={() => toggleFilter(f.id)}
@@ -447,6 +453,7 @@ function FieldNode({ field, allDirections, allProfessions, allCustomFilters, all
             <DirectionNode
               key={dir.id}
               direction={dir}
+              allDirections={allDirections}
               allProfessions={allProfessions}
               allCustomFilters={allCustomFilters}
               allServices={allServices}
