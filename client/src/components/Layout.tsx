@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, Search, Users, User, MessageCircle, Menu, X, Music, Bell, ShieldCheck } from 'lucide-react';
+import { Home, Search, Users, User, MessageCircle, Menu, X, Bell, ShieldCheck } from 'lucide-react';
 import BottomNav from './BottomNav';
 import NotificationBell from './NotificationBell';
 import { useAuthStore } from '../stores/authStore';
