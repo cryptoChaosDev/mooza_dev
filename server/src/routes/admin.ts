@@ -106,7 +106,7 @@ router.delete('/professions/:id', async (req, res) => {
 
 // ─── Service (flat reference list) ─────────────────────────────────────────
 router.get('/services', async (_req, res) => {
-  const items = await prisma.service.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] });
+  const items = await prisma.service.findMany({ orderBy: { createdAt: 'asc' } });
   res.json(items);
 });
 router.post('/services', async (req, res) => {
