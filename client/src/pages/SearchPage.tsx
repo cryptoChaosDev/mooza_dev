@@ -370,7 +370,7 @@ export default function SearchPage() {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-slate-950">
       {/* ── Header ── */}
       <div className="relative">
         <div className="absolute inset-0 bg-gradient-to-r from-primary-500/10 via-purple-500/10 to-pink-500/10 blur-3xl" />

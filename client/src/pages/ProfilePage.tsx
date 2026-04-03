@@ -213,7 +213,7 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center">
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent mx-auto shadow-lg shadow-primary-500/30" />
           <p className="text-slate-400 mt-3 text-sm">Загрузка профиля...</p>
@@ -521,7 +521,7 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-900 via-slate-800 to-slate-900">
+    <div className="min-h-screen bg-slate-950">
       <div className="max-w-2xl mx-auto px-4 pt-4 pb-28">
 
         {/* ── HERO CARD ────────────────────────────────────────────────── */}
