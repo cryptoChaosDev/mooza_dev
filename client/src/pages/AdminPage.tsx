@@ -355,7 +355,7 @@ function DirectionNode({ direction, allDirections, allProfessions, allCustomFilt
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Фильтры</p>
             <div className="space-y-2">
               <div className="flex flex-wrap gap-1.5">
-                {SYSTEM_FILTER_TYPES.filter(f => !takenFilterTypes.has(f.key) || attachedTypes.includes(f.key)).map(f => {
+                {SYSTEM_FILTER_TYPES.map(f => {
                   const on = attachedTypes.includes(f.key);
                   return (
                     <button key={f.key} onClick={() => toggleType(f.key)}
