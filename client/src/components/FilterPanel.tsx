@@ -26,6 +26,94 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
+// ─── Price range dual slider ────────────────────────────────────────────────
+const PRICE_MAX = 500000;
+const PRICE_STEP = 1000;
+
+function PriceRangeSlider({
+  min, max, onChange,
+}: {
+  min: string; max: string; onChange: (min: string, max: string) => void;
+}) {
+  const lo = min ? Math.min(Number(min), PRICE_MAX) : 0;
+  const hi = max ? Math.min(Number(max), PRICE_MAX) : PRICE_MAX;
+  const isActive = !!min || !!max;
+
+  const setLo = (v: number) => onChange(v === 0 ? '' : String(v), max);
+  const setHi = (v: number) => onChange(min, v === PRICE_MAX ? '' : String(v));
+
+  const loPercent = (lo / PRICE_MAX) * 100;
+  const hiPercent = (hi / PRICE_MAX) * 100;
+
+  const fmt = (v: number) =>
+    v === 0 ? '0 ₽' : v >= 1000 ? `${(v / 1000).toFixed(v % 1000 === 0 ? 0 : 1)} тыс. ₽` : `${v} ₽`;
+
+  return (
+    <div className="py-2">
+      <div className="flex items-center justify-between mb-2">
+        <span className={`text-sm font-medium ${isActive ? 'text-primary-400' : 'text-slate-300'}`}>Бюджет (₽)</span>
+        {isActive && (
+          <button
+            onClick={() => onChange('', '')}
+            className="p-0.5 text-slate-400 hover:text-white transition-colors"
+          >
+            <X size={13} />
+          </button>
+        )}
+      </div>
+
+      {/* Track */}
+      <div className="relative h-5 flex items-center mb-2">
+        <div className="w-full h-1.5 bg-slate-700 rounded-full relative">
+          <div
+            className="absolute h-full bg-primary-500 rounded-full"
+            style={{ left: `${loPercent}%`, right: `${100 - hiPercent}%` }}
+          />
+        </div>
+        {/* Min thumb */}
+        <input
+          type="range"
+          min={0} max={PRICE_MAX} step={PRICE_STEP}
+          value={lo}
+          onChange={e => {
+            const v = Math.min(Number(e.target.value), hi - PRICE_STEP);
+            setLo(v);
+          }}
+          className="price-thumb absolute w-full h-full opacity-0 cursor-pointer"
+          style={{ zIndex: lo > PRICE_MAX - PRICE_STEP ? 5 : 3 }}
+        />
+        {/* Max thumb */}
+        <input
+          type="range"
+          min={0} max={PRICE_MAX} step={PRICE_STEP}
+          value={hi}
+          onChange={e => {
+            const v = Math.max(Number(e.target.value), lo + PRICE_STEP);
+            setHi(v);
+          }}
+          className="price-thumb absolute w-full h-full opacity-0 cursor-pointer"
+          style={{ zIndex: 4 }}
+        />
+        {/* Visual thumbs */}
+        <div
+          className="absolute w-4 h-4 bg-primary-500 border-2 border-white rounded-full shadow pointer-events-none"
+          style={{ left: `calc(${loPercent}% - 8px)`, zIndex: 6 }}
+        />
+        <div
+          className="absolute w-4 h-4 bg-primary-500 border-2 border-white rounded-full shadow pointer-events-none"
+          style={{ left: `calc(${hiPercent}% - 8px)`, zIndex: 6 }}
+        />
+      </div>
+
+      {/* Labels */}
+      <div className="flex justify-between">
+        <span className="text-xs text-slate-400">{fmt(lo)}</span>
+        <span className="text-xs text-slate-400">{hi === PRICE_MAX ? 'без лимита' : fmt(hi)}</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Single filter accordion section ──────────────────────────────────────
 interface FilterSectionProps {
   title: string;
@@ -283,23 +371,11 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
               <FilterSection title="Город / Регион" value={geographyId} items={geographies || []} loading={geographiesLoading} onSelect={wrap(setGeographyId)} />
             )}
             {showAttr('priceRange') && (
-              <div className="py-2">
-                <span className={`text-sm font-medium ${priceMin || priceMax ? 'text-primary-400' : 'text-slate-300'}`}>
-                  Бюджет (₽)
-                </span>
-                <div className="flex gap-2 mt-2">
-                  <input
-                    type="number" min={0} placeholder="От" value={priceMin}
-                    onChange={e => { setPriceMin(e.target.value); setPage(1); }}
-                    className="flex-1 px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  />
-                  <input
-                    type="number" min={0} placeholder="До" value={priceMax}
-                    onChange={e => { setPriceMax(e.target.value); setPage(1); }}
-                    className="flex-1 px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  />
-                </div>
-              </div>
+              <PriceRangeSlider
+                min={priceMin}
+                max={priceMax}
+                onChange={(min, max) => { setPriceMin(min); setPriceMax(max); setPage(1); }}
+              />
             )}
 
             {directionCustomFilters.length > 0 && (

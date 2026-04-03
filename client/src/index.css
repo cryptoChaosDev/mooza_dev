@@ -253,6 +253,30 @@ button {
   }
 }
 
+/* Price range dual slider — hide native thumb, use custom visual thumbs */
+input[type='range'].price-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  pointer-events: none;
+}
+input[type='range'].price-thumb::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  pointer-events: all;
+  cursor: pointer;
+}
+input[type='range'].price-thumb::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  background: transparent;
+  pointer-events: all;
+  cursor: pointer;
+}
+
 /* Print styles */
 @media print {
   body {
