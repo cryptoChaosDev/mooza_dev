@@ -982,7 +982,6 @@ export default function AdminPage() {
               </h2>
               <div className="grid gap-3 md:grid-cols-2">
                 <SimpleTable collapsible title="Жанры" queryKey="admin-genres" apiModule={adminAPI.genres} />
-                <SimpleTable collapsible title="Формат работы" queryKey="admin-work-formats" apiModule={adminAPI.workFormats} />
                 <SimpleTable collapsible title="Тип занятости" queryKey="admin-employment-types" apiModule={adminAPI.employmentTypes} />
                 <SimpleTable collapsible title="Уровень мастерства" queryKey="admin-skill-levels" apiModule={adminAPI.skillLevels} />
                 <SimpleTable collapsible title="Готовность к работе" queryKey="admin-availabilities" apiModule={adminAPI.availabilities} />
