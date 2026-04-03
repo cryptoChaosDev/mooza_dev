@@ -237,6 +237,7 @@ export interface SearchFilters {
   geographyId?: string;
   priceMin?: string;
   priceMax?: string;
+  customFilterValueIds?: string[];
   query?: string;
   page?: number;
   limit?: number;

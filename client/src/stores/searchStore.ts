@@ -130,6 +130,9 @@ interface SearchFilterState {
   // Geography
   geographyId: string | null;
 
+  // Custom filter values (multi-select, one value per filter)
+  customFilterValues: Record<string, string>; // filterId → valueId
+
   // Price Range (manual input)
   priceMin: string;
   priceMax: string;
@@ -156,6 +159,7 @@ interface SearchFilterActions {
   setSkillLevelId: (id: string | null) => void;
   setAvailabilityId: (id: string | null) => void;
   setGeographyId: (id: string | null) => void;
+  setCustomFilterValue: (filterId: string, valueId: string | null) => void;
   setPriceMin: (v: string) => void;
   setPriceMax: (v: string) => void;
 
@@ -194,6 +198,7 @@ const initialState: SearchFilterState = {
   skillLevelId: null,
   availabilityId: null,
   geographyId: null,
+  customFilterValues: {},
   priceMin: '',
   priceMax: '',
   page: 1,
@@ -247,6 +252,11 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
   setSkillLevelId: (id) => set({ skillLevelId: id }),
   setAvailabilityId: (id) => set({ availabilityId: id }),
   setGeographyId: (id) => set({ geographyId: id }),
+  setCustomFilterValue: (filterId, valueId) => set(state => {
+    const next = { ...state.customFilterValues };
+    if (valueId === null) delete next[filterId]; else next[filterId] = valueId;
+    return { customFilterValues: next };
+  }),
   setPriceMin: (v) => set({ priceMin: v }),
   setPriceMax: (v) => set({ priceMax: v }),
 
@@ -273,6 +283,7 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
     skillLevelId: null,
     availabilityId: null,
     geographyId: null,
+    customFilterValues: {},
     priceMin: '',
     priceMax: '',
     page: 1,
@@ -299,6 +310,9 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
       geographyId: state.geographyId || undefined,
       priceMin: state.priceMin || undefined,
       priceMax: state.priceMax || undefined,
+      customFilterValueIds: Object.values(state.customFilterValues).length > 0
+        ? Object.values(state.customFilterValues)
+        : undefined,
       page: state.page,
       limit: state.limit,
     };
