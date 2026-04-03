@@ -118,7 +118,7 @@ export default function Layout({ children }: LayoutProps) {
         </nav>
 
         <div className="p-4 border-t border-slate-800/50">
-          <div className="bg-gradient-to-br from-primary-500/10 to-purple-500/10 rounded-xl p-4 border border-primary-500/20">
+          <div className="bg-slate-900 rounded-xl p-4 border border-slate-800">
             <p className="text-sm text-slate-300 mb-2">Moooza v1.0</p>
             <p className="text-xs text-slate-500">Социальная сеть для музыкантов</p>
           </div>

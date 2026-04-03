@@ -76,140 +76,102 @@ export default function FeedPage() {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-slate-950">
-        {/* Header with gradient backdrop */}
-        <div className="relative">
-          <div className="absolute inset-0 bg-gradient-to-r from-primary-500/10 via-purple-500/10 to-pink-500/10 blur-3xl"></div>
-          <div className="relative max-w-4xl mx-auto px-4 pt-4 pb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-primary-500/20 rounded-xl">
-                <Newspaper size={20} className="text-primary-400" />
-              </div>
-              <h1 className="text-xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-                Лента
-              </h1>
-            </div>
-          </div>
-        </div>
-
-        {/* Loading Skeleton */}
-        <div className="max-w-4xl mx-auto px-4 pb-24 space-y-4">
-          {[1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50 animate-pulse"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 bg-slate-700/50 rounded-xl"></div>
-                <div className="flex-1 space-y-2">
-                  <div className="h-4 bg-slate-700/50 rounded-lg w-1/3"></div>
-                  <div className="h-3 bg-slate-700/50 rounded-lg w-1/4"></div>
-                </div>
-              </div>
-              <div className="space-y-2">
-                <div className="h-4 bg-slate-700/50 rounded-lg w-full"></div>
-                <div className="h-4 bg-slate-700/50 rounded-lg w-5/6"></div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-950">
-      {/* Header with gradient backdrop */}
-      <div className="relative">
-        <div className="absolute inset-0 bg-gradient-to-r from-primary-500/10 via-purple-500/10 to-pink-500/10 blur-3xl"></div>
-        <div className="relative max-w-4xl mx-auto px-4 pt-4 pb-4">
-          <div className="flex items-center gap-2">
-            <div className="p-2 bg-primary-500/20 rounded-xl">
+      <div className="max-w-2xl mx-auto">
+
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+          <div className="px-4 pt-4 pb-3">
+            <div className="flex items-center gap-2">
               <Newspaper size={20} className="text-primary-400" />
+              <h2 className="text-lg font-bold text-white">Лента</h2>
             </div>
-            <h1 className="text-xl font-bold bg-gradient-to-r from-white to-slate-300 bg-clip-text text-transparent">
-              Лента
-            </h1>
           </div>
         </div>
-      </div>
 
-      <div className="max-w-4xl mx-auto px-4 pb-24 space-y-4">
-        {/* Create Post */}
-        <form onSubmit={handleCreatePost} className="group relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50 hover:border-primary-500/50 transition-all shadow-md">
-          <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity"></div>
-          <div className="relative">
-            <textarea
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Что нового?"
-              className="w-full bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600/50 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500/50 resize-none transition-all"
-              rows={3}
-            />
-            <div className="flex justify-end mt-3">
-              <button
-                type="submit"
-                disabled={!content.trim() || createPostMutation.isPending}
-                className="group/btn relative px-4 py-2 bg-gradient-to-br from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 disabled:from-slate-700 disabled:to-slate-800 text-white font-semibold rounded-xl transition-all duration-300 disabled:cursor-not-allowed shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:scale-105 disabled:shadow-none disabled:scale-100 flex items-center gap-2 text-sm"
-              >
-                <div className="absolute inset-0 bg-gradient-to-r from-primary-400/0 via-white/20 to-primary-400/0 opacity-0 group-hover/btn:opacity-100 transition-opacity blur-xl"></div>
-                <span className="relative z-10 flex items-center gap-2">
+        <div className="pb-24">
+
+          {/* Create Post */}
+          <div className="px-4 pt-4 pb-2">
+            <form onSubmit={handleCreatePost} className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="Что нового?"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 resize-none transition-colors"
+                rows={3}
+              />
+              <div className="flex justify-end mt-3">
+                <button
+                  type="submit"
+                  disabled={!content.trim() || createPostMutation.isPending}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium rounded-xl transition-colors"
+                >
                   {createPostMutation.isPending ? (
-                    <Loader2 size={18} className="animate-spin" />
+                    <Loader2 size={16} className="animate-spin" />
                   ) : (
-                    <Send size={18} />
+                    <Send size={16} />
                   )}
                   Опубликовать
-                </span>
-              </button>
-            </div>
+                </button>
+              </div>
+            </form>
           </div>
-        </form>
 
-        {/* Posts */}
-        {posts && posts.length > 0 ? (
-          <div className="space-y-4">
-            {posts?.map((post: any) => (
-              <div key={post.id} className="group relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl p-4 border border-slate-700/50 hover:border-primary-500/50 transition-all duration-300 shadow-md hover:shadow-primary-500/10">
-                {/* Subtle gradient overlay on hover */}
-                <div className="absolute inset-0 bg-gradient-to-r from-primary-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-
-                <div className="relative">
-                  {/* Author Info */}
-                  <div className="flex items-center mb-3">
+          {/* Posts */}
+          {isLoading ? (
+            <div className="divide-y divide-slate-800/60">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="px-4 py-4 animate-pulse">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-slate-800 rounded-full flex-shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3.5 bg-slate-800 rounded w-1/3" />
+                      <div className="h-3 bg-slate-800 rounded w-1/4" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="h-3.5 bg-slate-800 rounded w-full" />
+                    <div className="h-3.5 bg-slate-800 rounded w-5/6" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : posts && posts.length > 0 ? (
+            <div className="divide-y divide-slate-800/60">
+              {posts.map((post: any) => (
+                <div key={post.id} className="px-4 py-4 hover:bg-slate-800/20 transition-colors">
+                  {/* Author */}
+                  <div className="flex items-center gap-3 mb-3">
                     {post.author.avatar ? (
-                      <div className="relative">
-                        <img
-                          src={`${import.meta.env.VITE_API_URL}${post.author.avatar}`}
-                          alt={`${post.author.firstName} ${post.author.lastName}`}
-                          className="w-10 h-10 rounded-xl object-cover ring-2 ring-slate-700/50 group-hover:ring-primary-500/40 transition-all duration-300"
-                        />
-                        <div className="absolute inset-0 rounded-xl bg-gradient-to-t from-primary-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                      </div>
+                      <img
+                        src={`${import.meta.env.VITE_API_URL}${post.author.avatar}`}
+                        alt={`${post.author.firstName} ${post.author.lastName}`}
+                        className="w-10 h-10 rounded-full object-cover flex-shrink-0"
+                      />
                     ) : (
-                      <div className="w-10 h-10 bg-gradient-to-br from-primary-500 via-primary-600 to-purple-600 rounded-xl flex items-center justify-center ring-2 ring-slate-700/50 group-hover:ring-primary-500/40 transition-all duration-300">
+                      <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
                         <span className="text-white font-bold text-sm">
                           {post.author.firstName[0]}{post.author.lastName[0]}
                         </span>
                       </div>
                     )}
-                    <div className="ml-3">
-                      <p className="font-semibold text-white text-sm">
+                    <div>
+                      <p className="text-sm font-semibold text-white">
                         {post.author.firstName} {post.author.lastName}
                       </p>
                       {post.author.role && (
-                        <p className="text-xs text-primary-300">{post.author.role}</p>
+                        <p className="text-xs text-slate-500">{post.author.role}</p>
                       )}
                     </div>
                   </div>
 
                   {/* Content */}
-                  <p className="text-slate-100 mb-4 leading-relaxed text-sm">{post.content}</p>
+                  <p className="text-slate-200 text-sm leading-relaxed mb-3">{post.content}</p>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-3">
                     <button
                       onClick={() => {
                         if (post.isLiked) {
@@ -219,58 +181,48 @@ export default function FeedPage() {
                         }
                       }}
                       disabled={likeMutation.isPending || unlikeMutation.isPending || post.author.id === currentUser?.id}
-                      className="group/like flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/30 hover:bg-slate-700/50 rounded-lg transition-all disabled:cursor-not-allowed disabled:opacity-50"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all disabled:cursor-not-allowed disabled:opacity-50 hover:bg-slate-800/60"
                     >
-                      <Heart size={16} className={`transition-all ${post.isLiked ? 'fill-red-400 text-red-400 scale-110' : 'text-slate-300 group-hover/like:text-red-400'}`} />
-                      <span className={`text-sm font-medium ${post.isLiked ? 'text-red-400' : 'text-slate-300 group-hover/like:text-white'}`}>{post._count.likes}</span>
+                      <Heart size={15} className={`transition-all ${post.isLiked ? 'fill-red-400 text-red-400' : 'text-slate-400'}`} />
+                      <span className={`font-medium ${post.isLiked ? 'text-red-400' : 'text-slate-400'}`}>{post._count.likes}</span>
                     </button>
 
                     <button
                       onClick={() => setShowComments({ ...showComments, [post.id]: !showComments[post.id] })}
-                      className="group/comment flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/30 hover:bg-slate-700/50 rounded-lg transition-all"
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all"
                     >
-                      <MessageCircle size={16} className="text-slate-300 group-hover/comment:text-primary-400 transition-colors" />
-                      <span className="text-sm font-medium text-slate-300 group-hover/comment:text-white">{post._count.comments}</span>
+                      <MessageCircle size={15} />
+                      <span className="font-medium">{post._count.comments}</span>
                     </button>
                   </div>
 
-                  {/* Comments Section */}
+                  {/* Comments */}
                   {showComments[post.id] && (
-                    <div className="mt-4 pt-4 border-t border-slate-700/50">
-                      {/* Comment Input */}
+                    <div className="mt-3 pt-3 border-t border-slate-800/60">
                       <form
                         onSubmit={(e) => {
                           e.preventDefault();
-                          const content = commentContent[post.id];
-                          if (content?.trim()) {
-                            commentMutation.mutate({ postId: post.id, content });
-                          }
+                          const c = commentContent[post.id];
+                          if (c?.trim()) commentMutation.mutate({ postId: post.id, content: c });
                         }}
-                        className="flex gap-2 mb-4"
+                        className="flex gap-2 mb-3"
                       >
                         <input
                           type="text"
                           value={commentContent[post.id] || ''}
-                          onChange={(e) =>
-                            setCommentContent({ ...commentContent, [post.id]: e.target.value })
-                          }
+                          onChange={(e) => setCommentContent({ ...commentContent, [post.id]: e.target.value })}
                           placeholder="Написать комментарий..."
-                          className="flex-1 bg-gradient-to-br from-slate-700/50 to-slate-800/50 border border-slate-600/50 rounded-xl px-3.5 py-2 text-sm text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500/50 transition-all"
+                          className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
                         />
                         <button
                           type="submit"
                           disabled={!commentContent[post.id]?.trim() || commentMutation.isPending}
-                          className="group/send p-2.5 bg-gradient-to-br from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 disabled:from-slate-700 disabled:to-slate-800 text-white rounded-xl transition-all duration-300 disabled:cursor-not-allowed shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 hover:scale-105 disabled:shadow-none disabled:scale-100"
+                          className="p-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl transition-colors"
                         >
-                          {commentMutation.isPending ? (
-                            <Loader2 size={16} className="animate-spin" />
-                          ) : (
-                            <Send size={16} />
-                          )}
+                          {commentMutation.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                         </button>
                       </form>
 
-                      {/* Comments List */}
                       {post.comments && post.comments.length > 0 && (
                         <div className="space-y-2">
                           {post.comments.map((comment: any) => (
@@ -279,20 +231,20 @@ export default function FeedPage() {
                                 <img
                                   src={`${import.meta.env.VITE_API_URL}${comment.author.avatar}`}
                                   alt={`${comment.author.firstName} ${comment.author.lastName}`}
-                                  className="w-7 h-7 rounded-lg object-cover ring-1 ring-slate-700/50 flex-shrink-0"
+                                  className="w-7 h-7 rounded-full object-cover flex-shrink-0"
                                 />
                               ) : (
-                                <div className="w-7 h-7 bg-gradient-to-br from-primary-500 to-primary-700 rounded-lg flex items-center justify-center flex-shrink-0 ring-1 ring-slate-700/50">
+                                <div className="w-7 h-7 bg-gradient-to-br from-primary-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
                                   <span className="text-white text-xs font-bold">
                                     {comment.author.firstName[0]}{comment.author.lastName[0]}
                                   </span>
                                 </div>
                               )}
-                              <div className="flex-1 bg-gradient-to-br from-slate-700/40 to-slate-800/40 rounded-xl px-3 py-2 border border-slate-600/30">
+                              <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2">
                                 <p className="text-xs font-semibold text-white mb-0.5">
                                   {comment.author.firstName} {comment.author.lastName}
                                 </p>
-                                <p className="text-xs text-slate-200 leading-relaxed">{comment.content}</p>
+                                <p className="text-xs text-slate-300 leading-relaxed">{comment.content}</p>
                               </div>
                             </div>
                           ))}
@@ -301,20 +253,18 @@ export default function FeedPage() {
                     </div>
                   )}
                 </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="relative overflow-hidden bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-xl rounded-2xl border border-slate-700/50 shadow-xl">
-            <div className="relative text-center py-10 px-6">
-              <div className="inline-flex p-4 bg-slate-700/30 rounded-2xl mb-4">
-                <Newspaper size={36} className="text-slate-500" />
-              </div>
-              <h3 className="text-base font-bold text-white mb-2">Лента пуста</h3>
-              <p className="text-slate-400 text-sm">Создайте первый пост или добавьте друзей</p>
+              ))}
             </div>
-          </div>
-        )}
+          ) : (
+            <div className="flex flex-col items-center py-16 px-6 text-center">
+              <div className="p-4 bg-slate-800/50 rounded-2xl mb-4">
+                <Newspaper size={32} className="text-slate-600" />
+              </div>
+              <p className="text-white font-semibold mb-1">Лента пуста</p>
+              <p className="text-slate-500 text-sm">Создайте первый пост или добавьте друзей</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
