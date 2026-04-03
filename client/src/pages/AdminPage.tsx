@@ -290,22 +290,35 @@ function DirectionNode({ direction, allProfessions, allCustomFilters, allService
             <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Профессии</p>
             {allProfessions.length === 0 ? (
               <p className="text-xs text-slate-600">Добавьте профессии во вкладке «Профессии»</p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {allProfessions.map(p => {
-                  const on = p.direction?.id === direction.id;
-                  return (
-                    <button key={p.id} onClick={() => toggleProfession(p)}
-                      className={`px-2.5 py-1 rounded-md text-xs border transition-all ${
-                        on ? 'bg-slate-500/20 text-slate-200 border-slate-500/40' : 'text-slate-600 border-slate-800 hover:border-slate-600 hover:text-slate-400'
-                      }`}
-                    >
-                      {p.name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            ) : (() => {
+              // Only show: linked to THIS direction, or not linked to any direction
+              const visibleProfs = allProfessions.filter(p =>
+                p.direction?.id === direction.id || !p.direction?.id
+              );
+              // Detect duplicate names among visible professions for disambiguation
+              const nameCounts: Record<string, number> = {};
+              visibleProfs.forEach(p => { nameCounts[p.name] = (nameCounts[p.name] ?? 0) + 1; });
+              const profLabel = (p: Item) => {
+                if (nameCounts[p.name] <= 1) return p.name;
+                return p.direction?.id ? `${p.name} (${p.direction.name})` : `${p.name} (свободна)`;
+              };
+              return (
+                <div className="flex flex-wrap gap-1.5">
+                  {visibleProfs.map(p => {
+                    const on = p.direction?.id === direction.id;
+                    return (
+                      <button key={p.id} onClick={() => toggleProfession(p)}
+                        className={`px-2.5 py-1 rounded-md text-xs border transition-all ${
+                          on ? 'bg-slate-500/20 text-slate-200 border-slate-500/40' : 'text-slate-600 border-slate-800 hover:border-slate-600 hover:text-slate-400'
+                        }`}
+                      >
+                        {profLabel(p)}
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
           </div>
 
           {/* ── Услуги ── */}
@@ -786,14 +799,24 @@ function DirectionsTab() {
             <AddRow placeholder="Название направления" onAdd={name => { createMut.mutate(name); setAdding(false); }} onCancel={() => setAdding(false)} />
           </div>
         )}
-        {directions.map((dir, idx) => (
+        {(() => {
+          const nameCounts: Record<string, number> = {};
+          directions.forEach(d => { nameCounts[d.name] = (nameCounts[d.name] ?? 0) + 1; });
+          return directions.map((dir, idx) => (
           <div key={dir.id} className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800/30 group">
             <span className="text-xs text-slate-600 w-5 text-right flex-shrink-0">{idx + 1}</span>
             {editId === dir.id ? (
               <InlineEdit value={editName} onSave={name => updateMut.mutate({ id: dir.id, name })} onCancel={() => setEditId(null)} />
             ) : (
               <>
-                <span className="flex-1 text-sm text-slate-200">{dir.name}</span>
+                <span className="flex-1 text-sm text-slate-200">
+                  {dir.name}
+                  {nameCounts[dir.name] > 1 && (
+                    <span className="text-slate-500 ml-1">
+                      ({dir.fieldOfActivity?.name ?? 'без сферы'})
+                    </span>
+                  )}
+                </span>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={() => { setEditId(dir.id); setEditName(dir.name); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
                   <button onClick={() => deleteMut.mutate(dir.id)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
@@ -801,7 +824,8 @@ function DirectionsTab() {
               </>
             )}
           </div>
-        ))}
+        ));
+        })()}
         {directions.length === 0 && !adding && <div className="px-4 py-4 text-sm text-slate-500 text-center">Нет записей</div>}
       </div>
     </div>
@@ -851,14 +875,24 @@ function ProfessionsTab() {
             <AddRow placeholder="Название профессии" onAdd={name => { createMut.mutate(name); setAdding(false); }} onCancel={() => setAdding(false)} />
           </div>
         )}
-        {professions.map((p, idx) => (
+        {(() => {
+          const nameCounts: Record<string, number> = {};
+          professions.forEach(p => { nameCounts[p.name] = (nameCounts[p.name] ?? 0) + 1; });
+          return professions.map((p, idx) => (
           <div key={p.id} className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800/30 group">
             <span className="text-xs text-slate-600 w-5 text-right flex-shrink-0">{idx + 1}</span>
             {editId === p.id ? (
               <InlineEdit value={editName} onSave={name => updateMut.mutate({ id: p.id, name })} onCancel={() => setEditId(null)} />
             ) : (
               <>
-                <span className="flex-1 text-sm text-slate-200">{p.name}</span>
+                <span className="flex-1 text-sm text-slate-200">
+                  {p.name}
+                  {nameCounts[p.name] > 1 && (
+                    <span className="text-slate-500 ml-1">
+                      ({p.direction?.name ?? 'без направления'})
+                    </span>
+                  )}
+                </span>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                   <button onClick={() => { setEditId(p.id); setEditName(p.name); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
                   <button onClick={() => deleteMut.mutate(p.id)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
@@ -866,7 +900,8 @@ function ProfessionsTab() {
               </>
             )}
           </div>
-        ))}
+        ));
+        })()}
         {professions.length === 0 && !adding && <div className="px-4 py-4 text-sm text-slate-500 text-center">Нет записей</div>}
       </div>
     </div>
