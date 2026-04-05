@@ -300,6 +300,33 @@ router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
+// Edit post
+router.put('/:id', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    if (post.authorId !== req.userId) return res.status(403).json({ error: 'Unauthorized' });
+
+    const { content, imageUrl, audioUrl } = req.body;
+    const updated = await prisma.post.update({
+      where: { id: req.params.id },
+      data: {
+        ...(content !== undefined && { content }),
+        ...(imageUrl !== undefined && { imageUrl: imageUrl || null }),
+        ...(audioUrl !== undefined && { audioUrl: audioUrl || null }),
+      },
+      include: {
+        author: { select: { id: true, firstName: true, lastName: true, avatar: true, role: true } },
+        _count: { select: { likes: true, comments: true } },
+      },
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error('Edit post error:', error);
+    res.status(500).json({ error: 'Failed to edit post' });
+  }
+});
+
 // Delete comment
 router.delete('/:postId/comments/:commentId', authenticate, async (req: AuthRequest, res) => {
   try {
