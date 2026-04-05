@@ -34,12 +34,14 @@ interface User {
   }[];
   employerId?: string;
   employer?: { id: string; name: string; inn?: string; ogrn?: string };
+  termsAgreedAt?: string | null;
 }
 
 interface AuthState {
   user: User | null;
   token: string | null;
   setAuth: (user: User, token: string) => void;
+  setUser: (user: User) => void;
   logout: () => void;
 }
 
@@ -52,6 +54,7 @@ export const useAuthStore = create<AuthState>()(
         localStorage.setItem('token', token);
         set({ user, token });
       },
+      setUser: (user) => set({ user }),
       logout: () => {
         localStorage.removeItem('token');
         set({ user: null, token: null });

@@ -83,6 +83,7 @@ export const userAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   deletePortfolioFile: (fileId: string) => api.delete(`/users/me/portfolio/${fileId}`),
+  agreeToTerms: () => api.post('/users/me/agree-terms'),
 };
 
 // Reference API
