@@ -71,6 +71,7 @@ const userSelect = {
   vkLink: true,
   youtubeLink: true,
   telegramLink: true,
+  termsAgreedAt: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
   _count: {
@@ -407,6 +408,21 @@ router.delete('/me/portfolio/:fileId', authenticate, async (req: AuthRequest, re
   } catch (error) {
     console.error('Portfolio delete error:', error);
     res.status(500).json({ error: 'Failed to delete portfolio file' });
+  }
+});
+
+// Agree to terms and privacy policy
+router.post('/me/agree-terms', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data: { termsAgreedAt: new Date() },
+      select: userSelect,
+    });
+    res.json(user);
+  } catch (error) {
+    console.error('Agree terms error:', error);
+    res.status(500).json({ error: 'Failed to record agreement' });
   }
 });
 

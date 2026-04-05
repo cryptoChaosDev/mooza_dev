@@ -6,18 +6,21 @@ import { useBadgeStore } from './stores/badgeStore';
 import { usePresenceStore } from './stores/presenceStore';
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket';
 import Layout from './components/Layout';
+import ConsentModal from './components/ConsentModal';
 
-const LandingPage     = lazy(() => import('./pages/LandingPage'));
-const LoginPage       = lazy(() => import('./pages/LoginPage'));
-const RegisterPage    = lazy(() => import('./pages/RegisterPage'));
-const FeedPage        = lazy(() => import('./pages/FeedPage'));
-const ProfilePage     = lazy(() => import('./pages/ProfilePage'));
-const UserProfilePage = lazy(() => import('./pages/UserProfilePage'));
-const SearchPage      = lazy(() => import('./pages/SearchPage'));
-const FriendsPage     = lazy(() => import('./pages/FriendsPage'));
-const MessagesPage    = lazy(() => import('./pages/MessagesPage'));
-const ChatPage        = lazy(() => import('./pages/ChatPage'));
-const AdminPage       = lazy(() => import('./pages/AdminPage'));
+const LandingPage        = lazy(() => import('./pages/LandingPage'));
+const LoginPage          = lazy(() => import('./pages/LoginPage'));
+const RegisterPage       = lazy(() => import('./pages/RegisterPage'));
+const FeedPage           = lazy(() => import('./pages/FeedPage'));
+const ProfilePage        = lazy(() => import('./pages/ProfilePage'));
+const UserProfilePage    = lazy(() => import('./pages/UserProfilePage'));
+const SearchPage         = lazy(() => import('./pages/SearchPage'));
+const FriendsPage        = lazy(() => import('./pages/FriendsPage'));
+const MessagesPage       = lazy(() => import('./pages/MessagesPage'));
+const ChatPage           = lazy(() => import('./pages/ChatPage'));
+const AdminPage          = lazy(() => import('./pages/AdminPage'));
+const PrivacyPolicyPage  = lazy(() => import('./pages/PrivacyPolicyPage'));
+const TermsPage          = lazy(() => import('./pages/TermsPage'));
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -76,24 +79,30 @@ function BadgeClearer() {
 
 function AppRoutes() {
   const { user } = useAuthStore();
+  const needsConsent = user && !user.termsAgreedAt;
   return (
-    <Layout>
-      <BadgeClearer />
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
-          <Route path="/"                 element={<FeedPage />} />
-          <Route path="/profile"          element={<ProfilePage />} />
-          <Route path="/profile/:userId"  element={<UserProfilePage />} />
-          <Route path="/search"           element={<SearchPage />} />
-          <Route path="/friends"          element={<FriendsPage />} />
-          <Route path="/messages"     element={<MessagesPage />} />
-          <Route path="/messages/:id" element={<ChatPage />} />
-          <Route path="/chat/:id"     element={<ChatPage />} />
-          {user?.isAdmin && <Route path="/admin" element={<AdminPage />} />}
-          <Route path="*"                 element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
-    </Layout>
+    <>
+      {needsConsent && <ConsentModal />}
+      <Layout>
+        <BadgeClearer />
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/"                 element={<FeedPage />} />
+            <Route path="/profile"          element={<ProfilePage />} />
+            <Route path="/profile/:userId"  element={<UserProfilePage />} />
+            <Route path="/search"           element={<SearchPage />} />
+            <Route path="/friends"          element={<FriendsPage />} />
+            <Route path="/messages"         element={<MessagesPage />} />
+            <Route path="/messages/:id"     element={<ChatPage />} />
+            <Route path="/chat/:id"         element={<ChatPage />} />
+            <Route path="/privacy"          element={<PrivacyPolicyPage />} />
+            <Route path="/terms"            element={<TermsPage />} />
+            {user?.isAdmin && <Route path="/admin" element={<AdminPage />} />}
+            <Route path="*"                 element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </Layout>
+    </>
   );
 }
 
@@ -278,6 +287,8 @@ function App() {
           <Route path="/"         element={<LandingPage />} />
           <Route path="/login"    element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/privacy"  element={<PrivacyPolicyPage />} />
+          <Route path="/terms"    element={<TermsPage />} />
           <Route path="*"         element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
