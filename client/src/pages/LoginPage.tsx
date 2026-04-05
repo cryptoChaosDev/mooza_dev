@@ -110,9 +110,12 @@ export default function LoginPage() {
 
           <p className="mt-6 text-center text-slate-400">
             Нет аккаунта?{' '}
-            <Link to="/register" className="text-primary-400 hover:text-primary-300 font-medium transition-colors">
-              Зарегистрироваться
-            </Link>
+            <span
+              className="text-slate-500 font-medium cursor-default"
+              title="Скоро, скоро.."
+            >
+              Скоро, скоро..
+            </span>
           </p>
         </div>
 
