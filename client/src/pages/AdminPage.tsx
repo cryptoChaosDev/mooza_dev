@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { adminAPI } from '../lib/api';
-import { Plus, Pencil, Trash2, Check, X, ChevronRight } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -567,10 +567,11 @@ function StructureTree() {
 
 interface CFilter { id: string; name: string; values: { id: string; value: string; sortOrder: number }[] }
 
-function CustomFilterCard({ filter, onUpdate, onDelete }: {
+function CustomFilterCard({ filter, onUpdate, onDelete, onCopy }: {
   filter: CFilter;
   onUpdate: (name: string, values: string[]) => void;
   onDelete: () => void;
+  onCopy: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [editingName, setEditingName] = useState(false);
@@ -620,6 +621,7 @@ function CustomFilterCard({ filter, onUpdate, onDelete }: {
             <span className="text-xs text-slate-500 flex-shrink-0">{filter.values.length} зн.</span>
             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button onClick={() => { setEditName(filter.name); setEditingName(true); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
+              <button onClick={onCopy} className="text-slate-400 hover:text-sky-400 p-1" title="Копировать фильтр"><Copy size={14} /></button>
               <button onClick={onDelete} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
             </div>
           </>
@@ -720,6 +722,7 @@ function CustomFiltersSection() {
           filter={filter}
           onUpdate={(name, values) => updateMut.mutate({ id: filter.id, name, values })}
           onDelete={() => deleteMut.mutate(filter.id)}
+          onCopy={() => createMut.mutate({ name: filter.name + ' (копия)', values: filter.values.map(v => v.value) })}
         />
       ))}
 
