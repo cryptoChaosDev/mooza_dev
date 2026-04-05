@@ -1,26 +1,42 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2 } from 'lucide-react';
-import { authAPI } from '../lib/api';
+import { authAPI, userAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
-  const { setAuth } = useAuthStore();
+  const { setAuth, setUser } = useAuthStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!agreed) {
+      setError('Необходимо принять соглашения для входа');
+      return;
+    }
     setError('');
     setLoading(true);
 
     try {
       const { data } = await authAPI.login(email, password);
       setAuth(data.user, data.token);
+
+      // Record agreement timestamp if not yet agreed
+      if (!data.user.termsAgreedAt) {
+        try {
+          const { data: updatedUser } = await userAPI.agreeToTerms();
+          setUser(updatedUser);
+        } catch {
+          // Non-critical — proceed anyway
+        }
+      }
+
       navigate('/');
     } catch (err: any) {
       setError(err.response?.data?.error || 'Ошибка входа');
@@ -97,10 +113,41 @@ export default function LoginPage() {
               </div>
             </div>
 
+            {/* Agreement checkbox */}
+            <label className="flex items-start gap-3 cursor-pointer group">
+              <div className="relative flex-shrink-0 mt-0.5">
+                <input
+                  type="checkbox"
+                  checked={agreed}
+                  onChange={e => { setAgreed(e.target.checked); if (error) setError(''); }}
+                  className="sr-only"
+                />
+                <div className={`w-5 h-5 rounded border-2 transition-colors flex items-center justify-center ${
+                  agreed ? 'bg-primary-500 border-primary-500' : 'border-slate-600 bg-slate-800 group-hover:border-slate-500'
+                }`}>
+                  {agreed && (
+                    <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                      <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  )}
+                </div>
+              </div>
+              <span className="text-sm text-slate-400 leading-snug">
+                Я прочитал(а) и принимаю{' '}
+                <a href="/terms" target="_blank" onClick={e => e.stopPropagation()} className="text-primary-400 hover:text-primary-300 underline underline-offset-2">
+                  Пользовательское соглашение
+                </a>
+                {' '}и{' '}
+                <a href="/privacy" target="_blank" onClick={e => e.stopPropagation()} className="text-primary-400 hover:text-primary-300 underline underline-offset-2">
+                  Политику конфиденциальности
+                </a>
+              </span>
+            </label>
+
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || !agreed}
               className="w-full bg-gradient-to-r from-primary-500 to-purple-500 hover:from-primary-400 hover:to-purple-400 disabled:from-slate-700 disabled:to-slate-600 text-white font-semibold py-3.5 px-4 rounded-xl transition-all disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary-500/25"
             >
               {loading && <Loader2 size={20} className="animate-spin" />}
@@ -110,19 +157,11 @@ export default function LoginPage() {
 
           <p className="mt-6 text-center text-slate-400">
             Нет аккаунта?{' '}
-            <span
-              className="text-slate-500 font-medium cursor-default"
-              title="Скоро, скоро.."
-            >
+            <span className="text-slate-500 font-medium cursor-default" title="Скоро, скоро..">
               Скоро, скоро..
             </span>
           </p>
         </div>
-
-        {/* Footer */}
-        <p className="mt-8 text-center text-slate-500 text-sm">
-          Продолжая, вы соглашаетесь с условиями использования
-        </p>
       </div>
     </div>
   );
