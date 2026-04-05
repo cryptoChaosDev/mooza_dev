@@ -59,7 +59,6 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
             }
           },
           orderBy: { createdAt: 'asc' },
-          take: 3,
         },
         _count: {
           select: { likes: true, comments: true }
@@ -283,6 +282,30 @@ router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('Comment error:', error);
     res.status(500).json({ error: 'Failed to comment' });
+  }
+});
+
+// Delete comment
+router.delete('/:postId/comments/:commentId', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const comment = await prisma.comment.findUnique({
+      where: { id: req.params.commentId },
+      include: { post: { select: { authorId: true } } }
+    });
+
+    if (!comment) return res.status(404).json({ error: 'Comment not found' });
+    if (comment.postId !== req.params.postId) return res.status(400).json({ error: 'Comment does not belong to this post' });
+
+    // Allow comment author or post author to delete
+    if (comment.authorId !== req.userId && comment.post.authorId !== req.userId) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    await prisma.comment.delete({ where: { id: req.params.commentId } });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Delete comment error:', error);
+    res.status(500).json({ error: 'Failed to delete comment' });
   }
 });
 
