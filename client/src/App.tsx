@@ -6,7 +6,6 @@ import { useBadgeStore } from './stores/badgeStore';
 import { usePresenceStore } from './stores/presenceStore';
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket';
 import Layout from './components/Layout';
-import ConsentModal from './components/ConsentModal';
 
 const LandingPage        = lazy(() => import('./pages/LandingPage'));
 const LoginPage          = lazy(() => import('./pages/LoginPage'));
@@ -79,12 +78,9 @@ function BadgeClearer() {
 
 function AppRoutes() {
   const { user } = useAuthStore();
-  const needsConsent = user && !user.termsAgreedAt;
   return (
-    <>
-      {needsConsent && <ConsentModal />}
-      <Layout>
-        <BadgeClearer />
+    <Layout>
+      <BadgeClearer />
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/"                 element={<FeedPage />} />
@@ -101,8 +97,7 @@ function AppRoutes() {
             <Route path="*"                 element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
-      </Layout>
-    </>
+    </Layout>
   );
 }
 
