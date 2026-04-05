@@ -80,7 +80,7 @@ function PriceRangeSlider({
             setLo(v);
           }}
           className="price-thumb absolute w-full h-full opacity-0 cursor-pointer"
-          style={{ zIndex: lo > PRICE_MAX - PRICE_STEP ? 5 : 3 }}
+          style={{ zIndex: lo > PRICE_MAX - PRICE_STEP ? 5 : 3, touchAction: 'none' }}
         />
         {/* Max thumb */}
         <input
@@ -92,7 +92,7 @@ function PriceRangeSlider({
             setHi(v);
           }}
           className="price-thumb absolute w-full h-full opacity-0 cursor-pointer"
-          style={{ zIndex: 4 }}
+          style={{ zIndex: 4, touchAction: 'none' }}
         />
         {/* Visual thumbs */}
         <div

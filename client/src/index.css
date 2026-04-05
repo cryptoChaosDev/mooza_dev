@@ -259,6 +259,7 @@ input[type='range'].price-thumb {
   appearance: none;
   background: transparent;
   pointer-events: none;
+  touch-action: none;
 }
 input[type='range'].price-thumb::-webkit-slider-thumb {
   -webkit-appearance: none;
