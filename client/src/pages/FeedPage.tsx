@@ -1,9 +1,14 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
-import { Newspaper, Send, Heart, MessageCircle, Trash2, Loader2, X, MoreHorizontal } from 'lucide-react';
+import {
+  Newspaper, Send, Heart, MessageCircle, Trash2, Loader2, X,
+  MoreHorizontal, Image, Music, Smile,
+} from 'lucide-react';
 import { postAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import EmojiPicker from '../components/EmojiPicker';
+import AudioPlayer from '../components/AudioPlayer';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -20,9 +25,8 @@ function timeAgo(dateStr: string) {
 }
 
 function Avatar({ user, size = 10 }: { user: { firstName: string; lastName: string; avatar?: string }; size?: number }) {
-  const cls = `w-${size} h-${size} rounded-full object-cover flex-shrink-0`;
   if (user.avatar) {
-    return <img src={`${API_URL}${user.avatar}`} alt={`${user.firstName} ${user.lastName}`} className={cls} />;
+    return <img src={`${API_URL}${user.avatar}`} alt="" className={`w-${size} h-${size} rounded-full object-cover flex-shrink-0`} />;
   }
   return (
     <div className={`w-${size} h-${size} rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center flex-shrink-0`}>
@@ -33,61 +37,185 @@ function Avatar({ user, size = 10 }: { user: { firstName: string; lastName: stri
   );
 }
 
+// ─── Create Post Card ──────────────────────────────────────────────────────────
+
 function CreatePostCard({ currentUser }: { currentUser: any }) {
   const [content, setContent] = useState('');
+  const [imagePreview, setImagePreview] = useState<{ url: string; serverUrl: string } | null>(null);
+  const [audioFile, setAudioFile] = useState<{ name: string; serverUrl: string } | null>(null);
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
+
+  const canPost = (content.trim() || imagePreview || audioFile) && !uploading;
 
   const createMut = useMutation({
     mutationFn: postAPI.createPost,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feed'] });
       setContent('');
+      setImagePreview(null);
+      setAudioFile(null);
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
     },
   });
 
-  const handleInput = () => {
+  const autoResize = () => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${el.scrollHeight}px`;
   };
 
+  const uploadFile = async (file: File, type: 'image' | 'audio') => {
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const { data } = await postAPI.uploadMedia(fd);
+      if (type === 'image') {
+        setImagePreview({ url: URL.createObjectURL(file), serverUrl: data.url });
+      } else {
+        setAudioFile({ name: file.name, serverUrl: data.url });
+      }
+    } catch {
+      // fail silently — could add toast here
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file, 'image');
+    e.target.value = '';
+  };
+
+  const handleAudioChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadFile(file, 'audio');
+    e.target.value = '';
+  };
+
+  const handleSubmit = () => {
+    if (!canPost) return;
+    createMut.mutate({
+      content,
+      imageUrl: imagePreview?.serverUrl,
+      audioUrl: audioFile?.serverUrl,
+    });
+  };
+
+  const insertEmoji = useCallback((emoji: string) => {
+    const el = textareaRef.current;
+    if (!el) { setContent(c => c + emoji); return; }
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    setContent(c => c.slice(0, start) + emoji + c.slice(end));
+    setTimeout(() => {
+      el.selectionStart = el.selectionEnd = start + emoji.length;
+      el.focus();
+      autoResize();
+    }, 0);
+  }, []);
+
   return (
     <div className="px-4 pt-4 pb-2">
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
         <div className="flex gap-3">
-          <Avatar user={currentUser} size={9} />
-          <div className="flex-1">
+          <Link to="/profile" className="flex-shrink-0"><Avatar user={currentUser} size={9} /></Link>
+          <div className="flex-1 min-w-0">
             <textarea
               ref={textareaRef}
               value={content}
-              onChange={e => { setContent(e.target.value); handleInput(); }}
-              onInput={handleInput}
+              onChange={e => { setContent(e.target.value); autoResize(); }}
               placeholder="Что у вас нового?"
               className="w-full bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none resize-none min-h-[40px]"
               rows={1}
             />
-            {content.trim() && (
-              <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-800">
+
+            {/* Image preview */}
+            {imagePreview && (
+              <div className="relative mt-2 inline-block">
+                <img src={imagePreview.url} alt="preview" className="max-h-64 rounded-xl object-cover border border-slate-700" />
                 <button
                   type="button"
-                  onClick={() => { setContent(''); if (textareaRef.current) textareaRef.current.style.height = 'auto'; }}
-                  className="text-xs text-slate-500 hover:text-slate-400 transition-colors"
+                  onClick={() => setImagePreview(null)}
+                  className="absolute top-1.5 right-1.5 p-1 bg-slate-900/80 hover:bg-slate-900 rounded-full text-white transition-colors"
                 >
-                  Отмена
-                </button>
-                <button
-                  onClick={() => createMut.mutate({ content })}
-                  disabled={createMut.isPending}
-                  className="flex items-center gap-2 px-4 py-1.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  {createMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
-                  Опубликовать
+                  <X size={14} />
                 </button>
               </div>
             )}
+
+            {/* Audio preview */}
+            {audioFile && (
+              <div className="mt-2 flex items-center gap-2 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2">
+                <Music size={14} className="text-primary-400 flex-shrink-0" />
+                <span className="text-xs text-slate-300 truncate flex-1">{audioFile.name}</span>
+                <button type="button" onClick={() => setAudioFile(null)} className="text-slate-500 hover:text-white transition-colors">
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+
+            {/* Toolbar + Post button */}
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-slate-800">
+              {/* Left: attachment buttons */}
+              <div className="flex items-center gap-1 relative">
+                {/* Image/GIF */}
+                <input ref={imageInputRef} type="file" accept="image/*,.gif" className="hidden" onChange={handleImageChange} />
+                <button
+                  type="button"
+                  onClick={() => imageInputRef.current?.click()}
+                  disabled={uploading || !!imagePreview}
+                  title="Фото / GIF"
+                  className="p-2 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {uploading && !audioFile ? <Loader2 size={16} className="animate-spin" /> : <Image size={16} />}
+                </button>
+
+                {/* Audio */}
+                <input ref={audioInputRef} type="file" accept="audio/mp3,audio/mpeg,audio/wav,audio/ogg,audio/flac,.mp3,.wav,.ogg,.flac" className="hidden" onChange={handleAudioChange} />
+                <button
+                  type="button"
+                  onClick={() => audioInputRef.current?.click()}
+                  disabled={uploading || !!audioFile}
+                  title="Музыка (MP3, WAV)"
+                  className="p-2 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {uploading && !imagePreview ? <Loader2 size={16} className="animate-spin" /> : <Music size={16} />}
+                </button>
+
+                {/* Emoji */}
+                <button
+                  type="button"
+                  onClick={() => setShowEmoji(e => !e)}
+                  title="Эмодзи"
+                  className={`p-2 rounded-lg transition-colors ${showEmoji ? 'text-primary-400 bg-slate-800' : 'text-slate-400 hover:text-primary-400 hover:bg-slate-800'}`}
+                >
+                  <Smile size={16} />
+                </button>
+
+                {showEmoji && (
+                  <EmojiPicker onSelect={emoji => { insertEmoji(emoji); setShowEmoji(false); }} onClose={() => setShowEmoji(false)} />
+                )}
+              </div>
+
+              {/* Right: post button */}
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={!canPost || createMut.isPending}
+                className="flex items-center gap-2 px-4 py-1.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {createMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+                Опубликовать
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -95,16 +223,10 @@ function CreatePostCard({ currentUser }: { currentUser: any }) {
   );
 }
 
-function CommentItem({
-  comment,
-  postId,
-  postAuthorId,
-  currentUserId,
-}: {
-  comment: any;
-  postId: string;
-  postAuthorId: string;
-  currentUserId: string;
+// ─── Comment Item ──────────────────────────────────────────────────────────────
+
+function CommentItem({ comment, postId, postAuthorId, currentUserId }: {
+  comment: any; postId: string; postAuthorId: string; currentUserId: string;
 }) {
   const queryClient = useQueryClient();
   const canDelete = comment.author.id === currentUserId || postAuthorId === currentUserId;
@@ -116,9 +238,7 @@ function CommentItem({
 
   return (
     <div className="flex gap-2.5 group/comment">
-      <Link to={`/profile/${comment.author.id}`}>
-        <Avatar user={comment.author} size={7} />
-      </Link>
+      <Link to={`/profile/${comment.author.id}`}><Avatar user={comment.author} size={7} /></Link>
       <div className="flex-1 min-w-0">
         <div className="bg-slate-800/60 rounded-xl px-3 py-2">
           <div className="flex items-center justify-between gap-2">
@@ -142,6 +262,8 @@ function CommentItem({
     </div>
   );
 }
+
+// ─── Post Card ─────────────────────────────────────────────────────────────────
 
 function PostCard({ post, currentUserId }: { post: any; currentUserId: string }) {
   const queryClient = useQueryClient();
@@ -170,21 +292,13 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
 
   const commentMut = useMutation({
     mutationFn: (content: string) => postAPI.commentPost(post.id, content),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['feed'] });
-      setCommentText('');
-    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['feed'] }); setCommentText(''); },
   });
 
   const deleteMut = useMutation({
     mutationFn: () => postAPI.deletePost(post.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
   });
-
-  const handleCommentSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (commentText.trim()) commentMut.mutate(commentText.trim());
-  };
 
   const handleCommentClick = () => {
     setShowComments(true);
@@ -203,15 +317,14 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
             <Link to={`/profile/${post.author.id}`} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate block">
               {post.author.firstName} {post.author.lastName}
             </Link>
-            <p className="text-xs text-slate-500 truncate">{timeAgo(post.createdAt)}{post.author.role ? ` · ${post.author.role}` : ''}</p>
+            <p className="text-xs text-slate-500 truncate">
+              {timeAgo(post.createdAt)}{post.author.role ? ` · ${post.author.role}` : ''}
+            </p>
           </div>
         </div>
         {isOwner && (
           <div className="relative flex-shrink-0" ref={menuRef}>
-            <button
-              onClick={() => setShowMenu(m => !m)}
-              className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-            >
+            <button onClick={() => setShowMenu(m => !m)} className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors">
               <MoreHorizontal size={16} />
             </button>
             {showMenu && (
@@ -232,13 +345,35 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
 
       {/* Content */}
       <div className="mb-3 ml-[52px]">
-        <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
-          {isLongContent && !expanded ? post.content.slice(0, 280) + '…' : post.content}
-        </p>
+        {post.content && (
+          <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
+            {isLongContent && !expanded ? post.content.slice(0, 280) + '…' : post.content}
+          </p>
+        )}
         {isLongContent && (
           <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">
             {expanded ? 'Свернуть' : 'Читать полностью'}
           </button>
+        )}
+
+        {/* Image attachment */}
+        {post.imageUrl && (
+          <div className="mt-2">
+            <img
+              src={`${API_URL}${post.imageUrl}`}
+              alt="Вложение"
+              className="max-h-96 w-full object-cover rounded-xl border border-slate-800"
+              loading="lazy"
+            />
+          </div>
+        )}
+
+        {/* Audio attachment */}
+        {post.audioUrl && (
+          <AudioPlayer
+            src={`${API_URL}${post.audioUrl}`}
+            name={post.audioUrl.split('/').pop()}
+          />
         )}
       </div>
 
@@ -266,26 +401,20 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
         </button>
       </div>
 
-      {/* Comments section */}
+      {/* Comments */}
       {showComments && (
         <div className="mt-3 ml-[52px] space-y-3">
-          {/* Existing comments */}
           {post.comments && post.comments.length > 0 && (
             <div className="space-y-2">
               {post.comments.map((comment: any) => (
-                <CommentItem
-                  key={comment.id}
-                  comment={comment}
-                  postId={post.id}
-                  postAuthorId={post.author.id}
-                  currentUserId={currentUserId}
-                />
+                <CommentItem key={comment.id} comment={comment} postId={post.id} postAuthorId={post.author.id} currentUserId={currentUserId} />
               ))}
             </div>
           )}
-
-          {/* Add comment */}
-          <form onSubmit={handleCommentSubmit} className="flex gap-2 items-center">
+          <form
+            onSubmit={e => { e.preventDefault(); if (commentText.trim()) commentMut.mutate(commentText.trim()); }}
+            className="flex gap-2 items-center"
+          >
             <input
               ref={commentInputRef}
               type="text"
@@ -308,6 +437,8 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
   );
 }
 
+// ─── Feed Page ─────────────────────────────────────────────────────────────────
+
 export default function FeedPage() {
   const { user: currentUser } = useAuthStore();
 
@@ -323,7 +454,6 @@ export default function FeedPage() {
   return (
     <div className="min-h-screen bg-slate-950">
       <div className="max-w-2xl mx-auto">
-
         {/* Header */}
         <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
           <div className="px-4 pt-4 pb-3 flex items-center gap-2">
@@ -333,13 +463,9 @@ export default function FeedPage() {
         </div>
 
         <div className="pb-24">
-          {/* Create post */}
           {currentUser && <CreatePostCard currentUser={currentUser} />}
-
-          {/* Divider */}
           <div className="border-t border-slate-800/60 mt-3" />
 
-          {/* Posts */}
           {isLoading ? (
             <div className="divide-y divide-slate-800/60">
               {[1, 2, 3].map(i => (
