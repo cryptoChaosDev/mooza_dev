@@ -138,6 +138,8 @@ export const postAPI = {
   unlikePost: (postId: string) => api.delete(`/posts/${postId}/like`),
   commentPost: (postId: string, content: string) =>
     api.post(`/posts/${postId}/comments`, { content }),
+  deletePost: (postId: string) => api.delete(`/posts/${postId}`),
+  deleteComment: (postId: string, commentId: string) => api.delete(`/posts/${postId}/comments/${commentId}`),
 };
 
 // Friendship API
