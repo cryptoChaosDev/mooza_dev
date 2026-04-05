@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { motion, type Transition } from 'framer-motion';
 import {
-  ChevronRight,
   Search,
   MessageCircle,
   Briefcase,
