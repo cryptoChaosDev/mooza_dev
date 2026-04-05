@@ -2,8 +2,22 @@ import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser, notifyUser } from '../socket';
+import { uploadPostMedia } from '../middleware/upload';
 
 const router = Router();
+
+// Upload post media (image, gif, audio)
+router.post('/upload', authenticate, uploadPostMedia.single('file'), async (req: AuthRequest, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const isAudio = req.file.mimetype.startsWith('audio/');
+    const url = `/uploads/posts/${req.file.filename}`;
+    res.json({ url, type: isAudio ? 'audio' : 'image', originalName: req.file.originalname });
+  } catch (error) {
+    console.error('Post media upload error:', error);
+    res.status(500).json({ error: 'Failed to upload file' });
+  }
+});
 
 // Get feed (posts from friends and own posts)
 router.get('/feed', authenticate, async (req: AuthRequest, res) => {
@@ -85,16 +99,17 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
 // Create post
 router.post('/', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { content, imageUrl } = req.body;
+    const { content, imageUrl, audioUrl } = req.body;
 
-    if (!content) {
-      return res.status(400).json({ error: 'Content is required' });
+    if (!content && !imageUrl && !audioUrl) {
+      return res.status(400).json({ error: 'Post cannot be empty' });
     }
 
     const post = await prisma.post.create({
       data: {
-        content,
-        imageUrl,
+        content: content || '',
+        imageUrl: imageUrl || null,
+        audioUrl: audioUrl || null,
         authorId: req.userId!,
       },
       include: {

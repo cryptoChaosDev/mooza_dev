@@ -132,8 +132,10 @@ export const referenceAPI = {
 export const postAPI = {
   getFeed: (params?: { limit?: number; offset?: number }) =>
     api.get('/posts/feed', { params }),
-  createPost: (data: { content: string; imageUrl?: string }) =>
+  createPost: (data: { content: string; imageUrl?: string; audioUrl?: string }) =>
     api.post('/posts', data),
+  uploadMedia: (formData: FormData) =>
+    api.post('/posts/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   likePost: (postId: string) => api.post(`/posts/${postId}/like`),
   unlikePost: (postId: string) => api.delete(`/posts/${postId}/like`),
   commentPost: (postId: string, content: string) =>

@@ -91,6 +91,41 @@ export const uploadPortfolio = multer({
   },
 });
 
+// ── Post media upload (images, gifs, audio) ───────────────────────────────────
+
+const postMediaDir = path.join(process.cwd(), 'uploads', 'posts');
+if (!fs.existsSync(postMediaDir)) {
+  fs.mkdirSync(postMediaDir, { recursive: true });
+}
+
+const postMediaStorage = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, postMediaDir); },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `post-${uniqueSuffix}${ext}`);
+  },
+});
+
+const postMediaFilter = (req: any, file: any, cb: any) => {
+  const allowedTypes = [
+    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+    'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/wave', 'audio/x-wav',
+    'audio/ogg', 'audio/flac',
+  ];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Unsupported file type'), false);
+  }
+};
+
+export const uploadPostMedia = multer({
+  storage: postMediaStorage,
+  fileFilter: postMediaFilter,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+});
+
 // ── Chat attachment upload ─────────────────────────────────────────────────────
 
 const chatDir = path.join(process.cwd(), 'uploads', 'chat');
