@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   Newspaper, Send, Heart, MessageCircle, Trash2, Loader2, X,
-  MoreHorizontal, Image, Music, Smile,
+  MoreHorizontal, Image, Music, Smile, Pencil, Check,
 } from 'lucide-react';
 import { postAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
@@ -271,11 +271,25 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
   const [commentText, setCommentText] = useState('');
   const [showMenu, setShowMenu] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // Edit state
+  const [editing, setEditing] = useState(false);
+  const [editContent, setEditContent] = useState(post.content);
+  const [editImagePreview, setEditImagePreview] = useState<{ url: string; serverUrl: string } | null>(
+    post.imageUrl ? { url: `${API_URL}${post.imageUrl}`, serverUrl: post.imageUrl } : null
+  );
+  const [editAudioFile, setEditAudioFile] = useState<{ name: string; serverUrl: string } | null>(
+    post.audioUrl ? { name: post.audioUrl.split('/').pop() || 'audio', serverUrl: post.audioUrl } : null
+  );
+  const [editUploading, setEditUploading] = useState(false);
+  const editImageRef = useRef<HTMLInputElement>(null);
+  const editAudioRef = useRef<HTMLInputElement>(null);
+  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
+
   const commentInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isOwner = post.author.id === currentUserId;
-  const isLongContent = post.content.length > 280;
+  const isLongContent = !editing && post.content.length > 280;
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -284,6 +298,16 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Auto-resize edit textarea
+  useEffect(() => {
+    if (editing && editTextareaRef.current) {
+      const el = editTextareaRef.current;
+      el.style.height = 'auto';
+      el.style.height = `${el.scrollHeight}px`;
+      el.focus();
+    }
+  }, [editing]);
 
   const likeMut = useMutation({
     mutationFn: () => post.isLiked ? postAPI.unlikePost(post.id) : postAPI.likePost(post.id),
@@ -295,6 +319,15 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['feed'] }); setCommentText(''); },
   });
 
+  const editMut = useMutation({
+    mutationFn: () => postAPI.editPost(post.id, {
+      content: editContent,
+      imageUrl: editImagePreview?.serverUrl ?? null,
+      audioUrl: editAudioFile?.serverUrl ?? null,
+    }),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['feed'] }); setEditing(false); },
+  });
+
   const deleteMut = useMutation({
     mutationFn: () => postAPI.deletePost(post.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
@@ -303,6 +336,19 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
   const handleCommentClick = () => {
     setShowComments(true);
     setTimeout(() => commentInputRef.current?.focus(), 50);
+  };
+
+  const uploadEditFile = async (file: File, type: 'image' | 'audio') => {
+    setEditUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const { data } = await postAPI.uploadMedia(fd);
+      if (type === 'image') setEditImagePreview({ url: URL.createObjectURL(file), serverUrl: data.url });
+      else setEditAudioFile({ name: file.name, serverUrl: data.url });
+    } finally {
+      setEditUploading(false);
+    }
   };
 
   return (
@@ -328,11 +374,17 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
               <MoreHorizontal size={16} />
             </button>
             {showMenu && (
-              <div className="absolute right-0 top-8 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-10 overflow-hidden min-w-[140px]">
+              <div className="absolute right-0 top-8 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-10 overflow-hidden min-w-[150px]">
+                <button
+                  onClick={() => { setShowMenu(false); setEditing(true); setEditContent(post.content); }}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                >
+                  <Pencil size={14} /> Редактировать
+                </button>
                 <button
                   onClick={() => { setShowMenu(false); deleteMut.mutate(); }}
                   disabled={deleteMut.isPending}
-                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-slate-700 transition-colors"
+                  className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-slate-700 transition-colors border-t border-slate-700"
                 >
                   {deleteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
                   Удалить пост
@@ -345,35 +397,93 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
 
       {/* Content */}
       <div className="mb-3 ml-[52px]">
-        {post.content && (
-          <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
-            {isLongContent && !expanded ? post.content.slice(0, 280) + '…' : post.content}
-          </p>
-        )}
-        {isLongContent && (
-          <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">
-            {expanded ? 'Свернуть' : 'Читать полностью'}
-          </button>
-        )}
-
-        {/* Image attachment */}
-        {post.imageUrl && (
-          <div className="mt-2">
-            <img
-              src={`${API_URL}${post.imageUrl}`}
-              alt="Вложение"
-              className="max-h-96 w-full object-cover rounded-xl border border-slate-800"
-              loading="lazy"
+        {editing ? (
+          <div className="space-y-2">
+            <textarea
+              ref={editTextareaRef}
+              value={editContent}
+              onChange={e => {
+                setEditContent(e.target.value);
+                const el = e.target;
+                el.style.height = 'auto';
+                el.style.height = `${el.scrollHeight}px`;
+              }}
+              className="w-full bg-slate-800/60 border border-slate-700 focus:border-primary-500 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none resize-none transition-colors"
+              rows={1}
             />
-          </div>
-        )}
 
-        {/* Audio attachment */}
-        {post.audioUrl && (
-          <AudioPlayer
-            src={`${API_URL}${post.audioUrl}`}
-            name={post.audioUrl.split('/').pop()}
-          />
+            {/* Edit image preview */}
+            {editImagePreview && (
+              <div className="relative inline-block">
+                <img src={editImagePreview.url} alt="preview" className="max-h-48 rounded-xl object-cover border border-slate-700" />
+                <button type="button" onClick={() => setEditImagePreview(null)} className="absolute top-1.5 right-1.5 p-1 bg-slate-900/80 hover:bg-slate-900 rounded-full text-white">
+                  <X size={12} />
+                </button>
+              </div>
+            )}
+
+            {/* Edit audio */}
+            {editAudioFile && (
+              <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2">
+                <Music size={13} className="text-primary-400 flex-shrink-0" />
+                <span className="text-xs text-slate-300 truncate flex-1">{editAudioFile.name}</span>
+                <button type="button" onClick={() => setEditAudioFile(null)} className="text-slate-500 hover:text-white transition-colors"><X size={13} /></button>
+              </div>
+            )}
+
+            {/* Edit toolbar */}
+            <div className="flex items-center justify-between">
+              <div className="flex gap-1">
+                <input ref={editImageRef} type="file" accept="image/*,.gif" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadEditFile(f, 'image'); e.target.value = ''; }} />
+                <button type="button" onClick={() => editImageRef.current?.click()} disabled={editUploading || !!editImagePreview}
+                  className="p-1.5 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-40">
+                  {editUploading && !editAudioFile ? <Loader2 size={14} className="animate-spin" /> : <Image size={14} />}
+                </button>
+                <input ref={editAudioRef} type="file" accept="audio/mp3,audio/mpeg,audio/wav,audio/ogg,.mp3,.wav,.ogg" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadEditFile(f, 'audio'); e.target.value = ''; }} />
+                <button type="button" onClick={() => editAudioRef.current?.click()} disabled={editUploading || !!editAudioFile}
+                  className="p-1.5 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-40">
+                  {editUploading && !editImagePreview ? <Loader2 size={14} className="animate-spin" /> : <Music size={14} />}
+                </button>
+              </div>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setEditing(false)} className="px-3 py-1.5 text-xs text-slate-400 hover:text-white transition-colors">
+                  Отмена
+                </button>
+                <button
+                  type="button"
+                  onClick={() => editMut.mutate()}
+                  disabled={editMut.isPending || editUploading}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white text-xs font-medium rounded-lg transition-colors"
+                >
+                  {editMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                  Сохранить
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <>
+            {post.content && (
+              <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
+                {isLongContent && !expanded ? post.content.slice(0, 280) + '…' : post.content}
+              </p>
+            )}
+            {isLongContent && (
+              <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">
+                {expanded ? 'Свернуть' : 'Читать полностью'}
+              </button>
+            )}
+            {post.imageUrl && (
+              <div className="mt-2">
+                <img src={`${API_URL}${post.imageUrl}`} alt="Вложение" className="max-h-96 w-full object-cover rounded-xl border border-slate-800" loading="lazy" />
+              </div>
+            )}
+            {post.audioUrl && (
+              <AudioPlayer src={`${API_URL}${post.audioUrl}`} name={post.audioUrl.split('/').pop()} />
+            )}
+          </>
         )}
       </div>
 
