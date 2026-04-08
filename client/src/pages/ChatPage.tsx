@@ -843,8 +843,6 @@ export default function ChatPage() {
                           </div>
                         </div>
 
-                        </div>
-
                         {/* Inline reaction bubbles (below bubble) */}
                         {(msg.reactions?.length ?? 0) > 0 && !msg.deletedAt && (
                           <div className={`flex flex-wrap gap-1 mt-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
