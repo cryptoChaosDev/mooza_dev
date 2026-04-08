@@ -227,8 +227,8 @@ function CreatePostCard({ currentUser }: { currentUser: any }) {
 
 // ─── Comment Item ──────────────────────────────────────────────────────────────
 
-function CommentItem({ comment, postId, postAuthorId, currentUserId }: {
-  comment: any; postId: string; postAuthorId: string; currentUserId: string;
+function CommentItem({ comment, postId, currentUserId }: {
+  comment: any; postId: string; postAuthorId?: string; currentUserId: string;
 }) {
   const queryClient = useQueryClient();
   const isOwner = comment.author.id === currentUserId;
