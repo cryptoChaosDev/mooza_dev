@@ -5,7 +5,7 @@ import { messageAPI, friendshipAPI } from '../lib/api';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
-import { ReactionBar, DoubleTapReactWrapper } from '../components/ReactionBar';
+import { REACTION_EMOJIS, groupReactions } from '../components/ReactionBar';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -89,6 +89,9 @@ export default function ChatPage() {
 
   // Emoji picker
   const [showEmoji, setShowEmoji] = useState(false);
+
+  // Reaction picker
+  const [reactionPickerMsgId, setReactionPickerMsgId] = useState<string | null>(null);
 
   const EMOJIS = ['😊','😂','❤️','👍','👎','🔥','🎵','🎸','🎹','🎤','🙏','😍','🤔','😅','🥹','💯','✨','🚀','👏','🎉'];
 
@@ -738,7 +741,7 @@ export default function ChatPage() {
                   return (
                     <div
                       key={msg.id}
-                      className={`flex items-end ${isMine ? 'justify-end' : 'justify-start'} ${showSender ? 'mt-3' : 'mt-1'} group/row relative overflow-hidden`}
+                      className={`flex items-end ${isMine ? 'justify-end' : 'justify-start'} ${showSender ? 'mt-3' : 'mt-1'} group/row relative`}
                       onTouchStart={e => !msg.deletedAt && onMsgTouchStart(e, msg.id)}
                       onTouchMove={e => !msg.deletedAt && onMsgTouchMove(e, msg.id)}
                       onTouchEnd={() => !msg.deletedAt && onMsgTouchEnd(msg)}
@@ -785,15 +788,9 @@ export default function ChatPage() {
                         )}
 
                         {/* Bubble */}
-                        <DoubleTapReactWrapper
-                          reactions={msg.reactions ?? []}
-                          currentUserId={me?.id ?? ''}
-                          onReact={(emoji) => handleReact(msg.id, emoji)}
-                          onUnreact={() => handleUnreact(msg.id)}
-                          className="inline-block"
-                        >
                         <div
-                          className={`relative px-4 py-2.5 rounded-2xl ${
+                          onDoubleClick={() => !msg.deletedAt && setReactionPickerMsgId(msg.id)}
+                          className={`relative px-4 py-2.5 rounded-2xl cursor-default ${
                             isMine
                               ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-tr-md shadow-lg shadow-primary-500/25'
                               : 'bg-gradient-to-br from-slate-700/80 to-slate-800/80 backdrop-blur-sm border border-slate-600/50 text-white rounded-tl-md shadow-lg'
@@ -846,16 +843,35 @@ export default function ChatPage() {
                           </div>
                         </div>
 
-                        </DoubleTapReactWrapper>
+                        </div>
 
-                        {/* Reaction bar */}
-                        {!msg.deletedAt && (
-                          <ReactionBar
-                            reactions={msg.reactions ?? []}
-                            currentUserId={me?.id ?? ''}
-                            onReact={(emoji) => handleReact(msg.id, emoji)}
-                            onUnreact={() => handleUnreact(msg.id)}
-                          />
+                        {/* Inline reaction bubbles (below bubble) */}
+                        {(msg.reactions?.length ?? 0) > 0 && !msg.deletedAt && (
+                          <div className={`flex flex-wrap gap-1 mt-1 ${isMine ? 'justify-end' : 'justify-start'}`}>
+                            {groupReactions(msg.reactions ?? []).map(({ emoji, count, userIds }) => {
+                              const isMyReaction = userIds.includes(me?.id ?? '');
+                              return (
+                                <button
+                                  key={emoji}
+                                  onClick={() => isMyReaction ? handleUnreact(msg.id) : handleReact(msg.id, emoji)}
+                                  className={`flex items-center gap-0.5 text-sm px-2 py-0.5 rounded-full border transition-colors ${
+                                    isMyReaction
+                                      ? 'bg-indigo-600/40 border-indigo-500/60 text-white'
+                                      : 'bg-slate-700/80 border-slate-600/60 text-slate-300 hover:bg-slate-600/80'
+                                  }`}
+                                >
+                                  <span>{emoji}</span>
+                                  {count > 1 && <span className="text-xs font-medium">{count}</span>}
+                                </button>
+                              );
+                            })}
+                            <button
+                              onClick={() => setReactionPickerMsgId(msg.id)}
+                              className="text-sm px-1.5 py-0.5 rounded-full border border-slate-600/40 bg-slate-700/50 text-slate-500 hover:text-slate-300 hover:bg-slate-600/60 transition-colors"
+                            >
+                              +
+                            </button>
+                          </div>
                         )}
 
                         {/* Action icons under bubble */}
@@ -899,6 +915,37 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
       </div>
+
+      {/* Reaction picker overlay */}
+      {reactionPickerMsgId && (
+        <div
+          className="fixed inset-0 z-50"
+          onClick={() => setReactionPickerMsgId(null)}
+        >
+          <div
+            className="absolute bottom-28 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 flex gap-3 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            {REACTION_EMOJIS.map(emoji => {
+              const msg = messages.find(m => m.id === reactionPickerMsgId);
+              const myReaction = msg?.reactions?.find(r => r.userId === me?.id);
+              return (
+                <button
+                  key={emoji}
+                  onClick={() => {
+                    if (myReaction?.emoji === emoji) handleUnreact(reactionPickerMsgId);
+                    else handleReact(reactionPickerMsgId, emoji);
+                    setReactionPickerMsgId(null);
+                  }}
+                  className={`text-3xl hover:scale-125 transition-transform leading-none ${myReaction?.emoji === emoji ? 'ring-2 ring-indigo-500 rounded-full' : ''}`}
+                >
+                  {emoji}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Hidden file inputs */}
       <input ref={fileInputRef} type="file" className="hidden" accept="*/*" onChange={pickFile} />

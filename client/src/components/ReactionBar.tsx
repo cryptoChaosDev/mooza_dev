@@ -18,7 +18,7 @@ interface ReactionBarProps {
 }
 
 /** Groups reactions by emoji and returns sorted list */
-function groupReactions(reactions: Reaction[]) {
+export function groupReactions(reactions: Reaction[]) {
   const map = new Map<string, string[]>();
   for (const r of reactions) {
     if (!map.has(r.emoji)) map.set(r.emoji, []);
