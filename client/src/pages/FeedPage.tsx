@@ -364,7 +364,11 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
               {post.author.firstName} {post.author.lastName}
             </Link>
             <p className="text-xs text-slate-500 truncate">
-              {timeAgo(post.createdAt)}{post.author.role ? ` · ${post.author.role}` : ''}
+              {timeAgo(post.createdAt)}
+              {post.author.role ? ` · ${post.author.role}` : ''}
+              {new Date(post.updatedAt).getTime() - new Date(post.createdAt).getTime() > 5000 && (
+                <span className="text-slate-600"> · изменён {timeAgo(post.updatedAt)}</span>
+              )}
             </p>
           </div>
         </div>
