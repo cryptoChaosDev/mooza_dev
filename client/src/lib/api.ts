@@ -143,6 +143,8 @@ export const postAPI = {
   editPost: (postId: string, data: { content?: string; imageUrl?: string | null; audioUrl?: string | null; audioName?: string | null }) =>
     api.put(`/posts/${postId}`, data),
   deletePost: (postId: string) => api.delete(`/posts/${postId}`),
+  editComment: (postId: string, commentId: string, content: string) =>
+    api.put(`/posts/${postId}/comments/${commentId}`, { content }),
   deleteComment: (postId: string, commentId: string) => api.delete(`/posts/${postId}/comments/${commentId}`),
   reactPost: (postId: string, emoji: string) => api.post(`/posts/${postId}/reactions`, { emoji }),
   unreactPost: (postId: string) => api.delete(`/posts/${postId}/reactions`),
