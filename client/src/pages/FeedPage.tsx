@@ -106,6 +106,7 @@ function CreatePostCard({ currentUser }: { currentUser: any }) {
       content,
       imageUrl: imagePreview?.serverUrl,
       audioUrl: audioFile?.serverUrl,
+      audioName: audioFile?.name,
     });
   };
 
@@ -278,7 +279,7 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
     post.imageUrl ? { url: `${API_URL}${post.imageUrl}`, serverUrl: post.imageUrl } : null
   );
   const [editAudioFile, setEditAudioFile] = useState<{ name: string; serverUrl: string } | null>(
-    post.audioUrl ? { name: post.audioUrl.split('/').pop() || 'audio', serverUrl: post.audioUrl } : null
+    post.audioUrl ? { name: post.audioName || post.audioUrl.split('/').pop() || 'audio', serverUrl: post.audioUrl } : null
   );
   const [editUploading, setEditUploading] = useState(false);
   const editImageRef = useRef<HTMLInputElement>(null);
@@ -324,6 +325,7 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
       content: editContent,
       imageUrl: editImagePreview?.serverUrl ?? null,
       audioUrl: editAudioFile?.serverUrl ?? null,
+      audioName: editAudioFile?.name ?? null,
     }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['feed'] }); setEditing(false); },
   });
@@ -485,7 +487,7 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
               </div>
             )}
             {post.audioUrl && (
-              <AudioPlayer src={`${API_URL}${post.audioUrl}`} name={post.audioUrl.split('/').pop()} />
+              <AudioPlayer src={`${API_URL}${post.audioUrl}`} name={post.audioName || post.audioUrl.split('/').pop()} />
             )}
           </>
         )}

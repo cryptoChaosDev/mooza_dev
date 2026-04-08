@@ -132,7 +132,7 @@ export const referenceAPI = {
 export const postAPI = {
   getFeed: (params?: { limit?: number; offset?: number }) =>
     api.get('/posts/feed', { params }),
-  createPost: (data: { content: string; imageUrl?: string; audioUrl?: string }) =>
+  createPost: (data: { content: string; imageUrl?: string; audioUrl?: string; audioName?: string }) =>
     api.post('/posts', data),
   uploadMedia: (formData: FormData) =>
     api.post('/posts/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
@@ -140,7 +140,7 @@ export const postAPI = {
   unlikePost: (postId: string) => api.delete(`/posts/${postId}/like`),
   commentPost: (postId: string, content: string) =>
     api.post(`/posts/${postId}/comments`, { content }),
-  editPost: (postId: string, data: { content?: string; imageUrl?: string | null; audioUrl?: string | null }) =>
+  editPost: (postId: string, data: { content?: string; imageUrl?: string | null; audioUrl?: string | null; audioName?: string | null }) =>
     api.put(`/posts/${postId}`, data),
   deletePost: (postId: string) => api.delete(`/posts/${postId}`),
   deleteComment: (postId: string, commentId: string) => api.delete(`/posts/${postId}/comments/${commentId}`),

@@ -328,8 +328,9 @@ model UserArtist {
 model Post {
   id       String @id @default(uuid())
   content  String
-  imageUrl String?
-  audioUrl String?
+  imageUrl  String?
+  audioUrl  String?
+  audioName String?
 
   author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId String

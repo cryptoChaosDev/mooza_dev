@@ -12,7 +12,10 @@ router.post('/upload', authenticate, uploadPostMedia.single('file'), async (req:
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const isAudio = req.file.mimetype.startsWith('audio/');
     const url = `/uploads/posts/${req.file.filename}`;
-    res.json({ url, type: isAudio ? 'audio' : 'image', originalName: req.file.originalname });
+    // Fix encoding: multer receives filename as latin1, convert to utf-8
+    let originalName = req.file.originalname;
+    try { originalName = Buffer.from(originalName, 'latin1').toString('utf8'); } catch {}
+    res.json({ url, type: isAudio ? 'audio' : 'image', originalName });
   } catch (error) {
     console.error('Post media upload error:', error);
     res.status(500).json({ error: 'Failed to upload file' });
@@ -99,7 +102,7 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
 // Create post
 router.post('/', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { content, imageUrl, audioUrl } = req.body;
+    const { content, imageUrl, audioUrl, audioName } = req.body;
 
     if (!content && !imageUrl && !audioUrl) {
       return res.status(400).json({ error: 'Post cannot be empty' });
@@ -110,6 +113,7 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         content: content || '',
         imageUrl: imageUrl || null,
         audioUrl: audioUrl || null,
+        audioName: audioName || null,
         authorId: req.userId!,
       },
       include: {
@@ -307,13 +311,14 @@ router.put('/:id', authenticate, async (req: AuthRequest, res) => {
     if (!post) return res.status(404).json({ error: 'Post not found' });
     if (post.authorId !== req.userId) return res.status(403).json({ error: 'Unauthorized' });
 
-    const { content, imageUrl, audioUrl } = req.body;
+    const { content, imageUrl, audioUrl, audioName } = req.body;
     const updated = await prisma.post.update({
       where: { id: req.params.id },
       data: {
         ...(content !== undefined && { content }),
         ...(imageUrl !== undefined && { imageUrl: imageUrl || null }),
         ...(audioUrl !== undefined && { audioUrl: audioUrl || null }),
+        ...(audioName !== undefined && { audioName: audioName || null }),
       },
       include: {
         author: { select: { id: true, firstName: true, lastName: true, avatar: true, role: true } },
