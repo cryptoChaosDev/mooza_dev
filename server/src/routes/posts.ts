@@ -349,8 +349,8 @@ router.delete('/:postId/comments/:commentId', authenticate, async (req: AuthRequ
     if (!comment) return res.status(404).json({ error: 'Comment not found' });
     if (comment.postId !== req.params.postId) return res.status(400).json({ error: 'Comment does not belong to this post' });
 
-    // Allow comment author or post author to delete
-    if (comment.authorId !== req.userId && comment.post.authorId !== req.userId) {
+    // Only comment author can delete their comment
+    if (comment.authorId !== req.userId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 

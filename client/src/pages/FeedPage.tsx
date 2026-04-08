@@ -231,7 +231,7 @@ function CommentItem({ comment, postId, postAuthorId, currentUserId }: {
   comment: any; postId: string; postAuthorId: string; currentUserId: string;
 }) {
   const queryClient = useQueryClient();
-  const canDelete = comment.author.id === currentUserId || postAuthorId === currentUserId;
+  const canDelete = comment.author.id === currentUserId;
 
   const deleteMut = useMutation({
     mutationFn: () => postAPI.deleteComment(postId, comment.id),
