@@ -9,6 +9,7 @@ import { postAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import EmojiPicker from '../components/EmojiPicker';
 import AudioPlayer from '../components/AudioPlayer';
+import { ReactionBar, DoubleTapReactWrapper } from '../components/ReactionBar';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -237,26 +238,51 @@ function CommentItem({ comment, postId, postAuthorId, currentUserId }: {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
   });
 
+  const reactMut = useMutation({
+    mutationFn: (emoji: string) => postAPI.reactComment(postId, comment.id, emoji),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
+  });
+
+  const unreactMut = useMutation({
+    mutationFn: () => postAPI.unreactComment(postId, comment.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
+  });
+
   return (
     <div className="flex gap-2.5 group/comment">
       <Link to={`/profile/${comment.author.id}`}><Avatar user={comment.author} size={7} /></Link>
       <div className="flex-1 min-w-0">
-        <div className="bg-slate-800/60 rounded-xl px-3 py-2">
-          <div className="flex items-center justify-between gap-2">
-            <Link to={`/profile/${comment.author.id}`} className="text-xs font-semibold text-white hover:text-primary-400 transition-colors truncate">
-              {comment.author.firstName} {comment.author.lastName}
-            </Link>
-            {canDelete && (
-              <button
-                onClick={() => deleteMut.mutate()}
-                disabled={deleteMut.isPending}
-                className="opacity-0 group-hover/comment:opacity-100 text-slate-500 hover:text-red-400 transition-all flex-shrink-0 p-0.5"
-              >
-                {deleteMut.isPending ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
-              </button>
-            )}
+        <DoubleTapReactWrapper
+          reactions={comment.reactions ?? []}
+          currentUserId={currentUserId}
+          onReact={(emoji) => reactMut.mutate(emoji)}
+          onUnreact={() => unreactMut.mutate()}
+        >
+          <div className="bg-slate-800/60 rounded-xl px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <Link to={`/profile/${comment.author.id}`} className="text-xs font-semibold text-white hover:text-primary-400 transition-colors truncate">
+                {comment.author.firstName} {comment.author.lastName}
+              </Link>
+              {canDelete && (
+                <button
+                  onClick={() => deleteMut.mutate()}
+                  disabled={deleteMut.isPending}
+                  className="opacity-0 group-hover/comment:opacity-100 text-slate-500 hover:text-red-400 transition-all flex-shrink-0 p-0.5"
+                >
+                  {deleteMut.isPending ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed mt-0.5 break-words">{comment.content}</p>
           </div>
-          <p className="text-xs text-slate-300 leading-relaxed mt-0.5 break-words">{comment.content}</p>
+        </DoubleTapReactWrapper>
+        <div className="px-1">
+          <ReactionBar
+            reactions={comment.reactions ?? []}
+            currentUserId={currentUserId}
+            onReact={(emoji) => reactMut.mutate(emoji)}
+            onUnreact={() => unreactMut.mutate()}
+          />
         </div>
         <p className="text-xs text-slate-600 mt-0.5 px-1">{timeAgo(comment.createdAt)}</p>
       </div>
@@ -332,6 +358,16 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
 
   const deleteMut = useMutation({
     mutationFn: () => postAPI.deletePost(post.id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
+  });
+
+  const reactMut = useMutation({
+    mutationFn: (emoji: string) => postAPI.reactPost(post.id, emoji),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
+  });
+
+  const unreactMut = useMutation({
+    mutationFn: () => postAPI.unreactPost(post.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
   });
 
@@ -470,26 +506,41 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
             </div>
           </div>
         ) : (
-          <>
-            {post.content && (
-              <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
-                {isLongContent && !expanded ? post.content.slice(0, 280) + '…' : post.content}
-              </p>
-            )}
-            {isLongContent && (
-              <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">
-                {expanded ? 'Свернуть' : 'Читать полностью'}
-              </button>
-            )}
-            {post.imageUrl && (
-              <div className="mt-2">
-                <img src={`${API_URL}${post.imageUrl}`} alt="Вложение" className="max-h-96 w-full object-cover rounded-xl border border-slate-800" loading="lazy" />
-              </div>
-            )}
-            {post.audioUrl && (
-              <AudioPlayer src={`${API_URL}${post.audioUrl}`} name={post.audioName || post.audioUrl.split('/').pop()} />
-            )}
-          </>
+          <DoubleTapReactWrapper
+            reactions={post.reactions ?? []}
+            currentUserId={currentUserId}
+            onReact={(emoji) => reactMut.mutate(emoji)}
+            onUnreact={() => unreactMut.mutate()}
+          >
+            <>
+              {post.content && (
+                <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
+                  {isLongContent && !expanded ? post.content.slice(0, 280) + '…' : post.content}
+                </p>
+              )}
+              {isLongContent && (
+                <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">
+                  {expanded ? 'Свернуть' : 'Читать полностью'}
+                </button>
+              )}
+              {post.imageUrl && (
+                <div className="mt-2">
+                  <img src={`${API_URL}${post.imageUrl}`} alt="Вложение" className="max-h-96 w-full object-cover rounded-xl border border-slate-800" loading="lazy" />
+                </div>
+              )}
+              {post.audioUrl && (
+                <AudioPlayer src={`${API_URL}${post.audioUrl}`} name={post.audioName || post.audioUrl.split('/').pop()} />
+              )}
+            </>
+          </DoubleTapReactWrapper>
+        )}
+        {!editing && (
+          <ReactionBar
+            reactions={post.reactions ?? []}
+            currentUserId={currentUserId}
+            onReact={(emoji) => reactMut.mutate(emoji)}
+            onUnreact={() => unreactMut.mutate()}
+          />
         )}
       </div>
 

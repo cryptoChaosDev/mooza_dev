@@ -5,6 +5,7 @@ import { messageAPI, friendshipAPI } from '../lib/api';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
+import { ReactionBar, DoubleTapReactWrapper } from '../components/ReactionBar';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -13,6 +14,12 @@ interface MsgSender {
   firstName: string;
   lastName: string;
   avatar: string | null;
+}
+
+interface MsgReaction {
+  id: string;
+  emoji: string;
+  userId: string;
 }
 
 interface Message {
@@ -29,6 +36,7 @@ interface Message {
   attachmentSize?: number | null;
   attachmentType?: string | null;
   readAt?: string | null;
+  reactions?: MsgReaction[];
   replyTo: {
     id: string;
     content: string;
@@ -249,15 +257,34 @@ export default function ChatPage() {
       if (cid === conversationId) navigate('/messages');
     };
 
+    const onReaction = ({ messageId, reaction }: { messageId: string; reaction: MsgReaction; conversationId: string }) => {
+      setMessages(prev => prev.map(m => {
+        if (m.id !== messageId) return m;
+        const existing = (m.reactions ?? []).filter(r => r.userId !== reaction.userId);
+        return { ...m, reactions: [...existing, reaction] };
+      }));
+    };
+
+    const onReactionRemoved = ({ messageId, userId }: { messageId: string; userId: string; conversationId: string }) => {
+      setMessages(prev => prev.map(m => {
+        if (m.id !== messageId) return m;
+        return { ...m, reactions: (m.reactions ?? []).filter(r => r.userId !== userId) };
+      }));
+    };
+
     socket.on('new_message', onNew);
     socket.on('message_edited', onEdited);
     socket.on('message_deleted', onDeleted);
     socket.on('group_deleted', onGroupDeleted);
+    socket.on('message_reaction', onReaction);
+    socket.on('message_reaction_removed', onReactionRemoved);
     return () => {
       socket.off('new_message', onNew);
       socket.off('message_edited', onEdited);
       socket.off('message_deleted', onDeleted);
       socket.off('group_deleted', onGroupDeleted);
+      socket.off('message_reaction', onReaction);
+      socket.off('message_reaction_removed', onReactionRemoved);
     };
   }, [conversationId]);
 
@@ -347,6 +374,33 @@ export default function ChatPage() {
       );
     } catch (err) {
       console.error('Failed to delete:', err);
+    }
+  };
+
+  const handleReact = async (msgId: string, emoji: string) => {
+    try {
+      const res = await messageAPI.reactMessage(msgId, emoji);
+      const reaction: MsgReaction = res.data;
+      setMessages(prev => prev.map(m => {
+        if (m.id !== msgId) return m;
+        const existing = (m.reactions ?? []).filter(r => r.userId !== reaction.userId);
+        return { ...m, reactions: [...existing, reaction] };
+      }));
+    } catch (err) {
+      console.error('Failed to react:', err);
+    }
+  };
+
+  const handleUnreact = async (msgId: string) => {
+    if (!me?.id) return;
+    try {
+      await messageAPI.unreactMessage(msgId);
+      setMessages(prev => prev.map(m => {
+        if (m.id !== msgId) return m;
+        return { ...m, reactions: (m.reactions ?? []).filter(r => r.userId !== me.id) };
+      }));
+    } catch (err) {
+      console.error('Failed to unreact:', err);
     }
   };
 
@@ -731,6 +785,13 @@ export default function ChatPage() {
                         )}
 
                         {/* Bubble */}
+                        <DoubleTapReactWrapper
+                          reactions={msg.reactions ?? []}
+                          currentUserId={me?.id ?? ''}
+                          onReact={(emoji) => handleReact(msg.id, emoji)}
+                          onUnreact={() => handleUnreact(msg.id)}
+                          className="inline-block"
+                        >
                         <div
                           className={`relative px-4 py-2.5 rounded-2xl ${
                             isMine
@@ -784,6 +845,18 @@ export default function ChatPage() {
                             )}
                           </div>
                         </div>
+
+                        </DoubleTapReactWrapper>
+
+                        {/* Reaction bar */}
+                        {!msg.deletedAt && (
+                          <ReactionBar
+                            reactions={msg.reactions ?? []}
+                            currentUserId={me?.id ?? ''}
+                            onReact={(emoji) => handleReact(msg.id, emoji)}
+                            onUnreact={() => handleUnreact(msg.id)}
+                          />
+                        )}
 
                         {/* Action icons under bubble */}
                         {!msg.deletedAt && (

@@ -21,6 +21,7 @@ const MSG_INCLUDE = {
       sender: { select: { id: true, firstName: true, lastName: true } },
     },
   },
+  reactions: { select: { id: true, emoji: true, userId: true } },
 };
 
 const MEMBER_USER = {
@@ -531,6 +532,70 @@ router.delete('/messages/:id', authenticate, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('Delete message error:', error);
     res.status(500).json({ error: 'Failed to delete message' });
+  }
+});
+
+// ─── POST /messages/:id/reactions — react to a message ──────────────────────
+router.post('/messages/:id/reactions', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const { emoji } = req.body;
+    if (!emoji) return res.status(400).json({ error: 'Emoji is required' });
+
+    const msg = await db.message.findUnique({
+      where: { id: req.params.id },
+      include: { conversation: { include: { members: { select: { userId: true } } } } },
+    });
+    if (!msg) return res.status(404).json({ error: 'Message not found' });
+
+    const reaction = await db.messageReaction.upsert({
+      where: { userId_messageId: { userId, messageId: req.params.id } },
+      update: { emoji },
+      create: { emoji, userId, messageId: req.params.id },
+    });
+
+    // Notify conversation members
+    if (msg.conversationId && msg.conversation) {
+      for (const m of msg.conversation.members) {
+        if (m.userId !== userId) {
+          emitToUser(m.userId, 'message_reaction', { messageId: req.params.id, reaction, conversationId: msg.conversationId });
+        }
+      }
+    }
+
+    res.json(reaction);
+  } catch (error) {
+    console.error('Message reaction error:', error);
+    res.status(500).json({ error: 'Failed to react' });
+  }
+});
+
+// ─── DELETE /messages/:id/reactions — remove reaction ────────────────────────
+router.delete('/messages/:id/reactions', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+
+    const msg = await db.message.findUnique({
+      where: { id: req.params.id },
+      include: { conversation: { include: { members: { select: { userId: true } } } } },
+    });
+
+    await db.messageReaction.deleteMany({
+      where: { userId, messageId: req.params.id },
+    });
+
+    if (msg?.conversationId && msg.conversation) {
+      for (const m of msg.conversation.members) {
+        if (m.userId !== userId) {
+          emitToUser(m.userId, 'message_reaction_removed', { messageId: req.params.id, userId, conversationId: msg.conversationId });
+        }
+      }
+    }
+
+    res.status(204).send();
+  } catch (error) {
+    console.error('Remove message reaction error:', error);
+    res.status(500).json({ error: 'Failed to remove reaction' });
   }
 });
 

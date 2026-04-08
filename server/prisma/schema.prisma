@@ -269,6 +269,9 @@ model User {
   posts        Post[]
   likes        Like[]
   comments     Comment[]
+  postReactions    PostReaction[]
+  commentReactions CommentReaction[]
+  messageReactions MessageReaction[]
   sentRequests Friendship[] @relation("SentRequests")
   receivedRequests Friendship[] @relation("ReceivedRequests")
   sentMessages Message[] @relation("SentMessages")
@@ -335,8 +338,9 @@ model Post {
   author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId String
 
-  likes    Like[]
-  comments Comment[]
+  likes     Like[]
+  comments  Comment[]
+  reactions PostReaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -370,6 +374,8 @@ model Comment {
 
   post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
   postId String
+
+  reactions CommentReaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -428,6 +434,7 @@ model Message {
   receiver     User?         @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
   replyTo      Message?      @relation("MessageReplies", fields: [replyToId], references: [id])
   replies      Message[]     @relation("MessageReplies")
+  reactions    MessageReaction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -497,6 +504,56 @@ model CustomFilterValue {
   userServices UserService[]
 
   @@index([filterId])
+}
+
+// ============ REACTIONS ============
+
+model PostReaction {
+  id     String @id @default(uuid())
+  emoji  String
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  postId String
+  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, postId])
+  @@index([postId])
+}
+
+model CommentReaction {
+  id    String @id @default(uuid())
+  emoji String
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  commentId String
+  comment   Comment @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, commentId])
+  @@index([commentId])
+}
+
+model MessageReaction {
+  id    String @id @default(uuid())
+  emoji String
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  messageId String
+  message   Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([userId, messageId])
+  @@index([messageId])
 }
 
 // ============ NOTIFICATIONS ============

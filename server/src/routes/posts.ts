@@ -73,9 +73,15 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
                 lastName: true,
                 avatar: true,
               }
+            },
+            reactions: {
+              select: { id: true, emoji: true, userId: true }
             }
           },
           orderBy: { createdAt: 'asc' },
+        },
+        reactions: {
+          select: { id: true, emoji: true, userId: true }
         },
         _count: {
           select: { likes: true, comments: true }
@@ -353,6 +359,70 @@ router.delete('/:postId/comments/:commentId', authenticate, async (req: AuthRequ
   } catch (error) {
     console.error('Delete comment error:', error);
     res.status(500).json({ error: 'Failed to delete comment' });
+  }
+});
+
+// React to post (add or change reaction)
+router.post('/:id/reactions', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { emoji } = req.body;
+    if (!emoji) return res.status(400).json({ error: 'Emoji is required' });
+
+    const reaction = await prisma.postReaction.upsert({
+      where: { userId_postId: { userId: req.userId!, postId: req.params.id } },
+      update: { emoji },
+      create: { emoji, userId: req.userId!, postId: req.params.id },
+    });
+
+    res.json(reaction);
+  } catch (error) {
+    console.error('Post reaction error:', error);
+    res.status(500).json({ error: 'Failed to react' });
+  }
+});
+
+// Remove reaction from post
+router.delete('/:id/reactions', authenticate, async (req: AuthRequest, res) => {
+  try {
+    await prisma.postReaction.deleteMany({
+      where: { userId: req.userId!, postId: req.params.id },
+    });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Remove post reaction error:', error);
+    res.status(500).json({ error: 'Failed to remove reaction' });
+  }
+});
+
+// React to comment
+router.post('/:postId/comments/:commentId/reactions', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { emoji } = req.body;
+    if (!emoji) return res.status(400).json({ error: 'Emoji is required' });
+
+    const reaction = await prisma.commentReaction.upsert({
+      where: { userId_commentId: { userId: req.userId!, commentId: req.params.commentId } },
+      update: { emoji },
+      create: { emoji, userId: req.userId!, commentId: req.params.commentId },
+    });
+
+    res.json(reaction);
+  } catch (error) {
+    console.error('Comment reaction error:', error);
+    res.status(500).json({ error: 'Failed to react' });
+  }
+});
+
+// Remove reaction from comment
+router.delete('/:postId/comments/:commentId/reactions', authenticate, async (req: AuthRequest, res) => {
+  try {
+    await prisma.commentReaction.deleteMany({
+      where: { userId: req.userId!, commentId: req.params.commentId },
+    });
+    res.status(204).send();
+  } catch (error) {
+    console.error('Remove comment reaction error:', error);
+    res.status(500).json({ error: 'Failed to remove reaction' });
   }
 });
 

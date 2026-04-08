@@ -144,6 +144,12 @@ export const postAPI = {
     api.put(`/posts/${postId}`, data),
   deletePost: (postId: string) => api.delete(`/posts/${postId}`),
   deleteComment: (postId: string, commentId: string) => api.delete(`/posts/${postId}/comments/${commentId}`),
+  reactPost: (postId: string, emoji: string) => api.post(`/posts/${postId}/reactions`, { emoji }),
+  unreactPost: (postId: string) => api.delete(`/posts/${postId}/reactions`),
+  reactComment: (postId: string, commentId: string, emoji: string) =>
+    api.post(`/posts/${postId}/comments/${commentId}/reactions`, { emoji }),
+  unreactComment: (postId: string, commentId: string) =>
+    api.delete(`/posts/${postId}/comments/${commentId}/reactions`),
 };
 
 // Friendship API
@@ -177,6 +183,10 @@ export const messageAPI = {
   editMessage: (messageId: string, content: string) =>
     api.patch(`/messages/messages/${messageId}`, { content }),
   deleteMessage: (messageId: string) => api.delete(`/messages/messages/${messageId}`),
+  reactMessage: (messageId: string, emoji: string) =>
+    api.post(`/messages/messages/${messageId}/reactions`, { emoji }),
+  unreactMessage: (messageId: string) =>
+    api.delete(`/messages/messages/${messageId}/reactions`),
   markRead: (conversationId: string) => api.patch(`/messages/conversations/${conversationId}/read`),
   createGroup: (name: string, memberIds: string[]) =>
     api.post('/messages/conversations/group', { name, memberIds }),
