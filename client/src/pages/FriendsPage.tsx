@@ -206,18 +206,16 @@ export default function FriendsPage() {
                   return (
                     <div
                       key={friend.id}
-                      className="group flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors"
+                      onClick={() => navigate(`/profile/${friend.id}`)}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
                     >
                       {/* Avatar */}
-                      <button onClick={() => navigate(`/profile/${friend.id}`)} className="flex-shrink-0">
+                      <div className="flex-shrink-0">
                         <Avatar user={friend} size={11} showPresence />
-                      </button>
+                      </div>
 
                       {/* Info */}
-                      <button
-                        onClick={() => navigate(`/profile/${friend.id}`)}
-                        className="flex-1 min-w-0 text-left"
-                      >
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm font-semibold text-white truncate">
                             {friend.firstName} {friend.lastName}
@@ -232,10 +230,10 @@ export default function FriendsPage() {
                             {[friend.role, friend.city].filter(Boolean).join(' · ')}
                           </p>
                         )}
-                      </button>
+                      </div>
 
-                      {/* Actions */}
-                      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                      {/* Actions — always visible, stop propagation */}
+                      <div className="flex items-center gap-0.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
                         <button
                           onClick={() => navigate(`/messages/${friend.id}`)}
                           className="p-2 text-slate-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg transition-all"
@@ -265,14 +263,6 @@ export default function FriendsPage() {
                           </button>
                         )}
                       </div>
-
-                      {/* Message button always visible on mobile */}
-                      <button
-                        onClick={() => navigate(`/messages/${friend.id}`)}
-                        className="p-2 text-slate-600 hover:text-primary-400 rounded-lg transition-colors flex-shrink-0 sm:hidden"
-                      >
-                        <MessageCircle size={16} />
-                      </button>
                     </div>
                   );
                 })}
