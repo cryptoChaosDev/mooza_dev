@@ -125,7 +125,6 @@ export default function ChatPage() {
       sw.locked = true;
     }
     if (dx >= 0) return;
-    e.preventDefault();
     // rubber-band resistance past threshold
     const clamped = dx < -SWIPE_MAX
       ? -SWIPE_MAX - Math.sqrt(Math.abs(dx) - SWIPE_MAX) * 2
@@ -713,7 +712,7 @@ export default function ChatPage() {
       })()}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto" onClick={() => inputRef.current?.blur()}>
+      <div className="flex-1 overflow-y-auto" style={{ touchAction: 'pan-y' }} onClick={() => inputRef.current?.blur()}>
         <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
           {grouped.length === 0 ? (
             <div className="text-center py-10">
@@ -863,18 +862,19 @@ export default function ChatPage() {
                                 </button>
                               );
                             })}
-                            <button
-                              onClick={() => setReactionPickerMsgId(msg.id)}
-                              className="text-sm px-1.5 py-0.5 rounded-full border border-slate-600/40 bg-slate-700/50 text-slate-500 hover:text-slate-300 hover:bg-slate-600/60 transition-colors"
-                            >
-                              +
-                            </button>
                           </div>
                         )}
 
                         {/* Action icons under bubble */}
                         {!msg.deletedAt && (
                           <div className={`flex items-center gap-1 mt-1 opacity-100 sm:opacity-0 sm:group-hover/msg:opacity-100 transition-opacity ${isMine ? 'justify-end' : 'justify-start'}`}>
+                            <button
+                              onClick={() => setReactionPickerMsgId(msg.id)}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-yellow-400 hover:bg-slate-700/60 transition-colors"
+                              title="Реакция"
+                            >
+                              <Smile size={14} />
+                            </button>
                             <button
                               onClick={() => startReply(msg)}
                               className="p-1.5 rounded-lg text-slate-500 hover:text-slate-300 hover:bg-slate-700/60 transition-colors"
