@@ -749,7 +749,8 @@ export default function ProfilePage() {
 
   const aUrl = getAvatarUrl(profile?.avatar);
   const bUrl = profile?.bannerImage ? `${API_URL}${profile.bannerImage}` : null;
-  const hasSocialLinks = Object.values((profile?.socialLinks as Record<string, string>) || {}).some(Boolean);
+  const hasSocialLinks = Object.values((profile?.socialLinks as Record<string, string>) || {}).some(Boolean)
+    || !!(profile?.vkLink || profile?.youtubeLink || profile?.telegramLink);
 
   return (
     <div className="min-h-screen bg-slate-950">
