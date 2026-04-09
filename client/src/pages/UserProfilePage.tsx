@@ -2,7 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, Briefcase, Music, MessageCircle, Loader2,
-  Globe, Building2, FileText, Radio, Crown, BadgeCheck, Ban,
+  Building2, FileText, Radio, Crown, BadgeCheck, Ban,
 } from 'lucide-react';
 import { userAPI, channelAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
