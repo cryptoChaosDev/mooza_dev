@@ -421,6 +421,9 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
         country: true,
         city: true,
         role: true,
+        isPremium: true,
+        isVerified: true,
+        isBlocked: true,
         genres: true,
         fieldOfActivity: { select: { id: true, name: true } },
         userProfessions: {
