@@ -40,15 +40,30 @@ function PageLoader() {
   );
 }
 
-function showBrowserNotification(title: string, body: string, icon?: string) {
+function resolveIcon(icon?: string): string {
+  if (!icon) return '/pwa-192x192.png';
+  return icon.startsWith('http') ? icon : `${API_URL}${icon}`;
+}
+
+async function showNotification(title: string, body: string, icon?: string, link?: string) {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-  const n = new Notification(title, {
-    body,
-    icon: icon ? `${API_URL}${icon}` : '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
-    tag: title,
-  });
-  n.onclick = () => { window.focus(); n.close(); };
+  const iconUrl = resolveIcon(icon);
+  // Use service worker notification — works on mobile (new Notification() does not)
+  if ('serviceWorker' in navigator) {
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      await reg.showNotification(title, {
+        body,
+        icon: iconUrl,
+        badge: '/pwa-192x192.png',
+        tag: link || title,
+        data: { link: link || '/' },
+      });
+      return;
+    } catch { /* fall through to legacy */ }
+  }
+  const n = new Notification(title, { body, icon: iconUrl, badge: '/pwa-192x192.png', tag: link || title });
+  n.onclick = () => { window.focus(); n.close(); if (link) window.location.href = link; };
 }
 
 async function apiFetch(path: string, token: string) {
@@ -184,15 +199,18 @@ function App() {
     });
 
     socket.on('new_message', (message: any) => {
-      const inChat = window.location.pathname.startsWith('/messages') ||
-                     window.location.pathname.startsWith('/chat');
-      if (!inChat) {
+      const convId = message.conversationId;
+      const inThisChat = window.location.pathname === `/messages/${convId}` ||
+                         window.location.pathname === `/chat/${convId}`;
+      if (!inThisChat) {
         bs().incrementMessages();
+        const senderName = message.sender
+          ? `${message.sender.firstName} ${message.sender.lastName}`
+          : 'Новое сообщение';
+        const preview = message.content?.trim() ||
+          (message.attachmentName ? `📎 ${message.attachmentName}` : '📎 Вложение');
+        showNotification(senderName, preview, message.sender?.avatar, `/messages/${convId}`);
       }
-      const senderName = message.sender
-        ? `${message.sender.firstName} ${message.sender.lastName}`
-        : 'Новое сообщение';
-      showBrowserNotification(senderName, message.content, message.sender?.avatar);
     });
 
     socket.on('message_edited', () => {
@@ -207,10 +225,11 @@ function App() {
       queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
       bs().incrementFriendRequests();
       if (!requester) return;
-      showBrowserNotification(
+      showNotification(
         'Заявка в друзья',
         `${requester.firstName} ${requester.lastName} хочет добавить вас в друзья`,
         requester.avatar,
+        '/friends',
       );
     });
 
@@ -219,10 +238,11 @@ function App() {
       queryClient.invalidateQueries({ queryKey: ['friend-requests-sent'] });
       const other = friendship?.receiver ?? friendship?.requester;
       if (!other) return;
-      showBrowserNotification(
+      showNotification(
         'Заявка принята',
         `${other.firstName} ${other.lastName} принял(а) вашу заявку в друзья`,
         other.avatar,
+        '/friends',
       );
     });
 
@@ -242,10 +262,11 @@ function App() {
       queryClient.invalidateQueries({ queryKey: ['posts'] });
       const commenter = comment?.author;
       if (!commenter) return;
-      showBrowserNotification(
+      showNotification(
         'Новый комментарий',
         `${commenter.firstName} ${commenter.lastName} прокомментировал(а) вашу запись`,
         commenter.avatar,
+        '/',
       );
     });
 
