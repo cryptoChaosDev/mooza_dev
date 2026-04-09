@@ -75,6 +75,12 @@ export default function LoginPage() {
         try {
           const codeVerifier = localStorage.getItem('vk_code_verifier') || undefined;
           localStorage.removeItem('vk_code_verifier');
+          // Must init before exchangeCode so SDK knows client_id and redirect_uri
+          VKID.Config.init({
+            app: 54535061,
+            redirectUrl: 'https://moooza.ru/login',
+            ...(codeVerifier ? { codeVerifier } : {}),
+          });
           const payload = await (VKID.Auth as any).exchangeCode(code, deviceId, codeVerifier);
           const accessToken = (payload as any)?.access_token;
           if (!accessToken) throw new Error('no access_token');
