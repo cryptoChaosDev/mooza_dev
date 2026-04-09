@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import * as VKID from '@vkid/sdk';
 
 const APP_ID = 54535061;
-const REDIRECT_URL = `${window.location.origin}/login`;
+const REDIRECT_URL = 'https://moooza.ru/login';
 
 function generateCodeVerifier(): string {
   const array = new Uint8Array(32);
