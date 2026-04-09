@@ -25,7 +25,7 @@ const MSG_INCLUDE = {
 };
 
 const MEMBER_USER = {
-  user: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+  user: { select: { id: true, firstName: true, lastName: true, avatar: true, isPremium: true, isVerified: true, isBlocked: true } },
 };
 
 /** Find or create a 1-to-1 conversation between two users */

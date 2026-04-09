@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, Camera, FileText, Download, Smile } from 'lucide-react';
+import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, Camera, FileText, Download, Smile, BadgeCheck, Ban } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { getSocket } from '../lib/socket';
@@ -541,10 +541,13 @@ export default function ChatPage() {
               <ArrowLeft size={20} className="text-slate-300 group-hover:text-white transition-colors" />
             </button>
 
-            <div className="flex items-center gap-3 flex-1 min-w-0">
+            <div
+              className={`flex items-center gap-3 flex-1 min-w-0 ${!conversation.isGroup && otherMember ? 'cursor-pointer' : ''}`}
+              onClick={() => { if (!conversation.isGroup && otherMember) navigate(`/profile/${otherMember.id}`); }}
+            >
               {chatAvatar ? (
                 <img
-                  src={`${API_URL}${chatAvatar}`}
+                  src={getAvatarUrl(chatAvatar)!}
                   alt={chatName}
                   className="w-9 h-9 rounded-xl object-cover ring-2 ring-slate-700/50"
                 />
@@ -559,7 +562,12 @@ export default function ChatPage() {
               )}
 
               <div className="flex-1 min-w-0">
-                <h2 className="font-semibold text-white text-sm truncate">{chatName}</h2>
+                <div className="flex items-center gap-1.5">
+                  <h2 className="font-semibold text-white text-sm truncate">{chatName}</h2>
+                  {(otherMember as any)?.isPremium && <span title="Premium"><Crown size={13} className="text-amber-400 flex-shrink-0" /></span>}
+                  {(otherMember as any)?.isVerified && <span title="Верифицирован"><BadgeCheck size={13} className="text-sky-400 flex-shrink-0" /></span>}
+                  {(otherMember as any)?.isBlocked && <span title="Заблокирован"><Ban size={13} className="text-red-500 flex-shrink-0" /></span>}
+                </div>
                 {conversation.isGroup ? (
                   <p className="text-xs text-slate-400">{conversation.members.length} участников</p>
                 ) : (

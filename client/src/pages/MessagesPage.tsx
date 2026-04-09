@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Search, Plus, Users, X, Check, User, FolderKanban } from 'lucide-react';
+import { MessageCircle, Search, Plus, Users, X, Check, User, FolderKanban, Crown, BadgeCheck, Ban } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { getSocket } from '../lib/socket';
@@ -10,7 +10,7 @@ interface ConvItem {
   isGroup: boolean;
   name: string;
   avatar: string | null;
-  otherUser: { id: string; firstName: string; lastName: string; avatar: string | null } | null;
+  otherUser: { id: string; firstName: string; lastName: string; avatar: string | null; isPremium?: boolean; isVerified?: boolean; isBlocked?: boolean } | null;
   lastMessage: { content: string; createdAt: string; senderId: string; senderName: string } | null;
   unreadCount: number;
   updatedAt: string;
@@ -221,7 +221,12 @@ export default function MessagesPage() {
                   {/* Info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <p className="font-semibold text-white text-sm truncate">{conv.name}</p>
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <p className="font-semibold text-white text-sm truncate">{conv.name}</p>
+                        {conv.otherUser?.isPremium && <span title="Premium"><Crown size={12} className="text-amber-400 flex-shrink-0" /></span>}
+                        {conv.otherUser?.isVerified && <span title="Верифицирован"><BadgeCheck size={12} className="text-sky-400 flex-shrink-0" /></span>}
+                        {conv.otherUser?.isBlocked && <span title="Заблокирован"><Ban size={12} className="text-red-500 flex-shrink-0" /></span>}
+                      </div>
                       {conv.lastMessage && (
                         <span className="text-xs text-slate-500 flex-shrink-0">
                           {formatTime(conv.lastMessage.createdAt)}
