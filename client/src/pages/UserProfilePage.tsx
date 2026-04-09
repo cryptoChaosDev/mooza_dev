@@ -86,7 +86,7 @@ export default function UserProfilePage() {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   };
 
-  const shareUrl = `/@${user.nickname || user.id}`;
+  const shareUrl = `/profile/${user.id}`;
   const bUrl = user.bannerImage ? getAvatarUrl(user.bannerImage) : null;
   const hasSocialLinks = Object.values((user.socialLinks as Record<string, string>) || {}).some(Boolean);
 
