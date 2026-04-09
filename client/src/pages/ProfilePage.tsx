@@ -6,7 +6,7 @@ import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, DollarSign, Calendar,
   Headphones, Edit3, User, Plus, ChevronDown, ChevronLeft, ChevronRight,
-  Building2, FileText, Trash2, Radio, Loader2, Copy, Check,
+  Building2, FileText, Trash2, Radio, Loader2,
 } from 'lucide-react';
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
@@ -60,7 +60,6 @@ export default function ProfilePage() {
   const bannerInputRef = useRef<HTMLInputElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('basic');
-  const [urlCopied, setUrlCopied] = useState(false);
 
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', nickname: '', bio: '',
@@ -651,32 +650,6 @@ export default function ProfilePage() {
               {profile?.firstName} {profile?.lastName}
             </h2>
             {profile?.nickname && <p className="text-slate-400 text-sm mt-0.5">@{profile.nickname}</p>}
-
-            {/* Public URL pill */}
-            {(() => {
-              const handle = profile?.nickname || profile?.id;
-              if (!handle) return null;
-              const publicUrl = `${window.location.origin}/@${handle}`;
-              return (
-                <button
-                  onClick={() => {
-                    navigator.clipboard.writeText(publicUrl).then(() => {
-                      setUrlCopied(true);
-                      setTimeout(() => setUrlCopied(false), 2000);
-                    });
-                  }}
-                  className="inline-flex items-center gap-1.5 mt-1.5 px-2.5 py-1 bg-slate-800/60 hover:bg-slate-700/60 rounded-full border border-slate-700/50 hover:border-primary-500/40 transition-all group"
-                  title="Скопировать публичную ссылку"
-                >
-                  <span className="text-[11px] text-slate-400 group-hover:text-primary-300 transition-colors font-mono">
-                    moooza.ru/@{profile?.nickname || profile?.id}
-                  </span>
-                  {urlCopied
-                    ? <Check size={10} className="text-green-400 flex-shrink-0" />
-                    : <Copy size={10} className="text-slate-500 group-hover:text-primary-400 flex-shrink-0 transition-colors" />}
-                </button>
-              );
-            })()}
 
             {profile?.role && (
               <span className="block mt-1.5 px-2.5 py-0.5 bg-primary-500/15 text-primary-300 text-xs font-medium rounded-full border border-primary-500/30 text-center">

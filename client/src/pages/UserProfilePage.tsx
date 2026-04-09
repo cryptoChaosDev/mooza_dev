@@ -208,7 +208,7 @@ export default function UserProfilePage() {
             {/* Share profile button */}
             <div className="mt-3 flex justify-center">
               <ShareButton
-                url={`/@${user.nickname || user.id}`}
+                url={`/profile/${user.id}`}
                 title={`${user.firstName} ${user.lastName} — Moooza`}
                 text={user.bio?.slice(0, 100)}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/50 text-slate-400 hover:text-white text-xs rounded-full transition-all"

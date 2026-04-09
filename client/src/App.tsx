@@ -20,7 +20,6 @@ const ChatPage           = lazy(() => import('./pages/ChatPage'));
 const AdminPage          = lazy(() => import('./pages/AdminPage'));
 const PrivacyPolicyPage  = lazy(() => import('./pages/PrivacyPolicyPage'));
 const TermsPage          = lazy(() => import('./pages/TermsPage'));
-const PublicProfilePage  = lazy(() => import('./pages/PublicProfilePage'));
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -87,7 +86,6 @@ function AppRoutes() {
             <Route path="/"                 element={<FeedPage />} />
             <Route path="/profile"          element={<ProfilePage />} />
             <Route path="/profile/:userId"  element={<UserProfilePage />} />
-            <Route path="/@:handle"         element={<PublicProfilePage />} />
             <Route path="/search"           element={<SearchPage />} />
             <Route path="/friends"          element={<FriendsPage />} />
             <Route path="/messages"         element={<MessagesPage />} />
@@ -286,7 +284,6 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/privacy"  element={<PrivacyPolicyPage />} />
           <Route path="/terms"    element={<TermsPage />} />
-          <Route path="/@:handle" element={<PublicProfilePage />} />
           <Route path="*"         element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
