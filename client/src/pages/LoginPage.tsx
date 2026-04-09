@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronDown } from 'lucide-react';
 import { authAPI, userAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import TelegramLoginButton from '../components/TelegramLoginButton';
 
 function DocSection({ title, children }: { title: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -34,6 +35,21 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { setAuth, setUser } = useAuthStore();
+
+  const handleTelegramAuth = useCallback(async (data: Record<string, string | number>) => {
+    setError('');
+    setLoading(true);
+    try {
+      const { data: res } = await authAPI.telegramLogin(data);
+      setAuth(res.user, res.token);
+      try { const { data: u } = await userAPI.agreeToTerms(); setUser(u); } catch {}
+      navigate('/');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Ошибка входа через Telegram');
+    } finally {
+      setLoading(false);
+    }
+  }, [navigate, setAuth, setUser]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -217,7 +233,16 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <p className="mt-6 text-center text-slate-400">
+          <div className="mt-6">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-1 h-px bg-slate-700" />
+              <span className="text-xs text-slate-500 uppercase tracking-wide">или</span>
+              <div className="flex-1 h-px bg-slate-700" />
+            </div>
+            <TelegramLoginButton onAuth={handleTelegramAuth} disabled={loading} />
+          </div>
+
+          <p className="mt-4 text-center text-slate-400">
             Нет аккаунта?{' '}
             <span className="text-slate-500 font-medium cursor-default" title="Скоро, скоро..">
               Скоро, скоро..

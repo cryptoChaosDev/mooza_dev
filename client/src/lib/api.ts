@@ -35,6 +35,8 @@ api.interceptors.response.use(
 export const authAPI = {
   login: (email: string, password: string) =>
     api.post('/auth/login', { email, password }),
+  telegramLogin: (data: Record<string, string | number>) =>
+    api.post('/auth/telegram', data),
   register: (data: {
     email: string;
     password: string;

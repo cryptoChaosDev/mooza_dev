@@ -225,9 +225,11 @@ model PortfolioFile {
 
 model User {
   id        String   @id @default(uuid())
-  email     String   @unique
+  email     String?  @unique
   phone     String?  @unique
-  password  String
+  password  String?
+  telegramId       String?  @unique
+  telegramUsername String?
   firstName String
   lastName  String
   nickname  String?

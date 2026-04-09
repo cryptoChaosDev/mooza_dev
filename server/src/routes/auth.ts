@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { prisma } from '../index';
 import { z } from 'zod';
 import { authLimiter, registerLimiter } from '../middleware/rateLimiter';
@@ -168,6 +169,9 @@ router.post('/login', authLimiter, async (req, res) => {
     }
 
     // Check password
+    if (!user.password) {
+      return res.status(401).json({ error: 'Этот аккаунт использует вход через Telegram' });
+    }
     const validPassword = await bcrypt.compare(data.password, user.password);
     if (!validPassword) {
       return res.status(401).json({ error: 'Неверные учетные данные' });
@@ -185,6 +189,71 @@ router.post('/login', authLimiter, async (req, res) => {
     }
     console.error('Login error:', error);
     res.status(500).json({ error: 'Ошибка входа' });
+  }
+});
+
+// Telegram Login
+router.post('/telegram', authLimiter, async (req, res) => {
+  try {
+    const { id, first_name, last_name, username, photo_url, auth_date, hash } = req.body;
+
+    if (!id || !hash || !auth_date) {
+      return res.status(400).json({ error: 'Неверные данные от Telegram' });
+    }
+
+    // Verify freshness (max 24h)
+    const now = Math.floor(Date.now() / 1000);
+    if (now - Number(auth_date) > 86400) {
+      return res.status(400).json({ error: 'Данные Telegram устарели, попробуйте снова' });
+    }
+
+    // Verify HMAC signature
+    const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+    const secretKey = crypto.createHash('sha256').update(botToken).digest();
+    const dataCheckArr = Object.entries({ id, first_name, last_name, username, photo_url, auth_date })
+      .filter(([, v]) => v !== undefined && v !== null && v !== '')
+      .map(([k, v]) => `${k}=${v}`)
+      .sort()
+      .join('\n');
+    const expectedHash = crypto.createHmac('sha256', secretKey).update(dataCheckArr).digest('hex');
+
+    if (expectedHash !== hash) {
+      return res.status(401).json({ error: 'Неверная подпись Telegram' });
+    }
+
+    const telegramId = String(id);
+
+    // Find or create user
+    let user = await prisma.user.findUnique({ where: { telegramId } });
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          telegramId,
+          telegramUsername: username || null,
+          firstName: first_name || 'Пользователь',
+          lastName: last_name || '',
+          avatar: photo_url || null,
+          nickname: username || null,
+        },
+      });
+    } else {
+      // Update username/avatar in case they changed
+      user = await prisma.user.update({
+        where: { telegramId },
+        data: {
+          telegramUsername: username || user.telegramUsername,
+          avatar: photo_url || user.avatar,
+        },
+      });
+    }
+
+    const token = generateToken({ userId: user.id });
+    const { password: _, ...userWithoutPassword } = user as any;
+    res.json({ user: userWithoutPassword, token });
+  } catch (error) {
+    console.error('Telegram auth error:', error);
+    res.status(500).json({ error: 'Ошибка авторизации через Telegram' });
   }
 });
 
