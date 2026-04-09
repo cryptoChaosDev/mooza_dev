@@ -109,6 +109,7 @@ const publicUserSelect = {
   role: true,
   isPremium: true,
   isVerified: true,
+  isBlocked: true,
   genres: true,
   fieldOfActivityId: true,
   fieldOfActivity: { select: { id: true, name: true } },

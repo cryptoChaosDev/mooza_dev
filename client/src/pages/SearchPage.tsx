@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Search, UserPlus, X, MessageCircle, Check, Users,
-  SlidersHorizontal, ArrowUpDown, ChevronDown, Loader2,
+  SlidersHorizontal, ArrowUpDown, ChevronDown, Loader2, Crown, BadgeCheck, Ban,
 } from 'lucide-react';
 import { friendshipAPI, userAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
@@ -43,109 +43,96 @@ function getUserCountText(n: number): string {
   return 'участников';
 }
 
-// ─── Skeleton card ─────────────────────────────────────────────────────────────
-function SkeletonCard() {
+// ─── Skeleton row ──────────────────────────────────────────────────────────────
+function SkeletonRow() {
   return (
-    <div className="bg-slate-900 rounded-xl p-3.5 border border-slate-800 animate-pulse">
-      <div className="flex items-center gap-3 mb-3">
-        <div className="w-10 h-10 bg-slate-700/50 rounded-xl flex-shrink-0" />
-        <div className="flex-1 space-y-1.5">
-          <div className="h-3.5 bg-slate-700/50 rounded w-2/3" />
-          <div className="h-3 bg-slate-700/50 rounded w-1/3" />
-          <div className="h-3 bg-slate-700/50 rounded w-1/2" />
-        </div>
+    <div className="flex items-center gap-3 px-4 py-3 animate-pulse">
+      <div className="w-11 h-11 rounded-full bg-slate-800 flex-shrink-0" />
+      <div className="flex-1 space-y-2">
+        <div className="h-3.5 bg-slate-800 rounded w-2/5" />
+        <div className="h-3 bg-slate-800 rounded w-1/3" />
       </div>
-      <div className="flex gap-2">
-        <div className="h-7 bg-slate-700/50 rounded-lg flex-1" />
-        <div className="h-7 bg-slate-700/50 rounded-lg flex-1" />
+      <div className="flex gap-1.5">
+        <div className="w-8 h-8 bg-slate-800 rounded-lg" />
+        <div className="w-8 h-8 bg-slate-800 rounded-lg" />
       </div>
     </div>
   );
 }
 
-// ─── User card ─────────────────────────────────────────────────────────────────
-interface UserCardProps {
+// ─── User row ──────────────────────────────────────────────────────────────────
+interface UserRowProps {
   user: any;
   sentRequests: Set<string>;
   onMessage: (id: string) => void;
   onAddFriend: (id: string) => void;
   onNavigate: (id: string) => void;
 }
-function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: UserCardProps) {
+function UserRow({ user, sentRequests, onMessage, onAddFriend, onNavigate }: UserRowProps) {
   const isSent = sentRequests.has(user.id);
   const match = user.matchPercent as number | undefined;
   const matchColor = match == null ? '' : match === 100 ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' : match >= 70 ? 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' : 'bg-slate-700/50 text-slate-400 border-slate-600/30';
   const isOnline = usePresenceStore((s) => s.onlineUsers.has(user.id));
+
+  const professions = user.userProfessions?.slice(0, 2).map((up: any) => up.profession?.name).filter(Boolean) ?? [];
+  const subtitle = [
+    user.role,
+    professions.join(', '),
+    user.city,
+  ].filter(Boolean).join(' · ');
+
   return (
-    <div className="group relative bg-slate-900 rounded-xl p-3.5 border border-slate-800 hover:bg-slate-800/50 transition-colors">
-      {match != null && (
-        <div className={`absolute top-2.5 right-2.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${matchColor}`}>
-          {match}%
-        </div>
-      )}
-      <div className="flex items-start gap-3">
-        <button onClick={() => onNavigate(user.id)} className="flex-shrink-0 relative">
-          {user.avatar ? (
-            <img
-              src={getAvatarUrl(user.avatar)!}
-              alt={`${user.firstName} ${user.lastName}`}
-              className="w-10 h-10 rounded-xl object-cover ring-2 ring-slate-700/50 group-hover:ring-primary-500/50 transition-all"
-            />
-          ) : (
-            <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl flex items-center justify-center ring-2 ring-slate-700/50 group-hover:ring-primary-500/50 transition-all">
-              <span className="text-white font-bold text-sm">
-                {user.firstName?.[0]}{user.lastName?.[0]}
-              </span>
-            </div>
-          )}
-          {isOnline && (
-            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-slate-800 rounded-full" />
-          )}
-        </button>
-        <div className="flex-1 min-w-0">
-          <button
-            onClick={() => onNavigate(user.id)}
-            className="font-semibold text-white text-sm hover:text-primary-400 transition-colors truncate block"
-          >
-            {user.firstName} {user.lastName}
-          </button>
-          {user.nickname && <p className="text-xs text-slate-400 truncate">@{user.nickname}</p>}
-          <div className="flex flex-wrap gap-1 mt-0.5">
-            {(user as any).isPremium && <span className="px-1.5 py-0 bg-amber-500/15 text-amber-400 text-[10px] font-semibold rounded-full border border-amber-500/30">👑 Premium</span>}
-            {(user as any).isVerified && <span className="px-1.5 py-0 bg-sky-500/15 text-sky-400 text-[10px] font-semibold rounded-full border border-sky-500/30">✓ Verified</span>}
+    <div
+      onClick={() => onNavigate(user.id)}
+      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
+    >
+      {/* Avatar */}
+      <div className="relative flex-shrink-0">
+        {user.avatar ? (
+          <img src={getAvatarUrl(user.avatar)!} alt={`${user.firstName} ${user.lastName}`} className="w-11 h-11 rounded-full object-cover" />
+        ) : (
+          <div className="w-11 h-11 bg-gradient-to-br from-primary-500 to-purple-600 rounded-full flex items-center justify-center">
+            <span className="text-white font-bold text-sm">{user.firstName?.[0]}{user.lastName?.[0]}</span>
           </div>
-          {user.city && <p className="text-xs text-slate-500 truncate">{user.city}</p>}
-          {user.userProfessions && user.userProfessions.length > 0 && (
-            <div className="flex flex-wrap gap-1 mt-1.5">
-              {user.userProfessions.slice(0, 2).map((up: any) => (
-                <span key={up.id} className="text-xs bg-primary-500/20 text-primary-300 px-1.5 py-0.5 rounded">
-                  {up.profession?.name}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
+        )}
+        {isOnline && <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full" />}
       </div>
-      <div className="flex gap-1.5 mt-3">
+
+      {/* Info */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="text-sm font-semibold text-white truncate">{user.firstName} {user.lastName}</span>
+          {match != null && (
+            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border flex-shrink-0 ${matchColor}`}>{match}%</span>
+          )}
+          {user.isPremium && <span title="Premium"><Crown size={12} className="text-amber-400 flex-shrink-0" /></span>}
+          {user.isVerified && <span title="Verified"><BadgeCheck size={12} className="text-sky-400 flex-shrink-0" /></span>}
+          {user.isBlocked && <span title="Заблокирован"><Ban size={12} className="text-red-400 flex-shrink-0" /></span>}
+        </div>
+        {subtitle && <p className="text-xs text-slate-500 truncate mt-0.5">{subtitle}</p>}
+        {user.nickname && <p className="text-xs text-slate-600 truncate">@{user.nickname}</p>}
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
         <button
           onClick={() => onMessage(user.id)}
-          className="flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-slate-800/50 hover:bg-slate-700/50 text-slate-300 hover:text-white rounded-lg text-xs font-medium transition-all"
+          className="p-2 text-slate-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg transition-all"
+          title="Написать"
         >
-          <MessageCircle size={13} />
-          <span className="hidden sm:inline">Сообщение</span>
+          <MessageCircle size={16} />
         </button>
         {isSent ? (
-          <div className="flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-green-500/10 text-green-400 rounded-lg text-xs font-medium">
-            <Check size={13} />
-            <span className="hidden sm:inline">Отправлено</span>
+          <div className="p-2 text-emerald-400" title="Заявка отправлена">
+            <Check size={16} />
           </div>
         ) : (
           <button
             onClick={() => onAddFriend(user.id)}
-            className="flex-1 flex items-center justify-center gap-1.5 px-2.5 py-1.5 bg-primary-500/10 hover:bg-primary-500/20 text-primary-400 rounded-lg text-xs font-medium transition-all"
+            className="p-2 text-slate-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg transition-all"
+            title="Добавить в друзья"
           >
-            <UserPlus size={13} />
-            <span className="hidden sm:inline">В друзья</span>
+            <UserPlus size={16} />
           </button>
         )}
       </div>
@@ -230,6 +217,7 @@ export default function SearchPage() {
   const [sortSheetOpen, setSortSheetOpen] = useState(false);
   const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
   const [errorMessage, setErrorMessage] = useState('');
+  const [visibleCount, setVisibleCount] = useState(30);
 
   // Debounced name (300ms)
   const [debouncedName, setDebouncedName] = useState('');
@@ -324,6 +312,9 @@ export default function SearchPage() {
   const totalCount = hasProfileFilters ? (searchData?.pagination?.totalCount ?? 0) : (defaultUsers?.length ?? 0);
   const totalPages = hasProfileFilters ? (searchData?.pagination?.totalPages ?? 1) : 1;
   const anyLoading = isLoading || isFetching;
+
+  // Reset visible count when results change
+  useEffect(() => { setVisibleCount(30); }, [results]);
 
   // Active filter chips — only selected values, each with its own clear action
   const activeChips = useMemo(() => {
@@ -498,16 +489,16 @@ export default function SearchPage() {
               </div>
             </div>
 
-            {/* Grid */}
+            {/* List */}
             {isLoading ? (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden divide-y divide-slate-800/60">
+                {Array.from({ length: 8 }).map((_, i) => <SkeletonRow key={i} />)}
               </div>
             ) : results.length > 0 ? (
               <>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  {results.map((user: any) => (
-                    <UserCard
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden divide-y divide-slate-800/60">
+                  {results.slice(0, visibleCount).map((user: any) => (
+                    <UserRow
                       key={user.id}
                       user={user}
                       sentRequests={sentRequests}
@@ -518,9 +509,19 @@ export default function SearchPage() {
                   ))}
                 </div>
 
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-center gap-2 pt-4">
+                {/* Show more / pagination */}
+                {visibleCount < results.length && (
+                  <div className="flex justify-center pt-2">
+                    <button
+                      onClick={() => setVisibleCount(v => v + 30)}
+                      className="px-6 py-2.5 bg-slate-800/70 hover:bg-slate-700/70 border border-slate-700/50 text-slate-300 hover:text-white rounded-xl text-sm font-medium transition-all"
+                    >
+                      Показать ещё ({results.length - visibleCount})
+                    </button>
+                  </div>
+                )}
+                {totalPages > 1 && visibleCount >= results.length && (
+                  <div className="flex items-center justify-center gap-2 pt-2">
                     <button
                       disabled={page <= 1}
                       onClick={() => setPage(page - 1)}
