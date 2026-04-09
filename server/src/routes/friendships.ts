@@ -105,6 +105,9 @@ router.get('/requests', authenticate, async (req: AuthRequest, res) => {
             avatar: true,
             role: true,
             city: true,
+            isPremium: true,
+            isVerified: true,
+            isBlocked: true,
           }
         }
       },
@@ -125,7 +128,7 @@ router.get('/sent', authenticate, async (req: AuthRequest, res) => {
       where: { requesterId: req.userId, status: 'pending' },
       include: {
         receiver: {
-          select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, city: true }
+          select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, city: true, isPremium: true, isVerified: true, isBlocked: true }
         }
       },
       orderBy: { createdAt: 'desc' }
@@ -244,6 +247,9 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
             avatar: true,
             role: true,
             city: true,
+            isPremium: true,
+            isVerified: true,
+            isBlocked: true,
           }
         },
         receiver: {
@@ -254,6 +260,9 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
             avatar: true,
             role: true,
             city: true,
+            isPremium: true,
+            isVerified: true,
+            isBlocked: true,
           }
         }
       }

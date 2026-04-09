@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Users, Check, X, MessageCircle, UserX, Clock, Pin, PinOff, Search, Wifi } from 'lucide-react';
+import { Users, Check, X, MessageCircle, UserX, Clock, Pin, PinOff, Search, Wifi, Crown, BadgeCheck, Ban } from 'lucide-react';
 import { friendshipAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { usePresenceStore } from '../stores/presenceStore';
@@ -217,10 +217,13 @@ export default function FriendsPage() {
 
                       {/* Info */}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-sm font-semibold text-white truncate">
                             {friend.firstName} {friend.lastName}
                           </span>
+                          {friend.isPremium && <span title="Premium"><Crown size={13} className="text-amber-400 flex-shrink-0" /></span>}
+                          {friend.isVerified && <span title="Верифицирован"><BadgeCheck size={13} className="text-sky-400 flex-shrink-0" /></span>}
+                          {friend.isBlocked && <span title="Заблокирован"><Ban size={13} className="text-red-500 flex-shrink-0" /></span>}
                           {isPinned && <Pin size={11} className="text-primary-400 flex-shrink-0" />}
                           {isOnline && (
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />

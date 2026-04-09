@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import {
   Newspaper, Send, Heart, MessageCircle, Trash2, Loader2, X,
   MoreHorizontal, Image, Music, Smile, Pencil, Check,
-  Radio, Users, ToggleLeft, ToggleRight,
+  Radio, Users, ToggleLeft, ToggleRight, Crown, BadgeCheck, Ban,
 } from 'lucide-react';
 import ShareButton from '../components/ShareButton';
 import { postAPI, channelAPI } from '../lib/api';
@@ -504,6 +504,9 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'] }: { post: any;
               <Link to={`/profile/${post.author.id}`} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate">
                 {post.author.firstName} {post.author.lastName}
               </Link>
+              {post.author.isPremium && <span title="Premium"><Crown size={13} className="text-amber-400 flex-shrink-0" /></span>}
+              {post.author.isVerified && <span title="Верифицирован"><BadgeCheck size={13} className="text-sky-400 flex-shrink-0" /></span>}
+              {post.author.isBlocked && <span title="Заблокирован"><Ban size={13} className="text-red-500 flex-shrink-0" /></span>}
               {post.channel && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-primary-600/15 border border-primary-600/30 rounded-full text-[10px] text-primary-400 font-medium flex-shrink-0">
                   <Radio size={9} />
