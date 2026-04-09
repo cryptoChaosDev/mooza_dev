@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Share2, Check, Link } from 'lucide-react';
+import { Share2, Check } from 'lucide-react';
 
 interface ShareButtonProps {
   url: string;       // relative or absolute URL to share
