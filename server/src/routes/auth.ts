@@ -339,7 +339,6 @@ router.get('/vk/login', (req, res) => {
     response_type: 'code',
     scope: 'email',
     v: '5.131',
-    display: 'page',
   });
   res.redirect(`https://oauth.vk.com/authorize?${params}`);
 });
