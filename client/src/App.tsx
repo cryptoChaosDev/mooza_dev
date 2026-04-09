@@ -286,6 +286,7 @@ function App() {
           <Route path="/register" element={<RegisterPage />} />
           <Route path="/privacy"  element={<PrivacyPolicyPage />} />
           <Route path="/terms"    element={<TermsPage />} />
+          <Route path="/@:handle" element={<PublicProfilePage />} />
           <Route path="*"         element={<Navigate to="/" replace />} />
         </Routes>
       </Suspense>
