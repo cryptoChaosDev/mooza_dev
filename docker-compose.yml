@@ -39,6 +39,9 @@ services:
       APP_URL: ${APP_URL:-https://moooza.ru}
       VK_CLIENT_ID: ${VK_CLIENT_ID}
       VK_CLIENT_SECRET: ${VK_CLIENT_SECRET}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY}
+      VAPID_EMAIL: ${VAPID_EMAIL:-mailto:admin@moooza.ru}
     volumes:
       - ./server:/app
       - /app/node_modules
