@@ -230,6 +230,7 @@ model User {
   password  String?
   telegramId       String?  @unique
   telegramUsername String?
+  vkId             String?  @unique
   firstName String
   lastName  String
   nickname  String?

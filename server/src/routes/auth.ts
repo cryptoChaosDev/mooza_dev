@@ -330,6 +330,95 @@ router.get('/telegram/poll/:token', authLimiter, async (req, res) => {
   }
 });
 
+// ─── VK OAuth ─────────────────────────────────────────────────────────────────
+router.get('/vk/login', (req, res) => {
+  const appUrl = process.env.APP_URL || 'https://moooza.ru';
+  const params = new URLSearchParams({
+    client_id: process.env.VK_CLIENT_ID || '',
+    redirect_uri: `${appUrl}/api/auth/vk/callback`,
+    response_type: 'code',
+    scope: 'email',
+    v: '5.131',
+    display: 'page',
+  });
+  res.redirect(`https://oauth.vk.com/authorize?${params}`);
+});
+
+router.get('/vk/callback', async (req, res) => {
+  const appUrl = process.env.APP_URL || 'https://moooza.ru';
+  const { code, error } = req.query;
+
+  if (error || !code) {
+    return res.redirect(`${appUrl}/login?vk_error=cancelled`);
+  }
+
+  try {
+    // Exchange code for access token
+    const tokenUrl = `https://oauth.vk.com/access_token?${new URLSearchParams({
+      client_id: process.env.VK_CLIENT_ID || '',
+      client_secret: process.env.VK_CLIENT_SECRET || '',
+      redirect_uri: `${appUrl}/api/auth/vk/callback`,
+      code: code as string,
+    })}`;
+    const tokenRes = await fetch(tokenUrl);
+    const tokenData: any = await tokenRes.json();
+
+    if (tokenData.error) {
+      console.error('[VK] Token error:', tokenData);
+      return res.redirect(`${appUrl}/login?vk_error=token`);
+    }
+
+    const { access_token, user_id, email } = tokenData;
+
+    // Get user profile
+    const userUrl = `https://api.vk.com/method/users.get?${new URLSearchParams({
+      user_ids: String(user_id),
+      fields: 'photo_200,screen_name',
+      access_token,
+      v: '5.131',
+    })}`;
+    const userRes = await fetch(userUrl);
+    const userData: any = await userRes.json();
+    const vkUser = userData.response?.[0];
+
+    if (!vkUser) {
+      return res.redirect(`${appUrl}/login?vk_error=userinfo`);
+    }
+
+    const vkId = String(vkUser.id);
+
+    // Find existing user by vkId or email
+    let user = await prisma.user.findUnique({ where: { vkId } });
+    if (!user && email) {
+      user = await prisma.user.findFirst({ where: { email } }) || null;
+    }
+
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          vkId,
+          firstName: vkUser.first_name || 'Пользователь',
+          lastName: vkUser.last_name || '',
+          email: email || null,
+          avatar: vkUser.photo_200 || null,
+          nickname: vkUser.screen_name || null,
+        },
+      });
+    } else if (!user.vkId) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { vkId },
+      });
+    }
+
+    const token = generateToken({ userId: user.id });
+    res.redirect(`${appUrl}/login?vk_token=${token}`);
+  } catch (e) {
+    console.error('[VK auth] Error:', e);
+    res.redirect(`${appUrl}/login?vk_error=server`);
+  }
+});
+
 // Telegram Login (widget — kept for future use)
 router.post('/telegram', authLimiter, async (req, res) => {
   try {

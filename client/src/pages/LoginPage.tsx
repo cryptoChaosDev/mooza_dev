@@ -1,9 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronDown } from 'lucide-react';
 import { authAPI, userAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import TelegramLoginButton from '../components/TelegramLoginButton';
+import VkLoginButton from '../components/VkLoginButton';
 
 function DocSection({ title, children }: { title: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -44,6 +45,44 @@ export default function LoginPage() {
 
   const handleTelegramError = useCallback((msg: string) => {
     setError(msg);
+  }, []);
+
+  // Handle VK OAuth callback (token in URL)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const vkToken = params.get('vk_token');
+    const vkError = params.get('vk_error');
+
+    if (vkError) {
+      const msgs: Record<string, string> = {
+        cancelled: 'Вход через ВКонтакте отменён',
+        token: 'Ошибка получения токена ВКонтакте',
+        userinfo: 'Не удалось получить данные профиля ВК',
+        server: 'Ошибка сервера при входе через ВКонтакте',
+      };
+      setError(msgs[vkError] || 'Ошибка входа через ВКонтакте');
+      window.history.replaceState({}, '', '/login');
+      return;
+    }
+
+    if (vkToken) {
+      window.history.replaceState({}, '', '/login');
+      setLoading(true);
+      // Fetch user info with the VK token
+      import('../lib/api').then(({ api }) => {
+        api.get('/users/me', { headers: { Authorization: `Bearer ${vkToken}` } })
+          .then(({ data: user }) => {
+            setAuth(user, vkToken);
+            userAPI.agreeToTerms().then(({ data: u }) => setUser(u)).catch(() => {});
+            navigate('/');
+          })
+          .catch(() => {
+            setError('Не удалось загрузить профиль. Попробуйте снова.');
+            setLoading(false);
+          });
+      });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -234,7 +273,10 @@ export default function LoginPage() {
               <span className="text-xs text-slate-500 uppercase tracking-wide">или</span>
               <div className="flex-1 h-px bg-slate-700" />
             </div>
-            <TelegramLoginButton onAuth={handleTelegramAuth} onError={handleTelegramError} disabled={loading} />
+            <div className="space-y-2.5">
+              <TelegramLoginButton onAuth={handleTelegramAuth} onError={handleTelegramError} disabled={loading} />
+              <VkLoginButton disabled={loading} />
+            </div>
           </div>
 
           <p className="mt-4 text-center text-slate-400">

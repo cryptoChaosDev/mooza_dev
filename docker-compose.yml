@@ -37,6 +37,8 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
       APP_URL: ${APP_URL:-https://moooza.ru}
+      VK_CLIENT_ID: ${VK_CLIENT_ID}
+      VK_CLIENT_SECRET: ${VK_CLIENT_SECRET}
     volumes:
       - ./server:/app
       - /app/node_modules
