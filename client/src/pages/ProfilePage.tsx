@@ -6,18 +6,20 @@ import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, DollarSign, Calendar,
   Headphones, Edit3, User, Plus, ChevronDown, ChevronLeft, ChevronRight,
-  Building2, FileText, Trash2,
+  Building2, FileText, Trash2, Radio, Loader2,
 } from 'lucide-react';
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
+import { channelAPI } from '../lib/api';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
-type Tab = 'basic' | 'profession';
+type Tab = 'basic' | 'profession' | 'channel';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'basic',      label: 'Основное',  icon: <User size={14} /> },
+  { id: 'basic',      label: 'Основное',   icon: <User size={14} /> },
   { id: 'profession', label: 'Мои услуги', icon: <Briefcase size={14} /> },
+  { id: 'channel',    label: 'Канал',      icon: <Radio size={14} /> },
 ];
 
 type ServiceCustomFilter = { id: string; name: string; values: { id: string; value: string }[] };
@@ -180,6 +182,59 @@ export default function ProfilePage() {
   const updateMutation = useMutation({
     mutationFn: userAPI.updateMe,
   });
+
+  // ── Channel ────────────────────────────────────────────────────────────────
+  const [channelForm, setChannelForm] = useState({ name: '', description: '' });
+  const [channelEditing, setChannelEditing] = useState(false);
+  const channelAvatarRef = useRef<HTMLInputElement>(null);
+
+  const { data: myChannel, refetch: refetchChannel } = useQuery({
+    queryKey: ['my-channel'],
+    queryFn: async () => {
+      const { data } = await channelAPI.getMyChannel();
+      return data as { id: string; name: string; description: string | null; avatar: string | null; _count: { subscriptions: number; posts: number } } | null;
+    },
+  });
+
+  const createChannelMut = useMutation({
+    mutationFn: () => channelAPI.createChannel({ name: channelForm.name.trim(), description: channelForm.description.trim() || undefined }),
+    onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['my-channel'] }); setChannelForm({ name: '', description: '' }); },
+  });
+
+  const updateChannelMut = useMutation({
+    mutationFn: () => channelAPI.updateChannel({ name: channelForm.name.trim(), description: channelForm.description.trim() || undefined }),
+    onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['my-channel'] }); setChannelEditing(false); },
+  });
+
+  const deleteChannelMut = useMutation({
+    mutationFn: () => channelAPI.deleteChannel(),
+    onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['my-channel'] }); },
+  });
+
+  const uploadChannelAvatarMut = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append('avatar', file);
+      const { data } = await channelAPI.uploadAvatar(fd);
+      return data;
+    },
+    onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['my-channel'] }); },
+  });
+
+  const handleChannelAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) uploadChannelAvatarMut.mutate(file);
+    e.target.value = '';
+  };
+
+  const startEditChannel = () => {
+    if (myChannel) {
+      setChannelForm({ name: myChannel.name, description: myChannel.description || '' });
+      setChannelEditing(true);
+    }
+  };
+
+  // ── End Channel ─────────────────────────────────────────────────────────────
 
   const updateServicesMutation = useMutation({
     mutationFn: (services: typeof userServices) => userAPI.updateServices(
@@ -984,6 +1039,135 @@ export default function ProfilePage() {
               </div>
             )
           )}
+
+        {/* ── КАНАЛ ── */}
+        {activeTab === 'channel' && (
+          <div className="p-4 space-y-4">
+            {myChannel ? (
+              <>
+                {/* Channel header */}
+                <div className="flex items-center gap-3">
+                  {/* Avatar */}
+                  <div className="relative flex-shrink-0">
+                    <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-700 border border-slate-600 flex items-center justify-center">
+                      {myChannel.avatar
+                        ? <img src={`${API_URL}${myChannel.avatar}`} alt="" className="w-full h-full object-cover" />
+                        : <Radio size={24} className="text-slate-500" />
+                      }
+                    </div>
+                    <button
+                      onClick={() => channelAvatarRef.current?.click()}
+                      className="absolute -bottom-1 -right-1 p-1 bg-primary-600 hover:bg-primary-500 rounded-full shadow transition-colors"
+                    >
+                      <Camera size={10} className="text-white" />
+                    </button>
+                    <input ref={channelAvatarRef} type="file" accept="image/*" className="hidden" onChange={handleChannelAvatarChange} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    {channelEditing ? (
+                      <input
+                        value={channelForm.name}
+                        onChange={e => setChannelForm(f => ({ ...f, name: e.target.value }))}
+                        className="w-full px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white"
+                        placeholder="Название канала"
+                      />
+                    ) : (
+                      <p className="text-base font-semibold text-white truncate">{myChannel.name}</p>
+                    )}
+                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                      <span>{myChannel._count.subscriptions} подписчиков</span>
+                      <span>{myChannel._count.posts} постов</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Description */}
+                {channelEditing ? (
+                  <textarea
+                    value={channelForm.description}
+                    onChange={e => setChannelForm(f => ({ ...f, description: e.target.value }))}
+                    rows={3}
+                    placeholder="Описание канала..."
+                    className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-slate-500 resize-none"
+                  />
+                ) : myChannel.description ? (
+                  <p className="text-sm text-slate-400 leading-relaxed">{myChannel.description}</p>
+                ) : (
+                  <p className="text-sm text-slate-600 italic">Нет описания</p>
+                )}
+
+                {/* Edit actions */}
+                {channelEditing ? (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setChannelEditing(false)}
+                      className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors"
+                    >
+                      Отмена
+                    </button>
+                    <button
+                      onClick={() => updateChannelMut.mutate()}
+                      disabled={updateChannelMut.isPending || !channelForm.name.trim()}
+                      className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      {updateChannelMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                      Сохранить
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <button
+                      onClick={startEditChannel}
+                      className="flex-1 py-2 text-sm text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      <Edit3 size={14} />
+                      Редактировать
+                    </button>
+                    <button
+                      onClick={() => { if (confirm('Удалить канал? Все посты канала будут отвязаны.')) deleteChannelMut.mutate(); }}
+                      disabled={deleteChannelMut.isPending}
+                      className="py-2 px-3 text-sm text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 rounded-xl transition-colors"
+                    >
+                      {deleteChannelMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              /* No channel — create form */
+              <div className="space-y-3">
+                <div className="flex flex-col items-center py-4 text-center">
+                  <div className="p-4 bg-slate-800/50 rounded-2xl mb-3">
+                    <Radio size={28} className="text-slate-500" />
+                  </div>
+                  <p className="text-white font-semibold mb-1">У вас нет канала</p>
+                  <p className="text-slate-500 text-sm">Создайте канал, чтобы публиковать посты от его имени</p>
+                </div>
+                <input
+                  value={channelForm.name}
+                  onChange={e => setChannelForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Название канала *"
+                  className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-slate-500"
+                />
+                <textarea
+                  value={channelForm.description}
+                  onChange={e => setChannelForm(f => ({ ...f, description: e.target.value }))}
+                  rows={3}
+                  placeholder="Описание (необязательно)"
+                  className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-slate-500 resize-none"
+                />
+                <button
+                  onClick={() => createChannelMut.mutate()}
+                  disabled={createChannelMut.isPending || !channelForm.name.trim()}
+                  className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
+                >
+                  {createChannelMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
+                  Создать канал
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         </div>
 

@@ -281,6 +281,9 @@ model User {
   notifications        Notification[] @relation("NotificationRecipient")
   triggeredNotifications Notification[] @relation("NotificationActor")
 
+  channel              Channel?
+  channelSubscriptions ChannelSubscription[]
+
   termsAgreedAt DateTime?
 
   createdAt DateTime @default(now())
@@ -328,15 +331,50 @@ model UserArtist {
 
 // ============ EXISTING MODELS ============
 
+model Channel {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  avatar      String?
+  ownerId     String  @unique
+  owner       User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  posts         Post[]
+  subscriptions ChannelSubscription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+model ChannelSubscription {
+  id        String @id @default(uuid())
+  channelId String
+  userId    String
+
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([channelId, userId])
+  @@index([channelId])
+  @@index([userId])
+}
+
 model Post {
-  id       String @id @default(uuid())
-  content  String
+  id        String  @id @default(uuid())
+  content   String
   imageUrl  String?
   audioUrl  String?
   audioName String?
 
   author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId String
+
+  channelId String?
+  channel   Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
 
   likes     Like[]
   comments  Comment[]
@@ -348,6 +386,7 @@ model Post {
   @@index([authorId])
   @@index([createdAt])
   @@index([authorId, createdAt])
+  @@index([channelId])
 }
 
 model Like {

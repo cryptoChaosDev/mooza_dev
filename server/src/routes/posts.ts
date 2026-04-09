@@ -44,35 +44,24 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
 
     const posts = await prisma.post.findMany({
       where: {
-        authorId: { in: [...friendIds, req.userId!] }
+        authorId: { in: [...friendIds, req.userId!] },
+        channelId: null,
       },
       include: {
         author: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
-            role: true,
-          }
+          select: { id: true, firstName: true, lastName: true, avatar: true, role: true }
+        },
+        channel: {
+          select: { id: true, name: true, avatar: true, ownerId: true }
         },
         likes: {
-          where: {
-            userId: req.userId
-          },
-          select: {
-            id: true
-          }
+          where: { userId: req.userId },
+          select: { id: true }
         },
         comments: {
           include: {
             author: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-              }
+              select: { id: true, firstName: true, lastName: true, avatar: true }
             },
             reactions: {
               select: { id: true, emoji: true, userId: true }
@@ -108,10 +97,18 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
 // Create post
 router.post('/', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { content, imageUrl, audioUrl, audioName } = req.body;
+    const { content, imageUrl, audioUrl, audioName, channelId } = req.body;
 
     if (!content && !imageUrl && !audioUrl) {
       return res.status(400).json({ error: 'Post cannot be empty' });
+    }
+
+    // If channelId provided, verify user owns that channel
+    if (channelId) {
+      const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+      if (!channel || channel.ownerId !== req.userId) {
+        return res.status(403).json({ error: 'Нет доступа к этому каналу' });
+      }
     }
 
     const post = await prisma.post.create({
@@ -121,17 +118,11 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         audioUrl: audioUrl || null,
         audioName: audioName || null,
         authorId: req.userId!,
+        channelId: channelId || null,
       },
       include: {
-        author: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
-            role: true,
-          }
-        }
+        author: { select: { id: true, firstName: true, lastName: true, avatar: true, role: true } },
+        channel: { select: { id: true, name: true, avatar: true, ownerId: true } },
       }
     });
 

@@ -28,6 +28,7 @@ import referenceRoutes from './routes/references';
 import adminRoutes from './routes/admin';
 import notificationRoutes from './routes/notifications';
 import pushRoutes from './routes/push';
+import channelRoutes from './routes/channels';
 
 // Load environment variables
 dotenv.config();
@@ -118,6 +119,7 @@ app.use('/api/references', referenceRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/push', pushRoutes);
+app.use('/api/channels', channelRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

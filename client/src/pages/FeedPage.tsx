@@ -4,8 +4,9 @@ import { Link } from 'react-router-dom';
 import {
   Newspaper, Send, Heart, MessageCircle, Trash2, Loader2, X,
   MoreHorizontal, Image, Music, Smile, Pencil, Check,
+  Radio, Users, ToggleLeft, ToggleRight,
 } from 'lucide-react';
-import { postAPI } from '../lib/api';
+import { postAPI, channelAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import EmojiPicker from '../components/EmojiPicker';
 import AudioPlayer from '../components/AudioPlayer';
@@ -40,23 +41,37 @@ function Avatar({ user, size = 10 }: { user: { firstName: string; lastName: stri
 
 // ─── Create Post Card ──────────────────────────────────────────────────────────
 
-function CreatePostCard({ currentUser }: { currentUser: any }) {
+function CreatePostCard({ currentUser, myChannel, defaultChannelPost = false }: {
+  currentUser: any;
+  myChannel?: { id: string; name: string; avatar: string | null } | null;
+  defaultChannelPost?: boolean;
+}) {
   const [content, setContent] = useState('');
   const [imagePreview, setImagePreview] = useState<{ url: string; serverUrl: string } | null>(null);
   const [audioFile, setAudioFile] = useState<{ name: string; serverUrl: string } | null>(null);
   const [showEmoji, setShowEmoji] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [postAsChannel, setPostAsChannel] = useState(defaultChannelPost && !!myChannel);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
+  // Sync postAsChannel when defaultChannelPost or myChannel changes (tab switch)
+  useEffect(() => {
+    setPostAsChannel(defaultChannelPost && !!myChannel);
+  }, [defaultChannelPost, myChannel]);
+
   const canPost = (content.trim() || imagePreview || audioFile) && !uploading;
 
   const createMut = useMutation({
     mutationFn: postAPI.createPost,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['feed'] });
+    onSuccess: (_, vars) => {
+      if (vars.channelId) {
+        queryClient.invalidateQueries({ queryKey: ['channel-feed'] });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['feed'] });
+      }
       setContent('');
       setImagePreview(null);
       setAudioFile(null);
@@ -108,6 +123,7 @@ function CreatePostCard({ currentUser }: { currentUser: any }) {
       imageUrl: imagePreview?.serverUrl,
       audioUrl: audioFile?.serverUrl,
       audioName: audioFile?.name,
+      channelId: postAsChannel && myChannel ? myChannel.id : null,
     });
   };
 
@@ -162,6 +178,23 @@ function CreatePostCard({ currentUser }: { currentUser: any }) {
                   <X size={14} />
                 </button>
               </div>
+            )}
+
+            {/* Channel toggle */}
+            {myChannel && (
+              <button
+                type="button"
+                onClick={() => setPostAsChannel(v => !v)}
+                className={`flex items-center gap-1.5 mt-2 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  postAsChannel
+                    ? 'bg-primary-600/20 text-primary-400 border border-primary-600/40'
+                    : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                {postAsChannel ? <ToggleRight size={14} /> : <ToggleLeft size={14} />}
+                <Radio size={12} />
+                {postAsChannel ? `В канал «${myChannel.name}»` : 'Опубликовать в канале'}
+              </button>
             )}
 
             {/* Toolbar + Post button */}
@@ -227,8 +260,8 @@ function CreatePostCard({ currentUser }: { currentUser: any }) {
 
 // ─── Comment Item ──────────────────────────────────────────────────────────────
 
-function CommentItem({ comment, postId, currentUserId }: {
-  comment: any; postId: string; postAuthorId?: string; currentUserId: string;
+function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'] }: {
+  comment: any; postId: string; postAuthorId?: string; currentUserId: string; feedQueryKey?: string[];
 }) {
   const queryClient = useQueryClient();
   const isOwner = comment.author.id === currentUserId;
@@ -248,22 +281,22 @@ function CommentItem({ comment, postId, currentUserId }: {
 
   const deleteMut = useMutation({
     mutationFn: () => postAPI.deleteComment(postId, comment.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }),
   });
 
   const editMut = useMutation({
     mutationFn: () => postAPI.editComment(postId, comment.id, editText),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['feed'] }); setEditing(false); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setEditing(false); },
   });
 
   const reactMut = useMutation({
     mutationFn: (emoji: string) => postAPI.reactComment(postId, comment.id, emoji),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }),
   });
 
   const unreactMut = useMutation({
     mutationFn: () => postAPI.unreactComment(postId, comment.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }),
   });
 
   const isEdited = new Date(comment.updatedAt).getTime() - new Date(comment.createdAt).getTime() > 3000;
@@ -359,7 +392,7 @@ function CommentItem({ comment, postId, currentUserId }: {
 
 // ─── Post Card ─────────────────────────────────────────────────────────────────
 
-function PostCard({ post, currentUserId }: { post: any; currentUserId: string }) {
+function PostCard({ post, currentUserId, feedQueryKey = ['feed'] }: { post: any; currentUserId: string; feedQueryKey?: string[] }) {
   const queryClient = useQueryClient();
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -405,12 +438,12 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
 
   const likeMut = useMutation({
     mutationFn: () => post.isLiked ? postAPI.unlikePost(post.id) : postAPI.likePost(post.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }),
   });
 
   const commentMut = useMutation({
     mutationFn: (content: string) => postAPI.commentPost(post.id, content),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['feed'] }); setCommentText(''); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setCommentText(''); },
   });
 
   const editMut = useMutation({
@@ -420,22 +453,22 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
       audioUrl: editAudioFile?.serverUrl ?? null,
       audioName: editAudioFile?.name ?? null,
     }),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['feed'] }); setEditing(false); },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setEditing(false); },
   });
 
   const deleteMut = useMutation({
     mutationFn: () => postAPI.deletePost(post.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }),
   });
 
   const reactMut = useMutation({
     mutationFn: (emoji: string) => postAPI.reactPost(post.id, emoji),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }),
   });
 
   const unreactMut = useMutation({
     mutationFn: () => postAPI.unreactPost(post.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['feed'] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }),
   });
 
   const handleCommentClick = () => {
@@ -465,9 +498,17 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
             <Avatar user={post.author} size={10} />
           </Link>
           <div className="min-w-0">
-            <Link to={`/profile/${post.author.id}`} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate block">
-              {post.author.firstName} {post.author.lastName}
-            </Link>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <Link to={`/profile/${post.author.id}`} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate">
+                {post.author.firstName} {post.author.lastName}
+              </Link>
+              {post.channel && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-primary-600/15 border border-primary-600/30 rounded-full text-[10px] text-primary-400 font-medium flex-shrink-0">
+                  <Radio size={9} />
+                  {post.channel.name}
+                </span>
+              )}
+            </div>
             <p className="text-xs text-slate-500 truncate">
               {timeAgo(post.createdAt)}
               {post.author.role ? ` · ${post.author.role}` : ''}
@@ -641,7 +682,7 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
           {post.comments && post.comments.length > 0 && (
             <div className="space-y-2">
               {post.comments.map((comment: any) => (
-                <CommentItem key={comment.id} comment={comment} postId={post.id} postAuthorId={post.author.id} currentUserId={currentUserId} />
+                <CommentItem key={comment.id} comment={comment} postId={post.id} postAuthorId={post.author.id} currentUserId={currentUserId} feedQueryKey={feedQueryKey} />
               ))}
             </div>
           )}
@@ -673,61 +714,132 @@ function PostCard({ post, currentUserId }: { post: any; currentUserId: string })
 
 // ─── Feed Page ─────────────────────────────────────────────────────────────────
 
+function PostSkeleton() {
+  return (
+    <div className="px-4 py-4 animate-pulse">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="w-10 h-10 bg-slate-800 rounded-full flex-shrink-0" />
+        <div className="flex-1 space-y-2">
+          <div className="h-3.5 bg-slate-800 rounded w-1/3" />
+          <div className="h-3 bg-slate-800 rounded w-1/4" />
+        </div>
+      </div>
+      <div className="ml-[52px] space-y-2">
+        <div className="h-3.5 bg-slate-800 rounded w-full" />
+        <div className="h-3.5 bg-slate-800 rounded w-5/6" />
+      </div>
+    </div>
+  );
+}
+
 export default function FeedPage() {
   const { user: currentUser } = useAuthStore();
+  const [activeTab, setActiveTab] = useState<'channels' | 'friends'>('channels');
 
-  const { data: posts, isLoading } = useQuery({
+  // Fetch user's own channel
+  const { data: myChannel } = useQuery({
+    queryKey: ['my-channel'],
+    queryFn: async () => {
+      const { data } = await channelAPI.getMyChannel();
+      return data as { id: string; name: string; avatar: string | null; _count: { subscriptions: number; posts: number } } | null;
+    },
+    staleTime: 60000,
+  });
+
+  // Friends feed (regular posts, no channel posts)
+  const { data: friendPosts, isLoading: friendsLoading } = useQuery({
     queryKey: ['feed'],
     queryFn: async () => {
       const { data } = await postAPI.getFeed();
       return data;
     },
     refetchInterval: 30000,
+    enabled: activeTab === 'friends',
   });
+
+  // Channel feed (posts from subscribed channels + own)
+  const { data: channelPosts, isLoading: channelsLoading } = useQuery({
+    queryKey: ['channel-feed'],
+    queryFn: async () => {
+      const { data } = await channelAPI.getChannelFeed();
+      return data;
+    },
+    refetchInterval: 30000,
+    enabled: activeTab === 'channels',
+  });
+
+  const posts = activeTab === 'channels' ? channelPosts : friendPosts;
+  const isLoading = activeTab === 'channels' ? channelsLoading : friendsLoading;
+  const feedQueryKey = activeTab === 'channels' ? ['channel-feed'] : ['feed'];
 
   return (
     <div className="min-h-screen bg-slate-950">
       <div className="max-w-2xl mx-auto">
-        {/* Header */}
+        {/* Header + Tabs */}
         <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
-          <div className="px-4 pt-4 pb-3 flex items-center gap-2">
+          <div className="px-4 pt-4 pb-2 flex items-center gap-2">
             <Newspaper size={20} className="text-primary-400" />
             <h2 className="text-lg font-bold text-white">Лента</h2>
+          </div>
+          {/* Tab bar */}
+          <div className="flex px-4 pb-0 gap-1">
+            <button
+              onClick={() => setActiveTab('channels')}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-all ${
+                activeTab === 'channels'
+                  ? 'border-primary-500 text-primary-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <Radio size={14} />
+              Каналы
+            </button>
+            <button
+              onClick={() => setActiveTab('friends')}
+              className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-all ${
+                activeTab === 'friends'
+                  ? 'border-primary-500 text-primary-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-300'
+              }`}
+            >
+              <Users size={14} />
+              Лента
+            </button>
           </div>
         </div>
 
         <div className="pb-24">
-          {currentUser && <CreatePostCard currentUser={currentUser} />}
+          {currentUser && (
+            <CreatePostCard
+              currentUser={currentUser}
+              myChannel={myChannel}
+              defaultChannelPost={activeTab === 'channels'}
+            />
+          )}
           <div className="border-t border-slate-800/60 mt-3" />
 
           {isLoading ? (
             <div className="divide-y divide-slate-800/60">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="px-4 py-4 animate-pulse">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-10 h-10 bg-slate-800 rounded-full flex-shrink-0" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-3.5 bg-slate-800 rounded w-1/3" />
-                      <div className="h-3 bg-slate-800 rounded w-1/4" />
-                    </div>
-                  </div>
-                  <div className="ml-[52px] space-y-2">
-                    <div className="h-3.5 bg-slate-800 rounded w-full" />
-                    <div className="h-3.5 bg-slate-800 rounded w-5/6" />
-                  </div>
-                </div>
-              ))}
+              {[1, 2, 3].map(i => <PostSkeleton key={i} />)}
             </div>
           ) : posts && posts.length > 0 ? (
             <div className="divide-y divide-slate-800/60">
               {posts.map((post: any) => (
-                <PostCard key={post.id} post={post} currentUserId={currentUser?.id ?? ''} />
+                <PostCard key={post.id} post={post} currentUserId={currentUser?.id ?? ''} feedQueryKey={feedQueryKey} />
               ))}
+            </div>
+          ) : activeTab === 'channels' ? (
+            <div className="flex flex-col items-center py-16 px-6 text-center">
+              <div className="p-4 bg-slate-800/50 rounded-2xl mb-4">
+                <Radio size={32} className="text-slate-600" />
+              </div>
+              <p className="text-white font-semibold mb-1">Нет постов в каналах</p>
+              <p className="text-slate-500 text-sm">Создайте канал и подпишитесь на других</p>
             </div>
           ) : (
             <div className="flex flex-col items-center py-16 px-6 text-center">
               <div className="p-4 bg-slate-800/50 rounded-2xl mb-4">
-                <Newspaper size={32} className="text-slate-600" />
+                <Users size={32} className="text-slate-600" />
               </div>
               <p className="text-white font-semibold mb-1">Лента пуста</p>
               <p className="text-slate-500 text-sm">Напишите первый пост или добавьте друзей</p>

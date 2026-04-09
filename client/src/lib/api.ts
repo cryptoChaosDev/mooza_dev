@@ -132,7 +132,7 @@ export const referenceAPI = {
 export const postAPI = {
   getFeed: (params?: { limit?: number; offset?: number }) =>
     api.get('/posts/feed', { params }),
-  createPost: (data: { content: string; imageUrl?: string; audioUrl?: string; audioName?: string }) =>
+  createPost: (data: { content: string; imageUrl?: string; audioUrl?: string; audioName?: string; channelId?: string | null }) =>
     api.post('/posts', data),
   uploadMedia: (formData: FormData) =>
     api.post('/posts/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
@@ -152,6 +152,21 @@ export const postAPI = {
     api.post(`/posts/${postId}/comments/${commentId}/reactions`, { emoji }),
   unreactComment: (postId: string, commentId: string) =>
     api.delete(`/posts/${postId}/comments/${commentId}/reactions`),
+};
+
+// Channel API
+export const channelAPI = {
+  getMyChannel: () => api.get('/channels/my'),
+  createChannel: (data: { name: string; description?: string }) => api.post('/channels', data),
+  updateChannel: (data: { name?: string; description?: string }) => api.put('/channels/my', data),
+  deleteChannel: () => api.delete('/channels/my'),
+  uploadAvatar: (formData: FormData) =>
+    api.post('/channels/my/avatar', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  getChannel: (id: string) => api.get(`/channels/${id}`),
+  subscribe: (id: string) => api.post(`/channels/${id}/subscribe`),
+  unsubscribe: (id: string) => api.delete(`/channels/${id}/subscribe`),
+  getChannelFeed: (params?: { limit?: number; offset?: number }) =>
+    api.get('/channels/feed', { params }),
 };
 
 // Friendship API

@@ -91,6 +91,28 @@ export const uploadPortfolio = multer({
   },
 });
 
+// ── Channel avatar upload ─────────────────────────────────────────────────────
+
+const channelAvatarDir = path.join(process.cwd(), 'uploads', 'channels');
+if (!fs.existsSync(channelAvatarDir)) {
+  fs.mkdirSync(channelAvatarDir, { recursive: true });
+}
+
+const channelAvatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, channelAvatarDir); },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `channel-${uniqueSuffix}${ext}`);
+  },
+});
+
+export const uploadChannelAvatar = multer({
+  storage: channelAvatarStorage,
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
+
 // ── Post media upload (images, gifs, audio) ───────────────────────────────────
 
 const postMediaDir = path.join(process.cwd(), 'uploads', 'posts');
