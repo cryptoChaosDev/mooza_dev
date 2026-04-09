@@ -1,14 +1,4 @@
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
-const VK_CLIENT_ID = '54535061';
-const REDIRECT_URI = `${API_URL}/api/auth/vk/callback`;
-
-const vkAuthUrl = `https://oauth.vk.com/authorize?${new URLSearchParams({
-  client_id: VK_CLIENT_ID,
-  redirect_uri: REDIRECT_URI,
-  response_type: 'code',
-  scope: 'email',
-  v: '5.131',
-})}`;
 
 interface VkLoginButtonProps {
   disabled?: boolean;
@@ -17,7 +7,7 @@ interface VkLoginButtonProps {
 export default function VkLoginButton({ disabled }: VkLoginButtonProps) {
   return (
     <a
-      href={disabled ? undefined : vkAuthUrl}
+      href={disabled ? undefined : `${API_URL}/api/auth/vk/login`}
       className={`w-full flex items-center justify-center gap-2.5 px-4 py-3 bg-[#0077FF] hover:bg-[#0066DD] text-white font-medium rounded-xl transition-all shadow-lg shadow-[#0077FF]/20 ${disabled ? 'opacity-50 pointer-events-none' : ''}`}
     >
       {/* VK icon */}

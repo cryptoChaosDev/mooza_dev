@@ -330,63 +330,102 @@ router.get('/telegram/poll/:token', authLimiter, async (req, res) => {
   }
 });
 
-// ─── VK OAuth ─────────────────────────────────────────────────────────────────
+// ─── VK ID OAuth 2.1 (PKCE) ───────────────────────────────────────────────────
+// state → { codeVerifier, deviceId }
+const vkStateMap = new Map<string, { codeVerifier: string; deviceId: string }>();
+setInterval(() => {
+  const cutoff = Date.now() - 10 * 60 * 1000;
+  // Map has no timestamps — just cap size to 1000
+  if (vkStateMap.size > 1000) vkStateMap.clear();
+}, 60_000);
+
+function base64url(buf: Buffer) {
+  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
 router.get('/vk/login', (req, res) => {
   const appUrl = process.env.APP_URL || 'https://moooza.ru';
+
+  // Generate PKCE
+  const codeVerifier = base64url(crypto.randomBytes(32));
+  const codeChallenge = base64url(
+    crypto.createHash('sha256').update(codeVerifier).digest()
+  );
+  const state = base64url(crypto.randomBytes(16));
+  const deviceId = base64url(crypto.randomBytes(16));
+
+  vkStateMap.set(state, { codeVerifier, deviceId });
+
   const params = new URLSearchParams({
     client_id: process.env.VK_CLIENT_ID || '',
     redirect_uri: `${appUrl}/api/auth/vk/callback`,
     response_type: 'code',
     scope: 'email',
-    v: '5.131',
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: 'S256',
   });
-  res.redirect(`https://oauth.vk.com/authorize?${params}`);
+  res.redirect(`https://id.vk.com/oauth2/auth?${params}`);
 });
 
 router.get('/vk/callback', async (req, res) => {
   const appUrl = process.env.APP_URL || 'https://moooza.ru';
-  const { code, error } = req.query;
+  const { code, state, error, device_id } = req.query;
 
-  if (error || !code) {
+  if (error || !code || !state) {
     return res.redirect(`${appUrl}/login?vk_error=cancelled`);
   }
 
+  const pending = vkStateMap.get(state as string);
+  if (!pending) {
+    return res.redirect(`${appUrl}/login?vk_error=state`);
+  }
+  vkStateMap.delete(state as string);
+
   try {
-    // Exchange code for access token
-    const tokenUrl = `https://oauth.vk.com/access_token?${new URLSearchParams({
-      client_id: process.env.VK_CLIENT_ID || '',
-      client_secret: process.env.VK_CLIENT_SECRET || '',
-      redirect_uri: `${appUrl}/api/auth/vk/callback`,
-      code: code as string,
-    })}`;
-    const tokenRes = await fetch(tokenUrl);
+    // Exchange code for token
+    const tokenRes = await fetch('https://id.vk.com/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: process.env.VK_CLIENT_ID || '',
+        client_secret: process.env.VK_CLIENT_SECRET || '',
+        redirect_uri: `${appUrl}/api/auth/vk/callback`,
+        code: code as string,
+        code_verifier: pending.codeVerifier,
+        device_id: (device_id as string) || pending.deviceId,
+        state: state as string,
+      }),
+    });
     const tokenData: any = await tokenRes.json();
 
     if (tokenData.error) {
-      console.error('[VK] Token error:', tokenData);
+      console.error('[VK ID] Token error:', tokenData);
       return res.redirect(`${appUrl}/login?vk_error=token`);
     }
 
-    const { access_token, user_id, email } = tokenData;
+    const { access_token } = tokenData;
 
-    // Get user profile
-    const userUrl = `https://api.vk.com/method/users.get?${new URLSearchParams({
-      user_ids: String(user_id),
-      fields: 'photo_200,screen_name',
-      access_token,
-      v: '5.131',
-    })}`;
-    const userRes = await fetch(userUrl);
-    const userData: any = await userRes.json();
-    const vkUser = userData.response?.[0];
+    // Get user info
+    const userRes = await fetch('https://id.vk.com/oauth2/user_info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: process.env.VK_CLIENT_ID || '',
+        access_token,
+      }),
+    });
+    const userBody: any = await userRes.json();
+    const vkUser = userBody.user;
 
     if (!vkUser) {
       return res.redirect(`${appUrl}/login?vk_error=userinfo`);
     }
 
-    const vkId = String(vkUser.id);
+    const vkId = String(vkUser.user_id);
+    const email: string | undefined = vkUser.email;
 
-    // Find existing user by vkId or email
     let user = await prisma.user.findUnique({ where: { vkId } });
     if (!user && email) {
       user = await prisma.user.findFirst({ where: { email } }) || null;
@@ -399,15 +438,12 @@ router.get('/vk/callback', async (req, res) => {
           firstName: vkUser.first_name || 'Пользователь',
           lastName: vkUser.last_name || '',
           email: email || null,
-          avatar: vkUser.photo_200 || null,
+          avatar: vkUser.avatar || null,
           nickname: vkUser.screen_name || null,
         },
       });
     } else if (!user.vkId) {
-      user = await prisma.user.update({
-        where: { id: user.id },
-        data: { vkId },
-      });
+      user = await prisma.user.update({ where: { id: user.id }, data: { vkId } });
     }
 
     const token = generateToken({ userId: user.id });
