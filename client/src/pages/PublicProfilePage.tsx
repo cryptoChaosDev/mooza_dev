@@ -4,12 +4,11 @@
  * Resolves handle → user data via /users/handle/:handle (no auth required).
  * If user IS logged in, shows full interactive features (subscribe, message).
  */
-import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, Briefcase, Music, MessageCircle, Loader2,
-  Globe, Building2, User, FileText, Radio, LogIn, Crown, BadgeCheck, Ban,
+  Building2, FileText, Radio, LogIn, Crown, BadgeCheck, Ban,
 } from 'lucide-react';
 import { userAPI, channelAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
