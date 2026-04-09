@@ -237,7 +237,7 @@ export function SocialIconRow({ links }: { links: Record<string, string> }) {
   if (entries.length === 0) return null;
 
   return (
-    <div className="flex items-center flex-wrap gap-2 mt-3 justify-center">
+    <div className="flex items-center flex-wrap gap-2">
       {entries.map(service => (
         <a
           key={service.key}
