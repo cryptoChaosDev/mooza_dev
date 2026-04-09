@@ -27,20 +27,78 @@ setInterval(() => {
   }
 }, 60_000);
 
-// Register Telegram webhook on startup
-function registerTelegramWebhook() {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  const appUrl = process.env.APP_URL || 'https://moooza.ru';
-  if (!token) return;
-  const webhookUrl = `${appUrl}/api/auth/telegram/webhook`;
-  const url = `https://api.telegram.org/bot${token}/setWebhook?url=${encodeURIComponent(webhookUrl)}&drop_pending_updates=true`;
-  https.get(url, (res) => {
-    let data = '';
-    res.on('data', (chunk) => data += chunk);
-    res.on('end', () => console.log('[Telegram] Webhook registered:', data));
-  }).on('error', (e) => console.error('[Telegram] Webhook registration error:', e.message));
+// ─── Long-polling loop (no webhook needed) ───────────────────────────────────
+let tgOffset = 0;
+
+function tgApi(method: string, params: Record<string, any> = {}): Promise<any> {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+  const query = new URLSearchParams({ ...params }).toString();
+  const url = `https://api.telegram.org/bot${botToken}/${method}?${query}`;
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try { resolve(JSON.parse(data)); } catch { reject(new Error('Parse error')); }
+      });
+    }).on('error', reject);
+  });
 }
-setTimeout(registerTelegramWebhook, 3000);
+
+async function tgPollLoop() {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+  if (!botToken) return;
+
+  // Delete webhook so getUpdates works
+  try {
+    await tgApi('deleteWebhook', { drop_pending_updates: 'true' });
+    console.log('[Telegram] Webhook deleted, starting long-poll loop');
+  } catch {}
+
+  while (true) {
+    try {
+      const res = await tgApi('getUpdates', { offset: tgOffset, timeout: '30', allowed_updates: '["message"]' });
+      if (!res.ok || !Array.isArray(res.result)) {
+        await new Promise(r => setTimeout(r, 5000));
+        continue;
+      }
+      for (const update of res.result) {
+        tgOffset = update.update_id + 1;
+        const msg = update.message;
+        const text: string = msg?.text || '';
+        const from = msg?.from;
+        if (!from || !text.startsWith('/start ')) continue;
+
+        const token = text.slice(7).trim();
+        if (!tgPending.has(token)) continue;
+
+        // Send confirmation to user
+        try {
+          await tgApi('sendMessage', {
+            chat_id: String(from.id),
+            text: '✅ Авторизация подтверждена! Вернитесь на сайт.',
+          });
+        } catch {}
+
+        tgPending.set(token, {
+          telegramId: String(from.id),
+          firstName: from.first_name || '',
+          lastName: from.last_name || '',
+          username: from.username,
+          photoUrl: undefined,
+          resolvedAt: Date.now(),
+        });
+        console.log(`[Telegram] Auth token confirmed for user ${from.id}`);
+      }
+    } catch (e: any) {
+      console.error('[Telegram] Poll error:', e.message);
+      await new Promise(r => setTimeout(r, 5000));
+    }
+  }
+}
+
+// Start polling after 2s
+setTimeout(() => tgPollLoop().catch(console.error), 2000);
 
 const router = Router();
 
@@ -236,46 +294,7 @@ router.post('/telegram/token', authLimiter, (req, res) => {
   res.json({ token });
 });
 
-// ─── 2. Telegram webhook (called by Telegram servers) ────────────────────────
-router.post('/telegram/webhook', async (req, res) => {
-  try {
-    res.sendStatus(200); // always respond quickly
-    const update = req.body;
-    const msg = update?.message;
-    if (!msg) return;
-
-    const text: string = msg.text || '';
-    const from = msg.from;
-    if (!from) return;
-
-    // Handle /start <token>
-    if (text.startsWith('/start ')) {
-      const token = text.slice(7).trim();
-      if (!tgPending.has(token)) return;
-
-      // Send confirmation message to user
-      const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
-      const replyText = encodeURIComponent('✅ Авторизация подтверждена! Вернитесь на сайт.');
-      https.get(
-        `https://api.telegram.org/bot${botToken}/sendMessage?chat_id=${from.id}&text=${replyText}`,
-        () => {}
-      );
-
-      tgPending.set(token, {
-        telegramId: String(from.id),
-        firstName: from.first_name || '',
-        lastName: from.last_name || '',
-        username: from.username,
-        photoUrl: undefined,
-        resolvedAt: Date.now(),
-      });
-    }
-  } catch (e) {
-    console.error('[Telegram webhook]', e);
-  }
-});
-
-// ─── 3. Poll endpoint — frontend calls every 2s ───────────────────────────────
+// ─── 2. Poll endpoint — frontend calls every 2s ───────────────────────────────
 router.get('/telegram/poll/:token', authLimiter, async (req, res) => {
   const entry = tgPending.get(req.params.token);
   if (!entry) return res.status(404).json({ error: 'Токен не найден или истёк' });
