@@ -59,7 +59,7 @@ export default function Layout({ children }: LayoutProps) {
         )}
         <header className="flex items-center justify-between px-4 h-16">
           <Link to="/" className="flex items-center">
-            <img src="/logo.png" alt="Moooza" className="h-8 w-auto" />
+            <img src="/logo.png" alt="Moooza" className="h-12 w-auto" />
           </Link>
           <div className="flex items-center gap-1">
             <NotificationBell />
@@ -78,7 +78,7 @@ export default function Layout({ children }: LayoutProps) {
         <div className="p-6 border-b border-slate-800/50">
           <div className="flex items-center justify-between">
             <Link to="/" className="flex items-center">
-              <img src="/logo.png" alt="Moooza" className="h-10 w-auto" />
+              <img src="/logo.png" alt="Moooza" className="h-14 w-auto" />
             </Link>
             <NotificationBell />
           </div>
