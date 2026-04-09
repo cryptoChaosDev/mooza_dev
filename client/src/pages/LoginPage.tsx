@@ -47,10 +47,11 @@ export default function LoginPage() {
     setError(msg);
   }, []);
 
-  // Handle VK OAuth callback (token in URL)
+  // Handle VK ID OAuth 2.1 callback (?code=...&device_id=...&state=...)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const vkToken = params.get('vk_token');
+    const code = params.get('code');
+    const deviceId = params.get('device_id');
     const vkError = params.get('vk_error');
 
     if (vkError) {
@@ -59,25 +60,27 @@ export default function LoginPage() {
         token: 'Ошибка получения токена ВКонтакте',
         userinfo: 'Не удалось получить данные профиля ВК',
         server: 'Ошибка сервера при входе через ВКонтакте',
+        state: 'Ошибка безопасности VK. Попробуйте снова.',
       };
       setError(msgs[vkError] || 'Ошибка входа через ВКонтакте');
       window.history.replaceState({}, '', '/login');
       return;
     }
 
-    if (vkToken) {
+    if (code && deviceId) {
       window.history.replaceState({}, '', '/login');
+      const codeVerifier = sessionStorage.getItem('vk_code_verifier') || '';
+      sessionStorage.removeItem('vk_code_verifier');
       setLoading(true);
-      // Fetch user info with the VK token
-      import('../lib/api').then(({ api }) => {
-        api.get('/users/me', { headers: { Authorization: `Bearer ${vkToken}` } })
-          .then(({ data: user }) => {
-            setAuth(user, vkToken);
+      import('../lib/api').then(({ authAPI: aAPI }) => {
+        aAPI.vkExchange({ code, device_id: deviceId, code_verifier: codeVerifier })
+          .then(({ data }) => {
+            setAuth(data.user, data.token);
             userAPI.agreeToTerms().then(({ data: u }) => setUser(u)).catch(() => {});
             navigate('/');
           })
           .catch(() => {
-            setError('Не удалось загрузить профиль. Попробуйте снова.');
+            setError('Не удалось войти через ВКонтакте. Попробуйте снова.');
             setLoading(false);
           });
       });

@@ -454,6 +454,85 @@ router.get('/vk/callback', async (req, res) => {
   }
 });
 
+// ─── VK ID code exchange (called by frontend after SDK redirect) ──────────────
+router.post('/vk/exchange', authLimiter, async (req, res) => {
+  const { code, device_id, code_verifier } = req.body;
+  if (!code || !device_id || !code_verifier) {
+    return res.status(400).json({ error: 'Недостаточно параметров' });
+  }
+
+  const appUrl = process.env.APP_URL || 'https://moooza.ru';
+
+  try {
+    // Exchange code for token (public client — no client_secret)
+    const tokenRes = await fetch('https://id.vk.com/oauth2/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: String(process.env.VK_CLIENT_ID || ''),
+        redirect_uri: `${appUrl}/login`,
+        code,
+        code_verifier,
+        device_id,
+        state: '',
+      }),
+    });
+    const tokenData: any = await tokenRes.json();
+    if (tokenData.error) {
+      console.error('[VK exchange] token error:', tokenData);
+      return res.status(401).json({ error: 'Ошибка получения токена VK: ' + tokenData.error_description });
+    }
+
+    const { access_token } = tokenData;
+
+    // Get user info
+    const userRes = await fetch('https://id.vk.com/oauth2/user_info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: String(process.env.VK_CLIENT_ID || ''),
+        access_token,
+      }),
+    });
+    const userBody: any = await userRes.json();
+    const vkUser = userBody.user;
+
+    if (!vkUser) {
+      return res.status(401).json({ error: 'Не удалось получить данные профиля VK' });
+    }
+
+    const vkId = String(vkUser.user_id);
+    const email: string | undefined = vkUser.email;
+
+    let user = await prisma.user.findUnique({ where: { vkId } });
+    if (!user && email) {
+      user = await prisma.user.findFirst({ where: { email } }) || null;
+    }
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          vkId,
+          firstName: vkUser.first_name || 'Пользователь',
+          lastName: vkUser.last_name || '',
+          email: email || null,
+          avatar: vkUser.avatar || null,
+          nickname: vkUser.screen_name || null,
+        },
+      });
+    } else if (!user.vkId) {
+      user = await prisma.user.update({ where: { id: user.id }, data: { vkId } });
+    }
+
+    const token = generateToken({ userId: user.id });
+    const { password: _, ...safe } = user as any;
+    res.json({ user: safe, token });
+  } catch (e) {
+    console.error('[VK exchange] Error:', e);
+    res.status(500).json({ error: 'Ошибка авторизации через ВКонтакте' });
+  }
+});
+
 // Telegram Login (widget — kept for future use)
 router.post('/telegram', authLimiter, async (req, res) => {
   try {
