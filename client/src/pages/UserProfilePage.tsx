@@ -105,9 +105,7 @@ export default function UserProfilePage() {
     if (user.avatar) s += 15;
     if (user.country) s += 5;
     if (user.city) s += 5;
-    if (user.vkLink) s += 5;
-    if (user.youtubeLink) s += 5;
-    if (user.telegramLink) s += 5;
+    if (Object.values((user.socialLinks as Record<string, string>) || {}).some(Boolean)) s += 5;
     if (user.employer) s += 5;
     if (user.userArtists?.length > 0) s += 5;
     if (user.userServices?.length > 0) s += 15;

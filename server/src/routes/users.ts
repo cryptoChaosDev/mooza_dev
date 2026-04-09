@@ -71,9 +71,6 @@ const userSelect = {
   },
   employerId: true,
   employer: { select: { id: true, name: true, inn: true, ogrn: true } },
-  vkLink: true,
-  youtubeLink: true,
-  telegramLink: true,
   socialLinks: true,
   channel: {
     select: {
@@ -255,7 +252,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
   try {
     const {
       firstName, lastName, nickname, bio, country, city, role, genres,
-      vkLink, youtubeLink, telegramLink, socialLinks,
+      socialLinks,
       fieldOfActivityId, employerId,
       userProfessions, artistIds,
     } = req.body;
@@ -270,9 +267,6 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     if (city !== undefined) updateData.city = city;
     if (role !== undefined) updateData.role = role;
     if (genres !== undefined) updateData.genres = genres;
-    if (vkLink !== undefined) updateData.vkLink = vkLink;
-    if (youtubeLink !== undefined) updateData.youtubeLink = youtubeLink;
-    if (telegramLink !== undefined) updateData.telegramLink = telegramLink;
     if (socialLinks !== undefined) updateData.socialLinks = socialLinks;
     if (fieldOfActivityId !== undefined) updateData.fieldOfActivityId = fieldOfActivityId || null;
     if (employerId !== undefined) updateData.employerId = employerId || null;

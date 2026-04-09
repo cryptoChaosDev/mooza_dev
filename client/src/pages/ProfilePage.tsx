@@ -65,7 +65,6 @@ export default function ProfilePage() {
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', nickname: '', bio: '',
     country: '', city: '', role: '', genres: [] as string[],
-    vkLink: '', youtubeLink: '', telegramLink: '',
     socialLinks: {} as Record<string, string>,
     fieldOfActivityId: '', employerId: '',
     userProfessions: [] as { professionId: string; features: string[] }[],
@@ -122,8 +121,6 @@ export default function ProfilePage() {
         nickname: data.nickname || '', bio: data.bio || '',
         country: data.country || '', city: data.city || '',
         role: data.role || '', genres: data.genres || [],
-        vkLink: data.vkLink || '', youtubeLink: data.youtubeLink || '',
-        telegramLink: data.telegramLink || '',
         socialLinks: (data.socialLinks as Record<string, string>) || {},
         fieldOfActivityId: data.fieldOfActivityId || '',
         employerId: data.employerId || '',
@@ -295,9 +292,6 @@ export default function ProfilePage() {
     if (profile.avatar) s += 15;
     if (profile.country) s += 5;
     if (profile.city) s += 5;
-    if (profile.vkLink) s += 5;
-    if (profile.youtubeLink) s += 5;
-    if (profile.telegramLink) s += 5;
     if (profile.employer) s += 5;
     if (profile.userArtists?.length > 0) s += 5;
     if (profile.userServices?.length > 0) s += 15;
@@ -749,8 +743,7 @@ export default function ProfilePage() {
 
   const aUrl = getAvatarUrl(profile?.avatar);
   const bUrl = profile?.bannerImage ? `${API_URL}${profile.bannerImage}` : null;
-  const hasSocialLinks = Object.values((profile?.socialLinks as Record<string, string>) || {}).some(Boolean)
-    || !!(profile?.vkLink || profile?.youtubeLink || profile?.telegramLink);
+  const hasSocialLinks = Object.values((profile?.socialLinks as Record<string, string>) || {}).some(Boolean);
 
   return (
     <div className="min-h-screen bg-slate-950">
