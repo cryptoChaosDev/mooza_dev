@@ -69,20 +69,26 @@ export default function LoginPage() {
 
     if (code && deviceId) {
       window.history.replaceState({}, '', '/login');
-      const codeVerifier = sessionStorage.getItem('vk_code_verifier') || '';
-      sessionStorage.removeItem('vk_code_verifier');
       setLoading(true);
-      import('../lib/api').then(({ authAPI: aAPI }) => {
-        aAPI.vkExchange({ code, device_id: deviceId, code_verifier: codeVerifier })
-          .then(({ data }) => {
-            setAuth(data.user, data.token);
-            userAPI.agreeToTerms().then(({ data: u }) => setUser(u)).catch(() => {});
-            navigate('/');
-          })
-          .catch(() => {
-            setError('Не удалось войти через ВКонтакте. Попробуйте снова.');
-            setLoading(false);
-          });
+      // Let the SDK exchange the code (it manages codeVerifier internally via cookies)
+      import('@vkid/sdk').then(async (VKID) => {
+        try {
+          const codeVerifier = sessionStorage.getItem('vk_code_verifier') || undefined;
+          sessionStorage.removeItem('vk_code_verifier');
+          const payload = await (VKID.Auth as any).exchangeCode(code, deviceId, codeVerifier);
+          const accessToken = (payload as any)?.access_token;
+          if (!accessToken) throw new Error('no access_token');
+          // Send access_token to our backend to create a session
+          const { authAPI: aAPI } = await import('../lib/api');
+          const { data } = await aAPI.vkToken(accessToken);
+          setAuth(data.user, data.token);
+          userAPI.agreeToTerms().then(({ data: u }) => setUser(u)).catch(() => {});
+          navigate('/');
+        } catch (e: any) {
+          console.error('[VK callback]', e);
+          setError('Не удалось войти через ВКонтакте. Попробуйте снова.');
+          setLoading(false);
+        }
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

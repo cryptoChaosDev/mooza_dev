@@ -454,6 +454,54 @@ router.get('/vk/callback', async (req, res) => {
   }
 });
 
+// ─── VK ID: receive access_token from SDK, get user info, issue JWT ──────────
+router.post('/vk/token', authLimiter, async (req, res) => {
+  const { access_token } = req.body;
+  if (!access_token) return res.status(400).json({ error: 'access_token required' });
+
+  try {
+    const userRes = await fetch('https://id.vk.com/oauth2/user_info', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        client_id: String(process.env.VK_CLIENT_ID || ''),
+        access_token,
+      }),
+    });
+    const userBody: any = await userRes.json();
+    console.log('[VK token] user_info response:', JSON.stringify(userBody).substring(0, 300));
+    const vkUser = userBody.user;
+    if (!vkUser) return res.status(401).json({ error: 'Не удалось получить профиль VK' });
+
+    const vkId = String(vkUser.user_id);
+    const email: string | undefined = vkUser.email;
+
+    let user = await prisma.user.findUnique({ where: { vkId } });
+    if (!user && email) user = await prisma.user.findFirst({ where: { email } }) || null;
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          vkId,
+          firstName: vkUser.first_name || 'Пользователь',
+          lastName: vkUser.last_name || '',
+          email: email || null,
+          avatar: vkUser.avatar || null,
+          nickname: vkUser.screen_name || null,
+        },
+      });
+    } else if (!user.vkId) {
+      user = await prisma.user.update({ where: { id: user.id }, data: { vkId } });
+    }
+
+    const token = generateToken({ userId: user.id });
+    const { password: _, ...safe } = user as any;
+    res.json({ user: safe, token });
+  } catch (e) {
+    console.error('[VK token] Error:', e);
+    res.status(500).json({ error: 'Ошибка авторизации через ВКонтакте' });
+  }
+});
+
 // ─── VK ID code exchange (called by frontend after SDK redirect) ──────────────
 router.post('/vk/exchange', authLimiter, async (req, res) => {
   const { code, device_id, code_verifier } = req.body;
