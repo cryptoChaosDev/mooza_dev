@@ -6,6 +6,7 @@ import {
   MoreHorizontal, Image, Music, Smile, Pencil, Check,
   Radio, Users, ToggleLeft, ToggleRight,
 } from 'lucide-react';
+import ShareButton from '../components/ShareButton';
 import { postAPI, channelAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import EmojiPicker from '../components/EmojiPicker';
@@ -674,6 +675,14 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'] }: { post: any;
           <MessageCircle size={15} />
           <span className="font-medium tabular-nums">{post._count.comments}</span>
         </button>
+
+        <ShareButton
+          url={`/post/${post.id}`}
+          title={`Пост от ${post.author.firstName} ${post.author.lastName}`}
+          text={post.content?.slice(0, 100)}
+          iconSize={15}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all"
+        />
       </div>
 
       {/* Comments */}
@@ -732,9 +741,13 @@ function PostSkeleton() {
   );
 }
 
+type MainTab = 'channels' | 'friends';
+type ChannelSubTab = 'mine' | 'subscribed';
+
 export default function FeedPage() {
   const { user: currentUser } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<'channels' | 'friends'>('channels');
+  const [activeTab, setActiveTab] = useState<MainTab>('channels');
+  const [channelSubTab, setChannelSubTab] = useState<ChannelSubTab>('mine');
 
   // Fetch user's own channel
   const { data: myChannel } = useQuery({
@@ -746,74 +759,103 @@ export default function FeedPage() {
     staleTime: 60000,
   });
 
-  // Friends feed (regular posts, no channel posts)
+  // Friends feed
   const { data: friendPosts, isLoading: friendsLoading } = useQuery({
     queryKey: ['feed'],
-    queryFn: async () => {
-      const { data } = await postAPI.getFeed();
-      return data;
-    },
+    queryFn: async () => { const { data } = await postAPI.getFeed(); return data; },
     refetchInterval: 30000,
     enabled: activeTab === 'friends',
   });
 
-  // Channel feed (posts from subscribed channels + own)
-  const { data: channelPosts, isLoading: channelsLoading } = useQuery({
-    queryKey: ['channel-feed'],
-    queryFn: async () => {
-      const { data } = await channelAPI.getChannelFeed();
-      return data;
-    },
+  // My channel posts
+  const { data: myChannelPosts, isLoading: mineLoading } = useQuery({
+    queryKey: ['channel-feed-mine'],
+    queryFn: async () => { const { data } = await channelAPI.getMyChannelFeed(); return data; },
     refetchInterval: 30000,
-    enabled: activeTab === 'channels',
+    enabled: activeTab === 'channels' && channelSubTab === 'mine',
   });
 
-  const posts = activeTab === 'channels' ? channelPosts : friendPosts;
-  const isLoading = activeTab === 'channels' ? channelsLoading : friendsLoading;
-  const feedQueryKey = activeTab === 'channels' ? ['channel-feed'] : ['feed'];
+  // Subscribed channels posts
+  const { data: subscribedPosts, isLoading: subLoading } = useQuery({
+    queryKey: ['channel-feed-subscribed'],
+    queryFn: async () => { const { data } = await channelAPI.getSubscribedFeed(); return data; },
+    refetchInterval: 30000,
+    enabled: activeTab === 'channels' && channelSubTab === 'subscribed',
+  });
+
+  const posts = activeTab === 'friends'
+    ? friendPosts
+    : channelSubTab === 'mine' ? myChannelPosts : subscribedPosts;
+
+  const isLoading = activeTab === 'friends'
+    ? friendsLoading
+    : channelSubTab === 'mine' ? mineLoading : subLoading;
+
+  const feedQueryKey = activeTab === 'friends'
+    ? ['feed']
+    : channelSubTab === 'mine' ? ['channel-feed-mine'] : ['channel-feed-subscribed'];
 
   return (
     <div className="min-h-screen bg-slate-950">
       <div className="max-w-2xl mx-auto">
-        {/* Header + Tabs */}
+        {/* Header + Main Tabs */}
         <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
           <div className="px-4 pt-4 pb-2 flex items-center gap-2">
             <Newspaper size={20} className="text-primary-400" />
             <h2 className="text-lg font-bold text-white">Лента</h2>
           </div>
-          {/* Tab bar */}
           <div className="flex px-4 pb-0 gap-1">
             <button
               onClick={() => setActiveTab('channels')}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-all ${
-                activeTab === 'channels'
-                  ? 'border-primary-500 text-primary-400'
-                  : 'border-transparent text-slate-500 hover:text-slate-300'
+                activeTab === 'channels' ? 'border-primary-500 text-primary-400' : 'border-transparent text-slate-500 hover:text-slate-300'
               }`}
             >
-              <Radio size={14} />
-              Каналы
+              <Radio size={14} />Каналы
             </button>
             <button
               onClick={() => setActiveTab('friends')}
               className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 transition-all ${
-                activeTab === 'friends'
-                  ? 'border-primary-500 text-primary-400'
-                  : 'border-transparent text-slate-500 hover:text-slate-300'
+                activeTab === 'friends' ? 'border-primary-500 text-primary-400' : 'border-transparent text-slate-500 hover:text-slate-300'
               }`}
             >
-              <Users size={14} />
-              Лента
+              <Users size={14} />Лента
             </button>
           </div>
         </div>
+
+        {/* Channel sub-tabs */}
+        {activeTab === 'channels' && (
+          <div className="flex gap-2 px-4 pt-3 pb-0">
+            <button
+              onClick={() => setChannelSubTab('mine')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                channelSubTab === 'mine'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              <Radio size={11} />Мои каналы
+            </button>
+            <button
+              onClick={() => setChannelSubTab('subscribed')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                channelSubTab === 'subscribed'
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              <Users size={11} />Я подписан
+            </button>
+          </div>
+        )}
 
         <div className="pb-24">
           {currentUser && (
             <CreatePostCard
               currentUser={currentUser}
               myChannel={myChannel}
-              defaultChannelPost={activeTab === 'channels'}
+              defaultChannelPost={activeTab === 'channels' && channelSubTab === 'mine'}
             />
           )}
           <div className="border-t border-slate-800/60 mt-3" />
@@ -828,19 +870,21 @@ export default function FeedPage() {
                 <PostCard key={post.id} post={post} currentUserId={currentUser?.id ?? ''} feedQueryKey={feedQueryKey} />
               ))}
             </div>
-          ) : activeTab === 'channels' ? (
+          ) : activeTab === 'channels' && channelSubTab === 'mine' ? (
             <div className="flex flex-col items-center py-16 px-6 text-center">
-              <div className="p-4 bg-slate-800/50 rounded-2xl mb-4">
-                <Radio size={32} className="text-slate-600" />
-              </div>
-              <p className="text-white font-semibold mb-1">Нет постов в каналах</p>
-              <p className="text-slate-500 text-sm">Создайте канал и подпишитесь на других</p>
+              <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Radio size={32} className="text-slate-600" /></div>
+              <p className="text-white font-semibold mb-1">{myChannel ? 'Нет постов в вашем канале' : 'У вас нет канала'}</p>
+              <p className="text-slate-500 text-sm">{myChannel ? 'Опубликуйте первый пост' : 'Создайте канал в разделе Профиль → Канал'}</p>
+            </div>
+          ) : activeTab === 'channels' && channelSubTab === 'subscribed' ? (
+            <div className="flex flex-col items-center py-16 px-6 text-center">
+              <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Users size={32} className="text-slate-600" /></div>
+              <p className="text-white font-semibold mb-1">Вы ни на кого не подписаны</p>
+              <p className="text-slate-500 text-sm">Найдите интересных авторов в профилях</p>
             </div>
           ) : (
             <div className="flex flex-col items-center py-16 px-6 text-center">
-              <div className="p-4 bg-slate-800/50 rounded-2xl mb-4">
-                <Users size={32} className="text-slate-600" />
-              </div>
+              <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Users size={32} className="text-slate-600" /></div>
               <p className="text-white font-semibold mb-1">Лента пуста</p>
               <p className="text-slate-500 text-sm">Напишите первый пост или добавьте друзей</p>
             </div>

@@ -72,6 +72,15 @@ const userSelect = {
   youtubeLink: true,
   telegramLink: true,
   socialLinks: true,
+  channel: {
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      avatar: true,
+      _count: { select: { subscriptions: true, posts: true } },
+    },
+  },
   termsAgreedAt: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },

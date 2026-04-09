@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, Briefcase, Music, MessageCircle, Loader2,
-  Globe, Building2, User, FileText,
+  Globe, Building2, User, FileText, Radio,
 } from 'lucide-react';
-import { userAPI } from '../lib/api';
+import { userAPI, channelAPI } from '../lib/api';
+import { SocialIconRow } from '../components/SocialLinks';
+import ShareButton from '../components/ShareButton';
 
-type Tab = 'basic' | 'profession';
+type Tab = 'basic' | 'profession' | 'channel';
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'basic',      label: 'Основное',  icon: <User size={14} /> },
-  { id: 'profession', label: 'Услуги', icon: <Briefcase size={14} /> },
+  { id: 'profession', label: 'Услуги',    icon: <Briefcase size={14} /> },
+  { id: 'channel',    label: 'Канал',     icon: <Radio size={14} /> },
 ];
 
 const EmptyState = ({ text }: { text: string }) => (
@@ -23,6 +26,7 @@ const EmptyState = ({ text }: { text: string }) => (
 export default function UserProfilePage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<Tab>('basic');
 
   const { data: user, isLoading } = useQuery({
@@ -32,6 +36,26 @@ export default function UserProfilePage() {
       return data;
     },
     enabled: !!userId,
+  });
+
+  // Channel subscription state (only relevant when user has a channel)
+  const channelId = user?.channel?.id;
+  const { data: channelInfo, refetch: refetchChannel } = useQuery({
+    queryKey: ['channel', channelId],
+    queryFn: async () => {
+      const { data } = await channelAPI.getChannel(channelId!);
+      return data as { id: string; name: string; description: string | null; avatar: string | null; isSubscribed: boolean; _count: { subscriptions: number; posts: number } };
+    },
+    enabled: !!channelId,
+  });
+
+  const subscribeMut = useMutation({
+    mutationFn: () => channelAPI.subscribe(channelId!),
+    onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['channel-feed-subscribed'] }); },
+  });
+  const unsubscribeMut = useMutation({
+    mutationFn: () => channelAPI.unsubscribe(channelId!),
+    onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['channel-feed-subscribed'] }); },
   });
 
   if (isLoading) {
@@ -179,31 +203,25 @@ export default function UserProfilePage() {
             </div>
 
             {/* Social links */}
-            {(user.vkLink || user.youtubeLink || user.telegramLink) && (
-              <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
-                {user.vkLink && (
-                  <a href={user.vkLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:text-blue-300 text-xs font-semibold rounded-full transition-all">
-                    VK
-                  </a>
-                )}
-                {user.youtubeLink && (
-                  <a href={user.youtubeLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-full transition-all">
-                    YT
-                  </a>
-                )}
-                {user.telegramLink && (
-                  <a href={user.telegramLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-400 hover:text-sky-300 text-xs font-semibold rounded-full transition-all">
-                    TG
-                  </a>
-                )}
-              </div>
-            )}
+            <SocialIconRow links={(user.socialLinks as Record<string, string>) || {}} />
+
+            {/* Share profile button */}
+            <div className="mt-3 flex justify-center">
+              <ShareButton
+                url={`/profile/${user.id}`}
+                title={`${user.firstName} ${user.lastName} — Moooza`}
+                text={user.bio?.slice(0, 100)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 hover:bg-slate-700/60 border border-slate-700/50 text-slate-400 hover:text-white text-xs rounded-full transition-all"
+                iconSize={12}
+                label="Поделиться профилем"
+              />
+            </div>
           </div>
         </div>
 
         {/* ── TAB BAR ── */}
         <div className="flex gap-1 p-1 bg-slate-800/80 rounded-xl border border-slate-700/50 mb-3">
-          {TABS.map(tab => (
+          {TABS.filter(t => t.id !== 'channel' || !!user.channel).map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)}
               className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium transition-all ${
                 activeTab === tab.id
@@ -345,6 +363,48 @@ export default function UserProfilePage() {
               ) : (
                 <EmptyState text="Профессиональная информация не заполнена" />
               )}
+            </div>
+          )}
+
+          {/* КАНАЛ */}
+          {activeTab === 'channel' && user.channel && (
+            <div className="p-4 space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="w-14 h-14 rounded-2xl overflow-hidden bg-slate-700 border border-slate-600 flex items-center justify-center flex-shrink-0">
+                  {user.channel.avatar
+                    ? <img src={`${API_URL}${user.channel.avatar}`} alt="" className="w-full h-full object-cover" />
+                    : <Radio size={22} className="text-slate-500" />
+                  }
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-white truncate">{user.channel.name}</p>
+                  <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-500">
+                    <span>{channelInfo?._count?.subscriptions ?? user.channel._count.subscriptions} подписчиков</span>
+                    <span>{channelInfo?._count?.posts ?? user.channel._count.posts} постов</span>
+                  </div>
+                </div>
+              </div>
+
+              {user.channel.description && (
+                <p className="text-sm text-slate-400 leading-relaxed">{user.channel.description}</p>
+              )}
+
+              <button
+                onClick={() => channelInfo?.isSubscribed ? unsubscribeMut.mutate() : subscribeMut.mutate()}
+                disabled={subscribeMut.isPending || unsubscribeMut.isPending}
+                className={`w-full py-2.5 text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
+                  channelInfo?.isSubscribed
+                    ? 'bg-slate-700 hover:bg-red-500/20 border border-slate-600 hover:border-red-500/50 text-slate-300 hover:text-red-400'
+                    : 'bg-primary-600 hover:bg-primary-500 text-white shadow-lg shadow-primary-500/20'
+                }`}
+              >
+                {(subscribeMut.isPending || unsubscribeMut.isPending)
+                  ? <Loader2 size={15} className="animate-spin" />
+                  : channelInfo?.isSubscribed
+                    ? 'Отписаться'
+                    : 'Подписаться'
+                }
+              </button>
             </div>
           )}
 

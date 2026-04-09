@@ -167,6 +167,11 @@ export const channelAPI = {
   unsubscribe: (id: string) => api.delete(`/channels/${id}/subscribe`),
   getChannelFeed: (params?: { limit?: number; offset?: number }) =>
     api.get('/channels/feed', { params }),
+  getMyChannelFeed: (params?: { limit?: number; offset?: number }) =>
+    api.get('/channels/feed/mine', { params }),
+  getSubscribedFeed: (params?: { limit?: number; offset?: number }) =>
+    api.get('/channels/feed/subscribed', { params }),
+  getSubscriptions: () => api.get('/channels/subscriptions'),
 };
 
 // Friendship API

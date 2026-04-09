@@ -23,7 +23,7 @@ function postInclude(userId: string) {
   };
 }
 
-// GET /channels/feed — posts from subscribed channels + own channel
+// GET /channels/feed — posts from subscribed channels + own channel (combined)
 router.get('/feed', authenticate, async (req: AuthRequest, res) => {
   try {
     const { limit = 20, offset = 0 } = req.query;
@@ -55,6 +55,71 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Failed to get channel feed' });
+  }
+});
+
+// GET /channels/feed/mine — only own channel posts
+router.get('/feed/mine', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { limit = 20, offset = 0 } = req.query;
+    const myChannel = await prisma.channel.findUnique({
+      where: { ownerId: req.userId! },
+      select: { id: true },
+    });
+    if (!myChannel) return res.json([]);
+    const posts = await prisma.post.findMany({
+      where: { channelId: myChannel.id },
+      include: postInclude(req.userId!),
+      orderBy: { createdAt: 'desc' },
+      take: Number(limit),
+      skip: Number(offset),
+    });
+    res.json(posts.map(p => ({ ...p, isLiked: p.likes.length > 0 })));
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to get own channel feed' });
+  }
+});
+
+// GET /channels/feed/subscribed — only subscribed channels posts
+router.get('/feed/subscribed', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { limit = 20, offset = 0 } = req.query;
+    const subs = await prisma.channelSubscription.findMany({
+      where: { userId: req.userId! },
+      select: { channelId: true },
+    });
+    if (subs.length === 0) return res.json([]);
+    const channelIds = subs.map(s => s.channelId);
+    const posts = await prisma.post.findMany({
+      where: { channelId: { in: channelIds } },
+      include: postInclude(req.userId!),
+      orderBy: { createdAt: 'desc' },
+      take: Number(limit),
+      skip: Number(offset),
+    });
+    res.json(posts.map(p => ({ ...p, isLiked: p.likes.length > 0 })));
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to get subscribed feed' });
+  }
+});
+
+// GET /channels/subscriptions — list channels user is subscribed to
+router.get('/subscriptions', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const subs = await prisma.channelSubscription.findMany({
+      where: { userId: req.userId! },
+      include: {
+        channel: {
+          include: {
+            owner: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+            _count: { select: { subscriptions: true, posts: true } },
+          },
+        },
+      },
+    });
+    res.json(subs.map(s => s.channel));
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to get subscriptions' });
   }
 });
 
