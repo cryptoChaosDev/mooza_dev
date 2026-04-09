@@ -109,7 +109,6 @@ export default function PublicProfilePage() {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   };
 
-  const profileHandle = user.nickname ? `@${user.nickname}` : user.id;
   const shareUrl = `/@${user.nickname || user.id}`;
 
   return (
