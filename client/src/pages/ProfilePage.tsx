@@ -281,17 +281,8 @@ export default function ProfilePage() {
     );
   }
 
-  const avatarUrl = getAvatarUrl(profile?.avatar);
-  const bannerUrl = profile?.bannerImage ? `${API_URL}${profile.bannerImage}` : null;
-
   const inputCls = "w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white placeholder-slate-500";
   const labelCls = "block text-xs font-semibold mb-1 text-slate-400";
-
-  const EmptyState = ({ text }: { text: string }) => (
-    <div className="py-8 text-center">
-      <p className="text-slate-500 text-sm">{text}</p>
-    </div>
-  );
 
   const friendCount = (profile?._count?.sentRequests ?? 0) + (profile?._count?.receivedRequests ?? 0);
   const rating = (() => {
