@@ -158,8 +158,6 @@ export default function UserProfilePage() {
               <span className="text-lg font-bold text-white">{friendCount}</span>
               <span className="text-slate-500 text-sm ml-1.5">друзей</span>
             </div>
-            <div className="h-4 w-px bg-slate-700" />
-            <span className="text-xs text-slate-600 font-mono select-all">moooza.ru{shareUrl}</span>
           </div>
         </div>
 
