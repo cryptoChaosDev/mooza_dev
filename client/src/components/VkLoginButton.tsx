@@ -1,49 +1,54 @@
 import { useEffect, useRef } from 'react';
 import * as VKID from '@vkid/sdk';
-
-const APP_ID = 54535061;
-const REDIRECT_URL = 'https://moooza.ru/login';
-
-function generateCodeVerifier(): string {
-  const array = new Uint8Array(32);
-  crypto.getRandomValues(array);
-  return btoa(String.fromCharCode(...array))
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_')
-    .replace(/=/g, '');
-}
+import { authAPI } from '../lib/api';
 
 interface VkLoginButtonProps {
+  onAuth: (user: any, token: string) => void;
+  onError: (msg: string) => void;
   disabled?: boolean;
 }
 
-export default function VkLoginButton({ disabled }: VkLoginButtonProps) {
+export default function VkLoginButton({ onAuth, onError, disabled }: VkLoginButtonProps) {
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!containerRef.current || disabled) return;
-    // Don't reinitialize when we're handling the OAuth callback
-    if (new URLSearchParams(window.location.search).get('code')) return;
-
-    const codeVerifier = generateCodeVerifier();
-    localStorage.setItem('vk_code_verifier', codeVerifier);
 
     VKID.Config.init({
-      app: APP_ID,
-      redirectUrl: REDIRECT_URL,
-      codeVerifier,
+      app: 54535061,
+      redirectUrl: 'https://moooza.ru/login',
+      responseMode: VKID.ConfigResponseMode.Callback,
+      source: VKID.ConfigSource.LOWCODE,
       scope: 'email',
     });
 
-    const oauthList = new VKID.OAuthList();
-    oauthList
+    const oneTap = new VKID.OneTap();
+
+    oneTap
       .render({
         container: containerRef.current,
-        oauthList: [VKID.OAuthName.VK],
+        showAlternativeLogin: true,
         scheme: VKID.Scheme.DARK,
       })
       .on(VKID.WidgetEvents.ERROR, (err: unknown) => {
         console.error('[VK ID] widget error', err);
+        onError('Ошибка виджета ВКонтакте');
+      })
+      .on(VKID.OneTapInternalEvents.LOGIN_SUCCESS, (payload: any) => {
+        const { code, device_id } = payload;
+        VKID.Auth.exchangeCode(code, device_id)
+          .then((data: any) => {
+            const accessToken = data?.access_token;
+            if (!accessToken) throw new Error('no access_token');
+            return authAPI.vkToken(accessToken);
+          })
+          .then(({ data }) => {
+            onAuth(data.user, data.token);
+          })
+          .catch((e: any) => {
+            console.error('[VK ID] auth error', e);
+            onError('Не удалось войти через ВКонтакте');
+          });
       });
 
     return () => {

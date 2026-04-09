@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronDown } from 'lucide-react';
 import { authAPI, userAPI } from '../lib/api';
@@ -47,57 +47,14 @@ export default function LoginPage() {
     setError(msg);
   }, []);
 
-  // Handle VK ID OAuth 2.1 callback (?code=...&device_id=...&state=...)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get('code');
-    const deviceId = params.get('device_id');
-    const vkError = params.get('vk_error');
+  const handleVkAuth = useCallback(async (user: any, token: string) => {
+    setAuth(user, token);
+    try { const { data: u } = await userAPI.agreeToTerms(); setUser(u); } catch {}
+    navigate('/');
+  }, [navigate, setAuth, setUser]);
 
-    if (vkError) {
-      const msgs: Record<string, string> = {
-        cancelled: 'Вход через ВКонтакте отменён',
-        token: 'Ошибка получения токена ВКонтакте',
-        userinfo: 'Не удалось получить данные профиля ВК',
-        server: 'Ошибка сервера при входе через ВКонтакте',
-        state: 'Ошибка безопасности VK. Попробуйте снова.',
-      };
-      setError(msgs[vkError] || 'Ошибка входа через ВКонтакте');
-      window.history.replaceState({}, '', '/login');
-      return;
-    }
-
-    if (code && deviceId) {
-      window.history.replaceState({}, '', '/login');
-      setLoading(true);
-      // Let the SDK exchange the code (it manages codeVerifier internally via cookies)
-      import('@vkid/sdk').then(async (VKID) => {
-        try {
-          const codeVerifier = localStorage.getItem('vk_code_verifier') || undefined;
-          localStorage.removeItem('vk_code_verifier');
-          // Must init before exchangeCode so SDK knows client_id and redirect_uri
-          VKID.Config.init({
-            app: 54535061,
-            redirectUrl: 'https://moooza.ru/login',
-            ...(codeVerifier ? { codeVerifier } : {}),
-          });
-          const payload = await (VKID.Auth as any).exchangeCode(code, deviceId, codeVerifier);
-          const accessToken = (payload as any)?.access_token;
-          if (!accessToken) throw new Error('no access_token');
-          // Send access_token to our backend to create a session
-          const { authAPI: aAPI } = await import('../lib/api');
-          const { data } = await aAPI.vkToken(accessToken);
-          setAuth(data.user, data.token);
-          userAPI.agreeToTerms().then(({ data: u }) => setUser(u)).catch(() => {});
-          navigate('/');
-        } catch (e: any) {
-          console.error('[VK callback]', e);
-          setError('Не удалось войти через ВКонтакте. Попробуйте снова.');
-          setLoading(false);
-        }
-      });
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const handleVkError = useCallback((msg: string) => {
+    setError(msg);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -290,7 +247,7 @@ export default function LoginPage() {
             </div>
             <div className="space-y-2.5">
               <TelegramLoginButton onAuth={handleTelegramAuth} onError={handleTelegramError} disabled={loading} />
-              <VkLoginButton disabled={loading} />
+              <VkLoginButton onAuth={handleVkAuth} onError={handleVkError} disabled={loading} />
             </div>
           </div>
 
