@@ -54,7 +54,7 @@ model Profession {
 // Service — standalone reference item, attached to directions via M2M
 model Service {
   id        String      @id @default(uuid())
-  name      String      @unique
+  name      String
   sortOrder Int         @default(0)
   directions Direction[] @relation("DirectionServices")
 

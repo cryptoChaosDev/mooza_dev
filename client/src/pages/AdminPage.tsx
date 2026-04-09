@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { adminAPI } from '../lib/api';
-import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search } from 'lucide-react';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -27,11 +27,15 @@ function SimpleTable({
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [form, setForm] = useState<Record<string, string>>({});
+  const [search, setSearch] = useState('');
 
   const { data: items = [] } = useQuery<Item[]>({
     queryKey: [queryKey],
     queryFn: () => apiModule.list().then((r: any) => r.data),
   });
+
+  const q = search.toLowerCase();
+  const filtered = q ? items.filter(i => i.name.toLowerCase().includes(q)) : items;
 
   const invalidate = () => qc.invalidateQueries({ queryKey: [queryKey] });
 
@@ -77,7 +81,21 @@ function SimpleTable({
         )}
       </div>
 
-      {(!collapsible || open) && <div className="divide-y divide-slate-800">
+      {(!collapsible || open) && <div>
+        {/* Search */}
+        <div className="px-3 py-2 border-b border-slate-800">
+          <div className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-2.5 py-1">
+            <Search size={13} className="text-slate-500 flex-shrink-0" />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Поиск..."
+              className="flex-1 bg-transparent text-sm text-white outline-none placeholder-slate-600 py-0.5"
+            />
+            {search && <button onClick={() => setSearch('')} className="text-slate-500 hover:text-white"><X size={12} /></button>}
+          </div>
+        </div>
+        <div className="divide-y divide-slate-800">
         {adding && (
           <div className="flex items-center gap-2 px-4 py-2 bg-slate-800/50">
             <input
@@ -101,7 +119,7 @@ function SimpleTable({
           </div>
         )}
 
-        {items.map((item, idx) => (
+        {filtered.map((item, idx) => (
           <div key={item.id} className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800/30 group">
             <span className="text-xs text-slate-600 w-5 text-right flex-shrink-0">{idx + 1}</span>
             {editId === item.id ? (
@@ -139,9 +157,12 @@ function SimpleTable({
           </div>
         ))}
 
-        {items.length === 0 && !adding && (
-          <div className="px-4 py-4 text-sm text-slate-500 text-center">Нет записей</div>
+        {filtered.length === 0 && !adding && (
+          <div className="px-4 py-4 text-sm text-slate-500 text-center">
+            {search ? 'Ничего не найдено' : 'Нет записей'}
+          </div>
         )}
+        </div>
       </div>}
     </div>
   );
@@ -565,7 +586,12 @@ function StructureTree() {
 
 // ─── Custom filter card ──────────────────────────────────────────────────────
 
-interface CFilter { id: string; name: string; values: { id: string; value: string; sortOrder: number }[] }
+interface CFilter {
+  id: string;
+  name: string;
+  values: { id: string; value: string; sortOrder: number }[];
+  directions?: { id: string; name: string; fieldOfActivity: { id: string; name: string } | null }[];
+}
 
 function CustomFilterCard({ filter, onUpdate, onDelete, onCopy }: {
   filter: CFilter;
@@ -617,7 +643,12 @@ function CustomFilterCard({ filter, onUpdate, onDelete, onCopy }: {
           </div>
         ) : (
           <>
-            <span className="flex-1 font-semibold text-white">{filter.name}</span>
+            <div className="flex-1 min-w-0">
+              <span className="font-semibold text-white">{filter.name}</span>
+              {(filter.directions?.length ?? 0) > 0 && (
+                <BindingBadges bindings={(filter.directions ?? []).map(d => ({ sphere: d.fieldOfActivity?.name ?? null, direction: d.name }))} />
+              )}
+            </div>
             <span className="text-xs text-slate-500 flex-shrink-0">{filter.values.length} зн.</span>
             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
               <button onClick={() => { setEditName(filter.name); setEditingName(true); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
@@ -692,11 +723,20 @@ function CustomFiltersSection() {
   const qc = useQueryClient();
   const [addingFilter, setAddingFilter] = useState(false);
   const [newFilterName, setNewFilterName] = useState('');
+  const [search, setSearch] = useState('');
 
   const { data: filters = [] } = useQuery<CFilter[]>({
     queryKey: ['admin-custom-filters'],
     queryFn: () => adminAPI.customFilters.list().then((r: any) => r.data),
   });
+
+  const q = search.toLowerCase();
+  const filteredFilters = q
+    ? filters.filter(f =>
+        f.name.toLowerCase().includes(q) ||
+        f.values.some(v => v.value.toLowerCase().includes(q))
+      )
+    : filters;
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['admin-custom-filters'] });
 
@@ -716,7 +756,15 @@ function CustomFiltersSection() {
 
   return (
     <div className="space-y-3">
-      {filters.map(filter => (
+      {/* Search */}
+      <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2">
+        <Search size={14} className="text-slate-500 flex-shrink-0" />
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск по названию или значениям..."
+          className="flex-1 bg-transparent text-sm text-white outline-none placeholder-slate-600" />
+        {search && <button onClick={() => setSearch('')} className="text-slate-500 hover:text-white"><X size={13} /></button>}
+      </div>
+
+      {filteredFilters.map(filter => (
         <CustomFilterCard
           key={filter.id}
           filter={filter}
@@ -726,8 +774,10 @@ function CustomFiltersSection() {
         />
       ))}
 
-      {filters.length === 0 && !addingFilter && (
-        <div className="text-center py-8 text-slate-500 text-sm">Нет пользовательских фильтров</div>
+      {filteredFilters.length === 0 && !addingFilter && (
+        <div className="text-center py-8 text-slate-500 text-sm">
+          {search ? 'Ничего не найдено' : 'Нет пользовательских фильтров'}
+        </div>
       )}
 
       {addingFilter ? (
@@ -789,6 +839,12 @@ function DirectionsTab() {
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [search, setSearch] = useState('');
+
+  const q = search.toLowerCase();
+  const nameCounts: Record<string, number> = {};
+  directions.forEach(d => { nameCounts[d.name] = (nameCounts[d.name] ?? 0) + 1; });
+  const filtered = q ? directions.filter(d => d.name.toLowerCase().includes(q)) : directions;
 
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
@@ -801,16 +857,21 @@ function DirectionsTab() {
           <Plus size={14} /> Добавить
         </button>
       </div>
+      <div className="px-3 py-2 border-b border-slate-800">
+        <div className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-2.5 py-1">
+          <Search size={13} className="text-slate-500 flex-shrink-0" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск..."
+            className="flex-1 bg-transparent text-sm text-white outline-none placeholder-slate-600 py-0.5" />
+          {search && <button onClick={() => setSearch('')} className="text-slate-500 hover:text-white"><X size={12} /></button>}
+        </div>
+      </div>
       <div className="divide-y divide-slate-800">
         {adding && (
           <div className="px-4 py-2 bg-slate-800/50">
             <AddRow placeholder="Название направления" onAdd={name => { createMut.mutate(name); setAdding(false); }} onCancel={() => setAdding(false)} />
           </div>
         )}
-        {(() => {
-          const nameCounts: Record<string, number> = {};
-          directions.forEach(d => { nameCounts[d.name] = (nameCounts[d.name] ?? 0) + 1; });
-          return directions.map((dir, idx) => (
+        {filtered.map((dir, idx) => (
           <div key={dir.id} className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800/30 group">
             <span className="text-xs text-slate-600 w-5 text-right flex-shrink-0">{idx + 1}</span>
             {editId === dir.id ? (
@@ -820,9 +881,7 @@ function DirectionsTab() {
                 <span className="flex-1 text-sm text-slate-200">
                   {dir.name}
                   {nameCounts[dir.name] > 1 && (
-                    <span className="text-slate-500 ml-1">
-                      ({dir.fieldOfActivity?.name ?? 'без сферы'})
-                    </span>
+                    <span className="text-slate-500 ml-1">({dir.fieldOfActivity?.name ?? 'без сферы'})</span>
                   )}
                 </span>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -832,9 +891,10 @@ function DirectionsTab() {
               </>
             )}
           </div>
-        ));
-        })()}
-        {directions.length === 0 && !adding && <div className="px-4 py-4 text-sm text-slate-500 text-center">Нет записей</div>}
+        ))}
+        {filtered.length === 0 && !adding && (
+          <div className="px-4 py-4 text-sm text-slate-500 text-center">{search ? 'Ничего не найдено' : 'Нет записей'}</div>
+        )}
       </div>
     </div>
   );
@@ -865,6 +925,12 @@ function ProfessionsTab() {
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [search, setSearch] = useState('');
+
+  const q = search.toLowerCase();
+  const nameCounts: Record<string, number> = {};
+  professions.forEach(p => { nameCounts[p.name] = (nameCounts[p.name] ?? 0) + 1; });
+  const filtered = q ? professions.filter(p => p.name.toLowerCase().includes(q)) : professions;
 
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
@@ -877,16 +943,21 @@ function ProfessionsTab() {
           <Plus size={14} /> Добавить
         </button>
       </div>
+      <div className="px-3 py-2 border-b border-slate-800">
+        <div className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-2.5 py-1">
+          <Search size={13} className="text-slate-500 flex-shrink-0" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск..."
+            className="flex-1 bg-transparent text-sm text-white outline-none placeholder-slate-600 py-0.5" />
+          {search && <button onClick={() => setSearch('')} className="text-slate-500 hover:text-white"><X size={12} /></button>}
+        </div>
+      </div>
       <div className="divide-y divide-slate-800">
         {adding && (
           <div className="px-4 py-2 bg-slate-800/50">
             <AddRow placeholder="Название профессии" onAdd={name => { createMut.mutate(name); setAdding(false); }} onCancel={() => setAdding(false)} />
           </div>
         )}
-        {(() => {
-          const nameCounts: Record<string, number> = {};
-          professions.forEach(p => { nameCounts[p.name] = (nameCounts[p.name] ?? 0) + 1; });
-          return professions.map((p, idx) => (
+        {filtered.map((p, idx) => (
           <div key={p.id} className="flex items-center gap-2 px-4 py-2 hover:bg-slate-800/30 group">
             <span className="text-xs text-slate-600 w-5 text-right flex-shrink-0">{idx + 1}</span>
             {editId === p.id ? (
@@ -896,9 +967,7 @@ function ProfessionsTab() {
                 <span className="flex-1 text-sm text-slate-200">
                   {p.name}
                   {nameCounts[p.name] > 1 && (
-                    <span className="text-slate-500 ml-1">
-                      ({p.direction?.name ?? 'без направления'})
-                    </span>
+                    <span className="text-slate-500 ml-1">({p.direction?.name ?? 'без направления'})</span>
                   )}
                 </span>
                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -908,9 +977,119 @@ function ProfessionsTab() {
               </>
             )}
           </div>
-        ));
-        })()}
-        {professions.length === 0 && !adding && <div className="px-4 py-4 text-sm text-slate-500 text-center">Нет записей</div>}
+        ))}
+        {filtered.length === 0 && !adding && (
+          <div className="px-4 py-4 text-sm text-slate-500 text-center">{search ? 'Ничего не найдено' : 'Нет записей'}</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Binding badge helper ────────────────────────────────────────────────────
+
+function BindingBadges({ bindings }: { bindings: { sphere: string | null; direction: string }[] }) {
+  if (!bindings.length) return null;
+  return (
+    <div className="flex flex-wrap gap-1 mt-0.5">
+      {bindings.map((b, i) => (
+        <span key={i} className="inline-flex items-center gap-0.5 text-xs text-slate-500 bg-slate-800 border border-slate-700 rounded px-1.5 py-0.5">
+          {b.sphere && <><span className="text-slate-600">{b.sphere}</span><span className="text-slate-700 mx-0.5">›</span></>}
+          <span>{b.direction}</span>
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ─── Services tab ────────────────────────────────────────────────────────────
+
+interface ServiceItem { id: string; name: string; sortOrder: number; directions: { id: string; name: string; fieldOfActivity: { id: string; name: string } | null }[] }
+
+function ServicesTab() {
+  const qc = useQueryClient();
+  const [adding, setAdding] = useState(false);
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [search, setSearch] = useState('');
+
+  const { data: services = [] } = useQuery<ServiceItem[]>({
+    queryKey: ['admin-services'],
+    queryFn: () => adminAPI.services.list().then((r: any) => r.data),
+  });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['admin-services'] });
+  const createMut = useMutation({
+    mutationFn: (name: string) => adminAPI.services.create({ name }),
+    onSuccess: () => { invalidate(); setAdding(false); },
+  });
+  const updateMut = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => adminAPI.services.update(id, { name }),
+    onSuccess: () => { invalidate(); setEditId(null); },
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => adminAPI.services.remove(id),
+    onSuccess: invalidate,
+  });
+
+  const q = search.toLowerCase();
+  const filtered = q ? services.filter(s => s.name.toLowerCase().includes(q)) : services;
+
+  return (
+    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-white">Услуги</h3>
+          <span className="text-xs text-slate-500">{services.length}</span>
+        </div>
+        <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+          <Plus size={14} /> Добавить
+        </button>
+      </div>
+      <div className="px-3 py-2 border-b border-slate-800">
+        <div className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-2.5 py-1">
+          <Search size={13} className="text-slate-500 flex-shrink-0" />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск..."
+            className="flex-1 bg-transparent text-sm text-white outline-none placeholder-slate-600 py-0.5" />
+          {search && <button onClick={() => setSearch('')} className="text-slate-500 hover:text-white"><X size={12} /></button>}
+        </div>
+      </div>
+      <div className="divide-y divide-slate-800">
+        {adding && (
+          <div className="px-4 py-2 bg-slate-800/50">
+            <AddRow placeholder="Название услуги" onAdd={name => createMut.mutate(name)} onCancel={() => setAdding(false)} />
+          </div>
+        )}
+        {filtered.map((svc, idx) => {
+          const bindings = svc.directions.map(d => ({
+            sphere: d.fieldOfActivity?.name ?? null,
+            direction: d.name,
+          }));
+          return (
+            <div key={svc.id} className="flex items-start gap-2 px-4 py-2 hover:bg-slate-800/30 group">
+              <span className="text-xs text-slate-600 w-5 text-right flex-shrink-0 mt-1">{idx + 1}</span>
+              {editId === svc.id ? (
+                <div className="flex-1">
+                  <InlineEdit value={editName} onSave={name => updateMut.mutate({ id: svc.id, name })} onCancel={() => setEditId(null)} />
+                </div>
+              ) : (
+                <>
+                  <div className="flex-1 min-w-0">
+                    <span className="text-sm text-slate-200">{svc.name}</span>
+                    <BindingBadges bindings={bindings} />
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5 flex-shrink-0">
+                    <button onClick={() => { setEditId(svc.id); setEditName(svc.name); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
+                    <button onClick={() => deleteMut.mutate(svc.id)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+        {filtered.length === 0 && !adding && (
+          <div className="px-4 py-4 text-sm text-slate-500 text-center">{search ? 'Ничего не найдено' : 'Нет записей'}</div>
+        )}
       </div>
     </div>
   );
@@ -969,13 +1148,7 @@ export default function AdminPage() {
 
         {tab === 'professions' && <ProfessionsTab />}
 
-        {tab === 'services' && (
-          <SimpleTable
-            title="Услуги"
-            queryKey="admin-services"
-            apiModule={adminAPI.services}
-          />
-        )}
+        {tab === 'services' && <ServicesTab />}
 
         {tab === 'filters' && (
           <div className="space-y-6">

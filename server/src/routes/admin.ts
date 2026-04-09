@@ -106,7 +106,18 @@ router.delete('/professions/:id', async (req, res) => {
 
 // ─── Service (flat reference list) ─────────────────────────────────────────
 router.get('/services', async (_req, res) => {
-  const items = await prisma.service.findMany({ orderBy: { createdAt: 'asc' } });
+  const items = await prisma.service.findMany({
+    orderBy: { createdAt: 'asc' },
+    include: {
+      directions: {
+        select: {
+          id: true,
+          name: true,
+          fieldOfActivity: { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
   res.json(items);
 });
 router.post('/services', async (req, res) => {
@@ -426,7 +437,16 @@ router.delete('/employers/:id', async (req, res) => {
 // ─── Custom Filters ────────────────────────────────────────────────────────
 router.get('/custom-filters', async (_req, res) => {
   const filters = await prisma.customFilter.findMany({
-    include: { values: { orderBy: { sortOrder: 'asc' } } },
+    include: {
+      values: { orderBy: { sortOrder: 'asc' } },
+      directions: {
+        select: {
+          id: true,
+          name: true,
+          fieldOfActivity: { select: { id: true, name: true } },
+        },
+      },
+    },
     orderBy: { createdAt: 'asc' },
   });
   res.json(filters);
