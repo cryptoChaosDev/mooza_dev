@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { userAPI, channelAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { SocialIconRow } from '../components/SocialLinks';
 import ShareButton from '../components/ShareButton';
 
@@ -153,7 +154,7 @@ export default function PublicProfilePage() {
             <div className="absolute -bottom-10 left-1/2 -translate-x-1/2">
               <div className="w-20 h-20 rounded-2xl overflow-hidden ring-2 ring-primary-500/40 ring-offset-2 ring-offset-slate-900 shadow-xl shadow-primary-500/20">
                 {user.avatar
-                  ? <img src={`${API_URL}${user.avatar}`} alt={`${user.firstName} ${user.lastName}`} className="w-full h-full object-cover" />
+                  ? <img src={getAvatarUrl(user.avatar)!} alt={`${user.firstName} ${user.lastName}`} className="w-full h-full object-cover" />
                   : <div className="w-full h-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center">
                       <span className="text-2xl font-bold text-white">{user.firstName[0]}{user.lastName[0]}</span>
                     </div>
@@ -364,7 +365,7 @@ export default function PublicProfilePage() {
               <div className="flex items-center gap-3">
                 <div className="w-14 h-14 rounded-2xl overflow-hidden bg-slate-700 border border-slate-600 flex items-center justify-center flex-shrink-0">
                   {user.channel.avatar
-                    ? <img src={`${API_URL}${user.channel.avatar}`} alt="" className="w-full h-full object-cover" />
+                    ? <img src={getAvatarUrl(user.channel.avatar)!} alt="" className="w-full h-full object-cover" />
                     : <Radio size={22} className="text-slate-500" />
                   }
                 </div>

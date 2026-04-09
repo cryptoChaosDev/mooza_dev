@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Users, Check, X, MessageCircle, UserX, Clock, Pin, PinOff, Search, Wifi } from 'lucide-react';
 import { friendshipAPI } from '../lib/api';
+import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { usePresenceStore } from '../stores/presenceStore';
 
 type Tab = 'friends' | 'requests' | 'sent';
@@ -100,7 +101,7 @@ export default function FriendsPage() {
     const cls = `w-${size} h-${size} rounded-full object-cover`;
     const isOnline = showPresence && onlineUsers.has(user.id);
     const inner = user.avatar ? (
-      <img src={`${import.meta.env.VITE_API_URL}${user.avatar}`} alt={`${user.firstName} ${user.lastName}`} className={cls} />
+      <img src={getAvatarUrl(user.avatar)!} alt={`${user.firstName} ${user.lastName}`} className={cls} />
     ) : (
       <div className={`w-${size} h-${size} bg-gradient-to-br from-primary-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0`}>
         <span className="text-white font-bold text-sm">{user.firstName[0]}{user.lastName[0]}</span>

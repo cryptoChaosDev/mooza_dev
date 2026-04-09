@@ -12,6 +12,7 @@ import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
 import { channelAPI } from '../lib/api';
 import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
+import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -280,7 +281,7 @@ export default function ProfilePage() {
     );
   }
 
-  const avatarUrl = profile?.avatar ? `${API_URL}${profile.avatar}` : null;
+  const avatarUrl = getAvatarUrl(profile?.avatar);
   const bannerUrl = profile?.bannerImage ? `${API_URL}${profile.bannerImage}` : null;
 
   const inputCls = "w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white placeholder-slate-500";
@@ -1014,7 +1015,7 @@ export default function ProfilePage() {
                   <div className="relative flex-shrink-0">
                     <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-700 border border-slate-600 flex items-center justify-center">
                       {myChannel.avatar
-                        ? <img src={`${API_URL}${myChannel.avatar}`} alt="" className="w-full h-full object-cover" />
+                        ? <img src={getAvatarUrl(myChannel.avatar)!} alt="" className="w-full h-full object-cover" />
                         : <Radio size={24} className="text-slate-500" />
                       }
                     </div>

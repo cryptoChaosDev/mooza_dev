@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, Camera, FileText, Download, Smile } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
+import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
@@ -624,7 +625,7 @@ export default function ChatPage() {
                       return (
                         <div key={m.userId} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-700/30 transition-colors">
                           {m.user.avatar ? (
-                            <img src={`${API_URL}${m.user.avatar}`} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" />
+                            <img src={getAvatarUrl(m.user.avatar)!} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" />
                           ) : (
                             <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
                               <span className="text-white text-xs font-bold">{m.user.firstName[0]}</span>
@@ -673,7 +674,7 @@ export default function ChatPage() {
                       {friends.map(f => (
                         <div key={f.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-700/30 transition-colors">
                           {f.avatar ? (
-                            <img src={`${API_URL}${f.avatar}`} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" />
+                            <img src={getAvatarUrl(f.avatar)!} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" />
                           ) : (
                             <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
                               <span className="text-white text-xs font-bold">{f.firstName[0]}</span>
@@ -765,7 +766,7 @@ export default function ChatPage() {
                           {showSender && senderInGroup ? (
                             senderInGroup.avatar ? (
                               <img
-                                src={`${API_URL}${senderInGroup.avatar}`}
+                                src={getAvatarUrl(senderInGroup.avatar)!}
                                 className="w-7 h-7 rounded-lg object-cover"
                                 alt=""
                               />

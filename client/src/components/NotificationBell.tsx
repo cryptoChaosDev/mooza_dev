@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, MessageCircle, UserPlus, UserCheck, MessageSquare, X, CheckCheck } from 'lucide-react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useBadgeStore } from '../stores/badgeStore';
+import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -166,7 +167,7 @@ export default function NotificationBell() {
                   <div className="relative shrink-0 mt-0.5">
                     {notif.actor?.avatar ? (
                       <img
-                        src={`${API_URL}${notif.actor.avatar}`}
+                        src={getAvatarUrl(notif.actor.avatar)!}
                         className="w-9 h-9 rounded-xl object-cover"
                         alt=""
                       />

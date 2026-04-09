@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageCircle, Search, Plus, Users, X, Check, User, FolderKanban } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
+import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { getSocket } from '../lib/socket';
 
 interface ConvItem {
@@ -197,7 +198,7 @@ export default function MessagesPage() {
                   <div className="relative flex-shrink-0">
                     {conv.avatar ? (
                       <img
-                        src={`${import.meta.env.VITE_API_URL}${conv.avatar}`}
+                        src={getAvatarUrl(conv.avatar)!}
                         alt={conv.name}
                         className="w-11 h-11 rounded-full object-cover"
                       />
@@ -301,7 +302,7 @@ export default function MessagesPage() {
                   >
                     {f.avatar ? (
                       <img
-                        src={`${import.meta.env.VITE_API_URL}${f.avatar}`}
+                        src={getAvatarUrl(f.avatar)!}
                         alt={`${f.firstName} ${f.lastName}`}
                         className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                       />

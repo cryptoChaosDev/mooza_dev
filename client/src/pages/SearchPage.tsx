@@ -5,6 +5,7 @@ import {
   SlidersHorizontal, ArrowUpDown, ChevronDown, Loader2,
 } from 'lucide-react';
 import { friendshipAPI, userAPI } from '../lib/api';
+import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
@@ -86,7 +87,7 @@ function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: Us
         <button onClick={() => onNavigate(user.id)} className="flex-shrink-0 relative">
           {user.avatar ? (
             <img
-              src={`${import.meta.env.VITE_API_URL}${user.avatar}`}
+              src={getAvatarUrl(user.avatar)!}
               alt={`${user.firstName} ${user.lastName}`}
               className="w-10 h-10 rounded-xl object-cover ring-2 ring-slate-700/50 group-hover:ring-primary-500/50 transition-all"
             />

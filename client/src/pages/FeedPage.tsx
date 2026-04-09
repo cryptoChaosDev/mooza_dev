@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import ShareButton from '../components/ShareButton';
 import { postAPI, channelAPI } from '../lib/api';
+import { avatarUrl } from '../lib/avatar';
 import { useAuthStore } from '../stores/authStore';
 import EmojiPicker from '../components/EmojiPicker';
 import AudioPlayer from '../components/AudioPlayer';
@@ -29,7 +30,7 @@ function timeAgo(dateStr: string) {
 
 function Avatar({ user, size = 10 }: { user: { firstName: string; lastName: string; avatar?: string }; size?: number }) {
   if (user.avatar) {
-    return <img src={`${API_URL}${user.avatar}`} alt="" className={`w-${size} h-${size} rounded-full object-cover flex-shrink-0`} />;
+    return <img src={avatarUrl(user.avatar)!} alt="" className={`w-${size} h-${size} rounded-full object-cover flex-shrink-0`} />;
   }
   return (
     <div className={`w-${size} h-${size} rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center flex-shrink-0`}>
