@@ -773,7 +773,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Tab content */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto pb-24">
             {activeTab === 'basic' && <EditBasicTab />}
             {activeTab === 'profession' && <EditServicesTab />}
             {activeTab === 'channel' && <EditChannelTab />}

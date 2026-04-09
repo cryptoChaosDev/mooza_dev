@@ -84,7 +84,6 @@ export const userAPI = {
     }),
   search: (params: any) => api.get('/users/search', { params }),
   getUser: (id: string) => api.get(`/users/${id}`),
-  getUserByHandle: (handle: string) => api.get(`/users/handle/${encodeURIComponent(handle)}`),
   uploadPortfolio: (formData: FormData) =>
     api.post('/users/me/portfolio', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
