@@ -6,7 +6,7 @@ import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, DollarSign, Calendar,
   Headphones, Edit3, User, Plus, ChevronDown, ChevronLeft, ChevronRight,
-  Building2, FileText, Trash2, Radio, Loader2,
+  Building2, FileText, Trash2, Radio, Loader2, Crown, BadgeCheck, Ban,
 } from 'lucide-react';
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
@@ -579,580 +579,444 @@ export default function ProfilePage() {
     return null;
   };
 
-  return (
-    <div className="min-h-screen bg-slate-950">
-      <div className="max-w-2xl mx-auto px-4 pt-4 pb-28">
-
-        {/* ── HERO CARD ────────────────────────────────────────────────── */}
-        <div className="rounded-2xl border border-slate-700/50 shadow-xl overflow-hidden mb-4 bg-slate-900 relative">
-          {/* Full-bleed cover image */}
-          {bannerUrl && <img src={bannerUrl} alt="" className="absolute inset-0 w-full h-full object-cover z-0" />}
-          {bannerUrl && <div className="absolute inset-0 bg-black/50 z-0" />}
-          {/* Banner */}
-          <div className="relative h-28 group z-20">
-            {!bannerUrl && <div className="absolute inset-0 bg-gradient-to-br from-primary-900/70 via-purple-900/50 to-slate-900 opacity-100" />}
-            {!bannerUrl && <div className="absolute inset-0 opacity-30" style={{ backgroundImage: 'radial-gradient(circle at 15% 60%, rgba(99,102,241,0.5) 0%, transparent 55%), radial-gradient(circle at 85% 20%, rgba(168,85,247,0.5) 0%, transparent 55%)' }} />}
-            {/* Banner upload button */}
-            <button
-              onClick={() => bannerInputRef.current?.click()}
-              className="absolute bottom-2 left-2 z-10 flex items-center gap-1 px-2 py-1 bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white/80 hover:text-white rounded-lg text-[10px] font-medium transition-all opacity-0 group-hover:opacity-100"
-            >
-              <Camera size={10} />Фон
-            </button>
-            <input ref={bannerInputRef} type="file" accept="image/*"
-              onChange={e => { const f = e.target.files?.[0]; if (f) uploadBannerMutation.mutate(f); e.target.value = ''; }}
-              className="hidden" />
-            {/* Actions */}
-            <div className="absolute top-3 right-3 flex gap-1.5 z-10">
-              {isEditing ? (
-                <>
-                  <button onClick={() => setIsEditing(false)} className="p-1.5 bg-slate-800/80 backdrop-blur-sm hover:bg-slate-700 rounded-lg border border-slate-600/50 transition-all">
-                    <X size={14} className="text-slate-300" />
-                  </button>
-                  <button onClick={handleSave} disabled={updateMutation.isPending} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500 hover:bg-primary-600 rounded-lg text-white text-xs font-medium transition-all disabled:opacity-60 shadow-lg shadow-primary-500/30">
-                    <Save size={12} />Сохранить
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button onClick={() => setIsEditing(true)} className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-800/80 backdrop-blur-sm hover:bg-slate-700 rounded-lg border border-slate-600/50 hover:border-primary-500/50 text-slate-300 hover:text-white text-xs font-medium transition-all">
-                    <Edit3 size={12} />Изменить
-                  </button>
-                  <button onClick={logout} className="p-1.5 bg-slate-800/80 backdrop-blur-sm hover:bg-slate-700 rounded-lg border border-slate-600/50 text-slate-400 hover:text-red-400 transition-all">
-                    <LogOut size={14} />
-                  </button>
-                </>
-              )}
-            </div>
-            {/* Avatar overlapping banner */}
-            <div className="absolute -bottom-10 left-1/2 -translate-x-1/2">
-              <div className="relative">
-                <div className="w-20 h-20 rounded-2xl overflow-hidden ring-2 ring-primary-500/40 ring-offset-2 ring-offset-slate-900 shadow-xl shadow-primary-500/20">
-                  {avatarUrl
-                    ? <img src={avatarUrl} alt="Avatar" className="w-full h-full object-cover" />
-                    : <div className="w-full h-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center">
-                        <span className="text-2xl font-bold text-white">{profile?.firstName?.[0]}{profile?.lastName?.[0]}</span>
-                      </div>
-                  }
-                </div>
-                <button onClick={() => fileInputRef.current?.click()} className="absolute -bottom-1.5 -right-1.5 bg-primary-500 hover:bg-primary-600 text-white p-1.5 rounded-lg shadow-lg transition-all">
-                  <Camera size={11} />
-                </button>
-                <input ref={fileInputRef} type="file" accept="image/*"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatarMutation.mutate(f); e.target.value = ''; }}
-                  className="hidden" />
-              </div>
-            </div>
-          </div>
-
-          {/* Info */}
-          <div className="pt-12 pb-4 px-4 text-center relative z-10">
-            <h2 className="text-lg font-bold text-white leading-tight">
-              {profile?.firstName} {profile?.lastName}
-            </h2>
-            {profile?.nickname && <p className="text-slate-400 text-sm mt-0.5">@{profile.nickname}</p>}
-
-            {profile?.role && (
-              <span className="block mt-1.5 px-2.5 py-0.5 bg-primary-500/15 text-primary-300 text-xs font-medium rounded-full border border-primary-500/30 text-center">
-                {profile.role}
-              </span>
-            )}
-
-            {/* Location chips */}
-            {(profile?.city || profile?.country) && (
-              <div className="flex items-center justify-center gap-2 mt-2 flex-wrap">
-                {profile?.city && (
-                  <span className="flex items-center gap-1 text-xs text-slate-400 bg-slate-800/60 px-2.5 py-1 rounded-full border border-slate-700/50">
-                    <MapPin size={10} className="text-primary-400" />{profile.city}
-                  </span>
-                )}
-                {profile?.country && (
-                  <span className="flex items-center gap-1 text-xs text-slate-400 bg-slate-800/60 px-2.5 py-1 rounded-full border border-slate-700/50">
-                    <Globe size={10} className="text-slate-500" />{profile.country}
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Stats */}
-            <div className="flex items-center justify-center mt-3 bg-slate-800/50 rounded-xl border border-slate-700/50 divide-x divide-slate-700/50">
-              <div className="flex-1 py-2.5 text-center">
-                <div className="text-base font-bold text-white">{friendCount}</div>
-                <div className="text-[10px] text-slate-500 uppercase tracking-wide mt-0.5">Друзья</div>
-              </div>
-              <div className="flex-1 py-2.5 text-center">
-                <div className="text-base font-bold text-white">{rating}<span className="text-xs text-slate-500 font-normal">/100</span></div>
-                <div className="text-[10px] text-slate-500 uppercase tracking-wide mt-0.5">Профиль</div>
-              </div>
-            </div>
-            <div className="mt-1.5 h-1 bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full bg-gradient-to-r from-primary-500 to-purple-500 rounded-full transition-all" style={{ width: `${rating}%` }} />
-            </div>
-
-            {/* Social links */}
-            <SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} />
-          </div>
+  // ── Edit-mode modal content for "Основное" tab ────────────────────────────
+  const EditBasicTab = () => (
+    <div className="p-4 space-y-4">
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={labelCls}>Имя</label>
+          <input type="text" value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} className={inputCls} />
         </div>
-
-        {/* ── TAB BAR ───────────────────────────────────────────────────── */}
-        <div className="flex gap-1 p-1 bg-slate-800/80 rounded-xl border border-slate-700/50 mb-3">
-          {TABS.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium transition-all ${
-                activeTab === tab.id
-                  ? 'bg-primary-500 text-white shadow-md shadow-primary-500/30'
-                  : 'text-slate-400 hover:text-slate-300'
-              }`}
-            >
-              {tab.icon}
-              <span>{tab.label}</span>
-            </button>
+        <div>
+          <label className={labelCls}>Фамилия</label>
+          <input type="text" value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} className={inputCls} />
+        </div>
+      </div>
+      <div>
+        <label className={labelCls}>Никнейм</label>
+        <input type="text" value={formData.nickname} onChange={e => setFormData({ ...formData, nickname: e.target.value })} placeholder="@nickname" className={inputCls} />
+      </div>
+      <div>
+        <label className={labelCls}>О себе</label>
+        <textarea value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} rows={4} className={`${inputCls} resize-none`} placeholder="Расскажите о себе..." />
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label className={labelCls}>Страна</label>
+          <input type="text" value={formData.country} onChange={e => setFormData({ ...formData, country: e.target.value })} placeholder="Россия" className={inputCls} />
+        </div>
+        <div>
+          <label className={labelCls}>Город</label>
+          <input type="text" value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="Москва" className={inputCls} />
+        </div>
+      </div>
+      <div>
+        <label className={labelCls}>Моя группа</label>
+        <SelectField label="" value={formData.artistIds.map(id => artists.find((a: any) => a.id === id)?.name ?? profile?.userArtists?.find((ua: any) => ua.artistId === id)?.artist?.name ?? '').filter(Boolean).join(', ')} placeholder="Выберите группу или артиста" icon={<Music size={13} />} onClick={() => setOpenBasicSheet('artists')} badge={formData.artistIds.length || undefined} />
+        <SelectSheet isOpen={openBasicSheet === 'artists'} onClose={() => setOpenBasicSheet(null)} title="Моя группа" options={artists.map((a: any) => ({ id: a.id, name: a.name }))} selectedIds={formData.artistIds} onSelect={ids => setFormData({ ...formData, artistIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />
+      </div>
+      <div>
+        <label className={labelCls}>Мой работодатель</label>
+        <SelectField label="" value={employers.find((e: any) => e.id === formData.employerId)?.name ?? profile?.employer?.name ?? ''} placeholder="Выберите работодателя" icon={<Building2 size={13} />} onClick={() => setOpenBasicSheet('employer')} />
+        <SelectSheet isOpen={openBasicSheet === 'employer'} onClose={() => setOpenBasicSheet(null)} title="Мой работодатель" options={employers.map((e: any) => ({ id: e.id, name: e.name, subtitle: e.inn ? `ИНН ${e.inn}` : undefined }))} selectedIds={formData.employerId} onSelect={id => setFormData({ ...formData, employerId: id as string })} mode="single" searchable height="half" />
+      </div>
+      <div>
+        <label className={labelCls}>Социальные сети и сервисы</label>
+        <SocialLinksEditor value={formData.socialLinks} onChange={v => setFormData({ ...formData, socialLinks: v })} />
+      </div>
+      <div>
+        <label className={labelCls}>Портфолио</label>
+        <p className="text-xs text-slate-500 mb-2">До 5 файлов, не более 5 МБ каждый</p>
+        <div className="space-y-1.5 mb-2">
+          {portfolioFiles.map((f: any) => (
+            <div key={f.id} className="flex items-center gap-2 px-3 py-2 bg-slate-700/30 rounded-xl border border-slate-600/50">
+              <FileText size={14} className="text-slate-400 flex-shrink-0" />
+              <span className="flex-1 text-xs text-slate-300 truncate">{f.originalName}</span>
+              <span className="text-xs text-slate-500 flex-shrink-0">{formatFileSize(f.size)}</span>
+              <button type="button" onClick={() => handlePortfolioDelete(f.id)} className="p-1 rounded hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all flex-shrink-0"><Trash2 size={13} /></button>
+            </div>
           ))}
         </div>
+        {portfolioFiles.length < 5 && (
+          <label className={`flex items-center justify-center gap-2 py-2.5 border border-dashed rounded-xl text-sm transition-all cursor-pointer ${isUploadingPortfolio ? 'border-slate-600 text-slate-500' : 'border-slate-600 text-slate-400 hover:text-primary-400 hover:border-primary-500/50'}`}>
+            <input type="file" multiple accept="*/*" className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+            {isUploadingPortfolio ? 'Загрузка...' : `+ Добавить файл (${portfolioFiles.length}/5)`}
+          </label>
+        )}
+      </div>
+    </div>
+  );
 
-        {/* ── TAB CONTENT ───────────────────────────────────────────────── */}
-        <div className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm rounded-xl border border-slate-700/50">
-
-          {/* ── ОСНОВНОЕ ── */}
-          {activeTab === 'basic' && (
-            isEditing ? (
-              <div className="p-4 space-y-4">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Имя</label>
-                    <input type="text" value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} className={inputCls} />
+  // ── Edit-mode modal content for "Услуги" tab ───────────────────────────────
+  const EditServicesTab = () => {
+    const byField: Record<string, { fieldName: string; entries: { us: UserServiceEntry; idx: number }[] }> = {};
+    userServices.forEach((us, idx) => {
+      const fId = us.fieldOfActivityId || 'unknown';
+      if (!byField[fId]) byField[fId] = { fieldName: us.fieldOfActivityName, entries: [] };
+      byField[fId].entries.push({ us, idx });
+    });
+    return (
+      <div className="p-4 space-y-4">
+        <p className="text-xs text-slate-500">Выберите услуги, по которым вас можно найти. Для каждой услуги настройте жанры, формат и другие параметры.</p>
+        <div className="space-y-3">
+          {Object.entries(byField).map(([fId, { fieldName, entries }]) => (
+            <div key={fId}>
+              <p className="text-xs font-bold text-primary-400 uppercase tracking-wider mb-1.5">{fieldName}</p>
+              <div className="space-y-2 pl-2 border-l border-primary-500/20">
+                {entries.map(({ us, idx }) => (
+                  <div key={us.serviceId} className="bg-slate-700/30 rounded-xl border border-slate-600/50 overflow-hidden">
+                    <div className="flex items-center gap-2 px-3 py-2.5">
+                      <button type="button" onClick={() => setExpandedSvcIdx(expandedSvcIdx === idx ? null : idx)} className="flex-1 flex items-center justify-between text-left">
+                        <div>
+                          <p className="text-xs text-slate-500">{us.professionName}</p>
+                          <p className="text-sm font-semibold text-white">{us.serviceName}</p>
+                        </div>
+                        <ChevronDown size={15} className={`text-slate-400 transition-transform mr-1 ${expandedSvcIdx === idx ? 'rotate-180' : ''}`} />
+                      </button>
+                      <button type="button" onClick={() => { setUserServices(prev => prev.filter((_, i) => i !== idx)); if (expandedSvcIdx === idx) setExpandedSvcIdx(null); }} className="flex-shrink-0 p-1 rounded-lg hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all"><X size={14} /></button>
+                    </div>
+                    {expandedSvcIdx === idx && <ServiceFilterEditors idx={idx} />}
                   </div>
-                  <div>
-                    <label className={labelCls}>Фамилия</label>
-                    <input type="text" value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} className={inputCls} />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelCls}>Никнейм</label>
-                  <input type="text" value={formData.nickname} onChange={e => setFormData({ ...formData, nickname: e.target.value })} placeholder="@nickname" className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>О себе</label>
-                  <textarea value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} rows={4} className={`${inputCls} resize-none`} placeholder="Расскажите о себе..." />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Страна</label>
-                    <input type="text" value={formData.country} onChange={e => setFormData({ ...formData, country: e.target.value })} placeholder="Россия" className={inputCls} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Город</label>
-                    <input type="text" value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="Москва" className={inputCls} />
-                  </div>
-                </div>
-                {/* Моя группа */}
-                <div>
-                  <label className={labelCls}>Моя группа</label>
-                  <SelectField
-                    label=""
-                    value={formData.artistIds.map(id => artists.find((a: any) => a.id === id)?.name ?? profile?.userArtists?.find((ua: any) => ua.artistId === id)?.artist?.name ?? '').filter(Boolean).join(', ')}
-                    placeholder="Выберите группу или артиста"
-                    icon={<Music size={13} />}
-                    onClick={() => setOpenBasicSheet('artists')}
-                    badge={formData.artistIds.length || undefined}
-                  />
-                  <SelectSheet
-                    isOpen={openBasicSheet === 'artists'}
-                    onClose={() => setOpenBasicSheet(null)}
-                    title="Моя группа"
-                    options={artists.map((a: any) => ({ id: a.id, name: a.name }))}
-                    selectedIds={formData.artistIds}
-                    onSelect={ids => setFormData({ ...formData, artistIds: ids as string[] })}
-                    mode="multiple"
-                    showConfirm
-                    searchable
-                    height="half"
-                  />
-                </div>
-                {/* Мой работодатель */}
-                <div>
-                  <label className={labelCls}>Мой работодатель</label>
-                  <SelectField
-                    label=""
-                    value={employers.find((e: any) => e.id === formData.employerId)?.name ?? profile?.employer?.name ?? ''}
-                    placeholder="Выберите работодателя"
-                    icon={<Building2 size={13} />}
-                    onClick={() => setOpenBasicSheet('employer')}
-                  />
-                  <SelectSheet
-                    isOpen={openBasicSheet === 'employer'}
-                    onClose={() => setOpenBasicSheet(null)}
-                    title="Мой работодатель"
-                    options={employers.map((e: any) => ({ id: e.id, name: e.name, subtitle: e.inn ? `ИНН ${e.inn}` : undefined }))}
-                    selectedIds={formData.employerId}
-                    onSelect={id => setFormData({ ...formData, employerId: id as string })}
-                    mode="single"
-                    searchable
-                    height="half"
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Социальные сети и сервисы</label>
-                  <SocialLinksEditor
-                    value={formData.socialLinks}
-                    onChange={v => setFormData({ ...formData, socialLinks: v })}
-                  />
-                </div>
-                {/* Моё портфолио */}
-                <div>
-                  <label className={labelCls}>Моё портфолио</label>
-                  <p className="text-xs text-slate-500 mb-2">До 5 файлов, не более 5 МБ каждый</p>
-                  <div className="space-y-1.5 mb-2">
-                    {portfolioFiles.map((f: any) => (
-                      <div key={f.id} className="flex items-center gap-2 px-3 py-2 bg-slate-700/30 rounded-xl border border-slate-600/50">
-                        <FileText size={14} className="text-slate-400 flex-shrink-0" />
-                        <span className="flex-1 text-xs text-slate-300 truncate">{f.originalName}</span>
-                        <span className="text-xs text-slate-500 flex-shrink-0">{formatFileSize(f.size)}</span>
-                        <button type="button" onClick={() => handlePortfolioDelete(f.id)} className="p-1 rounded hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all flex-shrink-0">
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  {portfolioFiles.length < 5 && (
-                    <label className={`flex items-center justify-center gap-2 py-2.5 border border-dashed rounded-xl text-sm transition-all cursor-pointer ${isUploadingPortfolio ? 'border-slate-600 text-slate-500' : 'border-slate-600 text-slate-400 hover:text-primary-400 hover:border-primary-500/50'}`}>
-                      <input type="file" multiple accept="*/*" className="hidden" disabled={isUploadingPortfolio}
-                        onChange={e => handlePortfolioUpload(e.target.files)} />
-                      {isUploadingPortfolio ? 'Загрузка...' : `+ Добавить файл (${portfolioFiles.length}/5)`}
-                    </label>
-                  )}
-                </div>
+                ))}
               </div>
-            ) : (
-              <div className="p-4 space-y-4">
-                {profile?.bio
-                  ? <p className="text-slate-300 text-sm leading-relaxed">{profile.bio}</p>
-                  : <EmptyState text="Биография не заполнена" />
+            </div>
+          ))}
+        </div>
+        {addStep ? <AddServiceFlow /> : (
+          <button type="button" onClick={() => setAddStep('field')} className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm">
+            <Plus size={14} />Добавить услугу
+          </button>
+        )}
+      </div>
+    );
+  };
+
+  // ── Edit-mode modal content for "Канал" tab ────────────────────────────────
+  const EditChannelTab = () => (
+    <div className="p-4 space-y-4">
+      {myChannel ? (
+        <>
+          <div className="flex items-center gap-3">
+            <div className="relative flex-shrink-0">
+              <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-700 border border-slate-600 flex items-center justify-center">
+                {myChannel.avatar ? <img src={getAvatarUrl(myChannel.avatar)!} alt="" className="w-full h-full object-cover" /> : <Radio size={24} className="text-slate-500" />}
+              </div>
+              <button onClick={() => channelAvatarRef.current?.click()} className="absolute -bottom-1 -right-1 p-1 bg-primary-600 hover:bg-primary-500 rounded-full shadow transition-colors"><Camera size={10} className="text-white" /></button>
+              <input ref={channelAvatarRef} type="file" accept="image/*" className="hidden" onChange={handleChannelAvatarChange} />
+            </div>
+            <div className="flex-1 min-w-0">
+              {channelEditing ? (
+                <input value={channelForm.name} onChange={e => setChannelForm(f => ({ ...f, name: e.target.value }))} className="w-full px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white" placeholder="Название канала" />
+              ) : (
+                <p className="text-base font-semibold text-white truncate">{myChannel.name}</p>
+              )}
+              <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                <span>{myChannel._count.subscriptions} подписчиков</span>
+                <span>{myChannel._count.posts} постов</span>
+              </div>
+            </div>
+          </div>
+          {channelEditing ? (
+            <textarea value={channelForm.description} onChange={e => setChannelForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Описание канала..." className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-slate-500 resize-none" />
+          ) : myChannel.description ? (
+            <p className="text-sm text-slate-400 leading-relaxed">{myChannel.description}</p>
+          ) : (
+            <p className="text-sm text-slate-600 italic">Нет описания</p>
+          )}
+          {channelEditing ? (
+            <div className="flex gap-2">
+              <button onClick={() => setChannelEditing(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
+              <button onClick={() => updateChannelMut.mutate()} disabled={updateChannelMut.isPending || !channelForm.name.trim()} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                {updateChannelMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}Сохранить
+              </button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <button onClick={startEditChannel} className="flex-1 py-2 text-sm text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 rounded-xl transition-colors flex items-center justify-center gap-1.5"><Edit3 size={14} />Редактировать</button>
+              <button onClick={() => { if (confirm('Удалить канал? Все посты канала будут отвязаны.')) deleteChannelMut.mutate(); }} disabled={deleteChannelMut.isPending} className="py-2 px-3 text-sm text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 rounded-xl transition-colors">
+                {deleteChannelMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex flex-col items-center py-4 text-center">
+            <div className="p-4 bg-slate-800/50 rounded-2xl mb-3"><Radio size={28} className="text-slate-500" /></div>
+            <p className="text-white font-semibold mb-1">У вас нет канала</p>
+            <p className="text-slate-500 text-sm">Создайте канал, чтобы публиковать посты от его имени</p>
+          </div>
+          <input value={channelForm.name} onChange={e => setChannelForm(f => ({ ...f, name: e.target.value }))} placeholder="Название канала *" className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-slate-500" />
+          <textarea value={channelForm.description} onChange={e => setChannelForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Описание (необязательно)" className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-slate-500 resize-none" />
+          <button onClick={() => createChannelMut.mutate()} disabled={createChannelMut.isPending || !channelForm.name.trim()} className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
+            {createChannelMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}Создать канал
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  const aUrl = getAvatarUrl(profile?.avatar);
+  const bUrl = profile?.bannerImage ? `${API_URL}${profile.bannerImage}` : null;
+  const hasSocialLinks = Object.values((profile?.socialLinks as Record<string, string>) || {}).some(Boolean);
+
+  return (
+    <div className="min-h-screen bg-slate-950">
+
+      {/* ── EDIT MODAL (full-screen) ─────────────────────────────────────── */}
+      {isEditing && (
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
+          {/* Modal header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0 bg-slate-950">
+            <button onClick={() => setIsEditing(false)} className="p-2 -ml-2 text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-slate-800">
+              <X size={20} />
+            </button>
+            <span className="font-semibold text-white text-sm">Редактирование профиля</span>
+            <button onClick={handleSave} disabled={updateMutation.isPending} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-colors">
+              {updateMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              Сохранить
+            </button>
+          </div>
+
+          {/* Tab bar */}
+          <div className="flex gap-1 p-2 bg-slate-950 border-b border-slate-800 flex-shrink-0">
+            {TABS.map(tab => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${activeTab === tab.id ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
+                {tab.icon}<span>{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          <div className="flex-1 overflow-y-auto">
+            {activeTab === 'basic' && <EditBasicTab />}
+            {activeTab === 'profession' && <EditServicesTab />}
+            {activeTab === 'channel' && <EditChannelTab />}
+          </div>
+        </div>
+      )}
+
+      {/* ── VIEW MODE ────────────────────────────────────────────────────── */}
+      <div className="max-w-2xl mx-auto pb-28">
+
+        {/* Banner */}
+        <div className="relative group">
+          <div className="h-48 overflow-hidden bg-gradient-to-br from-primary-900 via-purple-900/70 to-slate-900">
+            {bUrl
+              ? <img src={bUrl} alt="" className="w-full h-full object-cover" />
+              : <div className="absolute inset-0 opacity-40" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(99,102,241,0.8) 0%, transparent 60%), radial-gradient(circle at 80% 20%, rgba(168,85,247,0.7) 0%, transparent 60%)' }} />
+            }
+          </div>
+          {/* Banner upload */}
+          <button
+            onClick={() => bannerInputRef.current?.click()}
+            className="absolute bottom-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white/80 hover:text-white rounded-lg text-xs font-medium transition-all opacity-0 group-hover:opacity-100"
+          >
+            <Camera size={12} />Сменить фон
+          </button>
+          <input ref={bannerInputRef} type="file" accept="image/*" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadBannerMutation.mutate(f); e.target.value = ''; }} />
+        </div>
+
+        {/* Avatar + edit button row */}
+        <div className="px-4">
+          <div className="flex items-end justify-between -mt-14 mb-4">
+            {/* Avatar */}
+            <div className="relative z-10">
+              <div className="w-28 h-28 rounded-full overflow-hidden ring-4 ring-slate-950 shadow-2xl bg-gradient-to-br from-primary-500 to-purple-600">
+                {aUrl
+                  ? <img src={aUrl} alt="Avatar" className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center">
+                      <span className="text-3xl font-bold text-white">{profile?.firstName?.[0]}{profile?.lastName?.[0]}</span>
+                    </div>
                 }
-                {(profile?.country || profile?.city) && (
-                  <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-700/50">
-                    {profile?.country && (
-                      <span className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/50 rounded-xl text-slate-300 text-xs border border-slate-600/30">
-                        <Globe size={12} className="text-slate-400" />{profile.country}
-                      </span>
-                    )}
-                    {profile?.city && (
-                      <span className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700/50 rounded-xl text-slate-300 text-xs border border-slate-600/30">
-                        <MapPin size={12} className="text-slate-400" />{profile.city}
-                      </span>
-                    )}
-                  </div>
-                )}
-                {/* Groups */}
-                {profile?.userArtists?.length > 0 && (
-                  <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-700/50">
-                    <span className="w-full text-xs text-slate-500 font-semibold">Группы / Артисты</span>
-                    {profile.userArtists.map((ua: any) => (
-                      <span key={ua.id} className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-500/10 rounded-xl text-purple-300 text-xs border border-purple-500/20">
-                        <Music size={11} />{ua.artist?.name}
-                      </span>
-                    ))}
-                  </div>
-                )}
-                {/* Employer */}
-                {profile?.employer && (
-                  <div className="flex flex-wrap gap-2 pt-2 border-t border-slate-700/50">
-                    <span className="w-full text-xs text-slate-500 font-semibold">Работодатель</span>
-                    <span className="flex items-center gap-1.5 px-3 py-1.5 bg-green-500/10 rounded-xl text-green-300 text-xs border border-green-500/20">
-                      <Building2 size={11} />{profile.employer.name}
-                    </span>
-                  </div>
-                )}
-                {/* Portfolio */}
-                {portfolioFiles.length > 0 && (
-                  <div className="pt-2 border-t border-slate-700/50">
-                    <p className="text-xs text-slate-500 font-semibold mb-2">Портфолио</p>
-                    <div className="space-y-1.5">
-                      {portfolioFiles.map((f: any) => (
-                        <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-2 px-3 py-2 bg-slate-700/20 rounded-xl border border-slate-600/30 hover:border-primary-500/30 transition-colors">
-                          <FileText size={13} className="text-slate-400 flex-shrink-0" />
-                          <span className="flex-1 text-xs text-slate-300 truncate">{f.originalName}</span>
-                          <span className="text-xs text-slate-500">{formatFileSize(f.size)}</span>
-                        </a>
+              </div>
+              <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-0.5 right-0.5 bg-primary-500 hover:bg-primary-600 text-white p-2 rounded-full shadow-lg transition-all border-2 border-slate-950">
+                <Camera size={13} />
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatarMutation.mutate(f); e.target.value = ''; }} />
+            </div>
+
+            {/* Edit button */}
+            <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-500 text-slate-200 hover:text-white rounded-xl text-sm font-medium transition-all mb-1">
+              <Edit3 size={15} />Редактировать
+            </button>
+          </div>
+
+          {/* Name + badges */}
+          <div className="mb-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-2xl font-bold text-white leading-tight">{profile?.firstName} {profile?.lastName}</h1>
+              {profile?.isPremium && <span title="Premium"><Crown size={18} className="text-amber-400" /></span>}
+              {profile?.isVerified && <span title="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></span>}
+              {profile?.isBlocked && <span title="Заблокирован"><Ban size={18} className="text-red-500" /></span>}
+            </div>
+            {profile?.nickname && <p className="text-slate-400 text-sm mt-0.5">@{profile.nickname}</p>}
+            {profile?.role && <p className="text-slate-300 text-sm mt-1 font-medium">{profile.role}</p>}
+          </div>
+
+          {/* Stats */}
+          <div className="flex items-center gap-5 mt-3 mb-2">
+            <div>
+              <span className="text-lg font-bold text-white">{friendCount}</span>
+              <span className="text-slate-500 text-sm ml-1.5">друзей</span>
+            </div>
+            <div className="h-4 w-px bg-slate-700" />
+            <div className="flex items-center gap-2 flex-1">
+              <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-primary-500 to-purple-500 rounded-full transition-all" style={{ width: `${rating}%` }} />
+              </div>
+              <span className="text-slate-500 text-xs">{rating}%</span>
+            </div>
+          </div>
+        </div>
+
+        {/* ── Sections ── */}
+        <div className="mt-2 divide-y divide-slate-800/70">
+
+          {/* Bio */}
+          {profile?.bio && (
+            <div className="px-4 py-4">
+              <p className="text-slate-200 text-sm leading-relaxed">{profile.bio}</p>
+            </div>
+          )}
+
+          {/* Info rows */}
+          {(profile?.city || profile?.country || profile?.employer || (profile?.userArtists?.length > 0) || (profile?.fieldOfActivity)) && (
+            <div className="px-4 py-3 space-y-3.5">
+              {(profile?.city || profile?.country) && (
+                <div className="flex items-center gap-3">
+                  <MapPin size={16} className="text-slate-500 flex-shrink-0" />
+                  <span className="text-slate-300 text-sm">{[profile.city, profile.country].filter(Boolean).join(', ')}</span>
+                </div>
+              )}
+              {profile?.fieldOfActivity && (
+                <div className="flex items-center gap-3">
+                  <Briefcase size={16} className="text-slate-500 flex-shrink-0" />
+                  <span className="text-slate-300 text-sm">{profile.fieldOfActivity.name}</span>
+                </div>
+              )}
+              {profile?.employer && (
+                <div className="flex items-center gap-3">
+                  <Building2 size={16} className="text-slate-500 flex-shrink-0" />
+                  <span className="text-slate-300 text-sm">{profile.employer.name}</span>
+                </div>
+              )}
+              {profile?.userArtists?.length > 0 && (
+                <div className="flex items-start gap-3">
+                  <Music size={16} className="text-slate-500 flex-shrink-0 mt-0.5" />
+                  <span className="text-slate-300 text-sm">{profile.userArtists.map((ua: any) => ua.artist?.name).filter(Boolean).join(', ')}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Social links */}
+          {hasSocialLinks && (
+            <div className="px-4 py-3">
+              <SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} />
+            </div>
+          )}
+
+          {/* Services */}
+          {Object.keys(servicesByField).length > 0 && (
+            <div className="px-4 py-4">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Мои услуги</p>
+              <div className="space-y-4">
+                {(Object.entries(servicesByField) as [string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }][]).map(([fieldId, { fieldName, byProfession }]) => (
+                  <div key={fieldId}>
+                    <p className="text-xs font-bold text-primary-400 uppercase tracking-wider mb-2">{fieldName}</p>
+                    <div className="space-y-3 pl-3 border-l border-primary-500/20">
+                      {(Object.entries(byProfession) as [string, { profName: string; services: any[] }][]).map(([profId, { profName, services }]) => (
+                        <div key={profId}>
+                          <p className="text-xs text-slate-500 font-medium mb-1.5">{profName}</p>
+                          <div className="space-y-2">
+                            {services.map((us: any) => {
+                              const tags = [
+                                ...(us.genres?.map((g: any) => g.name) ?? []),
+                                ...(us.workFormats?.map((w: any) => w.name) ?? []),
+                                ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
+                                ...(us.skillLevels?.map((s: any) => s.name) ?? []),
+                                ...(us.availabilities?.map((a: any) => a.name) ?? []),
+                                ...(us.geographies?.map((g: any) => g.name) ?? []),
+                              ];
+                              const price = us.priceFrom != null || us.priceTo != null
+                                ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
+                                : null;
+                              return (
+                                <div key={us.id}>
+                                  <p className="text-sm font-semibold text-white mb-1.5">{us.service?.name}</p>
+                                  {(tags.length > 0 || price) && (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {tags.map((t: string, i: number) => (
+                                        <span key={i} className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded-md text-xs">{t}</span>
+                                      ))}
+                                      {price && <span className="px-2 py-0.5 bg-primary-500/10 text-primary-300 rounded-md text-xs border border-primary-500/20">{price}</span>}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
-                )}
+                ))}
               </div>
-            )
+            </div>
           )}
 
-          {/* ── ПРОФЕССИЯ (edit + view) ────────────────────────────────── */}
-          {activeTab === 'profession' && (
-            isEditing ? (
-              <div className="p-4 space-y-4">
-                {/* ── User Services ── */}
-                <div>
-                  <label className={`${labelCls} flex items-center gap-1`}><Headphones size={11} /> Мои услуги и параметры поиска</label>
-                  <p className="text-xs text-slate-500 mb-2">Выберите услуги, по которым вас можно найти. Для каждой услуги настройте жанры, формат и другие параметры.</p>
-
-                  {/* Existing service cards grouped by field */}
-                  {(() => {
-                    const byField: Record<string, { fieldName: string; entries: { us: UserServiceEntry; idx: number }[] }> = {};
-                    userServices.forEach((us, idx) => {
-                      const fId = us.fieldOfActivityId || 'unknown';
-                      if (!byField[fId]) byField[fId] = { fieldName: us.fieldOfActivityName, entries: [] };
-                      byField[fId].entries.push({ us, idx });
-                    });
-                    return (
-                      <div className="space-y-3 mb-2">
-                        {Object.entries(byField).map(([fId, { fieldName, entries }]) => (
-                          <div key={fId}>
-                            <p className="text-xs font-bold text-primary-400 uppercase tracking-wider mb-1.5">{fieldName}</p>
-                            <div className="space-y-2 pl-2 border-l border-primary-500/20">
-                              {entries.map(({ us, idx }) => (
-                                <div key={us.serviceId} className="bg-slate-700/30 rounded-xl border border-slate-600/50 overflow-hidden">
-                                  <div className="flex items-center gap-2 px-3 py-2.5">
-                                    <button type="button" onClick={() => setExpandedSvcIdx(expandedSvcIdx === idx ? null : idx)} className="flex-1 flex items-center justify-between text-left">
-                                      <div>
-                                        <p className="text-xs text-slate-500">{us.professionName}</p>
-                                        <p className="text-sm font-semibold text-white">{us.serviceName}</p>
-                                      </div>
-                                      <ChevronDown size={15} className={`text-slate-400 transition-transform mr-1 ${expandedSvcIdx === idx ? 'rotate-180' : ''}`} />
-                                    </button>
-                                    <button type="button"
-                                      onClick={() => {
-                                        setUserServices(prev => prev.filter((_, i) => i !== idx));
-                                        if (expandedSvcIdx === idx) setExpandedSvcIdx(null);
-                                      }}
-                                      className="flex-shrink-0 p-1 rounded-lg hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all"
-                                    >
-                                      <X size={14} />
-                                    </button>
-                                  </div>
-                                  {expandedSvcIdx === idx && <ServiceFilterEditors idx={idx} />}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-
-                  {/* Add service flow */}
-                  {addStep ? (
-                    <AddServiceFlow />
-                  ) : (
-                    <button type="button"
-                      onClick={() => setAddStep('field')}
-                      className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm"
-                    >
-                      <Plus size={14} />Добавить услугу
-                    </button>
-                  )}
-                </div>
+          {/* Portfolio */}
+          {portfolioFiles.length > 0 && (
+            <div className="px-4 py-4">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Портфолио</p>
+              <div className="space-y-1.5">
+                {portfolioFiles.map((f: any) => (
+                  <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800/60 transition-colors group">
+                    <FileText size={16} className="text-slate-500 flex-shrink-0 group-hover:text-primary-400 transition-colors" />
+                    <span className="flex-1 text-sm text-slate-300 truncate group-hover:text-white transition-colors">{f.originalName}</span>
+                    <span className="text-xs text-slate-600">{formatFileSize(f.size)}</span>
+                  </a>
+                ))}
               </div>
-            ) : (
-              /* ── view mode ── */
-              <div className="p-4">
-                {Object.keys(servicesByField).length > 0 ? (
-                  <div className="space-y-4">
-                    {(Object.entries(servicesByField) as [string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }][]).map(([fieldId, { fieldName, byProfession }]) => (
-                      <div key={fieldId}>
-                        {/* Field of activity header */}
-                        <p className="text-xs font-bold text-primary-400 uppercase tracking-wider mb-2">{fieldName}</p>
-                        <div className="space-y-3 pl-2 border-l border-primary-500/20">
-                          {(Object.entries(byProfession) as [string, { profName: string; services: any[] }][]).map(([professionId, { profName, services }]) => (
-                            <div key={professionId}>
-                              <p className="text-xs text-slate-500 font-semibold mb-1.5">{profName}</p>
-                              <div className="space-y-2">
-                                {services.map((us: any) => {
-                                  const tags = [
-                                    ...(us.genres?.map((g: any) => g.name) ?? []),
-                                    ...(us.workFormats?.map((w: any) => w.name) ?? []),
-                                    ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
-                                    ...(us.skillLevels?.map((s: any) => s.name) ?? []),
-                                    ...(us.availabilities?.map((a: any) => a.name) ?? []),
-                                    ...(us.priceRanges?.map((p: any) => p.name) ?? []),
-                                    ...(us.geographies?.map((g: any) => g.name) ?? []),
-                                  ];
-                                  return (
-                                    <div key={us.id} className="bg-slate-700/20 rounded-xl border border-slate-600/30 p-3">
-                                      <p className="text-sm font-semibold text-white mb-1.5">{us.service?.name}</p>
-                                      {tags.length > 0 ? (
-                                        <div className="flex flex-wrap gap-1.5">
-                                          {tags.map((t: string, i: number) => (
-                                            <span key={i} className="px-2 py-0.5 bg-slate-600/40 text-slate-300 rounded-md text-xs border border-slate-600/30">{t}</span>
-                                          ))}
-                                        </div>
-                                      ) : (
-                                        <p className="text-slate-500 text-xs">Фильтры не настроены</p>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <EmptyState text="Услуги не добавлены" />
-                )}
-              </div>
-            )
+            </div>
           )}
 
-        {/* ── КАНАЛ ── */}
-        {activeTab === 'channel' && (
-          <div className="p-4 space-y-4">
-            {myChannel ? (
-              <>
-                {/* Channel header */}
-                <div className="flex items-center gap-3">
-                  {/* Avatar */}
-                  <div className="relative flex-shrink-0">
-                    <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-700 border border-slate-600 flex items-center justify-center">
-                      {myChannel.avatar
-                        ? <img src={getAvatarUrl(myChannel.avatar)!} alt="" className="w-full h-full object-cover" />
-                        : <Radio size={24} className="text-slate-500" />
-                      }
-                    </div>
-                    <button
-                      onClick={() => channelAvatarRef.current?.click()}
-                      className="absolute -bottom-1 -right-1 p-1 bg-primary-600 hover:bg-primary-500 rounded-full shadow transition-colors"
-                    >
-                      <Camera size={10} className="text-white" />
-                    </button>
-                    <input ref={channelAvatarRef} type="file" accept="image/*" className="hidden" onChange={handleChannelAvatarChange} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    {channelEditing ? (
-                      <input
-                        value={channelForm.name}
-                        onChange={e => setChannelForm(f => ({ ...f, name: e.target.value }))}
-                        className="w-full px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white"
-                        placeholder="Название канала"
-                      />
-                    ) : (
-                      <p className="text-base font-semibold text-white truncate">{myChannel.name}</p>
-                    )}
-                    <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                      <span>{myChannel._count.subscriptions} подписчиков</span>
-                      <span>{myChannel._count.posts} постов</span>
-                    </div>
-                  </div>
+          {/* Channel */}
+          {myChannel && (
+            <div className="px-4 py-4">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Мой канал</p>
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center flex-shrink-0">
+                  {myChannel.avatar
+                    ? <img src={getAvatarUrl(myChannel.avatar)!} alt="" className="w-full h-full object-cover" />
+                    : <Radio size={20} className="text-slate-500" />
+                  }
                 </div>
-
-                {/* Description */}
-                {channelEditing ? (
-                  <textarea
-                    value={channelForm.description}
-                    onChange={e => setChannelForm(f => ({ ...f, description: e.target.value }))}
-                    rows={3}
-                    placeholder="Описание канала..."
-                    className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-slate-500 resize-none"
-                  />
-                ) : myChannel.description ? (
-                  <p className="text-sm text-slate-400 leading-relaxed">{myChannel.description}</p>
-                ) : (
-                  <p className="text-sm text-slate-600 italic">Нет описания</p>
-                )}
-
-                {/* Edit actions */}
-                {channelEditing ? (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setChannelEditing(false)}
-                      className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors"
-                    >
-                      Отмена
-                    </button>
-                    <button
-                      onClick={() => updateChannelMut.mutate()}
-                      disabled={updateChannelMut.isPending || !channelForm.name.trim()}
-                      className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-1.5"
-                    >
-                      {updateChannelMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-                      Сохранить
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex gap-2">
-                    <button
-                      onClick={startEditChannel}
-                      className="flex-1 py-2 text-sm text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 rounded-xl transition-colors flex items-center justify-center gap-1.5"
-                    >
-                      <Edit3 size={14} />
-                      Редактировать
-                    </button>
-                    <button
-                      onClick={() => { if (confirm('Удалить канал? Все посты канала будут отвязаны.')) deleteChannelMut.mutate(); }}
-                      disabled={deleteChannelMut.isPending}
-                      className="py-2 px-3 text-sm text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 rounded-xl transition-colors"
-                    >
-                      {deleteChannelMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                    </button>
-                  </div>
-                )}
-              </>
-            ) : (
-              /* No channel — create form */
-              <div className="space-y-3">
-                <div className="flex flex-col items-center py-4 text-center">
-                  <div className="p-4 bg-slate-800/50 rounded-2xl mb-3">
-                    <Radio size={28} className="text-slate-500" />
-                  </div>
-                  <p className="text-white font-semibold mb-1">У вас нет канала</p>
-                  <p className="text-slate-500 text-sm">Создайте канал, чтобы публиковать посты от его имени</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{myChannel.name}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{myChannel._count.subscriptions} подписчиков · {myChannel._count.posts} постов</p>
                 </div>
-                <input
-                  value={channelForm.name}
-                  onChange={e => setChannelForm(f => ({ ...f, name: e.target.value }))}
-                  placeholder="Название канала *"
-                  className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-slate-500"
-                />
-                <textarea
-                  value={channelForm.description}
-                  onChange={e => setChannelForm(f => ({ ...f, description: e.target.value }))}
-                  rows={3}
-                  placeholder="Описание (необязательно)"
-                  className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-slate-500 resize-none"
-                />
-                <button
-                  onClick={() => createChannelMut.mutate()}
-                  disabled={createChannelMut.isPending || !channelForm.name.trim()}
-                  className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
-                >
-                  {createChannelMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}
-                  Создать канал
-                </button>
               </div>
-            )}
+            </div>
+          )}
+
+          {/* Actions */}
+          <div className="px-4 py-4 space-y-2">
+            <button onClick={() => { setActiveTab('basic'); setIsEditing(true); }}
+              className="w-full flex items-center justify-center gap-2 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-slate-200 hover:text-white rounded-xl text-sm font-medium transition-all">
+              <Edit3 size={16} />Редактировать профиль
+            </button>
+            <button onClick={() => logout()}
+              className="w-full flex items-center justify-center gap-2 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/8 border border-transparent hover:border-red-500/20 rounded-xl text-sm font-medium transition-all">
+              <LogOut size={16} />Выйти из аккаунта
+            </button>
           </div>
-        )}
 
         </div>
-
-        {/* Save button (edit mode) */}
-        {isEditing && (
-          <button onClick={handleSave} disabled={updateMutation.isPending}
-            className="w-full mt-3 py-3 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-600 hover:to-primary-700 text-white font-semibold rounded-xl transition-all shadow-lg shadow-primary-500/30 disabled:opacity-60 flex items-center justify-center gap-2 text-sm"
-          >
-            <Save size={16} />
-            Сохранить изменения
-          </button>
-        )}
-
-        {/* Logout */}
-        <button onClick={() => logout()}
-          className="w-full mt-3 bg-gradient-to-br from-slate-800/80 to-slate-900/80 hover:from-red-500/10 hover:to-red-600/10 text-red-400 hover:text-red-300 border border-slate-700/50 hover:border-red-500/50 font-medium py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 text-sm"
-        >
-          <LogOut size={16} />
-          Выйти из аккаунта
-        </button>
-
       </div>
     </div>
   );
