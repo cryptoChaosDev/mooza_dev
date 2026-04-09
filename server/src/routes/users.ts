@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../index';
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { upload, uploadBanner, uploadPortfolio } from '../middleware/upload';
 import path from 'path';
 import fs from 'fs';
@@ -91,6 +91,72 @@ const userSelect = {
     }
   },
 } as const;
+
+// Public profile select — no email/phone/isAdmin
+const publicUserSelect = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  nickname: true,
+  avatar: true,
+  bannerImage: true,
+  bio: true,
+  country: true,
+  city: true,
+  role: true,
+  genres: true,
+  fieldOfActivityId: true,
+  fieldOfActivity: { select: { id: true, name: true } },
+  userServices: { include: userServiceInclude },
+  userArtists: {
+    include: { artist: { select: { id: true, name: true } } },
+  },
+  employerId: true,
+  employer: { select: { id: true, name: true } },
+  socialLinks: true,
+  channel: {
+    select: {
+      id: true,
+      name: true,
+      description: true,
+      avatar: true,
+      _count: { select: { subscriptions: true, posts: true } },
+    },
+  },
+  createdAt: true,
+  portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
+  _count: {
+    select: {
+      sentRequests: { where: { status: 'accepted' } },
+      receivedRequests: { where: { status: 'accepted' } },
+    }
+  },
+} as const;
+
+// Public: resolve user by nickname or UUID — no auth required
+router.get('/handle/:handle', optionalAuthenticate, async (req: AuthRequest, res) => {
+  try {
+    const { handle } = req.params;
+    // Try nickname first (strip leading @ if present)
+    const cleanHandle = handle.startsWith('@') ? handle.slice(1) : handle;
+
+    const user = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { nickname: { equals: cleanHandle, mode: 'insensitive' } },
+          { id: cleanHandle },
+        ],
+      },
+      select: publicUserSelect,
+    });
+
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    res.json(user);
+  } catch (error) {
+    console.error('Get by handle error:', error);
+    res.status(500).json({ error: 'Failed to get user' });
+  }
+});
 
 // Get current user
 router.get('/me', authenticate, async (req: AuthRequest, res) => {
@@ -371,12 +437,12 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
-// Get user by ID
-router.get('/:id', authenticate, async (req: AuthRequest, res) => {
+// Get user by ID — public (no sensitive fields)
+router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.params.id },
-      select: userSelect,
+      select: publicUserSelect,
     });
 
     if (!user) {

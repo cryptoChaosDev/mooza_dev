@@ -9,6 +9,20 @@ export interface AuthRequest extends Request {
  * Middleware для аутентификации пользователей через JWT
  * Проверяет наличие и валидность токена в заголовке Authorization
  */
+// Optional auth — sets userId if token present, continues without it
+export const optionalAuthenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const token = extractTokenFromHeader(req.headers.authorization);
+    if (token) {
+      const decoded = verifyToken(token);
+      req.userId = decoded.userId;
+    }
+  } catch {
+    // ignore — unauthenticated access allowed
+  }
+  next();
+};
+
 export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     // Извлекаем токен из заголовка Authorization
