@@ -112,13 +112,15 @@ export default function UserProfilePage() {
         <div className="px-4">
           <div className="flex items-end justify-between -mt-14 mb-4">
             {/* Avatar */}
-            <div className="w-28 h-28 rounded-full overflow-hidden ring-4 ring-slate-950 shadow-2xl bg-gradient-to-br from-primary-500 to-purple-600 flex-shrink-0">
-              {user.avatar
-                ? <img src={getAvatarUrl(user.avatar)!} alt={`${user.firstName} ${user.lastName}`} className="w-full h-full object-cover" />
-                : <div className="w-full h-full flex items-center justify-center">
-                    <span className="text-3xl font-bold text-white">{user.firstName[0]}{user.lastName[0]}</span>
-                  </div>
-              }
+            <div className="relative z-10 flex-shrink-0">
+              <div className="w-28 h-28 rounded-full overflow-hidden ring-4 ring-slate-950 shadow-2xl bg-gradient-to-br from-primary-500 to-purple-600">
+                {user.avatar
+                  ? <img src={getAvatarUrl(user.avatar)!} alt={`${user.firstName} ${user.lastName}`} className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center">
+                      <span className="text-3xl font-bold text-white">{user.firstName[0]}{user.lastName[0]}</span>
+                    </div>
+                }
+              </div>
             </div>
 
             {/* Action buttons */}
