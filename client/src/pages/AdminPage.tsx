@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
-import { adminAPI } from '../lib/api';
-import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search } from 'lucide-react';
+import { adminAPI, api } from '../lib/api';
+import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2 } from 'lucide-react';
+import { avatarUrl } from '../lib/avatar';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1097,6 +1098,132 @@ function ServicesTab() {
 
 // ─── Tabs ────────────────────────────────────────────────────────────────────
 
+// ─── Users Tab ────────────────────────────────────────────────────────────────
+interface AdminUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  nickname?: string;
+  email?: string;
+  avatar?: string;
+  isAdmin: boolean;
+  isBlocked: boolean;
+  isPremium: boolean;
+  isVerified: boolean;
+  createdAt: string;
+}
+
+function UsersTab() {
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const qc = useQueryClient();
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['admin-users', search, page],
+    queryFn: async () => {
+      const r = await api.get('/admin/users', { params: { search, page, limit: 20 } });
+      return r.data as { users: AdminUser[]; total: number; page: number; limit: number };
+    },
+    placeholderData: (prev) => prev,
+  });
+
+  const toggle = (userId: string, field: 'block' | 'premium' | 'verified') => {
+    api.patch(`/admin/users/${userId}/${field}`).then(() => {
+      qc.invalidateQueries({ queryKey: ['admin-users'] });
+    });
+  };
+
+  const totalPages = data ? Math.ceil(data.total / data.limit) : 1;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+          <input
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            placeholder="Поиск по имени, нику, email..."
+            className="w-full pl-9 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
+          />
+        </div>
+        <span className="text-sm text-slate-500 whitespace-nowrap">{data?.total ?? 0} польз.</span>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-12"><Loader2 className="animate-spin text-slate-400" size={24} /></div>
+      ) : (
+        <div className="space-y-2">
+          {data?.users.map(u => (
+            <div key={u.id} className="flex items-center gap-3 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
+              {/* Avatar */}
+              <div className="relative flex-shrink-0">
+                {u.avatar
+                  ? <img src={avatarUrl(u.avatar)!} className="w-10 h-10 rounded-full object-cover" alt="" />
+                  : <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-slate-300">{u.firstName[0]}{u.lastName[0]}</div>
+                }
+                {u.isBlocked && (
+                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
+                    <Ban size={10} className="text-white" />
+                  </div>
+                )}
+              </div>
+
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-sm font-medium text-white">{u.firstName} {u.lastName}</span>
+                  {u.isPremium && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded-full border border-amber-500/30"><Crown size={10} />Premium</span>}
+                  {u.isVerified && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-xs rounded-full border border-sky-500/30"><BadgeCheck size={10} />Verified</span>}
+                  {u.isAdmin && <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full border border-purple-500/30">Admin</span>}
+                  {u.isBlocked && <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full border border-red-500/30">Заблокирован</span>}
+                </div>
+                <div className="text-xs text-slate-500 truncate mt-0.5">
+                  {u.nickname && <span>@{u.nickname} · </span>}
+                  {u.email || 'без email'}
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button
+                  onClick={() => toggle(u.id, 'premium')}
+                  title={u.isPremium ? 'Убрать Premium' : 'Выдать Premium'}
+                  className={`p-1.5 rounded-lg transition-colors ${u.isPremium ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30' : 'text-slate-500 hover:bg-slate-700 hover:text-amber-400'}`}
+                >
+                  <Crown size={15} />
+                </button>
+                <button
+                  onClick={() => toggle(u.id, 'verified')}
+                  title={u.isVerified ? 'Убрать Verified' : 'Выдать Verified'}
+                  className={`p-1.5 rounded-lg transition-colors ${u.isVerified ? 'bg-sky-500/20 text-sky-400 hover:bg-sky-500/30' : 'text-slate-500 hover:bg-slate-700 hover:text-sky-400'}`}
+                >
+                  <BadgeCheck size={15} />
+                </button>
+                <button
+                  onClick={() => toggle(u.id, 'block')}
+                  title={u.isBlocked ? 'Разблокировать' : 'Заблокировать'}
+                  className={`p-1.5 rounded-lg transition-colors ${u.isBlocked ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30' : 'text-slate-500 hover:bg-slate-700 hover:text-red-400'}`}
+                >
+                  {u.isBlocked ? <ShieldOff size={15} /> : <Shield size={15} />}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex justify-center gap-2">
+          <button disabled={page <= 1} onClick={() => setPage(p => p - 1)} className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-lg text-sm disabled:opacity-40">←</button>
+          <span className="px-3 py-1.5 text-slate-400 text-sm">{page} / {totalPages}</span>
+          <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-lg text-sm disabled:opacity-40">→</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const TABS = [
   { id: 'structure',   label: 'Структура' },
   { id: 'spheres',     label: 'Сферы' },
@@ -1105,6 +1232,7 @@ const TABS = [
   { id: 'services',    label: 'Услуги' },
   { id: 'filters',     label: 'Фильтры' },
   { id: 'orgs',        label: 'Организации' },
+  { id: 'users',       label: 'Пользователи' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -1199,6 +1327,8 @@ export default function AdminPage() {
             />
           </div>
         )}
+
+        {tab === 'users' && <UsersTab />}
       </div>
     </div>
   );

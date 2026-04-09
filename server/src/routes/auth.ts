@@ -262,6 +262,11 @@ router.post('/login', authLimiter, async (req, res) => {
       return res.status(401).json({ error: 'Неверные учетные данные' });
     }
 
+    // Check if blocked
+    if ((user as any).isBlocked) {
+      return res.status(403).json({ error: 'Аккаунт заблокирован. Обратитесь в поддержку.' });
+    }
+
     // Check password
     if (!user.password) {
       return res.status(401).json({ error: 'Этот аккаунт использует вход через Telegram' });

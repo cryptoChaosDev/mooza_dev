@@ -166,11 +166,23 @@ export default function UserProfilePage() {
           <div className="pt-12 pb-4 px-4 text-center relative z-10">
             <h1 className="text-lg font-bold text-white leading-tight">{user.firstName} {user.lastName}</h1>
             {user.nickname && <p className="text-slate-400 text-sm mt-0.5">@{user.nickname}</p>}
-            {user.role && (
-              <span className="block mt-1.5 px-2.5 py-0.5 bg-primary-500/15 text-primary-300 text-xs font-medium rounded-full border border-primary-500/30 text-center">
-                {user.role}
-              </span>
-            )}
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {(user as any).isPremium && (
+                <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-500/15 text-amber-400 text-xs font-semibold rounded-full border border-amber-500/30">
+                  👑 Premium
+                </span>
+              )}
+              {(user as any).isVerified && (
+                <span className="flex items-center gap-1 px-2 py-0.5 bg-sky-500/15 text-sky-400 text-xs font-semibold rounded-full border border-sky-500/30">
+                  ✓ Verified
+                </span>
+              )}
+              {user.role && (
+                <span className="px-2 py-0.5 bg-primary-500/15 text-primary-300 text-xs font-medium rounded-full border border-primary-500/30">
+                  {user.role}
+                </span>
+              )}
+            </div>
 
             {/* Location chips */}
             {(user.city || user.country) && (

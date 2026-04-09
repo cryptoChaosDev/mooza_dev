@@ -110,6 +110,10 @@ function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: Us
             {user.firstName} {user.lastName}
           </button>
           {user.nickname && <p className="text-xs text-slate-400 truncate">@{user.nickname}</p>}
+          <div className="flex flex-wrap gap-1 mt-0.5">
+            {(user as any).isPremium && <span className="px-1.5 py-0 bg-amber-500/15 text-amber-400 text-[10px] font-semibold rounded-full border border-amber-500/30">👑 Premium</span>}
+            {(user as any).isVerified && <span className="px-1.5 py-0 bg-sky-500/15 text-sky-400 text-[10px] font-semibold rounded-full border border-sky-500/30">✓ Verified</span>}
+          </div>
           {user.city && <p className="text-xs text-slate-500 truncate">{user.city}</p>}
           {user.userProfessions && user.userProfessions.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">

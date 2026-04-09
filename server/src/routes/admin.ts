@@ -489,4 +489,73 @@ router.delete('/custom-filters/:id', async (req, res) => {
   catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
+// ─── User Management ──────────────────────────────────────────────────────────
+router.get('/users', async (req, res) => {
+  const search = (req.query.search as string) || '';
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const limit = Math.min(50, Number(req.query.limit) || 20);
+  const where = search ? {
+    OR: [
+      { firstName: { contains: search, mode: 'insensitive' as const } },
+      { lastName: { contains: search, mode: 'insensitive' as const } },
+      { nickname: { contains: search, mode: 'insensitive' as const } },
+      { email: { contains: search, mode: 'insensitive' as const } },
+    ],
+  } : {};
+  const [users, total] = await Promise.all([
+    prisma.user.findMany({
+      where,
+      select: {
+        id: true, firstName: true, lastName: true, nickname: true,
+        email: true, avatar: true, isAdmin: true, isBlocked: true,
+        isPremium: true, isVerified: true, createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+    prisma.user.count({ where }),
+  ]);
+  res.json({ users, total, page, limit });
+});
+
+router.patch('/users/:id/block', async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { isBlocked: true } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { isBlocked: !user.isBlocked },
+      select: { id: true, isBlocked: true },
+    });
+    res.json(updated);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+router.patch('/users/:id/premium', async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { isPremium: true } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { isPremium: !user.isPremium },
+      select: { id: true, isPremium: true },
+    });
+    res.json(updated);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+router.patch('/users/:id/verified', async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { isVerified: true } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { isVerified: !user.isVerified },
+      select: { id: true, isVerified: true },
+    });
+    res.json(updated);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
 export default router;
