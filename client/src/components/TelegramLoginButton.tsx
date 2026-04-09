@@ -11,7 +11,7 @@ declare global {
   }
 }
 
-const BOT_NAME = 'MooozaAuthBot';
+const BOT_NAME = 'moooza_auth_bot';
 
 export default function TelegramLoginButton({ onAuth, disabled }: TelegramLoginButtonProps) {
   const containerRef = useRef<HTMLDivElement>(null);
