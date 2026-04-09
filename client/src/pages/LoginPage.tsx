@@ -36,20 +36,15 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { setAuth, setUser } = useAuthStore();
 
-  const handleTelegramAuth = useCallback(async (data: Record<string, string | number>) => {
-    setError('');
-    setLoading(true);
-    try {
-      const { data: res } = await authAPI.telegramLogin(data);
-      setAuth(res.user, res.token);
-      try { const { data: u } = await userAPI.agreeToTerms(); setUser(u); } catch {}
-      navigate('/');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Ошибка входа через Telegram');
-    } finally {
-      setLoading(false);
-    }
+  const handleTelegramAuth = useCallback(async (user: any, token: string) => {
+    setAuth(user, token);
+    try { const { data: u } = await userAPI.agreeToTerms(); setUser(u); } catch {}
+    navigate('/');
   }, [navigate, setAuth, setUser]);
+
+  const handleTelegramError = useCallback((msg: string) => {
+    setError(msg);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -239,7 +234,7 @@ export default function LoginPage() {
               <span className="text-xs text-slate-500 uppercase tracking-wide">или</span>
               <div className="flex-1 h-px bg-slate-700" />
             </div>
-            <TelegramLoginButton onAuth={handleTelegramAuth} disabled={loading} />
+            <TelegramLoginButton onAuth={handleTelegramAuth} onError={handleTelegramError} disabled={loading} />
           </div>
 
           <p className="mt-4 text-center text-slate-400">
