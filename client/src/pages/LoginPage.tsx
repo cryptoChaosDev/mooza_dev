@@ -73,8 +73,8 @@ export default function LoginPage() {
       // Let the SDK exchange the code (it manages codeVerifier internally via cookies)
       import('@vkid/sdk').then(async (VKID) => {
         try {
-          const codeVerifier = sessionStorage.getItem('vk_code_verifier') || undefined;
-          sessionStorage.removeItem('vk_code_verifier');
+          const codeVerifier = localStorage.getItem('vk_code_verifier') || undefined;
+          localStorage.removeItem('vk_code_verifier');
           const payload = await (VKID.Auth as any).exchangeCode(code, deviceId, codeVerifier);
           const accessToken = (payload as any)?.access_token;
           if (!accessToken) throw new Error('no access_token');

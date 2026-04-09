@@ -22,9 +22,11 @@ export default function VkLoginButton({ disabled }: VkLoginButtonProps) {
 
   useEffect(() => {
     if (!containerRef.current || disabled) return;
+    // Don't reinitialize when we're handling the OAuth callback
+    if (new URLSearchParams(window.location.search).get('code')) return;
 
     const codeVerifier = generateCodeVerifier();
-    sessionStorage.setItem('vk_code_verifier', codeVerifier);
+    localStorage.setItem('vk_code_verifier', codeVerifier);
 
     VKID.Config.init({
       app: APP_ID,
