@@ -246,8 +246,8 @@ export default function LoginPage() {
               <div className="flex-1 h-px bg-slate-700" />
             </div>
             <div className="space-y-2.5">
-              <TelegramLoginButton onAuth={handleTelegramAuth} onError={handleTelegramError} disabled={loading} />
-              <VkLoginButton onAuth={handleVkAuth} onError={handleVkError} disabled={loading} />
+              <TelegramLoginButton onAuth={handleTelegramAuth} onError={handleTelegramError} disabled={loading || !agreed} />
+              <VkLoginButton onAuth={handleVkAuth} onError={handleVkError} disabled={loading || !agreed} />
             </div>
           </div>
 
