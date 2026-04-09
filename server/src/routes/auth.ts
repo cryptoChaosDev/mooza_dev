@@ -465,23 +465,31 @@ router.post('/vk/exchange', authLimiter, async (req, res) => {
 
   try {
     // Exchange code for token (public client — no client_secret)
+    const exchangeParams = new URLSearchParams({
+      grant_type: 'authorization_code',
+      client_id: String(process.env.VK_CLIENT_ID || ''),
+      redirect_uri: `${appUrl}/login`,
+      code,
+      code_verifier,
+      device_id,
+    });
+    console.log('[VK exchange] token request params:', Object.fromEntries(exchangeParams));
+
     const tokenRes = await fetch('https://id.vk.com/oauth2/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: String(process.env.VK_CLIENT_ID || ''),
-        redirect_uri: `${appUrl}/login`,
-        code,
-        code_verifier,
-        device_id,
-        state: '',
-      }),
+      body: exchangeParams,
     });
-    const tokenData: any = await tokenRes.json();
+    const rawText = await tokenRes.text();
+    console.log('[VK exchange] token raw response:', rawText.substring(0, 500));
+
+    let tokenData: any;
+    try { tokenData = JSON.parse(rawText); } catch {
+      return res.status(502).json({ error: 'VK вернул неожиданный ответ', raw: rawText.substring(0, 200) });
+    }
     if (tokenData.error) {
       console.error('[VK exchange] token error:', tokenData);
-      return res.status(401).json({ error: 'Ошибка получения токена VK: ' + tokenData.error_description });
+      return res.status(401).json({ error: 'Ошибка VK: ' + (tokenData.error_description || tokenData.error) });
     }
 
     const { access_token } = tokenData;
