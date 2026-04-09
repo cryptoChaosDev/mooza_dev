@@ -206,7 +206,7 @@ export default function FriendsPage() {
                   return (
                     <div
                       key={friend.id}
-                      onClick={() => navigate(`/profile/${friend.id}`)}
+                      onClick={() => navigate(`/@${friend.nickname || friend.id}`)}
                       className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
                     >
                       {/* Avatar */}
@@ -295,10 +295,10 @@ export default function FriendsPage() {
               <div className="divide-y divide-slate-800/60">
                 {requests.map((request: any) => (
                   <div key={request.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors">
-                    <button onClick={() => navigate(`/profile/${request.requester.id}`)} className="flex-shrink-0">
+                    <button onClick={() => navigate(`/@${request.requester.nickname || request.requester.id}`)} className="flex-shrink-0">
                       <Avatar user={request.requester} size={11} />
                     </button>
-                    <button onClick={() => navigate(`/profile/${request.requester.id}`)} className="flex-1 min-w-0 text-left">
+                    <button onClick={() => navigate(`/@${request.requester.nickname || request.requester.id}`)} className="flex-1 min-w-0 text-left">
                       <p className="text-sm font-semibold text-white truncate">
                         {request.requester.firstName} {request.requester.lastName}
                       </p>
@@ -344,10 +344,10 @@ export default function FriendsPage() {
               <div className="divide-y divide-slate-800/60">
                 {sentRequests.map((request: any) => (
                   <div key={request.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors">
-                    <button onClick={() => navigate(`/profile/${request.receiver.id}`)} className="flex-shrink-0">
+                    <button onClick={() => navigate(`/@${request.receiver.nickname || request.receiver.id}`)} className="flex-shrink-0">
                       <Avatar user={request.receiver} size={11} />
                     </button>
-                    <button onClick={() => navigate(`/profile/${request.receiver.id}`)} className="flex-1 min-w-0 text-left">
+                    <button onClick={() => navigate(`/@${request.receiver.nickname || request.receiver.id}`)} className="flex-1 min-w-0 text-left">
                       <p className="text-sm font-semibold text-white truncate">
                         {request.receiver.firstName} {request.receiver.lastName}
                       </p>

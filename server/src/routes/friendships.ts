@@ -125,7 +125,7 @@ router.get('/sent', authenticate, async (req: AuthRequest, res) => {
       where: { requesterId: req.userId, status: 'pending' },
       include: {
         receiver: {
-          select: { id: true, firstName: true, lastName: true, avatar: true, role: true, city: true }
+          select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, city: true }
         }
       },
       orderBy: { createdAt: 'desc' }

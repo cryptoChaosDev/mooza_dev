@@ -304,7 +304,7 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'] }
 
   return (
     <div className="flex gap-2.5 group/comment">
-      <Link to={`/profile/${comment.author.id}`}><Avatar user={comment.author} size={7} /></Link>
+      <Link to={`/@${comment.author.nickname || comment.author.id}`}><Avatar user={comment.author} size={7} /></Link>
       <div className="flex-1 min-w-0">
         <DoubleTapReactWrapper
           reactions={comment.reactions ?? []}
@@ -314,7 +314,7 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'] }
         >
           <div className="bg-slate-800/60 rounded-xl px-3 py-2">
             <div className="flex items-center justify-between gap-2">
-              <Link to={`/profile/${comment.author.id}`} className="text-xs font-semibold text-white hover:text-primary-400 transition-colors truncate">
+              <Link to={`/@${comment.author.nickname || comment.author.id}`} className="text-xs font-semibold text-white hover:text-primary-400 transition-colors truncate">
                 {comment.author.firstName} {comment.author.lastName}
               </Link>
               {isOwner && !editing && (
@@ -495,12 +495,12 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'] }: { post: any;
       {/* Author row */}
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-3 min-w-0">
-          <Link to={`/profile/${post.author.id}`} className="flex-shrink-0">
+          <Link to={`/@${post.author.nickname || post.author.id}`} className="flex-shrink-0">
             <Avatar user={post.author} size={10} />
           </Link>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <Link to={`/profile/${post.author.id}`} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate">
+              <Link to={`/@${post.author.nickname || post.author.id}`} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate">
                 {post.author.firstName} {post.author.lastName}
               </Link>
               {post.channel && (

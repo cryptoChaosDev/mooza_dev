@@ -49,7 +49,7 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
       },
       include: {
         author: {
-          select: { id: true, firstName: true, lastName: true, avatar: true, role: true }
+          select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true }
         },
         channel: {
           select: { id: true, name: true, avatar: true, ownerId: true }
@@ -61,7 +61,7 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
         comments: {
           include: {
             author: {
-              select: { id: true, firstName: true, lastName: true, avatar: true }
+              select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true }
             },
             reactions: {
               select: { id: true, emoji: true, userId: true }
@@ -121,7 +121,7 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         channelId: channelId || null,
       },
       include: {
-        author: { select: { id: true, firstName: true, lastName: true, avatar: true, role: true } },
+        author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true } },
         channel: { select: { id: true, name: true, avatar: true, ownerId: true } },
       }
     });
@@ -284,7 +284,7 @@ router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
           body: `${comment.author.firstName} ${comment.author.lastName}: ${comment.content.length > 60 ? comment.content.slice(0, 60) + '…' : comment.content}`,
           link: `/`,
         },
-        include: { actor: { select: { id: true, firstName: true, lastName: true, avatar: true } } },
+        include: { actor: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true } } },
       });
       notifyUser(post.authorId, 'post_reply', { comment, postId: req.params.id }, {
         title: 'Новый комментарий',
@@ -318,7 +318,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res) => {
         ...(audioName !== undefined && { audioName: audioName || null }),
       },
       include: {
-        author: { select: { id: true, firstName: true, lastName: true, avatar: true, role: true } },
+        author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true } },
         _count: { select: { likes: true, comments: true } },
       },
     });
@@ -344,7 +344,7 @@ router.put('/:postId/comments/:commentId', authenticate, async (req: AuthRequest
       where: { id: req.params.commentId },
       data: { content: content.trim() },
       include: {
-        author: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+        author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true } },
       },
     });
 

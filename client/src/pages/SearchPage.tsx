@@ -83,7 +83,7 @@ function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: Us
         </div>
       )}
       <div className="flex items-start gap-3">
-        <button onClick={() => onNavigate(user.id)} className="flex-shrink-0 relative">
+        <button onClick={() => onNavigate(user.nickname || user.id)} className="flex-shrink-0 relative">
           {user.avatar ? (
             <img
               src={`${import.meta.env.VITE_API_URL}${user.avatar}`}
@@ -103,7 +103,7 @@ function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: Us
         </button>
         <div className="flex-1 min-w-0">
           <button
-            onClick={() => onNavigate(user.id)}
+            onClick={() => onNavigate(user.nickname || user.id)}
             className="font-semibold text-white text-sm hover:text-primary-400 transition-colors truncate block"
           >
             {user.firstName} {user.lastName}
@@ -508,7 +508,7 @@ export default function SearchPage() {
                       sentRequests={sentRequests}
                       onMessage={(id) => navigate(`/messages/${id}`)}
                       onAddFriend={(id) => addFriendMutation.mutate(id)}
-                      onNavigate={(id) => navigate(`/profile/${id}`)}
+                      onNavigate={(handle) => navigate(`/@${handle}`)}
                     />
                   ))}
                 </div>
