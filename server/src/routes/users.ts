@@ -71,6 +71,7 @@ const userSelect = {
   vkLink: true,
   youtubeLink: true,
   telegramLink: true,
+  socialLinks: true,
   termsAgreedAt: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
@@ -173,7 +174,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
   try {
     const {
       firstName, lastName, nickname, bio, country, city, role, genres,
-      vkLink, youtubeLink, telegramLink,
+      vkLink, youtubeLink, telegramLink, socialLinks,
       fieldOfActivityId, employerId,
       userProfessions, artistIds,
     } = req.body;
@@ -191,6 +192,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     if (vkLink !== undefined) updateData.vkLink = vkLink;
     if (youtubeLink !== undefined) updateData.youtubeLink = youtubeLink;
     if (telegramLink !== undefined) updateData.telegramLink = telegramLink;
+    if (socialLinks !== undefined) updateData.socialLinks = socialLinks;
     if (fieldOfActivityId !== undefined) updateData.fieldOfActivityId = fieldOfActivityId || null;
     if (employerId !== undefined) updateData.employerId = employerId || null;
 

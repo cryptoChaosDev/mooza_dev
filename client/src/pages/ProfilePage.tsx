@@ -11,6 +11,7 @@ import {
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
 import { channelAPI } from '../lib/api';
+import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -64,6 +65,7 @@ export default function ProfilePage() {
     firstName: '', lastName: '', nickname: '', bio: '',
     country: '', city: '', role: '', genres: [] as string[],
     vkLink: '', youtubeLink: '', telegramLink: '',
+    socialLinks: {} as Record<string, string>,
     fieldOfActivityId: '', employerId: '',
     userProfessions: [] as { professionId: string; features: string[] }[],
     artistIds: [] as string[],
@@ -121,6 +123,7 @@ export default function ProfilePage() {
         role: data.role || '', genres: data.genres || [],
         vkLink: data.vkLink || '', youtubeLink: data.youtubeLink || '',
         telegramLink: data.telegramLink || '',
+        socialLinks: (data.socialLinks as Record<string, string>) || {},
         fieldOfActivityId: data.fieldOfActivityId || '',
         employerId: data.employerId || '',
         userProfessions: data.userProfessions?.map((up: any) => ({
@@ -685,25 +688,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Social links */}
-            {(profile?.vkLink || profile?.youtubeLink || profile?.telegramLink) && (
-              <div className="flex items-center justify-center gap-2 mt-3 flex-wrap">
-                {profile?.vkLink && (
-                  <a href={profile.vkLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 text-blue-400 hover:text-blue-300 text-xs font-semibold rounded-full transition-all">
-                    VK
-                  </a>
-                )}
-                {profile?.youtubeLink && (
-                  <a href={profile.youtubeLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 text-red-400 hover:text-red-300 text-xs font-semibold rounded-full transition-all">
-                    YT
-                  </a>
-                )}
-                {profile?.telegramLink && (
-                  <a href={profile.telegramLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-400 hover:text-sky-300 text-xs font-semibold rounded-full transition-all">
-                    TG
-                  </a>
-                )}
-              </div>
-            )}
+            <SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} />
           </div>
         </div>
 
@@ -807,34 +792,11 @@ export default function ProfilePage() {
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>VK</label>
-                  <div className="flex items-center bg-slate-700/50 border border-slate-600/50 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary-500">
-                    <span className="px-3 text-slate-500 text-sm shrink-0 border-r border-slate-600/50">vk.com/</span>
-                    <input type="text"
-                      value={formData.vkLink.replace(/^https?:\/\/(www\.)?vk\.com\//, '')}
-                      onChange={e => setFormData({ ...formData, vkLink: e.target.value ? `https://vk.com/${e.target.value}` : '' })}
-                      placeholder="никнейм" className="flex-1 px-3 py-2.5 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none" />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelCls}>YouTube</label>
-                  <div className="flex items-center bg-slate-700/50 border border-slate-600/50 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary-500">
-                    <span className="px-3 text-slate-500 text-sm shrink-0 border-r border-slate-600/50">youtube.com/</span>
-                    <input type="text"
-                      value={formData.youtubeLink.replace(/^https?:\/\/(www\.)?youtube\.com\//, '')}
-                      onChange={e => setFormData({ ...formData, youtubeLink: e.target.value ? `https://www.youtube.com/${e.target.value}` : '' })}
-                      placeholder="@никнейм" className="flex-1 px-3 py-2.5 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none" />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelCls}>Telegram</label>
-                  <div className="flex items-center bg-slate-700/50 border border-slate-600/50 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary-500">
-                    <span className="px-3 text-slate-500 text-sm shrink-0 border-r border-slate-600/50">t.me/</span>
-                    <input type="text"
-                      value={formData.telegramLink.replace(/^https?:\/\/(www\.)?t\.me\//, '')}
-                      onChange={e => setFormData({ ...formData, telegramLink: e.target.value ? `https://t.me/${e.target.value}` : '' })}
-                      placeholder="никнейм" className="flex-1 px-3 py-2.5 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none" />
-                  </div>
+                  <label className={labelCls}>Социальные сети и сервисы</label>
+                  <SocialLinksEditor
+                    value={formData.socialLinks}
+                    onChange={v => setFormData({ ...formData, socialLinks: v })}
+                  />
                 </div>
                 {/* Моё портфолио */}
                 <div>
