@@ -157,3 +157,5 @@ docker-compose.prod.yml
 .claude/
 # SSH temp libs
 tempssh_libs/
+vps.env
+*.env.prod

@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser, notifyUser } from '../socket';
 import { uploadChatAttachment } from '../middleware/upload';
+import { messageLimiter } from '../middleware/rateLimiter';
 
 const router = Router();
 // Lazy proxy — avoids circular-import TDZ when this module loads before prisma is initialized
@@ -291,7 +292,7 @@ router.get('/conversations/:id', authenticate, async (req: AuthRequest, res) => 
 });
 
 // ─── POST /conversations/:id/messages ────────────────────────────────────────
-router.post('/conversations/:id/messages', authenticate, async (req: AuthRequest, res) => {
+router.post('/conversations/:id/messages', authenticate, messageLimiter, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
     const { id: conversationId } = req.params;

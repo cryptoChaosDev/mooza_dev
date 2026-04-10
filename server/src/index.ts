@@ -58,7 +58,21 @@ app.use(compression());
 
 // Middleware
 app.use(helmet({
-  crossOriginResourcePolicy: { policy: "cross-origin" }
+  crossOriginResourcePolicy: { policy: "cross-origin" },
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "https:", "data:"],
+      connectSrc: ["'self'"].concat(
+        (process.env.ALLOWED_ORIGINS || '').split(',').map(o => o.trim()).filter(Boolean)
+      ),
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      upgradeInsecureRequests: [],
+    },
+  },
 }));
 
 // CORS Configuration
@@ -93,7 +107,8 @@ app.use(cors({
   maxAge: 86400, // 24 часа
 }));
 
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ limit: '1mb', extended: true }));
 
 // HTTP request logging через Morgan + Winston
 app.use(morgan('combined', { stream: morganStream }));

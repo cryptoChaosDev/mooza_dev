@@ -474,7 +474,6 @@ router.post('/vk/token', authLimiter, async (req, res) => {
       }),
     });
     const userBody: any = await userRes.json();
-    console.log('[VK token] user_info response:', JSON.stringify(userBody).substring(0, 300));
     const vkUser = userBody.user;
     if (!vkUser) return res.status(401).json({ error: 'Не удалось получить профиль VK' });
 
@@ -526,7 +525,6 @@ router.post('/vk/exchange', authLimiter, async (req, res) => {
       code_verifier,
       device_id,
     });
-    console.log('[VK exchange] token request params:', Object.fromEntries(exchangeParams));
 
     const tokenRes = await fetch('https://id.vk.com/oauth2/token', {
       method: 'POST',
@@ -534,7 +532,6 @@ router.post('/vk/exchange', authLimiter, async (req, res) => {
       body: exchangeParams,
     });
     const rawText = await tokenRes.text();
-    console.log('[VK exchange] token raw response:', rawText.substring(0, 500));
 
     let tokenData: any;
     try { tokenData = JSON.parse(rawText); } catch {

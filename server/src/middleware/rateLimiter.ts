@@ -57,19 +57,30 @@ export const apiLimiter = rateLimit({
  */
 export const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 час
-  max: 2000, // максимум 2000 регистраций с одного IP в час
-  message: {
-    error: 'Слишком много попыток регистрации. Пожалуйста, попробуйте позже.',
-    retryAfter: '1 час'
-  },
+  max: 5, // максимум 5 регистраций с одного IP в час
   standardHeaders: true,
   legacyHeaders: false,
-  skipSuccessfulRequests: false, // Считаем все попытки, даже успешные
+  skipSuccessfulRequests: false,
   handler: (req, res) => {
+    logSecurity(`Register rate limit exceeded for IP ${req.ip}`, { ip: req.ip });
     res.status(429).json({
       error: 'Превышен лимит регистраций',
-      message: 'Вы можете зарегистрировать не более 3 аккаунтов в час с одного IP',
+      message: 'Вы можете зарегистрировать не более 5 аккаунтов в час с одного IP',
       retryAfter: '1 hour'
+    });
+  },
+});
+
+export const messageLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 минута
+  max: 60, // 60 сообщений в минуту
+  keyGenerator: (req: any) => req.userId || req.ip,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({
+      error: 'Слишком много сообщений',
+      message: 'Пожалуйста, не спамьте. Подождите немного.',
     });
   },
 });

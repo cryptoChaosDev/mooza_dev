@@ -84,8 +84,31 @@ const portfolioStorage = multer.diskStorage({
   },
 });
 
+const portfolioFileFilter = (req: any, file: any, cb: any) => {
+  const allowedMimes = [
+    'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'text/plain',
+    'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/flac',
+    'audio/x-wav', 'audio/wave',
+  ];
+  const allowedExts = [
+    '.jpg', '.jpeg', '.png', '.webp',
+    '.pdf', '.doc', '.docx', '.txt',
+    '.mp3', '.wav', '.ogg', '.flac',
+  ];
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (!allowedMimes.includes(file.mimetype) || !allowedExts.includes(ext)) {
+    return cb(new Error('Недопустимый тип файла для портфолио'), false);
+  }
+  cb(null, true);
+};
+
 export const uploadPortfolio = multer({
   storage: portfolioStorage,
+  fileFilter: portfolioFileFilter,
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB max
   },
