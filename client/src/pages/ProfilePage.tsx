@@ -283,22 +283,7 @@ export default function ProfilePage() {
   const labelCls = "block text-xs font-semibold mb-1 text-slate-400";
 
   const friendCount = (profile?._count?.sentRequests ?? 0) + (profile?._count?.receivedRequests ?? 0);
-  const rating = (() => {
-    if (!profile) return 0;
-    let s = 0;
-    if (profile.firstName) s += 5;
-    if (profile.lastName) s += 5;
-    if (profile.nickname) s += 5;
-    if (profile.bio) s += 15;
-    if (profile.avatar) s += 15;
-    if (profile.country) s += 5;
-    if (profile.city) s += 5;
-    if (profile.employer) s += 5;
-    if (profile.userArtists?.length > 0) s += 5;
-    if (profile.userServices?.length > 0) s += 15;
-    if (portfolioFiles.length > 0) s += 5;
-    return Math.min(100, s);
-  })();
+
 
   // Group userServices by field → profession for view mode
   const servicesByField = profile?.userServices?.reduce((acc: Record<string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }>, us: any) => {
