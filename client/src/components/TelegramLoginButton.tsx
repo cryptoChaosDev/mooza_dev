@@ -7,7 +7,7 @@ interface TelegramLoginButtonProps {
   disabled?: boolean;
 }
 
-const BOT_ID = 'moooza_auth_bot';
+const BOT_ID = 8682289483; // numeric bot ID (from token prefix)
 
 // Load Telegram widget script once
 function loadTelegramScript(): Promise<void> {
