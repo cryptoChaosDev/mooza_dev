@@ -13,6 +13,7 @@ import SelectSheet from '../components/SelectSheet';
 import { channelAPI } from '../lib/api';
 import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
+import ShareButton from '../components/ShareButton';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -823,10 +824,19 @@ export default function ProfilePage() {
                 onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatarMutation.mutate(f); e.target.value = ''; }} />
             </div>
 
-            {/* Edit button */}
-            <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-500 text-slate-200 hover:text-white rounded-xl text-sm font-medium transition-all mb-1">
-              <Edit3 size={15} />Редактировать
-            </button>
+            {/* Action buttons */}
+            <div className="flex items-center gap-2 mb-1">
+              <ShareButton
+                url={`/profile/${profile?.id}`}
+                title={`${profile?.firstName} ${profile?.lastName} — Moooza`}
+                text={profile?.bio?.slice(0, 100)}
+                className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white rounded-xl transition-all"
+                iconSize={16}
+              />
+              <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-500 text-slate-200 hover:text-white rounded-xl text-sm font-medium transition-all">
+                <Edit3 size={15} />Редактировать
+              </button>
+            </div>
           </div>
 
           {/* Name + badges */}
@@ -838,22 +848,31 @@ export default function ProfilePage() {
               {profile?.isBlocked && <span title="Заблокирован"><Ban size={18} className="text-red-500" /></span>}
             </div>
             {profile?.nickname && <p className="text-slate-400 text-sm mt-0.5">@{profile.nickname}</p>}
-            {profile?.role && <p className="text-slate-300 text-sm mt-1 font-medium">{profile.role}</p>}
+            {profile?.role && (
+              <span className="inline-flex items-center mt-2 px-3 py-1 text-sm font-medium text-primary-300 bg-primary-500/10 border border-primary-500/20 rounded-full">
+                {profile.role}
+              </span>
+            )}
           </div>
 
-          {/* Stats */}
-          <div className="flex items-center gap-5 mt-3 mb-2">
-            <div>
-              <span className="text-lg font-bold text-white">{friendCount}</span>
-              <span className="text-slate-500 text-sm ml-1.5">друзей</span>
+          {/* Stats — 3 columns */}
+          <div className="flex mt-4 mb-2 rounded-2xl border border-slate-800/60 bg-slate-900/50 overflow-hidden divide-x divide-slate-800/60">
+            <div className="flex-1 py-3 text-center">
+              <div className="text-lg font-bold text-white">{friendCount}</div>
+              <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Друзья</div>
             </div>
-            <div className="h-4 w-px bg-slate-700" />
-            <div className="flex items-center gap-2 flex-1">
-              <div className="flex-1 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                <div className="h-full bg-gradient-to-r from-primary-500 to-purple-500 rounded-full transition-all" style={{ width: `${rating}%` }} />
+            {(profile?.userServices?.length ?? 0) > 0 && (
+              <div className="flex-1 py-3 text-center">
+                <div className="text-lg font-bold text-white">{profile!.userServices!.length}</div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Услуги</div>
               </div>
-              <span className="text-slate-500 text-xs">{rating}%</span>
-            </div>
+            )}
+            {myChannel && (
+              <div className="flex-1 py-3 text-center">
+                <div className="text-lg font-bold text-white">{myChannel._count.subscriptions}</div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Подписчики</div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -863,7 +882,7 @@ export default function ProfilePage() {
           {/* Bio */}
           {profile?.bio && (
             <div className="px-4 py-4">
-              <p className="text-slate-200 text-sm leading-relaxed">{profile.bio}</p>
+              <p className="text-slate-200 text-sm leading-relaxed border-l-2 border-primary-500/50 pl-3">{profile.bio}</p>
             </div>
           )}
 
@@ -900,55 +919,50 @@ export default function ProfilePage() {
           {/* Social links */}
           {hasSocialLinks && (
             <div className="px-4 py-3">
-              <SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} />
+              <SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} labeled />
             </div>
           )}
 
-          {/* Services */}
+          {/* Services — flat cards */}
           {Object.keys(servicesByField).length > 0 && (
             <div className="px-4 py-4">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Мои услуги</p>
-              <div className="space-y-4">
-                {(Object.entries(servicesByField) as [string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }][]).map(([fieldId, { fieldName, byProfession }]) => (
-                  <div key={fieldId}>
-                    <p className="text-xs font-bold text-primary-400 uppercase tracking-wider mb-2">{fieldName}</p>
-                    <div className="space-y-3 pl-3 border-l border-primary-500/20">
-                      {(Object.entries(byProfession) as [string, { profName: string; services: any[] }][]).map(([profId, { profName, services }]) => (
-                        <div key={profId}>
-                          <p className="text-xs text-slate-500 font-medium mb-1.5">{profName}</p>
-                          <div className="space-y-2">
-                            {services.map((us: any) => {
-                              const tags = [
-                                ...(us.genres?.map((g: any) => g.name) ?? []),
-                                ...(us.workFormats?.map((w: any) => w.name) ?? []),
-                                ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
-                                ...(us.skillLevels?.map((s: any) => s.name) ?? []),
-                                ...(us.availabilities?.map((a: any) => a.name) ?? []),
-                                ...(us.geographies?.map((g: any) => g.name) ?? []),
-                              ];
-                              const price = us.priceFrom != null || us.priceTo != null
-                                ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
-                                : null;
-                              return (
-                                <div key={us.id}>
-                                  <p className="text-sm font-semibold text-white mb-1.5">{us.service?.name}</p>
-                                  {(tags.length > 0 || price) && (
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {tags.map((t: string, i: number) => (
-                                        <span key={i} className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded-md text-xs">{t}</span>
-                                      ))}
-                                      {price && <span className="px-2 py-0.5 bg-primary-500/10 text-primary-300 rounded-md text-xs border border-primary-500/20">{price}</span>}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
+              <div className="space-y-2">
+                {(Object.entries(servicesByField) as [string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }][]).flatMap(([, { fieldName, byProfession }]) =>
+                  (Object.entries(byProfession) as [string, { profName: string; services: any[] }][]).flatMap(([, { profName, services }]) =>
+                    services.map((us: any) => {
+                      const tags = [
+                        ...(us.genres?.map((g: any) => g.name) ?? []),
+                        ...(us.workFormats?.map((w: any) => w.name) ?? []),
+                        ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
+                        ...(us.skillLevels?.map((s: any) => s.name) ?? []),
+                        ...(us.availabilities?.map((a: any) => a.name) ?? []),
+                        ...(us.geographies?.map((g: any) => g.name) ?? []),
+                      ];
+                      const price = us.priceFrom != null || us.priceTo != null
+                        ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
+                        : null;
+                      return (
+                        <div key={us.id} className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3.5">
+                          <div className="flex items-start justify-between gap-3 mb-1.5">
+                            <div>
+                              <p className="text-sm font-bold text-white">{us.service?.name}</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5">{profName} · {fieldName}</p>
+                            </div>
+                            {price && <span className="text-sm font-bold text-primary-400 whitespace-nowrap flex-shrink-0">{price}</span>}
                           </div>
+                          {tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {tags.map((t: string, i: number) => (
+                                <span key={i} className="px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded text-[11px]">{t}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                      );
+                    })
+                  )
+                )}
               </div>
             </div>
           )}

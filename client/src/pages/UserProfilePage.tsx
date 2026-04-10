@@ -149,15 +149,31 @@ export default function UserProfilePage() {
               {(user as any).isBlocked && <span title="Заблокирован"><Ban size={18} className="text-red-500" /></span>}
             </div>
             {user.nickname && <p className="text-slate-400 text-sm mt-0.5">@{user.nickname}</p>}
-            {user.role && <p className="text-slate-300 text-sm mt-1 font-medium">{user.role}</p>}
+            {user.role && (
+              <span className="inline-flex items-center mt-2 px-3 py-1 text-sm font-medium text-primary-300 bg-primary-500/10 border border-primary-500/20 rounded-full">
+                {user.role}
+              </span>
+            )}
           </div>
 
-          {/* Stats */}
-          <div className="flex items-center gap-5 mt-3 mb-2">
-            <div>
-              <span className="text-lg font-bold text-white">{friendCount}</span>
-              <span className="text-slate-500 text-sm ml-1.5">друзей</span>
+          {/* Stats — 3 columns */}
+          <div className="flex mt-4 mb-2 rounded-2xl border border-slate-800/60 bg-slate-900/50 overflow-hidden divide-x divide-slate-800/60">
+            <div className="flex-1 py-3 text-center">
+              <div className="text-lg font-bold text-white">{friendCount}</div>
+              <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Друзья</div>
             </div>
+            {(user.userServices?.length ?? 0) > 0 && (
+              <div className="flex-1 py-3 text-center">
+                <div className="text-lg font-bold text-white">{user.userServices.length}</div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Услуги</div>
+              </div>
+            )}
+            {user.channel && (
+              <div className="flex-1 py-3 text-center">
+                <div className="text-lg font-bold text-white">{channelInfo?._count?.subscriptions ?? user.channel._count.subscriptions}</div>
+                <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Подписчики</div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -167,7 +183,7 @@ export default function UserProfilePage() {
           {/* Bio */}
           {user.bio && (
             <div className="px-4 py-4">
-              <p className="text-slate-200 text-sm leading-relaxed">{user.bio}</p>
+              <p className="text-slate-200 text-sm leading-relaxed border-l-2 border-primary-500/50 pl-3">{user.bio}</p>
             </div>
           )}
 
@@ -204,55 +220,50 @@ export default function UserProfilePage() {
           {/* Social links */}
           {hasSocialLinks && (
             <div className="px-4 py-3">
-              <SocialIconRow links={(user.socialLinks as Record<string, string>) || {}} />
+              <SocialIconRow links={(user.socialLinks as Record<string, string>) || {}} labeled />
             </div>
           )}
 
-          {/* Services */}
+          {/* Services — flat cards */}
           {Object.keys(servicesByField).length > 0 && (
             <div className="px-4 py-4">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Услуги</p>
-              <div className="space-y-4">
-                {(Object.entries(servicesByField) as any[]).map(([fieldId, { fieldName, byProfession }]: any) => (
-                  <div key={fieldId}>
-                    <p className="text-xs font-bold text-primary-400 uppercase tracking-wider mb-2">{fieldName}</p>
-                    <div className="space-y-3 pl-3 border-l border-primary-500/20">
-                      {(Object.entries(byProfession) as any[]).map(([profId, { profName, services }]: any) => (
-                        <div key={profId}>
-                          <p className="text-xs text-slate-500 font-medium mb-1.5">{profName}</p>
-                          <div className="space-y-2">
-                            {services.map((us: any) => {
-                              const tags = [
-                                ...(us.genres?.map((g: any) => g.name) ?? []),
-                                ...(us.workFormats?.map((w: any) => w.name) ?? []),
-                                ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
-                                ...(us.skillLevels?.map((s: any) => s.name) ?? []),
-                                ...(us.availabilities?.map((a: any) => a.name) ?? []),
-                                ...(us.geographies?.map((g: any) => g.name) ?? []),
-                              ];
-                              const price = us.priceFrom != null || us.priceTo != null
-                                ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
-                                : null;
-                              return (
-                                <div key={us.id}>
-                                  <p className="text-sm font-semibold text-white mb-1.5">{us.service?.name}</p>
-                                  {(tags.length > 0 || price) && (
-                                    <div className="flex flex-wrap gap-1.5">
-                                      {tags.map((t: string, i: number) => (
-                                        <span key={i} className="px-2 py-0.5 bg-slate-800 text-slate-300 rounded-md text-xs">{t}</span>
-                                      ))}
-                                      {price && <span className="px-2 py-0.5 bg-primary-500/10 text-primary-300 rounded-md text-xs border border-primary-500/20">{price}</span>}
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })}
+              <div className="space-y-2">
+                {(Object.entries(servicesByField) as any[]).flatMap(([, { fieldName, byProfession }]: any) =>
+                  (Object.entries(byProfession) as any[]).flatMap(([, { profName, services }]: any) =>
+                    services.map((us: any) => {
+                      const tags = [
+                        ...(us.genres?.map((g: any) => g.name) ?? []),
+                        ...(us.workFormats?.map((w: any) => w.name) ?? []),
+                        ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
+                        ...(us.skillLevels?.map((s: any) => s.name) ?? []),
+                        ...(us.availabilities?.map((a: any) => a.name) ?? []),
+                        ...(us.geographies?.map((g: any) => g.name) ?? []),
+                      ];
+                      const price = us.priceFrom != null || us.priceTo != null
+                        ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
+                        : null;
+                      return (
+                        <div key={us.id} className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3.5">
+                          <div className="flex items-start justify-between gap-3 mb-1.5">
+                            <div>
+                              <p className="text-sm font-bold text-white">{us.service?.name}</p>
+                              <p className="text-[11px] text-slate-500 mt-0.5">{profName} · {fieldName}</p>
+                            </div>
+                            {price && <span className="text-sm font-bold text-primary-400 whitespace-nowrap flex-shrink-0">{price}</span>}
                           </div>
+                          {tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {tags.map((t: string, i: number) => (
+                                <span key={i} className="px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded text-[11px]">{t}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                      );
+                    })
+                  )
+                )}
               </div>
             </div>
           )}

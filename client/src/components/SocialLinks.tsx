@@ -232,9 +232,30 @@ export function extractSlug(service: SocialService, fullUrl: string): string {
 
 // ─── View: clickable icon row ─────────────────────────────────────────────────
 
-export function SocialIconRow({ links }: { links: Record<string, string> }) {
+export function SocialIconRow({ links, labeled = false }: { links: Record<string, string>; labeled?: boolean }) {
   const entries = SOCIAL_SERVICES.filter(s => links[s.key]);
   if (entries.length === 0) return null;
+
+  if (labeled) {
+    return (
+      <div className="flex items-center flex-wrap gap-2">
+        {entries.map(service => (
+          <a
+            key={service.key}
+            href={buildUrl(service, links[service.key])}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-700/50 bg-slate-800/50 hover:bg-slate-700/60 hover:border-slate-600 transition-all group"
+          >
+            <div className="w-4 h-4 flex-shrink-0" style={{ color: service.iconBg }}>
+              {service.icon}
+            </div>
+            <span className="text-slate-300 group-hover:text-white text-xs font-medium transition-colors">{service.label}</span>
+          </a>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center flex-wrap gap-2">
