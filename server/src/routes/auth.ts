@@ -32,16 +32,21 @@ let tgOffset = 0;
 
 function tgApi(method: string, params: Record<string, any> = {}): Promise<any> {
   const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
-  const query = new URLSearchParams({ ...params }).toString();
+  const query = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))
+  ).toString();
   const url = `https://api.telegram.org/bot${botToken}/${method}?${query}`;
   return new Promise((resolve, reject) => {
-    https.get(url, (res) => {
+    const req = https.get(url, (res) => {
       let data = '';
       res.on('data', (chunk) => data += chunk);
+      res.on('error', reject);
       res.on('end', () => {
-        try { resolve(JSON.parse(data)); } catch { reject(new Error('Parse error')); }
+        try { resolve(JSON.parse(data)); } catch (err) { reject(new Error(`Parse error: ${data.slice(0, 100)}`)); }
       });
-    }).on('error', reject);
+    });
+    req.on('error', reject);
+    req.setTimeout(35000, () => { req.destroy(new Error('Request timeout')); });
   });
 }
 
@@ -57,7 +62,7 @@ async function tgPollLoop() {
     const del = await tgApi('deleteWebhook', { drop_pending_updates: 'true' });
     console.log('[Telegram] Webhook deleted, starting long-poll loop. Result:', del?.ok);
   } catch (e: any) {
-    console.error('[Telegram] deleteWebhook failed:', e.message);
+    console.error('[Telegram] deleteWebhook failed:', e?.message || e);
   }
 
   let failCount = 0;
@@ -115,7 +120,7 @@ async function tgPollLoop() {
       }
     } catch (e: any) {
       failCount++;
-      console.error('[Telegram] Poll error:', e.message, '| fail #' + failCount);
+      console.error('[Telegram] Poll error #' + failCount + ':', e?.message || e);
       await new Promise(r => setTimeout(r, Math.min(5000 * failCount, 30000)));
     }
   }
