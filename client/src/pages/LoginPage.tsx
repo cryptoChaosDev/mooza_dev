@@ -39,9 +39,9 @@ export default function LoginPage() {
 
   const handleTelegramAuth = useCallback(async (user: any, token: string) => {
     setAuth(user, token);
-    try { const { data: u } = await userAPI.agreeToTerms(); setUser(u); } catch {}
-    navigate('/');
-  }, [navigate, setAuth, setUser]);
+    try { await userAPI.agreeToTerms(); } catch {}
+    window.location.href = '/profile';
+  }, [setAuth]);
 
   const handleTelegramError = useCallback((msg: string) => {
     setError(msg);
@@ -49,9 +49,9 @@ export default function LoginPage() {
 
   const handleVkAuth = useCallback(async (user: any, token: string) => {
     setAuth(user, token);
-    try { const { data: u } = await userAPI.agreeToTerms(); setUser(u); } catch {}
-    navigate('/');
-  }, [navigate, setAuth, setUser]);
+    try { await userAPI.agreeToTerms(); } catch {}
+    window.location.href = '/profile';
+  }, [setAuth]);
 
   const handleVkError = useCallback((msg: string) => {
     setError(msg);
