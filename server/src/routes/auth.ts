@@ -1,7 +1,6 @@
 import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
-import https from 'https';
 import { prisma } from '../index';
 import { z } from 'zod';
 import { authLimiter, registerLimiter } from '../middleware/rateLimiter';
@@ -27,107 +26,8 @@ setInterval(() => {
   }
 }, 60_000);
 
-// ─── Long-polling loop (no webhook needed) ───────────────────────────────────
-let tgOffset = 0;
-
-function tgApi(method: string, params: Record<string, any> = {}): Promise<any> {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
-  const query = new URLSearchParams(
-    Object.fromEntries(Object.entries(params).map(([k, v]) => [k, String(v)]))
-  ).toString();
-  const url = `https://api.telegram.org/bot${botToken}/${method}?${query}`;
-  return new Promise((resolve, reject) => {
-    const req = https.get(url, (res) => {
-      let data = '';
-      res.on('data', (chunk) => data += chunk);
-      res.on('error', reject);
-      res.on('end', () => {
-        try { resolve(JSON.parse(data)); } catch (err) { reject(new Error(`Parse error: ${data.slice(0, 100)}`)); }
-      });
-    });
-    req.on('error', reject);
-    req.setTimeout(35000, () => { req.destroy(new Error('Request timeout')); });
-  });
-}
-
-async function tgPollLoop() {
-  const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
-  if (!botToken) {
-    console.warn('[Telegram] TELEGRAM_BOT_TOKEN is not set — bot polling disabled');
-    return;
-  }
-
-  // Delete webhook so getUpdates works
-  try {
-    const del = await tgApi('deleteWebhook', { drop_pending_updates: 'true' });
-    console.log('[Telegram] Webhook deleted, starting long-poll loop. Result:', del?.ok);
-  } catch (e: any) {
-    console.error('[Telegram] deleteWebhook failed:', e?.message || e);
-  }
-
-  let failCount = 0;
-  while (true) {
-    try {
-      // timeout=20 — shorter than 30 to avoid NAT/firewall drops on idle connections
-      const res = await tgApi('getUpdates', { offset: tgOffset, timeout: '20', allowed_updates: '["message"]' });
-      if (!res.ok || !Array.isArray(res.result)) {
-        console.warn('[Telegram] getUpdates not ok:', JSON.stringify(res).slice(0, 200));
-        failCount++;
-        await new Promise(r => setTimeout(r, Math.min(5000 * failCount, 30000)));
-        continue;
-      }
-      failCount = 0;
-      for (const update of res.result) {
-        tgOffset = update.update_id + 1;
-        const msg = update.message;
-        const text: string = msg?.text || '';
-        const from = msg?.from;
-        if (!from) continue;
-
-        // Respond to bare /start (user testing the bot)
-        if (text === '/start') {
-          try {
-            await tgApi('sendMessage', {
-              chat_id: String(from.id),
-              text: '👋 Привет! Чтобы войти в Moooza, нажмите кнопку «Войти через Telegram» на сайте — она откроет эту беседу с нужной ссылкой.',
-            });
-          } catch {}
-          continue;
-        }
-
-        if (!text.startsWith('/start ')) continue;
-
-        const token = text.slice(7).trim();
-        if (!tgPending.has(token)) continue;
-
-        // Send confirmation to user
-        try {
-          await tgApi('sendMessage', {
-            chat_id: String(from.id),
-            text: '✅ Авторизация подтверждена! Вернитесь на сайт.',
-          });
-        } catch {}
-
-        tgPending.set(token, {
-          telegramId: String(from.id),
-          firstName: from.first_name || '',
-          lastName: from.last_name || '',
-          username: from.username,
-          photoUrl: undefined,
-          resolvedAt: Date.now(),
-        });
-        console.log(`[Telegram] Auth token confirmed for user ${from.id}`);
-      }
-    } catch (e: any) {
-      failCount++;
-      console.error('[Telegram] Poll error #' + failCount + ':', e?.message || e);
-      await new Promise(r => setTimeout(r, Math.min(5000 * failCount, 30000)));
-    }
-  }
-}
-
-// Start polling after 2s
-setTimeout(() => tgPollLoop().catch(console.error), 2000);
+// ─── Webhook-based bot (Telegram pushes updates to us) ───────────────────────
+// No outbound connection to Telegram needed — Telegram calls our endpoint.
 
 const router = Router();
 
@@ -361,6 +261,43 @@ router.get('/telegram/poll/:token', authLimiter, async (req, res) => {
   } catch (e) {
     console.error('[Telegram poll]', e);
     res.status(500).json({ error: 'Ошибка авторизации' });
+  }
+});
+
+// ─── 3. Telegram webhook — Telegram pushes /start {token} updates here ───────
+router.post('/telegram/webhook', async (req, res) => {
+  // Verify secret token header (set when registering webhook)
+  const secret = process.env.TELEGRAM_WEBHOOK_SECRET || '';
+  if (secret && req.headers['x-telegram-bot-api-secret-token'] !== secret) {
+    return res.sendStatus(403);
+  }
+
+  res.sendStatus(200); // always respond quickly
+
+  try {
+    const update = req.body;
+    const msg = update?.message;
+    const text: string = msg?.text || '';
+    const from = msg?.from;
+    if (!from || !text) return;
+
+    if (text.startsWith('/start ')) {
+      const token = text.slice(7).trim();
+      const entry = tgPending.get(token);
+      if (!entry) return;
+
+      tgPending.set(token, {
+        telegramId: String(from.id),
+        firstName: from.first_name || '',
+        lastName: from.last_name || '',
+        username: from.username,
+        photoUrl: undefined,
+        resolvedAt: Date.now(),
+      });
+      console.log(`[Telegram] Webhook: auth confirmed for user ${from.id}`);
+    }
+  } catch (e) {
+    console.error('[Telegram] Webhook error:', e);
   }
 });
 
