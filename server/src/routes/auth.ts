@@ -47,27 +47,50 @@ function tgApi(method: string, params: Record<string, any> = {}): Promise<any> {
 
 async function tgPollLoop() {
   const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
-  if (!botToken) return;
+  if (!botToken) {
+    console.warn('[Telegram] TELEGRAM_BOT_TOKEN is not set — bot polling disabled');
+    return;
+  }
 
   // Delete webhook so getUpdates works
   try {
-    await tgApi('deleteWebhook', { drop_pending_updates: 'true' });
-    console.log('[Telegram] Webhook deleted, starting long-poll loop');
-  } catch {}
+    const del = await tgApi('deleteWebhook', { drop_pending_updates: 'true' });
+    console.log('[Telegram] Webhook deleted, starting long-poll loop. Result:', del?.ok);
+  } catch (e: any) {
+    console.error('[Telegram] deleteWebhook failed:', e.message);
+  }
 
+  let failCount = 0;
   while (true) {
     try {
-      const res = await tgApi('getUpdates', { offset: tgOffset, timeout: '30', allowed_updates: '["message"]' });
+      // timeout=20 — shorter than 30 to avoid NAT/firewall drops on idle connections
+      const res = await tgApi('getUpdates', { offset: tgOffset, timeout: '20', allowed_updates: '["message"]' });
       if (!res.ok || !Array.isArray(res.result)) {
-        await new Promise(r => setTimeout(r, 5000));
+        console.warn('[Telegram] getUpdates not ok:', JSON.stringify(res).slice(0, 200));
+        failCount++;
+        await new Promise(r => setTimeout(r, Math.min(5000 * failCount, 30000)));
         continue;
       }
+      failCount = 0;
       for (const update of res.result) {
         tgOffset = update.update_id + 1;
         const msg = update.message;
         const text: string = msg?.text || '';
         const from = msg?.from;
-        if (!from || !text.startsWith('/start ')) continue;
+        if (!from) continue;
+
+        // Respond to bare /start (user testing the bot)
+        if (text === '/start') {
+          try {
+            await tgApi('sendMessage', {
+              chat_id: String(from.id),
+              text: '👋 Привет! Чтобы войти в Moooza, нажмите кнопку «Войти через Telegram» на сайте — она откроет эту беседу с нужной ссылкой.',
+            });
+          } catch {}
+          continue;
+        }
+
+        if (!text.startsWith('/start ')) continue;
 
         const token = text.slice(7).trim();
         if (!tgPending.has(token)) continue;
@@ -91,8 +114,9 @@ async function tgPollLoop() {
         console.log(`[Telegram] Auth token confirmed for user ${from.id}`);
       }
     } catch (e: any) {
-      console.error('[Telegram] Poll error:', e.message);
-      await new Promise(r => setTimeout(r, 5000));
+      failCount++;
+      console.error('[Telegram] Poll error:', e.message, '| fail #' + failCount);
+      await new Promise(r => setTimeout(r, Math.min(5000 * failCount, 30000)));
     }
   }
 }
