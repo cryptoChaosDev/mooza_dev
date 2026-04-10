@@ -74,7 +74,6 @@ export const registerLimiter = rateLimit({
 export const messageLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 минута
   max: 60, // 60 сообщений в минуту
-  keyGenerator: (req: any) => req.userId || req.ip,
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res) => {
