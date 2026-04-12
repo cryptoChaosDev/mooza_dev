@@ -3,21 +3,25 @@ import { prisma } from '../index';
 
 const router = Router();
 
-// Get all fields of activity with user counts
+// Get all fields of activity with user counts — only those that have users
 router.get('/fields-of-activity', async (_req, res) => {
   try {
     const fields = await prisma.fieldOfActivity.findMany({
       orderBy: { name: 'asc' },
       include: { _count: { select: { users: true } } },
     });
-    res.json(fields.map(f => ({ id: f.id, name: f.name, createdAt: f.createdAt, userCount: f._count.users })));
+    res.json(
+      fields
+        .filter(f => f._count.users > 0)
+        .map(f => ({ id: f.id, name: f.name, createdAt: f.createdAt, userCount: f._count.users }))
+    );
   } catch (error) {
     console.error('Get fields of activity error:', error);
     res.status(500).json({ error: 'Failed to get fields of activity' });
   }
 });
 
-// Get directions by field of activity
+// Get directions by field of activity — only those that have users
 router.get('/directions', async (req, res) => {
   try {
     const { fieldOfActivityId } = req.query;
@@ -27,26 +31,47 @@ router.get('/directions', async (req, res) => {
     const directions = await prisma.direction.findMany({
       where,
       include: {
+        professions: { select: { id: true } },
         _count: { select: { professions: true } },
         customFilters: { select: { id: true, name: true, values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } } } },
       },
       orderBy: { name: 'asc' },
     });
-    res.json(directions.map(d => ({
-      id: d.id,
-      name: d.name,
-      fieldOfActivityId: d.fieldOfActivityId,
-      professionCount: d._count.professions,
-      allowedFilterTypes: d.allowedFilterTypes,
-      customFilters: d.customFilters,
-    })));
+
+    // Count users per direction via UserProfession
+    const professionIds = directions.flatMap(d => d.professions.map(p => p.id));
+    const userCounts = professionIds.length > 0
+      ? await prisma.userProfession.groupBy({
+          by: ['professionId'],
+          where: { professionId: { in: professionIds } },
+          _count: { userId: true },
+        })
+      : [];
+    const countMap = new Map(userCounts.map(u => [u.professionId, u._count.userId]));
+
+    const result = directions
+      .map(d => {
+        const userCount = d.professions.reduce((sum, p) => sum + (countMap.get(p.id) ?? 0), 0);
+        return {
+          id: d.id,
+          name: d.name,
+          fieldOfActivityId: d.fieldOfActivityId,
+          professionCount: d._count.professions,
+          userCount,
+          allowedFilterTypes: d.allowedFilterTypes,
+          customFilters: d.customFilters,
+        };
+      })
+      .filter(d => d.userCount > 0);
+
+    res.json(result);
   } catch (error) {
     console.error('Get directions error:', error);
     res.status(500).json({ error: 'Failed to get directions' });
   }
 });
 
-// Get professions by direction
+// Get professions by direction — only those that have users
 router.get('/professions', async (req, res) => {
   try {
     const { directionId, search } = req.query;
@@ -56,10 +81,18 @@ router.get('/professions', async (req, res) => {
 
     const professions = await prisma.profession.findMany({
       where,
-      include: { direction: { select: { id: true, name: true, fieldOfActivityId: true } } },
+      include: {
+        direction: { select: { id: true, name: true, fieldOfActivityId: true } },
+        _count: { select: { userProfessions: true } },
+      },
       orderBy: { name: 'asc' },
     });
-    res.json(professions);
+
+    res.json(
+      professions
+        .filter(p => p._count.userProfessions > 0)
+        .map(p => ({ ...p, userCount: p._count.userProfessions, _count: undefined }))
+    );
   } catch (error) {
     console.error('Get professions error:', error);
     res.status(500).json({ error: 'Failed to get professions' });
