@@ -942,17 +942,17 @@ export default function ProfilePage() {
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Портфолио</p>
               <div className="space-y-5">
 
-                {/* Фото — сетка с предпросмотром */}
+                {/* Фото — карусель */}
                 {photoFiles.length > 0 && (
                   <div>
                     <div className="flex items-center gap-1.5 mb-2">
                       <Image size={13} className="text-slate-500" />
                       <span className="text-xs text-slate-500 font-medium">Фото</span>
                     </div>
-                    <div className="grid grid-cols-3 gap-1.5">
+                    <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                       {photoFiles.map((f: any) => (
                         <button key={f.id} onClick={() => setLightboxFile(f)}
-                          className="aspect-square rounded-xl overflow-hidden bg-slate-800 hover:opacity-90 transition-opacity">
+                          className="flex-shrink-0 w-48 h-48 rounded-xl overflow-hidden bg-slate-800 hover:opacity-90 transition-opacity">
                           <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
                         </button>
                       ))}
