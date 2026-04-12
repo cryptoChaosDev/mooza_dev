@@ -302,8 +302,10 @@ export default function SearchPage() {
   });
 
   const professionUsers = useMemo(() => {
-    return (usersData?.results || []).map((r: any) => r.user ?? r);
-  }, [usersData]);
+    return (usersData?.results || [])
+      .map((r: any) => r.user ?? r)
+      .filter((u: any) => u.id !== currentUser?.id);
+  }, [usersData, currentUser?.id]);
 
   // ── Active secondary filter chips ─────────────────────────────────────────
   const activeChips = useMemo(() => {
