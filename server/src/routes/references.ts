@@ -127,19 +127,26 @@ router.get('/professions', async (req, res) => {
       where,
       include: {
         direction: { select: { id: true, name: true, fieldOfActivityId: true } },
-        _count: { select: { userServices: true } },
+        userServices: { select: { userId: true } },
       },
       orderBy: { name: 'asc' },
     });
 
-    res.json(professions.map(p => ({
-      id: p.id,
-      name: p.name,
-      directionId: p.directionId,
-      direction: p.direction,
-      userCount: p._count.userServices,
-      createdAt: p.createdAt,
-    })));
+    res.json(professions.map(p => {
+      const uniqueUsers = new Set(
+        p.userServices
+          .map((us: any) => us.userId)
+          .filter((uid: string) => !excludeUserId || uid !== (excludeUserId as string))
+      );
+      return {
+        id: p.id,
+        name: p.name,
+        directionId: p.directionId,
+        direction: p.direction,
+        userCount: uniqueUsers.size,
+        createdAt: p.createdAt,
+      };
+    }));
   } catch (error) {
     console.error('Get professions error:', error);
     res.status(500).json({ error: 'Failed to get professions' });

@@ -630,7 +630,12 @@ export default function SearchPage() {
                     className="w-full flex items-center justify-between px-4 py-3.5 bg-slate-900 border border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/50 rounded-xl transition-all text-left group"
                   >
                     <span className="text-white font-medium text-sm">{dir.name}</span>
-                    <ChevronRight size={16} className="text-slate-500 group-hover:text-slate-300 transition-colors flex-shrink-0" />
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {dir.userCount != null && (
+                        <span className="text-xs text-slate-500">{dir.userCount} уч.</span>
+                      )}
+                      <ChevronRight size={16} className="text-slate-500 group-hover:text-slate-300 transition-colors" />
+                    </div>
                   </button>
                 ))}
               </div>
@@ -659,7 +664,12 @@ export default function SearchPage() {
                     className="w-full flex items-center justify-between px-4 py-3.5 bg-slate-900 border border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/50 rounded-xl transition-all text-left group"
                   >
                     <span className="text-white font-medium text-sm">{prof.name}</span>
-                    <ChevronRight size={16} className="text-slate-500 group-hover:text-slate-300 transition-colors flex-shrink-0" />
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {prof.userCount != null && (
+                        <span className="text-xs text-slate-500">{prof.userCount} уч.</span>
+                      )}
+                      <ChevronRight size={16} className="text-slate-500 group-hover:text-slate-300 transition-colors" />
+                    </div>
                   </button>
                 ))}
               </div>
