@@ -470,6 +470,7 @@ model Message {
   attachmentSize Int?
   attachmentType String?
   deletedAt      DateTime?
+  deliveredAt    DateTime?
   readAt         DateTime?
 
   conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -487,6 +488,7 @@ model Message {
   @@index([receiverId])
   @@index([createdAt])
   @@index([receiverId, readAt])
+  @@index([conversationId, deliveredAt])
   @@index([senderId, receiverId, createdAt])
 }
 
