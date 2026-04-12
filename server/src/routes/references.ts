@@ -3,79 +3,92 @@ import { prisma } from '../index';
 
 const router = Router();
 
-// Get all fields of activity with user counts — only those that have users
+// Get all fields of activity with user counts — only those that have users (via UserService)
 router.get('/fields-of-activity', async (_req, res) => {
   try {
     const fields = await prisma.fieldOfActivity.findMany({
+      where: {
+        directions: { some: { professions: { some: { userServices: { some: {} } } } } },
+      },
       orderBy: { name: 'asc' },
-      include: { _count: { select: { users: true } } },
     });
-    res.json(
-      fields
-        .filter(f => f._count.users > 0)
-        .map(f => ({ id: f.id, name: f.name, createdAt: f.createdAt, userCount: f._count.users }))
-    );
+
+    // Count distinct users per field via UserService → Profession → Direction
+    const counts: { field_id: string; cnt: bigint }[] = await prisma.$queryRaw`
+      SELECT d."fieldOfActivityId" AS field_id, COUNT(DISTINCT us."userId") AS cnt
+      FROM "UserService" us
+      JOIN "Profession" p ON p.id = us."professionId"
+      JOIN "Direction" d ON d.id = p."directionId"
+      WHERE d."fieldOfActivityId" IS NOT NULL
+      GROUP BY d."fieldOfActivityId"
+    `;
+    const countMap = new Map(counts.map(r => [r.field_id, Number(r.cnt)]));
+
+    res.json(fields.map(f => ({
+      id: f.id,
+      name: f.name,
+      createdAt: f.createdAt,
+      userCount: countMap.get(f.id) ?? 0,
+    })));
   } catch (error) {
     console.error('Get fields of activity error:', error);
     res.status(500).json({ error: 'Failed to get fields of activity' });
   }
 });
 
-// Get directions by field of activity — only those that have users
+// Get directions by field of activity — only those that have users (via UserService)
 router.get('/directions', async (req, res) => {
   try {
     const { fieldOfActivityId } = req.query;
-    const where: any = {};
+    const where: any = {
+      professions: { some: { userServices: { some: {} } } },
+    };
     if (fieldOfActivityId) where.fieldOfActivityId = fieldOfActivityId as string;
 
     const directions = await prisma.direction.findMany({
       where,
       include: {
-        professions: { select: { id: true } },
         _count: { select: { professions: true } },
         customFilters: { select: { id: true, name: true, values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } } } },
       },
       orderBy: { name: 'asc' },
     });
 
-    // Count users per direction via UserProfession
-    const professionIds = directions.flatMap(d => d.professions.map(p => p.id));
-    const userCounts = professionIds.length > 0
-      ? await prisma.userProfession.groupBy({
-          by: ['professionId'],
-          where: { professionId: { in: professionIds } },
-          _count: { userId: true },
-        })
+    // Count distinct users per direction
+    const directionIds = directions.map(d => d.id);
+    const counts: { direction_id: string; cnt: bigint }[] = directionIds.length > 0
+      ? await prisma.$queryRaw`
+          SELECT p."directionId" AS direction_id, COUNT(DISTINCT us."userId") AS cnt
+          FROM "UserService" us
+          JOIN "Profession" p ON p.id = us."professionId"
+          WHERE p."directionId" = ANY(${directionIds}::uuid[])
+          GROUP BY p."directionId"
+        `
       : [];
-    const countMap = new Map(userCounts.map(u => [u.professionId, u._count.userId]));
+    const countMap = new Map(counts.map(r => [r.direction_id, Number(r.cnt)]));
 
-    const result = directions
-      .map(d => {
-        const userCount = d.professions.reduce((sum, p) => sum + (countMap.get(p.id) ?? 0), 0);
-        return {
-          id: d.id,
-          name: d.name,
-          fieldOfActivityId: d.fieldOfActivityId,
-          professionCount: d._count.professions,
-          userCount,
-          allowedFilterTypes: d.allowedFilterTypes,
-          customFilters: d.customFilters,
-        };
-      })
-      .filter(d => d.userCount > 0);
-
-    res.json(result);
+    res.json(directions.map(d => ({
+      id: d.id,
+      name: d.name,
+      fieldOfActivityId: d.fieldOfActivityId,
+      professionCount: d._count.professions,
+      userCount: countMap.get(d.id) ?? 0,
+      allowedFilterTypes: d.allowedFilterTypes,
+      customFilters: d.customFilters,
+    })));
   } catch (error) {
     console.error('Get directions error:', error);
     res.status(500).json({ error: 'Failed to get directions' });
   }
 });
 
-// Get professions by direction — only those that have users
+// Get professions by direction — only those that have users (via UserService)
 router.get('/professions', async (req, res) => {
   try {
     const { directionId, search } = req.query;
-    const where: any = {};
+    const where: any = {
+      userServices: { some: {} },
+    };
     if (directionId) where.directionId = directionId as string;
     if (search) where.name = { contains: search as string, mode: 'insensitive' };
 
@@ -83,16 +96,19 @@ router.get('/professions', async (req, res) => {
       where,
       include: {
         direction: { select: { id: true, name: true, fieldOfActivityId: true } },
-        _count: { select: { userProfessions: true } },
+        _count: { select: { userServices: true } },
       },
       orderBy: { name: 'asc' },
     });
 
-    res.json(
-      professions
-        .filter(p => p._count.userProfessions > 0)
-        .map(p => ({ ...p, userCount: p._count.userProfessions, _count: undefined }))
-    );
+    res.json(professions.map(p => ({
+      id: p.id,
+      name: p.name,
+      directionId: p.directionId,
+      direction: p.direction,
+      userCount: p._count.userServices,
+      createdAt: p.createdAt,
+    })));
   } catch (error) {
     console.error('Get professions error:', error);
     res.status(500).json({ error: 'Failed to get professions' });
