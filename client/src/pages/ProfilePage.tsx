@@ -4,7 +4,7 @@ import { userAPI, referenceAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
-  Globe, DollarSign, Calendar,
+  Globe, DollarSign, Calendar, Film,
   Headphones, Edit3, User, Plus, ChevronDown, ChevronLeft, ChevronRight,
   Building2, FileText, Trash2, Radio, Loader2, Crown, BadgeCheck, Ban,
 } from 'lucide-react';
@@ -731,6 +731,32 @@ export default function ProfilePage() {
   const bUrl = profile?.bannerImage ? `${API_URL}${profile.bannerImage}` : null;
   const hasSocialLinks = Object.values((profile?.socialLinks as Record<string, string>) || {}).some(Boolean);
 
+  // Unique profession names from UserService chain
+  const professionNames = (() => {
+    const seen = new Set<string>();
+    const names: string[] = [];
+    for (const us of profile?.userServices ?? []) {
+      const name = us.profession?.name;
+      if (name && !seen.has(name)) { seen.add(name); names.push(name); }
+    }
+    return names;
+  })();
+
+  // Flat list of services for carousel
+  const servicesFlat = (Object.values(servicesByField) as { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }[]).flatMap(({ fieldName, byProfession }) =>
+    Object.values(byProfession).flatMap(({ profName, services }) =>
+      services.map((us: any) => ({ ...us, _profName: profName, _fieldName: fieldName }))
+    )
+  );
+
+  // Portfolio categorised by type
+  const AUDIO_EXTS = new Set(['mp3','wav','flac','aac','ogg','m4a','wma','opus']);
+  const VIDEO_EXTS = new Set(['mp4','mov','avi','mkv','webm','m4v','wmv']);
+  const fileExt = (f: any) => (f.originalName as string).split('.').pop()?.toLowerCase() ?? '';
+  const audioFiles = portfolioFiles.filter(f => AUDIO_EXTS.has(fileExt(f)));
+  const videoFiles = portfolioFiles.filter(f => VIDEO_EXTS.has(fileExt(f)));
+  const otherFiles = portfolioFiles.filter(f => !AUDIO_EXTS.has(fileExt(f)) && !VIDEO_EXTS.has(fileExt(f)));
+
   return (
     <div className="min-h-screen bg-slate-950">
 
@@ -778,7 +804,6 @@ export default function ProfilePage() {
               : <div className="absolute inset-0 opacity-40" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(99,102,241,0.8) 0%, transparent 60%), radial-gradient(circle at 80% 20%, rgba(168,85,247,0.7) 0%, transparent 60%)' }} />
             }
           </div>
-          {/* Banner upload */}
           <button
             onClick={() => bannerInputRef.current?.click()}
             className="absolute bottom-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white/80 hover:text-white rounded-lg text-xs font-medium transition-all opacity-0 group-hover:opacity-100"
@@ -789,10 +814,9 @@ export default function ProfilePage() {
             onChange={e => { const f = e.target.files?.[0]; if (f) uploadBannerMutation.mutate(f); e.target.value = ''; }} />
         </div>
 
-        {/* Avatar + edit button row */}
         <div className="px-4">
-          <div className="flex items-end justify-between -mt-14 mb-4">
-            {/* Avatar */}
+          {/* Avatar + action buttons row */}
+          <div className="flex items-end justify-between -mt-14 mb-5">
             <div className="relative z-10">
               <div className="w-28 h-28 rounded-full overflow-hidden ring-4 ring-slate-950 shadow-2xl bg-gradient-to-br from-primary-500 to-purple-600">
                 {aUrl
@@ -808,8 +832,6 @@ export default function ProfilePage() {
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatarMutation.mutate(f); e.target.value = ''; }} />
             </div>
-
-            {/* Action buttons */}
             <div className="flex items-center gap-2 mb-1">
               <ShareButton
                 url={`/profile/${profile?.id}`}
@@ -824,31 +846,55 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* Name + badges */}
-          <div className="mb-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-2xl font-bold text-white leading-tight">{profile?.firstName} {profile?.lastName}</h1>
-              {profile?.isPremium && <span title="Premium"><Crown size={18} className="text-amber-400" /></span>}
-              {profile?.isVerified && <span title="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></span>}
-              {profile?.isBlocked && <span title="Заблокирован"><Ban size={18} className="text-red-500" /></span>}
-            </div>
-            {profile?.nickname && <p className="text-slate-400 text-sm mt-0.5">@{profile.nickname}</p>}
-            {profile?.role && (
-              <span className="inline-flex items-center mt-2 px-3 py-1 text-sm font-medium text-primary-300 bg-primary-500/10 border border-primary-500/20 rounded-full">
-                {profile.role}
+          {/* 1. ФИО */}
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <h1 className="text-2xl font-bold text-white leading-tight">{profile?.firstName} {profile?.lastName}</h1>
+            {profile?.isPremium && <span title="Premium"><Crown size={18} className="text-amber-400" /></span>}
+            {profile?.isVerified && <span title="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></span>}
+            {profile?.isBlocked && <span title="Заблокирован"><Ban size={18} className="text-red-500" /></span>}
+          </div>
+
+          {/* 2. Ник + Гео */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-3">
+            {profile?.nickname && <span>@{profile.nickname}</span>}
+            {(profile?.city || profile?.country) && (
+              <span className="flex items-center gap-1">
+                <MapPin size={12} className="flex-shrink-0" />
+                {[profile.city, profile.country].filter(Boolean).join(', ')}
               </span>
             )}
           </div>
 
-          {/* Stats — 3 columns */}
-          <div className="flex mt-4 mb-2 rounded-2xl border border-slate-800/60 bg-slate-900/50 overflow-hidden divide-x divide-slate-800/60">
+          {/* Bio */}
+          {profile?.bio && (
+            <p className="text-slate-300 text-sm leading-relaxed mb-4 border-l-2 border-primary-500/40 pl-3">{profile.bio}</p>
+          )}
+
+          {/* 3. Профессии */}
+          {professionNames.length > 0 && (
+            <div className="flex items-start gap-2 mb-2.5">
+              <Briefcase size={14} className="text-slate-500 mt-0.5 flex-shrink-0" />
+              <p className="text-slate-300 text-sm leading-snug">{professionNames.join(', ')}</p>
+            </div>
+          )}
+
+          {/* 4. Муз. коллективы */}
+          {(profile?.userArtists?.length ?? 0) > 0 && (
+            <div className="flex items-start gap-2 mb-3">
+              <Music size={14} className="text-slate-500 mt-0.5 flex-shrink-0" />
+              <p className="text-slate-300 text-sm">{profile!.userArtists.map((ua: any) => ua.artist?.name).filter(Boolean).join(', ')}</p>
+            </div>
+          )}
+
+          {/* Stats */}
+          <div className="flex mt-4 mb-5 rounded-2xl border border-slate-800/60 bg-slate-900/50 overflow-hidden divide-x divide-slate-800/60">
             <div className="flex-1 py-3 text-center">
               <div className="text-lg font-bold text-white">{friendCount}</div>
               <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Друзья</div>
             </div>
-            {(profile?.userServices?.length ?? 0) > 0 && (
+            {servicesFlat.length > 0 && (
               <div className="flex-1 py-3 text-center">
-                <div className="text-lg font-bold text-white">{profile!.userServices!.length}</div>
+                <div className="text-lg font-bold text-white">{servicesFlat.length}</div>
                 <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Услуги</div>
               </div>
             )}
@@ -859,148 +905,154 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
-        </div>
 
-        {/* ── Sections ── */}
-        <div className="mt-2 divide-y divide-slate-800/70">
-
-          {/* Bio */}
-          {profile?.bio && (
-            <div className="px-4 py-4">
-              <p className="text-slate-200 text-sm leading-relaxed border-l-2 border-primary-500/50 pl-3">{profile.bio}</p>
-            </div>
-          )}
-
-          {/* Info rows */}
-          {(profile?.city || profile?.country || profile?.employer || (profile?.userArtists?.length > 0) || (profile?.fieldOfActivity)) && (
-            <div className="px-4 py-3 space-y-3.5">
-              {(profile?.city || profile?.country) && (
-                <div className="flex items-center gap-3">
-                  <MapPin size={16} className="text-slate-500 flex-shrink-0" />
-                  <span className="text-slate-300 text-sm">{[profile.city, profile.country].filter(Boolean).join(', ')}</span>
-                </div>
-              )}
-              {profile?.fieldOfActivity && (
-                <div className="flex items-center gap-3">
-                  <Briefcase size={16} className="text-slate-500 flex-shrink-0" />
-                  <span className="text-slate-300 text-sm">{profile.fieldOfActivity.name}</span>
-                </div>
-              )}
-              {profile?.employer && (
-                <div className="flex items-center gap-3">
-                  <Building2 size={16} className="text-slate-500 flex-shrink-0" />
-                  <span className="text-slate-300 text-sm">{profile.employer.name}</span>
-                </div>
-              )}
-              {profile?.userArtists?.length > 0 && (
-                <div className="flex items-start gap-3">
-                  <Music size={16} className="text-slate-500 flex-shrink-0 mt-0.5" />
-                  <span className="text-slate-300 text-sm">{profile.userArtists.map((ua: any) => ua.artist?.name).filter(Boolean).join(', ')}</span>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Social links */}
+          {/* 5. Ссылки */}
           {hasSocialLinks && (
-            <div className="px-4 py-3">
+            <div className="mb-5">
               <SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} labeled />
             </div>
           )}
 
-          {/* Services — flat cards */}
-          {Object.keys(servicesByField).length > 0 && (
-            <div className="px-4 py-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Мои услуги</p>
-              <div className="space-y-2">
-                {(Object.entries(servicesByField) as [string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }][]).flatMap(([, { fieldName, byProfession }]) =>
-                  (Object.entries(byProfession) as [string, { profName: string; services: any[] }][]).flatMap(([, { profName, services }]) =>
-                    services.map((us: any) => {
-                      const tags = [
-                        ...(us.genres?.map((g: any) => g.name) ?? []),
-                        ...(us.workFormats?.map((w: any) => w.name) ?? []),
-                        ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
-                        ...(us.skillLevels?.map((s: any) => s.name) ?? []),
-                        ...(us.availabilities?.map((a: any) => a.name) ?? []),
-                        ...(us.geographies?.map((g: any) => g.name) ?? []),
-                      ];
-                      const price = us.priceFrom != null || us.priceTo != null
-                        ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
-                        : null;
-                      return (
-                        <div key={us.id} className="rounded-xl border border-slate-800/60 bg-slate-900/50 p-3.5">
-                          <div className="flex items-start justify-between gap-3 mb-1.5">
-                            <div>
-                              <p className="text-sm font-bold text-white">{us.service?.name}</p>
-                              <p className="text-[11px] text-slate-500 mt-0.5">{profName} · {fieldName}</p>
-                            </div>
-                            {price && <span className="text-sm font-bold text-primary-400 whitespace-nowrap flex-shrink-0">{price}</span>}
-                          </div>
-                          {tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-2">
-                              {tags.map((t: string, i: number) => (
-                                <span key={i} className="px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded text-[11px]">{t}</span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
-                  )
+          {/* 6. Портфолио */}
+          {portfolioFiles.length > 0 && (
+            <div className="mb-5">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Портфолио</p>
+              <div className="space-y-4">
+                {audioFiles.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Headphones size={13} className="text-slate-500" />
+                      <span className="text-xs text-slate-500 font-medium">Аудио</span>
+                    </div>
+                    <div className="space-y-1">
+                      {audioFiles.map((f: any) => (
+                        <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-900/60 hover:bg-slate-800/60 border border-slate-800/60 transition-colors group">
+                          <Headphones size={14} className="text-slate-500 flex-shrink-0 group-hover:text-primary-400 transition-colors" />
+                          <span className="flex-1 text-sm text-slate-300 truncate group-hover:text-white transition-colors">{f.originalName}</span>
+                          <span className="text-xs text-slate-600 flex-shrink-0">{formatFileSize(f.size)}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {videoFiles.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <Film size={13} className="text-slate-500" />
+                      <span className="text-xs text-slate-500 font-medium">Видео</span>
+                    </div>
+                    <div className="space-y-1">
+                      {videoFiles.map((f: any) => (
+                        <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-900/60 hover:bg-slate-800/60 border border-slate-800/60 transition-colors group">
+                          <Film size={14} className="text-slate-500 flex-shrink-0 group-hover:text-primary-400 transition-colors" />
+                          <span className="flex-1 text-sm text-slate-300 truncate group-hover:text-white transition-colors">{f.originalName}</span>
+                          <span className="text-xs text-slate-600 flex-shrink-0">{formatFileSize(f.size)}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {otherFiles.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <FileText size={13} className="text-slate-500" />
+                      <span className="text-xs text-slate-500 font-medium">Другое</span>
+                    </div>
+                    <div className="space-y-1">
+                      {otherFiles.map((f: any) => (
+                        <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-900/60 hover:bg-slate-800/60 border border-slate-800/60 transition-colors group">
+                          <FileText size={14} className="text-slate-500 flex-shrink-0 group-hover:text-primary-400 transition-colors" />
+                          <span className="flex-1 text-sm text-slate-300 truncate group-hover:text-white transition-colors">{f.originalName}</span>
+                          <span className="text-xs text-slate-600 flex-shrink-0">{formatFileSize(f.size)}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </div>
                 )}
               </div>
             </div>
           )}
-
-          {/* Portfolio */}
-          {portfolioFiles.length > 0 && (
-            <div className="px-4 py-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Портфолио</p>
-              <div className="space-y-1.5">
-                {portfolioFiles.map((f: any) => (
-                  <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800/60 transition-colors group">
-                    <FileText size={16} className="text-slate-500 flex-shrink-0 group-hover:text-primary-400 transition-colors" />
-                    <span className="flex-1 text-sm text-slate-300 truncate group-hover:text-white transition-colors">{f.originalName}</span>
-                    <span className="text-xs text-slate-600">{formatFileSize(f.size)}</span>
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Channel */}
-          {myChannel && (
-            <div className="px-4 py-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Мой канал</p>
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center flex-shrink-0">
-                  {myChannel.avatar
-                    ? <img src={getAvatarUrl(myChannel.avatar)!} alt="" className="w-full h-full object-cover" />
-                    : <Radio size={20} className="text-slate-500" />
-                  }
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white truncate">{myChannel.name}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{myChannel._count.subscriptions} подписчиков · {myChannel._count.posts} постов</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Actions */}
-          <div className="px-4 py-4 space-y-2">
-            <button onClick={() => { setActiveTab('basic'); setIsEditing(true); }}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-slate-200 hover:text-white rounded-xl text-sm font-medium transition-all">
-              <Edit3 size={16} />Редактировать профиль
-            </button>
-            <button onClick={() => logout()}
-              className="w-full flex items-center justify-center gap-2 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/8 border border-transparent hover:border-red-500/20 rounded-xl text-sm font-medium transition-all">
-              <LogOut size={16} />Выйти из аккаунта
-            </button>
-          </div>
-
         </div>
+
+        {/* 7. Услуги — горизонтальная карусель */}
+        {servicesFlat.length > 0 && (
+          <div className="mb-5">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-4">Услуги</p>
+            <div className="flex gap-3 overflow-x-auto pb-3 px-4" style={{ scrollbarWidth: 'none' }}>
+              {servicesFlat.map((us: any) => {
+                const tags = [
+                  ...(us.genres?.map((g: any) => g.name) ?? []),
+                  ...(us.workFormats?.map((w: any) => w.name) ?? []),
+                  ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
+                  ...(us.skillLevels?.map((s: any) => s.name) ?? []),
+                  ...(us.availabilities?.map((a: any) => a.name) ?? []),
+                  ...(us.geographies?.map((g: any) => g.name) ?? []),
+                ];
+                const price = us.priceFrom != null || us.priceTo != null
+                  ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
+                  : null;
+                return (
+                  <div key={us.id} className="flex-shrink-0 w-52 rounded-2xl border border-slate-800/60 bg-slate-900/70 p-4 flex flex-col gap-2">
+                    <div>
+                      <p className="text-sm font-bold text-white leading-snug">{us.service?.name}</p>
+                      <p className="text-[11px] text-slate-500 mt-0.5">{us._profName} · {us._fieldName}</p>
+                    </div>
+                    {price && <span className="text-sm font-semibold text-primary-400">{price}</span>}
+                    {tags.length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-auto pt-1">
+                        {tags.slice(0, 4).map((t: string, i: number) => (
+                          <span key={i} className="px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded text-[10px]">{t}</span>
+                        ))}
+                        {tags.length > 4 && <span className="px-1.5 py-0.5 text-slate-600 text-[10px]">+{tags.length - 4}</span>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 8. Канал */}
+        {myChannel && (
+          <div className="px-4 mb-5">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Канал</p>
+            <div className="flex items-center gap-3 p-3.5 rounded-2xl border border-slate-800/60 bg-slate-900/50">
+              <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center flex-shrink-0">
+                {myChannel.avatar
+                  ? <img src={getAvatarUrl(myChannel.avatar)!} alt="" className="w-full h-full object-cover" />
+                  : <Radio size={20} className="text-slate-500" />
+                }
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white truncate">{myChannel.name}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{myChannel._count.subscriptions} подписчиков · {myChannel._count.posts} постов</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Подвал — только иконки */}
+        <div className="px-4 pt-2 pb-4 flex items-center gap-2">
+          <button
+            onClick={() => { setActiveTab('basic'); setIsEditing(true); }}
+            title="Редактировать профиль"
+            className="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-slate-400 hover:text-white rounded-xl transition-all"
+          >
+            <Edit3 size={18} />
+          </button>
+          <button
+            onClick={() => logout()}
+            title="Выйти из аккаунта"
+            className="p-2.5 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 rounded-xl transition-all"
+          >
+            <LogOut size={18} />
+          </button>
+        </div>
+
       </div>
     </div>
   );
