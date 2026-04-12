@@ -39,8 +39,9 @@ const TILE_GRADIENTS = [
 ];
 
 // ─── User card (3-column grid) ─────────────────────────────────────────────────
-function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: {
+function UserCard({ user, currentUserId, sentRequests, onMessage, onAddFriend, onNavigate }: {
   user: any;
+  currentUserId?: string;
   sentRequests: Set<string>;
   onMessage: (id: string) => void;
   onAddFriend: (id: string) => void;
@@ -48,6 +49,7 @@ function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: {
 }) {
   const isSent = sentRequests.has(user.id);
   const isOnline = usePresenceStore((s) => s.onlineUsers.has(user.id));
+  const isMe = user.id === currentUserId;
 
   const professions = user.userProfessions?.slice(0, 2)
     .map((up: any) => up.profession?.name).filter(Boolean) ?? [];
@@ -105,31 +107,33 @@ function UserCard({ user, sentRequests, onMessage, onAddFriend, onNavigate }: {
         )}
 
         {/* Actions */}
-        <div
-          className="flex items-center gap-1 mt-3"
-          onClick={e => e.stopPropagation()}
-        >
-          <button
-            onClick={() => onMessage(user.id)}
-            className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-slate-800 hover:bg-primary-500/20 hover:text-primary-400 text-slate-400 rounded-lg transition-all text-xs"
-            title="Написать"
+        {!isMe && (
+          <div
+            className="flex items-center gap-1 mt-3"
+            onClick={e => e.stopPropagation()}
           >
-            <MessageCircle size={13} />
-          </button>
-          {isSent ? (
-            <div className="flex-1 flex items-center justify-center py-1.5 text-emerald-400" title="Заявка отправлена">
-              <Check size={13} />
-            </div>
-          ) : (
             <button
-              onClick={() => onAddFriend(user.id)}
+              onClick={() => onMessage(user.id)}
               className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-slate-800 hover:bg-primary-500/20 hover:text-primary-400 text-slate-400 rounded-lg transition-all text-xs"
-              title="Добавить в друзья"
+              title="Написать"
             >
-              <UserPlus size={13} />
+              <MessageCircle size={13} />
             </button>
-          )}
-        </div>
+            {isSent ? (
+              <div className="flex-1 flex items-center justify-center py-1.5 text-emerald-400" title="Заявка отправлена">
+                <Check size={13} />
+              </div>
+            ) : (
+              <button
+                onClick={() => onAddFriend(user.id)}
+                className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-slate-800 hover:bg-primary-500/20 hover:text-primary-400 text-slate-400 rounded-lg transition-all text-xs"
+                title="Добавить в друзья"
+              >
+                <UserPlus size={13} />
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -298,9 +302,8 @@ export default function SearchPage() {
   });
 
   const professionUsers = useMemo(() => {
-    const list = (usersData?.results || []).map((r: any) => r.user ?? r);
-    return list.filter((u: any) => u.id !== currentUser?.id);
-  }, [usersData, currentUser?.id]);
+    return (usersData?.results || []).map((r: any) => r.user ?? r);
+  }, [usersData]);
 
   // ── Active secondary filter chips ─────────────────────────────────────────
   const activeChips = useMemo(() => {
@@ -680,6 +683,7 @@ export default function SearchPage() {
                     <UserCard
                       key={user.id}
                       user={user}
+                      currentUserId={currentUser?.id}
                       sentRequests={sentRequests}
                       onMessage={id => navigate(`/messages/${id}`)}
                       onAddFriend={id => addFriendMutation.mutate(id)}
