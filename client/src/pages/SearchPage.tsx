@@ -246,9 +246,9 @@ export default function SearchPage() {
   }, [nameQuery]);
 
   // Reference data
-  const { data: fields, isLoading: fieldsLoading } = useFieldsOfActivity();
-  const { data: directions, isLoading: directionsLoading } = useDirections(selectedField?.id);
-  const { data: professions, isLoading: professionsLoading } = useProfessions(selectedDirection?.id);
+  const { data: fields, isLoading: fieldsLoading } = useFieldsOfActivity(currentUser?.id);
+  const { data: directions, isLoading: directionsLoading } = useDirections(selectedField?.id, currentUser?.id);
+  const { data: professions, isLoading: professionsLoading } = useProfessions(selectedDirection?.id, currentUser?.id);
 
   // Secondary filters from store
   const {

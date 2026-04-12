@@ -320,32 +320,32 @@ export const useSearchStore = create<SearchStore>((set, get) => ({
 }));
 
 // Custom hooks for fetching reference data
-export function useFieldsOfActivity() {
+export function useFieldsOfActivity(excludeUserId?: string) {
   return useQuery({
-    queryKey: ['fieldsOfActivity'],
+    queryKey: ['fieldsOfActivity', excludeUserId],
     queryFn: async () => {
-      const { data } = await referenceAPI.getFieldsOfActivity();
+      const { data } = await referenceAPI.getFieldsOfActivity({ excludeUserId });
       return data as FieldOfActivity[];
     },
   });
 }
 
-export function useDirections(fieldOfActivityId?: string) {
+export function useDirections(fieldOfActivityId?: string, excludeUserId?: string) {
   return useQuery({
-    queryKey: ['directions', fieldOfActivityId],
+    queryKey: ['directions', fieldOfActivityId, excludeUserId],
     queryFn: async () => {
-      const { data } = await referenceAPI.getDirections({ fieldOfActivityId });
+      const { data } = await referenceAPI.getDirections({ fieldOfActivityId, excludeUserId });
       return data as Direction[];
     },
     enabled: !!fieldOfActivityId,
   });
 }
 
-export function useProfessions(directionId?: string) {
+export function useProfessions(directionId?: string, excludeUserId?: string) {
   return useQuery({
-    queryKey: ['professions', directionId],
+    queryKey: ['professions', directionId, excludeUserId],
     queryFn: async () => {
-      const { data } = await referenceAPI.getProfessions({ directionId });
+      const { data } = await referenceAPI.getProfessions({ directionId, excludeUserId });
       return data as Profession[];
     },
     enabled: !!directionId,

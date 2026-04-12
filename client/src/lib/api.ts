@@ -94,10 +94,10 @@ export const userAPI = {
 
 // Reference API
 export const referenceAPI = {
-  getFieldsOfActivity: () => api.get('/references/fields-of-activity'),
-  getDirections: (params?: { fieldOfActivityId?: string }) =>
+  getFieldsOfActivity: (params?: { excludeUserId?: string }) => api.get('/references/fields-of-activity', { params }),
+  getDirections: (params?: { fieldOfActivityId?: string; excludeUserId?: string }) =>
     api.get('/references/directions', { params }),
-  getProfessions: (params?: { directionId?: string; search?: string }) =>
+  getProfessions: (params?: { directionId?: string; search?: string; excludeUserId?: string }) =>
     api.get('/references/professions', { params }),
   getProfessionFeatures: () => api.get('/references/profession-features'),
   getArtists: (params?: { search?: string }) =>
