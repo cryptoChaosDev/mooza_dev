@@ -39,15 +39,17 @@ const TILE_GRADIENTS = [
 ];
 
 // ─── User card (3-column grid) ─────────────────────────────────────────────────
-function UserCard({ user, currentUserId, sentRequests, onMessage, onAddFriend, onNavigate }: {
+function UserCard({ user, currentUserId, sentRequests, friendIds, onMessage, onAddFriend, onNavigate }: {
   user: any;
   currentUserId?: string;
   sentRequests: Set<string>;
+  friendIds: Set<string>;
   onMessage: (id: string) => void;
   onAddFriend: (id: string) => void;
   onNavigate: (id: string) => void;
 }) {
   const isSent = sentRequests.has(user.id);
+  const isFriend = friendIds.has(user.id);
   const isOnline = usePresenceStore((s) => s.onlineUsers.has(user.id));
   const isMe = user.id === currentUserId;
 
@@ -112,13 +114,15 @@ function UserCard({ user, currentUserId, sentRequests, onMessage, onAddFriend, o
             className="flex items-center gap-1 mt-3"
             onClick={e => e.stopPropagation()}
           >
-            <button
-              onClick={() => onMessage(user.id)}
-              className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-slate-800 hover:bg-primary-500/20 hover:text-primary-400 text-slate-400 rounded-lg transition-all text-xs"
-              title="Написать"
-            >
-              <MessageCircle size={13} />
-            </button>
+            {isFriend ? (
+              <button
+                onClick={() => onMessage(user.id)}
+                className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-slate-800 hover:bg-primary-500/20 hover:text-primary-400 text-slate-400 rounded-lg transition-all text-xs"
+                title="Написать"
+              >
+                <MessageCircle size={13} />
+              </button>
+            ) : null}
             {isSent ? (
               <div className="flex-1 flex items-center justify-center py-1.5 text-emerald-400" title="Заявка отправлена">
                 <Check size={13} />
@@ -154,14 +158,16 @@ function SkeletonCard() {
 }
 
 // ─── Global search row (when query typed) ─────────────────────────────────────
-function SearchResultRow({ user, sentRequests, onMessage, onAddFriend, onNavigate }: {
+function SearchResultRow({ user, sentRequests, friendIds, onMessage, onAddFriend, onNavigate }: {
   user: any;
   sentRequests: Set<string>;
+  friendIds: Set<string>;
   onMessage: (id: string) => void;
   onAddFriend: (id: string) => void;
   onNavigate: (id: string) => void;
 }) {
   const isSent = sentRequests.has(user.id);
+  const isFriend = friendIds.has(user.id);
   const isOnline = usePresenceStore((s) => s.onlineUsers.has(user.id));
   const professions = user.userProfessions?.slice(0, 2).map((up: any) => up.profession?.name).filter(Boolean) ?? [];
   const subtitle = [professions.join(', ') || user.role, user.city].filter(Boolean).join(' · ');
@@ -191,9 +197,11 @@ function SearchResultRow({ user, sentRequests, onMessage, onAddFriend, onNavigat
         {subtitle && <p className="text-xs text-slate-500 truncate mt-0.5">{subtitle}</p>}
       </div>
       <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-        <button onClick={() => onMessage(user.id)} className="p-2 text-slate-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg transition-all" title="Написать">
-          <MessageCircle size={16} />
-        </button>
+        {isFriend && (
+          <button onClick={() => onMessage(user.id)} className="p-2 text-slate-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg transition-all" title="Написать">
+            <MessageCircle size={16} />
+          </button>
+        )}
         {isSent ? (
           <div className="p-2 text-emerald-400"><Check size={16} /></div>
         ) : (
@@ -219,6 +227,15 @@ export default function SearchPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
   const [errorMessage, setErrorMessage] = useState('');
+
+  const { data: friendsData } = useQuery({
+    queryKey: ['friends'],
+    queryFn: async () => {
+      const { data } = await friendshipAPI.getFriends();
+      return data as { friendshipId: string; user: any }[];
+    },
+  });
+  const friendIds = useMemo(() => new Set((friendsData ?? []).map((f: any) => f.user.id)), [friendsData]);
 
   // Drill-down state (independent from store to allow local navigation)
   const [view, setView] = useState<DrillView>('fields');
@@ -540,6 +557,7 @@ export default function SearchPage() {
                     key={user.id}
                     user={user}
                     sentRequests={sentRequests}
+                    friendIds={friendIds}
                     onMessage={id => navigate(`/messages/${id}`)}
                     onAddFriend={id => addFriendMutation.mutate(id)}
                     onNavigate={id => navigate(`/profile/${id}`)}
@@ -687,6 +705,7 @@ export default function SearchPage() {
                       user={user}
                       currentUserId={currentUser?.id}
                       sentRequests={sentRequests}
+                      friendIds={friendIds}
                       onMessage={id => navigate(`/messages/${id}`)}
                       onAddFriend={id => addFriendMutation.mutate(id)}
                       onNavigate={id => navigate(`/profile/${id}`)}
