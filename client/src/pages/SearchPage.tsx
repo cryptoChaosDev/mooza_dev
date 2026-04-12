@@ -13,7 +13,6 @@ import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
 import {
   useSearchStore,
-  useSearchResults,
   useFieldsOfActivity,
   useDirections,
   useProfessions,
@@ -274,12 +273,29 @@ export default function SearchPage() {
     enabled: isSearchMode,
   });
 
-  // ── Users in profession view ───────────────────────────────────────────────
-  const professionFilters = useMemo(() => getFilters(), [
-    selectedProfession?.id, genreId, workFormatId, employmentTypeId,
-    skillLevelId, availabilityId, geographyId, priceMin, priceMax,
-  ]);
-  const { data: usersData, isLoading: usersLoading } = useSearchResults(professionFilters);
+  // ── Users in profession view — build filters directly from local state ────
+  const professionFilters = useMemo(() => ({
+    professionId: selectedProfession?.id || undefined,
+    genreId: genreId || undefined,
+    workFormatId: workFormatId || undefined,
+    employmentTypeId: employmentTypeId || undefined,
+    skillLevelId: skillLevelId || undefined,
+    availabilityId: availabilityId || undefined,
+    geographyId: geographyId || undefined,
+    priceMin: priceMin || undefined,
+    priceMax: priceMax || undefined,
+    limit: 100,
+    page: 1,
+  }), [selectedProfession?.id, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId, priceMin, priceMax]);
+
+  const { data: usersData, isLoading: usersLoading } = useQuery({
+    queryKey: ['searchResults', professionFilters],
+    queryFn: async () => {
+      const { data } = await (await import('../lib/api')).referenceAPI.searchMusicians(professionFilters);
+      return data;
+    },
+    enabled: view === 'users' && !!selectedProfession,
+  });
 
   const professionUsers = useMemo(() => {
     const list = (usersData?.results || []).map((r: any) => r.user ?? r);
