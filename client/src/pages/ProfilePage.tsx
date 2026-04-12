@@ -4,7 +4,7 @@ import { userAPI, referenceAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
-  Globe, DollarSign, Calendar, Film,
+  Globe, DollarSign, Calendar, Film, Image,
   Headphones, Edit3, User, Plus, ChevronDown, ChevronLeft, ChevronRight,
   Building2, FileText, Trash2, Radio, Loader2, Crown, BadgeCheck, Ban,
 } from 'lucide-react';
@@ -88,6 +88,7 @@ export default function ProfilePage() {
 
   const [portfolioFiles, setPortfolioFiles] = useState<any[]>([]);
   const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
+  const [lightboxFile, setLightboxFile] = useState<any>(null);
   const [artists, setArtists] = useState<any[]>([]);
   const [employers, setEmployers] = useState<any[]>([]);
   const [openBasicSheet, setOpenBasicSheet] = useState<string | null>(null);
@@ -749,16 +750,38 @@ export default function ProfilePage() {
     )
   );
 
-  // Portfolio categorised by type
-  const AUDIO_EXTS = new Set(['mp3','wav','flac','aac','ogg','m4a','wma','opus']);
-  const VIDEO_EXTS = new Set(['mp4','mov','avi','mkv','webm','m4v','wmv']);
-  const fileExt = (f: any) => (f.originalName as string).split('.').pop()?.toLowerCase() ?? '';
-  const audioFiles = portfolioFiles.filter(f => AUDIO_EXTS.has(fileExt(f)));
-  const videoFiles = portfolioFiles.filter(f => VIDEO_EXTS.has(fileExt(f)));
-  const otherFiles = portfolioFiles.filter(f => !AUDIO_EXTS.has(fileExt(f)) && !VIDEO_EXTS.has(fileExt(f)));
+  // Portfolio categorised by mimeType
+  const photoFiles = portfolioFiles.filter(f => f.mimeType?.startsWith('image/'));
+  const audioFiles = portfolioFiles.filter(f => f.mimeType?.startsWith('audio/'));
+  const videoFiles = portfolioFiles.filter(f => f.mimeType?.startsWith('video/'));
+  const otherFiles = portfolioFiles.filter(f =>
+    !f.mimeType?.startsWith('image/') && !f.mimeType?.startsWith('audio/') && !f.mimeType?.startsWith('video/')
+  );
 
   return (
     <div className="min-h-screen bg-slate-950">
+
+      {/* ── LIGHTBOX ─────────────────────────────────────────────────────── */}
+      {lightboxFile && (
+        <div
+          className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center"
+          onClick={() => setLightboxFile(null)}
+        >
+          <button
+            className="absolute top-4 right-4 p-2 bg-slate-800/80 hover:bg-slate-700 text-white rounded-full transition-colors"
+            onClick={() => setLightboxFile(null)}
+          >
+            <X size={20} />
+          </button>
+          <img
+            src={`${API_URL}${lightboxFile.url}`}
+            alt={lightboxFile.originalName}
+            className="max-w-full max-h-[85vh] object-contain rounded-lg"
+            onClick={e => e.stopPropagation()}
+          />
+          <p className="mt-3 text-xs text-slate-500">{lightboxFile.originalName}</p>
+        </div>
+      )}
 
       {/* ── EDIT MODAL (full-screen) ─────────────────────────────────────── */}
       {isEditing && (
@@ -917,46 +940,66 @@ export default function ProfilePage() {
           {portfolioFiles.length > 0 && (
             <div className="mb-5">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Портфолио</p>
-              <div className="space-y-4">
+              <div className="space-y-5">
+
+                {/* Фото — сетка с предпросмотром */}
+                {photoFiles.length > 0 && (
+                  <div>
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <Image size={13} className="text-slate-500" />
+                      <span className="text-xs text-slate-500 font-medium">Фото</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {photoFiles.map((f: any) => (
+                        <button key={f.id} onClick={() => setLightboxFile(f)}
+                          className="aspect-square rounded-xl overflow-hidden bg-slate-800 hover:opacity-90 transition-opacity">
+                          <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Аудио — встроенный плеер */}
                 {audioFiles.length > 0 && (
                   <div>
-                    <div className="flex items-center gap-1.5 mb-1.5">
+                    <div className="flex items-center gap-1.5 mb-2">
                       <Headphones size={13} className="text-slate-500" />
                       <span className="text-xs text-slate-500 font-medium">Аудио</span>
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       {audioFiles.map((f: any) => (
-                        <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-900/60 hover:bg-slate-800/60 border border-slate-800/60 transition-colors group">
-                          <Headphones size={14} className="text-slate-500 flex-shrink-0 group-hover:text-primary-400 transition-colors" />
-                          <span className="flex-1 text-sm text-slate-300 truncate group-hover:text-white transition-colors">{f.originalName}</span>
-                          <span className="text-xs text-slate-600 flex-shrink-0">{formatFileSize(f.size)}</span>
-                        </a>
+                        <div key={f.id} className="rounded-xl bg-slate-900/60 border border-slate-800/60 px-3 pt-3 pb-2">
+                          <p className="text-xs text-slate-400 truncate mb-2">{f.originalName}</p>
+                          <audio controls src={`${API_URL}${f.url}`} className="w-full h-9" />
+                        </div>
                       ))}
                     </div>
                   </div>
                 )}
+
+                {/* Видео — встроенный плеер */}
                 {videoFiles.length > 0 && (
                   <div>
-                    <div className="flex items-center gap-1.5 mb-1.5">
+                    <div className="flex items-center gap-1.5 mb-2">
                       <Film size={13} className="text-slate-500" />
                       <span className="text-xs text-slate-500 font-medium">Видео</span>
                     </div>
-                    <div className="space-y-1">
+                    <div className="space-y-2">
                       {videoFiles.map((f: any) => (
-                        <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-900/60 hover:bg-slate-800/60 border border-slate-800/60 transition-colors group">
-                          <Film size={14} className="text-slate-500 flex-shrink-0 group-hover:text-primary-400 transition-colors" />
-                          <span className="flex-1 text-sm text-slate-300 truncate group-hover:text-white transition-colors">{f.originalName}</span>
-                          <span className="text-xs text-slate-600 flex-shrink-0">{formatFileSize(f.size)}</span>
-                        </a>
+                        <div key={f.id} className="rounded-xl overflow-hidden bg-slate-900/60 border border-slate-800/60">
+                          <video controls src={`${API_URL}${f.url}`} className="w-full max-h-64 object-contain bg-black" />
+                          <p className="text-xs text-slate-500 truncate px-3 py-1.5">{f.originalName}</p>
+                        </div>
                       ))}
                     </div>
                   </div>
                 )}
+
+                {/* Другое — ссылки */}
                 {otherFiles.length > 0 && (
                   <div>
-                    <div className="flex items-center gap-1.5 mb-1.5">
+                    <div className="flex items-center gap-1.5 mb-2">
                       <FileText size={13} className="text-slate-500" />
                       <span className="text-xs text-slate-500 font-medium">Другое</span>
                     </div>
@@ -972,6 +1015,7 @@ export default function ProfilePage() {
                     </div>
                   </div>
                 )}
+
               </div>
             </div>
           )}
