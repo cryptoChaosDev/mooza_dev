@@ -1035,21 +1035,13 @@ export default function ProfilePage() {
           </div>
         )}
 
-        {/* Подвал — только иконки */}
-        <div className="px-4 pt-2 pb-4 flex items-center gap-2">
-          <button
-            onClick={() => { setActiveTab('basic'); setIsEditing(true); }}
-            title="Редактировать профиль"
-            className="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-600 text-slate-400 hover:text-white rounded-xl transition-all"
-          >
-            <Edit3 size={18} />
-          </button>
+        {/* Подвал профиля */}
+        <div className="px-4 pt-2 pb-4">
           <button
             onClick={() => logout()}
-            title="Выйти из аккаунта"
-            className="p-2.5 text-red-400/60 hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 rounded-xl transition-all"
+            className="w-full flex items-center justify-center gap-2 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/8 border border-red-500/20 hover:border-red-500/40 rounded-xl text-sm font-medium transition-all"
           >
-            <LogOut size={18} />
+            <LogOut size={16} />Выйти из профиля
           </button>
         </div>
 
