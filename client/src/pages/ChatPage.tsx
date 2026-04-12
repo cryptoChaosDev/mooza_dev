@@ -861,8 +861,8 @@ export default function ChatPage() {
                             {isMine && !msg.deletedAt && (() => {
                               if (msg.readAt) return (
                                 <>
-                                  <CheckCheck size={13} className="text-violet-400 flex-shrink-0" />
-                                  <span className="text-violet-400/80 text-[10px]">{formatTime(msg.readAt)}</span>
+                                  <CheckCheck size={13} className="text-emerald-400 flex-shrink-0" />
+                                  <span className="text-emerald-400/80 text-[10px]">{formatTime(msg.readAt)}</span>
                                 </>
                               );
                               if (msg.deliveredAt) return <CheckCheck size={13} className="opacity-60 flex-shrink-0" />;
