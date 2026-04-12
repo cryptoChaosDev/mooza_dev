@@ -3,12 +3,17 @@ import { prisma } from '../index';
 
 const router = Router();
 
-// Get all fields of activity with user counts — only those that have users (via UserService)
-router.get('/fields-of-activity', async (_req, res) => {
+// Get all fields of activity — only those with users other than excludeUserId
+router.get('/fields-of-activity', async (req, res) => {
   try {
+    const { excludeUserId } = req.query;
+    const usFilter = excludeUserId
+      ? { some: { userId: { not: excludeUserId as string } } }
+      : { some: {} };
+
     const fields = await prisma.fieldOfActivity.findMany({
       where: {
-        directions: { some: { professions: { some: { userServices: { some: {} } } } } },
+        directions: { some: { professions: { some: { userServices: usFilter } } } },
       },
       include: {
         directions: {
@@ -28,7 +33,9 @@ router.get('/fields-of-activity', async (_req, res) => {
       const users = new Set<string>();
       for (const d of f.directions) {
         for (const p of d.professions) {
-          for (const us of p.userServices) users.add(us.userId);
+          for (const us of p.userServices) {
+            if (!excludeUserId || us.userId !== excludeUserId) users.add(us.userId);
+          }
         }
       }
       return { id: f.id, name: f.name, createdAt: f.createdAt, userCount: users.size };
@@ -39,12 +46,15 @@ router.get('/fields-of-activity', async (_req, res) => {
   }
 });
 
-// Get directions by field of activity — only those that have users (via UserService)
+// Get directions by field of activity — only those with users other than excludeUserId
 router.get('/directions', async (req, res) => {
   try {
-    const { fieldOfActivityId } = req.query;
+    const { fieldOfActivityId, excludeUserId } = req.query;
+    const usFilter = excludeUserId
+      ? { some: { userId: { not: excludeUserId as string } } }
+      : { some: {} };
     const where: any = {
-      professions: { some: { userServices: { some: {} } } },
+      professions: { some: { userServices: usFilter } },
     };
     if (fieldOfActivityId) where.fieldOfActivityId = fieldOfActivityId as string;
 
@@ -58,23 +68,24 @@ router.get('/directions', async (req, res) => {
       orderBy: { name: 'asc' },
     });
 
-    // Count distinct users per direction via UserService
+    // Count distinct users per direction via UserService (excluding self)
     const professionIds = directions.flatMap(d => d.professions.map(p => p.id));
-    const userServices = professionIds.length > 0
+    const userServicesData = professionIds.length > 0
       ? await prisma.userService.findMany({
-          where: { professionId: { in: professionIds } },
+          where: {
+            professionId: { in: professionIds },
+            ...(excludeUserId ? { userId: { not: excludeUserId as string } } : {}),
+          },
           select: { professionId: true, userId: true },
         })
       : [];
 
-    // Build professionId → Set<userId>
     const profUserMap = new Map<string, Set<string>>();
-    for (const us of userServices) {
+    for (const us of userServicesData) {
       if (!profUserMap.has(us.professionId)) profUserMap.set(us.professionId, new Set());
       profUserMap.get(us.professionId)!.add(us.userId);
     }
 
-    // Aggregate distinct users per direction
     const dirUserMap = new Map<string, Set<string>>();
     for (const d of directions) {
       const users = new Set<string>();
@@ -99,12 +110,15 @@ router.get('/directions', async (req, res) => {
   }
 });
 
-// Get professions by direction — only those that have users (via UserService)
+// Get professions by direction — only those with users other than excludeUserId
 router.get('/professions', async (req, res) => {
   try {
-    const { directionId, search } = req.query;
+    const { directionId, search, excludeUserId } = req.query;
+    const usFilter = excludeUserId
+      ? { some: { userId: { not: excludeUserId as string } } }
+      : { some: {} };
     const where: any = {
-      userServices: { some: {} },
+      userServices: usFilter,
     };
     if (directionId) where.directionId = directionId as string;
     if (search) where.name = { contains: search as string, mode: 'insensitive' };
