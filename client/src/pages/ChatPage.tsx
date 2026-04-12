@@ -36,6 +36,7 @@ interface Message {
   attachmentName?: string | null;
   attachmentSize?: number | null;
   attachmentType?: string | null;
+  deliveredAt?: string | null;
   readAt?: string | null;
   reactions?: MsgReaction[];
   replyTo: {
@@ -275,12 +276,24 @@ export default function ChatPage() {
       }));
     };
 
+    const onDelivered = ({ messageIds, deliveredAt }: { messageIds: string[]; deliveredAt: string }) => {
+      const ids = new Set(messageIds);
+      setMessages(prev => prev.map(m => ids.has(m.id) ? { ...m, deliveredAt } : m));
+    };
+
+    const onRead = ({ messageIds, readAt }: { messageIds: string[]; readAt: string }) => {
+      const ids = new Set(messageIds);
+      setMessages(prev => prev.map(m => ids.has(m.id) ? { ...m, readAt, deliveredAt: m.deliveredAt ?? readAt } : m));
+    };
+
     socket.on('new_message', onNew);
     socket.on('message_edited', onEdited);
     socket.on('message_deleted', onDeleted);
     socket.on('group_deleted', onGroupDeleted);
     socket.on('message_reaction', onReaction);
     socket.on('message_reaction_removed', onReactionRemoved);
+    socket.on('messages_delivered', onDelivered);
+    socket.on('messages_read', onRead);
     return () => {
       socket.off('new_message', onNew);
       socket.off('message_edited', onEdited);
@@ -288,6 +301,8 @@ export default function ChatPage() {
       socket.off('group_deleted', onGroupDeleted);
       socket.off('message_reaction', onReaction);
       socket.off('message_reaction_removed', onReactionRemoved);
+      socket.off('messages_delivered', onDelivered);
+      socket.off('messages_read', onRead);
     };
   }, [conversationId]);
 
@@ -843,11 +858,16 @@ export default function ChatPage() {
                           <div className={`flex items-center justify-end gap-1 mt-1 ${isMine ? 'text-primary-100' : 'text-slate-400'} text-xs`}>
                             {msg.isEdited && !msg.deletedAt && <span className="opacity-70">изм.</span>}
                             <span>{formatTime(msg.createdAt)}</span>
-                            {isMine && !msg.deletedAt && (
-                              msg.readAt
-                                ? <CheckCheck size={13} className="text-primary-200" />
-                                : <Check size={13} className="opacity-60" />
-                            )}
+                            {isMine && !msg.deletedAt && (() => {
+                              if (msg.readAt) return (
+                                <>
+                                  <CheckCheck size={13} className="text-violet-400 flex-shrink-0" />
+                                  <span className="text-violet-400/80 text-[10px]">{formatTime(msg.readAt)}</span>
+                                </>
+                              );
+                              if (msg.deliveredAt) return <CheckCheck size={13} className="opacity-60 flex-shrink-0" />;
+                              return <Check size={13} className="opacity-60 flex-shrink-0" />;
+                            })()}
                           </div>
                         </div>
 

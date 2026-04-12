@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { emitToUser, notifyUser } from '../socket';
+import { emitToUser, notifyUser, isUserOnline } from '../socket';
 import { uploadChatAttachment } from '../middleware/upload';
 import { messageLimiter } from '../middleware/rateLimiter';
 
@@ -272,10 +272,33 @@ router.get('/conversations/:id', authenticate, async (req: AuthRequest, res) => 
       include: MSG_INCLUDE,
     });
 
-    // Mark messages as read
+    // Set readAt on all unread messages sent by others
+    const now = new Date();
+    const unread = messages.filter((m: any) => m.senderId !== userId && !m.readAt && !m.deletedAt);
+    if (unread.length > 0) {
+      await db.message.updateMany({
+        where: { id: { in: unread.map((m: any) => m.id) } },
+        data: { readAt: now, deliveredAt: now },
+      });
+      // Update local message objects so response reflects the new state
+      for (const m of unread) { m.readAt = now; m.deliveredAt = m.deliveredAt ?? now; }
+
+      // Notify each sender that their messages were read
+      const bySender = new Map<string, string[]>();
+      for (const m of unread) {
+        const ids = bySender.get(m.senderId) ?? [];
+        ids.push(m.id);
+        bySender.set(m.senderId, ids);
+      }
+      for (const [senderId, messageIds] of bySender) {
+        emitToUser(senderId, 'messages_read', { messageIds, readAt: now.toISOString() });
+      }
+    }
+
+    // Mark conversation as read (for unread count badge)
     await db.conversationMember.updateMany({
       where: { conversationId: id, userId },
-      data: { lastReadAt: new Date() },
+      data: { lastReadAt: now },
     });
 
     // Mark message notifications for this conversation as read in the bell
@@ -309,6 +332,12 @@ router.post('/conversations/:id/messages', authenticate, messageLimiter, async (
     const isMember = conv.members.some((m: any) => m.userId === userId);
     if (!isMember) return res.status(403).json({ error: 'Not a member' });
 
+    const otherMemberIds = conv.members.filter((m: any) => m.userId !== userId).map((m: any) => m.userId);
+
+    // Determine if any recipient is online → set deliveredAt immediately
+    const anyOnline = otherMemberIds.some((id: string) => isUserOnline(id));
+    const now = new Date();
+
     const message = await db.message.create({
       data: {
         conversationId,
@@ -316,6 +345,7 @@ router.post('/conversations/:id/messages', authenticate, messageLimiter, async (
         content: content?.trim() || '',
         ...(replyToId ? { replyToId } : {}),
         ...(attachmentUrl ? { attachmentUrl, attachmentName: attachmentName || null, attachmentSize: attachmentSize ? Number(attachmentSize) : null, attachmentType: attachmentType || null } : {}),
+        ...(anyOnline ? { deliveredAt: now } : {}),
       },
       include: MSG_INCLUDE,
     });
