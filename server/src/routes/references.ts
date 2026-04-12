@@ -324,9 +324,19 @@ router.get('/search', async (req, res) => {
     const limitNum = parseInt(limit as string, 10);
     const skip = (pageNum - 1) * limitNum;
 
+    // Build UserService filter — profession/direction/field resolved through the relation chain
     const userServiceWhere: any = {};
+
+    // Most specific filter wins (profession > direction > field)
+    if (professionId) {
+      userServiceWhere.professionId = professionId;
+    } else if (directionId) {
+      userServiceWhere.profession = { directionId: directionId as string };
+    } else if (fieldId) {
+      userServiceWhere.profession = { direction: { fieldOfActivityId: fieldId as string } };
+    }
+
     if (serviceId) userServiceWhere.serviceId = serviceId;
-    if (professionId) userServiceWhere.professionId = professionId;
     if (genreId) userServiceWhere.genres = { some: { id: genreId } };
     if (workFormatId) userServiceWhere.workFormats = { some: { id: workFormatId } };
     if (employmentTypeId) userServiceWhere.employmentTypes = { some: { id: employmentTypeId } };
@@ -337,17 +347,6 @@ router.get('/search', async (req, res) => {
     if (priceMax) userServiceWhere.priceTo = { lte: parseInt(priceMax as string, 10) };
 
     const userWhere: any = {};
-    if (fieldId) userWhere.fieldOfActivityId = fieldId;
-    if (directionId) {
-      const profsByDir = await prisma.profession.findMany({
-        where: { directionId: directionId as string },
-        select: { id: true },
-      });
-      const dirFilter = { professionId: { in: profsByDir.map(p => p.id) } };
-      userWhere.userServices = userWhere.userServices
-        ? { some: { ...userWhere.userServices.some, ...dirFilter } }
-        : { some: dirFilter };
-    }
     if (Object.keys(userServiceWhere).length > 0) {
       userWhere.userServices = { some: userServiceWhere };
     }
@@ -356,6 +355,7 @@ router.get('/search', async (req, res) => {
         { firstName: { contains: query as string, mode: 'insensitive' } },
         { lastName: { contains: query as string, mode: 'insensitive' } },
         { nickname: { contains: query as string, mode: 'insensitive' } },
+        { city: { contains: query as string, mode: 'insensitive' } },
       ];
     }
 
