@@ -223,7 +223,7 @@ export default function SearchPage() {
   const [selectedProfession, setSelectedProfession] = useState<{ id: string; name: string } | null>(null);
 
   // Sync drill-down selections into global search store
-  const { setFieldId, setDirectionId, setProfessionId, getFilters, resetAllFilters } = useSearchStore();
+  const { setFieldId, setDirectionId, setProfessionId, resetAllFilters } = useSearchStore();
 
   useEffect(() => {
     setFieldId(selectedField?.id ?? null);
