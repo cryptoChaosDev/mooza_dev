@@ -1,17 +1,24 @@
-import { useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, Music, ExternalLink, Users,
-  Camera, Navigation,
+  Camera, Navigation, Edit3, X, Save, Loader2,
 } from 'lucide-react';
-import { artistAPI } from '../lib/api';
+import { artistAPI, referenceAPI } from '../lib/api';
 import { avatarUrl } from '../lib/avatar';
-import { SocialIconRow } from '../components/SocialLinks';
+import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
+import SelectSheet from '../components/SelectSheet';
 import ShareButton from '../components/ShareButton';
 import { useAuthStore } from '../stores/authStore';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
+const TYPE_OPTIONS = [
+  { id: 'SOLO',        name: 'Соло артист' },
+  { id: 'GROUP',       name: 'Группа' },
+  { id: 'COVER_GROUP', name: 'Кавер группа' },
+];
 
 const TYPE_LABELS: Record<string, string> = {
   SOLO: 'Соло артист',
@@ -25,6 +32,18 @@ function resolveUrl(path: string | null | undefined): string | null {
   return `${API_URL}${path}`;
 }
 
+type EditForm = {
+  name: string;
+  type: string;
+  city: string;
+  tourReady: string;
+  description: string;
+  bandLink: string;
+  listeners: string;
+  genreIds: string[];
+  socialLinks: Record<string, string>;
+};
+
 export default function ArtistPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -34,6 +53,14 @@ export default function ArtistPage() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
+  const [isEditing, setIsEditing] = useState(false);
+  const [form, setForm] = useState<EditForm>({
+    name: '', type: '', city: '', tourReady: '', description: '',
+    bandLink: '', listeners: '', genreIds: [], socialLinks: {},
+  });
+  const [genreSheetOpen, setGenreSheetOpen] = useState(false);
+  const [typeSheetOpen, setTypeSheetOpen] = useState(false);
+
   const { data: artist, isLoading, isError } = useQuery({
     queryKey: ['artist', id],
     queryFn: async () => {
@@ -42,6 +69,31 @@ export default function ArtistPage() {
     },
     enabled: !!id,
   });
+
+  const { data: genreOptions = [] } = useQuery({
+    queryKey: ['genres'],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getGenres();
+      return data as { id: string; name: string }[];
+    },
+  });
+
+  // Populate form when opening edit
+  useEffect(() => {
+    if (isEditing && artist) {
+      setForm({
+        name: artist.name ?? '',
+        type: artist.type ?? '',
+        city: artist.city ?? '',
+        tourReady: artist.tourReady ?? '',
+        description: artist.description ?? '',
+        bandLink: artist.bandLink ?? '',
+        listeners: artist.listeners != null ? String(artist.listeners) : '',
+        genreIds: (artist.genres ?? []).map((g: { id: string }) => g.id),
+        socialLinks: (artist.socialLinks as Record<string, string>) ?? {},
+      });
+    }
+  }, [isEditing, artist]);
 
   const followMut = useMutation({
     mutationFn: () => artistAPI.follow(id!),
@@ -62,6 +114,28 @@ export default function ArtistPage() {
     mutationFn: (file: File) => artistAPI.uploadBanner(id!, file),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
   });
+
+  const saveMut = useMutation({
+    mutationFn: () =>
+      artistAPI.updateArtist(id!, {
+        name: form.name.trim(),
+        type: form.type || undefined,
+        city: form.city.trim() || undefined,
+        tourReady: form.tourReady.trim() || undefined,
+        description: form.description.trim() || undefined,
+        bandLink: form.bandLink.trim() || undefined,
+        listeners: form.listeners !== '' ? Number(form.listeners) : undefined,
+        genreIds: form.genreIds,
+        socialLinks: form.socialLinks,
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['artist', id] });
+      setIsEditing(false);
+    },
+  });
+
+  const set = (key: keyof EditForm, value: string | string[] | Record<string, string>) =>
+    setForm((f) => ({ ...f, [key]: value }));
 
   if (isLoading) {
     return (
@@ -87,6 +161,170 @@ export default function ArtistPage() {
   const bannerSrc = resolveUrl(artist.banner);
   const avatarSrc = avatarUrl(artist.avatar);
 
+  // ── Edit modal ───────────────────────────────────────────────────────────────
+  function EditModal() {
+    return (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm">
+        <div className="w-full max-w-lg bg-slate-900 rounded-t-2xl sm:rounded-2xl max-h-[90vh] flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
+            <button onClick={() => setIsEditing(false)} className="p-2 text-slate-400 hover:text-white">
+              <X size={20} />
+            </button>
+            <span className="font-semibold text-white text-sm">Редактировать коллектив</span>
+            <button
+              onClick={() => saveMut.mutate()}
+              disabled={saveMut.isPending || !form.name.trim()}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-600 text-white text-sm font-semibold disabled:opacity-50"
+            >
+              {saveMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              Сохранить
+            </button>
+          </div>
+
+          {/* Scrollable body */}
+          <div className="overflow-y-auto flex-1 px-4 py-4 space-y-4">
+
+            {/* Название */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Название *</label>
+              <input
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
+                value={form.name}
+                onChange={(e) => set('name', e.target.value)}
+                placeholder="Название коллектива"
+              />
+            </div>
+
+            {/* Тип */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Тип</label>
+              <button
+                type="button"
+                onClick={() => setTypeSheetOpen(true)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
+              >
+                <span className={form.type ? 'text-white' : 'text-slate-500'}>
+                  {form.type ? TYPE_LABELS[form.type] : 'Выбрать тип'}
+                </span>
+                <span className="text-slate-500 text-xs">▾</span>
+              </button>
+            </div>
+
+            {/* Город */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Город</label>
+              <input
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
+                value={form.city}
+                onChange={(e) => set('city', e.target.value)}
+                placeholder="Москва"
+              />
+            </div>
+
+            {/* Готовность к туру */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Готовность к туру</label>
+              <input
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
+                value={form.tourReady}
+                onChange={(e) => set('tourReady', e.target.value)}
+                placeholder="Готовы к гастролям"
+              />
+            </div>
+
+            {/* Описание */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Описание</label>
+              <textarea
+                rows={4}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500 resize-none"
+                value={form.description}
+                onChange={(e) => set('description', e.target.value)}
+                placeholder="О коллективе..."
+              />
+            </div>
+
+            {/* Жанры */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Жанры</label>
+              <button
+                type="button"
+                onClick={() => setGenreSheetOpen(true)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
+              >
+                <span className={form.genreIds.length ? 'text-white' : 'text-slate-500'}>
+                  {form.genreIds.length
+                    ? genreOptions.filter((g) => form.genreIds.includes(g.id)).map((g) => g.name).join(', ')
+                    : 'Выбрать жанры'}
+                </span>
+                <span className="text-slate-500 text-xs">▾</span>
+              </button>
+            </div>
+
+            {/* Слушатели */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Слушателей в месяц</label>
+              <input
+                type="number"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
+                value={form.listeners}
+                onChange={(e) => set('listeners', e.target.value)}
+                placeholder="0"
+                min="0"
+              />
+            </div>
+
+            {/* Ссылка BandLink */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Ссылка на страницу группы</label>
+              <input
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
+                value={form.bandLink}
+                onChange={(e) => set('bandLink', e.target.value)}
+                placeholder="https://band.link/..."
+              />
+            </div>
+
+            {/* Соцсети */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-2">Социальные сети</label>
+              <SocialLinksEditor
+                value={form.socialLinks}
+                onChange={(v) => set('socialLinks', v)}
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Sheets */}
+        <SelectSheet
+          isOpen={typeSheetOpen}
+          onClose={() => setTypeSheetOpen(false)}
+          title="Тип коллектива"
+          options={TYPE_OPTIONS}
+          selectedIds={form.type}
+          onSelect={(v) => { set('type', v as string); setTypeSheetOpen(false); }}
+          mode="single"
+          searchable={false}
+          height="auto"
+        />
+
+        <SelectSheet
+          isOpen={genreSheetOpen}
+          onClose={() => setGenreSheetOpen(false)}
+          title="Жанры"
+          options={genreOptions}
+          selectedIds={form.genreIds}
+          onSelect={(v) => { set('genreIds', v as string[]); }}
+          mode="multiple"
+          showConfirm
+          height="full"
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-950 pb-24">
       {/* ── Header banner ── */}
@@ -106,14 +344,19 @@ export default function ArtistPage() {
         {/* Top-right actions */}
         <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
           <ShareButton url={`/artist/${id}`} title={artist?.name} />
-          {currentUser && (
+          {isMemberOfArtist && (
+            <button
+              onClick={() => setIsEditing(true)}
+              className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
+            >
+              <Edit3 size={16} className="text-white" />
+            </button>
+          )}
+          {currentUser && !isMemberOfArtist && (
             <button
               onClick={() => {
-                if (artist.isFollowed) {
-                  unfollowMut.mutate();
-                } else {
-                  followMut.mutate();
-                }
+                if (artist.isFollowed) unfollowMut.mutate();
+                else followMut.mutate();
               }}
               disabled={followMut.isPending || unfollowMut.isPending}
               className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
@@ -278,7 +521,25 @@ export default function ArtistPage() {
           </div>
         )}
 
-        {/* 9. Members */}
+        {/* 9. Follow button (for members who want to unfollow is handled top-right, but members see edit there) */}
+        {currentUser && isMemberOfArtist && (
+          <button
+            onClick={() => {
+              if (artist.isFollowed) unfollowMut.mutate();
+              else followMut.mutate();
+            }}
+            disabled={followMut.isPending || unfollowMut.isPending}
+            className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${
+              artist.isFollowed
+                ? 'bg-slate-800 text-slate-300 border border-slate-700'
+                : 'bg-primary-600/20 text-primary-300 border border-primary-500/30'
+            }`}
+          >
+            {artist.isFollowed ? 'Отписаться' : 'Подписаться на коллектив'}
+          </button>
+        )}
+
+        {/* 10. Members */}
         {(artist.members?.length ?? 0) > 0 && (
           <div>
             <div className="flex items-center gap-2 mb-3">
@@ -308,6 +569,9 @@ export default function ArtistPage() {
           </div>
         )}
       </div>
+
+      {/* ── Edit modal ── */}
+      {isEditing && EditModal()}
     </div>
   );
 }
