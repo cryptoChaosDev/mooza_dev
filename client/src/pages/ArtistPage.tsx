@@ -2,13 +2,14 @@ import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, MapPin, Music, ExternalLink, Users,
+  ArrowLeft, MapPin, ExternalLink,
   Camera, Navigation, Edit3, X, Save, Loader2,
 } from 'lucide-react';
 import { artistAPI, referenceAPI } from '../lib/api';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
 import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
+import AvatarComponent from '../components/Avatar';
 import SelectSheet from '../components/SelectSheet';
 import ShareButton from '../components/ShareButton';
 import { useAuthStore } from '../stores/authStore';
@@ -350,7 +351,7 @@ export default function ArtistPage() {
   return (
     <div className="min-h-screen bg-slate-950 pb-24">
       {/* ── Header banner ── */}
-      <div className="relative w-full h-48 bg-gradient-to-br from-slate-800 to-slate-900 overflow-hidden">
+      <div className="relative w-full h-32 bg-gradient-to-br from-slate-800 to-slate-900 overflow-hidden">
         {bannerSrc && (
           <img src={bannerSrc} alt="banner" className="w-full h-full object-cover" />
         )}
@@ -453,38 +454,60 @@ export default function ArtistPage() {
       </div>
 
       {/* ── Content ── */}
-      <div className="px-4 space-y-4">
+      <div className="px-4">
 
-        {/* 1. Name + type badge */}
-        <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-bold text-white leading-tight">{artist.name}</h1>
-            {artist.type && TYPE_LABELS[artist.type] && (
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-primary-500/20 text-primary-300 border border-primary-500/30">
-                {TYPE_LABELS[artist.type]}
+        {/* Name + type badge */}
+        <div className="flex items-center gap-2 flex-wrap mb-0.5">
+          <h1 className="text-2xl font-bold text-white leading-tight">{artist.name}</h1>
+          {artist.type && TYPE_LABELS[artist.type] && (
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-primary-500/20 text-primary-300 border border-primary-500/30">
+              {TYPE_LABELS[artist.type]}
+            </span>
+          )}
+        </div>
+
+        {/* City + tour readiness */}
+        {(artist.city || artist.tourReady) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-1">
+            {artist.city && (
+              <span className="flex items-center gap-1">
+                <MapPin size={12} className="flex-shrink-0" />
+                {artist.city}
+              </span>
+            )}
+            {artist.tourReady && (
+              <span className="flex items-center gap-1">
+                <Navigation size={12} className="flex-shrink-0" />
+                {artist.tourReady}
               </span>
             )}
           </div>
-        </div>
-
-        {/* 2. City */}
-        {artist.city && (
-          <div className="flex items-center gap-2 text-slate-400 text-sm">
-            <MapPin size={14} className="flex-shrink-0" />
-            <span>{artist.city}</span>
-          </div>
         )}
 
-        {/* 3. Genres */}
+        {/* Stats — compact inline */}
+        <div className="flex items-center gap-2 text-xs text-slate-500 mb-3 flex-wrap">
+          <span><span className="font-semibold text-slate-300">{artist.followersCount ?? 0}</span> подписчиков</span>
+          {(artist.members?.length ?? 0) > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{artist.members.length}</span> участников</span></>}
+          {(artist.listeners ?? 0) > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{Number(artist.listeners).toLocaleString('ru-RU')}</span> слушателей</span></>}
+        </div>
+
+        {/* Description */}
+        {artist.description && (
+          <p className="text-slate-300 text-sm leading-relaxed mb-4 border-l-2 border-primary-500/40 pl-3">
+            {artist.description}
+          </p>
+        )}
+
+        {/* Жанры */}
         {(artist.genres?.length ?? 0) > 0 && (
-          <div className="flex items-start gap-2">
-            <Music size={14} className="text-slate-500 mt-0.5 flex-shrink-0" />
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Жанры</span>
+              <div className="flex-1 h-px bg-slate-800" />
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {artist.genres.map((g: { id: string; name: string }) => (
-                <span
-                  key={g.id}
-                  className="px-2 py-0.5 rounded-full text-xs bg-slate-800 text-slate-300 border border-slate-700"
-                >
+                <span key={g.id} className="px-2.5 py-1 bg-slate-800/80 border border-slate-700/50 text-slate-300 rounded-lg text-xs font-medium">
                   {g.name}
                 </span>
               ))}
@@ -492,81 +515,34 @@ export default function ArtistPage() {
           </div>
         )}
 
-        {/* 4. Tour readiness */}
-        {artist.tourReady && (
-          <div className="flex items-center gap-2 text-slate-400 text-sm">
-            <Navigation size={14} className="flex-shrink-0" />
-            <span>{artist.tourReady}</span>
+        {/* Контакты */}
+        {(hasSocialLinks || artist.bandLink) && (
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Контакты</span>
+              <div className="flex-1 h-px bg-slate-800" />
+            </div>
+            {artist.bandLink && (
+              <a
+                href={artist.bandLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 text-primary-400 text-sm hover:underline mb-2"
+              >
+                <ExternalLink size={14} className="flex-shrink-0" />
+                <span className="truncate">{artist.bandLink}</span>
+              </a>
+            )}
+            {hasSocialLinks && <SocialIconRow links={(artist.socialLinks as Record<string, string>) || {}} labeled />}
           </div>
         )}
 
-        {/* 5. Description */}
-        {artist.description && (
-          <p className="text-slate-300 text-sm leading-relaxed border-l-2 border-primary-500/40 pl-3">
-            {artist.description}
-          </p>
-        )}
-
-        {/* 6. Stats */}
-        <div className="flex rounded-2xl border border-slate-800/60 bg-slate-900/50 overflow-hidden divide-x divide-slate-800/60">
-          <div className="flex-1 py-3 text-center">
-            <div className="text-lg font-bold text-white">{artist.followersCount ?? 0}</div>
-            <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Подписчики</div>
-          </div>
-          <div className="flex-1 py-3 text-center">
-            <div className="text-lg font-bold text-white">{artist.members?.length ?? 0}</div>
-            <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Участники</div>
-          </div>
-          <div className="flex-1 py-3 text-center">
-            <div className="text-lg font-bold text-white">{artist.listeners ?? 0}</div>
-            <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Слушатели</div>
-          </div>
-        </div>
-
-        {/* 7. BandLink */}
-        {artist.bandLink && (
-          <a
-            href={artist.bandLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-2 text-primary-400 text-sm hover:underline"
-          >
-            <ExternalLink size={14} className="flex-shrink-0" />
-            <span className="truncate">{artist.bandLink}</span>
-          </a>
-        )}
-
-        {/* 8. Social links */}
-        {hasSocialLinks && (
-          <div>
-            <SocialIconRow links={(artist.socialLinks as Record<string, string>) || {}} labeled />
-          </div>
-        )}
-
-        {/* 9. Follow button (for members who want to unfollow is handled top-right, but members see edit there) */}
-        {currentUser && isMemberOfArtist && (
-          <button
-            onClick={() => {
-              if (artist.isFollowed) unfollowMut.mutate();
-              else followMut.mutate();
-            }}
-            disabled={followMut.isPending || unfollowMut.isPending}
-            className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors ${
-              artist.isFollowed
-                ? 'bg-slate-800 text-slate-300 border border-slate-700'
-                : 'bg-primary-600/20 text-primary-300 border border-primary-500/30'
-            }`}
-          >
-            {artist.isFollowed ? 'Отписаться' : 'Подписаться на коллектив'}
-          </button>
-        )}
-
-        {/* 10. Members */}
+        {/* Участники */}
         {(artist.members?.length ?? 0) > 0 && (
-          <div>
+          <div className="mb-4">
             <div className="flex items-center gap-2 mb-3">
-              <Users size={14} className="text-slate-500" />
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Участники</span>
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Участники</span>
+              <div className="flex-1 h-px bg-slate-800" />
             </div>
             <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
               {artist.members.map((m: { id: string; firstName: string; lastName: string; avatar: string | null; nickname: string | null }) => (
@@ -575,20 +551,30 @@ export default function ArtistPage() {
                   onClick={() => navigate(`/profile/${m.id}`)}
                   className="flex-shrink-0 flex flex-col items-center gap-1.5 w-16"
                 >
-                  <div className="w-14 h-14 rounded-full overflow-hidden bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center">
-                    {m.avatar ? (
-                      <img src={avatarUrl(m.avatar)!} className="w-full h-full object-cover" alt={m.firstName} />
-                    ) : (
-                      <span className="text-white font-bold text-sm">
-                        {m.firstName?.[0]}{m.lastName?.[0]}
-                      </span>
-                    )}
-                  </div>
+                  <AvatarComponent src={m.avatar} name={`${m.firstName} ${m.lastName}`} size={56} />
                   <span className="text-xs text-slate-400 truncate w-full text-center">{m.firstName}</span>
                 </button>
               ))}
             </div>
           </div>
+        )}
+
+        {/* Follow/Unfollow for members */}
+        {currentUser && isMemberOfArtist && (
+          <button
+            onClick={() => {
+              if (artist.isFollowed) unfollowMut.mutate();
+              else followMut.mutate();
+            }}
+            disabled={followMut.isPending || unfollowMut.isPending}
+            className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors mb-4 ${
+              artist.isFollowed
+                ? 'bg-slate-800 text-slate-300 border border-slate-700'
+                : 'bg-primary-600/20 text-primary-300 border border-primary-500/30'
+            }`}
+          >
+            {artist.isFollowed ? 'Отписаться' : 'Подписаться на коллектив'}
+          </button>
         )}
       </div>
 
