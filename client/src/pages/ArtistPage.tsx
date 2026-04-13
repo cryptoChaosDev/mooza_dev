@@ -333,10 +333,10 @@ export default function ArtistPage() {
           <img src={bannerSrc} alt="banner" className="w-full h-full object-cover" />
         )}
 
-        {/* Back button */}
+        {/* Back button — fixed so it stays visible on scroll */}
         <button
           onClick={() => navigate(-1)}
-          className="absolute top-4 left-4 z-10 w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
+          className="fixed top-[72px] left-4 z-30 w-9 h-9 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center shadow-lg"
         >
           <ArrowLeft size={18} className="text-white" />
         </button>
