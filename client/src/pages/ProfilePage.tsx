@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userAPI, referenceAPI } from '../lib/api';
+import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
@@ -104,7 +105,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (isEditing) {
-      document.body.style.overflow = 'hidden';
+      lockScroll();
       referenceAPI.getFieldsOfActivity().then(r => setFieldsOfActivity(r.data));
       referenceAPI.getWorkFormats().then(r => setWorkFormats(r.data));
       referenceAPI.getEmploymentTypes().then(r => setEmploymentTypes(r.data));
@@ -115,9 +116,9 @@ export default function ProfilePage() {
       referenceAPI.getArtists().then(r => setArtists(r.data));
       referenceAPI.getEmployers().then(r => setEmployers(r.data));
     } else {
-      document.body.style.overflow = '';
+      unlockScroll();
     }
-    return () => { document.body.style.overflow = ''; };
+    return () => unlockScroll();
   }, [isEditing]);
 
   const { data: profile, isLoading } = useQuery({
@@ -814,7 +815,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Tab content */}
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-6">
+          <div className="flex-1 min-h-0 overflow-y-auto pb-6" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
             {activeTab === 'basic' && EditBasicTab()}
             {activeTab === 'profession' && EditServicesTab()}
             {activeTab === 'channel' && EditChannelTab()}

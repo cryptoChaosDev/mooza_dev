@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
+import { lockScroll, unlockScroll } from '../lib/scrollLock';
 
 interface BottomSheetProps {
   isOpen: boolean;
@@ -13,21 +14,22 @@ interface BottomSheetProps {
 export default function BottomSheet({ isOpen, onClose, title, children, height = 'half' }: BottomSheetProps) {
   useEffect(() => {
     if (isOpen) {
-      document.body.style.overflow = 'hidden';
+      lockScroll();
     } else {
-      document.body.style.overflow = 'unset';
+      unlockScroll();
     }
     return () => {
-      document.body.style.overflow = 'unset';
+      unlockScroll();
     };
   }, [isOpen]);
 
   if (!isOpen) return null;
 
+  // dvh не поддерживается до iOS 16.4 — используем vh
   const heightClasses = {
-    auto: 'max-h-[90dvh]',
-    half: 'h-[50dvh]',
-    full: 'h-[90dvh]',
+    auto: 'max-h-[90vh]',
+    half: 'h-[50vh]',
+    full: 'h-[90vh]',
   };
 
   const sheet = (
@@ -59,9 +61,10 @@ export default function BottomSheet({ isOpen, onClose, title, children, height =
           </button>
         </div>
 
-        {/* Content */}
+        {/* Content — -webkit-overflow-scrolling для инерционного скролла на iOS */}
         <div
-          className="flex-1 min-h-0 overflow-y-auto overscroll-contain"
+          className="flex-1 min-h-0 overflow-y-auto"
+          style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
         >
           {children}
         </div>

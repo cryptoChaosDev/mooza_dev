@@ -6,6 +6,7 @@ import {
   Camera, Navigation, Edit3, X, Save, Loader2,
 } from 'lucide-react';
 import { artistAPI, referenceAPI } from '../lib/api';
+import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
 import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
 import SelectSheet from '../components/SelectSheet';
@@ -78,14 +79,11 @@ export default function ArtistPage() {
     },
   });
 
-  // Lock body scroll when modal is open
+  // Lock body scroll when modal is open (iOS-compatible)
   useEffect(() => {
-    if (isEditing) {
-      document.body.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-    }
-    return () => { document.body.style.overflow = ''; };
+    if (isEditing) lockScroll();
+    else unlockScroll();
+    return () => unlockScroll();
   }, [isEditing]);
 
   // Populate form when opening edit
@@ -181,7 +179,7 @@ export default function ArtistPage() {
       >
         <div
           className="absolute bottom-0 left-0 right-0 bg-slate-900 rounded-t-3xl flex flex-col"
-          style={{ maxHeight: '92dvh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          style={{ maxHeight: '92vh', paddingBottom: 'env(safe-area-inset-bottom, 0px)', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Drag handle */}
@@ -206,7 +204,7 @@ export default function ArtistPage() {
           </div>
 
           {/* Scrollable body */}
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
 
             {/* Название */}
             <div>

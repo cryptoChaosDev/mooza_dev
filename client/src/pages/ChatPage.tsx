@@ -1067,8 +1067,8 @@ export default function ChatPage() {
               }
             }}
             placeholder={editingId ? 'Редактировать...' : 'Сообщение...'}
-            className="flex-1 bg-slate-800 border border-slate-700 text-sm text-white rounded-2xl px-4 py-2.5 focus:outline-none focus:border-primary-500/50 placeholder-slate-500 resize-none overflow-y-auto"
-            style={{ height: '40px', maxHeight: '160px' }}
+            className="flex-1 bg-slate-800 border border-slate-700 text-white rounded-2xl px-4 py-2.5 focus:outline-none focus:border-primary-500/50 placeholder-slate-500 resize-none overflow-y-auto"
+            style={{ height: '40px', maxHeight: '160px', fontSize: '16px', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
           />
           <button
             type="submit"
