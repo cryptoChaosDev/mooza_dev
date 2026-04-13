@@ -200,7 +200,7 @@ export default function NotificationBell() {
     setOpen(false);
   }
 
-  const groups = groupNotifications(notifications);
+  const groups = groupNotifications(notifications.filter(n => !n.read));
 
   const panel = open ? createPortal(
     <>
