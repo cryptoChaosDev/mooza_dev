@@ -237,8 +237,17 @@ export default function ChatPage() {
   const isFirstLoad = useRef(true);
   useEffect(() => {
     if (!messages.length) return;
-    messagesEndRef.current?.scrollIntoView({ behavior: isFirstLoad.current ? 'instant' : 'smooth' });
-    isFirstLoad.current = false;
+    if (isFirstLoad.current) {
+      isFirstLoad.current = false;
+      // Double-rAF: wait for browser to finish layout before scrolling
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+        });
+      });
+    } else {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
   }, [messages]);
 
   // ── Socket ─────────────────────────────────────────────────────────────────
