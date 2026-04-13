@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, Camera, FileText, Download, Smile, BadgeCheck, Ban } from 'lucide-react';
+import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, BadgeCheck, Ban } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { getSocket } from '../lib/socket';
@@ -100,7 +100,6 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Swipe gestures — DOM-ref approach (no re-renders during drag)
   const swipeEls = useRef<Record<string, HTMLDivElement | null>>({});
@@ -225,6 +224,14 @@ export default function ChatPage() {
   }, [id]);
 
   useEffect(() => { loadChat(); }, [loadChat]);
+
+  // ── Auto-resize textarea ───────────────────────────────────────────────────
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+  }, [newMessage]);
 
   // ── Auto-scroll ────────────────────────────────────────────────────────────
   const isFirstLoad = useRef(true);
@@ -976,7 +983,6 @@ export default function ChatPage() {
 
       {/* Hidden file inputs */}
       <input ref={fileInputRef} type="file" className="hidden" accept="*/*" onChange={pickFile} />
-      <input ref={cameraInputRef} type="file" className="hidden" accept="image/*" capture="environment" onChange={pickFile} />
 
       {/* Input area */}
       <div className="flex-shrink-0 bg-slate-900 border-t border-slate-800">
@@ -1044,10 +1050,6 @@ export default function ChatPage() {
                 className="p-2 text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0">
                 <Paperclip size={20} />
               </button>
-              <button type="button" onClick={() => cameraInputRef.current?.click()} title="Камера / галерея"
-                className="p-2 text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0">
-                <Camera size={20} />
-              </button>
             </>
           )}
           <button type="button" onClick={() => setShowEmoji(p => !p)}
@@ -1065,8 +1067,8 @@ export default function ChatPage() {
               }
             }}
             placeholder={editingId ? 'Редактировать...' : 'Сообщение...'}
-            rows={1}
-            className="flex-1 bg-slate-800 border border-slate-700 text-sm text-white rounded-2xl px-4 py-2.5 focus:outline-none focus:border-primary-500/50 placeholder-slate-500 resize-none max-h-28 overflow-y-auto"
+            className="flex-1 bg-slate-800 border border-slate-700 text-sm text-white rounded-2xl px-4 py-2.5 focus:outline-none focus:border-primary-500/50 placeholder-slate-500 resize-none overflow-y-auto"
+            style={{ height: '40px', maxHeight: '160px' }}
           />
           <button
             type="submit"
