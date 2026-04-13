@@ -1013,33 +1013,38 @@ export default function ChatPage() {
         )}
 
         {/* Message form */}
-        <form onSubmit={handleSubmit} className="flex items-end gap-2 px-3 py-2">
+        <form onSubmit={handleSubmit} className="flex items-end gap-2 px-2 py-2">
+          {/* Attach — standalone left */}
           {!editingId && (
-            <>
-              <button type="button" onClick={() => fileInputRef.current?.click()} title="Прикрепить файл"
-                className="p-2 text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0">
-                <Paperclip size={20} />
-              </button>
-            </>
+            <button type="button" onClick={() => fileInputRef.current?.click()} title="Прикрепить файл"
+              className="p-2 text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0">
+              <Paperclip size={22} />
+            </button>
           )}
-          <button type="button" onClick={() => setShowEmoji(p => !p)}
-            className={`p-2 transition-colors flex-shrink-0 ${showEmoji ? 'text-primary-400' : 'text-slate-500 hover:text-slate-300'}`}>
-            <Smile size={20} />
-          </button>
-          <textarea
-            ref={inputRef}
-            value={newMessage}
-            onChange={e => setNewMessage(e.target.value)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                e.currentTarget.form?.requestSubmit();
-              }
-            }}
-            placeholder={editingId ? 'Редактировать...' : 'Сообщение...'}
-            className="flex-1 bg-slate-800 border border-slate-700 text-white rounded-2xl px-4 py-2.5 focus:outline-none focus:border-primary-500/50 placeholder-slate-500 resize-none overflow-y-auto"
-            style={{ height: '40px', maxHeight: '160px', fontSize: '16px', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
-          />
+
+          {/* Input bubble — emoji inside right */}
+          <div className="flex-1 flex items-end bg-slate-800 border border-slate-700 rounded-2xl focus-within:border-primary-500/50 transition-colors overflow-hidden">
+            <textarea
+              ref={inputRef}
+              value={newMessage}
+              onChange={e => setNewMessage(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                }
+              }}
+              placeholder={editingId ? 'Редактировать...' : 'Сообщение...'}
+              className="flex-1 bg-transparent text-white px-3 py-2.5 focus:outline-none placeholder-slate-500 resize-none overflow-y-auto"
+              style={{ height: '40px', maxHeight: '160px', fontSize: '16px', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+            />
+            <button type="button" onClick={() => setShowEmoji(p => !p)}
+              className={`p-2.5 transition-colors flex-shrink-0 ${showEmoji ? 'text-primary-400' : 'text-slate-500 hover:text-slate-300'}`}>
+              <Smile size={20} />
+            </button>
+          </div>
+
+          {/* Send */}
           <button
             type="submit"
             disabled={(!newMessage.trim() && !pendingFile) || sending || uploading}
