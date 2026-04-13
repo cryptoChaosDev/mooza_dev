@@ -35,6 +35,18 @@ button {
   touch-action: manipulation;
 }
 
+/* Inherit font from app in all inputs */
+input, textarea, select {
+  font-family: inherit;
+}
+
+/* Prevent iOS Safari auto-zoom on input focus (requires font-size ≥ 16px) */
+@supports (-webkit-touch-callout: none) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
