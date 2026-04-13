@@ -177,8 +177,8 @@ export default function MessagesPage() {
           {loading ? (
             <div className="divide-y divide-slate-800/60">
               {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse">
-                  <div className="w-11 h-11 rounded-full bg-slate-800 flex-shrink-0" />
+                <div key={i} className="flex items-center gap-3 px-4 py-2 animate-pulse">
+                  <div className="w-10 h-10 rounded-full bg-slate-800 flex-shrink-0" />
                   <div className="flex-1 space-y-2">
                     <div className="h-3.5 bg-slate-800 rounded w-2/5" />
                     <div className="h-3 bg-slate-800 rounded w-1/2" />
@@ -192,11 +192,11 @@ export default function MessagesPage() {
                 <button
                   key={conv.id}
                   onClick={() => navigate(`/messages/${conv.id}`)}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors text-left"
+                  className="w-full flex items-center gap-3 px-4 py-2 hover:bg-slate-800/40 transition-colors text-left"
                 >
                   {/* Avatar */}
                   <div className="relative flex-shrink-0">
-                    <AvatarComponent src={conv.avatar} name={conv.name} size={44} />
+                    <AvatarComponent src={conv.avatar} name={conv.name} size={40} />
                     {conv.unreadCount > 0 && (
                       <span className="absolute -top-0.5 -right-0.5 bg-primary-500 text-white text-[10px] min-w-[16px] h-4 px-0.5 rounded-full flex items-center justify-center font-semibold">
                         {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
