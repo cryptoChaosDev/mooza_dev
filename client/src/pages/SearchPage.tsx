@@ -6,7 +6,7 @@ import {
   Crown, BadgeCheck, Ban,
 } from 'lucide-react';
 import { friendshipAPI, userAPI } from '../lib/api';
-import { avatarUrl as getAvatarUrl } from '../lib/avatar';
+import AvatarComponent from '../components/Avatar';
 import { useQuery } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
@@ -67,19 +67,7 @@ function UserCard({ user, currentUserId, sentRequests, friendIds, onMessage, onA
     >
       {/* Avatar area */}
       <div className="relative">
-        {user.avatar ? (
-          <img
-            src={getAvatarUrl(user.avatar)!}
-            alt={`${user.firstName} ${user.lastName}`}
-            className="w-full aspect-square object-cover"
-          />
-        ) : (
-          <div className="w-full aspect-square bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center">
-            <span className="text-white font-bold text-3xl">
-              {user.firstName?.[0]}{user.lastName?.[0]}
-            </span>
-          </div>
-        )}
+        <AvatarComponent src={user.avatar} name={`${user.firstName} ${user.lastName}`} size={200} className="w-full aspect-square !rounded-none" />
         {/* Online dot */}
         {isOnline && (
           <span className="absolute top-2 right-2 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full" />
@@ -178,13 +166,7 @@ function SearchResultRow({ user, sentRequests, friendIds, onMessage, onAddFriend
       className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
     >
       <div className="relative flex-shrink-0">
-        {user.avatar ? (
-          <img src={getAvatarUrl(user.avatar)!} alt="" className="w-11 h-11 rounded-full object-cover" />
-        ) : (
-          <div className="w-11 h-11 bg-gradient-to-br from-primary-500 to-purple-600 rounded-full flex items-center justify-center">
-            <span className="text-white font-bold text-sm">{user.firstName?.[0]}{user.lastName?.[0]}</span>
-          </div>
-        )}
+        <AvatarComponent src={user.avatar} name={`${user.firstName} ${user.lastName}`} size={44} />
         {isOnline && <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full" />}
       </div>
       <div className="flex-1 min-w-0">

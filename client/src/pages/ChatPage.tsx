@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, BadgeCheck, Ban } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
-import { avatarUrl as getAvatarUrl } from '../lib/avatar';
+import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
@@ -567,16 +567,8 @@ export default function ChatPage() {
               className={`flex items-center gap-3 flex-1 min-w-0 ${!conversation.isGroup && otherMember ? 'cursor-pointer' : ''}`}
               onClick={() => { if (!conversation.isGroup && otherMember) navigate(`/profile/${otherMember.id}`); }}
             >
-              {chatAvatar ? (
-                <img
-                  src={getAvatarUrl(chatAvatar)!}
-                  alt={chatName}
-                  className="w-9 h-9 rounded-xl object-cover ring-2 ring-slate-700/50"
-                />
-              ) : conversation.isGroup ? (
-                <div className="w-9 h-9 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center ring-2 ring-slate-700/50">
-                  <Users size={16} className="text-white" />
-                </div>
+              {true ? (
+                <AvatarComponent src={chatAvatar} name={chatName} size={36} className="rounded-xl ring-2 ring-slate-700/50" />
               ) : (
                 <div className="w-9 h-9 bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl flex items-center justify-center ring-2 ring-slate-700/50">
                   <span className="text-white font-bold text-sm">{chatName[0]}</span>
@@ -654,13 +646,7 @@ export default function ChatPage() {
                       const isMe = m.userId === me?.id;
                       return (
                         <div key={m.userId} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-700/30 transition-colors">
-                          {m.user.avatar ? (
-                            <img src={getAvatarUrl(m.user.avatar)!} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" />
-                          ) : (
-                            <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <span className="text-white text-xs font-bold">{m.user.firstName[0]}</span>
-                            </div>
-                          )}
+                          <AvatarComponent src={m.user.avatar} name={`${m.user.firstName} ${m.user.lastName}`} size={32} className="rounded-lg" />
                           <div className="flex-1 min-w-0">
                             <p className="text-white text-sm truncate">{m.user.firstName} {m.user.lastName}{isMe ? ' (Вы)' : ''}</p>
                           </div>
@@ -703,13 +689,7 @@ export default function ChatPage() {
                     <div className="space-y-1">
                       {friends.map(f => (
                         <div key={f.id} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-slate-700/30 transition-colors">
-                          {f.avatar ? (
-                            <img src={getAvatarUrl(f.avatar)!} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" alt="" />
-                          ) : (
-                            <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <span className="text-white text-xs font-bold">{f.firstName[0]}</span>
-                            </div>
-                          )}
+                          <AvatarComponent src={f.avatar} name={`${f.firstName} ${f.lastName}`} size={32} className="rounded-lg" />
                           <p className="text-white text-sm flex-1 truncate">{f.firstName} {f.lastName}</p>
                           {amIAdmin && (
                             <button
@@ -794,17 +774,7 @@ export default function ChatPage() {
                       {conversation.isGroup && !isMine && (
                         <div className="mr-2 flex-shrink-0 self-end w-7">
                           {showSender && senderInGroup ? (
-                            senderInGroup.avatar ? (
-                              <img
-                                src={getAvatarUrl(senderInGroup.avatar)!}
-                                className="w-7 h-7 rounded-lg object-cover"
-                                alt=""
-                              />
-                            ) : (
-                              <div className="w-7 h-7 bg-gradient-to-br from-primary-500 to-purple-600 rounded-lg flex items-center justify-center">
-                                <span className="text-white text-xs font-bold">{senderInGroup.firstName[0]}</span>
-                              </div>
-                            )
+                            <AvatarComponent src={senderInGroup.avatar} name={`${senderInGroup.firstName} ${senderInGroup.lastName}`} size={28} className="rounded-lg" />
                           ) : null}
                         </div>
                       )}

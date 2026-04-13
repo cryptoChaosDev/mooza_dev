@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Search, Plus, Users, X, Check, User, FolderKanban, Crown, BadgeCheck, Ban } from 'lucide-react';
+import { MessageCircle, Search, Plus, X, Check, User, FolderKanban, Crown, BadgeCheck, Ban } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
-import { avatarUrl as getAvatarUrl } from '../lib/avatar';
+import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
 
 interface ConvItem {
@@ -196,21 +196,7 @@ export default function MessagesPage() {
                 >
                   {/* Avatar */}
                   <div className="relative flex-shrink-0">
-                    {conv.avatar ? (
-                      <img
-                        src={getAvatarUrl(conv.avatar)!}
-                        alt={conv.name}
-                        className="w-11 h-11 rounded-full object-cover"
-                      />
-                    ) : conv.isGroup ? (
-                      <div className="w-11 h-11 bg-gradient-to-br from-purple-500 to-pink-600 rounded-full flex items-center justify-center">
-                        <Users size={18} className="text-white" />
-                      </div>
-                    ) : (
-                      <div className="w-11 h-11 bg-gradient-to-br from-primary-500 to-purple-600 rounded-full flex items-center justify-center">
-                        <span className="text-white font-bold text-sm">{conv.name[0]}</span>
-                      </div>
-                    )}
+                    <AvatarComponent src={conv.avatar} name={conv.name} size={44} />
                     {conv.unreadCount > 0 && (
                       <span className="absolute -top-0.5 -right-0.5 bg-primary-500 text-white text-[10px] min-w-[16px] h-4 px-0.5 rounded-full flex items-center justify-center font-semibold">
                         {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
@@ -305,17 +291,7 @@ export default function MessagesPage() {
                         : 'hover:bg-slate-800 border border-transparent'
                     }`}
                   >
-                    {f.avatar ? (
-                      <img
-                        src={getAvatarUrl(f.avatar)!}
-                        alt={`${f.firstName} ${f.lastName}`}
-                        className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-                      />
-                    ) : (
-                      <div className="w-8 h-8 bg-gradient-to-br from-primary-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
-                        <span className="text-white text-xs font-bold">{f.firstName[0]}</span>
-                      </div>
-                    )}
+                    <AvatarComponent src={f.avatar} name={`${f.firstName} ${f.lastName}`} size={32} />
                     <span className="text-white text-sm flex-1">{f.firstName} {f.lastName}</span>
                     {selectedIds.includes(f.id) && <Check size={16} className="text-primary-400 flex-shrink-0" />}
                   </button>

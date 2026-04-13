@@ -8,8 +8,8 @@ import {
 } from 'lucide-react';
 import ShareButton from '../components/ShareButton';
 import { postAPI, channelAPI } from '../lib/api';
-import { avatarUrl } from '../lib/avatar';
 import { useAuthStore } from '../stores/authStore';
+import AvatarComponent from '../components/Avatar';
 import EmojiPicker from '../components/EmojiPicker';
 import AudioPlayer from '../components/AudioPlayer';
 import { ReactionBar, DoubleTapReactWrapper } from '../components/ReactionBar';
@@ -29,15 +29,12 @@ function timeAgo(dateStr: string) {
 }
 
 function Avatar({ user, size = 10 }: { user: { firstName: string; lastName: string; avatar?: string }; size?: number }) {
-  if (user.avatar) {
-    return <img src={avatarUrl(user.avatar)!} alt="" className={`w-${size} h-${size} rounded-full object-cover flex-shrink-0`} />;
-  }
   return (
-    <div className={`w-${size} h-${size} rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center flex-shrink-0`}>
-      <span className="text-white font-bold" style={{ fontSize: size <= 8 ? '0.65rem' : '0.8rem' }}>
-        {user.firstName[0]}{user.lastName[0]}
-      </span>
-    </div>
+    <AvatarComponent
+      src={user.avatar}
+      name={`${user.firstName} ${user.lastName}`}
+      size={size * 4}
+    />
   );
 }
 

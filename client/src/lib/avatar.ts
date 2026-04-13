@@ -7,6 +7,8 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
  */
 export function avatarUrl(avatar: string | null | undefined): string | null {
   if (!avatar) return null;
+  // Telegram CDN URLs always 404 outside Telegram context — treat as missing
+  if (avatar.includes('t.me/')) return null;
   if (avatar.startsWith('http://') || avatar.startsWith('https://')) return avatar;
   return `${API_URL}${avatar}`;
 }
