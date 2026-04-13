@@ -828,7 +828,7 @@ export default function ProfilePage() {
 
         {/* Banner */}
         <div className="relative group">
-          <div className="h-48 overflow-hidden bg-gradient-to-br from-primary-900 via-purple-900/70 to-slate-900">
+          <div className="h-32 overflow-hidden bg-gradient-to-br from-primary-900 via-purple-900/70 to-slate-900">
             {bUrl
               ? <img src={bUrl} alt="" className="w-full h-full object-cover" />
               : <div className="absolute inset-0 opacity-40" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(99,102,241,0.8) 0%, transparent 60%), radial-gradient(circle at 80% 20%, rgba(168,85,247,0.7) 0%, transparent 60%)' }} />
@@ -877,7 +877,7 @@ export default function ProfilePage() {
           </div>
 
           {/* 1. ФИО */}
-          <div className="flex items-center gap-2 flex-wrap mb-1">
+          <div className="flex items-center gap-2 flex-wrap mb-0.5">
             <h1 className="text-2xl font-bold text-white leading-tight">{profile?.firstName} {profile?.lastName}</h1>
             {profile?.isPremium && <span title="Premium"><Crown size={18} className="text-amber-400" /></span>}
             {profile?.isVerified && <span title="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></span>}
@@ -885,7 +885,7 @@ export default function ProfilePage() {
           </div>
 
           {/* 2. Ник + Гео */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-1">
             {profile?.nickname && <span>@{profile.nickname}</span>}
             {(profile?.city || profile?.country) && (
               <span className="flex items-center gap-1">
@@ -895,62 +895,61 @@ export default function ProfilePage() {
             )}
           </div>
 
+          {/* Stats — compact inline */}
+          <div className="flex items-center gap-2 text-xs text-slate-500 mb-3 flex-wrap">
+            <span><span className="font-semibold text-slate-300">{friendCount}</span> друзей</span>
+            {servicesFlat.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{servicesFlat.length}</span> услуг</span></>}
+            {myChannel && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{myChannel._count.subscriptions}</span> подписчиков</span></>}
+          </div>
+
           {/* Bio */}
           {profile?.bio && (
             <p className="text-slate-300 text-sm leading-relaxed mb-4 border-l-2 border-primary-500/40 pl-3">{profile.bio}</p>
           )}
 
-          {/* 3. Профессии */}
+          {/* 3. Специализация */}
           {professionNames.length > 0 && (
-            <div className="flex items-start gap-2 mb-2.5">
-              <Briefcase size={14} className="text-slate-500 mt-0.5 flex-shrink-0" />
-              <p className="text-slate-300 text-sm leading-snug">{professionNames.join(', ')}</p>
-            </div>
-          )}
-
-          {/* 4. Муз. коллективы */}
-          {(profile?.userArtists?.length ?? 0) > 0 && (
-            <div className="flex items-start gap-2 mb-3">
-              <Music size={14} className="text-slate-500 mt-0.5 flex-shrink-0" />
-              <p className="text-slate-300 text-sm flex flex-wrap gap-x-1.5 gap-y-0.5">
-                {profile!.userArtists.filter((ua: any) => ua.artist?.name).map((ua: any, idx: number, arr: any[]) => (
-                  <span key={ua.artistId ?? ua.artist?.id}>
-                    <button
-                      onClick={() => navigate('/artist/' + (ua.artist?.id ?? ua.artistId))}
-                      className="hover:text-primary-400 transition-colors"
-                    >
-                      {ua.artist?.name}
-                    </button>
-                    {idx < arr.length - 1 && <span className="text-slate-500">,</span>}
-                  </span>
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Специализация</span>
+                <div className="flex-1 h-px bg-slate-800" />
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {professionNames.map((name, i) => (
+                  <span key={i} className="px-2.5 py-1 bg-slate-800/80 border border-slate-700/50 text-slate-300 rounded-lg text-xs font-medium">{name}</span>
                 ))}
-              </p>
+              </div>
             </div>
           )}
 
-          {/* Stats */}
-          <div className="flex mt-4 mb-5 rounded-2xl border border-slate-800/60 bg-slate-900/50 overflow-hidden divide-x divide-slate-800/60">
-            <div className="flex-1 py-3 text-center">
-              <div className="text-lg font-bold text-white">{friendCount}</div>
-              <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Друзья</div>
+          {/* 4. Коллективы */}
+          {(profile?.userArtists?.length ?? 0) > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Коллективы</span>
+                <div className="flex-1 h-px bg-slate-800" />
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {profile!.userArtists.filter((ua: any) => ua.artist?.name).map((ua: any) => (
+                  <button
+                    key={ua.artistId ?? ua.artist?.id}
+                    onClick={() => navigate('/artist/' + (ua.artist?.id ?? ua.artistId))}
+                    className="px-2.5 py-1 bg-primary-600/15 border border-primary-500/30 text-primary-400 rounded-lg text-xs font-medium hover:bg-primary-600/25 transition-colors"
+                  >
+                    {ua.artist?.name}
+                  </button>
+                ))}
+              </div>
             </div>
-            {servicesFlat.length > 0 && (
-              <div className="flex-1 py-3 text-center">
-                <div className="text-lg font-bold text-white">{servicesFlat.length}</div>
-                <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Услуги</div>
-              </div>
-            )}
-            {myChannel && (
-              <div className="flex-1 py-3 text-center">
-                <div className="text-lg font-bold text-white">{myChannel._count.subscriptions}</div>
-                <div className="text-[10px] text-slate-500 uppercase tracking-wider mt-0.5">Подписчики</div>
-              </div>
-            )}
-          </div>
+          )}
 
-          {/* 5. Ссылки */}
+          {/* 5. Контакты */}
           {hasSocialLinks && (
-            <div className="mb-5">
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Контакты</span>
+                <div className="flex-1 h-px bg-slate-800" />
+              </div>
               <SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} labeled />
             </div>
           )}
@@ -958,7 +957,10 @@ export default function ProfilePage() {
           {/* 6. Портфолио */}
           {portfolioFiles.length > 0 && (
             <div className="mb-5">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Портфолио</p>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Портфолио</span>
+                <div className="flex-1 h-px bg-slate-800" />
+              </div>
               <div className="space-y-5">
 
                 {/* Фото — карусель */}
@@ -1043,7 +1045,10 @@ export default function ProfilePage() {
         {/* 7. Услуги — горизонтальная карусель */}
         {servicesFlat.length > 0 && (
           <div className="mb-5">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3 px-4">Услуги</p>
+            <div className="flex items-center gap-2 mb-3 px-4">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Услуги</span>
+              <div className="flex-1 h-px bg-slate-800" />
+            </div>
             <div className="flex gap-3 overflow-x-auto pb-3 px-4" style={{ scrollbarWidth: 'none' }}>
               {servicesFlat.map((us: any) => {
                 const tags = [
@@ -1082,7 +1087,10 @@ export default function ProfilePage() {
         {/* 8. Канал */}
         {myChannel && (
           <div className="px-4 mb-5">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Канал</p>
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Канал</span>
+              <div className="flex-1 h-px bg-slate-800" />
+            </div>
             <div className="flex items-center gap-3 p-3.5 rounded-2xl border border-slate-800/60 bg-slate-900/50">
               <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center flex-shrink-0">
                 {myChannel.avatar
