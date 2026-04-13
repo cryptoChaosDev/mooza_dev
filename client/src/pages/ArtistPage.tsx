@@ -78,6 +78,16 @@ export default function ArtistPage() {
     },
   });
 
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (isEditing) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => { document.body.style.overflow = ''; };
+  }, [isEditing]);
+
   // Populate form when opening edit
   useEffect(() => {
     if (isEditing && artist) {
@@ -164,8 +174,20 @@ export default function ArtistPage() {
   // ── Edit modal ───────────────────────────────────────────────────────────────
   function EditModal() {
     return (
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm">
-        <div className="w-full max-w-lg bg-slate-900 rounded-t-2xl sm:rounded-2xl max-h-[90vh] flex flex-col">
+      <div
+        className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
+        onClick={() => setIsEditing(false)}
+      >
+        <div
+          className="absolute bottom-0 left-0 right-0 bg-slate-900 rounded-t-3xl flex flex-col"
+          style={{ maxHeight: '92dvh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Drag handle */}
+          <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
+            <div className="w-10 h-1 rounded-full bg-slate-600" />
+          </div>
+
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
             <button onClick={() => setIsEditing(false)} className="p-2 text-slate-400 hover:text-white">
@@ -183,7 +205,7 @@ export default function ArtistPage() {
           </div>
 
           {/* Scrollable body */}
-          <div className="overflow-y-auto flex-1 px-4 py-4 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-4 space-y-4">
 
             {/* Название */}
             <div>

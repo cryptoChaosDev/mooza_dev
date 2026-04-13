@@ -104,6 +104,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (isEditing) {
+      document.body.style.overflow = 'hidden';
       referenceAPI.getFieldsOfActivity().then(r => setFieldsOfActivity(r.data));
       referenceAPI.getWorkFormats().then(r => setWorkFormats(r.data));
       referenceAPI.getEmploymentTypes().then(r => setEmploymentTypes(r.data));
@@ -113,7 +114,10 @@ export default function ProfilePage() {
       referenceAPI.getGeographies().then(r => setGeographies(r.data));
       referenceAPI.getArtists().then(r => setArtists(r.data));
       referenceAPI.getEmployers().then(r => setEmployers(r.data));
+    } else {
+      document.body.style.overflow = '';
     }
+    return () => { document.body.style.overflow = ''; };
   }, [isEditing]);
 
   const { data: profile, isLoading } = useQuery({
@@ -810,7 +814,7 @@ export default function ProfilePage() {
           </div>
 
           {/* Tab content */}
-          <div className="flex-1 overflow-y-auto pb-24">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pb-6">
             {activeTab === 'basic' && EditBasicTab()}
             {activeTab === 'profession' && EditServicesTab()}
             {activeTab === 'channel' && EditChannelTab()}
