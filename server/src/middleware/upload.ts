@@ -210,3 +210,47 @@ export const uploadChatAttachment = multer({
   fileFilter: chatFileFilter,
   limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
 });
+
+// ── Artist avatar upload ───────────────────────────────────────────────────────
+
+const artistAvatarDir = path.join(process.cwd(), 'uploads', 'artists', 'avatars');
+if (!fs.existsSync(artistAvatarDir)) {
+  fs.mkdirSync(artistAvatarDir, { recursive: true });
+}
+
+const artistAvatarStorage = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, artistAvatarDir); },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `artist-avatar-${uniqueSuffix}${ext}`);
+  },
+});
+
+export const uploadArtistAvatar = multer({
+  storage: artistAvatarStorage,
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB
+});
+
+// ── Artist banner upload ───────────────────────────────────────────────────────
+
+const artistBannerDir = path.join(process.cwd(), 'uploads', 'artists', 'banners');
+if (!fs.existsSync(artistBannerDir)) {
+  fs.mkdirSync(artistBannerDir, { recursive: true });
+}
+
+const artistBannerStorage = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, artistBannerDir); },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `artist-banner-${uniqueSuffix}${ext}`);
+  },
+});
+
+export const uploadArtistBanner = multer({
+  storage: artistBannerStorage,
+  fileFilter,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+});

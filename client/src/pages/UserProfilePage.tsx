@@ -220,7 +220,19 @@ export default function UserProfilePage() {
           {(user.userArtists?.length ?? 0) > 0 && (
             <div className="flex items-start gap-2 mb-3">
               <Music size={14} className="text-slate-500 mt-0.5 flex-shrink-0" />
-              <p className="text-slate-300 text-sm">{user.userArtists.map((ua: any) => ua.artist?.name).filter(Boolean).join(', ')}</p>
+              <p className="text-slate-300 text-sm flex flex-wrap gap-x-1.5 gap-y-0.5">
+                {user.userArtists.filter((ua: any) => ua.artist?.name).map((ua: any, idx: number, arr: any[]) => (
+                  <span key={ua.artistId ?? ua.artist?.id}>
+                    <button
+                      onClick={() => navigate('/artist/' + (ua.artist?.id ?? ua.artistId))}
+                      className="hover:text-primary-400 transition-colors"
+                    >
+                      {ua.artist?.name}
+                    </button>
+                    {idx < arr.length - 1 && <span className="text-slate-500">,</span>}
+                  </span>
+                ))}
+              </p>
             </div>
           )}
 

@@ -71,6 +71,7 @@ model Genre {
   sortOrder Int    @default(0)
 
   userServices UserService[]
+  artists      ArtistGenre[]
 
   createdAt DateTime @default(now())
 }
@@ -186,13 +187,48 @@ model ProfessionFeature {
   createdAt DateTime @default(now())
 }
 
-model Artist {
-  id   String @id @default(uuid())
-  name String @unique
+enum ArtistType {
+  SOLO
+  GROUP
+  COVER_GROUP
+}
 
+model Artist {
+  id          String      @id @default(uuid())
+  name        String
+  type        ArtistType?
+  city        String?
+  tourReady   String?
+  description String?
+  socialLinks Json?
+  bandLink    String?
+  avatar      String?
+  banner      String?
+  listeners   Int         @default(0)
+
+  genres      ArtistGenre[]
   userArtists UserArtist[]
+  followers   ArtistFollower[]
 
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ArtistGenre {
+  artistId String
+  genreId  String
+  artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  genre    Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
+  @@id([artistId, genreId])
+}
+
+model ArtistFollower {
+  userId    String
+  artistId  String
+  user      User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artist    Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@id([userId, artistId])
 }
 
 model Employer {
@@ -259,6 +295,7 @@ model User {
 
   // Artist / Group (many-to-many)
   userArtists UserArtist[]
+  artistFollows ArtistFollower[]
 
   portfolioFiles PortfolioFile[]
 

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userAPI, referenceAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
@@ -56,6 +57,7 @@ const emptyEntry = (): UserServiceEntry => ({
 });
 
 export default function ProfilePage() {
+  const navigate = useNavigate();
   const { logout } = useAuthStore();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -905,7 +907,19 @@ export default function ProfilePage() {
           {(profile?.userArtists?.length ?? 0) > 0 && (
             <div className="flex items-start gap-2 mb-3">
               <Music size={14} className="text-slate-500 mt-0.5 flex-shrink-0" />
-              <p className="text-slate-300 text-sm">{profile!.userArtists.map((ua: any) => ua.artist?.name).filter(Boolean).join(', ')}</p>
+              <p className="text-slate-300 text-sm flex flex-wrap gap-x-1.5 gap-y-0.5">
+                {profile!.userArtists.filter((ua: any) => ua.artist?.name).map((ua: any, idx: number, arr: any[]) => (
+                  <span key={ua.artistId ?? ua.artist?.id}>
+                    <button
+                      onClick={() => navigate('/artist/' + (ua.artist?.id ?? ua.artistId))}
+                      className="hover:text-primary-400 transition-colors"
+                    >
+                      {ua.artist?.name}
+                    </button>
+                    {idx < arr.length - 1 && <span className="text-slate-500">,</span>}
+                  </span>
+                ))}
+              </p>
             </div>
           )}
 

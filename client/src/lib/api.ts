@@ -226,6 +226,23 @@ export const messageAPI = {
     api.delete(`/messages/conversations/${conversationId}/members/${memberId}`),
 };
 
+// Artist API
+export const artistAPI = {
+  getArtist: (id: string) => api.get(`/artists/${id}`),
+  createArtist: (data: any) => api.post('/artists', data),
+  updateArtist: (id: string, data: any) => api.put(`/artists/${id}`, data),
+  follow: (id: string) => api.post(`/artists/${id}/follow`),
+  unfollow: (id: string) => api.delete(`/artists/${id}/follow`),
+  uploadAvatar: (id: string, file: File) => {
+    const fd = new FormData(); fd.append('avatar', file);
+    return api.post(`/artists/${id}/avatar`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  uploadBanner: (id: string, file: File) => {
+    const fd = new FormData(); fd.append('banner', file);
+    return api.post(`/artists/${id}/banner`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+};
+
 // Admin API
 const adminBase = '/admin';
 const crudFor = (path: string) => ({
