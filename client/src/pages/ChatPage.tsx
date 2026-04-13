@@ -546,7 +546,8 @@ export default function ChatPage() {
   return (
     <div
       ref={chatContainerRef}
-      className="fixed inset-x-0 top-16 bottom-16 z-10 lg:static lg:h-screen bg-slate-950 flex flex-col"
+      className="fixed inset-x-0 top-16 z-10 lg:static lg:h-screen bg-slate-950 flex flex-col"
+      style={{ bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' }}
       onTouchStart={onBackTouchStart}
       onTouchMove={onBackTouchMove}
       onTouchEnd={onBackTouchEnd}
