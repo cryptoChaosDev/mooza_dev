@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { adminAPI, api } from '../lib/api';
 import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2 } from 'lucide-react';
-import { avatarUrl } from '../lib/avatar';
+import AvatarComponent from '../components/Avatar';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -1158,10 +1158,7 @@ function UsersTab() {
             <div key={u.id} className="flex items-center gap-3 bg-slate-900 border border-slate-800 rounded-xl px-4 py-3">
               {/* Avatar */}
               <div className="relative flex-shrink-0">
-                {u.avatar
-                  ? <img src={avatarUrl(u.avatar)!} className="w-10 h-10 rounded-full object-cover" alt="" />
-                  : <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-sm font-bold text-slate-300">{u.firstName[0]}{u.lastName[0]}</div>
-                }
+                <AvatarComponent src={u.avatar} name={`${u.firstName} ${u.lastName}`} size={40} />
                 {u.isBlocked && (
                   <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
                     <Ban size={10} className="text-white" />

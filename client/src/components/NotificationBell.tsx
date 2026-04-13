@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Bell, MessageCircle, UserPlus, UserCheck, MessageSquare, X, CheckCheck } from 'lucide-react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useBadgeStore } from '../stores/badgeStore';
-import { avatarUrl as getAvatarUrl } from '../lib/avatar';
+import AvatarComponent from './Avatar';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -165,17 +165,12 @@ export default function NotificationBell() {
                   }`}
                 >
                   <div className="relative shrink-0 mt-0.5">
-                    {notif.actor?.avatar ? (
-                      <img
-                        src={getAvatarUrl(notif.actor.avatar)!}
-                        className="w-9 h-9 rounded-xl object-cover"
-                        alt=""
-                      />
-                    ) : (
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold">
-                        {notif.actor ? notif.actor.firstName[0] : '?'}
-                      </div>
-                    )}
+                    <AvatarComponent
+                      src={notif.actor?.avatar ?? null}
+                      name={notif.actor ? `${notif.actor.firstName} ${notif.actor.lastName}` : '?'}
+                      size={36}
+                      className="rounded-xl"
+                    />
                     <span className="absolute -bottom-1 -right-1 bg-slate-900 rounded-full p-0.5">
                       {typeIcon(notif.type)}
                     </span>

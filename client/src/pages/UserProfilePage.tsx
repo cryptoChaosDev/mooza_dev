@@ -3,12 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, Briefcase, Music, MessageCircle, Loader2,
-  Radio, Crown, BadgeCheck, Ban, X,
+  Crown, BadgeCheck, Ban, X,
   Headphones, Film, Image, FileText,
 } from 'lucide-react';
 import { userAPI, channelAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { SocialIconRow } from '../components/SocialLinks';
+import AvatarComponent from '../components/Avatar';
 import ShareButton from '../components/ShareButton';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -158,13 +159,8 @@ export default function UserProfilePage() {
           {/* Avatar + action buttons */}
           <div className="flex items-end justify-between -mt-14 mb-5">
             <div className="relative z-10 flex-shrink-0">
-              <div className="w-28 h-28 rounded-full overflow-hidden ring-4 ring-slate-950 shadow-2xl bg-gradient-to-br from-primary-500 to-purple-600">
-                {user.avatar
-                  ? <img src={getAvatarUrl(user.avatar)!} alt={`${user.firstName} ${user.lastName}`} className="w-full h-full object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center">
-                      <span className="text-3xl font-bold text-white">{user.firstName?.[0]}{user.lastName?.[0]}</span>
-                    </div>
-                }
+              <div className="rounded-full ring-4 ring-slate-950 shadow-2xl">
+                <AvatarComponent src={user.avatar} name={`${user.firstName} ${user.lastName}`} size={112} />
               </div>
             </div>
             <div className="flex items-center gap-2 mb-1">
@@ -393,11 +389,8 @@ export default function UserProfilePage() {
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Канал</p>
             <div className="p-3.5 rounded-2xl border border-slate-800/60 bg-slate-900/50">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center flex-shrink-0">
-                  {user.channel.avatar
-                    ? <img src={getAvatarUrl(user.channel.avatar)!} alt="" className="w-full h-full object-cover" />
-                    : <Radio size={20} className="text-slate-500" />
-                  }
+                <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0">
+                  <AvatarComponent src={user.channel.avatar} name={user.channel.name} size={48} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate">{user.channel.name}</p>
