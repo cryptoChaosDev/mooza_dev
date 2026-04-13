@@ -174,8 +174,9 @@ export default function ArtistPage() {
   // ── Edit modal ───────────────────────────────────────────────────────────────
   function EditModal() {
     return (
+      <>
       <div
-        className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
+        className="fixed inset-0 z-50 bg-black/70"
         onClick={() => setIsEditing(false)}
       >
         <div
@@ -318,32 +319,33 @@ export default function ArtistPage() {
             </div>
           </div>
         </div>
-
-        {/* Sheets */}
-        <SelectSheet
-          isOpen={typeSheetOpen}
-          onClose={() => setTypeSheetOpen(false)}
-          title="Тип коллектива"
-          options={TYPE_OPTIONS}
-          selectedIds={form.type}
-          onSelect={(v) => { set('type', v as string); setTypeSheetOpen(false); }}
-          mode="single"
-          searchable={false}
-          height="auto"
-        />
-
-        <SelectSheet
-          isOpen={genreSheetOpen}
-          onClose={() => setGenreSheetOpen(false)}
-          title="Жанры"
-          options={genreOptions}
-          selectedIds={form.genreIds}
-          onSelect={(v) => { set('genreIds', v as string[]); }}
-          mode="multiple"
-          showConfirm
-          height="full"
-        />
       </div>
+
+      {/* Sheets rendered outside overlay so fixed positioning works correctly */}
+      <SelectSheet
+        isOpen={typeSheetOpen}
+        onClose={() => setTypeSheetOpen(false)}
+        title="Тип коллектива"
+        options={TYPE_OPTIONS}
+        selectedIds={form.type}
+        onSelect={(v) => { set('type', v as string); setTypeSheetOpen(false); }}
+        mode="single"
+        searchable={false}
+        height="auto"
+      />
+
+      <SelectSheet
+        isOpen={genreSheetOpen}
+        onClose={() => setGenreSheetOpen(false)}
+        title="Жанры"
+        options={genreOptions}
+        selectedIds={form.genreIds}
+        onSelect={(v) => { set('genreIds', v as string[]); }}
+        mode="multiple"
+        showConfirm
+        height="full"
+      />
+      </>
     );
   }
 
