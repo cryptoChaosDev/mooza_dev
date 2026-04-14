@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronDown } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronDown, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { authAPI, userAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import TelegramLoginButton from '../components/TelegramLoginButton';
@@ -155,76 +155,78 @@ export default function LoginPage() {
 
             {/* Documents + Agreement */}
             {!agreed ? (
-              <div className="space-y-2">
-                <p className="text-xs text-slate-500 uppercase tracking-wide font-medium">Перед входом ознакомьтесь с документами</p>
+              <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 overflow-hidden">
+                {/* Header */}
+                <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/20">
+                  <ShieldAlert size={15} className="text-amber-400 flex-shrink-0" />
+                  <span className="text-xs font-semibold text-amber-400 uppercase tracking-wide">Обязательно для входа</span>
+                </div>
 
-                <DocSection title="Пользовательское соглашение">
-                  <p className="font-medium text-slate-300">1. Предмет соглашения</p>
-                  <p>Moooza — профессиональная социальная сеть для участников музыкальной индустрии. Используя платформу, вы принимаете условия настоящего соглашения.</p>
+                <div className="p-3 space-y-2">
+                  <p className="text-xs text-slate-400">Ознакомьтесь с документами и подтвердите согласие</p>
 
-                  <p className="font-medium text-slate-300">2. Регистрация и аккаунт</p>
-                  <p>Вы обязаны указывать достоверные данные, хранить данные аккаунта в тайне и не передавать доступ третьим лицам. Допускается один аккаунт на человека. Минимальный возраст — 14 лет.</p>
+                  <DocSection title="Пользовательское соглашение">
+                    <p className="font-medium text-slate-300">1. Предмет соглашения</p>
+                    <p>Moooza — профессиональная социальная сеть для участников музыкальной индустрии. Используя платформу, вы принимаете условия настоящего соглашения.</p>
 
-                  <p className="font-medium text-slate-300">3. Правила поведения</p>
-                  <p>Запрещено: размещать незаконный контент, нарушать авторские права, осуществлять спам, выдавать себя за других лиц, использовать автоматические инструменты для сбора данных.</p>
+                    <p className="font-medium text-slate-300">2. Регистрация и аккаунт</p>
+                    <p>Вы обязаны указывать достоверные данные, хранить данные аккаунта в тайне и не передавать доступ третьим лицам. Допускается один аккаунт на человека. Минимальный возраст — 14 лет.</p>
 
-                  <p className="font-medium text-slate-300">4. Контент пользователя</p>
-                  <p>Вы сохраняете права на свой контент и предоставляете платформе право на его хранение и отображение в рамках её работы. Вы несёте ответственность за размещаемые материалы.</p>
+                    <p className="font-medium text-slate-300">3. Правила поведения</p>
+                    <p>Запрещено: размещать незаконный контент, нарушать авторские права, осуществлять спам, выдавать себя за других лиц, использовать автоматические инструменты для сбора данных.</p>
 
-                  <p className="font-medium text-slate-300">5. Ограничение ответственности</p>
-                  <p>Платформа предоставляется «как есть». Мы не несём ответственности за действия пользователей и технические сбои, не зависящие от нас.</p>
+                    <p className="font-medium text-slate-300">4. Контент пользователя</p>
+                    <p>Вы сохраняете права на свой контент и предоставляете платформе право на его хранение и отображение в рамках её работы. Вы несёте ответственность за размещаемые материалы.</p>
 
-                  <p className="font-medium text-slate-300">6. Контакты</p>
-                  <p>По вопросам: support@moooza.ru. Полная версия: <a href="/terms" target="_blank" className="text-primary-400 underline">moooza.ru/terms</a></p>
-                </DocSection>
+                    <p className="font-medium text-slate-300">5. Ограничение ответственности</p>
+                    <p>Платформа предоставляется «как есть». Мы не несём ответственности за действия пользователей и технические сбои, не зависящие от нас.</p>
 
-                <DocSection title="Политика обработки персональных данных">
-                  <p className="font-medium text-slate-300">1. Общие положения</p>
-                  <p>Политика разработана в соответствии с ФЗ № 152-ФЗ «О персональных данных». Используя платформу, вы даёте согласие на обработку данных в соответствии с настоящей Политикой.</p>
+                    <p className="font-medium text-slate-300">6. Контакты</p>
+                    <p>По вопросам: support@moooza.ru. Полная версия: <a href="/terms" target="_blank" className="text-primary-400 underline">moooza.ru/terms</a></p>
+                  </DocSection>
 
-                  <p className="font-medium text-slate-300">2. Состав данных</p>
-                  <p>Мы обрабатываем: имя, email, телефон, город, фото профиля, информацию о профессии и деятельности, переписку, публикации, а также техническую информацию (IP, браузер, cookies).</p>
+                  <DocSection title="Политика обработки персональных данных">
+                    <p className="font-medium text-slate-300">1. Общие положения</p>
+                    <p>Политика разработана в соответствии с ФЗ № 152-ФЗ «О персональных данных». Используя платформу, вы даёте согласие на обработку данных в соответствии с настоящей Политикой.</p>
 
-                  <p className="font-medium text-slate-300">3. Цели обработки</p>
-                  <p>Обеспечение работы платформы, идентификация, коммуникация между пользователями, улучшение сервиса, соблюдение законодательства РФ.</p>
+                    <p className="font-medium text-slate-300">2. Состав данных</p>
+                    <p>Мы обрабатываем: имя, email, телефон, город, фото профиля, информацию о профессии и деятельности, переписку, публикации, а также техническую информацию (IP, браузер, cookies).</p>
 
-                  <p className="font-medium text-slate-300">4. Хранение и защита</p>
-                  <p>Данные хранятся на серверах в России. Мы применяем шифрование и ограничение доступа. Срок хранения — весь период действия аккаунта + 3 года после удаления.</p>
+                    <p className="font-medium text-slate-300">3. Цели обработки</p>
+                    <p>Обеспечение работы платформы, идентификация, коммуникация между пользователями, улучшение сервиса, соблюдение законодательства РФ.</p>
 
-                  <p className="font-medium text-slate-300">5. Ваши права</p>
-                  <p>Вы вправе: запросить доступ к данным, исправить их, потребовать удаления, отозвать согласие. Запросы направляйте на support@moooza.ru.</p>
+                    <p className="font-medium text-slate-300">4. Хранение и защита</p>
+                    <p>Данные хранятся на серверах в России. Мы применяем шифрование и ограничение доступа. Срок хранения — весь период действия аккаунта + 3 года после удаления.</p>
 
-                  <p className="font-medium text-slate-300">6. Контакты</p>
-                  <p>Оператор персональных данных: администрация Moooza. Полная версия: <a href="/privacy" target="_blank" className="text-primary-400 underline">moooza.ru/privacy</a></p>
-                </DocSection>
+                    <p className="font-medium text-slate-300">5. Ваши права</p>
+                    <p>Вы вправе: запросить доступ к данным, исправить их, потребовать удаления, отозвать согласие. Запросы направляйте на support@moooza.ru.</p>
 
-                <div className="flex items-start gap-3 pt-1">
+                    <p className="font-medium text-slate-300">6. Контакты</p>
+                    <p>Оператор персональных данных: администрация Moooza. Полная версия: <a href="/privacy" target="_blank" className="text-primary-400 underline">moooza.ru/privacy</a></p>
+                  </DocSection>
+
+                  {/* Confirm button */}
                   <button
                     type="button"
                     onClick={() => { setAgreed(true); if (error) setError(''); }}
-                    className="flex-shrink-0 mt-0.5"
-                    aria-label="Принять соглашения"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 mt-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-sm font-medium transition-colors"
                   >
-                    <div className="w-5 h-5 rounded border-2 border-slate-600 bg-slate-800 hover:border-slate-500 transition-colors" />
+                    <div className="w-4 h-4 rounded border-2 border-amber-400/70 bg-transparent flex items-center justify-center" />
+                    Ознакомился(ась) и принимаю условия
                   </button>
-                  <span className="text-sm text-slate-400 leading-snug">
-                    Я ознакомился(ась) с документами выше и принимаю их условия
-                  </span>
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-3 py-2">
-                <div className="w-5 h-5 rounded border-2 bg-primary-500 border-primary-500 flex items-center justify-center flex-shrink-0">
-                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                    <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </div>
-                <span className="text-sm text-slate-400">
-                  Соглашения приняты ·{' '}
-                  <button type="button" onClick={() => setAgreed(false)} className="text-slate-500 hover:text-slate-400 underline underline-offset-2 text-xs">
-                    читать снова
-                  </button>
-                </span>
+              <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-green-500/10 border border-green-500/25">
+                <CheckCircle2 size={17} className="text-green-400 flex-shrink-0" />
+                <span className="text-sm text-green-300 flex-1">Соглашения приняты</span>
+                <button
+                  type="button"
+                  onClick={() => setAgreed(false)}
+                  className="text-slate-500 hover:text-slate-400 underline underline-offset-2 text-xs transition-colors"
+                >
+                  читать снова
+                </button>
               </div>
             )}
 
