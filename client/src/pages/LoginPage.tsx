@@ -31,7 +31,9 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [agreed, setAgreed] = useState(() => localStorage.getItem('termsAgreed') === '1');
+  // true if user already agreed in a previous session — skip the block entirely
+  const returningUser = localStorage.getItem('termsAgreed') === '1';
+  const [agreed, setAgreed] = useState(returningUser);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -153,13 +155,14 @@ export default function LoginPage() {
               </div>
             </div>
 
-            {/* Documents + Agreement */}
-            {!agreed ? (
-              <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 overflow-hidden">
+            {/* Documents + Agreement — hidden for returning users who already agreed */}
+            {!returningUser && (!agreed ? (
+              <div className="rounded-xl border-2 border-amber-500 bg-amber-500/8 overflow-hidden shadow-[0_0_0_4px_rgba(245,158,11,0.08)]">
                 {/* Header */}
-                <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/20">
+                <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-500/15 border-b border-amber-500/30">
                   <ShieldAlert size={15} className="text-amber-400 flex-shrink-0" />
                   <span className="text-xs font-semibold text-amber-400 uppercase tracking-wide">Обязательно для входа</span>
+                  <span className="text-red-400 font-bold text-sm leading-none ml-0.5">*</span>
                 </div>
 
                 <div className="p-3 space-y-2">
@@ -228,7 +231,7 @@ export default function LoginPage() {
                   читать снова
                 </button>
               </div>
-            )}
+            ))}
 
             {/* Submit Button */}
             <button
