@@ -222,6 +222,7 @@ export default function LoginPage() {
                   >
                     <div className="w-4 h-4 rounded border-2 border-amber-400/70 bg-transparent flex items-center justify-center" />
                     Ознакомился(ась) и принимаю условия
+                    <span style={{ color: '#f87171', fontWeight: 700, fontSize: '1rem', lineHeight: 1 }}>*</span>
                   </button>
                 </div>
               </div>
