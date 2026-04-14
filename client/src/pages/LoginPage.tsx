@@ -159,16 +159,16 @@ export default function LoginPage() {
             {!returningUser && (!agreed ? (
               <div
                 className="rounded-xl overflow-hidden"
-                style={{ border: '2px solid #f59e0b', boxShadow: '0 0 0 4px rgba(245,158,11,0.12)' }}
+                style={{ border: '1px solid rgba(245,158,11,0.35)', borderLeft: '3px solid rgba(245,158,11,0.7)' }}
               >
                 {/* Header */}
                 <div
                   className="flex items-center gap-2 px-3 py-2.5 border-b"
-                  style={{ backgroundColor: 'rgba(245,158,11,0.18)', borderColor: 'rgba(245,158,11,0.35)' }}
+                  style={{ backgroundColor: 'rgba(245,158,11,0.07)', borderColor: 'rgba(245,158,11,0.2)' }}
                 >
-                  <ShieldAlert size={15} className="text-amber-400 flex-shrink-0" />
-                  <span className="text-xs font-semibold text-amber-400 uppercase tracking-wide">Обязательно для входа</span>
-                  <span className="font-bold text-base leading-none ml-0.5" style={{ color: '#f87171' }}>*</span>
+                  <ShieldAlert size={14} className="text-amber-500 flex-shrink-0" />
+                  <span className="text-xs font-medium text-amber-500 uppercase tracking-wide">Обязательно для входа</span>
+                  <span className="font-bold text-sm leading-none ml-0.5" style={{ color: '#f87171' }}>*</span>
                 </div>
 
                 <div className="p-3 space-y-2">
