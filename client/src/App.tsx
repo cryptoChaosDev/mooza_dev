@@ -19,6 +19,7 @@ const MessagesPage       = lazy(() => import('./pages/MessagesPage'));
 const ChatPage           = lazy(() => import('./pages/ChatPage'));
 const AdminPage          = lazy(() => import('./pages/AdminPage'));
 const ArtistPage         = lazy(() => import('./pages/ArtistPage'));
+const ArtistCreatePage   = lazy(() => import('./pages/ArtistCreatePage'));
 const PrivacyPolicyPage  = lazy(() => import('./pages/PrivacyPolicyPage'));
 const TermsPage          = lazy(() => import('./pages/TermsPage'));
 
@@ -102,6 +103,7 @@ function AppRoutes() {
             <Route path="/"                 element={<FeedPage />} />
             <Route path="/profile"          element={<ProfilePage />} />
             <Route path="/profile/:userId"  element={<UserProfilePage />} />
+            <Route path="/artist/create"     element={<ArtistCreatePage />} />
             <Route path="/artist/:id"       element={<ArtistPage />} />
             <Route path="/search"           element={<SearchPage />} />
             <Route path="/friends"          element={<FriendsPage />} />

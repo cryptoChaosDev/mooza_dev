@@ -233,6 +233,8 @@ export const artistAPI = {
   updateArtist: (id: string, data: any) => api.put(`/artists/${id}`, data),
   follow: (id: string) => api.post(`/artists/${id}/follow`),
   unfollow: (id: string) => api.delete(`/artists/${id}/follow`),
+  submitForModeration: (id: string) => api.patch(`/artists/${id}/submit`),
+  submitProof: (id: string, proofUrl: string) => api.patch(`/artists/${id}/submit-proof`, { proofUrl }),
   uploadAvatar: (id: string, file: File) => {
     const fd = new FormData(); fd.append('avatar', file);
     return api.post(`/artists/${id}/avatar`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
@@ -276,6 +278,13 @@ export const adminAPI = {
   geographies: crudFor('geographies'),
   priceRanges: crudFor('price-ranges'),
   artists: crudFor('artists'),
+  artistModeration: {
+    pending: () => api.get(`${adminBase}/artists/pending`),
+    verification: () => api.get(`${adminBase}/artists/verification`),
+    approve: (id: string) => api.patch(`${adminBase}/artists/${id}/approve`),
+    reject: (id: string, reason?: string) => api.patch(`${adminBase}/artists/${id}/reject`, { reason }),
+    verify: (id: string) => api.patch(`${adminBase}/artists/${id}/verify`),
+  },
   employers: crudFor('employers'),
   customFilters: {
     list: () => api.get(`${adminBase}/custom-filters`),

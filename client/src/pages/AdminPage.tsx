@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { adminAPI, api } from '../lib/api';
-import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2, ShieldCheck, Clock } from 'lucide-react';
 import AvatarComponent from '../components/Avatar';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -1221,6 +1221,189 @@ function UsersTab() {
   );
 }
 
+// ─── Artist Moderation Tab ──────────────────────────────────────────────────
+
+function ArtistModerationTab() {
+  const qc = useQueryClient();
+  const [rejectId, setRejectId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+
+  const { data: pending = [], isLoading: loadingPending } = useQuery<any[]>({
+    queryKey: ['admin-artists-pending'],
+    queryFn: () => adminAPI.artistModeration.pending().then((r: any) => r.data),
+  });
+
+  const { data: verification = [], isLoading: loadingVerification } = useQuery<any[]>({
+    queryKey: ['admin-artists-verification'],
+    queryFn: () => adminAPI.artistModeration.verification().then((r: any) => r.data),
+  });
+
+  const approveMut = useMutation({
+    mutationFn: (id: string) => adminAPI.artistModeration.approve(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-artists-pending'] }); },
+  });
+
+  const rejectMut = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => adminAPI.artistModeration.reject(id, reason),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-artists-pending'] }); setRejectId(null); setRejectReason(''); },
+  });
+
+  const verifyMut = useMutation({
+    mutationFn: (id: string) => adminAPI.artistModeration.verify(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-artists-verification'] }); },
+  });
+
+  return (
+    <div className="space-y-6">
+      {/* Pending moderation */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Clock size={15} className="text-amber-400" />
+          <h2 className="text-sm font-semibold text-white">Ожидают модерации</h2>
+          {pending.length > 0 && (
+            <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[11px] rounded-full font-semibold">{pending.length}</span>
+          )}
+        </div>
+
+        {loadingPending ? (
+          <div className="text-sm text-slate-500 py-4 text-center">Загрузка...</div>
+        ) : pending.length === 0 ? (
+          <div className="text-sm text-slate-500 py-4 text-center bg-slate-900 rounded-xl border border-slate-800">Очередь пуста</div>
+        ) : (
+          <div className="space-y-3">
+            {pending.map((artist: any) => (
+              <div key={artist.id} className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+                <div className="flex items-start gap-3 mb-3">
+                  <AvatarComponent src={artist.avatar} name={artist.name} size={40} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-white text-sm">{artist.name}</p>
+                    {artist.city && <p className="text-xs text-slate-400">{artist.city}</p>}
+                    {artist.submittedByUser && (
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Отправил: {artist.submittedByUser.firstName} {artist.submittedByUser.lastName}
+                      </p>
+                    )}
+                    {artist.description && (
+                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">{artist.description}</p>
+                    )}
+                    {(artist.genres ?? []).length > 0 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {artist.genres.map((g: any) => (
+                          <span key={g.id} className="px-2 py-0.5 bg-slate-800 text-slate-400 text-[10px] rounded-md">{g.name}</span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {rejectId === artist.id ? (
+                  <div className="flex gap-2 mt-2">
+                    <input
+                      value={rejectReason}
+                      onChange={e => setRejectReason(e.target.value)}
+                      placeholder="Причина отказа..."
+                      className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500"
+                    />
+                    <button
+                      onClick={() => rejectMut.mutate({ id: artist.id, reason: rejectReason })}
+                      disabled={rejectMut.isPending}
+                      className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {rejectMut.isPending ? <Loader2 size={13} className="animate-spin" /> : 'Отклонить'}
+                    </button>
+                    <button onClick={() => setRejectId(null)} className="px-2 py-1.5 text-slate-400 hover:text-white text-xs">
+                      Отмена
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2 mt-2">
+                    <button
+                      onClick={() => approveMut.mutate(artist.id)}
+                      disabled={approveMut.isPending}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-600/30 text-xs rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {approveMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                      Одобрить
+                    </button>
+                    <button
+                      onClick={() => { setRejectId(artist.id); setRejectReason(''); }}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 border border-red-600/30 text-xs rounded-lg transition-colors"
+                    >
+                      <X size={12} />
+                      Отклонить
+                    </button>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Verification requests */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <ShieldCheck size={15} className="text-sky-400" />
+          <h2 className="text-sm font-semibold text-white">Запросы верификации</h2>
+          {verification.length > 0 && (
+            <span className="px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-[11px] rounded-full font-semibold">{verification.length}</span>
+          )}
+        </div>
+
+        {loadingVerification ? (
+          <div className="text-sm text-slate-500 py-4 text-center">Загрузка...</div>
+        ) : verification.length === 0 ? (
+          <div className="text-sm text-slate-500 py-4 text-center bg-slate-900 rounded-xl border border-slate-800">Нет запросов</div>
+        ) : (
+          <div className="space-y-3">
+            {verification.map((artist: any) => (
+              <div key={artist.id} className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <AvatarComponent src={artist.avatar} name={artist.name} size={40} />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-white text-sm">{artist.name}</p>
+                    {artist.submittedByUser && (
+                      <p className="text-xs text-slate-500">
+                        {artist.submittedByUser.firstName} {artist.submittedByUser.lastName}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mb-3">
+                  <p className="text-[10px] text-slate-500 mb-1">Код верификации</p>
+                  <code className="text-sm font-mono font-bold text-primary-400">{artist.verificationCode}</code>
+                </div>
+
+                <div className="mb-3">
+                  <p className="text-[10px] text-slate-500 mb-1">Ссылка на публикацию</p>
+                  <a
+                    href={artist.verificationProofUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-sky-400 hover:underline break-all"
+                  >
+                    {artist.verificationProofUrl}
+                  </a>
+                </div>
+
+                <button
+                  onClick={() => verifyMut.mutate(artist.id)}
+                  disabled={verifyMut.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600/20 hover:bg-sky-600/30 text-sky-400 border border-sky-600/30 text-xs rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {verifyMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />}
+                  Верифицировать
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const TABS = [
   { id: 'structure',   label: 'Структура' },
   { id: 'spheres',     label: 'Сферы' },
@@ -1230,6 +1413,7 @@ const TABS = [
   { id: 'filters',     label: 'Фильтры' },
   { id: 'orgs',        label: 'Организации' },
   { id: 'users',       label: 'Пользователи' },
+  { id: 'moderation',  label: 'Модерация' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -1326,6 +1510,8 @@ export default function AdminPage() {
         )}
 
         {tab === 'users' && <UsersTab />}
+
+        {tab === 'moderation' && <ArtistModerationTab />}
       </div>
     </div>
   );

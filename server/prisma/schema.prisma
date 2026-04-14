@@ -193,8 +193,16 @@ enum ArtistType {
   COVER_GROUP
 }
 
+enum ArtistStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  VERIFIED
+}
+
 model Artist {
-  id          String      @id @default(uuid())
+  id          String       @id @default(uuid())
   name        String
   type        ArtistType?
   city        String?
@@ -204,7 +212,15 @@ model Artist {
   bandLink    String?
   avatar      String?
   banner      String?
-  listeners   Int         @default(0)
+  listeners   Int          @default(0)
+
+  status               ArtistStatus @default(DRAFT)
+  submittedById        String?
+  submittedByUser      User?        @relation("ArtistSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  rejectionReason      String?
+  verificationCode     String?      @unique
+  verificationProofUrl String?
+  moderatedAt          DateTime?
 
   genres      ArtistGenre[]
   userArtists UserArtist[]
@@ -212,6 +228,9 @@ model Artist {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([status])
+  @@index([submittedById])
 }
 
 model ArtistGenre {
@@ -296,6 +315,7 @@ model User {
   // Artist / Group (many-to-many)
   userArtists UserArtist[]
   artistFollows ArtistFollower[]
+  submittedArtists Artist[] @relation("ArtistSubmitter")
 
   portfolioFiles PortfolioFile[]
 

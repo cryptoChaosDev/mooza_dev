@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import crypto from 'crypto';
 
 const router = Router();
 
@@ -407,6 +408,82 @@ router.put('/artists/:id', async (req, res) => {
 router.delete('/artists/:id', async (req, res) => {
   try { await prisma.artist.delete({ where: { id: req.params.id } }); res.json({ ok: true }); }
   catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+// ─── Artist Moderation ────────────────────────────────────────────────────
+// GET /admin/artists/pending — list artists awaiting moderation
+router.get('/artists/pending', authenticate, requireAdmin, async (_req, res) => {
+  try {
+    const artists = await prisma.artist.findMany({
+      where: { status: 'PENDING' },
+      include: {
+        submittedByUser: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+        genres: { include: { genre: true } },
+        _count: { select: { followers: true } },
+      },
+      orderBy: { updatedAt: 'asc' },
+    });
+    res.json(artists.map(a => ({ ...a, genres: a.genres.map(ag => ag.genre), followersCount: a._count.followers })));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /admin/artists/verification — list approved artists with proof URL pending verification
+router.get('/artists/verification', authenticate, requireAdmin, async (_req, res) => {
+  try {
+    const artists = await prisma.artist.findMany({
+      where: { status: 'APPROVED', verificationProofUrl: { not: null } },
+      include: {
+        submittedByUser: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+        genres: { include: { genre: true } },
+      },
+      orderBy: { updatedAt: 'asc' },
+    });
+    res.json(artists.map(a => ({ ...a, genres: a.genres.map(ag => ag.genre) })));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH /admin/artists/:id/approve — approve artist card + generate verification code
+router.patch('/artists/:id/approve', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const code = 'MOOOZA-' + crypto.randomBytes(3).toString('hex').toUpperCase();
+    const artist = await prisma.artist.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'APPROVED',
+        verificationCode: code,
+        rejectionReason: null,
+        moderatedAt: new Date(),
+      },
+    });
+    res.json(artist);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+// PATCH /admin/artists/:id/reject — reject with reason
+router.patch('/artists/:id/reject', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { reason } = req.body as { reason?: string };
+    const artist = await prisma.artist.update({
+      where: { id: req.params.id },
+      data: {
+        status: 'REJECTED',
+        rejectionReason: reason || null,
+        moderatedAt: new Date(),
+      },
+    });
+    res.json(artist);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+// PATCH /admin/artists/:id/verify — mark artist as VERIFIED after checking proof
+router.patch('/artists/:id/verify', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const artist = await prisma.artist.update({
+      where: { id: req.params.id },
+      data: { status: 'VERIFIED', moderatedAt: new Date() },
+    });
+    res.json(artist);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
 // ─── Employer ──────────────────────────────────────────────────────────────

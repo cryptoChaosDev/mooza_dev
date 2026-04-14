@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, ExternalLink,
   Camera, Navigation, Edit3, X, Save, Loader2,
+  ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
 } from 'lucide-react';
 import { artistAPI, referenceAPI } from '../lib/api';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
@@ -56,6 +57,7 @@ export default function ArtistPage() {
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
   const [isEditing, setIsEditing] = useState(false);
+  const [proofUrl, setProofUrl] = useState('');
   const [form, setForm] = useState<EditForm>({
     name: '', type: '', city: '', tourReady: '', description: '',
     bandLink: '', listeners: '', genreIds: [], socialLinks: {},
@@ -122,6 +124,16 @@ export default function ArtistPage() {
   const uploadBannerMut = useMutation({
     mutationFn: (file: File) => artistAPI.uploadBanner(id!, file),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+  });
+
+  const submitMut = useMutation({
+    mutationFn: () => artistAPI.submitForModeration(id!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+  });
+
+  const submitProofMut = useMutation({
+    mutationFn: () => artistAPI.submitProof(id!, proofUrl),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); setProofUrl(''); },
   });
 
   const saveMut = useMutation({
@@ -456,12 +468,27 @@ export default function ArtistPage() {
       {/* ── Content ── */}
       <div className="px-4">
 
-        {/* Name + type badge */}
+        {/* Name + type badge + status */}
         <div className="flex items-center gap-2 flex-wrap mb-0.5">
           <h1 className="text-2xl font-bold text-white leading-tight">{artist.name}</h1>
           {artist.type && TYPE_LABELS[artist.type] && (
             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-primary-500/20 text-primary-300 border border-primary-500/30">
               {TYPE_LABELS[artist.type]}
+            </span>
+          )}
+          {artist.status === 'VERIFIED' && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30">
+              <ShieldCheck size={11} /> Верифицирован
+            </span>
+          )}
+          {artist.status === 'PENDING' && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">
+              <Clock size={11} /> На модерации
+            </span>
+          )}
+          {artist.status === 'APPROVED' && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-sky-500/20 text-sky-400 border border-sky-500/30">
+              <CheckCircle2 size={11} /> Одобрен
             </span>
           )}
         </div>
@@ -490,6 +517,76 @@ export default function ArtistPage() {
           {(artist.members?.length ?? 0) > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{artist.members.length}</span> участников</span></>}
           {(artist.listeners ?? 0) > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{Number(artist.listeners).toLocaleString('ru-RU')}</span> слушателей</span></>}
         </div>
+
+        {/* Moderation panel for members */}
+        {isMemberOfArtist && (
+          <>
+            {(artist.status === 'DRAFT' || artist.status === 'REJECTED') && (
+              <div className={`mb-4 p-3 rounded-xl border ${artist.status === 'REJECTED' ? 'bg-red-500/5 border-red-500/20' : 'bg-slate-800/50 border-slate-700'}`}>
+                {artist.status === 'REJECTED' && artist.rejectionReason && (
+                  <p className="text-xs text-red-400 mb-2 flex items-start gap-1.5">
+                    <ShieldX size={13} className="flex-shrink-0 mt-0.5" />
+                    <span>Отклонено: {artist.rejectionReason}</span>
+                  </p>
+                )}
+                <p className="text-xs text-slate-400 mb-2">
+                  {artist.status === 'DRAFT'
+                    ? 'Карточка не опубликована. Отправьте на проверку, чтобы она появилась в каталоге.'
+                    : 'Карточка была отклонена. Исправьте данные и отправьте снова.'}
+                </p>
+                <button
+                  onClick={() => submitMut.mutate()}
+                  disabled={submitMut.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+                >
+                  {submitMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                  Отправить на модерацию
+                </button>
+              </div>
+            )}
+
+            {artist.status === 'APPROVED' && (
+              <div className="mb-4 p-3 rounded-xl bg-sky-500/5 border border-sky-500/20">
+                <p className="text-xs text-sky-300 font-medium mb-1">Карточка одобрена — верифицируйте коллектив</p>
+                <p className="text-xs text-slate-400 mb-2">
+                  Опубликуйте этот код в официальных соцсетях коллектива и пришлите ссылку на публикацию:
+                </p>
+                <div className="flex items-center gap-2 mb-3 p-2 bg-slate-900 rounded-lg">
+                  <code className="text-sm font-mono font-bold text-primary-400 tracking-wider flex-1">
+                    {artist.verificationCode}
+                  </code>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(artist.verificationCode)}
+                    className="text-slate-500 hover:text-white text-xs px-2 py-0.5 bg-slate-800 rounded transition-colors"
+                  >
+                    Копировать
+                  </button>
+                </div>
+                {artist.verificationProofUrl ? (
+                  <p className="text-xs text-slate-400">
+                    Ссылка отправлена на проверку. Ожидайте подтверждения администратора.
+                  </p>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      value={proofUrl}
+                      onChange={e => setProofUrl(e.target.value)}
+                      placeholder="Ссылка на публикацию..."
+                      className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
+                    />
+                    <button
+                      onClick={() => submitProofMut.mutate()}
+                      disabled={!proofUrl.trim() || submitProofMut.isPending}
+                      className="px-3 py-1.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+                    >
+                      {submitProofMut.isPending ? <Loader2 size={13} className="animate-spin" /> : 'Отправить'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        )}
 
         {/* Description */}
         {artist.description && (

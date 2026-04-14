@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { uploadArtistAvatar, uploadArtistBanner } from '../middleware/upload';
 import { Prisma, ArtistType } from '@prisma/client';
+import crypto from 'crypto';
 
 const router = Router();
 
@@ -322,6 +323,75 @@ router.delete('/:id/follow', authenticate, async (req: AuthRequest, res: Respons
     return res.json({ followed: false });
   } catch (err) {
     console.error('[artists] DELETE /:id/follow', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── PATCH /api/artists/:id/submit ────────────────────────────────────────────
+// Member submits artist card for admin moderation
+router.patch('/:id/submit', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId!;
+
+    if (!(await isMember(id, userId))) {
+      return res.status(403).json({ error: 'Нет прав' });
+    }
+
+    const artist = await prisma.artist.findUnique({ where: { id } });
+    if (!artist) return res.status(404).json({ error: 'Артист не найден' });
+
+    if (!['DRAFT', 'REJECTED'].includes(artist.status)) {
+      return res.status(400).json({ error: 'Карточка уже отправлена на модерацию' });
+    }
+
+    const updated = await prisma.artist.update({
+      where: { id },
+      data: { status: 'PENDING', submittedById: userId, rejectionReason: null },
+    });
+
+    return res.json(updated);
+  } catch (err) {
+    console.error('[artists] PATCH /:id/submit', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── PATCH /api/artists/:id/submit-proof ─────────────────────────────────────
+// Member submits verification proof URL (link to post with the code)
+router.patch('/:id/submit-proof', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId!;
+    const { proofUrl } = req.body as { proofUrl: string };
+
+    if (!(await isMember(id, userId))) {
+      return res.status(403).json({ error: 'Нет прав' });
+    }
+
+    if (!proofUrl || !proofUrl.trim()) {
+      return res.status(400).json({ error: 'proofUrl обязателен' });
+    }
+
+    const artist = await prisma.artist.findUnique({ where: { id } });
+    if (!artist) return res.status(404).json({ error: 'Артист не найден' });
+
+    if (artist.status !== 'APPROVED') {
+      return res.status(400).json({ error: 'Карточка должна быть одобрена перед верификацией' });
+    }
+
+    if (!artist.verificationCode) {
+      return res.status(400).json({ error: 'Код верификации ещё не выдан' });
+    }
+
+    const updated = await prisma.artist.update({
+      where: { id },
+      data: { verificationProofUrl: proofUrl.trim() },
+    });
+
+    return res.json(updated);
+  } catch (err) {
+    console.error('[artists] PATCH /:id/submit-proof', err);
     return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });
