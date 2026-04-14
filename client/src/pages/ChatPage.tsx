@@ -98,8 +98,22 @@ export default function ChatPage() {
   const EMOJIS = ['😊','😂','❤️','👍','👎','🔥','🎵','🎸','🎹','🎤','🙏','😍','🤔','😅','🥹','💯','✨','🚀','👏','🎉'];
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesScrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [showScrollDown, setShowScrollDown] = useState(false);
+
+  const handleMessagesScroll = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return;
+    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setShowScrollDown(distFromBottom > 200);
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
 
   // Swipe gestures — DOM-ref approach (no re-renders during drag)
   const swipeEls = useRef<Record<string, HTMLDivElement | null>>({});
@@ -733,7 +747,13 @@ export default function ChatPage() {
       })()}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto" style={{ touchAction: 'pan-y' }} onClick={() => inputRef.current?.blur()}>
+      <div
+        ref={messagesScrollRef}
+        className="flex-1 overflow-y-auto relative"
+        style={{ touchAction: 'pan-y' }}
+        onScroll={handleMessagesScroll}
+        onClick={() => inputRef.current?.blur()}
+      >
         <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
           {grouped.length === 0 ? (
             <div className="text-center py-10">
@@ -929,6 +949,19 @@ export default function ChatPage() {
           <div ref={messagesEndRef} />
         </div>
       </div>
+
+      {/* Scroll-to-bottom button */}
+      {showScrollDown && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-24 right-4 z-20 w-10 h-10 rounded-full bg-slate-800 border border-slate-700 shadow-lg flex items-center justify-center text-slate-300 hover:bg-slate-700 hover:text-white transition-all"
+          style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}
+        >
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="4 7 9 12 14 7" />
+          </svg>
+        </button>
+      )}
 
       {/* Reaction picker overlay */}
       {reactionPickerMsgId && (
