@@ -157,12 +157,18 @@ export default function LoginPage() {
 
             {/* Documents + Agreement — hidden for returning users who already agreed */}
             {!returningUser && (!agreed ? (
-              <div className="rounded-xl border-2 border-amber-400 overflow-hidden ring-4 ring-amber-400/10">
+              <div
+                className="rounded-xl overflow-hidden"
+                style={{ border: '2px solid #f59e0b', boxShadow: '0 0 0 4px rgba(245,158,11,0.12)' }}
+              >
                 {/* Header */}
-                <div className="flex items-center gap-2 px-3 py-2.5 bg-amber-400/20 border-b border-amber-400/30">
+                <div
+                  className="flex items-center gap-2 px-3 py-2.5 border-b"
+                  style={{ backgroundColor: 'rgba(245,158,11,0.18)', borderColor: 'rgba(245,158,11,0.35)' }}
+                >
                   <ShieldAlert size={15} className="text-amber-400 flex-shrink-0" />
                   <span className="text-xs font-semibold text-amber-400 uppercase tracking-wide">Обязательно для входа</span>
-                  <span className="text-red-400 font-bold text-base leading-none ml-0.5">*</span>
+                  <span className="font-bold text-base leading-none ml-0.5" style={{ color: '#f87171' }}>*</span>
                 </div>
 
                 <div className="p-3 space-y-2">
