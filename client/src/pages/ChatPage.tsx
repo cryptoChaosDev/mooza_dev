@@ -954,7 +954,7 @@ export default function ChatPage() {
       {showScrollDown && (
         <button
           onClick={scrollToBottom}
-          className="absolute bottom-24 right-4 z-20 w-10 h-10 rounded-full bg-slate-800 border border-slate-700 shadow-lg flex items-center justify-center text-slate-300 hover:bg-slate-700 hover:text-white transition-all"
+          className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-slate-800 border border-slate-700 shadow-lg flex items-center justify-center text-slate-300 hover:bg-slate-700 hover:text-white transition-all"
           style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}
         >
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
