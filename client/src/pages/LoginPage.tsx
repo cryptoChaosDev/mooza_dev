@@ -1,10 +1,10 @@
-import { useState, useCallback } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronDown, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { authAPI, userAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
-import TelegramLoginButton from '../components/TelegramLoginButton';
-import VkLoginButton from '../components/VkLoginButton';
+// import TelegramLoginButton from '../components/TelegramLoginButton';
+// import VkLoginButton from '../components/VkLoginButton';
 
 function DocSection({ title, children }: { title: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -39,25 +39,9 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { setAuth, setUser } = useAuthStore();
 
-  const handleTelegramAuth = useCallback(async (user: any, token: string) => {
-    setAuth(user, token);
-    try { await userAPI.agreeToTerms(); } catch {}
-    window.location.href = '/profile';
-  }, [setAuth]);
-
-  const handleTelegramError = useCallback((msg: string) => {
-    setError(msg);
-  }, []);
-
-  const handleVkAuth = useCallback(async (user: any, token: string) => {
-    setAuth(user, token);
-    try { await userAPI.agreeToTerms(); } catch {}
-    window.location.href = '/profile';
-  }, [setAuth]);
-
-  const handleVkError = useCallback((msg: string) => {
-    setError(msg);
-  }, []);
+  // Telegram/VK handlers — kept for when buttons are re-enabled
+  // const handleTelegramAuth = useCallback(async (user: any, token: string) => { ... }, [setAuth]);
+  // const handleVkAuth = useCallback(async (user: any, token: string) => { ... }, [setAuth]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -245,7 +229,8 @@ export default function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-6">
+          {/* Telegram/VK login — temporarily hidden */}
+          {/* <div className="mt-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex-1 h-px bg-slate-700" />
               <span className="text-xs text-slate-500 uppercase tracking-wide">или</span>
@@ -255,7 +240,7 @@ export default function LoginPage() {
               <TelegramLoginButton onAuth={handleTelegramAuth} onError={handleTelegramError} disabled={loading || !agreed} />
               <VkLoginButton onAuth={handleVkAuth} onError={handleVkError} disabled={loading || !agreed} />
             </div>
-          </div>
+          </div> */}
 
           <p className="mt-4 text-center text-slate-400">
             Нет аккаунта?{' '}
