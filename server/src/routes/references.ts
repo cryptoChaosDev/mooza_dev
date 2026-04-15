@@ -480,7 +480,7 @@ router.get('/artists', async (req, res) => {
     const where: any = {};
     if (search) where.name = { contains: search as string, mode: 'insensitive' };
     const artists = await prisma.artist.findMany({ where, orderBy: { name: 'asc' }, take: 50 });
-    res.json(artists);
+    res.json(artists.map(a => ({ ...a, listeners: a.listeners !== undefined && a.listeners !== null ? Number(a.listeners) : a.listeners })));
   } catch (error) {
     console.error('Get artists error:', error);
     res.status(500).json({ error: 'Failed to get artists' });
