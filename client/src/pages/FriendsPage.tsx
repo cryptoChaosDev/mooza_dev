@@ -1,10 +1,11 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Users, Check, X, MessageCircle, UserX, Clock, Pin, PinOff, Search, Wifi, Crown, BadgeCheck, Ban, Link2, CheckCheck } from 'lucide-react';
+import { Users, Check, X, MessageCircle, UserX, Clock, Pin, PinOff, Search, Wifi, Crown, BadgeCheck, Ban, Link2 } from 'lucide-react';
 import { friendshipAPI, connectionAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { usePresenceStore } from '../stores/presenceStore';
+import ConnectionViewModal from '../components/ConnectionViewModal';
 
 type Tab = 'friends' | 'requests' | 'sent' | 'connections';
 
@@ -22,6 +23,7 @@ export default function FriendsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<Tab>('friends');
+  const [viewConn, setViewConn] = useState<any>(null);
   const [search, setSearch] = useState('');
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [pinnedIds, setPinnedIds] = useState<string[]>(getPinned);
@@ -430,44 +432,26 @@ export default function FriendsPage() {
                   </div>
                   <div className="divide-y divide-slate-800/60">
                     {connRequests.map((c: any) => (
-                      <div key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors">
-                        <button onClick={() => navigate(`/profile/${c.partner.id}`)} className="flex-shrink-0">
-                          <Avatar user={c.partner} size={11} />
-                        </button>
-                        <button onClick={() => navigate(`/profile/${c.partner.id}`)} className="flex-1 min-w-0 text-left">
-                          <p className="text-sm font-semibold text-white truncate">
-                            {c.partner.firstName} {c.partner.lastName}
-                          </p>
+                      <div
+                        key={c.id}
+                        onClick={() => setViewConn(c)}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
+                      >
+                        <div className="flex-shrink-0"><Avatar user={c.partner} size={11} /></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</p>
                           {c.services?.length > 0 && (
-                            <p className="text-xs text-slate-500 truncate mt-0.5">
-                              {c.services.map((s: any) => s.name).join(', ')}
-                            </p>
+                            <p className="text-xs text-slate-500 truncate mt-0.5">{c.services.map((s: any) => s.name).join(', ')}</p>
                           )}
-                        </button>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <button
-                            onClick={() => acceptConnMut.mutate(c.id)}
-                            disabled={acceptConnMut.isPending}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-primary-500/15 hover:bg-primary-500/25 text-primary-400 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
-                          >
-                            <CheckCheck size={13} /> Принять
-                          </button>
-                          <button
-                            onClick={() => rejectConnMut.mutate(c.id)}
-                            disabled={rejectConnMut.isPending}
-                            className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-50"
-                            title="Отклонить"
-                          >
-                            <X size={15} />
-                          </button>
                         </div>
+                        <span className="text-xs text-primary-400 font-medium flex-shrink-0">Просмотр →</span>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Pending break requests (where partner wants to break) */}
+              {/* Pending break requests */}
               {breakRequests.length > 0 && (
                 <div>
                   <div className="px-4 py-2 bg-slate-900/80 border-b border-slate-800">
@@ -475,23 +459,17 @@ export default function FriendsPage() {
                   </div>
                   <div className="divide-y divide-slate-800/60">
                     {breakRequests.map((c: any) => (
-                      <div key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors">
-                        <button onClick={() => navigate(`/profile/${c.partner.id}`)} className="flex-shrink-0">
-                          <Avatar user={c.partner} size={11} />
-                        </button>
-                        <button onClick={() => navigate(`/profile/${c.partner.id}`)} className="flex-1 min-w-0 text-left">
-                          <p className="text-sm font-semibold text-white truncate">
-                            {c.partner.firstName} {c.partner.lastName}
-                          </p>
+                      <div
+                        key={c.id}
+                        onClick={() => setViewConn(c)}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
+                      >
+                        <div className="flex-shrink-0"><Avatar user={c.partner} size={11} /></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</p>
                           <p className="text-xs text-red-400/80 mt-0.5">Запрашивает разрыв связи</p>
-                        </button>
-                        <button
-                          onClick={() => confirmBreakMut.mutate(c.id)}
-                          disabled={confirmBreakMut.isPending}
-                          className="flex items-center gap-1 px-3 py-1.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30 rounded-xl text-xs font-medium transition-all disabled:opacity-50 flex-shrink-0"
-                        >
-                          <X size={12} /> Разорвать
-                        </button>
+                        </div>
+                        <span className="text-xs text-red-400 font-medium flex-shrink-0">Просмотр →</span>
                       </div>
                     ))}
                   </div>
@@ -506,27 +484,19 @@ export default function FriendsPage() {
                   </div>
                   <div className="divide-y divide-slate-800/60">
                     {connSent.map((c: any) => (
-                      <div key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors">
-                        <button onClick={() => navigate(`/profile/${c.partner.id}`)} className="flex-shrink-0">
-                          <Avatar user={c.partner} size={11} />
-                        </button>
-                        <button onClick={() => navigate(`/profile/${c.partner.id}`)} className="flex-1 min-w-0 text-left">
-                          <p className="text-sm font-semibold text-white truncate">
-                            {c.partner.firstName} {c.partner.lastName}
-                          </p>
+                      <div
+                        key={c.id}
+                        onClick={() => setViewConn(c)}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
+                      >
+                        <div className="flex-shrink-0"><Avatar user={c.partner} size={11} /></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</p>
                           {c.services?.length > 0 && (
-                            <p className="text-xs text-slate-500 truncate mt-0.5">
-                              {c.services.map((s: any) => s.name).join(', ')}
-                            </p>
+                            <p className="text-xs text-slate-500 truncate mt-0.5">{c.services.map((s: any) => s.name).join(', ')}</p>
                           )}
-                        </button>
-                        <button
-                          onClick={() => cancelConnMut.mutate(c.id)}
-                          disabled={cancelConnMut.isPending}
-                          className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-red-500/10 text-slate-400 hover:text-red-400 rounded-xl text-xs font-medium border border-slate-700 hover:border-red-500/30 transition-all disabled:opacity-50 flex-shrink-0"
-                        >
-                          <X size={12} /> Отменить
-                        </button>
+                        </div>
+                        <span className="text-xs text-slate-500 flex-shrink-0">Ожидает →</span>
                       </div>
                     ))}
                   </div>
@@ -543,24 +513,18 @@ export default function FriendsPage() {
                     {connections.map((c: any) => (
                       <div
                         key={c.id}
-                        onClick={() => navigate(`/profile/${c.partner.id}`)}
+                        onClick={() => setViewConn(c)}
                         className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
                       >
-                        <div className="flex-shrink-0">
-                          <Avatar user={c.partner} size={11} />
-                        </div>
+                        <div className="flex-shrink-0"><Avatar user={c.partner} size={11} /></div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-sm font-semibold text-white truncate">
-                              {c.partner.firstName} {c.partner.lastName}
-                            </span>
+                            <span className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</span>
                             {c.partner.isPremium && <Crown size={13} className="text-amber-400 flex-shrink-0" />}
                             {c.partner.isVerified && <BadgeCheck size={13} className="text-sky-400 flex-shrink-0" />}
                           </div>
                           {c.services?.length > 0 && (
-                            <p className="text-xs text-primary-400/80 truncate mt-0.5">
-                              {c.services.map((s: any) => s.name).join(', ')}
-                            </p>
+                            <p className="text-xs text-primary-400/80 truncate mt-0.5">{c.services.map((s: any) => s.name).join(', ')}</p>
                           )}
                         </div>
                         <Link2 size={14} className="text-primary-400/60 flex-shrink-0" />
@@ -585,5 +549,9 @@ export default function FriendsPage() {
         </div>
       </div>
     </div>
+
+    {viewConn && (
+      <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />
+    )}
   );
 }

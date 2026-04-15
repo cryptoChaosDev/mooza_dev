@@ -162,6 +162,26 @@ router.get('/break-requests', authenticate, async (req: AuthRequest, res: Respon
   }
 });
 
+// ── GET /api/connections/user/:userId ─────────────────────────────────────────
+// Get accepted connections for any user (public)
+router.get('/user/:userId', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const targetId = req.params.userId;
+    const conns = await prisma.connection.findMany({
+      where: {
+        status: 'ACCEPTED',
+        OR: [{ requesterId: targetId }, { receiverId: targetId }],
+      },
+      include: CONN_INCLUDE,
+      orderBy: { updatedAt: 'desc' },
+    });
+    return res.json(conns.map(c => formatConnection(c, targetId)));
+  } catch (err) {
+    console.error('[connections] GET /user/:userId', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 // ── GET /api/connections/with/:userId ─────────────────────────────────────────
 // Get connection status with a specific user
 router.get('/with/:userId', authenticate, async (req: AuthRequest, res: Response) => {

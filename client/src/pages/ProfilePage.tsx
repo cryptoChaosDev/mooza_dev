@@ -1,15 +1,16 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { userAPI, referenceAPI } from '../lib/api';
+import { userAPI, referenceAPI, connectionAPI } from '../lib/api';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, DollarSign, Calendar, Film, Image,
   Headphones, Edit3, User, Plus, ChevronDown, ChevronLeft, ChevronRight,
-  Building2, FileText, Trash2, Radio, Loader2, Crown, BadgeCheck, Ban,
+  Building2, FileText, Trash2, Radio, Loader2, Crown, BadgeCheck, Ban, Link2,
 } from 'lucide-react';
+import ConnectionViewModal from '../components/ConnectionViewModal';
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
 import { channelAPI } from '../lib/api';
@@ -197,6 +198,13 @@ export default function ProfilePage() {
   const [channelForm, setChannelForm] = useState({ name: '', description: '' });
   const [channelEditing, setChannelEditing] = useState(false);
   const channelAvatarRef = useRef<HTMLInputElement>(null);
+
+  const [viewConn, setViewConn] = useState<any>(null);
+
+  const { data: myConnections = [] } = useQuery({
+    queryKey: ['connections-accepted'],
+    queryFn: async () => { const { data } = await connectionAPI.getAccepted(); return data; },
+  });
 
   const { data: myChannel, refetch: refetchChannel } = useQuery({
     queryKey: ['my-channel'],
@@ -899,6 +907,7 @@ export default function ProfilePage() {
           <div className="flex items-center gap-2 text-xs text-slate-500 mb-3 flex-wrap">
             <span><span className="font-semibold text-slate-300">{friendCount}</span> друзей</span>
             {servicesFlat.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{servicesFlat.length}</span> услуг</span></>}
+            {myConnections.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{myConnections.length}</span> связей</span></>}
             {myChannel && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{myChannel._count.subscriptions}</span> подписчиков</span></>}
           </div>
 
@@ -947,7 +956,35 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          {/* 5. Контакты */}
+          {/* 5. Связи */}
+          {myConnections.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Связи</span>
+                <div className="flex-1 h-px bg-slate-800" />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {myConnections.map((c: any) => (
+                  <button
+                    key={c.id}
+                    onClick={() => setViewConn(c)}
+                    className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 rounded-xl transition-colors"
+                  >
+                    <div className="w-6 h-6 rounded-full overflow-hidden bg-slate-700 flex-shrink-0">
+                      {c.partner.avatar
+                        ? <img src={`${API_URL}${c.partner.avatar}`} alt="" className="w-full h-full object-cover" />
+                        : <div className="w-full h-full bg-primary-600/30 flex items-center justify-center text-[10px] text-primary-300 font-bold">{c.partner.firstName?.[0]}</div>
+                      }
+                    </div>
+                    <span className="text-xs text-slate-300 font-medium">{c.partner.firstName} {c.partner.lastName}</span>
+                    <Link2 size={10} className="text-primary-400/60" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 6. Контакты */}
           {hasSocialLinks && (
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-2">
@@ -1122,5 +1159,9 @@ export default function ProfilePage() {
 
       </div>
     </div>
+
+    {viewConn && (
+      <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />
+    )}
   );
 }

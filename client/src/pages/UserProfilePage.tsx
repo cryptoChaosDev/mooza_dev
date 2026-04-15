@@ -13,6 +13,7 @@ import { SocialIconRow } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
 import ShareButton from '../components/ShareButton';
 import ConnectionRequestModal from '../components/ConnectionRequestModal';
+import ConnectionViewModal from '../components/ConnectionViewModal';
 import { useAuthStore } from '../stores/authStore';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -49,6 +50,14 @@ export default function UserProfilePage() {
     },
     enabled: !!channelId,
   });
+
+  const { data: userConnections = [] } = useQuery({
+    queryKey: ['user-connections', userId],
+    queryFn: async () => { const { data } = await connectionAPI.getUserConnections(userId!); return data; },
+    enabled: !!userId,
+  });
+
+  const [viewConn, setViewConn] = useState<any>(null);
 
   const { data: conn, refetch: refetchConn } = useQuery({
     queryKey: ['connection-with', userId],
@@ -158,6 +167,10 @@ export default function UserProfilePage() {
 
   return (
     <div className="min-h-screen bg-slate-950">
+
+      {viewConn && (
+        <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />
+      )}
 
       {showConnModal && (
         <ConnectionRequestModal
@@ -340,6 +353,7 @@ export default function UserProfilePage() {
             <span><span className="font-semibold text-slate-300">{friendCount}</span> друзей</span>
             {servicesFlat.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{servicesFlat.length}</span> услуг</span></>}
             {user.channel && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{channelInfo?._count?.subscriptions ?? user.channel._count?.subscriptions ?? 0}</span> подписчиков</span></>}
+            {userConnections.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{userConnections.length}</span> связей</span></>}
             {conn?.status === 'ACCEPTED' && conn.services.length > 0 && (
               <><span className="text-slate-700">·</span>
               <span className="flex items-center gap-1"><Link2 size={10} className="text-primary-400" /><span className="text-primary-400 font-medium">{conn.services.map((s: any) => s.name).join(', ')}</span></span></>
@@ -387,7 +401,35 @@ export default function UserProfilePage() {
             </div>
           )}
 
-          {/* 5. Контакты */}
+          {/* 5. Связи */}
+          {userConnections.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Связи</span>
+                <div className="flex-1 h-px bg-slate-800" />
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {userConnections.map((c: any) => (
+                  <button
+                    key={c.id}
+                    onClick={() => navigate(`/profile/${c.partner.id}`)}
+                    className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 rounded-xl transition-colors"
+                  >
+                    <div className="w-6 h-6 rounded-full overflow-hidden bg-slate-700 flex-shrink-0">
+                      {c.partner.avatar
+                        ? <img src={`${API_URL}${c.partner.avatar}`} alt="" className="w-full h-full object-cover" />
+                        : <div className="w-full h-full bg-primary-600/30 flex items-center justify-center text-[10px] text-primary-300 font-bold">{c.partner.firstName?.[0]}</div>
+                      }
+                    </div>
+                    <span className="text-xs text-slate-300 font-medium">{c.partner.firstName} {c.partner.lastName}</span>
+                    <Link2 size={10} className="text-primary-400/60" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 6. Контакты */}
           {hasSocialLinks && (
             <div className="mb-4">
               <div className="flex items-center gap-2 mb-2">

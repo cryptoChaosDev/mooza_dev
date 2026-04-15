@@ -254,6 +254,7 @@ export const connectionAPI = {
   getSent: () => api.get('/connections/sent'),
   getBreakRequests: () => api.get('/connections/break-requests'),
   getWith: (userId: string) => api.get(`/connections/with/${userId}`),
+  getUserConnections: (userId: string) => api.get(`/connections/user/${userId}`),
   accept: (id: string) => api.patch(`/connections/${id}/accept`),
   reject: (id: string) => api.patch(`/connections/${id}/reject`),
   cancel: (id: string) => api.delete(`/connections/${id}`),
