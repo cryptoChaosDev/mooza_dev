@@ -7,6 +7,14 @@ import crypto from 'crypto';
 
 const router = Router();
 
+// BigInt → Number for JSON serialization (listeners field)
+function serializeArtist(artist: any) {
+  return {
+    ...artist,
+    listeners: artist.listeners !== undefined ? Number(artist.listeners) : undefined,
+  };
+}
+
 // Helper: check if user is a member of the artist
 async function isMember(artistId: string, userId: string): Promise<boolean> {
   return !!(await prisma.userArtist.findFirst({ where: { artistId, userId } }));
@@ -42,7 +50,7 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
 
     const { genres, _count, followers, userArtists, ...rest } = artist;
 
-    return res.json({
+    return res.json(serializeArtist({
       ...rest,
       genres: genres.map((ag) => ag.genre),
       followersCount: _count.followers,
@@ -54,7 +62,7 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
         avatar: ua.user.avatar,
         nickname: ua.user.nickname,
       })),
-    });
+    }));
   } catch (err) {
     console.error('[artists] GET /:id', err);
     return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
@@ -121,7 +129,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       },
     });
 
-    return res.status(201).json({
+    return res.status(201).json(serializeArtist({
       ...artist,
       genres: artist.genres.map((ag) => ag.genre),
       followersCount: artist._count.followers,
@@ -133,7 +141,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         avatar: ua.user.avatar,
         nickname: ua.user.nickname,
       })),
-    });
+    }));
   } catch (err) {
     console.error('[artists] POST /', err);
     return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
@@ -206,7 +214,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       },
     });
 
-    return res.json({
+    return res.json(serializeArtist({
       ...artist,
       genres: artist.genres.map((ag) => ag.genre),
       followersCount: artist._count.followers,
@@ -218,7 +226,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
         avatar: ua.user.avatar,
         nickname: ua.user.nickname,
       })),
-    });
+    }));
   } catch (err) {
     console.error('[artists] PUT /:id', err);
     return res.status(500).json({ error: 'Внутренняя ошибка сервера' });

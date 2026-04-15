@@ -212,7 +212,7 @@ model Artist {
   bandLink    String?
   avatar      String?
   banner      String?
-  listeners   Int          @default(0)
+  listeners   BigInt       @default(0)
 
   status               ArtistStatus @default(DRAFT)
   submittedById        String?
