@@ -57,7 +57,7 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
   const searchResults = useMemo(() => {
     if (!search.trim() || !allRefs?.services) return [];
     const q = search.toLowerCase();
-    return (allRefs.services as { id: string; name: string; profession?: { name: string } }[])
+    return (allRefs.services as { id: string; name: string; directions?: { name: string }[] }[])
       .filter(s => s.name.toLowerCase().includes(q))
       .slice(0, 50);
   }, [search, allRefs]);
@@ -187,7 +187,7 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-white truncate">{s.name}</p>
-                          {s.profession?.name && <p className="text-[11px] text-slate-500 truncate">{s.profession.name}</p>}
+                          {s.directions?.[0]?.name && <p className="text-[11px] text-slate-500 truncate">{s.directions[0].name}</p>}
                         </div>
                       </button>
                     );

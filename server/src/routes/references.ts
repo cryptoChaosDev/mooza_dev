@@ -443,7 +443,7 @@ router.get('/all', async (_req, res) => {
     const [fields, services, genres, workFormats, employmentTypes, skillLevels, availabilities, geographies, priceRanges] = await Promise.all([
       prisma.fieldOfActivity.findMany({ orderBy: { name: 'asc' } }),
       prisma.service.findMany({
-        include: { profession: { select: { id: true, name: true, directionId: true } } },
+        include: { directions: { select: { id: true, name: true, fieldOfActivityId: true } } },
         orderBy: { sortOrder: 'asc' },
       }),
       prisma.genre.findMany({ orderBy: { sortOrder: 'asc' } }),
