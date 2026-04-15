@@ -63,29 +63,6 @@ export default function FriendsPage() {
 
   const connTotalBadge = connRequests.length + breakRequests.length;
 
-  const acceptConnMut = useMutation({
-    mutationFn: (id: string) => connectionAPI.accept(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['connections-accepted'] });
-      queryClient.invalidateQueries({ queryKey: ['connections-requests'] });
-    },
-  });
-  const rejectConnMut = useMutation({
-    mutationFn: (id: string) => connectionAPI.reject(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connections-requests'] }); },
-  });
-  const cancelConnMut = useMutation({
-    mutationFn: (id: string) => connectionAPI.cancel(id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connections-sent'] }); },
-  });
-  const confirmBreakMut = useMutation({
-    mutationFn: (id: string) => connectionAPI.confirmBreak(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['connections-accepted'] });
-      queryClient.invalidateQueries({ queryKey: ['connections-break-requests'] });
-    },
-  });
-
   const acceptMutation = useMutation({
     mutationFn: friendshipAPI.acceptRequest,
     onSuccess: () => {
