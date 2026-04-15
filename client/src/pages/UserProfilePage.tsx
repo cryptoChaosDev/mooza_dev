@@ -58,6 +58,7 @@ export default function UserProfilePage() {
   });
 
   const [viewConn, setViewConn] = useState<any>(null);
+  const [connExpanded, setConnExpanded] = useState(false);
 
   const { data: conn, refetch: refetchConn } = useQuery({
     queryKey: ['connection-with', userId],
@@ -402,32 +403,65 @@ export default function UserProfilePage() {
           )}
 
           {/* 5. Связи */}
-          {userConnections.length > 0 && (
-            <div className="mb-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Связи</span>
-                <div className="flex-1 h-px bg-slate-800" />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {userConnections.map((c: any) => (
+          {userConnections.length > 0 && (() => {
+            const LIMIT = 6;
+            const visible = connExpanded ? userConnections : userConnections.slice(0, LIMIT);
+            return (
+              <div className="mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Link2 size={13} className="text-primary-400" />
+                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Профессиональные связи</span>
+                  <span className="text-[11px] text-slate-600 font-medium">{userConnections.length}</span>
+                  <div className="flex-1 h-px bg-slate-800" />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {visible.map((c: any) => (
+                    <button
+                      key={c.id}
+                      onClick={() => navigate(`/profile/${c.partner.id}`)}
+                      className="text-left p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl hover:border-primary-500/30 hover:bg-slate-800/70 transition-all group"
+                    >
+                      <div className="flex items-center gap-2.5 mb-2">
+                        <div className="w-9 h-9 rounded-full overflow-hidden bg-slate-700 flex-shrink-0 ring-1 ring-white/5">
+                          {c.partner.avatar
+                            ? <img src={`${API_URL}${c.partner.avatar}`} alt="" className="w-full h-full object-cover" />
+                            : <div className="w-full h-full bg-primary-600/30 flex items-center justify-center text-xs text-primary-300 font-bold">{c.partner.firstName?.[0]}</div>
+                          }
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate leading-tight">{c.partner.firstName} {c.partner.lastName}</p>
+                          {c.partner.city && <p className="text-[11px] text-slate-500 truncate">{c.partner.city}</p>}
+                        </div>
+                        <Link2 size={12} className="text-primary-400/50 group-hover:text-primary-400 flex-shrink-0 transition-colors" />
+                      </div>
+                      {c.services.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {c.services.slice(0, 3).map((s: any) => (
+                            <span key={s.id} className="text-[11px] bg-primary-500/10 text-primary-300 border border-primary-500/20 rounded-md px-1.5 py-0.5 leading-none">
+                              {s.name}
+                            </span>
+                          ))}
+                          {c.services.length > 3 && (
+                            <span className="text-[11px] bg-slate-700/60 text-slate-400 rounded-md px-1.5 py-0.5 leading-none">
+                              +{c.services.length - 3}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                {userConnections.length > LIMIT && (
                   <button
-                    key={c.id}
-                    onClick={() => navigate(`/profile/${c.partner.id}`)}
-                    className="flex items-center gap-2 pl-1.5 pr-2.5 py-1 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 rounded-xl transition-colors"
+                    onClick={() => setConnExpanded(v => !v)}
+                    className="mt-2 w-full py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors text-center"
                   >
-                    <div className="w-6 h-6 rounded-full overflow-hidden bg-slate-700 flex-shrink-0">
-                      {c.partner.avatar
-                        ? <img src={`${API_URL}${c.partner.avatar}`} alt="" className="w-full h-full object-cover" />
-                        : <div className="w-full h-full bg-primary-600/30 flex items-center justify-center text-[10px] text-primary-300 font-bold">{c.partner.firstName?.[0]}</div>
-                      }
-                    </div>
-                    <span className="text-xs text-slate-300 font-medium">{c.partner.firstName} {c.partner.lastName}</span>
-                    <Link2 size={10} className="text-primary-400/60" />
+                    {connExpanded ? 'Свернуть' : `Показать ещё ${userConnections.length - LIMIT}`}
                   </button>
-                ))}
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* 6. Контакты */}
           {hasSocialLinks && (
