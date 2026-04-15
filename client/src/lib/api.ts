@@ -94,8 +94,8 @@ export const userAPI = {
 
 // Reference API
 export const referenceAPI = {
-  getFieldsOfActivity: (params?: { excludeUserId?: string }) => api.get('/references/fields-of-activity', { params }),
-  getDirections: (params?: { fieldOfActivityId?: string; excludeUserId?: string }) =>
+  getFieldsOfActivity: (params?: { excludeUserId?: string; all?: boolean }) => api.get('/references/fields-of-activity', { params }),
+  getDirections: (params?: { fieldOfActivityId?: string; excludeUserId?: string; all?: boolean }) =>
     api.get('/references/directions', { params }),
   getProfessions: (params?: { directionId?: string; search?: string; excludeUserId?: string }) =>
     api.get('/references/professions', { params }),

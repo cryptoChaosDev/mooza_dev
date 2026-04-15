@@ -6,7 +6,14 @@ const router = Router();
 // Get all fields of activity — only those with users other than excludeUserId
 router.get('/fields-of-activity', async (req, res) => {
   try {
-    const { excludeUserId } = req.query;
+    const { excludeUserId, all } = req.query;
+
+    // When all=true, return every field without user-count filtering
+    if (all === 'true') {
+      const fields = await prisma.fieldOfActivity.findMany({ orderBy: { name: 'asc' } });
+      return res.json(fields.map(f => ({ id: f.id, name: f.name, createdAt: f.createdAt, userCount: 0 })));
+    }
+
     const usFilter = excludeUserId
       ? { some: { userId: { not: excludeUserId as string } } }
       : { some: {} };
@@ -49,14 +56,16 @@ router.get('/fields-of-activity', async (req, res) => {
 // Get directions by field of activity — only those with users other than excludeUserId
 router.get('/directions', async (req, res) => {
   try {
-    const { fieldOfActivityId, excludeUserId } = req.query;
-    const usFilter = excludeUserId
-      ? { some: { userId: { not: excludeUserId as string } } }
-      : { some: {} };
-    const where: any = {
-      professions: { some: { userServices: usFilter } },
-    };
+    const { fieldOfActivityId, excludeUserId, all } = req.query;
+    const where: any = {};
     if (fieldOfActivityId) where.fieldOfActivityId = fieldOfActivityId as string;
+    // When all=true, skip user filter (used for connection modal to show all directions)
+    if (all !== 'true') {
+      const usFilter = excludeUserId
+        ? { some: { userId: { not: excludeUserId as string } } }
+        : { some: {} };
+      where.professions = { some: { userServices: usFilter } };
+    }
 
     const directions = await prisma.direction.findMany({
       where,

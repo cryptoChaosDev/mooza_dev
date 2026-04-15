@@ -32,12 +32,12 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
   // Data loading
   const { data: fields = [], isLoading: fieldsLoading } = useQuery({
     queryKey: ['ref-fields'],
-    queryFn: async () => { const { data } = await referenceAPI.getFieldsOfActivity(); return data as { id: string; name: string }[]; },
+    queryFn: async () => { const { data } = await referenceAPI.getFieldsOfActivity({ all: true }); return data as { id: string; name: string }[]; },
   });
 
   const { data: directions = [], isLoading: directionsLoading } = useQuery({
     queryKey: ['ref-directions', fieldId],
-    queryFn: async () => { const { data } = await referenceAPI.getDirections({ fieldOfActivityId: fieldId! }); return data as { id: string; name: string }[]; },
+    queryFn: async () => { const { data } = await referenceAPI.getDirections({ fieldOfActivityId: fieldId!, all: true }); return data as { id: string; name: string }[]; },
     enabled: !!fieldId,
   });
 
