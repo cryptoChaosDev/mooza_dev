@@ -161,7 +161,7 @@ export default function UserProfilePage() {
 
       {showConnModal && (
         <ConnectionRequestModal
-          targetUser={user}
+          targetUser={{ id: user.id, firstName: user.firstName, lastName: user.lastName, avatar: user.avatar }}
           onClose={() => setShowConnModal(false)}
         />
       )}
