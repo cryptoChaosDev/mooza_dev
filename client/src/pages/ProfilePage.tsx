@@ -774,6 +774,7 @@ export default function ProfilePage() {
   );
 
   return (
+    <>
     <div className="min-h-screen bg-slate-950">
 
       {/* ── LIGHTBOX ─────────────────────────────────────────────────────── */}
@@ -1163,5 +1164,6 @@ export default function ProfilePage() {
     {viewConn && (
       <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />
     )}
+    </>
   );
 }

@@ -158,6 +158,7 @@ export default function FriendsPage() {
   };
 
   return (
+    <>
     <div className="min-h-screen bg-slate-950">
       <div className="max-w-2xl mx-auto">
 
@@ -553,5 +554,6 @@ export default function FriendsPage() {
     {viewConn && (
       <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />
     )}
+    </>
   );
 }
