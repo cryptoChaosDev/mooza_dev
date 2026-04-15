@@ -262,9 +262,19 @@ export default function UserProfilePage() {
                 }
                 if (conn.status === 'ACCEPTED') {
                   return (
-                    <span className="flex items-center gap-1.5 px-3 py-2 bg-primary-500/10 border border-primary-500/30 text-primary-400 rounded-xl text-xs font-medium">
-                      <Link2 size={13} /> Связь
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="flex items-center gap-1.5 px-3 py-2 bg-primary-500/10 border border-primary-500/30 text-primary-400 rounded-xl text-xs font-medium">
+                        <Link2 size={13} /> Связь
+                      </span>
+                      <button
+                        onClick={() => breakConnMutation.mutate()}
+                        disabled={breakConnMutation.isPending}
+                        className="p-2 bg-slate-800 hover:bg-red-500/15 border border-slate-700 text-slate-500 hover:text-red-400 rounded-xl transition-all disabled:opacity-60"
+                        title="Запросить разрыв связи"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
                   );
                 }
                 if (conn.status === 'BREAK_REQUESTED') {
