@@ -5,12 +5,15 @@ import {
   ArrowLeft, MapPin, MessageCircle, Loader2,
   Crown, BadgeCheck, Ban, X,
   Headphones, Film, Image, FileText,
+  Link2, Clock, CheckCheck,
 } from 'lucide-react';
-import { userAPI, channelAPI } from '../lib/api';
+import { userAPI, channelAPI, connectionAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { SocialIconRow } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
 import ShareButton from '../components/ShareButton';
+import ConnectionRequestModal from '../components/ConnectionRequestModal';
+import { useAuthStore } from '../stores/authStore';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -24,7 +27,9 @@ export default function UserProfilePage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const me = useAuthStore(s => s.user);
   const [lightboxFile, setLightboxFile] = useState<any>(null);
+  const [showConnModal, setShowConnModal] = useState(false);
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['user', userId],
@@ -43,6 +48,42 @@ export default function UserProfilePage() {
       return data as { id: string; name: string; description: string | null; avatar: string | null; isSubscribed: boolean; _count: { subscriptions: number; posts: number } };
     },
     enabled: !!channelId,
+  });
+
+  const { data: conn, refetch: refetchConn } = useQuery({
+    queryKey: ['connection-with', userId],
+    queryFn: async () => {
+      const { data } = await connectionAPI.getWith(userId!);
+      return data as {
+        id: string;
+        status: string;
+        iAmRequester: boolean;
+        breakRequestedBy: string | null;
+        services: { id: string; name: string }[];
+      } | null;
+    },
+    enabled: !!userId && !!me && me.id !== userId,
+  });
+
+  const acceptConnMutation = useMutation({
+    mutationFn: () => connectionAPI.accept(conn!.id),
+    onSuccess: () => { refetchConn(); queryClient.invalidateQueries({ queryKey: ['connections-accepted'] }); },
+  });
+  const rejectConnMutation = useMutation({
+    mutationFn: () => connectionAPI.reject(conn!.id),
+    onSuccess: () => refetchConn(),
+  });
+  const breakConnMutation = useMutation({
+    mutationFn: () => connectionAPI.requestBreak(conn!.id),
+    onSuccess: () => refetchConn(),
+  });
+  const confirmBreakMutation = useMutation({
+    mutationFn: () => connectionAPI.confirmBreak(conn!.id),
+    onSuccess: () => refetchConn(),
+  });
+  const cancelBreakMutation = useMutation({
+    mutationFn: () => connectionAPI.cancelBreak(conn!.id),
+    onSuccess: () => refetchConn(),
   });
 
   const subscribeMut = useMutation({
@@ -118,6 +159,13 @@ export default function UserProfilePage() {
   return (
     <div className="min-h-screen bg-slate-950">
 
+      {showConnModal && (
+        <ConnectionRequestModal
+          targetUser={user}
+          onClose={() => setShowConnModal(false)}
+        />
+      )}
+
       {/* Lightbox */}
       {lightboxFile && (
         <div
@@ -171,6 +219,84 @@ export default function UserProfilePage() {
                 className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white rounded-xl transition-all"
                 iconSize={16}
               />
+              {/* Connection button — only show for other users */}
+              {me && me.id !== user.id && (() => {
+                if (!conn) {
+                  return (
+                    <button
+                      onClick={() => setShowConnModal(true)}
+                      className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-primary-400 rounded-xl transition-all"
+                      title="Установить связь"
+                    >
+                      <Link2 size={16} />
+                    </button>
+                  );
+                }
+                if (conn.status === 'PENDING' && conn.iAmRequester) {
+                  return (
+                    <span className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 border border-slate-700 text-slate-400 rounded-xl text-xs font-medium">
+                      <Clock size={13} /> Запрос отправлен
+                    </span>
+                  );
+                }
+                if (conn.status === 'PENDING' && !conn.iAmRequester) {
+                  return (
+                    <div className="flex gap-1.5">
+                      <button
+                        onClick={() => acceptConnMutation.mutate()}
+                        disabled={acceptConnMutation.isPending}
+                        className="flex items-center gap-1 px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-xs font-medium transition-all disabled:opacity-60"
+                      >
+                        <CheckCheck size={13} /> Принять
+                      </button>
+                      <button
+                        onClick={() => rejectConnMutation.mutate()}
+                        disabled={rejectConnMutation.isPending}
+                        className="p-2 bg-slate-800 hover:bg-red-500/15 border border-slate-700 text-slate-400 hover:text-red-400 rounded-xl transition-all disabled:opacity-60"
+                        title="Отклонить"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+                  );
+                }
+                if (conn.status === 'ACCEPTED') {
+                  return (
+                    <span className="flex items-center gap-1.5 px-3 py-2 bg-primary-500/10 border border-primary-500/30 text-primary-400 rounded-xl text-xs font-medium">
+                      <Link2 size={13} /> Связь
+                    </span>
+                  );
+                }
+                if (conn.status === 'BREAK_REQUESTED') {
+                  if (conn.breakRequestedBy !== me?.id) {
+                    return (
+                      <div className="flex gap-1.5">
+                        <button
+                          onClick={() => confirmBreakMutation.mutate()}
+                          disabled={confirmBreakMutation.isPending}
+                          className="flex items-center gap-1 px-3 py-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-xl text-xs font-medium transition-all disabled:opacity-60"
+                        >
+                          <X size={13} /> Разорвать
+                        </button>
+                        <button
+                          onClick={() => cancelBreakMutation.mutate()}
+                          disabled={cancelBreakMutation.isPending}
+                          className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 rounded-xl transition-all disabled:opacity-60"
+                          title="Отклонить запрос разрыва"
+                        >
+                          <CheckCheck size={15} />
+                        </button>
+                      </div>
+                    );
+                  }
+                  return (
+                    <span className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs font-medium">
+                      <Clock size={13} /> Разрыв ожидает
+                    </span>
+                  );
+                }
+                return null;
+              })()}
               <button
                 onClick={() => navigate(`/messages/${user.id}`)}
                 className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-xl transition-all shadow-lg shadow-primary-500/20"
@@ -204,6 +330,10 @@ export default function UserProfilePage() {
             <span><span className="font-semibold text-slate-300">{friendCount}</span> друзей</span>
             {servicesFlat.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{servicesFlat.length}</span> услуг</span></>}
             {user.channel && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{channelInfo?._count?.subscriptions ?? user.channel._count?.subscriptions ?? 0}</span> подписчиков</span></>}
+            {conn?.status === 'ACCEPTED' && conn.services.length > 0 && (
+              <><span className="text-slate-700">·</span>
+              <span className="flex items-center gap-1"><Link2 size={10} className="text-primary-400" /><span className="text-primary-400 font-medium">{conn.services.map((s: any) => s.name).join(', ')}</span></span></>
+            )}
           </div>
 
           {/* Bio */}

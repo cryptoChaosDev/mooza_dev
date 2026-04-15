@@ -1,12 +1,12 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Users, Check, X, MessageCircle, UserX, Clock, Pin, PinOff, Search, Wifi, Crown, BadgeCheck, Ban } from 'lucide-react';
-import { friendshipAPI } from '../lib/api';
+import { Users, Check, X, MessageCircle, UserX, Clock, Pin, PinOff, Search, Wifi, Crown, BadgeCheck, Ban, Link2, CheckCheck } from 'lucide-react';
+import { friendshipAPI, connectionAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { usePresenceStore } from '../stores/presenceStore';
 
-type Tab = 'friends' | 'requests' | 'sent';
+type Tab = 'friends' | 'requests' | 'sent' | 'connections';
 
 const PINNED_KEY = 'mooza_pinned_friends';
 
@@ -39,6 +39,49 @@ export default function FriendsPage() {
   const { data: sentRequests = [] } = useQuery({
     queryKey: ['friend-requests-sent'],
     queryFn: async () => { const { data } = await friendshipAPI.getSentRequests(); return data; },
+  });
+
+  // Connections queries
+  const { data: connections = [] } = useQuery({
+    queryKey: ['connections-accepted'],
+    queryFn: async () => { const { data } = await connectionAPI.getAccepted(); return data; },
+  });
+  const { data: connRequests = [] } = useQuery({
+    queryKey: ['connections-requests'],
+    queryFn: async () => { const { data } = await connectionAPI.getRequests(); return data; },
+  });
+  const { data: connSent = [] } = useQuery({
+    queryKey: ['connections-sent'],
+    queryFn: async () => { const { data } = await connectionAPI.getSent(); return data; },
+  });
+  const { data: breakRequests = [] } = useQuery({
+    queryKey: ['connections-break-requests'],
+    queryFn: async () => { const { data } = await connectionAPI.getBreakRequests(); return data; },
+  });
+
+  const connTotalBadge = connRequests.length + breakRequests.length;
+
+  const acceptConnMut = useMutation({
+    mutationFn: (id: string) => connectionAPI.accept(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['connections-accepted'] });
+      queryClient.invalidateQueries({ queryKey: ['connections-requests'] });
+    },
+  });
+  const rejectConnMut = useMutation({
+    mutationFn: (id: string) => connectionAPI.reject(id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connections-requests'] }); },
+  });
+  const cancelConnMut = useMutation({
+    mutationFn: (id: string) => connectionAPI.cancel(id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connections-sent'] }); },
+  });
+  const confirmBreakMut = useMutation({
+    mutationFn: (id: string) => connectionAPI.confirmBreak(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['connections-accepted'] });
+      queryClient.invalidateQueries({ queryKey: ['connections-break-requests'] });
+    },
   });
 
   const acceptMutation = useMutation({
@@ -95,6 +138,7 @@ export default function FriendsPage() {
     { id: 'friends' as Tab, label: 'Друзья', count: friends.length },
     { id: 'requests' as Tab, label: 'Заявки', count: requests.length },
     { id: 'sent' as Tab, label: 'Отправленные', count: sentRequests.length },
+    { id: 'connections' as Tab, label: 'Связи', count: connTotalBadge },
   ];
 
   const Avatar = ({ user, size = 10, showPresence = false }: { user: any; size?: number; showPresence?: boolean }) => {
@@ -373,6 +417,170 @@ export default function FriendsPage() {
                 <p className="text-slate-500 text-sm">Нет отправленных заявок</p>
               </div>
             )
+          )}
+
+          {/* ── Connections tab ── */}
+          {activeTab === 'connections' && (
+            <div className="pb-4">
+              {/* Incoming connection requests */}
+              {connRequests.length > 0 && (
+                <div>
+                  <div className="px-4 py-2 bg-slate-900/80 border-b border-slate-800">
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Входящие запросы</span>
+                  </div>
+                  <div className="divide-y divide-slate-800/60">
+                    {connRequests.map((c: any) => (
+                      <div key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors">
+                        <button onClick={() => navigate(`/profile/${c.partner.id}`)} className="flex-shrink-0">
+                          <Avatar user={c.partner} size={11} />
+                        </button>
+                        <button onClick={() => navigate(`/profile/${c.partner.id}`)} className="flex-1 min-w-0 text-left">
+                          <p className="text-sm font-semibold text-white truncate">
+                            {c.partner.firstName} {c.partner.lastName}
+                          </p>
+                          {c.services?.length > 0 && (
+                            <p className="text-xs text-slate-500 truncate mt-0.5">
+                              {c.services.map((s: any) => s.name).join(', ')}
+                            </p>
+                          )}
+                        </button>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            onClick={() => acceptConnMut.mutate(c.id)}
+                            disabled={acceptConnMut.isPending}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-primary-500/15 hover:bg-primary-500/25 text-primary-400 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
+                          >
+                            <CheckCheck size={13} /> Принять
+                          </button>
+                          <button
+                            onClick={() => rejectConnMut.mutate(c.id)}
+                            disabled={rejectConnMut.isPending}
+                            className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-50"
+                            title="Отклонить"
+                          >
+                            <X size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Pending break requests (where partner wants to break) */}
+              {breakRequests.length > 0 && (
+                <div>
+                  <div className="px-4 py-2 bg-slate-900/80 border-b border-slate-800">
+                    <span className="text-xs font-semibold text-red-500/70 uppercase tracking-wide">Запросы на разрыв</span>
+                  </div>
+                  <div className="divide-y divide-slate-800/60">
+                    {breakRequests.map((c: any) => (
+                      <div key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors">
+                        <button onClick={() => navigate(`/profile/${c.partner.id}`)} className="flex-shrink-0">
+                          <Avatar user={c.partner} size={11} />
+                        </button>
+                        <button onClick={() => navigate(`/profile/${c.partner.id}`)} className="flex-1 min-w-0 text-left">
+                          <p className="text-sm font-semibold text-white truncate">
+                            {c.partner.firstName} {c.partner.lastName}
+                          </p>
+                          <p className="text-xs text-red-400/80 mt-0.5">Запрашивает разрыв связи</p>
+                        </button>
+                        <button
+                          onClick={() => confirmBreakMut.mutate(c.id)}
+                          disabled={confirmBreakMut.isPending}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-red-500/15 hover:bg-red-500/25 text-red-400 border border-red-500/30 rounded-xl text-xs font-medium transition-all disabled:opacity-50 flex-shrink-0"
+                        >
+                          <X size={12} /> Разорвать
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sent connection requests */}
+              {connSent.length > 0 && (
+                <div>
+                  <div className="px-4 py-2 bg-slate-900/80 border-b border-slate-800">
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Отправленные запросы</span>
+                  </div>
+                  <div className="divide-y divide-slate-800/60">
+                    {connSent.map((c: any) => (
+                      <div key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors">
+                        <button onClick={() => navigate(`/profile/${c.partner.id}`)} className="flex-shrink-0">
+                          <Avatar user={c.partner} size={11} />
+                        </button>
+                        <button onClick={() => navigate(`/profile/${c.partner.id}`)} className="flex-1 min-w-0 text-left">
+                          <p className="text-sm font-semibold text-white truncate">
+                            {c.partner.firstName} {c.partner.lastName}
+                          </p>
+                          {c.services?.length > 0 && (
+                            <p className="text-xs text-slate-500 truncate mt-0.5">
+                              {c.services.map((s: any) => s.name).join(', ')}
+                            </p>
+                          )}
+                        </button>
+                        <button
+                          onClick={() => cancelConnMut.mutate(c.id)}
+                          disabled={cancelConnMut.isPending}
+                          className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-red-500/10 text-slate-400 hover:text-red-400 rounded-xl text-xs font-medium border border-slate-700 hover:border-red-500/30 transition-all disabled:opacity-50 flex-shrink-0"
+                        >
+                          <X size={12} /> Отменить
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Active connections */}
+              {connections.length > 0 && (
+                <div>
+                  <div className="px-4 py-2 bg-slate-900/80 border-b border-slate-800">
+                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Мои связи · {connections.length}</span>
+                  </div>
+                  <div className="divide-y divide-slate-800/60">
+                    {connections.map((c: any) => (
+                      <div
+                        key={c.id}
+                        onClick={() => navigate(`/profile/${c.partner.id}`)}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
+                      >
+                        <div className="flex-shrink-0">
+                          <Avatar user={c.partner} size={11} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-sm font-semibold text-white truncate">
+                              {c.partner.firstName} {c.partner.lastName}
+                            </span>
+                            {c.partner.isPremium && <Crown size={13} className="text-amber-400 flex-shrink-0" />}
+                            {c.partner.isVerified && <BadgeCheck size={13} className="text-sky-400 flex-shrink-0" />}
+                          </div>
+                          {c.services?.length > 0 && (
+                            <p className="text-xs text-primary-400/80 truncate mt-0.5">
+                              {c.services.map((s: any) => s.name).join(', ')}
+                            </p>
+                          )}
+                        </div>
+                        <Link2 size={14} className="text-primary-400/60 flex-shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty state */}
+              {connections.length === 0 && connRequests.length === 0 && connSent.length === 0 && breakRequests.length === 0 && (
+                <div className="flex flex-col items-center py-16 px-6 text-center">
+                  <div className="p-4 bg-slate-800/50 rounded-2xl mb-4">
+                    <Link2 size={32} className="text-slate-600" />
+                  </div>
+                  <p className="text-white font-semibold mb-1">Нет профессиональных связей</p>
+                  <p className="text-slate-500 text-sm">Найдите музыкантов и установите профессиональные связи</p>
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>

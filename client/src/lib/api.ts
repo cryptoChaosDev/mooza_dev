@@ -245,6 +245,23 @@ export const artistAPI = {
   },
 };
 
+// Connection API
+export const connectionAPI = {
+  send: (receiverId: string, serviceIds: string[]) =>
+    api.post('/connections', { receiverId, serviceIds }),
+  getAccepted: () => api.get('/connections'),
+  getRequests: () => api.get('/connections/requests'),
+  getSent: () => api.get('/connections/sent'),
+  getBreakRequests: () => api.get('/connections/break-requests'),
+  getWith: (userId: string) => api.get(`/connections/with/${userId}`),
+  accept: (id: string) => api.patch(`/connections/${id}/accept`),
+  reject: (id: string) => api.patch(`/connections/${id}/reject`),
+  cancel: (id: string) => api.delete(`/connections/${id}`),
+  requestBreak: (id: string) => api.patch(`/connections/${id}/break`),
+  confirmBreak: (id: string) => api.patch(`/connections/${id}/confirm-break`),
+  cancelBreak: (id: string) => api.patch(`/connections/${id}/cancel-break`),
+};
+
 // Admin API
 const adminBase = '/admin';
 const crudFor = (path: string) => ({

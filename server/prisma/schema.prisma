@@ -58,7 +58,8 @@ model Service {
   sortOrder Int         @default(0)
   directions Direction[] @relation("DirectionServices")
 
-  userServices UserService[]
+  userServices       UserService[]
+  connectionServices ConnectionService[]
 
   createdAt DateTime @default(now())
 }
@@ -185,6 +186,44 @@ model ProfessionFeature {
   name String @unique
 
   createdAt DateTime @default(now())
+}
+
+// ============ CONNECTIONS ============
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  BREAK_REQUESTED
+}
+
+model Connection {
+  id               String           @id @default(uuid())
+  requesterId      String
+  receiverId       String
+  status           ConnectionStatus @default(PENDING)
+  breakRequestedBy String?
+
+  requester     User   @relation("ConnectionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  receiver      User   @relation("ConnectionReceiver",  fields: [receiverId],  references: [id], onDelete: Cascade)
+
+  services      ConnectionService[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([requesterId, receiverId])
+  @@index([requesterId])
+  @@index([receiverId])
+  @@index([status])
+}
+
+model ConnectionService {
+  connectionId String
+  serviceId    String
+  connection   Connection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  service      Service    @relation(fields: [serviceId],    references: [id], onDelete: Cascade)
+  @@id([connectionId, serviceId])
 }
 
 enum ArtistType {
@@ -316,6 +355,10 @@ model User {
   userArtists UserArtist[]
   artistFollows ArtistFollower[]
   submittedArtists Artist[] @relation("ArtistSubmitter")
+
+  // Connections
+  sentConnections     Connection[] @relation("ConnectionRequester")
+  receivedConnections Connection[] @relation("ConnectionReceiver")
 
   portfolioFiles PortfolioFile[]
 
