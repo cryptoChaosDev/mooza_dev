@@ -74,6 +74,7 @@ export default function ChatPage() {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notFriend, setNotFriend] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -265,8 +266,10 @@ export default function ChatPage() {
       const convRes = await messageAPI.getConversation(convId);
       setConversation(convRes.data.conversation);
       setMessages(convRes.data.messages);
-    } catch (err) {
-      console.error('Failed to load chat:', err);
+    } catch (err: any) {
+      const status = err?.response?.status;
+      if (status === 403) setNotFriend(true);
+      else console.error('Failed to load chat:', err);
     } finally {
       setLoading(false);
     }
@@ -674,6 +677,17 @@ export default function ChatPage() {
     ? `${otherMember.firstName} ${otherMember.lastName}`
     : '...';
   const chatAvatar = conversation?.isGroup ? conversation.avatar : (otherMember?.avatar ?? null);
+
+  // ── Not friends state ─────────────────────────────────────────────────────
+  if (notFriend) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <p className="text-slate-300 text-base font-medium">Вы не друзья</p>
+        <p className="text-slate-500 text-sm">Сначала добавьте пользователя в друзья, чтобы написать ему сообщение.</p>
+        <button onClick={() => navigate(-1)} className="mt-2 px-4 py-2 bg-primary-600 text-white rounded-xl text-sm font-semibold">Назад</button>
+      </div>
+    );
+  }
 
   // ── Loading state ──────────────────────────────────────────────────────────
   if (loading) {

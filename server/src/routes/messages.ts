@@ -29,8 +29,9 @@ const MEMBER_USER = {
   user: { select: { id: true, firstName: true, lastName: true, avatar: true, isPremium: true, isVerified: true, isBlocked: true } },
 };
 
-/** Find or create a 1-to-1 conversation between two users */
-async function findOrCreateDM(userAId: string, userBId: string) {
+/** Find or create a 1-to-1 conversation between two users.
+ *  Returns { conv, forbidden: true } if users are not friends and no DM exists yet. */
+async function findOrCreateDM(userAId: string, userBId: string): Promise<{ conv: any; forbidden?: boolean }> {
   const all = await db.conversation.findMany({
     where: { isGroup: false },
     include: { members: true },
@@ -42,19 +43,35 @@ async function findOrCreateDM(userAId: string, userBId: string) {
   });
 
   if (found) {
-    return db.conversation.findUnique({
+    const conv = await db.conversation.findUnique({
       where: { id: found.id },
       include: { members: { include: MEMBER_USER } },
     });
+    return { conv };
   }
 
-  return db.conversation.create({
+  // No existing DM — require friendship before creating
+  const friendship = await db.friendship.findFirst({
+    where: {
+      OR: [
+        { requesterId: userAId, receiverId: userBId, status: 'accepted' },
+        { requesterId: userBId, receiverId: userAId, status: 'accepted' },
+      ],
+    },
+  });
+
+  if (!friendship) {
+    return { conv: null, forbidden: true };
+  }
+
+  const conv = await db.conversation.create({
     data: {
       isGroup: false,
       members: { create: [{ userId: userAId }, { userId: userBId }] },
     },
     include: { members: { include: MEMBER_USER } },
   });
+  return { conv };
 }
 
 // ─── GET /unread/count ───────────────────────────────────────────────────────
@@ -181,7 +198,8 @@ router.get('/resolve/:id', authenticate, async (req: AuthRequest, res) => {
     });
     if (!otherUser) return res.status(404).json({ error: 'Not found' });
 
-    const conv = await findOrCreateDM(userId, otherUser.id);
+    const { conv, forbidden } = await findOrCreateDM(userId, otherUser.id);
+    if (forbidden) return res.status(403).json({ error: 'Сначала добавьте пользователя в друзья' });
     res.json({ conversationId: conv.id, conversation: conv });
   } catch (error) {
     console.error('Resolve error:', error);
@@ -748,7 +766,8 @@ router.get('/:userId', authenticate, async (req: AuthRequest, res) => {
     const otherUser = await prisma.user.findUnique({ where: { id: otherId }, select: { id: true } });
     if (!otherUser) return res.status(404).json({ error: 'User not found' });
 
-    const conv = await findOrCreateDM(currentUserId, otherId);
+    const { conv, forbidden } = await findOrCreateDM(currentUserId, otherId);
+    if (forbidden) return res.status(403).json({ error: 'Сначала добавьте пользователя в друзья' });
     res.json({ conversationId: conv.id });
   } catch (error) {
     console.error('Legacy get messages error:', error);
