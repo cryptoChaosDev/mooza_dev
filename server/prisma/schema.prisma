@@ -43,6 +43,7 @@ model Profession {
 
   userProfessions UserProfession[]
   userServices    UserService[]
+  groupMembers    UserArtist[]
 
   createdAt DateTime @default(now())
 
@@ -351,9 +352,10 @@ model User {
   userServices UserService[]
 
   // Artist / Group (many-to-many)
-  userArtists UserArtist[]
-  artistFollows ArtistFollower[]
-  submittedArtists Artist[] @relation("ArtistSubmitter")
+  userArtists      UserArtist[]
+  groupInvitesSent UserArtist[] @relation("GroupInviter")
+  artistFollows    ArtistFollower[]
+  submittedArtists Artist[]        @relation("ArtistSubmitter")
 
   // Connections
   sentConnections     Connection[] @relation("ConnectionRequester")
@@ -421,19 +423,32 @@ model UserProfession {
   @@index([professionId])
 }
 
-model UserArtist {
-  id       String @id @default(uuid())
-  userId   String
-  artistId String
+enum GroupInviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+}
 
-  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  artist Artist @relation(fields: [artistId], references: [id])
+model UserArtist {
+  id           String            @id @default(uuid())
+  userId       String
+  artistId     String
+  isOwner      Boolean           @default(false)
+  professionId String?
+  inviteStatus GroupInviteStatus @default(ACCEPTED)
+  invitedById  String?
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  artist     Artist      @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  profession Profession? @relation(fields: [professionId], references: [id], onDelete: SetNull)
+  invitedBy  User?       @relation("GroupInviter", fields: [invitedById], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
   @@unique([userId, artistId])
   @@index([userId])
   @@index([artistId])
+  @@index([inviteStatus])
 }
 
 // ============ EXISTING MODELS ============

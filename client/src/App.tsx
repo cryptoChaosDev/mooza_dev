@@ -20,6 +20,8 @@ const ChatPage           = lazy(() => import('./pages/ChatPage'));
 const AdminPage          = lazy(() => import('./pages/AdminPage'));
 const ArtistPage         = lazy(() => import('./pages/ArtistPage'));
 const ArtistCreatePage   = lazy(() => import('./pages/ArtistCreatePage'));
+const GroupCreatePage    = lazy(() => import('./pages/GroupCreatePage'));
+const GroupInvitesPage   = lazy(() => import('./pages/GroupInvitesPage'));
 const PrivacyPolicyPage  = lazy(() => import('./pages/PrivacyPolicyPage'));
 const TermsPage          = lazy(() => import('./pages/TermsPage'));
 
@@ -105,6 +107,8 @@ function AppRoutes() {
             <Route path="/profile/:userId"  element={<UserProfilePage />} />
             <Route path="/artist/create"     element={<ArtistCreatePage />} />
             <Route path="/artist/:id"       element={<ArtistPage />} />
+            <Route path="/groups/create"    element={<GroupCreatePage />} />
+            <Route path="/groups/invites"   element={<GroupInvitesPage />} />
             <Route path="/search"           element={<SearchPage />} />
             <Route path="/friends"          element={<FriendsPage />} />
             <Route path="/messages"         element={<MessagesPage />} />

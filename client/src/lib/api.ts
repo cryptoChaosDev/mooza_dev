@@ -270,6 +270,22 @@ export const connectionAPI = {
   addServices: (id: string, serviceIds: string[]) => api.patch(`/connections/${id}/add-services`, { serviceIds }),
 };
 
+export const groupAPI = {
+  create: (data: { name: string; description?: string; city?: string; type?: string }) =>
+    api.post('/groups', data),
+  getMyGroups: () => api.get('/groups/my'),
+  getInvites: () => api.get('/groups/invites'),
+  getGroup: (id: string) => api.get(`/groups/${id}`),
+  update: (id: string, data: object) => api.patch(`/groups/${id}`, data),
+  submit: (id: string) => api.post(`/groups/${id}/submit`),
+  invite: (id: string, friendId: string, professionId: string) =>
+    api.post(`/groups/${id}/invite`, { friendId, professionId }),
+  acceptInvite: (membershipId: string) => api.patch(`/groups/invites/${membershipId}/accept`),
+  declineInvite: (membershipId: string) => api.patch(`/groups/invites/${membershipId}/decline`),
+  removeMember: (groupId: string, membershipId: string) =>
+    api.delete(`/groups/${groupId}/members/${membershipId}`),
+};
+
 export const favoriteAPI = {
   list: () => api.get('/favorites'),
   status: (targetId: string) => api.get(`/favorites/status/${targetId}`),

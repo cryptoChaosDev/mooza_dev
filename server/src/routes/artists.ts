@@ -39,6 +39,7 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
             user: {
               select: { id: true, firstName: true, lastName: true, avatar: true, nickname: true },
             },
+            profession: { select: { id: true, name: true } },
           },
         },
       },
@@ -55,12 +56,16 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
       genres: genres.map((ag) => ag.genre),
       followersCount: _count.followers,
       isFollowed: currentUserId ? followers.some((f) => f.userId === currentUserId) : false,
-      members: userArtists.map((ua) => ({
+      members: userArtists.map((ua: any) => ({
+        membershipId: ua.id,
         id: ua.user.id,
         firstName: ua.user.firstName,
         lastName: ua.user.lastName,
         avatar: ua.user.avatar,
         nickname: ua.user.nickname,
+        profession: ua.profession ?? null,
+        isOwner: ua.isOwner,
+        inviteStatus: ua.inviteStatus,
       })),
     }));
   } catch (err) {

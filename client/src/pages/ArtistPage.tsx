@@ -1,12 +1,13 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, ExternalLink,
   Camera, Navigation, Edit3, X, Save, Loader2,
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
+  UserPlus, Trash2, Search, ChevronRight,
 } from 'lucide-react';
-import { artistAPI, referenceAPI } from '../lib/api';
+import { artistAPI, referenceAPI, groupAPI, friendshipAPI } from '../lib/api';
 import { plural } from '../lib/plural';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
@@ -66,6 +67,13 @@ export default function ArtistPage() {
   const [genreSheetOpen, setGenreSheetOpen] = useState(false);
   const [typeSheetOpen, setTypeSheetOpen] = useState(false);
 
+  // Invite member state
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteFriendId, setInviteFriendId] = useState('');
+  const [inviteProfessionId, setInviteProfessionId] = useState('');
+  const [inviteFriendSearch, setInviteFriendSearch] = useState('');
+  const [inviteProfSearch, setInviteProfSearch] = useState('');
+
   const { data: artist, isLoading, isError } = useQuery({
     queryKey: ['artist', id],
     queryFn: async () => {
@@ -81,6 +89,28 @@ export default function ArtistPage() {
       const { data } = await referenceAPI.getGenres();
       return data as { id: string; name: string }[];
     },
+  });
+
+  const isGroup = artist?.type === 'GROUP' || artist?.type === 'COVER_GROUP';
+  const isOwner = !!currentUser && artist?.submittedById === currentUser.id;
+
+  const { data: friendsList = [] } = useQuery({
+    queryKey: ['friends-list'],
+    queryFn: async () => {
+      const { data } = await friendshipAPI.getFriends();
+      return (data as { friendshipId: string; user: { id: string; firstName: string; lastName: string; avatar?: string } }[])
+        .map(f => f.user);
+    },
+    enabled: showInviteModal && isOwner,
+  });
+
+  const { data: allProfessions = [] } = useQuery({
+    queryKey: ['all-professions'],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getAllReferences();
+      return (data?.professions ?? []) as { id: string; name: string }[];
+    },
+    enabled: showInviteModal && isOwner,
   });
 
   // Lock body scroll when modal is open (iOS-compatible)
@@ -156,6 +186,23 @@ export default function ArtistPage() {
     },
   });
 
+  const inviteMut = useMutation({
+    mutationFn: () => groupAPI.invite(id!, inviteFriendId, inviteProfessionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['artist', id] });
+      setShowInviteModal(false);
+      setInviteFriendId('');
+      setInviteProfessionId('');
+      setInviteFriendSearch('');
+      setInviteProfSearch('');
+    },
+  });
+
+  const removeMemberMut = useMutation({
+    mutationFn: (membershipId: string) => groupAPI.removeMember(id!, membershipId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+  });
+
   const set = (key: keyof EditForm, value: string | string[] | Record<string, string>) =>
     setForm((f) => ({ ...f, [key]: value }));
 
@@ -176,7 +223,24 @@ export default function ArtistPage() {
     );
   }
 
-  const isMemberOfArtist = artist.members?.some((m: { id: string }) => m.id === currentUser?.id);
+  const isMemberOfArtist = artist.members?.some(
+    (m: { id: string; inviteStatus: string }) => m.id === currentUser?.id && m.inviteStatus === 'ACCEPTED'
+  );
+
+  // Filtered lists for invite modal
+  const filteredFriends = useMemo(() => {
+    const memberIds = new Set((artist.members ?? []).map((m: any) => m.id));
+    const q = inviteFriendSearch.toLowerCase();
+    return friendsList.filter((f: any) =>
+      !memberIds.has(f.id) &&
+      `${f.firstName} ${f.lastName}`.toLowerCase().includes(q)
+    );
+  }, [friendsList, artist.members, inviteFriendSearch]);
+
+  const filteredProfessions = useMemo(() => {
+    const q = inviteProfSearch.toLowerCase();
+    return allProfessions.filter((p: any) => p.name.toLowerCase().includes(q));
+  }, [allProfessions, inviteProfSearch]);
   const hasSocialLinks =
     artist.socialLinks && Object.values(artist.socialLinks as Record<string, string>).some(Boolean);
 
@@ -380,7 +444,7 @@ export default function ArtistPage() {
         {/* Top-right actions */}
         <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
           <ShareButton url={`/artist/${id}`} title={artist?.name} />
-          {isMemberOfArtist && (
+          {isOwner && (
             <button
               onClick={() => setIsEditing(true)}
               className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
@@ -407,7 +471,7 @@ export default function ArtistPage() {
         </div>
 
         {/* Banner camera button */}
-        {isMemberOfArtist && (
+        {isOwner && (
           <>
             <button
               onClick={() => bannerInputRef.current?.click()}
@@ -636,24 +700,53 @@ export default function ArtistPage() {
         )}
 
         {/* Участники */}
-        {(artist.members?.length ?? 0) > 0 && (
+        {(isGroup || (artist.members?.length ?? 0) > 0) && (
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-3">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Участники</span>
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Состав</span>
               <div className="flex-1 h-px bg-slate-800" />
-            </div>
-            <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: 'none' }}>
-              {artist.members.map((m: { id: string; firstName: string; lastName: string; avatar: string | null; nickname: string | null }) => (
+              {isOwner && (
                 <button
-                  key={m.id}
-                  onClick={() => navigate(`/profile/${m.id}`)}
-                  className="flex-shrink-0 flex flex-col items-center gap-1.5 w-16"
+                  onClick={() => setShowInviteModal(true)}
+                  className="flex items-center gap-1 text-xs text-primary-400 hover:text-primary-300 transition-colors"
                 >
-                  <AvatarComponent src={m.avatar} name={`${m.firstName} ${m.lastName}`} size={56} />
-                  <span className="text-xs text-slate-400 truncate w-full text-center">{m.firstName}</span>
+                  <UserPlus size={13} />
+                  Пригласить
                 </button>
-              ))}
+              )}
             </div>
+
+            {(artist.members?.length ?? 0) === 0 ? (
+              <p className="text-xs text-slate-600 italic">Участников пока нет</p>
+            ) : (
+              <div className="space-y-2">
+                {artist.members.map((m: any) => (
+                  <div key={m.membershipId} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+                    <button onClick={() => navigate(`/profile/${m.id}`)} className="flex-shrink-0">
+                      <AvatarComponent src={m.avatar} name={`${m.firstName} ${m.lastName}`} size={40} />
+                    </button>
+                    <div className="flex-1 min-w-0" onClick={() => navigate(`/profile/${m.id}`)}>
+                      <p className="text-sm font-medium text-white truncate">{m.firstName} {m.lastName}</p>
+                      <p className="text-xs text-slate-500 truncate">
+                        {m.isOwner ? 'Владелец' : (m.profession?.name ?? '—')}
+                      </p>
+                    </div>
+                    {m.inviteStatus === 'PENDING' && (
+                      <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-400 rounded-md flex-shrink-0">ожидает</span>
+                    )}
+                    {isOwner && !m.isOwner && (
+                      <button
+                        onClick={() => removeMemberMut.mutate(m.membershipId)}
+                        disabled={removeMemberMut.isPending}
+                        className="p-1.5 text-slate-600 hover:text-red-400 transition-colors flex-shrink-0"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -678,6 +771,121 @@ export default function ArtistPage() {
 
       {/* ── Edit modal ── */}
       {isEditing && EditModal()}
+
+      {/* ── Invite member modal ── */}
+      {showInviteModal && (
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
+          {/* Top bar */}
+          <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-800 flex-shrink-0 bg-slate-900/80 backdrop-blur">
+            <button onClick={() => setShowInviteModal(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors">
+              <ArrowLeft size={20} />
+            </button>
+            <h2 className="text-base font-semibold text-white flex-1">Пригласить участника</h2>
+            <button
+              onClick={() => inviteMut.mutate()}
+              disabled={!inviteFriendId || !inviteProfessionId || inviteMut.isPending}
+              className="px-4 py-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center gap-2"
+            >
+              {inviteMut.isPending && <Loader2 size={14} className="animate-spin" />}
+              Пригласить
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+
+            {/* Step 1: Choose friend */}
+            <div className="px-4 pt-4 pb-2">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">1. Выберите друга</p>
+              <div className="relative mb-2">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  value={inviteFriendSearch}
+                  onChange={e => setInviteFriendSearch(e.target.value)}
+                  placeholder="Поиск по имени..."
+                  className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 outline-none focus:border-primary-500"
+                />
+              </div>
+              {filteredFriends.length === 0 ? (
+                <p className="text-xs text-slate-600 italic py-2">Нет друзей для приглашения</p>
+              ) : (
+                <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                  {filteredFriends.map((f: any) => (
+                    <button
+                      key={f.id}
+                      onClick={() => setInviteFriendId(f.id)}
+                      className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-colors text-left ${
+                        inviteFriendId === f.id
+                          ? 'bg-primary-500/10 border-primary-500/40'
+                          : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <AvatarComponent src={f.avatar} name={`${f.firstName} ${f.lastName}`} size={36} />
+                      <span className="text-sm text-white">{f.firstName} {f.lastName}</span>
+                      {inviteFriendId === f.id && <CheckCircle2 size={16} className="text-primary-400 ml-auto flex-shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Divider */}
+            <div className="px-4 py-3">
+              <div className="h-px bg-slate-800" />
+            </div>
+
+            {/* Step 2: Choose role (profession) */}
+            <div className="px-4 pb-4">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">2. Выберите роль</p>
+              <div className="relative mb-2">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  value={inviteProfSearch}
+                  onChange={e => setInviteProfSearch(e.target.value)}
+                  placeholder="Поиск роли (гитарист, вокалист...)..."
+                  className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 outline-none focus:border-primary-500"
+                />
+              </div>
+              <div className="space-y-1 max-h-56 overflow-y-auto">
+                {filteredProfessions.slice(0, 40).map((p: any) => (
+                  <button
+                    key={p.id}
+                    onClick={() => setInviteProfessionId(p.id)}
+                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors text-left ${
+                      inviteProfessionId === p.id
+                        ? 'bg-primary-500/10 border-primary-500/40 text-primary-300'
+                        : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
+                    }`}
+                  >
+                    <span className="text-sm">{p.name}</span>
+                    {inviteProfessionId === p.id && <CheckCircle2 size={15} className="text-primary-400 flex-shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Summary footer */}
+          {(inviteFriendId || inviteProfessionId) && (
+            <div className="px-4 py-3 border-t border-slate-800 bg-slate-900/80 flex-shrink-0 text-sm text-slate-400">
+              {inviteFriendId && (
+                <span className="text-white font-medium">
+                  {friendsList.find((f: any) => f.id === inviteFriendId)?.firstName}
+                </span>
+              )}
+              {inviteFriendId && inviteProfessionId && <span className="mx-1">—</span>}
+              {inviteProfessionId && (
+                <span>{allProfessions.find((p: any) => p.id === inviteProfessionId)?.name}</span>
+              )}
+            </div>
+          )}
+
+          {inviteMut.isError && (
+            <p className="px-4 py-2 text-sm text-red-400 bg-red-500/5 border-t border-red-500/20">
+              Ошибка. Попробуйте снова.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

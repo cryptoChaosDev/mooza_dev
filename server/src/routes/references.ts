@@ -449,7 +449,7 @@ router.get('/search', async (req, res) => {
 // Get all reference data in one call
 router.get('/all', async (_req, res) => {
   try {
-    const [fields, services, genres, workFormats, employmentTypes, skillLevels, availabilities, geographies, priceRanges] = await Promise.all([
+    const [fields, services, genres, workFormats, employmentTypes, skillLevels, availabilities, geographies, priceRanges, professions] = await Promise.all([
       prisma.fieldOfActivity.findMany({ orderBy: { name: 'asc' } }),
       prisma.service.findMany({
         include: { directions: { select: { id: true, name: true, fieldOfActivityId: true } } },
@@ -462,9 +462,10 @@ router.get('/all', async (_req, res) => {
       prisma.availability.findMany({ orderBy: { sortOrder: 'asc' } }),
       prisma.geography.findMany({ orderBy: { sortOrder: 'asc' } }),
       prisma.priceRange.findMany({ orderBy: { sortOrder: 'asc' } }),
+      prisma.profession.findMany({ orderBy: { name: 'asc' } }),
     ]);
 
-    res.json({ fields, services, genres, workFormats, employmentTypes, skillLevels, availabilities, geographies, priceRanges });
+    res.json({ fields, services, genres, workFormats, employmentTypes, skillLevels, availabilities, geographies, priceRanges, professions });
   } catch (error) {
     console.error('Get all reference data error:', error);
     res.status(500).json({ error: 'Failed to get reference data' });
