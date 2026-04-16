@@ -139,7 +139,7 @@ export default function MessagesPage() {
 
   const TABS = [
     { id: 'personal' as const, label: 'Личные', icon: User },
-    { id: 'projects' as const, label: 'Проекты', icon: FolderKanban },
+    { id: 'projects' as const, label: 'Групповые', icon: FolderKanban },
   ];
 
   const filtered = conversations
@@ -175,7 +175,7 @@ export default function MessagesPage() {
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-xs font-medium transition-colors"
                 >
                   <Plus size={14} />
-                  Проект
+                  Группа
                 </button>
               )}
             </div>
