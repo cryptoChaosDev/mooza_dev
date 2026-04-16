@@ -211,7 +211,8 @@ export default function ChatPage() {
 
   const onBackTouchStart = (e: React.TouchEvent) => {
     const t = e.touches[0];
-    if (t.clientX < window.innerWidth * 0.28) {
+    // Only trigger from the leftmost 20px — prevents accidental swipe on header/messages
+    if (t.clientX <= 20) {
       backSwipe.current = { startX: t.clientX, startY: t.clientY };
     }
   };
@@ -221,10 +222,12 @@ export default function ChatPage() {
     const t = e.touches[0];
     const dx = t.clientX - bs.startX;
     const dy = Math.abs(t.clientY - bs.startY);
+    // Cancel if mostly vertical — user is scrolling
     if (dy > Math.abs(dx) + 8) { backSwipe.current = null; return; }
     if (dx <= 0) return;
     const el = chatContainerRef.current;
-    if (el) el.style.transform = `translateX(${dx}px)`;
+    // Only apply transform once clearly swiping horizontally (avoids jitter)
+    if (el && dx > 8) el.style.transform = `translateX(${dx}px)`;
   };
   const onBackTouchEnd = (e: React.TouchEvent) => {
     const bs = backSwipe.current;
@@ -240,7 +243,7 @@ export default function ChatPage() {
     } else {
       el.style.transition = 'transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1)';
       el.style.transform  = 'translateX(0)';
-      setTimeout(() => { if (el) el.style.transition = ''; }, 370);
+      setTimeout(() => { if (el) { el.style.transition = ''; el.style.transform = ''; } }, 370);
     }
   };
 
@@ -689,9 +692,6 @@ export default function ChatPage() {
       ref={chatContainerRef}
       className="fixed inset-x-0 top-16 z-10 lg:static lg:h-screen bg-slate-950 flex flex-col"
       style={{ bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' }}
-      onTouchStart={onBackTouchStart}
-      onTouchMove={onBackTouchMove}
-      onTouchEnd={onBackTouchEnd}
     >
       {/* Chat Header */}
       <div className="relative border-b border-slate-700/50 backdrop-blur-sm bg-slate-900/80 flex-shrink-0 z-30">
@@ -1017,6 +1017,9 @@ export default function ChatPage() {
         style={{ touchAction: 'pan-y' }}
         onScroll={handleMessagesScroll}
         onClick={() => inputRef.current?.blur()}
+        onTouchStart={onBackTouchStart}
+        onTouchMove={onBackTouchMove}
+        onTouchEnd={onBackTouchEnd}
       >
         <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
           {grouped.length === 0 ? (
