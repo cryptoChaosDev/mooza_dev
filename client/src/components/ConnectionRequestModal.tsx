@@ -110,9 +110,6 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
   const isSearching = search.trim().length > 0;
   const fullName = `${targetUser.firstName} ${targetUser.lastName}`.trim();
 
-  // Available services to select (exclude already linked ones in edit mode)
-  const isSelectable = (id: string) => !existingServices.has(id);
-
   const getServiceLabel = (id: string) => {
     const fromServices = services.find(s => s.id === id);
     if (fromServices) return fromServices.name;
