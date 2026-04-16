@@ -122,13 +122,14 @@ router.get('/directions', async (req, res) => {
 // Get professions by direction — only those with users other than excludeUserId
 router.get('/professions', async (req, res) => {
   try {
-    const { directionId, search, excludeUserId } = req.query;
-    const usFilter = excludeUserId
-      ? { some: { userId: { not: excludeUserId as string } } }
-      : { some: {} };
-    const where: any = {
-      userServices: usFilter,
-    };
+    const { directionId, search, excludeUserId, all } = req.query;
+    const where: any = {};
+    if (!all) {
+      // Filter to professions that have at least one user (for catalog/search)
+      where.userServices = excludeUserId
+        ? { some: { userId: { not: excludeUserId as string } } }
+        : { some: {} };
+    }
     if (directionId) where.directionId = directionId as string;
     if (search) where.name = { contains: search as string, mode: 'insensitive' };
 

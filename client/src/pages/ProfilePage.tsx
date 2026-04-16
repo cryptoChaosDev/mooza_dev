@@ -108,7 +108,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (isEditing) {
       lockScroll();
-      referenceAPI.getFieldsOfActivity().then(r => setFieldsOfActivity(r.data));
+      referenceAPI.getFieldsOfActivity({ all: true }).then(r => setFieldsOfActivity(r.data));
       referenceAPI.getWorkFormats().then(r => setWorkFormats(r.data));
       referenceAPI.getEmploymentTypes().then(r => setEmploymentTypes(r.data));
       referenceAPI.getSkillLevels().then(r => setSkillLevels(r.data));
@@ -405,7 +405,7 @@ export default function ProfilePage() {
             <button key={f.id} type="button"
               onClick={() => {
                 setPending(prev => ({ ...prev, fieldOfActivityId: f.id, fieldOfActivityName: f.name }));
-                referenceAPI.getDirections({ fieldOfActivityId: f.id }).then(r => setAddFlowDirections(r.data));
+                referenceAPI.getDirections({ fieldOfActivityId: f.id, all: true }).then(r => setAddFlowDirections(r.data));
                 setAddStep('direction');
               }}
               className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
@@ -430,7 +430,7 @@ export default function ProfilePage() {
               {addFlowDirections.map((d: any) => (
                 <button key={d.id} type="button"
                   onClick={() => {
-                    referenceAPI.getProfessions({ directionId: d.id }).then(r => setAddFlowProfessions(r.data));
+                    referenceAPI.getProfessions({ directionId: d.id, all: true }).then(r => setAddFlowProfessions(r.data));
                     setAddStep('profession');
                   }}
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
