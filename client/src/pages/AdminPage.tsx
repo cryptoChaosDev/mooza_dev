@@ -223,8 +223,8 @@ const SYSTEM_FILTER_TYPES = [
 
 // ─── Direction node ──────────────────────────────────────────────────────────
 
-function DirectionNode({ direction, allDirections, allProfessions, allCustomFilters, allServices, onUnlink, qc }: {
-  direction: Item; allDirections: Item[]; allProfessions: Item[]; allCustomFilters: CFilter[]; allServices: { id: string; name: string }[]; onUnlink: () => void; qc: QueryClient;
+function DirectionNode({ direction, allProfessions, allCustomFilters, allServices, onUnlink, qc }: {
+  direction: Item; allProfessions: Item[]; allCustomFilters: CFilter[]; allServices: { id: string; name: string }[]; onUnlink: () => void; qc: QueryClient;
 }) {
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -469,7 +469,6 @@ function FieldNode({ field, allDirections, allProfessions, allCustomFilters, all
             <DirectionNode
               key={dir.id}
               direction={dir}
-              allDirections={allDirections}
               allProfessions={allProfessions}
               allCustomFilters={allCustomFilters}
               allServices={allServices}
