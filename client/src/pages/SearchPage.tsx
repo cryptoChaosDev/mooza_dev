@@ -160,6 +160,9 @@ export default function SearchPage() {
   const [debouncedArtistQuery, setDebouncedArtistQuery] = useState('');
   const [artistTypeFilter, setArtistTypeFilter] = useState<string>('ALL');
   const [artistGenreFilter, setArtistGenreFilter] = useState<string | null>(null);
+  const [showAllGenres, setShowAllGenres] = useState(false);
+
+  const POPULAR_GENRE_NAMES = ['рок', 'рэп', 'поп', 'панк', 'инди'];
 
   // Debounce
   useEffect(() => {
@@ -524,36 +527,53 @@ export default function SearchPage() {
             </div>
 
             {/* Genre tiles */}
-            {genresList && genresList.length > 0 && (
-              <div className="mb-5">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Жанры</p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setArtistGenreFilter(null)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                      artistGenreFilter === null
-                        ? 'bg-primary-600 text-white'
-                        : 'bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'
-                    }`}
-                  >
-                    Все жанры
-                  </button>
-                  {genresList.map((genre: any, i: number) => (
+            {genresList && genresList.length > 0 && (() => {
+              const popular = genresList.filter((g: any) =>
+                POPULAR_GENRE_NAMES.some(name => g.name.toLowerCase().includes(name))
+              );
+              const rest = genresList.filter((g: any) =>
+                !POPULAR_GENRE_NAMES.some(name => g.name.toLowerCase().includes(name))
+              );
+              const visibleGenres = showAllGenres ? genresList : popular;
+              return (
+                <div className="mb-5">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Жанры</p>
+                  <div className="flex flex-wrap gap-2" style={{ maxHeight: showAllGenres ? undefined : '4.5rem', overflow: showAllGenres ? undefined : 'hidden' }}>
                     <button
-                      key={genre.id}
-                      onClick={() => setArtistGenreFilter(genre.id)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
-                        artistGenreFilter === genre.id
-                          ? `bg-gradient-to-r ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]} text-white`
+                      onClick={() => setArtistGenreFilter(null)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${
+                        artistGenreFilter === null
+                          ? 'bg-primary-600 text-white'
                           : 'bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'
                       }`}
                     >
-                      {genre.name}
+                      Все жанры
                     </button>
-                  ))}
+                    {visibleGenres.map((genre: any, i: number) => (
+                      <button
+                        key={genre.id}
+                        onClick={() => setArtistGenreFilter(genre.id)}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${
+                          artistGenreFilter === genre.id
+                            ? `bg-gradient-to-r ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]} text-white`
+                            : 'bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'
+                        }`}
+                      >
+                        {genre.name}
+                      </button>
+                    ))}
+                  </div>
+                  {rest.length > 0 && (
+                    <button
+                      onClick={() => setShowAllGenres(v => !v)}
+                      className="mt-2 text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                    >
+                      {showAllGenres ? 'Скрыть' : `Ещё ${rest.length} жанров →`}
+                    </button>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Artist list */}
             <div>
