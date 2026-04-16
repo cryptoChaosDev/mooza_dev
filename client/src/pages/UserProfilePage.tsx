@@ -13,6 +13,7 @@ import { SocialIconRow } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
 import ShareButton from '../components/ShareButton';
 import ConnectionRequestModal from '../components/ConnectionRequestModal';
+import { plural } from '../lib/plural';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import { useAuthStore } from '../stores/authStore';
 
@@ -294,8 +295,8 @@ export default function UserProfilePage() {
           <div className="flex items-center gap-2 text-xs text-slate-500 mb-3 flex-wrap">
             <span><span className="font-semibold text-slate-300">{friendCount}</span> друзей</span>
             {servicesFlat.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{servicesFlat.length}</span> услуг</span></>}
-            {user.channel && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{channelInfo?._count?.subscriptions ?? user.channel._count?.subscriptions ?? 0}</span> подписчиков</span></>}
-            {userConnections.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{userConnections.length}</span> связей</span></>}
+            {user.channel && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{channelInfo?._count?.subscriptions ?? user.channel._count?.subscriptions ?? 0}</span> {plural(channelInfo?._count?.subscriptions ?? user.channel._count?.subscriptions ?? 0, 'подписчик', 'подписчика', 'подписчиков')}</span></>}
+            {userConnections.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{userConnections.length}</span> {plural(userConnections.length, 'связь', 'связи', 'связей')}</span></>}
           </div>
 
           {/* Bio */}
@@ -556,7 +557,7 @@ export default function UserProfilePage() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold text-white truncate">{user.channel.name}</p>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    {channelInfo?._count?.subscriptions ?? user.channel._count?.subscriptions ?? 0} подписчиков · {channelInfo?._count?.posts ?? user.channel._count?.posts ?? 0} постов
+                    {(() => { const s = channelInfo?._count?.subscriptions ?? user.channel._count?.subscriptions ?? 0; const p = channelInfo?._count?.posts ?? user.channel._count?.posts ?? 0; return `${s} ${plural(s, 'подписчик', 'подписчика', 'подписчиков')} · ${p} ${plural(p, 'пост', 'поста', 'постов')}`; })()}
                   </p>
                 </div>
               </div>

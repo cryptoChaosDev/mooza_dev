@@ -7,6 +7,7 @@ import {
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
 } from 'lucide-react';
 import { artistAPI, referenceAPI } from '../lib/api';
+import { plural } from '../lib/plural';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
 import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
@@ -513,9 +514,9 @@ export default function ArtistPage() {
 
         {/* Stats — compact inline */}
         <div className="flex items-center gap-2 text-xs text-slate-500 mb-3 flex-wrap">
-          <span><span className="font-semibold text-slate-300">{artist.followersCount ?? 0}</span> подписчиков</span>
-          {(artist.members?.length ?? 0) > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{artist.members.length}</span> участников</span></>}
-          {(artist.listeners ?? 0) > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{Number(artist.listeners).toLocaleString('ru-RU')}</span> слушателей</span></>}
+          <span><span className="font-semibold text-slate-300">{artist.followersCount ?? 0}</span> {plural(artist.followersCount ?? 0, 'подписчик', 'подписчика', 'подписчиков')}</span>
+          {(artist.members?.length ?? 0) > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{artist.members.length}</span> {plural(artist.members.length, 'участник', 'участника', 'участников')}</span></>}
+          {(artist.listeners ?? 0) > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{Number(artist.listeners).toLocaleString('ru-RU')}</span> {plural(Number(artist.listeners), 'слушатель', 'слушателя', 'слушателей')}</span></>}
         </div>
 
         {/* Moderation panel for members */}

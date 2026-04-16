@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, BadgeCheck, Ban, Search } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
+import { plural } from '../lib/plural';
 import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
@@ -701,7 +702,7 @@ export default function ChatPage() {
                   {(otherMember as any)?.isBlocked && <span title="Заблокирован"><Ban size={13} className="text-red-500 flex-shrink-0" /></span>}
                 </div>
                 {conversation.isGroup ? (
-                  <p className="text-xs text-slate-400">{conversation.members.length} участников</p>
+                  <p className="text-xs text-slate-400">{conversation.members.length} {plural(conversation.members.length, 'участник', 'участника', 'участников')}</p>
                 ) : (
                   <p className={`text-xs flex items-center gap-1 ${otherOnline ? 'text-emerald-400' : 'text-slate-500'}`}>
                     <span className={`inline-block w-1.5 h-1.5 rounded-full ${otherOnline ? 'bg-emerald-400' : 'bg-slate-500'}`} />
@@ -815,7 +816,7 @@ export default function ChatPage() {
                   </div>
                   <div>
                     <p className="font-semibold text-white text-sm">{chatName}</p>
-                    <p className="text-xs text-slate-400">{conversation.members.length} участников</p>
+                    <p className="text-xs text-slate-400">{conversation.members.length} {plural(conversation.members.length, 'участник', 'участника', 'участников')}</p>
                   </div>
                 </div>
 

@@ -17,6 +17,7 @@ import { channelAPI } from '../lib/api';
 import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import ShareButton from '../components/ShareButton';
+import { plural } from '../lib/plural';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -699,8 +700,8 @@ export default function ProfilePage() {
                 <p className="text-base font-semibold text-white truncate">{myChannel.name}</p>
               )}
               <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                <span>{myChannel._count.subscriptions} подписчиков</span>
-                <span>{myChannel._count.posts} постов</span>
+                <span>{myChannel._count.subscriptions} {plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')}</span>
+                <span>{myChannel._count.posts} {plural(myChannel._count.posts, 'пост', 'поста', 'постов')}</span>
               </div>
             </div>
           </div>
@@ -909,8 +910,8 @@ export default function ProfilePage() {
           <div className="flex items-center gap-2 text-xs text-slate-500 mb-3 flex-wrap">
             <span><span className="font-semibold text-slate-300">{friendCount}</span> друзей</span>
             {servicesFlat.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{servicesFlat.length}</span> услуг</span></>}
-            {myConnections.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{myConnections.length}</span> связей</span></>}
-            {myChannel && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{myChannel._count.subscriptions}</span> подписчиков</span></>}
+            {myConnections.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{myConnections.length}</span> {plural(myConnections.length, 'связь', 'связи', 'связей')}</span></>}
+            {myChannel && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{myChannel._count.subscriptions}</span> {plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')}</span></>}
           </div>
 
           {/* Bio */}
@@ -1176,7 +1177,7 @@ export default function ProfilePage() {
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-white truncate">{myChannel.name}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{myChannel._count.subscriptions} подписчиков · {myChannel._count.posts} постов</p>
+                <p className="text-xs text-slate-500 mt-0.5">{myChannel._count.subscriptions} {plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')} · {myChannel._count.posts} {plural(myChannel._count.posts, 'пост', 'поста', 'постов')}</p>
               </div>
             </div>
           </div>

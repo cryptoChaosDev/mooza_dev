@@ -10,6 +10,7 @@ import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
 import { referenceAPI, userAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
+import { plural } from '../lib/plural';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -77,7 +78,7 @@ function ExpandableUserRow({ user, onNavigate }: { user: any; onNavigate: (id: s
             {connCount > 0 && (
               <span className="flex items-center gap-0.5 text-xs text-slate-500">
                 <Link2 size={10} />
-                {connCount} {connCount === 1 ? 'связь' : connCount < 5 ? 'связи' : 'связей'}
+                {connCount} {plural(connCount, 'связь', 'связи', 'связей')}
               </span>
             )}
             {user.city && <span className="text-xs text-slate-600 truncate">· {user.city}</span>}
@@ -647,7 +648,7 @@ export default function SearchPage() {
                             ))}
                             {artist.city && <span className="text-xs text-slate-600">· {artist.city}</span>}
                             {artist.listeners > 0 && (
-                              <span className="text-xs text-slate-600">· {artist.listeners.toLocaleString('ru-RU')} слушателей</span>
+                              <span className="text-xs text-slate-600">· {artist.listeners.toLocaleString('ru-RU')} {plural(artist.listeners, 'слушатель', 'слушателя', 'слушателей')}</span>
                             )}
                           </div>
                         </div>
