@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
-  Crown, BadgeCheck, Ban, Mic, Users, Music2, Loader2, X,
+  Crown, BadgeCheck, Ban, Users, Music2, Loader2, X,
   BookOpen, Link2, ShieldCheck,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -31,7 +31,6 @@ type ServiceView = 'fields' | 'directions' | 'professions';
 
 const ARTIST_TYPES = [
   { value: 'ALL', label: 'Все', icon: Music2 },
-  { value: 'SOLO', label: 'Соло', icon: Mic },
   { value: 'GROUP', label: 'Группы', icon: Users },
   { value: 'COVER_GROUP', label: 'Кавербэнды', icon: BookOpen },
 ];
@@ -236,11 +235,11 @@ export default function SearchPage() {
   const { data: artists, isLoading: artistsLoading } = useQuery({
     queryKey: ['catalog-artists', debouncedArtistQuery, artistTypeFilter, artistGenreFilter],
     queryFn: async () => {
-      // Fetch all matching artists (server filters by single type; we do multi-type client-side)
+      // Only show groups (GROUP / COVER_GROUP), not solo artists
       const { data } = await referenceAPI.getArtists({
         search: debouncedArtistQuery || undefined,
       });
-      let result = data as any[];
+      let result = (data as any[]).filter((a: any) => a.type === 'GROUP' || a.type === 'COVER_GROUP');
       if (artistTypeFilter.length > 0) {
         result = result.filter((a: any) => artistTypeFilter.includes(a.type));
       }
@@ -347,7 +346,7 @@ export default function SearchPage() {
           <div className="flex gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
             {[
               { id: 'services' as const, label: 'Услуги' },
-              { id: 'artists' as const, label: 'Артисты' },
+              { id: 'artists' as const, label: 'Группы' },
             ].map(tab => (
               <button
                 key={tab.id}

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { userAPI, referenceAPI, connectionAPI } from '../lib/api';
+import { userAPI, referenceAPI, connectionAPI, groupAPI } from '../lib/api';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { useAuthStore } from '../stores/authStore';
 import {
@@ -206,6 +206,11 @@ export default function ProfilePage() {
   const { data: myConnections = [] } = useQuery({
     queryKey: ['connections-accepted'],
     queryFn: async () => { const { data } = await connectionAPI.getAccepted(); return data; },
+  });
+
+  const { data: myGroups = [] } = useQuery({
+    queryKey: ['my-groups'],
+    queryFn: async () => { const { data } = await groupAPI.getMyGroups(); return data as any[]; },
   });
 
   const { data: myChannel, refetch: refetchChannel } = useQuery({
@@ -934,20 +939,20 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* 4. Коллективы */}
+          {/* 4. Группы */}
           <div className="mb-4">
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Коллективы</span>
+              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Группы</span>
               <div className="flex-1 h-px bg-slate-800" />
             </div>
             <div className="flex flex-wrap gap-1.5">
-              {profile?.userArtists?.filter((ua: any) => ua.artist?.name).map((ua: any) => (
+              {myGroups.map((g: any) => (
                 <button
-                  key={ua.artistId ?? ua.artist?.id}
-                  onClick={() => navigate('/artist/' + (ua.artist?.id ?? ua.artistId))}
+                  key={g.id}
+                  onClick={() => navigate('/artist/' + g.id)}
                   className="px-2.5 py-1 bg-primary-600/15 border border-primary-500/30 text-primary-400 rounded-lg text-xs font-medium hover:bg-primary-600/25 transition-colors"
                 >
-                  {ua.artist?.name}
+                  {g.name}
                 </button>
               ))}
               <button
@@ -955,12 +960,6 @@ export default function ProfilePage() {
                 className="px-2.5 py-1 bg-primary-600/20 border border-primary-500/40 text-primary-400 rounded-lg text-xs font-medium hover:bg-primary-600/30 transition-colors flex items-center gap-1"
               >
                 + Создать группу
-              </button>
-              <button
-                onClick={() => navigate('/artist/create')}
-                className="px-2.5 py-1 bg-slate-800/60 border border-slate-700 text-slate-400 rounded-lg text-xs font-medium hover:bg-slate-800 hover:text-white transition-colors flex items-center gap-1"
-              >
-                + Артист
               </button>
             </div>
           </div>
