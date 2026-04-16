@@ -5,7 +5,7 @@ import {
   ArrowLeft, MapPin, ExternalLink,
   Camera, Navigation, Edit3, X, Save, Loader2,
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
-  UserPlus, Trash2, Search, ChevronRight,
+  UserPlus, Trash2, Search,
 } from 'lucide-react';
 import { artistAPI, referenceAPI, groupAPI, friendshipAPI } from '../lib/api';
 import { plural } from '../lib/plural';
