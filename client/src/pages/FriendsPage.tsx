@@ -3,14 +3,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import {
   Users, Check, X, MessageCircle, UserX, Clock,
-  Pin, PinOff, Search, Wifi, Link2, Star, Crown, BadgeCheck,
+  Pin, PinOff, Search, Wifi, Link2, Star, Crown, BadgeCheck, Music2,
 } from 'lucide-react';
-import { friendshipAPI, connectionAPI, favoriteAPI } from '../lib/api';
+import { friendshipAPI, connectionAPI, favoriteAPI, groupAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { usePresenceStore } from '../stores/presenceStore';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 
-type Tab = 'friends' | 'connections' | 'favorites';
+type Tab = 'friends' | 'connections' | 'favorites' | 'groups';
 
 const PINNED_KEY = 'mooza_pinned_friends';
 function getPinned(): string[] {
@@ -79,6 +79,21 @@ export default function FriendsPage() {
     queryFn: async () => { const { data } = await favoriteAPI.list(); return data; },
   });
 
+  // ── Group invites ──
+  const { data: groupInvites = [] } = useQuery({
+    queryKey: ['group-invites'],
+    queryFn: async () => { const { data } = await groupAPI.getInvites(); return data as any[]; },
+  });
+
+  const acceptGroupInviteMut = useMutation({
+    mutationFn: (membershipId: string) => groupAPI.acceptInvite(membershipId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['group-invites'] }),
+  });
+  const declineGroupInviteMut = useMutation({
+    mutationFn: (membershipId: string) => groupAPI.declineInvite(membershipId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['group-invites'] }),
+  });
+
   // ── Mutations (friends) ──
   const acceptMutation = useMutation({
     mutationFn: friendshipAPI.acceptRequest,
@@ -136,10 +151,12 @@ export default function FriendsPage() {
 
   const friendsBadge = requests.length;
   const connBadge = connRequests.length + breakRequests.length;
+  const groupsBadge = groupInvites.length;
 
   const TABS: { id: Tab; label: string; badge: number }[] = [
     { id: 'friends',     label: 'Друзья',   badge: friendsBadge },
     { id: 'connections', label: 'Связи',    badge: connBadge },
+    { id: 'groups',      label: 'Группы',   badge: groupsBadge },
     { id: 'favorites',   label: 'Избранное', badge: 0 },
   ];
 
@@ -468,6 +485,68 @@ export default function FriendsPage() {
                   <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Link2 size={32} className="text-slate-600" /></div>
                   <p className="text-white font-semibold mb-1">Нет профессиональных связей</p>
                   <p className="text-slate-500 text-sm">Найдите музыкантов и установите профессиональные связи</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ══ GROUPS TAB ══ */}
+          {activeTab === 'groups' && (
+            <div className="pb-4">
+              {groupInvites.length > 0 && (
+                <div>
+                  <SectionHeader label="Приглашения в группы" count={groupInvites.length} />
+                  <div className="divide-y divide-slate-800/60">
+                    {groupInvites.map((inv: any) => (
+                      <div key={inv.id} className="flex items-center gap-3 px-4 py-3">
+                        <button onClick={() => navigate(`/artist/${inv.group.id}`)} className="flex-shrink-0">
+                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center overflow-hidden">
+                            {inv.group.avatar
+                              ? <img src={inv.group.avatar} alt={inv.group.name} className="w-full h-full object-cover" />
+                              : <span className="text-white font-bold text-sm">{inv.group.name?.[0]?.toUpperCase()}</span>
+                            }
+                          </div>
+                        </button>
+                        <button onClick={() => navigate(`/artist/${inv.group.id}`)} className="flex-1 min-w-0 text-left">
+                          <p className="text-sm font-semibold text-white truncate">{inv.group.name}</p>
+                          <p className="text-xs text-primary-400 truncate">
+                            {inv.profession ? `Роль: ${inv.profession.name}` : 'Приглашение в группу'}
+                          </p>
+                          {inv.invitedBy && (
+                            <p className="text-xs text-slate-600 truncate">от {inv.invitedBy.firstName} {inv.invitedBy.lastName}</p>
+                          )}
+                        </button>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            onClick={() => acceptGroupInviteMut.mutate(inv.id)}
+                            disabled={acceptGroupInviteMut.isPending || declineGroupInviteMut.isPending}
+                            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
+                          >
+                            <Check size={13} /> Вступить
+                          </button>
+                          <button
+                            onClick={() => declineGroupInviteMut.mutate(inv.id)}
+                            disabled={declineGroupInviteMut.isPending || acceptGroupInviteMut.isPending}
+                            className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-50"
+                            title="Отклонить"
+                          >
+                            <X size={15} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {groupInvites.length === 0 && (
+                <div className="flex flex-col items-center py-16 px-6 text-center">
+                  <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Music2 size={32} className="text-slate-600" /></div>
+                  <p className="text-white font-semibold mb-1">Нет приглашений</p>
+                  <p className="text-slate-500 text-sm mb-5">Здесь появятся приглашения в музыкальные группы</p>
+                  <button onClick={() => navigate('/groups/create')} className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-medium transition-colors">
+                    Создать группу
+                  </button>
                 </div>
               )}
             </div>
