@@ -313,10 +313,13 @@ function DirectionNode({ direction, allProfessions, allCustomFilters, allService
             {allProfessions.length === 0 ? (
               <p className="text-xs text-slate-600">Добавьте профессии во вкладке «Профессии»</p>
             ) : (() => {
-              // Only show: linked to THIS direction, or not linked to any direction
+              // Show: linked to THIS direction, or not linked to any direction
               const visibleProfs = allProfessions.filter(p =>
                 p.direction?.id === direction.id || !p.direction?.id
               );
+              if (visibleProfs.length === 0) {
+                return <p className="text-xs text-slate-600">Все профессии привязаны к другим направлениям</p>;
+              }
               // Detect duplicate names among visible professions for disambiguation
               const nameCounts: Record<string, number> = {};
               visibleProfs.forEach(p => { nameCounts[p.name] = (nameCounts[p.name] ?? 0) + 1; });
