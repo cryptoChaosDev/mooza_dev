@@ -388,17 +388,15 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
     }
 
     // Apply only the most specific filter available (most→least specific: profession > direction > field)
+    // Users store their profession via UserService (not UserProfession which is empty).
     if (professionId) {
-      andClauses.push({ userProfessions: { some: { professionId: professionId as string } } });
+      andClauses.push({ userServices: { some: { professionId: professionId as string } } });
     } else if (directionId) {
-      andClauses.push({ userProfessions: { some: { profession: { directionId: directionId as string } } } });
+      andClauses.push({ userServices: { some: { profession: { directionId: directionId as string } } } });
     } else if (fieldOfActivityId) {
-      // Match via User.fieldOfActivityId OR via profession → direction → field
+      // Match via UserService → profession → direction → fieldOfActivity
       andClauses.push({
-        OR: [
-          { fieldOfActivityId: fieldOfActivityId as string },
-          { userProfessions: { some: { profession: { direction: { fieldOfActivityId: fieldOfActivityId as string } } } } },
-        ],
+        userServices: { some: { profession: { direction: { fieldOfActivityId: fieldOfActivityId as string } } } },
       });
     }
 
@@ -419,8 +417,9 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
         isVerified: true,
         isBlocked: true,
         fieldOfActivity: { select: { id: true, name: true } },
-        userProfessions: {
-          include: { profession: { select: { id: true, name: true } } },
+        userServices: {
+          select: { profession: { select: { id: true, name: true } } },
+          distinct: ['professionId'],
         },
         portfolioFiles: {
           select: { id: true, url: true, mimeType: true, originalName: true },

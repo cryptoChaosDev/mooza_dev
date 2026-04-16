@@ -40,7 +40,8 @@ function ExpandableUserRow({ user, onNavigate }: { user: any; onNavigate: (id: s
   const [expanded, setExpanded] = useState(false);
   const isOnline = usePresenceStore((s) => s.onlineUsers.has(user.id));
   const connCount = (user._count?.sentConnections ?? 0) + (user._count?.receivedConnections ?? 0);
-  const professions = user.userProfessions?.map((up: any) => up.profession?.name).filter(Boolean) ?? [];
+  // Professions come from userServices (UserProfession is unused, UserService has the data)
+  const professions = user.userServices?.map((us: any) => us.profession?.name).filter(Boolean) ?? [];
   const portfolio = user.portfolioFiles ?? [];
 
   return (
@@ -199,10 +200,11 @@ export default function SearchPage() {
   });
 
   // ── Catalog users ──────────────────────────────────────────────────────────
-  // User list always shows all users — tiles are navigation only, not a filter.
-  // Only text search narrows the list.
   const catalogParams = {
     query: debouncedServiceQuery || undefined,
+    fieldOfActivityId: selectedField?.id,
+    directionId: selectedDirection?.id,
+    professionId: selectedProfession?.id,
   };
 
   const { data: catalogUsers, isLoading: catalogLoading } = useQuery({
