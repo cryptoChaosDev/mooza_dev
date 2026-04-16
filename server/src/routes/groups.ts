@@ -184,8 +184,8 @@ router.post('/:id/invite', authenticate, async (req: AuthRequest, res: Response)
     const friendship = await prisma.friendship.findFirst({
       where: {
         OR: [
-          { senderId: meId, receiverId: friendId, status: 'ACCEPTED' },
-          { senderId: friendId, receiverId: meId, status: 'ACCEPTED' },
+          { requesterId: meId, receiverId: friendId, status: 'ACCEPTED' },
+          { requesterId: friendId, receiverId: meId, status: 'ACCEPTED' },
         ],
       },
     });
