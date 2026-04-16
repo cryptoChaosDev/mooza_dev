@@ -5,9 +5,9 @@ import {
   ArrowLeft, MapPin, MessageCircle, Loader2,
   Crown, BadgeCheck, Ban, X,
   Headphones, Film, Image, FileText,
-  Link2, Star,
+  Link2, Star, UserPlus, UserCheck, UserX, Clock,
 } from 'lucide-react';
-import { userAPI, channelAPI, connectionAPI, favoriteAPI } from '../lib/api';
+import { userAPI, channelAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { SocialIconRow } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
@@ -90,6 +90,23 @@ export default function UserProfilePage() {
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['favorite-status', userId] }); queryClient.invalidateQueries({ queryKey: ['favorites'] }); },
   });
 
+
+  const sendFriendMut = useMutation({
+    mutationFn: () => friendshipAPI.sendRequest(userId!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
+  });
+  const cancelFriendMut = useMutation({
+    mutationFn: () => friendshipAPI.rejectRequest(user?.friendshipId!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
+  });
+  const acceptFriendMut = useMutation({
+    mutationFn: () => friendshipAPI.acceptRequest(user?.friendshipId!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
+  });
+  const removeFriendMut = useMutation({
+    mutationFn: () => friendshipAPI.removeFriend(user?.friendshipId!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
+  });
 
   const subscribeMut = useMutation({
     mutationFn: () => channelAPI.subscribe(channelId!),
@@ -258,6 +275,57 @@ export default function UserProfilePage() {
                       title={favStatus.isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
                     >
                       <Star size={16} fill={favStatus.isFavorite ? 'currentColor' : 'none'} />
+                    </button>
+                  )}
+                  {/* Friendship button */}
+                  {user.friendshipStatus === 'none' && (
+                    <button
+                      onClick={() => sendFriendMut.mutate()}
+                      disabled={sendFriendMut.isPending}
+                      className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-primary-400 rounded-xl transition-all disabled:opacity-50"
+                      title="Добавить в друзья"
+                    >
+                      <UserPlus size={16} />
+                    </button>
+                  )}
+                  {user.friendshipStatus === 'pending_sent' && (
+                    <button
+                      onClick={() => cancelFriendMut.mutate()}
+                      disabled={cancelFriendMut.isPending}
+                      className="p-2 bg-slate-800 hover:bg-red-500/10 border border-slate-700 hover:border-red-500/30 text-slate-500 hover:text-red-400 rounded-xl transition-all disabled:opacity-50"
+                      title="Заявка отправлена — нажмите чтобы отменить"
+                    >
+                      <Clock size={16} />
+                    </button>
+                  )}
+                  {user.friendshipStatus === 'pending_received' && (
+                    <>
+                      <button
+                        onClick={() => acceptFriendMut.mutate()}
+                        disabled={acceptFriendMut.isPending}
+                        className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all disabled:opacity-50"
+                        title="Принять заявку в друзья"
+                      >
+                        <UserCheck size={16} />
+                      </button>
+                      <button
+                        onClick={() => cancelFriendMut.mutate()}
+                        disabled={cancelFriendMut.isPending}
+                        className="p-2 bg-slate-800 hover:bg-red-500/10 border border-slate-700 hover:border-red-500/30 text-slate-500 hover:text-red-400 rounded-xl transition-all disabled:opacity-50"
+                        title="Отклонить заявку"
+                      >
+                        <UserX size={16} />
+                      </button>
+                    </>
+                  )}
+                  {user.friendshipStatus === 'accepted' && (
+                    <button
+                      onClick={() => removeFriendMut.mutate()}
+                      disabled={removeFriendMut.isPending}
+                      className="p-2 bg-green-500/10 hover:bg-red-500/10 border border-green-500/30 hover:border-red-500/30 text-green-400 hover:text-red-400 rounded-xl transition-all disabled:opacity-50"
+                      title="В друзьях — нажмите чтобы удалить"
+                    >
+                      <UserCheck size={16} />
                     </button>
                   )}
                   {user.isFriend && (

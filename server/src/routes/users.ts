@@ -527,21 +527,33 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    let isFriend = false;
+    let friendship: { id: string; status: string; requesterId: string } | null = null;
     if (req.userId && req.userId !== req.params.id) {
-      const friendship = await prisma.friendship.findFirst({
+      friendship = await prisma.friendship.findFirst({
         where: {
           OR: [
-            { requesterId: req.userId, receiverId: req.params.id, status: 'accepted' },
-            { requesterId: req.params.id, receiverId: req.userId, status: 'accepted' },
+            { requesterId: req.userId, receiverId: req.params.id },
+            { requesterId: req.params.id, receiverId: req.userId },
           ],
         },
-        select: { id: true },
+        select: { id: true, status: true, requesterId: true },
       });
-      isFriend = !!friendship;
     }
 
-    res.json({ ...user, isFriend });
+    const friendshipStatus = !friendship
+      ? 'none'
+      : friendship.status === 'accepted'
+        ? 'accepted'
+        : friendship.requesterId === req.userId
+          ? 'pending_sent'
+          : 'pending_received';
+
+    res.json({
+      ...user,
+      isFriend: friendshipStatus === 'accepted',
+      friendshipId: friendship?.id ?? null,
+      friendshipStatus,
+    });
   } catch (error) {
     console.error('Get user by ID error:', error);
     res.status(500).json({ error: 'Failed to get user' });
