@@ -39,7 +39,7 @@ const ARTIST_TYPES = [
 function ExpandableUserRow({ user, onNavigate }: { user: any; onNavigate: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const isOnline = usePresenceStore((s) => s.onlineUsers.has(user.id));
-  const connCount = (user._count?.connectionsAsRequester ?? 0) + (user._count?.connectionsAsReceiver ?? 0);
+  const connCount = (user._count?.sentConnections ?? 0) + (user._count?.receivedConnections ?? 0);
   const professions = user.userProfessions?.map((up: any) => up.profession?.name).filter(Boolean) ?? [];
   const portfolio = user.portfolioFiles ?? [];
 

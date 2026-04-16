@@ -419,8 +419,8 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
         },
         _count: {
           select: {
-            connectionsAsRequester: { where: { status: 'ACCEPTED' } },
-            connectionsAsReceiver: { where: { status: 'ACCEPTED' } },
+            sentConnections: { where: { status: 'ACCEPTED' } },
+            receivedConnections: { where: { status: 'ACCEPTED' } },
           },
         },
       },
