@@ -359,6 +359,10 @@ model User {
   sentConnections     Connection[] @relation("ConnectionRequester")
   receivedConnections Connection[] @relation("ConnectionReceiver")
 
+  // Favorites
+  favorites   Favorite[] @relation("FavoriteAdder")
+  favoritedBy Favorite[] @relation("FavoriteTarget")
+
   portfolioFiles PortfolioFile[]
 
   // Employer (many-to-one)
@@ -698,6 +702,20 @@ model MessageReaction {
 
   @@unique([userId, messageId])
   @@index([messageId])
+}
+
+// ============ FAVORITES ============
+
+model Favorite {
+  id       String @id @default(uuid())
+  userId   String
+  targetId String
+  user     User   @relation("FavoriteAdder", fields: [userId],   references: [id], onDelete: Cascade)
+  target   User   @relation("FavoriteTarget", fields: [targetId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, targetId])
+  @@index([userId])
 }
 
 // ============ NOTIFICATIONS ============

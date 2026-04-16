@@ -263,6 +263,13 @@ export const connectionAPI = {
   cancelBreak: (id: string) => api.patch(`/connections/${id}/cancel-break`),
 };
 
+export const favoriteAPI = {
+  list: () => api.get('/favorites'),
+  status: (targetId: string) => api.get(`/favorites/status/${targetId}`),
+  add: (targetId: string) => api.post(`/favorites/${targetId}`),
+  remove: (targetId: string) => api.delete(`/favorites/${targetId}`),
+};
+
 // Admin API
 const adminBase = '/admin';
 const crudFor = (path: string) => ({

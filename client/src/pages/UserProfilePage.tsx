@@ -5,9 +5,9 @@ import {
   ArrowLeft, MapPin, MessageCircle, Loader2,
   Crown, BadgeCheck, Ban, X,
   Headphones, Film, Image, FileText,
-  Link2,
+  Link2, Star,
 } from 'lucide-react';
-import { userAPI, channelAPI, connectionAPI } from '../lib/api';
+import { userAPI, channelAPI, connectionAPI, favoriteAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { SocialIconRow } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
@@ -73,6 +73,20 @@ export default function UserProfilePage() {
       } | null;
     },
     enabled: !!userId && !!me && me.id !== userId,
+  });
+
+  const { data: favStatus } = useQuery({
+    queryKey: ['favorite-status', userId],
+    queryFn: async () => { const { data } = await favoriteAPI.status(userId!); return data as { isFavorite: boolean }; },
+    enabled: !!userId && !!me && me.id !== userId,
+  });
+  const addFavMut = useMutation({
+    mutationFn: () => favoriteAPI.add(userId!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['favorite-status', userId] }); queryClient.invalidateQueries({ queryKey: ['favorites'] }); },
+  });
+  const removeFavMut = useMutation({
+    mutationFn: () => favoriteAPI.remove(userId!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['favorite-status', userId] }); queryClient.invalidateQueries({ queryKey: ['favorites'] }); },
   });
 
 
@@ -231,6 +245,21 @@ export default function UserProfilePage() {
                   >
                     <Link2 size={16} />
                   </button>
+                  {/* Favorite star */}
+                  {favStatus !== undefined && (
+                    <button
+                      onClick={() => favStatus.isFavorite ? removeFavMut.mutate() : addFavMut.mutate()}
+                      disabled={addFavMut.isPending || removeFavMut.isPending}
+                      className={`p-2 border rounded-xl transition-all disabled:opacity-50 ${
+                        favStatus.isFavorite
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20'
+                          : 'bg-slate-800 hover:bg-slate-700 border-slate-700 text-slate-400 hover:text-amber-400'
+                      }`}
+                      title={favStatus.isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+                    >
+                      <Star size={16} fill={favStatus.isFavorite ? 'currentColor' : 'none'} />
+                    </button>
+                  )}
                 </>
               )}
               <button
