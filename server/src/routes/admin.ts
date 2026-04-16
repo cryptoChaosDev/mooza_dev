@@ -455,7 +455,7 @@ router.patch('/artists/:id/approve', authenticate, requireAdmin, async (req, res
         moderatedAt: new Date(),
       },
     });
-    res.json(artist);
+    res.json({ ...artist, listeners: Number(artist.listeners) });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
@@ -471,7 +471,7 @@ router.patch('/artists/:id/reject', authenticate, requireAdmin, async (req, res)
         moderatedAt: new Date(),
       },
     });
-    res.json(artist);
+    res.json({ ...artist, listeners: Number(artist.listeners) });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
@@ -482,7 +482,7 @@ router.patch('/artists/:id/verify', authenticate, requireAdmin, async (req, res)
       where: { id: req.params.id },
       data: { status: 'VERIFIED', moderatedAt: new Date() },
     });
-    res.json(artist);
+    res.json({ ...artist, listeners: Number(artist.listeners) });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
