@@ -5,7 +5,7 @@ import {
   ArrowLeft, MapPin, MessageCircle, Loader2,
   Crown, BadgeCheck, Ban, X,
   Headphones, Film, Image, FileText,
-  Link2, Clock, CheckCheck,
+  Link2, Clock,
 } from 'lucide-react';
 import { userAPI, channelAPI, connectionAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
@@ -60,7 +60,7 @@ export default function UserProfilePage() {
   const [viewConn, setViewConn] = useState<any>(null);
   const [connExpanded, setConnExpanded] = useState(false);
 
-  const { data: conn, refetch: refetchConn } = useQuery({
+  const { data: conn } = useQuery({
     queryKey: ['connection-with', userId],
     queryFn: async () => {
       const { data } = await connectionAPI.getWith(userId!);
@@ -75,26 +75,6 @@ export default function UserProfilePage() {
     enabled: !!userId && !!me && me.id !== userId,
   });
 
-  const acceptConnMutation = useMutation({
-    mutationFn: () => connectionAPI.accept(conn!.id),
-    onSuccess: () => { refetchConn(); queryClient.invalidateQueries({ queryKey: ['connections-accepted'] }); },
-  });
-  const rejectConnMutation = useMutation({
-    mutationFn: () => connectionAPI.reject(conn!.id),
-    onSuccess: () => refetchConn(),
-  });
-  const breakConnMutation = useMutation({
-    mutationFn: () => connectionAPI.requestBreak(conn!.id),
-    onSuccess: () => refetchConn(),
-  });
-  const confirmBreakMutation = useMutation({
-    mutationFn: () => connectionAPI.confirmBreak(conn!.id),
-    onSuccess: () => refetchConn(),
-  });
-  const cancelBreakMutation = useMutation({
-    mutationFn: () => connectionAPI.cancelBreak(conn!.id),
-    onSuccess: () => refetchConn(),
-  });
 
   const subscribeMut = useMutation({
     mutationFn: () => channelAPI.subscribe(channelId!),
@@ -235,7 +215,10 @@ export default function UserProfilePage() {
               />
               {/* Connection button — only show for other users */}
               {me && me.id !== user.id && (() => {
-                if (!conn) {
+                // conn === undefined means still loading — don't show anything yet
+                if (conn === undefined) return null;
+                // conn === null means no connection exists
+                if (conn === null) {
                   return (
                     <button
                       onClick={() => setShowConnModal(true)}
@@ -248,75 +231,42 @@ export default function UserProfilePage() {
                 }
                 if (conn.status === 'PENDING' && conn.iAmRequester) {
                   return (
-                    <span className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 border border-slate-700 text-slate-400 rounded-xl text-xs font-medium">
+                    <button
+                      onClick={() => setViewConn(conn)}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 rounded-xl text-xs font-medium transition-colors"
+                    >
                       <Clock size={13} /> Запрос отправлен
-                    </span>
+                    </button>
                   );
                 }
                 if (conn.status === 'PENDING' && !conn.iAmRequester) {
                   return (
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={() => acceptConnMutation.mutate()}
-                        disabled={acceptConnMutation.isPending}
-                        className="flex items-center gap-1 px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-xs font-medium transition-all disabled:opacity-60"
-                      >
-                        <CheckCheck size={13} /> Принять
-                      </button>
-                      <button
-                        onClick={() => rejectConnMutation.mutate()}
-                        disabled={rejectConnMutation.isPending}
-                        className="p-2 bg-slate-800 hover:bg-red-500/15 border border-slate-700 text-slate-400 hover:text-red-400 rounded-xl transition-all disabled:opacity-60"
-                        title="Отклонить"
-                      >
-                        <X size={15} />
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => setViewConn(conn)}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-xs font-medium transition-all"
+                    >
+                      <Link2 size={13} /> Входящий запрос
+                    </button>
                   );
                 }
                 if (conn.status === 'ACCEPTED') {
                   return (
-                    <div className="flex items-center gap-1.5">
-                      <span className="flex items-center gap-1.5 px-3 py-2 bg-primary-500/10 border border-primary-500/30 text-primary-400 rounded-xl text-xs font-medium">
-                        <Link2 size={13} /> Связь
-                      </span>
-                      <button
-                        onClick={() => breakConnMutation.mutate()}
-                        disabled={breakConnMutation.isPending}
-                        className="p-2 bg-slate-800 hover:bg-red-500/15 border border-slate-700 text-slate-500 hover:text-red-400 rounded-xl transition-all disabled:opacity-60"
-                        title="Запросить разрыв связи"
-                      >
-                        <X size={14} />
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => setViewConn(conn)}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-primary-500/10 hover:bg-primary-500/20 border border-primary-500/30 text-primary-400 rounded-xl text-xs font-medium transition-colors"
+                    >
+                      <Link2 size={13} /> Связь
+                    </button>
                   );
                 }
                 if (conn.status === 'BREAK_REQUESTED') {
-                  if (conn.breakRequestedBy !== me?.id) {
-                    return (
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => confirmBreakMutation.mutate()}
-                          disabled={confirmBreakMutation.isPending}
-                          className="flex items-center gap-1 px-3 py-2 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-xl text-xs font-medium transition-all disabled:opacity-60"
-                        >
-                          <X size={13} /> Разорвать
-                        </button>
-                        <button
-                          onClick={() => cancelBreakMutation.mutate()}
-                          disabled={cancelBreakMutation.isPending}
-                          className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 rounded-xl transition-all disabled:opacity-60"
-                          title="Отклонить запрос разрыва"
-                        >
-                          <CheckCheck size={15} />
-                        </button>
-                      </div>
-                    );
-                  }
                   return (
-                    <span className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl text-xs font-medium">
-                      <Clock size={13} /> Разрыв ожидает
-                    </span>
+                    <button
+                      onClick={() => setViewConn(conn)}
+                      className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 hover:bg-red-500/15 border border-red-500/20 text-red-400 rounded-xl text-xs font-medium transition-colors"
+                    >
+                      <Clock size={13} /> Разрыв связи
+                    </button>
                   );
                 }
                 return null;
@@ -355,10 +305,6 @@ export default function UserProfilePage() {
             {servicesFlat.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{servicesFlat.length}</span> услуг</span></>}
             {user.channel && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{channelInfo?._count?.subscriptions ?? user.channel._count?.subscriptions ?? 0}</span> подписчиков</span></>}
             {userConnections.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{userConnections.length}</span> связей</span></>}
-            {conn?.status === 'ACCEPTED' && conn.services.length > 0 && (
-              <><span className="text-slate-700">·</span>
-              <span className="flex items-center gap-1"><Link2 size={10} className="text-primary-400" /><span className="text-primary-400 font-medium">{conn.services.map((s: any) => s.name).join(', ')}</span></span></>
-            )}
           </div>
 
           {/* Bio */}

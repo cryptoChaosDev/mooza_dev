@@ -37,6 +37,7 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
     queryClient.invalidateQueries({ queryKey: ['connections-sent'] });
     queryClient.invalidateQueries({ queryKey: ['connections-break-requests'] });
     queryClient.invalidateQueries({ queryKey: ['connection-with', partner.id] });
+    queryClient.invalidateQueries({ queryKey: ['user-connections', partner.id] });
   };
 
   const acceptMut = useMutation({
@@ -51,8 +52,16 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
     mutationFn: () => connectionAPI.cancel(connection.id),
     onSuccess: () => { invalidate(); onClose(); },
   });
+  const requestBreakMut = useMutation({
+    mutationFn: () => connectionAPI.requestBreak(connection.id),
+    onSuccess: () => { invalidate(); onClose(); },
+  });
   const confirmBreakMut = useMutation({
     mutationFn: () => connectionAPI.confirmBreak(connection.id),
+    onSuccess: () => { invalidate(); onClose(); },
+  });
+  const cancelBreakMut = useMutation({
+    mutationFn: () => connectionAPI.cancelBreak(connection.id),
     onSuccess: () => { invalidate(); onClose(); },
   });
 
@@ -173,34 +182,58 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
             </>
           )}
 
-          {/* ACCEPTED → just close */}
+          {/* ACCEPTED → close + request break */}
           {status === 'ACCEPTED' && (
-            <button onClick={onClose} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
-              Закрыть
-            </button>
-          )}
-
-          {/* BREAK_REQUESTED and other party requested → Confirm break */}
-          {status === 'BREAK_REQUESTED' && breakRequestedBy === partner.id && (
             <>
               <button onClick={onClose} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
                 Закрыть
               </button>
               <button
-                onClick={() => confirmBreakMut.mutate()}
-                disabled={confirmBreakMut.isPending}
-                className="flex-1 py-2.5 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-xl text-sm font-medium transition-all disabled:opacity-50"
+                onClick={() => requestBreakMut.mutate()}
+                disabled={requestBreakMut.isPending}
+                className="flex-1 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/25 text-red-400 rounded-xl text-sm font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
+                {requestBreakMut.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
                 Разорвать связь
               </button>
             </>
           )}
 
-          {/* BREAK_REQUESTED and I requested → just close */}
+          {/* BREAK_REQUESTED by partner → confirm or cancel their request */}
+          {status === 'BREAK_REQUESTED' && breakRequestedBy === partner.id && (
+            <>
+              <button
+                onClick={() => cancelBreakMut.mutate()}
+                disabled={cancelBreakMut.isPending}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                Отклонить
+              </button>
+              <button
+                onClick={() => confirmBreakMut.mutate()}
+                disabled={confirmBreakMut.isPending}
+                className="flex-1 py-2.5 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-xl text-sm font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {confirmBreakMut.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
+                Разорвать связь
+              </button>
+            </>
+          )}
+
+          {/* BREAK_REQUESTED by me → close or cancel my request */}
           {status === 'BREAK_REQUESTED' && breakRequestedBy !== partner.id && (
-            <button onClick={onClose} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
-              Закрыть
-            </button>
+            <>
+              <button onClick={onClose} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
+                Закрыть
+              </button>
+              <button
+                onClick={() => cancelBreakMut.mutate()}
+                disabled={cancelBreakMut.isPending}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 rounded-xl text-sm font-medium transition-colors disabled:opacity-50"
+              >
+                Отменить запрос разрыва
+              </button>
+            </>
           )}
         </div>
       </div>
