@@ -28,7 +28,7 @@ export default function Layout({ children }: LayoutProps) {
 
   const navItems = [
     { path: '/', icon: Home, label: 'Главная' },
-    { path: '/search', icon: Search, label: 'Поиск' },
+    { path: '/search', icon: Search, label: 'Каталог' },
     { path: '/messages', icon: MessageCircle, label: 'Сообщения' },
     { path: '/friends', icon: Users, label: 'Друзья' },
     { path: '/profile', icon: User, label: 'Профиль' },

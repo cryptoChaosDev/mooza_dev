@@ -369,6 +369,72 @@ router.put('/me/services', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
+// ─── GET /catalog — all users with filters, for catalog page ─────────────────
+router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { query, fieldOfActivityId, directionId, professionId } = req.query;
+    const where: any = { id: { not: req.userId } };
+
+    if (query) {
+      where.OR = [
+        { firstName: { contains: query as string, mode: 'insensitive' } },
+        { lastName: { contains: query as string, mode: 'insensitive' } },
+        { nickname: { contains: query as string, mode: 'insensitive' } },
+      ];
+    }
+
+    if (fieldOfActivityId) where.fieldOfActivityId = fieldOfActivityId as string;
+
+    if (directionId || professionId) {
+      where.userProfessions = {
+        some: {
+          profession: {
+            ...(professionId ? { id: professionId as string } : {}),
+            ...(directionId && !professionId ? { directionId: directionId as string } : {}),
+          },
+        },
+      };
+    }
+
+    const users = await prisma.user.findMany({
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        nickname: true,
+        avatar: true,
+        city: true,
+        isPremium: true,
+        isVerified: true,
+        isBlocked: true,
+        fieldOfActivity: { select: { id: true, name: true } },
+        userProfessions: {
+          include: { profession: { select: { id: true, name: true } } },
+        },
+        portfolioFiles: {
+          select: { id: true, url: true, mimeType: true, originalName: true },
+          take: 6,
+          orderBy: { createdAt: 'desc' },
+        },
+        _count: {
+          select: {
+            connectionsAsRequester: { where: { status: 'ACCEPTED' } },
+            connectionsAsReceiver: { where: { status: 'ACCEPTED' } },
+          },
+        },
+      },
+      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      take: 500,
+    });
+
+    res.json(users);
+  } catch (error) {
+    console.error('[catalog] GET /catalog error:', error);
+    res.status(500).json({ error: 'Failed to get catalog' });
+  }
+});
+
 // Search users
 router.get('/search', authenticate, async (req: AuthRequest, res) => {
   try {

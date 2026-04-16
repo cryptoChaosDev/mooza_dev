@@ -83,6 +83,8 @@ export const userAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   search: (params: any) => api.get('/users/search', { params }),
+  catalog: (params?: { query?: string; fieldOfActivityId?: string; directionId?: string; professionId?: string }) =>
+    api.get('/users/catalog', { params }),
   getUser: (id: string) => api.get(`/users/${id}`),
   uploadPortfolio: (formData: FormData) =>
     api.post('/users/me/portfolio', formData, {
@@ -100,7 +102,7 @@ export const referenceAPI = {
   getProfessions: (params?: { directionId?: string; search?: string; excludeUserId?: string }) =>
     api.get('/references/professions', { params }),
   getProfessionFeatures: () => api.get('/references/profession-features'),
-  getArtists: (params?: { search?: string }) =>
+  getArtists: (params?: { search?: string; type?: string }) =>
     api.get('/references/artists', { params }),
   getEmployers: (params?: { search?: string }) =>
     api.get('/references/employers', { params }),

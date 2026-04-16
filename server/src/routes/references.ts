@@ -482,13 +482,21 @@ router.get('/profession-features', async (_req, res) => {
   }
 });
 
-// Get artists (with search)
+// Get artists (with search, type filter, genres)
 router.get('/artists', async (req, res) => {
   try {
-    const { search } = req.query;
-    const where: any = {};
+    const { search, type } = req.query;
+    const where: any = { status: 'APPROVED' };
     if (search) where.name = { contains: search as string, mode: 'insensitive' };
-    const artists = await prisma.artist.findMany({ where, orderBy: { name: 'asc' }, take: 50 });
+    if (type && type !== 'ALL') where.type = type as string;
+    const artists = await prisma.artist.findMany({
+      where,
+      orderBy: { name: 'asc' },
+      take: 200,
+      include: {
+        genres: { include: { genre: { select: { id: true, name: true } } } },
+      },
+    });
     res.json(artists.map(a => ({ ...a, listeners: a.listeners !== undefined && a.listeners !== null ? Number(a.listeners) : a.listeners })));
   } catch (error) {
     console.error('Get artists error:', error);

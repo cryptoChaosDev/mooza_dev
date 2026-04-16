@@ -1,32 +1,19 @@
-import { useState, useEffect, useMemo } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  Search, UserPlus, X, MessageCircle, Check, Users,
-  SlidersHorizontal, ChevronLeft, ChevronRight, Loader2,
-  Crown, BadgeCheck, Ban,
-} from 'lucide-react';
-import { friendshipAPI, userAPI } from '../lib/api';
-import AvatarComponent from '../components/Avatar';
+import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import {
+  Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
+  Crown, BadgeCheck, Ban, Mic, Users, Music2, Loader2, X,
+  BookOpen, Link2,
+} from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
-import {
-  useSearchStore,
-  useFieldsOfActivity,
-  useDirections,
-  useProfessions,
-  useGenres,
-  useWorkFormats,
-  useEmploymentTypes,
-  useSkillLevels,
-  useAvailabilities,
-  useGeographies,
-} from '../stores/searchStore';
-import FilterPanel from '../components/FilterPanel';
-import BottomSheet from '../components/BottomSheet';
+import { referenceAPI, userAPI } from '../lib/api';
+import AvatarComponent from '../components/Avatar';
 
-// ─── Tile gradients ────────────────────────────────────────────────────────────
+const API_URL = import.meta.env.VITE_API_URL || '';
+
+// ─── Tile gradients ──────────────────────────────────────────────────────────
 const TILE_GRADIENTS = [
   'from-violet-600 to-purple-700',
   'from-primary-600 to-cyan-700',
@@ -38,428 +25,351 @@ const TILE_GRADIENTS = [
   'from-lime-600 to-green-700',
 ];
 
-// ─── User card (3-column grid) ─────────────────────────────────────────────────
-function UserCard({ user, currentUserId, sentRequests, friendIds, onMessage, onAddFriend, onNavigate }: {
-  user: any;
-  currentUserId?: string;
-  sentRequests: Set<string>;
-  friendIds: Set<string>;
-  onMessage: (id: string) => void;
-  onAddFriend: (id: string) => void;
-  onNavigate: (id: string) => void;
-}) {
-  const isSent = sentRequests.has(user.id);
-  const isFriend = friendIds.has(user.id);
-  const isOnline = usePresenceStore((s) => s.onlineUsers.has(user.id));
-  const isMe = user.id === currentUserId;
+type CatalogTab = 'services' | 'artists';
+type ServiceView = 'fields' | 'directions' | 'professions';
 
-  const professions = user.userProfessions?.slice(0, 2)
-    .map((up: any) => up.profession?.name).filter(Boolean) ?? [];
-  const subtitle = [
-    professions.join(', ') || user.role,
-    user.city,
-  ].filter(Boolean).join(' · ');
+const ARTIST_TYPES = [
+  { value: 'ALL', label: 'Все', icon: Music2 },
+  { value: 'SOLO', label: 'Соло', icon: Mic },
+  { value: 'GROUP', label: 'Группы', icon: Users },
+  { value: 'COVER_GROUP', label: 'Кавербэнды', icon: BookOpen },
+];
+
+// ─── ExpandableUserRow ───────────────────────────────────────────────────────
+function ExpandableUserRow({ user, onNavigate }: { user: any; onNavigate: (id: string) => void }) {
+  const [expanded, setExpanded] = useState(false);
+  const isOnline = usePresenceStore((s) => s.onlineUsers.has(user.id));
+  const connCount = (user._count?.connectionsAsRequester ?? 0) + (user._count?.connectionsAsReceiver ?? 0);
+  const professions = user.userProfessions?.map((up: any) => up.profession?.name).filter(Boolean) ?? [];
+  const portfolio = user.portfolioFiles ?? [];
 
   return (
-    <div
-      onClick={() => onNavigate(user.id)}
-      className="bg-slate-900 border border-slate-800/60 rounded-2xl overflow-hidden cursor-pointer hover:border-slate-700 hover:bg-slate-800/50 transition-all group flex flex-col"
-    >
-      {/* Avatar area */}
-      <div className="relative">
-        <AvatarComponent src={user.avatar} name={`${user.firstName} ${user.lastName}`} size={200} className="w-full aspect-square !rounded-none" />
-        {/* Online dot */}
-        {isOnline && (
-          <span className="absolute top-2 right-2 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full" />
-        )}
-        {/* Badges */}
-        <div className="absolute bottom-2 left-2 flex gap-1">
-          {user.isPremium && (
-            <span className="bg-amber-500/90 backdrop-blur rounded-md p-0.5" title="Premium">
-              <Crown size={11} className="text-white" />
-            </span>
-          )}
-          {user.isVerified && (
-            <span className="bg-sky-500/90 backdrop-blur rounded-md p-0.5" title="Верифицирован">
-              <BadgeCheck size={11} className="text-white" />
-            </span>
+    <div className="border-b border-slate-800/50 last:border-0">
+      {/* Row */}
+      <div className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/30 transition-colors">
+        {/* Avatar — click navigates to profile */}
+        <div
+          className="relative flex-shrink-0 cursor-pointer"
+          onClick={() => onNavigate(user.id)}
+        >
+          <AvatarComponent src={user.avatar} name={`${user.firstName} ${user.lastName}`} size={44} className="rounded-xl" />
+          {isOnline && (
+            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-slate-950 rounded-full" />
           )}
         </div>
-      </div>
 
-      {/* Info */}
-      <div className="p-3 flex flex-col flex-1">
-        <p className="text-sm font-semibold text-white leading-tight truncate">
-          {user.firstName} {user.lastName}
-        </p>
-        {subtitle && (
-          <p className="text-xs text-slate-400 truncate mt-0.5 flex-1">{subtitle}</p>
-        )}
-
-        {/* Actions */}
-        {!isMe && (
-          <div
-            className="flex items-center gap-1 mt-3"
-            onClick={e => e.stopPropagation()}
-          >
-            {isFriend ? (
-              <button
-                onClick={() => onMessage(user.id)}
-                className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-slate-800 hover:bg-primary-500/20 hover:text-primary-400 text-slate-400 rounded-lg transition-all text-xs"
-                title="Написать"
-              >
-                <MessageCircle size={13} />
-              </button>
-            ) : null}
-            {isSent ? (
-              <div className="flex-1 flex items-center justify-center py-1.5 text-emerald-400" title="Заявка отправлена">
-                <Check size={13} />
-              </div>
-            ) : (
-              <button
-                onClick={() => onAddFriend(user.id)}
-                className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-slate-800 hover:bg-primary-500/20 hover:text-primary-400 text-slate-400 rounded-lg transition-all text-xs"
-                title="Добавить в друзья"
-              >
-                <UserPlus size={13} />
-              </button>
-            )}
+        {/* Info — click navigates to profile */}
+        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onNavigate(user.id)}>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-sm font-semibold text-white">
+              {user.firstName} {user.lastName}
+            </span>
+            {user.isPremium && <span title="Premium"><Crown size={12} className="text-amber-400 flex-shrink-0" /></span>}
+            {user.isVerified && <span title="Верифицирован"><BadgeCheck size={12} className="text-sky-400 flex-shrink-0" /></span>}
+            {user.isBlocked && <span title="Заблокирован"><Ban size={12} className="text-red-400 flex-shrink-0" /></span>}
           </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
-// ─── Skeleton card ─────────────────────────────────────────────────────────────
-function SkeletonCard() {
-  return (
-    <div className="bg-slate-900 border border-slate-800/60 rounded-2xl overflow-hidden animate-pulse">
-      <div className="aspect-square bg-slate-800" />
-      <div className="p-3 space-y-2">
-        <div className="h-3.5 bg-slate-800 rounded w-3/4" />
-        <div className="h-3 bg-slate-800 rounded w-1/2" />
-        <div className="h-7 bg-slate-800 rounded-lg mt-3" />
-      </div>
-    </div>
-  );
-}
-
-// ─── Global search row (when query typed) ─────────────────────────────────────
-function SearchResultRow({ user, sentRequests, friendIds, onMessage, onAddFriend, onNavigate }: {
-  user: any;
-  sentRequests: Set<string>;
-  friendIds: Set<string>;
-  onMessage: (id: string) => void;
-  onAddFriend: (id: string) => void;
-  onNavigate: (id: string) => void;
-}) {
-  const isSent = sentRequests.has(user.id);
-  const isFriend = friendIds.has(user.id);
-  const isOnline = usePresenceStore((s) => s.onlineUsers.has(user.id));
-  const professions = user.userProfessions?.slice(0, 2).map((up: any) => up.profession?.name).filter(Boolean) ?? [];
-  const subtitle = [professions.join(', ') || user.role, user.city].filter(Boolean).join(' · ');
-
-  return (
-    <div
-      onClick={() => onNavigate(user.id)}
-      className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
-    >
-      <div className="relative flex-shrink-0">
-        <AvatarComponent src={user.avatar} name={`${user.firstName} ${user.lastName}`} size={44} />
-        {isOnline && <span className="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full" />}
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="text-sm font-semibold text-white truncate">{user.firstName} {user.lastName}</span>
-          {user.isPremium && <Crown size={12} className="text-amber-400 flex-shrink-0" />}
-          {user.isVerified && <BadgeCheck size={12} className="text-sky-400 flex-shrink-0" />}
-          {user.isBlocked && <Ban size={12} className="text-red-400 flex-shrink-0" />}
+          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {professions.length > 0 && (
+              <span className="text-xs text-slate-400 truncate">{professions.slice(0, 2).join(', ')}</span>
+            )}
+            {connCount > 0 && (
+              <span className="flex items-center gap-0.5 text-xs text-slate-500">
+                <Link2 size={10} />
+                {connCount} {connCount === 1 ? 'связь' : connCount < 5 ? 'связи' : 'связей'}
+              </span>
+            )}
+            {user.city && <span className="text-xs text-slate-600 truncate">· {user.city}</span>}
+          </div>
         </div>
-        {subtitle && <p className="text-xs text-slate-500 truncate mt-0.5">{subtitle}</p>}
+
+        {/* Expand toggle */}
+        <button
+          onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
+          className="p-2 text-slate-500 hover:text-primary-400 hover:bg-primary-500/10 rounded-xl transition-all flex-shrink-0"
+          title={expanded ? 'Свернуть' : 'Раскрыть'}
+        >
+          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        </button>
       </div>
-      <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-        {isFriend && (
-          <button onClick={() => onMessage(user.id)} className="p-2 text-slate-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg transition-all" title="Написать">
-            <MessageCircle size={16} />
-          </button>
-        )}
-        {isSent ? (
-          <div className="p-2 text-emerald-400"><Check size={16} /></div>
-        ) : (
-          <button onClick={() => onAddFriend(user.id)} className="p-2 text-slate-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg transition-all" title="Добавить">
-            <UserPlus size={16} />
-          </button>
-        )}
-      </div>
+
+      {/* Expanded section */}
+      {expanded && (
+        <div
+          className="px-4 pb-4 bg-slate-900/40 cursor-pointer"
+          onClick={() => onNavigate(user.id)}
+        >
+          {/* Portfolio grid */}
+          {portfolio.length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wider">Портфолио</p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {portfolio.filter((f: any) => f.mimeType?.startsWith('image/')).slice(0, 6).map((f: any) => (
+                  <div
+                    key={f.id}
+                    className="aspect-square rounded-lg overflow-hidden bg-slate-800"
+                    onClick={e => { e.stopPropagation(); window.open(`${API_URL}${f.url}`, '_blank'); }}
+                  >
+                    <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover hover:opacity-80 transition-opacity" />
+                  </div>
+                ))}
+                {portfolio.filter((f: any) => !f.mimeType?.startsWith('image/')).slice(0, 3).map((f: any) => (
+                  <div key={f.id} className="flex items-center gap-1.5 p-2 bg-slate-800 rounded-lg col-span-1">
+                    <BookOpen size={12} className="text-slate-400 flex-shrink-0" />
+                    <span className="text-xs text-slate-400 truncate">{f.originalName}</span>
+                  </div>
+                ))}
+              </div>
+              {portfolio.filter((f: any) => f.mimeType?.startsWith('image/')).length === 0 && (
+                <p className="text-xs text-slate-600 italic">Нет изображений в портфолио</p>
+              )}
+            </div>
+          )}
+          {portfolio.length === 0 && (
+            <p className="text-xs text-slate-600 italic mb-2">Портфолио не добавлено</p>
+          )}
+
+          <p className="text-xs text-primary-400 hover:text-primary-300 transition-colors text-right mt-1">
+            Открыть профиль →
+          </p>
+        </div>
+      )}
     </div>
   );
 }
 
-// ─── Main page ─────────────────────────────────────────────────────────────────
-type DrillView = 'fields' | 'directions' | 'professions' | 'users';
-
+// ─── CatalogPage ──────────────────────────────────────────────────────────────
 export default function SearchPage() {
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user: currentUser } = useAuthStore();
 
-  const [nameQuery, setNameQuery] = useState('');
-  const [debouncedName, setDebouncedName] = useState('');
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [sentRequests, setSentRequests] = useState<Set<string>>(new Set());
-  const [errorMessage, setErrorMessage] = useState('');
+  const [activeTab, setActiveTab] = useState<CatalogTab>('services');
 
-  const { data: friendsData } = useQuery({
-    queryKey: ['friends'],
-    queryFn: async () => {
-      const { data } = await friendshipAPI.getFriends();
-      return data as { friendshipId: string; user: any }[];
-    },
-  });
-  const friendIds = useMemo(() => new Set((friendsData ?? []).map((f: any) => f.user.id)), [friendsData]);
-
-  // Drill-down state (independent from store to allow local navigation)
-  const [view, setView] = useState<DrillView>('fields');
+  // ── Services tab state ─────────────────────────────────────────────────────
+  const [serviceQuery, setServiceQuery] = useState('');
+  const [debouncedServiceQuery, setDebouncedServiceQuery] = useState('');
+  const [serviceView, setServiceView] = useState<ServiceView>('fields');
   const [selectedField, setSelectedField] = useState<{ id: string; name: string } | null>(null);
   const [selectedDirection, setSelectedDirection] = useState<{ id: string; name: string } | null>(null);
   const [selectedProfession, setSelectedProfession] = useState<{ id: string; name: string } | null>(null);
 
-  // Sync drill-down selections into global search store
-  const { setFieldId, setDirectionId, setProfessionId, resetAllFilters } = useSearchStore();
+  // ── Artists tab state ──────────────────────────────────────────────────────
+  const [artistQuery, setArtistQuery] = useState('');
+  const [debouncedArtistQuery, setDebouncedArtistQuery] = useState('');
+  const [artistTypeFilter, setArtistTypeFilter] = useState<string>('ALL');
+  const [artistGenreFilter, setArtistGenreFilter] = useState<string | null>(null);
 
+  // Debounce
   useEffect(() => {
-    setFieldId(selectedField?.id ?? null);
-  }, [selectedField]);
-  useEffect(() => {
-    setDirectionId(selectedDirection?.id ?? null);
-  }, [selectedDirection]);
-  useEffect(() => {
-    setProfessionId(selectedProfession?.id ?? null);
-  }, [selectedProfession]);
-
-  // Debounced search query
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedName(nameQuery), 300);
+    const t = setTimeout(() => setDebouncedServiceQuery(serviceQuery), 300);
     return () => clearTimeout(t);
-  }, [nameQuery]);
+  }, [serviceQuery]);
 
-  // Reference data
-  const { data: fields, isLoading: fieldsLoading } = useFieldsOfActivity(currentUser?.id);
-  const { data: directions, isLoading: directionsLoading } = useDirections(selectedField?.id, currentUser?.id);
-  const { data: professions, isLoading: professionsLoading } = useProfessions(selectedDirection?.id, currentUser?.id);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedArtistQuery(artistQuery), 300);
+    return () => clearTimeout(t);
+  }, [artistQuery]);
 
-  // Secondary filters from store
-  const {
-    genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId, priceMin, priceMax,
-    setGenreId, setWorkFormatId, setEmploymentTypeId, setSkillLevelId, setAvailabilityId, setGeographyId, setPriceMin, setPriceMax,
-  } = useSearchStore();
-
-  const { data: genres } = useGenres();
-  const { data: workFormats } = useWorkFormats();
-  const { data: employmentTypes } = useEmploymentTypes();
-  const { data: skillLevels } = useSkillLevels();
-  const { data: availabilities } = useAvailabilities();
-  const { data: geographies } = useGeographies();
-
-  const hasSecondaryFilters = !!(genreId || workFormatId || employmentTypeId || skillLevelId || availabilityId || geographyId || priceMin || priceMax);
-
-  // ── Global search query (bypasses drill-down) ─────────────────────────────
-  const isSearchMode = debouncedName.trim().length > 0;
-
-  const { data: globalSearchUsers, isLoading: globalSearchLoading } = useQuery({
-    queryKey: ['globalSearch', debouncedName],
+  // ── Reference data ─────────────────────────────────────────────────────────
+  const { data: fields, isLoading: fieldsLoading } = useQuery({
+    queryKey: ['fields-all'],
     queryFn: async () => {
-      const { data } = await userAPI.search({ query: debouncedName.trim() });
+      const { data } = await referenceAPI.getFieldsOfActivity({ all: true });
+      return data as any[];
+    },
+  });
+
+  const { data: directions, isLoading: directionsLoading } = useQuery({
+    queryKey: ['directions-all', selectedField?.id],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getDirections({ fieldOfActivityId: selectedField?.id, all: true });
+      return data as any[];
+    },
+    enabled: !!selectedField,
+  });
+
+  const { data: professions, isLoading: professionsLoading } = useQuery({
+    queryKey: ['professions-direction', selectedDirection?.id],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getProfessions({ directionId: selectedDirection?.id });
+      return data as any[];
+    },
+    enabled: !!selectedDirection,
+  });
+
+  // ── Catalog users ──────────────────────────────────────────────────────────
+  const catalogParams = {
+    query: debouncedServiceQuery || undefined,
+    fieldOfActivityId: selectedField?.id,
+    directionId: selectedDirection?.id,
+    professionId: selectedProfession?.id,
+  };
+
+  const { data: catalogUsers, isLoading: catalogLoading } = useQuery({
+    queryKey: ['catalog-users', catalogParams],
+    queryFn: async () => {
+      const { data } = await userAPI.catalog(catalogParams);
       return (data as any[]).filter((u: any) => u.id !== currentUser?.id);
     },
-    enabled: isSearchMode,
   });
 
-  // ── Users in profession view — build filters directly from local state ────
-  const professionFilters = useMemo(() => ({
-    professionId: selectedProfession?.id || undefined,
-    genreId: genreId || undefined,
-    workFormatId: workFormatId || undefined,
-    employmentTypeId: employmentTypeId || undefined,
-    skillLevelId: skillLevelId || undefined,
-    availabilityId: availabilityId || undefined,
-    geographyId: geographyId || undefined,
-    priceMin: priceMin || undefined,
-    priceMax: priceMax || undefined,
-    limit: 100,
-    page: 1,
-  }), [selectedProfession?.id, genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId, priceMin, priceMax]);
-
-  const { data: usersData, isLoading: usersLoading } = useQuery({
-    queryKey: ['searchResults', professionFilters],
+  // ── Artists ────────────────────────────────────────────────────────────────
+  const { data: artists, isLoading: artistsLoading } = useQuery({
+    queryKey: ['catalog-artists', debouncedArtistQuery, artistTypeFilter, artistGenreFilter],
     queryFn: async () => {
-      const { data } = await (await import('../lib/api')).referenceAPI.searchMusicians(professionFilters);
-      return data;
+      const { data } = await referenceAPI.getArtists({
+        search: debouncedArtistQuery || undefined,
+        type: artistTypeFilter !== 'ALL' ? artistTypeFilter : undefined,
+      });
+      let result = data as any[];
+      if (artistGenreFilter) {
+        result = result.filter((a: any) =>
+          a.genres?.some((g: any) => g.genre?.id === artistGenreFilter)
+        );
+      }
+      return result;
     },
-    enabled: view === 'users' && !!selectedProfession,
+    enabled: activeTab === 'artists',
   });
 
-  const professionUsers = useMemo(() => {
-    return (usersData?.results || [])
-      .map((r: any) => r.user ?? r)
-      .filter((u: any) => u.id !== currentUser?.id);
-  }, [usersData, currentUser?.id]);
-
-  // ── Active secondary filter chips ─────────────────────────────────────────
-  const activeChips = useMemo(() => {
-    const chips: { key: string; label: string; clear: () => void }[] = [];
-    if (genreId && genres?.find(g => g.id === genreId))
-      chips.push({ key: 'genre', label: genres!.find(g => g.id === genreId)!.name, clear: () => setGenreId(null) });
-    if (workFormatId && workFormats?.find(w => w.id === workFormatId))
-      chips.push({ key: 'wf', label: workFormats!.find(w => w.id === workFormatId)!.name, clear: () => setWorkFormatId(null) });
-    if (employmentTypeId && employmentTypes?.find(e => e.id === employmentTypeId))
-      chips.push({ key: 'et', label: employmentTypes!.find(e => e.id === employmentTypeId)!.name, clear: () => setEmploymentTypeId(null) });
-    if (skillLevelId && skillLevels?.find(s => s.id === skillLevelId))
-      chips.push({ key: 'sl', label: skillLevels!.find(s => s.id === skillLevelId)!.name, clear: () => setSkillLevelId(null) });
-    if (availabilityId && availabilities?.find(a => a.id === availabilityId))
-      chips.push({ key: 'av', label: availabilities!.find(a => a.id === availabilityId)!.name, clear: () => setAvailabilityId(null) });
-    if (geographyId && geographies?.find(g => g.id === geographyId))
-      chips.push({ key: 'geo', label: geographies!.find(g => g.id === geographyId)!.name, clear: () => setGeographyId(null) });
-    if (priceMin || priceMax)
-      chips.push({ key: 'price', label: `${priceMin || '0'} — ${priceMax || '∞'} ₽`, clear: () => { setPriceMin(''); setPriceMax(''); } });
-    return chips;
-  }, [genreId, workFormatId, employmentTypeId, skillLevelId, availabilityId, geographyId, priceMin, priceMax, genres, workFormats, employmentTypes, skillLevels, availabilities, geographies]);
-
-  // ── Friend request ─────────────────────────────────────────────────────────
-  const addFriendMutation = useMutation({
-    mutationFn: friendshipAPI.sendRequest,
-    onSuccess: (_, userId) => {
-      queryClient.invalidateQueries({ queryKey: ['friends'] });
-      setSentRequests(prev => new Set(prev).add(userId));
-      setErrorMessage('');
+  // ── Genres for artist filter ───────────────────────────────────────────────
+  const { data: genresList } = useQuery({
+    queryKey: ['genres'],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getGenres();
+      return data as any[];
     },
-    onError: (error: any) => {
-      setErrorMessage(error?.response?.data?.error || 'Не удалось отправить заявку');
-      setTimeout(() => setErrorMessage(''), 4000);
-    },
+    enabled: activeTab === 'artists',
   });
 
-  // ── Drill-down handlers ────────────────────────────────────────────────────
-  const handleFieldClick = (field: { id: string; name: string }) => {
+  // ── Navigation helpers ─────────────────────────────────────────────────────
+  const handleFieldClick = (field: any) => {
     setSelectedField(field);
     setSelectedDirection(null);
     setSelectedProfession(null);
-    setView('directions');
+    setServiceView('directions');
   };
 
-  const handleDirectionClick = (dir: { id: string; name: string }) => {
+  const handleDirectionClick = (dir: any) => {
     setSelectedDirection(dir);
     setSelectedProfession(null);
-    setView('professions');
+    setServiceView('professions');
   };
 
-  const handleProfessionClick = (prof: { id: string; name: string }) => {
+  const handleProfessionClick = (prof: any) => {
     setSelectedProfession(prof);
-    setView('users');
   };
 
   const goBack = () => {
-    if (view === 'directions') {
+    if (serviceView === 'directions') {
       setSelectedField(null);
-      setView('fields');
-    } else if (view === 'professions') {
+      setServiceView('fields');
+    } else if (serviceView === 'professions') {
       setSelectedDirection(null);
-      setView('directions');
-    } else if (view === 'users') {
       setSelectedProfession(null);
-      // Clear secondary filters too
-      resetAllFilters();
-      setSelectedField(selectedField);   // preserve breadcrumb
-      setSelectedDirection(selectedDirection);
-      setView('professions');
+      setServiceView('directions');
     }
-  };
-
-  const goToField = () => {
-    setSelectedDirection(null);
-    setSelectedProfession(null);
-    resetAllFilters();
-    setSelectedField(selectedField);
-    setView('directions');
-  };
-
-  const goToDirection = () => {
-    setSelectedProfession(null);
-    resetAllFilters();
-    setSelectedField(selectedField);
-    setSelectedDirection(selectedDirection);
-    setView('professions');
   };
 
   const resetAll = () => {
     setSelectedField(null);
     setSelectedDirection(null);
     setSelectedProfession(null);
-    resetAllFilters();
-    setView('fields');
+    setServiceView('fields');
+  };
+
+  const handleNavigateToProfile = (id: string) => {
+    navigate(`/profile/${id}`, { state: { from: location.pathname } });
+  };
+
+  const handleNavigateToArtist = (id: string) => {
+    navigate(`/artists/${id}`, { state: { from: location.pathname } });
   };
 
   // ── Breadcrumb ─────────────────────────────────────────────────────────────
-  const breadcrumb = useMemo(() => {
-    const crumbs: { label: string; onClick: () => void }[] = [];
-    if (selectedField) crumbs.push({ label: selectedField.name, onClick: goToField });
-    if (selectedDirection) crumbs.push({ label: selectedDirection.name, onClick: goToDirection });
-    if (selectedProfession) crumbs.push({ label: selectedProfession.name, onClick: () => {} });
-    return crumbs;
-  }, [selectedField, selectedDirection, selectedProfession]);
+  const breadcrumbs = [];
+  if (selectedField) breadcrumbs.push({ label: selectedField.name, onClick: () => { setSelectedDirection(null); setSelectedProfession(null); setServiceView('directions'); } });
+  if (selectedDirection) breadcrumbs.push({ label: selectedDirection.name, onClick: () => { setSelectedProfession(null); setServiceView('professions'); } });
+  if (selectedProfession) breadcrumbs.push({ label: selectedProfession.name, onClick: () => {} });
 
-  const showBreadcrumb = view !== 'fields' && !isSearchMode;
+  const hasTileDrilldown = serviceView !== 'fields' && !debouncedServiceQuery;
+
+  // Current tiles to show
+  const currentTiles = serviceView === 'fields' ? (fields ?? [])
+    : serviceView === 'directions' ? (directions ?? [])
+    : serviceView === 'professions' ? (professions ?? [])
+    : [];
+
+  const tilesLoading = serviceView === 'fields' ? fieldsLoading
+    : serviceView === 'directions' ? directionsLoading
+    : professionsLoading;
 
   return (
     <div className="min-h-screen bg-slate-950">
-      {/* ── Header ── */}
-      <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 pt-4 pb-3 space-y-3">
 
-          {/* Title row */}
+      {/* ── Sticky header ── */}
+      <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+        <div className="max-w-4xl mx-auto px-4 pt-4 pb-3 space-y-3">
+
+          {/* Title + breadcrumb back */}
           <div className="flex items-center gap-2">
-            {showBreadcrumb && (
-              <button
-                onClick={goBack}
-                className="p-1.5 -ml-1 text-slate-400 hover:text-white transition-colors"
-              >
+            {hasTileDrilldown && activeTab === 'services' && (
+              <button onClick={goBack} className="p-1.5 -ml-1.5 text-slate-400 hover:text-white transition-colors">
                 <ChevronLeft size={20} />
               </button>
             )}
-            <Search size={18} className="text-primary-400 flex-shrink-0" />
-            <h2 className="text-lg font-bold text-white">Поиск</h2>
+            <h2 className="text-lg font-bold text-white">Каталог</h2>
           </div>
 
-          {/* Search input */}
+          {/* Tabs */}
+          <div className="flex gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
+            {[
+              { id: 'services' as const, label: 'Услуги' },
+              { id: 'artists' as const, label: 'Артисты' },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  activeTab === tab.id ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Search bar */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
             <input
               type="text"
-              value={nameQuery}
-              onChange={(e) => setNameQuery(e.target.value)}
-              placeholder="Поиск по имени, нику, городу..."
+              value={activeTab === 'services' ? serviceQuery : artistQuery}
+              onChange={e => activeTab === 'services' ? setServiceQuery(e.target.value) : setArtistQuery(e.target.value)}
+              placeholder={activeTab === 'services' ? 'Поиск специалистов...' : 'Поиск артистов...'}
               className="w-full pl-8 pr-9 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
             />
-            {nameQuery && (
-              <button onClick={() => setNameQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white transition-colors">
+            {(activeTab === 'services' ? serviceQuery : artistQuery) && (
+              <button
+                onClick={() => activeTab === 'services' ? setServiceQuery('') : setArtistQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+              >
                 <X size={16} />
               </button>
             )}
           </div>
 
-          {/* Breadcrumb */}
-          {showBreadcrumb && (
+          {/* Breadcrumb (services tab) */}
+          {hasTileDrilldown && activeTab === 'services' && breadcrumbs.length > 0 && (
             <div className="flex items-center gap-1 text-xs overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-              <button onClick={resetAll} className="text-slate-500 hover:text-slate-300 flex-shrink-0 transition-colors">
-                Сферы
-              </button>
-              {breadcrumb.map((crumb, i) => (
+              <button onClick={resetAll} className="text-slate-500 hover:text-slate-300 flex-shrink-0">Все сферы</button>
+              {breadcrumbs.map((crumb, i) => (
                 <span key={i} className="flex items-center gap-1 flex-shrink-0">
                   <ChevronRight size={12} className="text-slate-600" />
                   <button
                     onClick={crumb.onClick}
-                    className={`transition-colors ${i === breadcrumb.length - 1 ? 'text-white font-medium' : 'text-slate-400 hover:text-slate-200'}`}
+                    className={i === breadcrumbs.length - 1 ? 'text-white font-medium' : 'text-slate-400 hover:text-slate-200'}
                   >
                     {crumb.label}
                   </button>
@@ -467,283 +377,251 @@ export default function SearchPage() {
               ))}
             </div>
           )}
-
-          {/* Filter chips row (users view only) */}
-          {view === 'users' && !isSearchMode && (
-            <div className="flex items-center gap-2 lg:hidden">
-              <button
-                onClick={() => setFiltersOpen(true)}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-sm font-medium transition-all ${
-                  hasSecondaryFilters
-                    ? 'bg-primary-500/20 border-primary-500/50 text-primary-400'
-                    : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white'
-                }`}
-              >
-                <SlidersHorizontal size={14} />
-                <span>Фильтры</span>
-                {activeChips.length > 0 && (
-                  <span className="bg-primary-500 text-white text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
-                    {activeChips.length}
-                  </span>
-                )}
-              </button>
-              {activeChips.length > 0 && (
-                <div className="flex items-center gap-2 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-                  {activeChips.map(chip => (
-                    <div key={chip.key} className="flex items-center gap-1 pl-2.5 pr-1.5 py-1 bg-primary-500/20 border border-primary-500/40 rounded-full flex-shrink-0">
-                      <span className="text-primary-300 text-xs whitespace-nowrap">{chip.label}</span>
-                      <button onClick={chip.clear} className="text-primary-400 hover:text-white transition-colors">
-                        <X size={12} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </div>
       </div>
 
-      {/* ── Error banner ── */}
-      {errorMessage && (
-        <div className="max-w-7xl mx-auto px-4 mt-3">
-          <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl flex items-center gap-2">
-            <X size={16} />
-            <span>{errorMessage}</span>
-          </div>
-        </div>
-      )}
-
       {/* ── Content ── */}
-      <div className="max-w-7xl mx-auto px-4 pb-24">
+      <div className="max-w-4xl mx-auto px-4 pb-28">
 
-        {/* ══ GLOBAL SEARCH MODE ══ */}
-        {isSearchMode && (
-          <div className="mt-4">
-            {globalSearchLoading ? (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden divide-y divide-slate-800/60">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse">
-                    <div className="w-11 h-11 rounded-full bg-slate-800" />
-                    <div className="flex-1 space-y-2">
-                      <div className="h-3.5 bg-slate-800 rounded w-2/5" />
-                      <div className="h-3 bg-slate-800 rounded w-1/3" />
-                    </div>
+        {/* ══ SERVICES TAB ══ */}
+        {activeTab === 'services' && (
+          <>
+            {/* Tiles (hide during text search) */}
+            {!debouncedServiceQuery && (
+              <div className="mt-4 mb-6">
+                {tilesLoading ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <div key={i} className="h-20 bg-slate-800/50 rounded-2xl animate-pulse" />
+                    ))}
                   </div>
-                ))}
+                ) : currentTiles.length > 0 ? (
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    {/* "Все" button when drilled in */}
+                    {serviceView !== 'fields' && (
+                      <button
+                        onClick={() => setSelectedProfession(null)}
+                        className={`relative overflow-hidden rounded-2xl p-4 text-left bg-slate-800 border transition-all hover:scale-[1.02] active:scale-[0.98] ${
+                          !selectedProfession ? 'border-primary-500/60 ring-1 ring-primary-500/30' : 'border-slate-700/50 hover:border-slate-600'
+                        }`}
+                      >
+                        <p className="text-white font-semibold text-xs leading-snug">Все</p>
+                      </button>
+                    )}
+                    {currentTiles.map((tile: any, i: number) => {
+                      const isSelected = selectedProfession?.id === tile.id;
+                      const canSelect = serviceView === 'professions';
+                      return (
+                        <button
+                          key={tile.id}
+                          onClick={() => {
+                            if (serviceView === 'fields') handleFieldClick(tile);
+                            else if (serviceView === 'directions') handleDirectionClick(tile);
+                            else handleProfessionClick(tile);
+                          }}
+                          className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md group ${
+                            canSelect && isSelected
+                              ? 'ring-2 ring-white/50'
+                              : ''
+                          } bg-gradient-to-br ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]}`}
+                        >
+                          <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
+                          <div className="relative">
+                            <p className="text-white font-semibold text-xs leading-snug line-clamp-2">{tile.name}</p>
+                          </div>
+                          {serviceView !== 'professions' && (
+                            <ChevronRight size={14} className="absolute right-2 bottom-2 text-white/50 group-hover:text-white/80 transition-colors" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  serviceView !== 'fields' && (
+                    <p className="text-slate-500 text-sm">Ничего не найдено</p>
+                  )
+                )}
               </div>
-            ) : globalSearchUsers && globalSearchUsers.length > 0 ? (
-              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden divide-y divide-slate-800/60">
-                {globalSearchUsers.map((user: any) => (
-                  <SearchResultRow
-                    key={user.id}
-                    user={user}
-                    sentRequests={sentRequests}
-                    friendIds={friendIds}
-                    onMessage={id => navigate(`/messages/${id}`)}
-                    onAddFriend={id => addFriendMutation.mutate(id)}
-                    onNavigate={id => navigate(`/profile/${id}`)}
-                  />
-                ))}
+            )}
+
+            {/* User list */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  {selectedProfession
+                    ? selectedProfession.name
+                    : selectedDirection
+                    ? selectedDirection.name
+                    : selectedField
+                    ? selectedField.name
+                    : 'Все специалисты'} · от А до Я
+                </p>
+                {catalogLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
+                {!catalogLoading && catalogUsers && (
+                  <span className="text-xs text-slate-600">{catalogUsers.length}</span>
+                )}
               </div>
-            ) : (
-              <div className="flex flex-col items-center py-16 text-center">
-                <div className="p-4 bg-slate-800/50 rounded-2xl mb-4">
-                  <Search size={32} className="text-slate-500" />
+
+              {catalogLoading ? (
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-slate-800/50 animate-pulse last:border-0">
+                      <div className="w-11 h-11 rounded-xl bg-slate-800 flex-shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3.5 bg-slate-800 rounded w-2/5" />
+                        <div className="h-3 bg-slate-800 rounded w-1/3" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <p className="text-white font-semibold mb-1">Ничего не найдено</p>
-                <p className="text-slate-400 text-sm">Попробуйте другой запрос</p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ══ FIELDS VIEW ══ */}
-        {!isSearchMode && view === 'fields' && (
-          <div className="mt-6">
-            <p className="text-slate-400 text-sm mb-4">Выберите сферу деятельности</p>
-            {fieldsLoading ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <div key={i} className="h-24 bg-slate-800/50 rounded-2xl animate-pulse" />
-                ))}
-              </div>
-            ) : fields && fields.length > 0 ? (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {fields.map((field, i) => (
-                  <button
-                    key={field.id}
-                    onClick={() => handleFieldClick(field)}
-                    className={`relative overflow-hidden rounded-2xl p-5 text-left bg-gradient-to-br ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]} hover:scale-[1.02] active:scale-[0.98] transition-transform shadow-lg group`}
-                  >
-                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
-                    <div className="relative">
-                      <p className="text-white font-semibold text-sm leading-snug">{field.name}</p>
-                      {field.userCount != null && (
-                        <p className="text-white/70 text-xs mt-1">{field.userCount} уч.</p>
-                      )}
-                    </div>
-                    <ChevronRight size={16} className="absolute right-3 bottom-3 text-white/50 group-hover:text-white/80 transition-colors" />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-slate-500 text-sm">Сферы не найдены</p>
-            )}
-          </div>
-        )}
-
-        {/* ══ DIRECTIONS VIEW ══ */}
-        {!isSearchMode && view === 'directions' && (
-          <div className="mt-4">
-            <p className="text-slate-400 text-sm mb-3">Выберите направление</p>
-            {directionsLoading ? (
-              <div className="space-y-2">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <div key={i} className="h-14 bg-slate-800/50 rounded-xl animate-pulse" />
-                ))}
-              </div>
-            ) : directions && directions.length > 0 ? (
-              <div className="space-y-2">
-                {directions.map(dir => (
-                  <button
-                    key={dir.id}
-                    onClick={() => handleDirectionClick(dir)}
-                    className="w-full flex items-center justify-between px-4 py-3.5 bg-slate-900 border border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/50 rounded-xl transition-all text-left group"
-                  >
-                    <span className="text-white font-medium text-sm">{dir.name}</span>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {dir.userCount != null && (
-                        <span className="text-xs text-slate-500">{dir.userCount} уч.</span>
-                      )}
-                      <ChevronRight size={16} className="text-slate-500 group-hover:text-slate-300 transition-colors" />
-                    </div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-slate-500 text-sm">Направления не найдены</p>
-            )}
-          </div>
-        )}
-
-        {/* ══ PROFESSIONS VIEW ══ */}
-        {!isSearchMode && view === 'professions' && (
-          <div className="mt-4">
-            <p className="text-slate-400 text-sm mb-3">Выберите профессию</p>
-            {professionsLoading ? (
-              <div className="space-y-2">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="h-14 bg-slate-800/50 rounded-xl animate-pulse" />
-                ))}
-              </div>
-            ) : professions && professions.length > 0 ? (
-              <div className="space-y-2">
-                {professions.map(prof => (
-                  <button
-                    key={prof.id}
-                    onClick={() => handleProfessionClick(prof)}
-                    className="w-full flex items-center justify-between px-4 py-3.5 bg-slate-900 border border-slate-800/60 hover:border-slate-700 hover:bg-slate-800/50 rounded-xl transition-all text-left group"
-                  >
-                    <span className="text-white font-medium text-sm">{prof.name}</span>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      {prof.userCount != null && (
-                        <span className="text-xs text-slate-500">{prof.userCount} уч.</span>
-                      )}
-                      <ChevronRight size={16} className="text-slate-500 group-hover:text-slate-300 transition-colors" />
-                    </div>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <p className="text-slate-500 text-sm">Профессии не найдены</p>
-            )}
-          </div>
-        )}
-
-        {/* ══ USERS VIEW ══ */}
-        {!isSearchMode && view === 'users' && (
-          <div className="flex gap-6 mt-4">
-            {/* Desktop filter sidebar */}
-            <aside className="hidden lg:block w-64 flex-shrink-0">
-              <div className="sticky top-36 bg-slate-900 border border-slate-800 rounded-2xl p-4">
-                <FilterPanel showHeader={false} />
-              </div>
-            </aside>
-
-            <main className="flex-1 min-w-0">
-              {/* Count row */}
-              <div className="flex items-center gap-2 text-slate-400 text-sm mb-4">
-                {usersLoading
-                  ? <Loader2 size={14} className="animate-spin text-primary-400" />
-                  : <Users size={14} />}
-                <span>
-                  {usersLoading
-                    ? 'Загрузка...'
-                    : `${professionUsers.length} ${getUserCountText(professionUsers.length)}`}
-                </span>
-              </div>
-
-              {/* 3-column grid */}
-              {usersLoading ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {Array.from({ length: 9 }).map((_, i) => <SkeletonCard key={i} />)}
-                </div>
-              ) : professionUsers.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {professionUsers.map((user: any) => (
-                    <UserCard
+              ) : catalogUsers && catalogUsers.length > 0 ? (
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                  {catalogUsers.map((user: any) => (
+                    <ExpandableUserRow
                       key={user.id}
                       user={user}
-                      currentUserId={currentUser?.id}
-                      sentRequests={sentRequests}
-                      friendIds={friendIds}
-                      onMessage={id => navigate(`/messages/${id}`)}
-                      onAddFriend={id => addFriendMutation.mutate(id)}
-                      onNavigate={id => navigate(`/profile/${id}`)}
+                      onNavigate={handleNavigateToProfile}
                     />
                   ))}
                 </div>
               ) : (
-                <div className="flex flex-col items-center py-16 text-center">
-                  <div className="p-4 bg-slate-800/50 rounded-2xl mb-4">
-                    <Users size={32} className="text-slate-500" />
+                <div className="flex flex-col items-center py-14 text-center">
+                  <div className="p-4 bg-slate-800/50 rounded-2xl mb-3">
+                    <Users size={28} className="text-slate-600" />
                   </div>
-                  <p className="text-white font-semibold mb-1">Пользователи не найдены</p>
-                  <p className="text-slate-400 text-sm">
-                    {hasSecondaryFilters ? 'Попробуйте изменить фильтры' : 'В этой профессии пока нет участников'}
-                  </p>
-                  {hasSecondaryFilters && (
-                    <button
-                      onClick={() => { resetAllFilters(); setSelectedField(selectedField); setSelectedDirection(selectedDirection); setProfessionId(selectedProfession?.id ?? null); }}
-                      className="mt-3 px-4 py-1.5 bg-primary-500/20 hover:bg-primary-500/30 text-primary-400 rounded-lg text-sm transition-all"
-                    >
-                      Сбросить фильтры
-                    </button>
-                  )}
+                  <p className="text-slate-400 text-sm">Специалистов не найдено</p>
                 </div>
               )}
-            </main>
-          </div>
+            </div>
+          </>
+        )}
+
+        {/* ══ ARTISTS TAB ══ */}
+        {activeTab === 'artists' && (
+          <>
+            {/* Artist type filter */}
+            <div className="mt-4 mb-4">
+              <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                {ARTIST_TYPES.map(type => {
+                  const Icon = type.icon;
+                  return (
+                    <button
+                      key={type.value}
+                      onClick={() => setArtistTypeFilter(type.value)}
+                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all flex-shrink-0 ${
+                        artistTypeFilter === type.value
+                          ? 'bg-primary-600 text-white shadow-sm'
+                          : 'bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'
+                      }`}
+                    >
+                      <Icon size={14} />
+                      {type.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Genre tiles */}
+            {genresList && genresList.length > 0 && (
+              <div className="mb-5">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Жанры</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setArtistGenreFilter(null)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                      artistGenreFilter === null
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'
+                    }`}
+                  >
+                    Все жанры
+                  </button>
+                  {genresList.map((genre: any, i: number) => (
+                    <button
+                      key={genre.id}
+                      onClick={() => setArtistGenreFilter(genre.id)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                        artistGenreFilter === genre.id
+                          ? `bg-gradient-to-r ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]} text-white`
+                          : 'bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'
+                      }`}
+                    >
+                      {genre.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Artist list */}
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Все артисты · от А до Я</p>
+                {artistsLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
+                {!artistsLoading && artists && (
+                  <span className="text-xs text-slate-600">{artists.length}</span>
+                )}
+              </div>
+
+              {artistsLoading ? (
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-slate-800/50 animate-pulse last:border-0">
+                      <div className="w-11 h-11 rounded-xl bg-slate-800 flex-shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3.5 bg-slate-800 rounded w-1/3" />
+                        <div className="h-3 bg-slate-800 rounded w-1/2" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : artists && artists.length > 0 ? (
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden divide-y divide-slate-800/50">
+                  {artists.map((artist: any) => {
+                    const genreNames = artist.genres?.map((g: any) => g.genre?.name).filter(Boolean).slice(0, 3) ?? [];
+                    const typeLabel = artist.type === 'SOLO' ? 'Соло' : artist.type === 'GROUP' ? 'Группа' : artist.type === 'COVER_GROUP' ? 'Кавербэнд' : '';
+                    return (
+                      <button
+                        key={artist.id}
+                        onClick={() => handleNavigateToArtist(artist.id)}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors text-left"
+                      >
+                        <AvatarComponent src={artist.avatar} name={artist.name} size={44} className="rounded-xl flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-white truncate">{artist.name}</span>
+                            {typeLabel && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-primary-500/20 text-primary-300 rounded-md flex-shrink-0">{typeLabel}</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            {genreNames.map((g: string, i: number) => (
+                              <span key={i} className="text-xs text-slate-500">{g}</span>
+                            ))}
+                            {artist.city && <span className="text-xs text-slate-600">· {artist.city}</span>}
+                            {artist.listeners > 0 && (
+                              <span className="text-xs text-slate-600">· {artist.listeners.toLocaleString('ru-RU')} слушателей</span>
+                            )}
+                          </div>
+                        </div>
+                        <ChevronRight size={16} className="text-slate-600 flex-shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="flex flex-col items-center py-14 text-center">
+                  <div className="p-4 bg-slate-800/50 rounded-2xl mb-3">
+                    <Music2 size={28} className="text-slate-600" />
+                  </div>
+                  <p className="text-slate-400 text-sm">Артисты не найдены</p>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
-
-      {/* ── Filters bottom sheet (mobile) ── */}
-      <BottomSheet
-        isOpen={filtersOpen}
-        onClose={() => setFiltersOpen(false)}
-        title="Фильтры"
-        height="full"
-      >
-        <FilterPanel showHeader={false} />
-      </BottomSheet>
     </div>
   );
-}
-
-// ─── Helper ────────────────────────────────────────────────────────────────────
-function getUserCountText(n: number): string {
-  if (n % 10 === 1 && n % 100 !== 11) return 'участник';
-  if (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) return 'участника';
-  return 'участников';
 }

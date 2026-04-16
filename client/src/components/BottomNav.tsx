@@ -19,7 +19,7 @@ export default function BottomNav() {
 
   const navItems = [
     { path: '/',         icon: Home,          label: 'Главная',   badge: 0 },
-    { path: '/search',   icon: Search,        label: 'Поиск',     badge: 0 },
+    { path: '/search',   icon: Search,        label: 'Каталог',   badge: 0 },
     { path: '/messages', icon: MessageCircle, label: 'Сообщения', badge: unreadMessages },
     { path: '/friends',  icon: Users,         label: 'Друзья',    badge: pendingFriendRequests },
     { path: '/profile',  icon: User,          label: 'Профиль',   badge: 0 },
