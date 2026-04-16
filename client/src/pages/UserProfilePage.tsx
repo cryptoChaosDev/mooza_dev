@@ -228,15 +228,15 @@ export default function UserProfilePage() {
                 className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white rounded-xl transition-all"
                 iconSize={16}
               />
-              {/* Connection buttons — always show "add" for other users; pending requests as a separate badge */}
               {me && me.id !== user.id && (
                 <>
                   {conn && conn.status === 'PENDING' && !conn.iAmRequester && (
                     <button
                       onClick={() => setViewConn(conn)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-xs font-medium transition-all"
+                      className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all"
+                      title="Входящий запрос на связь"
                     >
-                      <Link2 size={13} /> Входящий запрос
+                      <Link2 size={16} />
                     </button>
                   )}
                   <button
@@ -246,7 +246,6 @@ export default function UserProfilePage() {
                   >
                     <Link2 size={16} />
                   </button>
-                  {/* Favorite star */}
                   {favStatus !== undefined && (
                     <button
                       onClick={() => favStatus.isFavorite ? removeFavMut.mutate() : addFavMut.mutate()}
@@ -261,14 +260,17 @@ export default function UserProfilePage() {
                       <Star size={16} fill={favStatus.isFavorite ? 'currentColor' : 'none'} />
                     </button>
                   )}
+                  {user.isFriend && (
+                    <button
+                      onClick={() => navigate(`/messages/${user.id}`)}
+                      className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all shadow-lg shadow-primary-500/20"
+                      title="Написать сообщение"
+                    >
+                      <MessageCircle size={16} />
+                    </button>
+                  )}
                 </>
               )}
-              <button
-                onClick={() => navigate(`/messages/${user.id}`)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-xl transition-all shadow-lg shadow-primary-500/20"
-              >
-                <MessageCircle size={15} />Написать
-              </button>
             </div>
           </div>
 
