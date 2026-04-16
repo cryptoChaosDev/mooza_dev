@@ -123,16 +123,22 @@ export default function ChatPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [showScrollDown, setShowScrollDown] = useState(false);
+  const [unreadNewCount, setUnreadNewCount] = useState(0);
+  const isAtBottom = useRef(true);
 
   const handleMessagesScroll = useCallback(() => {
     const el = messagesScrollRef.current;
     if (!el) return;
     const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    const atBottom = distFromBottom < 60;
+    isAtBottom.current = atBottom;
     setShowScrollDown(distFromBottom > 200);
+    if (atBottom) setUnreadNewCount(0);
   }, []);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setUnreadNewCount(0);
   }, []);
 
   // Swipe gestures — DOM-ref approach (no re-renders during drag)
@@ -269,18 +275,35 @@ export default function ChatPage() {
 
   // ── Auto-scroll ────────────────────────────────────────────────────────────
   const isFirstLoad = useRef(true);
+  const prevMsgCount = useRef(0);
   useEffect(() => {
     if (!messages.length) return;
     if (isFirstLoad.current) {
       isFirstLoad.current = false;
-      // Double-rAF: wait for browser to finish layout before scrolling
+      prevMsgCount.current = messages.length;
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
         });
       });
-    } else {
+      return;
+    }
+    const addedCount = messages.length - prevMsgCount.current;
+    prevMsgCount.current = messages.length;
+    if (addedCount <= 0) return; // edit/delete, not a new message
+    if (isAtBottom.current) {
+      // User is at bottom — scroll automatically
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    } else {
+      // User scrolled up — show badge with count of new messages
+      const lastMsg = messages[messages.length - 1];
+      const myId = useAuthStore.getState().user?.id;
+      if (lastMsg?.senderId !== myId) {
+        setUnreadNewCount(prev => prev + addedCount);
+      } else {
+        // My own message — scroll to it
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }
     }
   }, [messages]);
 
@@ -1218,6 +1241,11 @@ export default function ChatPage() {
           className="absolute bottom-24 left-1/2 -translate-x-1/2 z-20 w-10 h-10 rounded-full bg-slate-800 border border-slate-700 shadow-lg flex items-center justify-center text-slate-300 hover:bg-slate-700 hover:text-white transition-all"
           style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.4)' }}
         >
+          {unreadNewCount > 0 && (
+            <span className="absolute -top-2 left-1/2 -translate-x-1/2 min-w-[20px] h-5 bg-primary-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 shadow-md">
+              {unreadNewCount > 99 ? '99+' : unreadNewCount}
+            </span>
+          )}
           <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="4 7 9 12 14 7" />
           </svg>
