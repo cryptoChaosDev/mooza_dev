@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, BadgeCheck, Ban, Search } from 'lucide-react';
-import { messageAPI, friendshipAPI } from '../lib/api';
+import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, BadgeCheck, Ban, Search, Link2 } from 'lucide-react';
+import { messageAPI, friendshipAPI, connectionAPI } from '../lib/api';
 import { plural } from '../lib/plural';
 import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
 import { groupReactions } from '../components/ReactionBar';
+import ConnectionRequestModal from '../components/ConnectionRequestModal';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -107,6 +108,10 @@ export default function ChatPage() {
   const [searchResults, setSearchResults] = useState<Message[]>([]);
   const [searching, setSearching] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Connection with other member
+  const [showConnModal, setShowConnModal] = useState(false);
+  const [connStatus, setConnStatus] = useState<string | null>(null);
 
   // Attachments panel
   const [showAttachments, setShowAttachments] = useState(false);
@@ -658,6 +663,14 @@ export default function ChatPage() {
     ? conversation?.members.find(m => m.userId !== me?.id)?.user
     : null;
   const otherOnline = otherMember ? onlineUsers.has(otherMember.id) : false;
+
+  // Load connection status with other member
+  useEffect(() => {
+    if (!otherMember?.id) return;
+    connectionAPI.getWith(otherMember.id)
+      .then(({ data }) => setConnStatus((data as any)?.status ?? null))
+      .catch(() => setConnStatus(null));
+  }, [otherMember?.id]);
   const chatName = conversation?.isGroup
     ? (conversation.name ?? 'Группа')
     : otherMember
@@ -751,6 +764,21 @@ export default function ChatPage() {
             >
               <Paperclip size={18} />
             </button>
+
+            {/* Connection button for direct chats */}
+            {!conversation.isGroup && otherMember && connStatus !== 'ACCEPTED' && (
+              <button
+                onClick={() => setShowConnModal(true)}
+                className={`p-2 rounded-xl transition-all border flex-shrink-0 ${
+                  connStatus === 'PENDING'
+                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                    : 'bg-slate-800/80 hover:bg-slate-700/80 border-slate-700/50 text-slate-300 hover:text-white'
+                }`}
+                title={connStatus === 'PENDING' ? 'Запрос отправлен' : 'Установить связь'}
+              >
+                <Link2 size={18} />
+              </button>
+            )}
 
             {/* Settings button for group chats */}
             {conversation.isGroup && (
@@ -1429,6 +1457,14 @@ export default function ChatPage() {
           </button>
         </form>
       </div>
+
+      {/* Connection request modal */}
+      {showConnModal && otherMember && (
+        <ConnectionRequestModal
+          targetUser={{ id: otherMember.id, firstName: otherMember.firstName, lastName: otherMember.lastName, avatar: otherMember.avatar }}
+          onClose={() => { setShowConnModal(false); setConnStatus('PENDING'); }}
+        />
+      )}
     </div>
   );
 }
