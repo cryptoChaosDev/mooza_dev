@@ -180,7 +180,15 @@ export default function FriendsPage() {
           <div className="px-4 pt-4 pb-3">
             <div className="flex items-center gap-2 mb-3">
               <Users size={20} className="text-primary-400" />
-              <h2 className="text-lg font-bold text-white">Друзья и связи</h2>
+              <h2 className="text-lg font-bold text-white flex-1">Друзья и связи</h2>
+              {activeTab === 'groups' && (
+                <button
+                  onClick={() => navigate('/groups/create')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-xs font-medium transition-colors"
+                >
+                  <Music2 size={13} /> + Группа
+                </button>
+              )}
             </div>
 
             {/* Tabs */}

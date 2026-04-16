@@ -951,10 +951,16 @@ export default function ProfilePage() {
                 </button>
               ))}
               <button
+                onClick={() => navigate('/groups/create')}
+                className="px-2.5 py-1 bg-primary-600/20 border border-primary-500/40 text-primary-400 rounded-lg text-xs font-medium hover:bg-primary-600/30 transition-colors flex items-center gap-1"
+              >
+                + Создать группу
+              </button>
+              <button
                 onClick={() => navigate('/artist/create')}
                 className="px-2.5 py-1 bg-slate-800/60 border border-slate-700 text-slate-400 rounded-lg text-xs font-medium hover:bg-slate-800 hover:text-white transition-colors flex items-center gap-1"
               >
-                + Создать карточку
+                + Артист
               </button>
             </div>
           </div>
