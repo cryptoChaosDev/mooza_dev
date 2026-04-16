@@ -486,7 +486,7 @@ router.get('/profession-features', async (_req, res) => {
 router.get('/artists', async (req, res) => {
   try {
     const { search, type } = req.query;
-    const where: any = { status: 'APPROVED' };
+    const where: any = { status: { in: ['APPROVED', 'VERIFIED'] } };
     if (search) where.name = { contains: search as string, mode: 'insensitive' };
     if (type && type !== 'ALL') where.type = type as string;
     const artists = await prisma.artist.findMany({
