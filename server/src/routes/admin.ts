@@ -423,7 +423,7 @@ router.get('/artists/pending', authenticate, requireAdmin, async (_req, res) => 
       },
       orderBy: { updatedAt: 'asc' },
     });
-    res.json(artists.map(a => ({ ...a, genres: a.genres.map(ag => ag.genre), followersCount: a._count.followers })));
+    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre), followersCount: a._count.followers })));
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -438,7 +438,7 @@ router.get('/artists/verification', authenticate, requireAdmin, async (_req, res
       },
       orderBy: { updatedAt: 'asc' },
     });
-    res.json(artists.map(a => ({ ...a, genres: a.genres.map(ag => ag.genre) })));
+    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre) })));
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
