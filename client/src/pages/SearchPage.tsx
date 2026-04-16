@@ -199,11 +199,10 @@ export default function SearchPage() {
   });
 
   // ── Catalog users ──────────────────────────────────────────────────────────
+  // User list always shows all users — tiles are navigation only, not a filter.
+  // Only text search narrows the list.
   const catalogParams = {
     query: debouncedServiceQuery || undefined,
-    fieldOfActivityId: selectedField?.id,
-    directionId: selectedDirection?.id,
-    professionId: selectedProfession?.id,
   };
 
   const { data: catalogUsers, isLoading: catalogLoading } = useQuery({
