@@ -375,25 +375,35 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
     const { query, fieldOfActivityId, directionId, professionId } = req.query;
     const where: any = { id: { not: req.userId } };
 
+    const andClauses: any[] = [];
+
     if (query) {
-      where.OR = [
-        { firstName: { contains: query as string, mode: 'insensitive' } },
-        { lastName: { contains: query as string, mode: 'insensitive' } },
-        { nickname: { contains: query as string, mode: 'insensitive' } },
-      ];
+      andClauses.push({
+        OR: [
+          { firstName: { contains: query as string, mode: 'insensitive' } },
+          { lastName: { contains: query as string, mode: 'insensitive' } },
+          { nickname: { contains: query as string, mode: 'insensitive' } },
+        ],
+      });
     }
 
-    if (fieldOfActivityId) where.fieldOfActivityId = fieldOfActivityId as string;
+    // Apply only the most specific filter available (most→least specific: profession > direction > field)
+    if (professionId) {
+      andClauses.push({ userProfessions: { some: { professionId: professionId as string } } });
+    } else if (directionId) {
+      andClauses.push({ userProfessions: { some: { profession: { directionId: directionId as string } } } });
+    } else if (fieldOfActivityId) {
+      // Match via User.fieldOfActivityId OR via profession → direction → field
+      andClauses.push({
+        OR: [
+          { fieldOfActivityId: fieldOfActivityId as string },
+          { userProfessions: { some: { profession: { direction: { fieldOfActivityId: fieldOfActivityId as string } } } } },
+        ],
+      });
+    }
 
-    if (directionId || professionId) {
-      where.userProfessions = {
-        some: {
-          profession: {
-            ...(professionId ? { id: professionId as string } : {}),
-            ...(directionId && !professionId ? { directionId: directionId as string } : {}),
-          },
-        },
-      };
+    if (andClauses.length > 0) {
+      where.AND = andClauses;
     }
 
     const users = await prisma.user.findMany({
