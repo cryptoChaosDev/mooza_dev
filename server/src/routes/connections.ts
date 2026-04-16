@@ -44,6 +44,19 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Нельзя создать связь с собой' });
     }
 
+    // Check if connection already exists between this pair
+    const existing = await prisma.connection.findFirst({
+      where: {
+        OR: [
+          { requesterId: meId, receiverId },
+          { requesterId: receiverId, receiverId: meId },
+        ],
+      },
+    });
+    if (existing) {
+      return res.status(409).json({ error: 'Связь уже существует', connectionId: existing.id });
+    }
+
     const conn = await prisma.connection.create({
       data: {
         requesterId: meId,
@@ -325,6 +338,36 @@ router.patch('/:id/confirm-break', authenticate, async (req: AuthRequest, res: R
 
 // ── PATCH /api/connections/:id/cancel-break ───────────────────────────────────
 // The requester cancels their break request → back to ACCEPTED
+// ── PATCH /api/connections/:id/add-services ───────────────────────────────────
+// Add services to an existing connection (both parties can do this)
+router.patch('/:id/add-services', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const { serviceIds } = req.body as { serviceIds: string[] };
+    if (!serviceIds?.length) return res.status(400).json({ error: 'serviceIds обязательны' });
+
+    const conn = await prisma.connection.findUnique({ where: { id: req.params.id }, include: CONN_INCLUDE });
+    if (!conn) return res.status(404).json({ error: 'Не найдено' });
+    if (conn.requesterId !== meId && conn.receiverId !== meId) return res.status(403).json({ error: 'Нет прав' });
+
+    // Only add services not already in the connection
+    const existingIds = new Set(conn.services.map((cs: any) => cs.service.id));
+    const newIds = serviceIds.filter((id: string) => !existingIds.has(id));
+
+    if (newIds.length > 0) {
+      await prisma.connectionService.createMany({
+        data: newIds.map((sid: string) => ({ connectionId: conn.id, serviceId: sid })),
+      });
+    }
+
+    const updated = await prisma.connection.findUnique({ where: { id: conn.id }, include: CONN_INCLUDE });
+    return res.json(formatConnection(updated!, meId));
+  } catch (err) {
+    console.error('[connections] PATCH /:id/add-services', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 router.patch('/:id/cancel-break', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;

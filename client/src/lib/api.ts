@@ -267,6 +267,7 @@ export const connectionAPI = {
   requestBreak: (id: string) => api.patch(`/connections/${id}/break`),
   confirmBreak: (id: string) => api.patch(`/connections/${id}/confirm-break`),
   cancelBreak: (id: string) => api.patch(`/connections/${id}/cancel-break`),
+  addServices: (id: string, serviceIds: string[]) => api.patch(`/connections/${id}/add-services`, { serviceIds }),
 };
 
 export const favoriteAPI = {
