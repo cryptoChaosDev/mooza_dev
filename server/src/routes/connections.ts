@@ -44,18 +44,6 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Нельзя создать связь с собой' });
     }
 
-    const existing = await prisma.connection.findFirst({
-      where: {
-        OR: [
-          { requesterId: meId, receiverId },
-          { requesterId: receiverId, receiverId: meId },
-        ],
-      },
-    });
-    if (existing) {
-      return res.status(409).json({ error: 'Связь уже существует', connection: existing });
-    }
-
     const conn = await prisma.connection.create({
       data: {
         requesterId: meId,

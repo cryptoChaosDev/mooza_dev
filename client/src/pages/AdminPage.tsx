@@ -238,10 +238,6 @@ function DirectionNode({ direction, allDirections, allProfessions, allCustomFilt
   const attachedServiceIds: string[] = (direction.services ?? []).map((s: any) => s.id);
   const attachedProfessions = allProfessions.filter(p => p.direction?.id === direction.id);
 
-  // IDs/types already used by OTHER directions
-  const otherDirs = allDirections.filter(d => d.id !== direction.id);
-  const takenServiceIds = new Set(otherDirs.flatMap((d: any) => (d.services ?? []).map((s: any) => s.id)));
-  const takenFilterIds = new Set(otherDirs.flatMap((d: any) => (d.customFilters ?? []).map((f: any) => f.id)));
 
   const updateMut = useMutation({
     mutationFn: (name: string) => adminAPI.directions.update(direction.id, { name }),
@@ -354,7 +350,7 @@ function DirectionNode({ direction, allDirections, allProfessions, allCustomFilt
               <p className="text-xs text-slate-600">Добавьте услуги во вкладке «Услуги»</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
-                {allServices.filter(s => !takenServiceIds.has(s.id) || attachedServiceIds.includes(s.id)).map(s => {
+                {allServices.map(s => {
                   const on = attachedServiceIds.includes(s.id);
                   return (
                     <button key={s.id} onClick={() => toggleService(s.id)}
@@ -388,9 +384,9 @@ function DirectionNode({ direction, allDirections, allProfessions, allCustomFilt
                   );
                 })}
               </div>
-              {allCustomFilters.filter(f => !takenFilterIds.has(f.id) || attachedIds.includes(f.id)).length > 0 && (
+              {allCustomFilters.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 pt-0.5 border-t border-slate-800/60">
-                  {allCustomFilters.filter(f => !takenFilterIds.has(f.id) || attachedIds.includes(f.id)).map(f => {
+                  {allCustomFilters.map(f => {
                     const on = attachedIds.includes(f.id);
                     return (
                       <button key={f.id} onClick={() => toggleFilter(f.id)}

@@ -5,7 +5,7 @@ import {
   ArrowLeft, MapPin, MessageCircle, Loader2,
   Crown, BadgeCheck, Ban, X,
   Headphones, Film, Image, FileText,
-  Link2, Clock,
+  Link2,
 } from 'lucide-react';
 import { userAPI, channelAPI, connectionAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
@@ -213,64 +213,26 @@ export default function UserProfilePage() {
                 className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white rounded-xl transition-all"
                 iconSize={16}
               />
-              {/* Connection button — only show for other users */}
-              {me && me.id !== user.id && (() => {
-                // conn === undefined means still loading — don't show anything yet
-                if (conn === undefined) return null;
-                // conn === null means no connection exists
-                if (conn === null) {
-                  return (
-                    <button
-                      onClick={() => setShowConnModal(true)}
-                      className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-primary-400 rounded-xl transition-all"
-                      title="Установить связь"
-                    >
-                      <Link2 size={16} />
-                    </button>
-                  );
-                }
-                if (conn.status === 'PENDING' && conn.iAmRequester) {
-                  return (
-                    <button
-                      onClick={() => setViewConn(conn)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 rounded-xl text-xs font-medium transition-colors"
-                    >
-                      <Clock size={13} /> Запрос отправлен
-                    </button>
-                  );
-                }
-                if (conn.status === 'PENDING' && !conn.iAmRequester) {
-                  return (
+              {/* Connection buttons — always show "add" for other users; pending requests as a separate badge */}
+              {me && me.id !== user.id && (
+                <>
+                  {conn && conn.status === 'PENDING' && !conn.iAmRequester && (
                     <button
                       onClick={() => setViewConn(conn)}
                       className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-xs font-medium transition-all"
                     >
                       <Link2 size={13} /> Входящий запрос
                     </button>
-                  );
-                }
-                if (conn.status === 'ACCEPTED') {
-                  return (
-                    <button
-                      onClick={() => setViewConn(conn)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-primary-500/10 hover:bg-primary-500/20 border border-primary-500/30 text-primary-400 rounded-xl text-xs font-medium transition-colors"
-                    >
-                      <Link2 size={13} /> Связь
-                    </button>
-                  );
-                }
-                if (conn.status === 'BREAK_REQUESTED') {
-                  return (
-                    <button
-                      onClick={() => setViewConn(conn)}
-                      className="flex items-center gap-1.5 px-3 py-2 bg-red-500/10 hover:bg-red-500/15 border border-red-500/20 text-red-400 rounded-xl text-xs font-medium transition-colors"
-                    >
-                      <Clock size={13} /> Разрыв связи
-                    </button>
-                  );
-                }
-                return null;
-              })()}
+                  )}
+                  <button
+                    onClick={() => setShowConnModal(true)}
+                    className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-primary-400 rounded-xl transition-all"
+                    title="Установить связь"
+                  >
+                    <Link2 size={16} />
+                  </button>
+                </>
+              )}
               <button
                 onClick={() => navigate(`/messages/${user.id}`)}
                 className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-xl transition-all shadow-lg shadow-primary-500/20"

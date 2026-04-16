@@ -212,7 +212,6 @@ model Connection {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([requesterId, receiverId])
   @@index([requesterId])
   @@index([receiverId])
   @@index([status])
