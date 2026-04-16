@@ -206,6 +206,21 @@ export default function ArtistPage() {
   const set = (key: keyof EditForm, value: string | string[] | Record<string, string>) =>
     setForm((f) => ({ ...f, [key]: value }));
 
+  // Filtered lists for invite modal — must be before early returns
+  const filteredFriends = useMemo(() => {
+    const memberIds = new Set((artist?.members ?? []).map((m: any) => m.id));
+    const q = inviteFriendSearch.toLowerCase();
+    return friendsList.filter((f: any) =>
+      !memberIds.has(f.id) &&
+      `${f.firstName} ${f.lastName}`.toLowerCase().includes(q)
+    );
+  }, [friendsList, artist?.members, inviteFriendSearch]);
+
+  const filteredProfessions = useMemo(() => {
+    const q = inviteProfSearch.toLowerCase();
+    return allProfessions.filter((p: any) => p.name.toLowerCase().includes(q));
+  }, [allProfessions, inviteProfSearch]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -226,21 +241,6 @@ export default function ArtistPage() {
   const isMemberOfArtist = artist.members?.some(
     (m: { id: string; inviteStatus: string }) => m.id === currentUser?.id && m.inviteStatus === 'ACCEPTED'
   );
-
-  // Filtered lists for invite modal
-  const filteredFriends = useMemo(() => {
-    const memberIds = new Set((artist.members ?? []).map((m: any) => m.id));
-    const q = inviteFriendSearch.toLowerCase();
-    return friendsList.filter((f: any) =>
-      !memberIds.has(f.id) &&
-      `${f.firstName} ${f.lastName}`.toLowerCase().includes(q)
-    );
-  }, [friendsList, artist.members, inviteFriendSearch]);
-
-  const filteredProfessions = useMemo(() => {
-    const q = inviteProfSearch.toLowerCase();
-    return allProfessions.filter((p: any) => p.name.toLowerCase().includes(q));
-  }, [allProfessions, inviteProfSearch]);
   const hasSocialLinks =
     artist.socialLinks && Object.values(artist.socialLinks as Record<string, string>).some(Boolean);
 
