@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   Crown, BadgeCheck, Ban, Mic, Users, Music2, Loader2, X,
-  BookOpen, Link2,
+  BookOpen, Link2, ShieldCheck,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
@@ -590,10 +590,16 @@ export default function SearchPage() {
                       >
                         <AvatarComponent src={artist.avatar} name={artist.name} size={44} className="rounded-xl flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-sm font-semibold text-white truncate">{artist.name}</span>
                             {typeLabel && (
                               <span className="text-[10px] px-1.5 py-0.5 bg-primary-500/20 text-primary-300 rounded-md flex-shrink-0">{typeLabel}</span>
+                            )}
+                            {artist.status === 'VERIFIED' && (
+                              <span title="Верифицирован"><BadgeCheck size={13} className="text-sky-400 flex-shrink-0" /></span>
+                            )}
+                            {artist.status === 'APPROVED' && (
+                              <span title="Проверен"><ShieldCheck size={13} className="text-emerald-400 flex-shrink-0" /></span>
                             )}
                           </div>
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
