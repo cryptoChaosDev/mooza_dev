@@ -363,7 +363,7 @@ router.patch('/:id/submit', authenticate, async (req: AuthRequest, res: Response
       data: { status: 'PENDING', submittedById: userId, rejectionReason: null },
     });
 
-    return res.json(updated);
+    return res.json(serializeArtist(updated));
   } catch (err) {
     console.error('[artists] PATCH /:id/submit', err);
     return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
@@ -402,7 +402,7 @@ router.patch('/:id/submit-proof', authenticate, async (req: AuthRequest, res: Re
       data: { verificationProofUrl: proofUrl.trim() },
     });
 
-    return res.json(updated);
+    return res.json(serializeArtist(updated));
   } catch (err) {
     console.error('[artists] PATCH /:id/submit-proof', err);
     return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
