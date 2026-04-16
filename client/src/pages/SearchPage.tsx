@@ -158,8 +158,21 @@ export default function SearchPage() {
   // ── Artists tab state ──────────────────────────────────────────────────────
   const [artistQuery, setArtistQuery] = useState('');
   const [debouncedArtistQuery, setDebouncedArtistQuery] = useState('');
-  const [artistTypeFilter, setArtistTypeFilter] = useState<string>('ALL');
-  const [artistGenreFilter, setArtistGenreFilter] = useState<string | null>(null);
+  const [artistTypeFilter, setArtistTypeFilter] = useState<string[]>([]);
+  const [artistGenreFilter, setArtistGenreFilter] = useState<string[]>([]);
+
+  function toggleType(value: string) {
+    if (value === 'ALL') { setArtistTypeFilter([]); return; }
+    setArtistTypeFilter(prev =>
+      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
+    );
+  }
+
+  function toggleGenre(id: string) {
+    setArtistGenreFilter(prev =>
+      prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]
+    );
+  }
   const [showAllGenres, setShowAllGenres] = useState(false);
 
   const POPULAR_GENRE_NAMES = ['рок', 'рэп', 'поп', 'панк', 'инди'];
@@ -222,14 +235,17 @@ export default function SearchPage() {
   const { data: artists, isLoading: artistsLoading } = useQuery({
     queryKey: ['catalog-artists', debouncedArtistQuery, artistTypeFilter, artistGenreFilter],
     queryFn: async () => {
+      // Fetch all matching artists (server filters by single type; we do multi-type client-side)
       const { data } = await referenceAPI.getArtists({
         search: debouncedArtistQuery || undefined,
-        type: artistTypeFilter !== 'ALL' ? artistTypeFilter : undefined,
       });
       let result = data as any[];
-      if (artistGenreFilter) {
+      if (artistTypeFilter.length > 0) {
+        result = result.filter((a: any) => artistTypeFilter.includes(a.type));
+      }
+      if (artistGenreFilter.length > 0) {
         result = result.filter((a: any) =>
-          a.genres?.some((g: any) => g.genre?.id === artistGenreFilter)
+          a.genres?.some((g: any) => artistGenreFilter.includes(g.genre?.id))
         );
       }
       return result;
@@ -508,12 +524,15 @@ export default function SearchPage() {
               <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
                 {ARTIST_TYPES.map(type => {
                   const Icon = type.icon;
+                  const isActive = type.value === 'ALL'
+                    ? artistTypeFilter.length === 0
+                    : artistTypeFilter.includes(type.value);
                   return (
                     <button
                       key={type.value}
-                      onClick={() => setArtistTypeFilter(type.value)}
+                      onClick={() => toggleType(type.value)}
                       className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all flex-shrink-0 ${
-                        artistTypeFilter === type.value
+                        isActive
                           ? 'bg-primary-600 text-white shadow-sm'
                           : 'bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'
                       }`}
@@ -540,9 +559,9 @@ export default function SearchPage() {
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Жанры</p>
                   <div className="flex flex-wrap gap-2" style={{ maxHeight: showAllGenres ? undefined : '4.5rem', overflow: showAllGenres ? undefined : 'hidden' }}>
                     <button
-                      onClick={() => setArtistGenreFilter(null)}
+                      onClick={() => setArtistGenreFilter([])}
                       className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${
-                        artistGenreFilter === null
+                        artistGenreFilter.length === 0
                           ? 'bg-primary-600 text-white'
                           : 'bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'
                       }`}
@@ -552,9 +571,9 @@ export default function SearchPage() {
                     {visibleGenres.map((genre: any, i: number) => (
                       <button
                         key={genre.id}
-                        onClick={() => setArtistGenreFilter(genre.id)}
+                        onClick={() => toggleGenre(genre.id)}
                         className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${
-                          artistGenreFilter === genre.id
+                          artistGenreFilter.includes(genre.id)
                             ? `bg-gradient-to-r ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]} text-white`
                             : 'bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'
                         }`}
