@@ -949,7 +949,7 @@ export default function ProfilePage() {
               {myGroups.map((g: any) => (
                 <button
                   key={g.id}
-                  onClick={() => navigate('/artist/' + g.id)}
+                  onClick={() => navigate('/groups/' + g.id)}
                   className="px-2.5 py-1 bg-primary-600/15 border border-primary-500/30 text-primary-400 rounded-lg text-xs font-medium hover:bg-primary-600/25 transition-colors"
                 >
                   {g.name}

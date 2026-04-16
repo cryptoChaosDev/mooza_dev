@@ -57,7 +57,7 @@ export default function GroupInvitesPage() {
                   {/* Group info */}
                   <div
                     className="flex items-center gap-3 mb-3 cursor-pointer"
-                    onClick={() => navigate(`/artist/${inv.group.id}`)}
+                    onClick={() => navigate(`/groups/${inv.group.id}`)}
                   >
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center flex-shrink-0 overflow-hidden">
                       {inv.group.avatar ? (

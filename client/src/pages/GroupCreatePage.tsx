@@ -19,7 +19,7 @@ export default function GroupCreatePage() {
   const createMutation = useMutation({
     mutationFn: () => groupAPI.create({ name, description, city, type }),
     onSuccess: ({ data }: any) => {
-      navigate(`/artist/${data.id}`);
+      navigate(`/groups/${data.id}`);
     },
   });
 

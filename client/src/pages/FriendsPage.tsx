@@ -507,7 +507,7 @@ export default function FriendsPage() {
                   <div className="divide-y divide-slate-800/60">
                     {groupInvites.map((inv: any) => (
                       <div key={inv.id} className="flex items-center gap-3 px-4 py-3">
-                        <button onClick={() => navigate(`/artist/${inv.group.id}`)} className="flex-shrink-0">
+                        <button onClick={() => navigate(`/groups/${inv.group.id}`)} className="flex-shrink-0">
                           <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center overflow-hidden">
                             {inv.group.avatar
                               ? <img src={inv.group.avatar} alt={inv.group.name} className="w-full h-full object-cover" />
@@ -515,7 +515,7 @@ export default function FriendsPage() {
                             }
                           </div>
                         </button>
-                        <button onClick={() => navigate(`/artist/${inv.group.id}`)} className="flex-1 min-w-0 text-left">
+                        <button onClick={() => navigate(`/groups/${inv.group.id}`)} className="flex-1 min-w-0 text-left">
                           <p className="text-sm font-semibold text-white truncate">{inv.group.name}</p>
                           <p className="text-xs text-primary-400 truncate">
                             {inv.profession ? `Роль: ${inv.profession.name}` : 'Приглашение в группу'}
