@@ -144,6 +144,8 @@ router.get('/conversations', authenticate, async (req: AuthRequest, res) => {
             : null,
           unreadCount,
           updatedAt: conv.updatedAt,
+          isPinned: m.isPinned,
+          isArchived: m.isArchived,
         };
       })
     );
@@ -311,6 +313,75 @@ router.get('/conversations/:id', authenticate, async (req: AuthRequest, res) => 
   } catch (error) {
     console.error('Get conversation error:', error);
     res.status(500).json({ error: 'Failed to get conversation' });
+  }
+});
+
+// ─── GET /conversations/:id/attachments — list all attachments ───────────────
+router.get('/conversations/:id/attachments', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const { id: conversationId } = req.params;
+
+    const conv = await db.conversation.findUnique({
+      where: { id: conversationId },
+      select: { members: { select: { userId: true } } },
+    });
+    if (!conv) return res.status(404).json({ error: 'Not found' });
+    if (!conv.members.some((m: any) => m.userId === userId)) return res.status(403).json({ error: 'Forbidden' });
+
+    const messages = await db.message.findMany({
+      where: {
+        conversationId,
+        deletedAt: null,
+        attachmentUrl: { not: null },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        attachmentUrl: true,
+        attachmentName: true,
+        attachmentSize: true,
+        attachmentType: true,
+        createdAt: true,
+        sender: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+
+    res.json(messages);
+  } catch {
+    res.status(500).json({ error: 'Failed to get attachments' });
+  }
+});
+
+// ─── GET /conversations/:id/search?q= — search messages in conversation ──────
+router.get('/conversations/:id/search', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const { id: conversationId } = req.params;
+    const q = (req.query.q as string ?? '').trim();
+    if (!q) return res.json([]);
+
+    const conv = await db.conversation.findUnique({
+      where: { id: conversationId },
+      select: { members: { select: { userId: true } } },
+    });
+    if (!conv) return res.status(404).json({ error: 'Not found' });
+    if (!conv.members.some((m: any) => m.userId === userId)) return res.status(403).json({ error: 'Forbidden' });
+
+    const results = await db.message.findMany({
+      where: {
+        conversationId,
+        deletedAt: null,
+        content: { contains: q, mode: 'insensitive' },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 50,
+      include: { sender: { select: { id: true, firstName: true, lastName: true } } },
+    });
+
+    res.json(results);
+  } catch {
+    res.status(500).json({ error: 'Search failed' });
   }
 });
 
@@ -495,6 +566,44 @@ router.delete('/conversations/:id/members/:memberId', authenticate, async (req: 
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: 'Failed to remove member' });
+  }
+});
+
+// ─── PATCH /conversations/:id/pin — toggle pin ───────────────────────────────
+router.patch('/conversations/:id/pin', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const { id: conversationId } = req.params;
+    const member = await db.conversationMember.findUnique({
+      where: { conversationId_userId: { conversationId, userId } },
+    });
+    if (!member) return res.status(404).json({ error: 'Conversation not found' });
+    const updated = await db.conversationMember.update({
+      where: { conversationId_userId: { conversationId, userId } },
+      data: { isPinned: !member.isPinned },
+    });
+    res.json({ isPinned: updated.isPinned });
+  } catch {
+    res.status(500).json({ error: 'Failed to toggle pin' });
+  }
+});
+
+// ─── PATCH /conversations/:id/archive — toggle archive ───────────────────────
+router.patch('/conversations/:id/archive', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const { id: conversationId } = req.params;
+    const member = await db.conversationMember.findUnique({
+      where: { conversationId_userId: { conversationId, userId } },
+    });
+    if (!member) return res.status(404).json({ error: 'Conversation not found' });
+    const updated = await db.conversationMember.update({
+      where: { conversationId_userId: { conversationId, userId } },
+      data: { isArchived: !member.isArchived, isPinned: member.isArchived ? member.isPinned : false },
+    });
+    res.json({ isArchived: updated.isArchived });
+  } catch {
+    res.status(500).json({ error: 'Failed to toggle archive' });
   }
 });
 

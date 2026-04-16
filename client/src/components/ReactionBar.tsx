@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback } from 'react';
 
-export const REACTION_EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🔥'];
+export const REACTION_EMOJIS = ['👍', '👎', '👌', '😢', '😂', '🔥', '❤️'];
 
 export interface Reaction {
   id: string;

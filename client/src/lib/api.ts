@@ -224,6 +224,10 @@ export const messageAPI = {
     api.post(`/messages/conversations/${conversationId}/members`, { memberId }),
   removeMember: (conversationId: string, memberId: string) =>
     api.delete(`/messages/conversations/${conversationId}/members/${memberId}`),
+  togglePin: (conversationId: string) => api.patch(`/messages/conversations/${conversationId}/pin`),
+  toggleArchive: (conversationId: string) => api.patch(`/messages/conversations/${conversationId}/archive`),
+  searchMessages: (conversationId: string, q: string) => api.get(`/messages/conversations/${conversationId}/search`, { params: { q } }),
+  getAttachments: (conversationId: string) => api.get(`/messages/conversations/${conversationId}/attachments`),
 };
 
 // Artist API

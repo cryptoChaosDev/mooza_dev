@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Search, Plus, X, Check, User, FolderKanban, Crown, BadgeCheck, Ban } from 'lucide-react';
+import { MessageCircle, Search, Plus, X, Check, User, FolderKanban, Crown, BadgeCheck, Ban, Pin, Archive, ArchiveX } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
@@ -14,6 +14,8 @@ interface ConvItem {
   lastMessage: { content: string; createdAt: string; senderId: string; senderName: string } | null;
   unreadCount: number;
   updatedAt: string;
+  isPinned: boolean;
+  isArchived: boolean;
 }
 
 interface Friend {
@@ -33,7 +35,11 @@ export default function MessagesPage() {
   const [friends, setFriends] = useState<Friend[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [convMenu, setConvMenu] = useState<{ conv: ConvItem; x: number; y: number } | null>(null);
   const navigate = useNavigate();
+  const convLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const convLongPressMoved = useRef(false);
 
   const loadConversations = useCallback(async () => {
     try {
@@ -99,6 +105,29 @@ export default function MessagesPage() {
     }
   };
 
+  const handleTogglePin = async (conv: ConvItem) => {
+    setConvMenu(null);
+    try {
+      await messageAPI.togglePin(conv.id);
+      setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, isPinned: !c.isPinned } : c));
+    } catch { /* ignore */ }
+  };
+
+  const handleToggleArchive = async (conv: ConvItem) => {
+    setConvMenu(null);
+    try {
+      await messageAPI.toggleArchive(conv.id);
+      setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, isArchived: !c.isArchived, isPinned: c.isArchived ? c.isPinned : false } : c));
+    } catch { /* ignore */ }
+  };
+
+  const openConvMenu = (e: React.MouseEvent | React.TouchEvent, conv: ConvItem) => {
+    e.preventDefault();
+    const x = 'clientX' in e ? e.clientX : (e as React.TouchEvent).touches[0].clientX;
+    const y = 'clientY' in e ? e.clientY : (e as React.TouchEvent).touches[0].clientY;
+    setConvMenu({ conv, x, y });
+  };
+
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     const now = new Date();
@@ -113,10 +142,20 @@ export default function MessagesPage() {
     { id: 'projects' as const, label: 'Проекты', icon: FolderKanban },
   ];
 
-  const filtered = conversations.filter(c =>
-    (activeTab === 'personal' ? !c.isGroup : c.isGroup) &&
-    c.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filtered = conversations
+    .filter(c =>
+      (activeTab === 'personal' ? !c.isGroup : c.isGroup) &&
+      c.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+      (showArchived ? c.isArchived : !c.isArchived)
+    )
+    .sort((a, b) => {
+      if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
+
+  const archivedCount = conversations.filter(c =>
+    (activeTab === 'personal' ? !c.isGroup : c.isGroup) && c.isArchived
+  ).length;
 
   return (
     <div className="min-h-screen bg-slate-950">
@@ -173,6 +212,35 @@ export default function MessagesPage() {
           </div>
         </div>
 
+        {/* Context menu overlay */}
+        {convMenu && (
+          <div className="fixed inset-0 z-50" onClick={() => setConvMenu(null)}>
+            <div
+              className="absolute bg-slate-800 border border-slate-700 rounded-2xl py-1.5 shadow-2xl min-w-[180px]"
+              style={{
+                left: Math.min(convMenu.x, window.innerWidth - 200),
+                top: Math.min(convMenu.y, window.innerHeight - 160),
+              }}
+              onClick={e => e.stopPropagation()}
+            >
+              <button
+                onClick={() => handleTogglePin(convMenu.conv)}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-700/60 transition-colors"
+              >
+                <Pin size={15} className={convMenu.conv.isPinned ? 'text-primary-400' : 'text-slate-400'} />
+                {convMenu.conv.isPinned ? 'Открепить' : 'Закрепить'}
+              </button>
+              <button
+                onClick={() => handleToggleArchive(convMenu.conv)}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-700/60 transition-colors"
+              >
+                {convMenu.conv.isArchived ? <ArchiveX size={15} className="text-slate-400" /> : <Archive size={15} className="text-slate-400" />}
+                {convMenu.conv.isArchived ? 'Из архива' : 'В архив'}
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="pb-24">
           {loading ? (
             <div className="divide-y divide-slate-800/60">
@@ -186,51 +254,94 @@ export default function MessagesPage() {
                 </div>
               ))}
             </div>
-          ) : filtered.length > 0 ? (
+          ) : filtered.length > 0 || (!showArchived && archivedCount > 0) ? (
             <div className="divide-y divide-slate-800/60">
-              {filtered.map(conv => (
+              {/* Archive toggle row (top of list, when not in archive view) */}
+              {!showArchived && archivedCount > 0 && (
                 <button
-                  key={conv.id}
-                  onClick={() => navigate(`/messages/${conv.id}`)}
-                  className="w-full flex items-center gap-3 px-4 py-2 hover:bg-slate-800/40 transition-colors text-left"
+                  onClick={() => setShowArchived(true)}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-800/40 transition-colors text-left"
                 >
-                  {/* Avatar */}
-                  <div className="relative flex-shrink-0">
-                    <AvatarComponent src={conv.avatar} name={conv.name} size={40} />
-                    {conv.unreadCount > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 bg-primary-500 text-white text-[10px] min-w-[16px] h-4 px-0.5 rounded-full flex items-center justify-center font-semibold">
-                        {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
-                      </span>
-                    )}
+                  <div className="w-10 h-10 rounded-full bg-slate-700/50 border border-slate-600/50 flex items-center justify-center flex-shrink-0">
+                    <Archive size={18} className="text-slate-400" />
                   </div>
-
-                  {/* Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <p className="font-semibold text-white text-sm truncate">{conv.name}</p>
-                        {conv.otherUser?.isPremium && <span title="Premium"><Crown size={12} className="text-amber-400 flex-shrink-0" /></span>}
-                        {conv.otherUser?.isVerified && <span title="Верифицирован"><BadgeCheck size={12} className="text-sky-400 flex-shrink-0" /></span>}
-                        {conv.otherUser?.isBlocked && <span title="Заблокирован"><Ban size={12} className="text-red-500 flex-shrink-0" /></span>}
-                      </div>
-                      {conv.lastMessage && (
-                        <span className="text-xs text-slate-500 flex-shrink-0">
-                          {formatTime(conv.lastMessage.createdAt)}
+                    <p className="font-semibold text-slate-300 text-sm">Архив</p>
+                    <p className="text-xs text-slate-500">{archivedCount} {archivedCount === 1 ? 'чат' : archivedCount < 5 ? 'чата' : 'чатов'}</p>
+                  </div>
+                </button>
+              )}
+              {/* Back from archive row */}
+              {showArchived && (
+                <button
+                  onClick={() => setShowArchived(false)}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-800/40 transition-colors text-left"
+                >
+                  <div className="w-10 h-10 rounded-full bg-primary-500/10 border border-primary-500/30 flex items-center justify-center flex-shrink-0">
+                    <ArchiveX size={18} className="text-primary-400" />
+                  </div>
+                  <p className="font-semibold text-primary-400 text-sm">← Назад из архива</p>
+                </button>
+              )}
+              {filtered.map(conv => (
+                <div
+                  key={conv.id}
+                  className={`relative w-full flex items-center gap-3 px-4 py-2 hover:bg-slate-800/40 transition-colors ${conv.isPinned ? 'bg-primary-500/5' : ''}`}
+                  onContextMenu={e => openConvMenu(e, conv)}
+                  onTouchStart={e => {
+                    convLongPressMoved.current = false;
+                    const tx = e.touches[0].clientX;
+                    const ty = e.touches[0].clientY;
+                    convLongPressTimer.current = setTimeout(() => {
+                      if (!convLongPressMoved.current) setConvMenu({ conv, x: tx, y: ty });
+                    }, 500);
+                  }}
+                  onTouchMove={() => { convLongPressMoved.current = true; if (convLongPressTimer.current) clearTimeout(convLongPressTimer.current); }}
+                  onTouchEnd={() => { if (convLongPressTimer.current) clearTimeout(convLongPressTimer.current); }}
+                >
+                  <button
+                    onClick={() => navigate(`/messages/${conv.id}`)}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                  >
+                    {/* Avatar */}
+                    <div className="relative flex-shrink-0">
+                      <AvatarComponent src={conv.avatar} name={conv.name} size={40} />
+                      {conv.unreadCount > 0 && (
+                        <span className="absolute -top-0.5 -right-0.5 bg-primary-500 text-white text-[10px] min-w-[16px] h-4 px-0.5 rounded-full flex items-center justify-center font-semibold">
+                          {conv.unreadCount > 99 ? '99+' : conv.unreadCount}
                         </span>
                       )}
                     </div>
-                    {conv.lastMessage ? (
-                      <p className={`text-sm truncate ${conv.unreadCount > 0 ? 'text-white font-medium' : 'text-slate-500'}`}>
-                        {conv.isGroup && `${conv.lastMessage.senderName.split(' ')[0]}: `}
-                        {conv.lastMessage.content.length > 50
-                          ? conv.lastMessage.content.slice(0, 50) + '...'
-                          : conv.lastMessage.content}
-                      </p>
-                    ) : (
-                      <p className="text-sm text-slate-500 italic">Нет сообщений</p>
-                    )}
-                  </div>
-                </button>
+
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2 mb-0.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <p className="font-semibold text-white text-sm truncate">{conv.name}</p>
+                          {conv.isPinned && <Pin size={11} className="text-primary-400 flex-shrink-0" />}
+                          {conv.otherUser?.isPremium && <span title="Premium"><Crown size={12} className="text-amber-400 flex-shrink-0" /></span>}
+                          {conv.otherUser?.isVerified && <span title="Верифицирован"><BadgeCheck size={12} className="text-sky-400 flex-shrink-0" /></span>}
+                          {conv.otherUser?.isBlocked && <span title="Заблокирован"><Ban size={12} className="text-red-500 flex-shrink-0" /></span>}
+                        </div>
+                        {conv.lastMessage && (
+                          <span className="text-xs text-slate-500 flex-shrink-0">
+                            {formatTime(conv.lastMessage.createdAt)}
+                          </span>
+                        )}
+                      </div>
+                      {conv.lastMessage ? (
+                        <p className={`text-sm truncate ${conv.unreadCount > 0 ? 'text-white font-medium' : 'text-slate-500'}`}>
+                          {conv.isGroup && `${conv.lastMessage.senderName.split(' ')[0]}: `}
+                          {conv.lastMessage.content.length > 50
+                            ? conv.lastMessage.content.slice(0, 50) + '...'
+                            : conv.lastMessage.content}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-slate-500 italic">Нет сообщений</p>
+                      )}
+                    </div>
+                  </button>
+                </div>
               ))}
             </div>
           ) : searchQuery ? (

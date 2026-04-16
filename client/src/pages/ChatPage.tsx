@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, BadgeCheck, Ban } from 'lucide-react';
+import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, BadgeCheck, Ban, Search } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
-import { REACTION_EMOJIS, groupReactions } from '../components/ReactionBar';
+import { groupReactions } from '../components/ReactionBar';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -95,7 +95,26 @@ export default function ChatPage() {
   // Reaction picker
   const [reactionPickerMsgId, setReactionPickerMsgId] = useState<string | null>(null);
 
+  // Context menu (long-press)
+  const [contextMenu, setContextMenu] = useState<{ msg: Message; x: number; y: number } | null>(null);
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressMoved = useRef(false);
+
+  // Search within chat
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Message[]>([]);
+  const [searching, setSearching] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Attachments panel
+  const [showAttachments, setShowAttachments] = useState(false);
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [attachmentsTab, setAttachmentsTab] = useState<'media' | 'files' | 'links'>('media');
+  const [loadingAttachments, setLoadingAttachments] = useState(false);
+
   const EMOJIS = ['😊','😂','❤️','👍','👎','🔥','🎵','🎸','🎹','🎤','🙏','😍','🤔','😅','🥹','💯','✨','🚀','👏','🎉'];
+  const REACTION_EMOJIS_LOCAL = ['👍','👎','👌','😢','😂','🔥','❤️'];
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesScrollRef = useRef<HTMLDivElement>(null);
@@ -452,6 +471,81 @@ export default function ChatPage() {
     }
   };
 
+  // ── Context menu (long-press) ──────────────────────────────────────────────
+  const openContextMenu = (msg: Message, x: number, y: number) => {
+    if (msg.deletedAt) return;
+    setContextMenu({ msg, x, y });
+  };
+
+  const onMsgLongPressStart = (e: React.TouchEvent, msg: Message) => {
+    if (msg.deletedAt) return;
+    longPressMoved.current = false;
+    const t = e.touches[0];
+    longPressTimer.current = setTimeout(() => {
+      if (!longPressMoved.current) {
+        openContextMenu(msg, t.clientX, t.clientY);
+      }
+    }, 500);
+  };
+
+  const onMsgLongPressMove = () => {
+    longPressMoved.current = true;
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  };
+
+  const onMsgLongPressEnd = () => {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  };
+
+  const copyText = (text: string) => {
+    navigator.clipboard.writeText(text).catch(() => {});
+    setContextMenu(null);
+  };
+
+  // ── Search within chat ─────────────────────────────────────────────────────
+  const handleSearch = async (q: string) => {
+    setSearchQuery(q);
+    if (!q.trim() || !conversationId) { setSearchResults([]); return; }
+    setSearching(true);
+    try {
+      const res = await messageAPI.searchMessages(conversationId, q.trim());
+      setSearchResults(res.data);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const openAttachments = async () => {
+    setShowAttachments(true);
+    if (!conversationId) return;
+    setLoadingAttachments(true);
+    try {
+      const res = await messageAPI.getAttachments(conversationId);
+      setAttachments(res.data);
+    } catch {
+      setAttachments([]);
+    } finally {
+      setLoadingAttachments(false);
+    }
+  };
+
+  const scrollToMessage = (msgId: string) => {
+    setShowSearch(false);
+    setSearchQuery('');
+    setSearchResults([]);
+    // Small delay to let search panel close, then scroll
+    setTimeout(() => {
+      const el = document.getElementById(`msg-${msgId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.add('ring-2', 'ring-primary-400', 'ring-offset-1');
+        setTimeout(() => el.classList.remove('ring-2', 'ring-primary-400', 'ring-offset-1'), 2000);
+      }
+    }, 100);
+  };
+
   // ── Group management ───────────────────────────────────────────────────────
   const openSettings = async () => {
     setShowSettings(true);
@@ -617,6 +711,23 @@ export default function ChatPage() {
               </div>
             </div>
 
+            {/* Search button */}
+            <button
+              onClick={() => { setShowSearch(v => !v); setTimeout(() => searchInputRef.current?.focus(), 50); }}
+              className={`p-2 rounded-xl transition-all border flex-shrink-0 ${showSearch ? 'bg-primary-500/20 border-primary-500/50 text-primary-400' : 'bg-slate-800/80 hover:bg-slate-700/80 border-slate-700/50 text-slate-300'}`}
+            >
+              <Search size={18} />
+            </button>
+
+            {/* Attachments panel button */}
+            <button
+              onClick={openAttachments}
+              className={`p-2 rounded-xl transition-all border flex-shrink-0 ${showAttachments ? 'bg-primary-500/20 border-primary-500/50 text-primary-400' : 'bg-slate-800/80 hover:bg-slate-700/80 border-slate-700/50 text-slate-300'}`}
+              title="Вложения"
+            >
+              <Paperclip size={18} />
+            </button>
+
             {/* Settings button for group chats */}
             {conversation.isGroup && (
               <button
@@ -629,6 +740,52 @@ export default function ChatPage() {
           </div>
         </div>
       </div>
+
+      {/* Search panel */}
+      {showSearch && (
+        <div className="flex-shrink-0 border-b border-slate-700/50 bg-slate-900/90 z-20">
+          <div className="max-w-4xl mx-auto px-4 py-2">
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={e => handleSearch(e.target.value)}
+                placeholder="Поиск в чате..."
+                className="w-full bg-slate-800 border border-slate-700 text-sm text-white placeholder-slate-500 pl-8 pr-8 py-2 rounded-xl focus:outline-none focus:border-primary-500/50 transition-colors"
+              />
+              {searchQuery && (
+                <button onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-500 hover:text-slate-300">
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+            {/* Search results dropdown */}
+            {searchQuery && (
+              <div className="mt-1 max-h-52 overflow-y-auto rounded-xl bg-slate-800 border border-slate-700 shadow-xl">
+                {searching ? (
+                  <div className="flex justify-center py-4"><Loader2 size={16} className="text-primary-500 animate-spin" /></div>
+                ) : searchResults.length === 0 ? (
+                  <p className="text-slate-500 text-sm text-center py-4">Ничего не найдено</p>
+                ) : searchResults.map(m => (
+                  <button
+                    key={m.id}
+                    onClick={() => scrollToMessage(m.id)}
+                    className="w-full flex items-start gap-2.5 px-3 py-2.5 text-left hover:bg-slate-700/60 transition-colors border-b border-slate-700/40 last:border-0"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-primary-400 font-medium">{m.sender.firstName} {m.sender.lastName}</p>
+                      <p className="text-sm text-slate-300 truncate">{m.content}</p>
+                    </div>
+                    <span className="text-xs text-slate-500 flex-shrink-0 mt-0.5">{formatTime(m.createdAt)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Group Settings Panel */}
       {showSettings && conversation.isGroup && (() => {
@@ -746,6 +903,89 @@ export default function ChatPage() {
         );
       })()}
 
+      {/* Attachments panel */}
+      {showAttachments && (
+        <div className="fixed inset-0 z-40 flex">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowAttachments(false)} />
+          <div className="relative ml-auto w-full max-w-sm bg-gradient-to-b from-slate-800 to-slate-900 border-l border-slate-700/50 shadow-2xl flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-700/50 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <Paperclip size={16} className="text-primary-400" />
+                <h3 className="font-semibold text-white text-sm">Вложения</h3>
+              </div>
+              <button onClick={() => setShowAttachments(false)} className="p-1.5 hover:bg-slate-700/50 rounded-lg">
+                <X size={16} className="text-slate-400" />
+              </button>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-1 p-2 border-b border-slate-700/50 flex-shrink-0">
+              {(['media', 'files', 'links'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setAttachmentsTab(tab)}
+                  className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all ${attachmentsTab === tab ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                >
+                  {tab === 'media' ? 'Медиа' : tab === 'files' ? 'Файлы' : 'Ссылки'}
+                </button>
+              ))}
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-3">
+              {loadingAttachments ? (
+                <div className="flex justify-center py-8"><Loader2 size={24} className="text-primary-500 animate-spin" /></div>
+              ) : (() => {
+                const isImage = (type?: string | null) => type?.startsWith('image/');
+
+                let items = attachments;
+                if (attachmentsTab === 'media') items = attachments.filter(a => isImage(a.attachmentType));
+                else if (attachmentsTab === 'files') items = attachments.filter(a => !isImage(a.attachmentType));
+                else items = []; // Links come from message content — skip for now
+
+                if (items.length === 0) return (
+                  <div className="flex flex-col items-center py-12 text-center">
+                    <FileText size={32} className="text-slate-600 mb-2" />
+                    <p className="text-slate-500 text-sm">Нет вложений</p>
+                  </div>
+                );
+
+                if (attachmentsTab === 'media') return (
+                  <div className="grid grid-cols-3 gap-1">
+                    {items.map((a: any) => (
+                      <a key={a.id} href={`${API_URL}${a.attachmentUrl}`} target="_blank" rel="noreferrer" className="aspect-square rounded-lg overflow-hidden bg-slate-700 block">
+                        <img src={`${API_URL}${a.attachmentUrl}`} alt={a.attachmentName || ''} className="w-full h-full object-cover hover:opacity-80 transition-opacity" />
+                      </a>
+                    ))}
+                  </div>
+                );
+
+                return (
+                  <div className="space-y-2">
+                    {items.map((a: any) => (
+                      <a key={a.id} href={`${API_URL}${a.attachmentUrl}`} target="_blank" rel="noreferrer" download={a.attachmentName || true} className="flex items-center gap-3 p-3 bg-slate-700/40 hover:bg-slate-700/60 rounded-xl transition-colors">
+                        <div className="w-10 h-10 rounded-lg bg-slate-600 flex items-center justify-center flex-shrink-0">
+                          <FileText size={18} className="text-slate-300" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-white truncate">{a.attachmentName || 'Файл'}</p>
+                          <p className="text-xs text-slate-500">
+                            {a.attachmentSize ? `${(a.attachmentSize / 1024 / 1024).toFixed(2)} МБ · ` : ''}
+                            {a.sender.firstName} {a.sender.lastName}
+                          </p>
+                        </div>
+                        <Download size={15} className="text-slate-400 flex-shrink-0" />
+                      </a>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Messages */}
       <div
         ref={messagesScrollRef}
@@ -781,10 +1021,12 @@ export default function ChatPage() {
                   return (
                     <div
                       key={msg.id}
-                      className={`flex items-end ${isMine ? 'justify-end' : 'justify-start'} ${showSender ? 'mt-3' : 'mt-1'} group/row relative`}
-                      onTouchStart={e => !msg.deletedAt && onMsgTouchStart(e, msg.id)}
-                      onTouchMove={e => !msg.deletedAt && onMsgTouchMove(e, msg.id)}
-                      onTouchEnd={() => !msg.deletedAt && onMsgTouchEnd(msg)}
+                      id={`msg-${msg.id}`}
+                      className={`flex items-end ${isMine ? 'justify-end' : 'justify-start'} ${showSender ? 'mt-3' : 'mt-1'} group/row relative rounded-xl transition-shadow`}
+                      onTouchStart={e => { if (!msg.deletedAt) { onMsgTouchStart(e, msg.id); onMsgLongPressStart(e, msg); } }}
+                      onTouchMove={e => { if (!msg.deletedAt) { onMsgTouchMove(e, msg.id); onMsgLongPressMove(); } }}
+                      onTouchEnd={() => { if (!msg.deletedAt) { onMsgTouchEnd(msg); onMsgLongPressEnd(); } }}
+                      onContextMenu={e => { e.preventDefault(); openContextMenu(msg, e.clientX, e.clientY); }}
                     >
                       {/* Reply hint icon — always rendered, opacity/scale controlled via ref */}
                       <div
@@ -846,36 +1088,54 @@ export default function ChatPage() {
                               {msg.attachmentUrl && (() => {
                                 const isImage = msg.attachmentType?.startsWith('image/');
                                 return isImage ? (
-                                  <a href={`${API_URL}${msg.attachmentUrl}`} target="_blank" rel="noreferrer" className="block mb-2">
+                                  <a href={`${API_URL}${msg.attachmentUrl}`} target="_blank" rel="noreferrer" className="block mb-1">
                                     <img src={`${API_URL}${msg.attachmentUrl}`} alt={msg.attachmentName || 'image'} className="rounded-lg max-w-full max-h-60 object-cover" />
                                   </a>
                                 ) : (
-                                  <a href={`${API_URL}${msg.attachmentUrl}`} target="_blank" rel="noreferrer" download={msg.attachmentName || true} className={`flex items-center gap-2 mb-2 px-3 py-2 rounded-lg ${isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-slate-600/50 hover:bg-slate-600'} transition-colors`}>
+                                  <a href={`${API_URL}${msg.attachmentUrl}`} target="_blank" rel="noreferrer" download={msg.attachmentName || true} className={`flex items-center gap-2 mb-1 px-3 py-2 rounded-lg ${isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-slate-600/50 hover:bg-slate-600'} transition-colors`}>
                                     <FileText size={16} className="flex-shrink-0" />
                                     <span className="text-xs truncate flex-1">{msg.attachmentName || 'Файл'}</span>
                                     <Download size={14} className="flex-shrink-0 opacity-60" />
                                   </a>
                                 );
                               })()}
-                              {msg.content && <p className="text-sm leading-relaxed break-words">{msg.content}</p>}
+                              {/* Time meta — floated right so it sits inline with last text line */}
+                              {(() => {
+                                const timeMeta = (
+                                  <span className={`inline-flex items-center gap-0.5 text-[11px] select-none align-bottom ${isMine ? 'text-primary-100/70' : 'text-slate-400'}`} style={{ float: 'right', marginLeft: '6px', marginBottom: '-1px', marginTop: '2px' }}>
+                                    {msg.isEdited && <span className="opacity-70">изм.</span>}
+                                    <span>{formatTime(msg.createdAt)}</span>
+                                    {isMine && (() => {
+                                      if (msg.readAt) return <CheckCheck size={12} className="text-emerald-400 flex-shrink-0" />;
+                                      if (msg.deliveredAt) return <CheckCheck size={12} className="opacity-60 flex-shrink-0" />;
+                                      return <Check size={12} className="opacity-60 flex-shrink-0" />;
+                                    })()}
+                                  </span>
+                                );
+                                return msg.content ? (
+                                  <p className="text-sm leading-relaxed break-words whitespace-pre-wrap overflow-hidden">
+                                    {timeMeta}{msg.content}
+                                  </p>
+                                ) : (
+                                  <div className={`flex items-center justify-end gap-0.5 text-[11px] mt-0.5 ${isMine ? 'text-primary-100/70' : 'text-slate-400'}`}>
+                                    {msg.isEdited && <span className="opacity-70">изм.</span>}
+                                    <span>{formatTime(msg.createdAt)}</span>
+                                    {isMine && (() => {
+                                      if (msg.readAt) return <CheckCheck size={12} className="text-emerald-400 flex-shrink-0" />;
+                                      if (msg.deliveredAt) return <CheckCheck size={12} className="opacity-60 flex-shrink-0" />;
+                                      return <Check size={12} className="opacity-60 flex-shrink-0" />;
+                                    })()}
+                                  </div>
+                                );
+                              })()}
                             </>
                           )}
-
-                          {/* Time + edited + read status */}
-                          <div className={`flex items-center justify-end gap-1 mt-1 ${isMine ? 'text-primary-100' : 'text-slate-400'} text-xs`}>
-                            {msg.isEdited && !msg.deletedAt && <span className="opacity-70">изм.</span>}
-                            <span>{formatTime(msg.createdAt)}</span>
-                            {isMine && !msg.deletedAt && (() => {
-                              if (msg.readAt) return (
-                                <>
-                                  <CheckCheck size={13} className="text-emerald-400 flex-shrink-0" />
-                                  <span className="text-emerald-400/80 text-[10px]">{formatTime(msg.readAt)}</span>
-                                </>
-                              );
-                              if (msg.deliveredAt) return <CheckCheck size={13} className="opacity-60 flex-shrink-0" />;
-                              return <Check size={13} className="opacity-60 flex-shrink-0" />;
-                            })()}
-                          </div>
+                          {/* Time for deleted messages */}
+                          {msg.deletedAt && (
+                            <div className={`flex items-center justify-end gap-0.5 text-[11px] mt-0.5 ${isMine ? 'text-primary-100/70' : 'text-slate-400'}`}>
+                              <span>{formatTime(msg.createdAt)}</span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Inline reaction bubbles (below bubble) */}
@@ -963,6 +1223,46 @@ export default function ChatPage() {
         </button>
       )}
 
+      {/* Context menu overlay */}
+      {contextMenu && (
+        <div
+          className="fixed inset-0 z-50"
+          onClick={() => setContextMenu(null)}
+        >
+          <div
+            className="absolute bg-slate-800 border border-slate-700 rounded-2xl py-1.5 shadow-2xl min-w-[180px]"
+            style={{
+              left: Math.min(contextMenu.x, window.innerWidth - 200),
+              top: Math.min(contextMenu.y, window.innerHeight - 300),
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            {[
+              { label: 'Ответить', icon: '↩️', action: () => { startReply(contextMenu.msg); setContextMenu(null); } },
+              contextMenu.msg.content ? { label: 'Скопировать', icon: '📋', action: () => copyText(contextMenu.msg.content) } : null,
+              contextMenu.msg.attachmentUrl && contextMenu.msg.attachmentType?.startsWith('image/')
+                ? { label: 'Сохранить фото', icon: '🖼️', action: () => { const a = document.createElement('a'); a.href = `${API_URL}${contextMenu.msg.attachmentUrl}`; a.download = contextMenu.msg.attachmentName || 'photo'; a.click(); setContextMenu(null); } }
+                : null,
+              contextMenu.msg.senderId === me?.id
+                ? { label: 'Редактировать', icon: '✏️', action: () => { startEdit(contextMenu.msg); setContextMenu(null); } }
+                : null,
+              contextMenu.msg.senderId === me?.id
+                ? { label: 'Удалить', icon: '🗑️', danger: true, action: () => { handleDelete(contextMenu.msg.id); setContextMenu(null); } }
+                : null,
+            ].filter(Boolean).map((item: any, i) => (
+              <button
+                key={i}
+                onClick={item.action}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm transition-colors ${item.danger ? 'text-red-400 hover:bg-red-500/10' : 'text-slate-200 hover:bg-slate-700/60'}`}
+              >
+                <span className="text-base leading-none">{item.icon}</span>
+                <span>{item.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Reaction picker overlay */}
       {reactionPickerMsgId && (
         <div
@@ -973,7 +1273,7 @@ export default function ChatPage() {
             className="absolute bottom-28 left-1/2 -translate-x-1/2 bg-slate-800 border border-slate-700 rounded-2xl px-4 py-3 flex gap-3 shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
-            {REACTION_EMOJIS.map(emoji => {
+            {REACTION_EMOJIS_LOCAL.map(emoji => {
               const msg = messages.find(m => m.id === reactionPickerMsgId);
               const myReaction = msg?.reactions?.find(r => r.userId === me?.id);
               return (
