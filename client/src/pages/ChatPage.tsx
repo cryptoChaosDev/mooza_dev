@@ -128,17 +128,19 @@ export default function ChatPage() {
 
   const [showScrollDown, setShowScrollDown] = useState(false);
   const [unreadNewCount, setUnreadNewCount] = useState(0);
-  const isAtBottom = useRef(true);
+
+  // Read scroll distance directly — avoids stale ref during smooth-scroll animation
+  const getDistFromBottom = useCallback(() => {
+    const el = messagesScrollRef.current;
+    if (!el) return 0;
+    return el.scrollHeight - el.scrollTop - el.clientHeight;
+  }, []);
 
   const handleMessagesScroll = useCallback(() => {
-    const el = messagesScrollRef.current;
-    if (!el) return;
-    const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-    const atBottom = distFromBottom < 60;
-    isAtBottom.current = atBottom;
-    setShowScrollDown(distFromBottom > 200);
-    if (atBottom) setUnreadNewCount(0);
-  }, []);
+    const dist = getDistFromBottom();
+    setShowScrollDown(dist > 200);
+    if (dist < 60) setUnreadNewCount(0);
+  }, [getDistFromBottom]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -298,19 +300,22 @@ export default function ChatPage() {
     const addedCount = messages.length - prevMsgCount.current;
     prevMsgCount.current = messages.length;
     if (addedCount <= 0) return; // edit/delete, not a new message
-    if (isAtBottom.current) {
-      // User is at bottom — scroll automatically
+
+    const lastMsg = messages[messages.length - 1];
+    const myId = useAuthStore.getState().user?.id;
+    const isMyMessage = lastMsg?.senderId === myId;
+
+    // Check scroll position right now (synchronous, avoids stale ref during animation)
+    const dist = getDistFromBottom();
+    const atBottom = dist < 150;
+
+    if (atBottom || isMyMessage) {
+      // At bottom or sent by me — scroll to new message
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      setUnreadNewCount(0);
     } else {
-      // User scrolled up — show badge with count of new messages
-      const lastMsg = messages[messages.length - 1];
-      const myId = useAuthStore.getState().user?.id;
-      if (lastMsg?.senderId !== myId) {
-        setUnreadNewCount(prev => prev + addedCount);
-      } else {
-        // My own message — scroll to it
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }
+      // Scrolled up and message from someone else — show badge
+      setUnreadNewCount(prev => prev + addedCount);
     }
   }, [messages]);
 
