@@ -333,9 +333,9 @@ export default function LoginPage() {
 
           <p className="mt-4 text-center text-slate-400">
             Нет аккаунта?{' '}
-            <span className="text-slate-500 font-medium cursor-default" title="Скоро, скоро..">
-              Скоро, скоро..
-            </span>
+            <a href="/register" className="text-primary-400 hover:text-primary-300 font-medium transition-colors">
+              Зарегистрироваться
+            </a>
           </p>
         </div>
       </div>
