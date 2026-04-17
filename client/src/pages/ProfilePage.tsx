@@ -834,13 +834,14 @@ export default function ProfilePage() {
       {/* ── VIEW MODE ────────────────────────────────────────────────────── */}
       <div className="max-w-2xl mx-auto pb-28">
 
-        {/* Banner */}
+        {/* ── HERO ──────────────────────────────────────────────────────────── */}
         <div className="relative group">
-          <div className="h-32 overflow-hidden bg-gradient-to-br from-primary-900 via-purple-900/70 to-slate-900">
+          <div className="h-44 overflow-hidden bg-gradient-to-br from-primary-900 via-purple-900/70 to-slate-900">
             {bUrl
               ? <img src={bUrl} alt="" className="w-full h-full object-cover" />
               : <div className="absolute inset-0 opacity-40" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(99,102,241,0.8) 0%, transparent 60%), radial-gradient(circle at 80% 20%, rgba(168,85,247,0.7) 0%, transparent 60%)' }} />
             }
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
           </div>
           <button
             onClick={() => bannerInputRef.current?.click()}
@@ -853,8 +854,8 @@ export default function ProfilePage() {
         </div>
 
         <div className="px-4">
-          {/* Avatar + action buttons row */}
-          <div className="flex items-end justify-between -mt-14 mb-5">
+          {/* Avatar + action buttons */}
+          <div className="flex items-end justify-between -mt-14 mb-4">
             <div className="relative z-10">
               <div className="w-28 h-28 rounded-full overflow-hidden ring-4 ring-slate-950 shadow-2xl bg-gradient-to-br from-primary-500 to-purple-600">
                 {aUrl
@@ -875,26 +876,26 @@ export default function ProfilePage() {
                 url={`/profile/${profile?.id}`}
                 title={`${profile?.firstName} ${profile?.lastName} — Moooza`}
                 text={profile?.bio?.slice(0, 100)}
-                className="p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white rounded-xl transition-all"
+                className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
                 iconSize={16}
               />
-              <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-slate-500 text-slate-200 hover:text-white rounded-xl text-sm font-medium transition-all">
+              <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 px-4 py-2 bg-primary-600/20 hover:bg-primary-600/30 border border-primary-500/40 text-primary-300 hover:text-primary-200 rounded-xl text-sm font-medium transition-all">
                 <Edit3 size={15} />Редактировать
               </button>
             </div>
           </div>
 
-          {/* 1. ФИО */}
+          {/* Name + badges */}
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
             <h1 className="text-2xl font-bold text-white leading-tight">{profile?.firstName} {profile?.lastName}</h1>
-            {profile?.isPremium && <span title="Premium"><Crown size={18} className="text-amber-400" /></span>}
-            {profile?.isVerified && <span title="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></span>}
-            {profile?.isBlocked && <span title="Заблокирован"><Ban size={18} className="text-red-500" /></span>}
+            {profile?.isPremium && <Crown size={18} className="text-amber-400" title="Premium" />}
+            {profile?.isVerified && <BadgeCheck size={18} className="text-sky-400" title="Верифицирован" />}
+            {profile?.isBlocked && <Ban size={18} className="text-red-500" title="Заблокирован" />}
           </div>
 
-          {/* 2. Ник + Гео */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-1">
-            {profile?.nickname && <span>@{profile.nickname}</span>}
+          {/* Nick + location */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-2">
+            {profile?.nickname && <span className="text-slate-500">@{profile.nickname}</span>}
             {(profile?.city || profile?.country) && (
               <span className="flex items-center gap-1">
                 <MapPin size={12} className="flex-shrink-0" />
@@ -903,291 +904,294 @@ export default function ProfilePage() {
             )}
           </div>
 
-          {/* Stats — compact inline */}
-          <div className="flex items-center gap-2 text-xs text-slate-500 mb-3 flex-wrap">
-            <span><span className="font-semibold text-slate-300">{friendCount}</span> друзей</span>
-            {servicesFlat.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{servicesFlat.length}</span> услуг</span></>}
-            {myConnections.length > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{myConnections.length}</span> {plural(myConnections.length, 'связь', 'связи', 'связей')}</span></>}
-            {myChannel && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{myChannel._count.subscriptions}</span> {plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')}</span></>}
-          </div>
-
-          {/* Bio */}
-          {profile?.bio && (
-            <p className="text-slate-300 text-sm leading-relaxed mb-4 border-l-2 border-primary-500/40 pl-3">{profile.bio}</p>
-          )}
-
-          {/* 3. Специализация */}
+          {/* Profession tags inline */}
           {professionNames.length > 0 && (
-            <div className="mb-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Специализация</span>
-                <div className="flex-1 h-px bg-slate-800" />
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {professionNames.map((name, i) => (
-                  <span key={i} className="px-2.5 py-1 bg-slate-800/80 border border-slate-700/50 text-slate-300 rounded-lg text-xs font-medium">{name}</span>
-                ))}
-              </div>
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {professionNames.map((name, i) => (
+                <span key={i} className="px-2.5 py-1 bg-primary-500/10 border border-primary-500/25 text-primary-300 rounded-lg text-xs font-medium">{name}</span>
+              ))}
             </div>
           )}
 
-          {/* 4. Группы */}
-          <div className="mb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Группы</span>
-              <div className="flex-1 h-px bg-slate-800" />
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {myGroups.map((g: any) => (
-                <button
-                  key={g.id}
-                  onClick={() => navigate('/groups/' + g.id)}
-                  className="px-2.5 py-1 bg-primary-600/15 border border-primary-500/30 text-primary-400 rounded-lg text-xs font-medium hover:bg-primary-600/25 transition-colors"
-                >
-                  {g.name}
-                </button>
-              ))}
-              <button
-                onClick={() => navigate('/groups/create')}
-                className="px-2.5 py-1 bg-primary-600/20 border border-primary-500/40 text-primary-400 rounded-lg text-xs font-medium hover:bg-primary-600/30 transition-colors flex items-center gap-1"
-              >
-                + Создать группу
-              </button>
-            </div>
-          </div>
-
-          {/* 5. Связи */}
-          {myConnections.length > 0 && (() => {
-            const LIMIT = 6;
-            const visible = connExpanded ? myConnections : myConnections.slice(0, LIMIT);
-            return (
-              <div className="mb-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <Link2 size={13} className="text-primary-400" />
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Профессиональные связи</span>
-                  <span className="text-[11px] text-slate-600 font-medium">{myConnections.length}</span>
-                  <div className="flex-1 h-px bg-slate-800" />
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {visible.map((c: any) => (
-                    <button
-                      key={c.id}
-                      onClick={() => setViewConn(c)}
-                      className="text-left p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl hover:border-primary-500/30 hover:bg-slate-800/70 transition-all group"
-                    >
-                      <div className="flex items-center gap-2.5 mb-2">
-                        <div className="w-9 h-9 rounded-full overflow-hidden bg-slate-700 flex-shrink-0 ring-1 ring-white/5">
-                          {c.partner.avatar
-                            ? <img src={`${API_URL}${c.partner.avatar}`} alt="" className="w-full h-full object-cover" />
-                            : <div className="w-full h-full bg-primary-600/30 flex items-center justify-center text-xs text-primary-300 font-bold">{c.partner.firstName?.[0]}</div>
-                          }
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-white truncate leading-tight">{c.partner.firstName} {c.partner.lastName}</p>
-                          {c.partner.city && <p className="text-[11px] text-slate-500 truncate">{c.partner.city}</p>}
-                        </div>
-                        <Link2 size={12} className="text-primary-400/50 group-hover:text-primary-400 flex-shrink-0 transition-colors" />
-                      </div>
-                      {c.services.length > 0 && (
-                        <div className="flex flex-wrap gap-1">
-                          {c.services.slice(0, 3).map((s: any) => (
-                            <span key={s.id} className="text-[11px] bg-primary-500/10 text-primary-300 border border-primary-500/20 rounded-md px-1.5 py-0.5 leading-none">
-                              {s.name}
-                            </span>
-                          ))}
-                          {c.services.length > 3 && (
-                            <span className="text-[11px] bg-slate-700/60 text-slate-400 rounded-md px-1.5 py-0.5 leading-none">
-                              +{c.services.length - 3}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </button>
-                  ))}
-                </div>
-                {myConnections.length > LIMIT && (
-                  <button
-                    onClick={() => setConnExpanded(v => !v)}
-                    className="mt-2 w-full py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors text-center"
-                  >
-                    {connExpanded ? 'Свернуть' : `Показать ещё ${myConnections.length - LIMIT}`}
-                  </button>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* 6. Контакты */}
+          {/* Social icons (compact, no labels) */}
           {hasSocialLinks && (
             <div className="mb-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Контакты</span>
-                <div className="flex-1 h-px bg-slate-800" />
-              </div>
-              <SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} labeled />
+              <SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} />
             </div>
           )}
 
-          {/* 6. Портфолио */}
-          {portfolioFiles.length > 0 && (
-            <div className="mb-5">
-              <div className="flex items-center gap-2 mb-3">
-                <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Портфолио</span>
-                <div className="flex-1 h-px bg-slate-800" />
+          {/* Stats pills */}
+          <div className="flex items-center gap-2 mb-5 flex-wrap">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
+              <span className="text-sm font-bold text-white">{friendCount}</span>
+              <span className="text-xs text-slate-500">друзей</span>
+            </div>
+            {servicesFlat.length > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
+                <span className="text-sm font-bold text-white">{servicesFlat.length}</span>
+                <span className="text-xs text-slate-500">услуг</span>
               </div>
-              <div className="space-y-5">
+            )}
+            {myConnections.length > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
+                <span className="text-sm font-bold text-white">{myConnections.length}</span>
+                <span className="text-xs text-slate-500">{plural(myConnections.length, 'связь', 'связи', 'связей')}</span>
+              </div>
+            )}
+            {myChannel && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
+                <span className="text-sm font-bold text-white">{myChannel._count.subscriptions}</span>
+                <span className="text-xs text-slate-500">{plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')}</span>
+              </div>
+            )}
+          </div>
 
-                {/* Фото — карусель */}
-                {photoFiles.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <Image size={13} className="text-slate-500" />
-                      <span className="text-xs text-slate-500 font-medium">Фото</span>
+          {/* ── CONTENT CARDS ──────────────────────────────────────────────── */}
+          <div className="space-y-3">
+
+            {/* Bio card */}
+            {profile?.bio && (
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">О себе</p>
+                <p className="text-slate-300 text-sm leading-relaxed">{profile.bio}</p>
+              </div>
+            )}
+
+            {/* Groups card */}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Группы</p>
+              <div className="flex flex-wrap gap-2">
+                {myGroups.map((g: any) => (
+                  <button
+                    key={g.id}
+                    onClick={() => navigate('/groups/' + g.id)}
+                    className="px-3 py-1.5 bg-primary-600/15 border border-primary-500/30 text-primary-400 rounded-xl text-xs font-medium hover:bg-primary-600/25 transition-colors"
+                  >
+                    {g.name}
+                  </button>
+                ))}
+                <button
+                  onClick={() => navigate('/groups/create')}
+                  className="px-3 py-1.5 bg-slate-800/60 border border-slate-700/60 text-slate-400 rounded-xl text-xs font-medium hover:bg-slate-700/60 transition-colors flex items-center gap-1"
+                >
+                  <Plus size={11} />Создать группу
+                </button>
+              </div>
+            </div>
+
+            {/* Services card — grid, not carousel */}
+            {servicesFlat.length > 0 && (
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                  <Briefcase size={14} className="text-primary-400" />
+                  <span className="text-sm font-semibold text-white">Услуги</span>
+                  <span className="ml-auto text-xs text-slate-500">{servicesFlat.length}</span>
+                </div>
+                <div className="p-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {servicesFlat.map((us: any) => {
+                      const tags = [
+                        ...(us.genres?.map((g: any) => g.name) ?? []),
+                        ...(us.workFormats?.map((w: any) => w.name) ?? []),
+                        ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
+                        ...(us.skillLevels?.map((s: any) => s.name) ?? []),
+                        ...(us.availabilities?.map((a: any) => a.name) ?? []),
+                        ...(us.geographies?.map((g: any) => g.name) ?? []),
+                      ];
+                      const price = us.priceFrom != null || us.priceTo != null
+                        ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
+                        : null;
+                      return (
+                        <div key={us.id} className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-3 flex flex-col gap-1.5">
+                          <div>
+                            <p className="text-[11px] text-slate-500 leading-none mb-1">{us._fieldName} · {us._profName}</p>
+                            <p className="text-sm font-bold text-white leading-snug">{us.service?.name}</p>
+                          </div>
+                          {price && <span className="text-xs font-semibold text-primary-400">{price}</span>}
+                          {tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-auto pt-0.5">
+                              {tags.slice(0, 3).map((t: string, i: number) => (
+                                <span key={i} className="px-1.5 py-0.5 bg-slate-700/60 text-slate-400 rounded text-[10px]">{t}</span>
+                              ))}
+                              {tags.length > 3 && <span className="px-1.5 py-0.5 text-slate-600 text-[10px]">+{tags.length - 3}</span>}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Portfolio card */}
+            {portfolioFiles.length > 0 && (
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                  <Image size={14} className="text-primary-400" />
+                  <span className="text-sm font-semibold text-white">Портфолио</span>
+                  <span className="ml-auto text-xs text-slate-500">{portfolioFiles.length}</span>
+                </div>
+                <div className="p-4 space-y-4">
+                  {photoFiles.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Image size={12} className="text-slate-500" />
+                        <span className="text-xs text-slate-500 font-medium">Фото</span>
+                      </div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {photoFiles.map((f: any) => (
+                          <button key={f.id} onClick={() => setLightboxFile(f)}
+                            className="aspect-square rounded-xl overflow-hidden bg-slate-800 hover:opacity-90 transition-opacity">
+                            <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                    <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                      {photoFiles.map((f: any) => (
-                        <button key={f.id} onClick={() => setLightboxFile(f)}
-                          className="flex-shrink-0 w-48 h-48 rounded-xl overflow-hidden bg-slate-800 hover:opacity-90 transition-opacity">
-                          <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
+                  )}
+                  {audioFiles.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Headphones size={12} className="text-slate-500" />
+                        <span className="text-xs text-slate-500 font-medium">Аудио</span>
+                      </div>
+                      <div className="space-y-2">
+                        {audioFiles.map((f: any) => (
+                          <div key={f.id} className="rounded-xl bg-slate-800/60 border border-slate-700/40 px-3 pt-3 pb-2">
+                            <p className="text-xs text-slate-400 truncate mb-2">{f.originalName}</p>
+                            <audio controls src={`${API_URL}${f.url}`} className="w-full h-9" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {videoFiles.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <Film size={12} className="text-slate-500" />
+                        <span className="text-xs text-slate-500 font-medium">Видео</span>
+                      </div>
+                      <div className="space-y-2">
+                        {videoFiles.map((f: any) => (
+                          <div key={f.id} className="rounded-xl overflow-hidden bg-slate-800/60 border border-slate-700/40">
+                            <video controls src={`${API_URL}${f.url}`} className="w-full max-h-52 object-contain bg-black" />
+                            <p className="text-xs text-slate-500 truncate px-3 py-1.5">{f.originalName}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {otherFiles.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <FileText size={12} className="text-slate-500" />
+                        <span className="text-xs text-slate-500 font-medium">Другое</span>
+                      </div>
+                      <div className="space-y-1">
+                        {otherFiles.map((f: any) => (
+                          <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/40 hover:bg-slate-700/40 border border-slate-700/40 transition-colors group">
+                            <FileText size={14} className="text-slate-500 flex-shrink-0 group-hover:text-primary-400 transition-colors" />
+                            <span className="flex-1 text-sm text-slate-300 truncate group-hover:text-white transition-colors">{f.originalName}</span>
+                            <span className="text-xs text-slate-600 flex-shrink-0">{formatFileSize(f.size)}</span>
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Channel card */}
+            {myChannel && (
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                  <Radio size={14} className="text-primary-400" />
+                  <span className="text-sm font-semibold text-white">Канал</span>
+                </div>
+                <div className="p-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center flex-shrink-0">
+                      {myChannel.avatar
+                        ? <img src={getAvatarUrl(myChannel.avatar)!} alt="" className="w-full h-full object-cover" />
+                        : <Radio size={20} className="text-slate-500" />
+                      }
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-white truncate">{myChannel.name}</p>
+                      {myChannel.description && <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{myChannel.description}</p>}
+                      <p className="text-xs text-slate-600 mt-1">{myChannel._count.subscriptions} {plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')} · {myChannel._count.posts} {plural(myChannel._count.posts, 'пост', 'поста', 'постов')}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Connections card */}
+            {myConnections.length > 0 && (() => {
+              const LIMIT = 4;
+              const visible = connExpanded ? myConnections : myConnections.slice(0, LIMIT);
+              return (
+                <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                    <Link2 size={14} className="text-primary-400" />
+                    <span className="text-sm font-semibold text-white">Профессиональные связи</span>
+                    <span className="ml-auto text-xs text-slate-500">{myConnections.length}</span>
+                  </div>
+                  <div className="p-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {visible.map((c: any) => (
+                        <button
+                          key={c.id}
+                          onClick={() => setViewConn(c)}
+                          className="text-left p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl hover:border-primary-500/30 hover:bg-slate-800/70 transition-all"
+                        >
+                          <div className="flex items-center gap-2.5 mb-2">
+                            <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-700 flex-shrink-0">
+                              {c.partner.avatar
+                                ? <img src={`${API_URL}${c.partner.avatar}`} alt="" className="w-full h-full object-cover" />
+                                : <div className="w-full h-full bg-primary-600/30 flex items-center justify-center text-xs text-primary-300 font-bold">{c.partner.firstName?.[0]}</div>
+                              }
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-white truncate leading-tight">{c.partner.firstName} {c.partner.lastName}</p>
+                              {c.partner.city && <p className="text-[11px] text-slate-500 truncate">{c.partner.city}</p>}
+                            </div>
+                          </div>
+                          {c.services.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {c.services.slice(0, 2).map((s: any) => (
+                                <span key={s.id} className="text-[10px] bg-primary-500/10 text-primary-300 border border-primary-500/20 rounded px-1.5 py-0.5">{s.name}</span>
+                              ))}
+                              {c.services.length > 2 && <span className="text-[10px] bg-slate-700/60 text-slate-400 rounded px-1.5 py-0.5">+{c.services.length - 2}</span>}
+                            </div>
+                          )}
                         </button>
                       ))}
                     </div>
-                  </div>
-                )}
-
-                {/* Аудио — встроенный плеер */}
-                {audioFiles.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <Headphones size={13} className="text-slate-500" />
-                      <span className="text-xs text-slate-500 font-medium">Аудио</span>
-                    </div>
-                    <div className="space-y-2">
-                      {audioFiles.map((f: any) => (
-                        <div key={f.id} className="rounded-xl bg-slate-900/60 border border-slate-800/60 px-3 pt-3 pb-2">
-                          <p className="text-xs text-slate-400 truncate mb-2">{f.originalName}</p>
-                          <audio controls src={`${API_URL}${f.url}`} className="w-full h-9" />
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Видео — встроенный плеер */}
-                {videoFiles.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <Film size={13} className="text-slate-500" />
-                      <span className="text-xs text-slate-500 font-medium">Видео</span>
-                    </div>
-                    <div className="space-y-2">
-                      {videoFiles.map((f: any) => (
-                        <div key={f.id} className="rounded-xl overflow-hidden bg-slate-900/60 border border-slate-800/60">
-                          <video controls src={`${API_URL}${f.url}`} className="w-full max-h-64 object-contain bg-black" />
-                          <p className="text-xs text-slate-500 truncate px-3 py-1.5">{f.originalName}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Другое — ссылки */}
-                {otherFiles.length > 0 && (
-                  <div>
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <FileText size={13} className="text-slate-500" />
-                      <span className="text-xs text-slate-500 font-medium">Другое</span>
-                    </div>
-                    <div className="space-y-1">
-                      {otherFiles.map((f: any) => (
-                        <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
-                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-900/60 hover:bg-slate-800/60 border border-slate-800/60 transition-colors group">
-                          <FileText size={14} className="text-slate-500 flex-shrink-0 group-hover:text-primary-400 transition-colors" />
-                          <span className="flex-1 text-sm text-slate-300 truncate group-hover:text-white transition-colors">{f.originalName}</span>
-                          <span className="text-xs text-slate-600 flex-shrink-0">{formatFileSize(f.size)}</span>
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 7. Услуги — горизонтальная карусель */}
-        {servicesFlat.length > 0 && (
-          <div className="mb-5">
-            <div className="flex items-center gap-2 mb-3 px-4">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Услуги</span>
-              <div className="flex-1 h-px bg-slate-800" />
-            </div>
-            <div className="flex gap-3 overflow-x-auto pb-3 px-4" style={{ scrollbarWidth: 'none' }}>
-              {servicesFlat.map((us: any) => {
-                const tags = [
-                  ...(us.genres?.map((g: any) => g.name) ?? []),
-                  ...(us.workFormats?.map((w: any) => w.name) ?? []),
-                  ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
-                  ...(us.skillLevels?.map((s: any) => s.name) ?? []),
-                  ...(us.availabilities?.map((a: any) => a.name) ?? []),
-                  ...(us.geographies?.map((g: any) => g.name) ?? []),
-                ];
-                const price = us.priceFrom != null || us.priceTo != null
-                  ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
-                  : null;
-                return (
-                  <div key={us.id} className="flex-shrink-0 w-52 rounded-2xl border border-slate-800/60 bg-slate-900/70 p-4 flex flex-col gap-2">
-                    <div>
-                      <p className="text-sm font-bold text-white leading-snug">{us.service?.name}</p>
-                      <p className="text-[11px] text-slate-500 mt-0.5">{us._profName} · {us._fieldName}</p>
-                    </div>
-                    {price && <span className="text-sm font-semibold text-primary-400">{price}</span>}
-                    {tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-auto pt-1">
-                        {tags.slice(0, 4).map((t: string, i: number) => (
-                          <span key={i} className="px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded text-[10px]">{t}</span>
-                        ))}
-                        {tags.length > 4 && <span className="px-1.5 py-0.5 text-slate-600 text-[10px]">+{tags.length - 4}</span>}
-                      </div>
+                    {myConnections.length > LIMIT && (
+                      <button
+                        onClick={() => setConnExpanded(v => !v)}
+                        className="mt-3 w-full py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors text-center"
+                      >
+                        {connExpanded ? 'Свернуть' : `Показать ещё ${myConnections.length - LIMIT}`}
+                      </button>
                     )}
                   </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
+                </div>
+              );
+            })()}
 
-        {/* 8. Канал */}
-        {myChannel && (
-          <div className="px-4 mb-5">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Канал</span>
-              <div className="flex-1 h-px bg-slate-800" />
-            </div>
-            <div className="flex items-center gap-3 p-3.5 rounded-2xl border border-slate-800/60 bg-slate-900/50">
-              <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center flex-shrink-0">
-                {myChannel.avatar
-                  ? <img src={getAvatarUrl(myChannel.avatar)!} alt="" className="w-full h-full object-cover" />
-                  : <Radio size={20} className="text-slate-500" />
-                }
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white truncate">{myChannel.name}</p>
-                <p className="text-xs text-slate-500 mt-0.5">{myChannel._count.subscriptions} {plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')} · {myChannel._count.posts} {plural(myChannel._count.posts, 'пост', 'поста', 'постов')}</p>
-              </div>
-            </div>
-          </div>
-        )}
+            {/* Logout */}
+            <button
+              onClick={() => logout()}
+              className="w-full flex items-center justify-center gap-2 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/8 border border-red-500/20 hover:border-red-500/40 rounded-xl text-sm font-medium transition-all"
+            >
+              <LogOut size={16} />Выйти из профиля
+            </button>
 
-        {/* Подвал профиля */}
-        <div className="px-4 pt-2 pb-4">
-          <button
-            onClick={() => logout()}
-            className="w-full flex items-center justify-center gap-2 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/8 border border-red-500/20 hover:border-red-500/40 rounded-xl text-sm font-medium transition-all"
-          >
-            <LogOut size={16} />Выйти из профиля
-          </button>
+          </div>
         </div>
 
       </div>
