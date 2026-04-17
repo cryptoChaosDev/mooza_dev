@@ -1170,6 +1170,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
       <div className="flex-1 bg-black/60" />
       <div
         className="w-full max-w-md bg-slate-950 border-l border-slate-800 flex flex-col"
+        style={{ height: '100vh' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
