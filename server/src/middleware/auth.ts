@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { verifyToken, extractTokenFromHeader } from '../utils/jwt';
+import { prisma } from '../index';
 
 export interface AuthRequest extends Request {
   userId?: string;
@@ -23,7 +24,7 @@ export const optionalAuthenticate = (req: AuthRequest, res: Response, next: Next
   next();
 };
 
-export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     // Извлекаем токен из заголовка Authorization
     const token = extractTokenFromHeader(req.headers.authorization);
@@ -37,8 +38,20 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
 
     // Проверяем и декодируем токен
     const decoded = verifyToken(token);
-    req.userId = decoded.userId;
 
+    // Если пароль менялся после выдачи токена — токен недействителен
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { passwordChangedAt: true, isBlocked: true },
+    });
+    if (!user || user.isBlocked) {
+      return res.status(401).json({ error: 'Токен недействителен', code: 'TOKEN_INVALID' });
+    }
+    if (user.passwordChangedAt && decoded.iat < Math.floor(user.passwordChangedAt.getTime() / 1000)) {
+      return res.status(401).json({ error: 'Пароль был изменён. Войдите заново.', code: 'TOKEN_INVALID' });
+    }
+
+    req.userId = decoded.userId;
     next();
   } catch (error) {
     // Обрабатываем различные типы ошибок JWT

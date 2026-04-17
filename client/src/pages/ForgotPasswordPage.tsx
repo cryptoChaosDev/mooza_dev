@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
 
   const handleReset = async () => {
     setError('');
-    if (password.length < 6) { setError('Пароль минимум 6 символов'); return; }
+    if (password.length < 8) { setError('Пароль минимум 8 символов'); return; }
     setLoading(true);
     try {
       await authAPI.resetPassword(email.trim().toLowerCase(), code.trim(), password);
@@ -195,7 +195,7 @@ export default function ForgotPasswordPage() {
               )}
 
               <button
-                onClick={handleReset} disabled={loading || password.length < 6}
+                onClick={handleReset} disabled={loading || password.length < 8}
                 className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-2 transition-colors"
               >
                 {loading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}

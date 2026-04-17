@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { prisma } from '../index';
 import { z } from 'zod';
-import { authLimiter, registerLimiter } from '../middleware/rateLimiter';
+import { authLimiter, registerLimiter, codeLimiter } from '../middleware/rateLimiter';
 import { generateToken } from '../utils/jwt';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/mailer';
 
@@ -54,7 +54,7 @@ const registerSchema = z.object({
   artistIds: z.array(z.string()).optional(),
   employerId: z.string().optional(),
   // Step 7: Password
-  password: z.string().min(6),
+  password: z.string().min(8),
 });
 
 const loginSchema = z.object({
@@ -67,9 +67,12 @@ router.post('/register', registerLimiter, async (req, res) => {
   try {
     const data = registerSchema.parse(req.body);
 
+    // Normalize email
+    const normalizedEmail = data.email.trim().toLowerCase();
+
     // Check if user exists
     const existingUser = await prisma.user.findUnique({
-      where: { email: data.email }
+      where: { email: normalizedEmail }
     });
 
     if (existingUser) {
@@ -92,7 +95,7 @@ router.post('/register', registerLimiter, async (req, res) => {
     // Create user with all fields
     const user = await prisma.user.create({
       data: {
-        email: data.email,
+        email: normalizedEmail,
         password: hashedPassword,
         firstName: data.firstName,
         lastName: data.lastName,
@@ -151,8 +154,8 @@ router.post('/register', registerLimiter, async (req, res) => {
       }
     });
 
-    // Generate 6-digit verification code
-    const verificationCode = String(Math.floor(100000 + Math.random() * 900000));
+    // Generate 6-digit verification code (cryptographically secure)
+    const verificationCode = String(crypto.randomInt(100000, 1000000));
     const expires = new Date(Date.now() + 15 * 60 * 1000);
 
     await prisma.user.update({
@@ -164,7 +167,7 @@ router.post('/register', registerLimiter, async (req, res) => {
     });
 
     try {
-      await sendVerificationEmail(data.email, verificationCode);
+      await sendVerificationEmail(normalizedEmail, verificationCode);
     } catch (mailErr) {
       console.error('[register] Failed to send verification email:', mailErr);
     }
@@ -180,7 +183,7 @@ router.post('/register', registerLimiter, async (req, res) => {
 });
 
 // ── POST /auth/verify-email ────────────────────────────────────────────────────
-router.post('/verify-email', async (req, res) => {
+router.post('/verify-email', codeLimiter, async (req, res) => {
   try {
     const { email, code } = req.body as { email: string; code: string };
     if (!email || !code) return res.status(400).json({ error: 'email и code обязательны' });
@@ -199,10 +202,7 @@ router.post('/verify-email', async (req, res) => {
 
     if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
     if (user.emailVerified) {
-      // Already verified — just issue token
-      const token = generateToken({ userId: user.id });
-      const { password: _, emailVerificationCode: __, emailVerificationExpires: ___, ...safe } = user as any;
-      return res.json({ user: safe, token });
+      return res.status(400).json({ error: 'Email уже подтверждён. Войдите в систему.' });
     }
     if (!user.emailVerificationCode || user.emailVerificationCode !== code) {
       return res.status(400).json({ error: 'Неверный код' });
@@ -235,12 +235,17 @@ router.post('/resend-verification', registerLimiter, async (req, res) => {
     if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
     if (user.emailVerified) return res.status(400).json({ error: 'Email уже подтверждён' });
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    // Server-side cooldown: 60 seconds between resends
+    if (user.lastCodeSentAt && Date.now() - user.lastCodeSentAt.getTime() < 60_000) {
+      return res.status(429).json({ error: 'Подождите перед повторной отправкой кода.' });
+    }
+
+    const code = String(crypto.randomInt(100000, 1000000));
     const expires = new Date(Date.now() + 15 * 60 * 1000);
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { emailVerificationCode: code, emailVerificationExpires: expires },
+      data: { emailVerificationCode: code, emailVerificationExpires: expires, lastCodeSentAt: new Date() },
     });
 
     await sendVerificationEmail(email, code);
@@ -361,7 +366,7 @@ router.get('/telegram/poll/:token', authLimiter, async (req, res) => {
 router.post('/telegram/webhook', async (req, res) => {
   // Verify secret token header (set when registering webhook)
   const secret = process.env.TELEGRAM_WEBHOOK_SECRET || '';
-  if (secret && req.headers['x-telegram-bot-api-secret-token'] !== secret) {
+  if (!secret || req.headers['x-telegram-bot-api-secret-token'] !== secret) {
     return res.sendStatus(403);
   }
 
@@ -725,12 +730,17 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
     // Always respond OK to prevent user enumeration
     if (!user) return res.json({ ok: true });
 
-    const code = String(Math.floor(100000 + Math.random() * 900000));
+    // Server-side cooldown: 60 seconds between reset code sends
+    if (user.lastCodeSentAt && Date.now() - user.lastCodeSentAt.getTime() < 60_000) {
+      return res.json({ ok: true }); // silent — still prevent enumeration
+    }
+
+    const code = String(crypto.randomInt(100000, 1000000));
     const expires = new Date(Date.now() + 15 * 60 * 1000);
 
     await prisma.user.update({
       where: { id: user.id },
-      data: { passwordResetCode: code, passwordResetExpires: expires },
+      data: { passwordResetCode: code, passwordResetExpires: expires, lastCodeSentAt: new Date() },
     });
 
     try {
@@ -747,11 +757,11 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
 });
 
 // ── POST /auth/reset-password ─────────────────────────────────────────────────
-router.post('/reset-password', async (req, res) => {
+router.post('/reset-password', codeLimiter, authLimiter, async (req, res) => {
   try {
     const { email, code, password } = req.body as { email: string; code: string; password: string };
     if (!email || !code || !password) return res.status(400).json({ error: 'Все поля обязательны' });
-    if (password.length < 6) return res.status(400).json({ error: 'Пароль минимум 6 символов' });
+    if (password.length < 8) return res.status(400).json({ error: 'Пароль минимум 8 символов' });
 
     const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
@@ -766,7 +776,13 @@ router.post('/reset-password', async (req, res) => {
     const hashed = await bcrypt.hash(password, 10);
     await prisma.user.update({
       where: { id: user.id },
-      data: { password: hashed, passwordResetCode: null, passwordResetExpires: null, emailVerified: true },
+      data: {
+        password: hashed,
+        passwordResetCode: null,
+        passwordResetExpires: null,
+        emailVerified: true,
+        passwordChangedAt: new Date(),
+      },
     });
 
     return res.json({ ok: true });

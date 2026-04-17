@@ -115,7 +115,7 @@ export default function RegisterPage() {
     setError('');
     if (step === 0) {
       if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Укажите корректный email'); return false; }
-      if (password.length < 6) { setError('Пароль — минимум 6 символов'); return false; }
+      if (password.length < 8) { setError('Пароль — минимум 8 символов'); return false; }
     }
     if (step === 1) {
       if (!firstName.trim()) { setError('Укажите имя'); return false; }
@@ -257,7 +257,7 @@ export default function RegisterPage() {
         <Field label="Email" hint="Используется для входа и восстановления пароля">
           <Input type="email" value={email} onChange={setEmail} placeholder="you@example.com" autoFocus />
         </Field>
-        <Field label="Пароль" hint="Минимум 6 символов">
+        <Field label="Пароль" hint="Минимум 8 символов">
           <Input
             type={showPassword ? 'text' : 'password'}
             value={password} onChange={setPassword}
