@@ -85,6 +85,12 @@ export default function FriendsPage() {
     queryFn: async () => { const { data } = await groupAPI.getInvites(); return data as any[]; },
   });
 
+  // ── My groups ──
+  const { data: myGroups = [] } = useQuery({
+    queryKey: ['my-groups'],
+    queryFn: async () => { const { data } = await groupAPI.getMyGroups(); return data as any[]; },
+  });
+
   const acceptGroupInviteMut = useMutation({
     mutationFn: (membershipId: string) => groupAPI.acceptInvite(membershipId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['group-invites'] }),
@@ -501,9 +507,11 @@ export default function FriendsPage() {
           {/* ══ GROUPS TAB ══ */}
           {activeTab === 'groups' && (
             <div className="pb-4">
+
+              {/* Invites */}
               {groupInvites.length > 0 && (
                 <div>
-                  <SectionHeader label="Приглашения в группы" count={groupInvites.length} />
+                  <SectionHeader label="Приглашения" count={groupInvites.length} />
                   <div className="divide-y divide-slate-800/60">
                     {groupInvites.map((inv: any) => (
                       <div key={inv.id} className="flex items-center gap-3 px-4 py-3">
@@ -511,8 +519,7 @@ export default function FriendsPage() {
                           <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center overflow-hidden">
                             {inv.group.avatar
                               ? <img src={inv.group.avatar} alt={inv.group.name} className="w-full h-full object-cover" />
-                              : <span className="text-white font-bold text-sm">{inv.group.name?.[0]?.toUpperCase()}</span>
-                            }
+                              : <span className="text-white font-bold text-sm">{inv.group.name?.[0]?.toUpperCase()}</span>}
                           </div>
                         </button>
                         <button onClick={() => navigate(`/groups/${inv.group.id}`)} className="flex-1 min-w-0 text-left">
@@ -547,11 +554,60 @@ export default function FriendsPage() {
                 </div>
               )}
 
-              {groupInvites.length === 0 && (
+              {/* My groups (owner or accepted member) */}
+              {myGroups.length > 0 && (
+                <div>
+                  <SectionHeader label="Мои группы" count={myGroups.length} />
+                  <div className="divide-y divide-slate-800/60">
+                    {myGroups.map((g: any) => {
+                      const isOwner = g.submittedById !== undefined
+                        ? false /* will be determined below */
+                        : false;
+                      const myMembership = (g.userArtists ?? []).find((ua: any) => ua.isOwner);
+                      const amOwner = !!myMembership;
+                      return (
+                        <button
+                          key={g.id}
+                          onClick={() => navigate(`/groups/${g.id}`)}
+                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors text-left"
+                        >
+                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-600 to-purple-700 flex items-center justify-center overflow-hidden flex-shrink-0">
+                            {g.avatar
+                              ? <img src={g.avatar} alt={g.name} className="w-full h-full object-cover" />
+                              : <span className="text-white font-bold text-sm">{g.name?.[0]?.toUpperCase()}</span>}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-white truncate">{g.name}</p>
+                            <p className="text-xs text-slate-500 truncate">
+                              {g.type === 'COVER_GROUP' ? 'Кавер-группа' : 'Группа'}
+                              {g.city ? ` · ${g.city}` : ''}
+                              {' · '}{(g.userArtists ?? []).filter((ua: any) => ua.inviteStatus === 'ACCEPTED').length} уч.
+                            </p>
+                          </div>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded-md flex-shrink-0 ${
+                            g.status === 'VERIFIED' ? 'bg-green-500/15 text-green-400' :
+                            g.status === 'PENDING' ? 'bg-amber-500/15 text-amber-400' :
+                            g.status === 'DRAFT' ? 'bg-slate-700 text-slate-400' :
+                            'bg-slate-700 text-slate-400'
+                          }`}>
+                            {g.status === 'VERIFIED' ? 'Верифицирована' :
+                             g.status === 'PENDING' ? 'Модерация' :
+                             g.status === 'APPROVED' ? 'Одобрена' :
+                             g.status === 'DRAFT' ? 'Черновик' : g.status}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Empty state */}
+              {groupInvites.length === 0 && myGroups.length === 0 && (
                 <div className="flex flex-col items-center py-16 px-6 text-center">
                   <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Music2 size={32} className="text-slate-600" /></div>
-                  <p className="text-white font-semibold mb-1">Нет приглашений</p>
-                  <p className="text-slate-500 text-sm mb-5">Здесь появятся приглашения в музыкальные группы</p>
+                  <p className="text-white font-semibold mb-1">Нет групп</p>
+                  <p className="text-slate-500 text-sm mb-5">Создайте свою группу или ждите приглашения</p>
                   <button onClick={() => navigate('/groups/create')} className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-medium transition-colors">
                     Создать группу
                   </button>

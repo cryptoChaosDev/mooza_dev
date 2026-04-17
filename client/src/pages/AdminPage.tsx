@@ -1402,6 +1402,154 @@ function ArtistModerationTab() {
   );
 }
 
+// ─── Groups Admin Tab ────────────────────────────────────────────────────────
+
+const TYPE_LABELS: Record<string, string> = { GROUP: 'Группа', COVER_GROUP: 'Кавер-группа', SOLO: 'Соло' };
+const STATUS_LABELS: Record<string, string> = { DRAFT: 'Черновик', PENDING: 'Модерация', APPROVED: 'Одобрена', VERIFIED: 'Верифицирована', REJECTED: 'Отклонена' };
+const STATUS_COLORS: Record<string, string> = {
+  DRAFT: 'text-slate-400', PENDING: 'text-amber-400', APPROVED: 'text-sky-400',
+  VERIFIED: 'text-green-400', REJECTED: 'text-red-400',
+};
+
+function GroupsAdminTab() {
+  const qc = useQueryClient();
+  const [editId, setEditId] = useState<string | null>(null);
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState<Record<string, string>>({ name: '', type: 'GROUP', city: '', description: '' });
+  const [search, setSearch] = useState('');
+
+  const { data: groups = [], isLoading } = useQuery<any[]>({
+    queryKey: ['admin-groups'],
+    queryFn: () => adminAPI.groups.list().then((r: any) => r.data),
+  });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['admin-groups'] });
+
+  const createMut = useMutation({
+    mutationFn: () => adminAPI.groups.create(form),
+    onSuccess: () => { invalidate(); setShowCreate(false); setForm({ name: '', type: 'GROUP', city: '', description: '' }); },
+  });
+  const updateMut = useMutation({
+    mutationFn: () => adminAPI.groups.update(editId!, form),
+    onSuccess: () => { invalidate(); setEditId(null); },
+  });
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => adminAPI.groups.remove(id),
+    onSuccess: invalidate,
+  });
+
+  const filtered = search
+    ? groups.filter(g => g.name.toLowerCase().includes(search.toLowerCase()))
+    : groups;
+
+  const startEdit = (g: any) => {
+    setEditId(g.id);
+    setForm({ name: g.name, type: g.type, city: g.city ?? '', description: g.description ?? '' });
+  };
+
+  const FormRow = () => (
+    <div className="p-4 bg-slate-800/60 border-b border-slate-700 space-y-3">
+      <div className="grid grid-cols-2 gap-2">
+        <div className="col-span-2">
+          <label className="block text-xs text-slate-500 mb-1">Название *</label>
+          <input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500" placeholder="Название группы" />
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Тип</label>
+          <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500">
+            <option value="GROUP">Группа</option>
+            <option value="COVER_GROUP">Кавер-группа</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Город</label>
+          <input value={form.city} onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
+            className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500" placeholder="Москва" />
+        </div>
+        <div className="col-span-2">
+          <label className="block text-xs text-slate-500 mb-1">Описание</label>
+          <textarea value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+            rows={2} className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500 resize-none" placeholder="О группе..." />
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <button onClick={editId ? () => updateMut.mutate() : () => createMut.mutate()}
+          disabled={!form.name.trim() || createMut.isPending || updateMut.isPending}
+          className="flex items-center gap-1 px-3 py-1.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-xs rounded-lg transition-colors">
+          <Check size={13} /> {editId ? 'Сохранить' : 'Создать'}
+        </button>
+        <button onClick={() => { setEditId(null); setShowCreate(false); }}
+          className="flex items-center gap-1 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs rounded-lg transition-colors">
+          <X size={13} /> Отмена
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-white">Группы</h3>
+          <span className="text-xs text-slate-500">{groups.length}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="relative">
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+            <input value={search} onChange={e => setSearch(e.target.value)}
+              className="pl-8 pr-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-primary-500 w-36"
+              placeholder="Поиск..." />
+          </div>
+          <button onClick={() => { setShowCreate(true); setEditId(null); setForm({ name: '', type: 'GROUP', city: '', description: '' }); }}
+            className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+            <Plus size={14} /> Создать
+          </button>
+        </div>
+      </div>
+
+      {showCreate && !editId && <FormRow />}
+
+      {isLoading ? (
+        <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-slate-600" /></div>
+      ) : filtered.length === 0 ? (
+        <p className="text-center text-slate-500 text-sm py-8">Групп нет</p>
+      ) : (
+        <div className="divide-y divide-slate-800">
+          {filtered.map(g => (
+            <div key={g.id}>
+              {editId === g.id ? (
+                <FormRow />
+              ) : (
+                <div className="flex items-center gap-3 px-4 py-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-white truncate">{g.name}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded">{TYPE_LABELS[g.type] ?? g.type}</span>
+                      <span className={`text-[10px] font-medium ${STATUS_COLORS[g.status] ?? 'text-slate-500'}`}>{STATUS_LABELS[g.status] ?? g.status}</span>
+                    </div>
+                    <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-500">
+                      {g.city && <span>{g.city}</span>}
+                      <span>{g._count?.userArtists ?? 0} участников</span>
+                      {g.submittedByUser && <span>Создатель: {g.submittedByUser.firstName} {g.submittedByUser.lastName}</span>}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button onClick={() => startEdit(g)} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"><Pencil size={14} /></button>
+                    <button onClick={() => { if (confirm(`Удалить группу «${g.name}»?`)) deleteMut.mutate(g.id); }}
+                      className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Trash2 size={14} /></button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const TABS = [
   { id: 'structure',   label: 'Структура' },
   { id: 'spheres',     label: 'Сферы' },
@@ -1409,7 +1557,7 @@ const TABS = [
   { id: 'professions', label: 'Профессии' },
   { id: 'services',    label: 'Услуги' },
   { id: 'filters',     label: 'Фильтры' },
-  { id: 'orgs',        label: 'Организации' },
+  { id: 'orgs',        label: 'Группы' },
   { id: 'users',       label: 'Пользователи' },
   { id: 'moderation',  label: 'Модерация' },
 ] as const;
@@ -1494,8 +1642,8 @@ export default function AdminPage() {
         )}
 
         {tab === 'orgs' && (
-          <div className="grid gap-4 md:grid-cols-2">
-            <SimpleTable collapsible title="Группы / Артисты" queryKey="admin-artists" apiModule={adminAPI.artists} />
+          <div className="space-y-4">
+            <GroupsAdminTab />
             <SimpleTable
               collapsible
               title="Работодатели"

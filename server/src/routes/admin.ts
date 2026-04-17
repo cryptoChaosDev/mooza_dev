@@ -410,6 +410,47 @@ router.delete('/directions/:id', async (req, res) => {
   }
 });
 
+// ─── Groups (admin) ──────────────────────────────────────────────────────────
+router.get('/groups', authenticate, requireAdmin, async (_req, res) => {
+  try {
+    const groups = await prisma.artist.findMany({
+      where: { type: { in: ['GROUP', 'COVER_GROUP'] } },
+      include: {
+        _count: { select: { userArtists: true } },
+        submittedByUser: { select: { id: true, firstName: true, lastName: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(groups.map(g => ({ ...g, listeners: Number(g.listeners) })));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+router.post('/groups', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { name, type = 'GROUP', city, description } = req.body;
+    const group = await prisma.artist.create({
+      data: { name, type, city: city || null, description: description || null },
+    });
+    res.status(201).json({ ...group, listeners: Number(group.listeners) });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+router.put('/groups/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const { name, type, city, description, status } = req.body;
+    const data: any = {};
+    if (name !== undefined) data.name = name;
+    if (type !== undefined) data.type = type;
+    if (city !== undefined) data.city = city;
+    if (description !== undefined) data.description = description;
+    if (status !== undefined) data.status = status;
+    const group = await prisma.artist.update({ where: { id: req.params.id }, data });
+    res.json({ ...group, listeners: Number(group.listeners) });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+router.delete('/groups/:id', authenticate, requireAdmin, async (req, res) => {
+  try { await prisma.artist.delete({ where: { id: req.params.id } }); res.json({ ok: true }); }
+  catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
 // ─── Artist ────────────────────────────────────────────────────────────────
 router.get('/artists', async (_req, res) => {
   res.json(await prisma.artist.findMany({ orderBy: { name: 'asc' } }));
