@@ -71,6 +71,17 @@ export const registerLimiter = rateLimit({
   },
 });
 
+// Strict limiter for code verification — 10 attempts per 15 min per IP
+export const codeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (req, res) => {
+    res.status(429).json({ error: 'Слишком много попыток. Подождите 15 минут.' });
+  },
+});
+
 export const messageLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 минута
   max: 60, // 60 сообщений в минуту

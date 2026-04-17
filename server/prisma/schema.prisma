@@ -343,6 +343,8 @@ model User {
   emailVerificationExpires DateTime?
   passwordResetCode      String?
   passwordResetExpires   DateTime?
+  passwordChangedAt      DateTime?
+  lastCodeSentAt         DateTime?
   genres    String[]
   professions String[] // legacy flat list, kept for backward compat
 

@@ -52,7 +52,6 @@ const registerSchema = z.object({
   })).optional(),
   // Step 6: Artist/Group + Employer
   artistIds: z.array(z.string()).optional(),
-  employerId: z.string().optional(),
   // Step 7: Password
   password: z.string().min(8),
 });
@@ -104,7 +103,6 @@ router.post('/register', registerLimiter, async (req, res) => {
         country: data.country,
         city: data.city,
         fieldOfActivityId: data.fieldOfActivityId || undefined,
-        employerId: data.employerId || undefined,
         // Create user professions
         userProfessions: data.userProfessions && data.userProfessions.length > 0
           ? {
@@ -148,8 +146,6 @@ router.post('/register', registerLimiter, async (req, res) => {
         userArtists: {
           include: { artist: { select: { id: true, name: true } } },
         },
-        employerId: true,
-        employer: { select: { id: true, name: true, inn: true, ogrn: true } },
         createdAt: true,
       }
     });

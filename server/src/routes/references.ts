@@ -506,24 +506,5 @@ router.get('/artists', async (req, res) => {
   }
 });
 
-// Get employers (with search by name, inn, ogrn)
-router.get('/employers', async (req, res) => {
-  try {
-    const { search } = req.query;
-    const where: any = {};
-    if (search) {
-      where.OR = [
-        { name: { contains: search as string, mode: 'insensitive' } },
-        { inn: { contains: search as string, mode: 'insensitive' } },
-        { ogrn: { contains: search as string, mode: 'insensitive' } },
-      ];
-    }
-    const employers = await prisma.employer.findMany({ where, orderBy: { name: 'asc' }, take: 50 });
-    res.json(employers);
-  } catch (error) {
-    console.error('Get employers error:', error);
-    res.status(500).json({ error: 'Failed to get employers' });
-  }
-});
 
 export default router;

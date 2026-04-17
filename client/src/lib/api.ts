@@ -53,7 +53,6 @@ export const authAPI = {
     fieldOfActivityId?: string;
     userProfessions?: { professionId: string; features?: string[] }[];
     artistIds?: string[];
-    employerId?: string;
   }) => api.post('/auth/register', data),
   verifyEmail: (email: string, code: string) =>
     api.post('/auth/verify-email', { email, code }),
@@ -112,8 +111,6 @@ export const referenceAPI = {
   getProfessionFeatures: () => api.get('/references/profession-features'),
   getArtists: (params?: { search?: string; type?: string }) =>
     api.get('/references/artists', { params }),
-  getEmployers: (params?: { search?: string }) =>
-    api.get('/references/employers', { params }),
   // Multi-level search endpoints
   getServices: (params?: { directionId?: string; professionId?: string; fieldOfActivityId?: string }) =>
     api.get('/references/services', { params }),
@@ -344,7 +341,6 @@ export const adminAPI = {
     reject: (id: string, reason?: string) => api.patch(`${adminBase}/artists/${id}/reject`, { reason }),
     verify: (id: string) => api.patch(`${adminBase}/artists/${id}/verify`),
   },
-  employers: crudFor('employers'),
   customFilters: {
     list: () => api.get(`${adminBase}/custom-filters`),
     create: (data: { name: string; values: string[] }) => api.post(`${adminBase}/custom-filters`, data),

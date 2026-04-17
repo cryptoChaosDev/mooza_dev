@@ -48,11 +48,11 @@ export function generateToken(payload: { userId: string }, expiresIn: number = 6
  * @returns Декодированные данные токена
  * @throws Error если токен невалидный или истек
  */
-export function verifyToken(token: string): { userId: string } {
+export function verifyToken(token: string): { userId: string; iat: number } {
   try {
     const decoded = jwt.verify(token, getJwtSecret(), {
       algorithms: ['HS256'], // Принимаем только HS256
-    }) as { userId: string };
+    }) as { userId: string; iat: number };
 
     return decoded;
   } catch (error) {

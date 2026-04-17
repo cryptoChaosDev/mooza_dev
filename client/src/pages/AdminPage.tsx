@@ -1964,16 +1964,6 @@ export default function AdminPage() {
         {tab === 'orgs' && (
           <div className="space-y-4">
             <GroupsAdminTab />
-            <SimpleTable
-              collapsible
-              title="Работодатели"
-              queryKey="admin-employers"
-              apiModule={adminAPI.employers}
-              extraFields={[
-                { key: 'inn', label: 'ИНН', placeholder: 'ИНН' },
-                { key: 'ogrn', label: 'ОГРН', placeholder: 'ОГРН' },
-              ]}
-            />
           </div>
         )}
 

@@ -69,8 +69,6 @@ const userSelect = {
   userArtists: {
     include: { artist: { select: { id: true, name: true } } },
   },
-  employerId: true,
-  employer: { select: { id: true, name: true, inn: true, ogrn: true } },
   socialLinks: true,
   channel: {
     select: {
@@ -114,8 +112,6 @@ const publicUserSelect = {
   userArtists: {
     include: { artist: { select: { id: true, name: true } } },
   },
-  employerId: true,
-  employer: { select: { id: true, name: true } },
   socialLinks: true,
   channel: {
     select: {
@@ -253,7 +249,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     const {
       firstName, lastName, nickname, bio, country, city, role, genres,
       socialLinks,
-      fieldOfActivityId, employerId,
+      fieldOfActivityId,
       userProfessions, artistIds,
     } = req.body;
 
@@ -269,7 +265,6 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     if (genres !== undefined) updateData.genres = genres;
     if (socialLinks !== undefined) updateData.socialLinks = socialLinks;
     if (fieldOfActivityId !== undefined) updateData.fieldOfActivityId = fieldOfActivityId || null;
-    if (employerId !== undefined) updateData.employerId = employerId || null;
 
     // Handle userProfessions: delete old, create new
     if (userProfessions !== undefined) {

@@ -8,7 +8,7 @@ import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, DollarSign, Calendar, Film, Image,
   Headphones, Edit3, User, Plus, ChevronDown, ChevronLeft, ChevronRight,
-  Building2, FileText, Trash2, Radio, Loader2, Crown, BadgeCheck, Ban, Link2,
+  FileText, Trash2, Radio, Loader2, Crown, BadgeCheck, Ban, Link2,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import SelectField from '../components/SelectField';
@@ -72,7 +72,7 @@ export default function ProfilePage() {
     firstName: '', lastName: '', nickname: '', bio: '',
     country: '', city: '', role: '', genres: [] as string[],
     socialLinks: {} as Record<string, string>,
-    fieldOfActivityId: '', employerId: '',
+    fieldOfActivityId: '',
     userProfessions: [] as { professionId: string; features: string[] }[],
     artistIds: [] as string[],
   });
@@ -95,7 +95,6 @@ export default function ProfilePage() {
   const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
   const [lightboxFile, setLightboxFile] = useState<any>(null);
   const [artists, setArtists] = useState<any[]>([]);
-  const [employers, setEmployers] = useState<any[]>([]);
   const [openBasicSheet, setOpenBasicSheet] = useState<string | null>(null);
 
   // Add-service multi-step flow
@@ -116,7 +115,6 @@ export default function ProfilePage() {
       referenceAPI.getGenres().then(r => setGenres(r.data));
       referenceAPI.getGeographies().then(r => setGeographies(r.data));
       referenceAPI.getArtists().then(r => setArtists(r.data));
-      referenceAPI.getEmployers().then(r => setEmployers(r.data));
     } else {
       unlockScroll();
     }
@@ -134,7 +132,6 @@ export default function ProfilePage() {
         role: data.role || '', genres: data.genres || [],
         socialLinks: (data.socialLinks as Record<string, string>) || {},
         fieldOfActivityId: data.fieldOfActivityId || '',
-        employerId: data.employerId || '',
         userProfessions: data.userProfessions?.map((up: any) => ({
           professionId: up.professionId || up.profession?.id,
           features: up.features || [],
@@ -608,11 +605,6 @@ export default function ProfilePage() {
         <label className={labelCls}>Моя группа</label>
         <SelectField label="" value={formData.artistIds.map(id => artists.find((a: any) => a.id === id)?.name ?? profile?.userArtists?.find((ua: any) => ua.artistId === id)?.artist?.name ?? '').filter(Boolean).join(', ')} placeholder="Выберите группу или артиста" icon={<Music size={13} />} onClick={() => setOpenBasicSheet('artists')} badge={formData.artistIds.length || undefined} />
         <SelectSheet isOpen={openBasicSheet === 'artists'} onClose={() => setOpenBasicSheet(null)} title="Моя группа" options={artists.map((a: any) => ({ id: a.id, name: a.name }))} selectedIds={formData.artistIds} onSelect={ids => setFormData({ ...formData, artistIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />
-      </div>
-      <div>
-        <label className={labelCls}>Мой работодатель</label>
-        <SelectField label="" value={employers.find((e: any) => e.id === formData.employerId)?.name ?? profile?.employer?.name ?? ''} placeholder="Выберите работодателя" icon={<Building2 size={13} />} onClick={() => setOpenBasicSheet('employer')} />
-        <SelectSheet isOpen={openBasicSheet === 'employer'} onClose={() => setOpenBasicSheet(null)} title="Мой работодатель" options={employers.map((e: any) => ({ id: e.id, name: e.name, subtitle: e.inn ? `ИНН ${e.inn}` : undefined }))} selectedIds={formData.employerId} onSelect={id => setFormData({ ...formData, employerId: id as string })} mode="single" searchable height="half" />
       </div>
       <div>
         <label className={labelCls}>Социальные сети и сервисы</label>

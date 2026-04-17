@@ -545,30 +545,6 @@ router.patch('/artists/:id/verify', authenticate, requireAdmin, async (req, res)
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
-// ─── Employer ──────────────────────────────────────────────────────────────
-router.get('/employers', async (_req, res) => {
-  res.json(await prisma.employer.findMany({ orderBy: { name: 'asc' } }));
-});
-router.post('/employers', async (req, res) => {
-  try {
-    res.json(await prisma.employer.create({
-      data: { name: req.body.name, inn: req.body.inn || null, ogrn: req.body.ogrn || null },
-    }));
-  } catch (e: any) { res.status(400).json({ error: e.message }); }
-});
-router.put('/employers/:id', async (req, res) => {
-  try {
-    const data: any = {};
-    if (req.body.name !== undefined) data.name = req.body.name;
-    if (req.body.inn !== undefined) data.inn = req.body.inn || null;
-    if (req.body.ogrn !== undefined) data.ogrn = req.body.ogrn || null;
-    res.json(await prisma.employer.update({ where: { id: req.params.id }, data }));
-  } catch (e: any) { res.status(400).json({ error: e.message }); }
-});
-router.delete('/employers/:id', async (req, res) => {
-  try { await prisma.employer.delete({ where: { id: req.params.id } }); res.json({ ok: true }); }
-  catch (e: any) { res.status(400).json({ error: e.message }); }
-});
 
 // ─── Custom Filters ────────────────────────────────────────────────────────
 router.get('/custom-filters', async (_req, res) => {
