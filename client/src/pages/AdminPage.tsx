@@ -1166,10 +1166,10 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
   const inputCls = 'w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-stretch" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex" onClick={onClose}>
       <div className="flex-1 bg-black/60" />
       <div
-        className="w-full max-w-md h-full bg-slate-950 border-l border-slate-800 flex flex-col overflow-hidden"
+        className="w-full max-w-md bg-slate-950 border-l border-slate-800 flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -1232,7 +1232,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
         </div>
 
         {/* Scrollable form */}
-        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-slate-500 mb-1">Имя *</label>
