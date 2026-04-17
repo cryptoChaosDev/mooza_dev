@@ -51,11 +51,10 @@ export default function LandingPage() {
           {/* CTA */}
           <motion.div {...fadeUp(0.3)} className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
-              disabled
-              title="Скоро, скоро.."
-              className="group w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-slate-400 bg-slate-800 border border-slate-700 cursor-not-allowed flex items-center justify-center gap-2"
+              onClick={() => navigate('/register')}
+              className="group w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-500 transition-all duration-300 flex items-center justify-center gap-2"
             >
-              Скоро, скоро..
+              Зарегистрироваться
             </button>
             <button
               onClick={() => navigate('/login')}
@@ -179,11 +178,10 @@ export default function LandingPage() {
               Регистрация занимает меньше минуты. Начни прямо сейчас.
             </motion.p>
             <motion.button {...fadeUp(0.3)}
-              disabled
-              title="Скоро, скоро.."
-              className="px-10 py-3.5 rounded-xl font-semibold text-slate-400 bg-slate-800 border border-slate-700 cursor-not-allowed flex items-center gap-2 mx-auto"
+              onClick={() => navigate('/register')}
+              className="px-10 py-3.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-500 transition-all duration-300 flex items-center gap-2 mx-auto"
             >
-              Скоро, скоро..
+              Зарегистрироваться
             </motion.button>
           </div>
         </div>
