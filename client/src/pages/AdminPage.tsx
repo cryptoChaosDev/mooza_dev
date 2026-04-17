@@ -1103,6 +1103,10 @@ interface AdminUser {
   lastName: string;
   nickname?: string;
   email?: string;
+  phone?: string;
+  city?: string;
+  country?: string;
+  bio?: string;
   avatar?: string;
   isAdmin: boolean;
   isBlocked: boolean;
@@ -1111,9 +1115,111 @@ interface AdminUser {
   createdAt: string;
 }
 
+type UserForm = {
+  firstName: string; lastName: string; email: string; password: string;
+  nickname: string; phone: string; city: string; country: string; bio: string; isAdmin: boolean;
+};
+const emptyUserForm = (): UserForm => ({
+  firstName: '', lastName: '', email: '', password: '', nickname: '', phone: '', city: '', country: '', bio: '', isAdmin: false,
+});
+
+function UserFormModal({
+  title, initialForm, onSubmit, isPending, onClose,
+}: {
+  title: string;
+  initialForm: UserForm;
+  onSubmit: (f: UserForm) => void;
+  isPending: boolean;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState<UserForm>(initialForm);
+  const set = (k: keyof UserForm, v: string | boolean) => setForm(f => ({ ...f, [k]: v }));
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-start justify-center overflow-y-auto py-8 px-4" onClick={onClose}>
+      <div className="bg-slate-900 rounded-2xl w-full max-w-md shadow-2xl" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-800">
+          <h3 className="font-semibold text-white">{title}</h3>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white"><X size={18} /></button>
+        </div>
+        <div className="px-5 py-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Имя *</label>
+              <input value={form.firstName} onChange={e => set('firstName', e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Фамилия *</label>
+              <input value={form.lastName} onChange={e => set('lastName', e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Email *</label>
+            <input type="email" value={form.email} onChange={e => set('email', e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Пароль {title.includes('Создать') ? '*' : '(оставьте пустым, чтобы не менять)'}</label>
+            <input type="password" value={form.password} onChange={e => set('password', e.target.value)}
+              placeholder={title.includes('Создать') ? 'Минимум 6 символов' : '••••••'}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Никнейм</label>
+            <input value={form.nickname} onChange={e => set('nickname', e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Телефон</label>
+              <input value={form.phone} onChange={e => set('phone', e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500" />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Город</label>
+              <input value={form.city} onChange={e => set('city', e.target.value)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500" />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Страна</label>
+            <input value={form.country} onChange={e => set('country', e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500" />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">О себе</label>
+            <textarea rows={3} value={form.bio} onChange={e => set('bio', e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500 resize-none" />
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input type="checkbox" checked={form.isAdmin} onChange={e => set('isAdmin', e.target.checked)}
+              className="w-4 h-4 rounded accent-purple-500" />
+            <span className="text-sm text-slate-300">Права администратора</span>
+          </label>
+        </div>
+        <div className="flex gap-3 px-5 pb-5">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm">Отмена</button>
+          <button
+            onClick={() => onSubmit(form)}
+            disabled={isPending || !form.firstName.trim() || !form.lastName.trim() || !form.email.trim()}
+            className="flex-1 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+          >
+            {isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+            {title.includes('Создать') ? 'Создать' : 'Сохранить'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UsersTab() {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
+  const [showCreate, setShowCreate] = useState(false);
+  const [editUser, setEditUser] = useState<AdminUser | null>(null);
   const qc = useQueryClient();
 
   const { data, isLoading } = useQuery({
@@ -1131,6 +1237,16 @@ function UsersTab() {
     });
   };
 
+  const createMut = useMutation({
+    mutationFn: (f: UserForm) => api.post('/admin/users', f),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); setShowCreate(false); },
+  });
+
+  const editMut = useMutation({
+    mutationFn: (f: UserForm) => api.patch(`/admin/users/${editUser!.id}`, f),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); setEditUser(null); },
+  });
+
   const totalPages = data ? Math.ceil(data.total / data.limit) : 1;
 
   return (
@@ -1145,6 +1261,12 @@ function UsersTab() {
             className="w-full pl-9 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
+        <button
+          onClick={() => setShowCreate(true)}
+          className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-xl transition-colors whitespace-nowrap"
+        >
+          <Plus size={15} /> Создать
+        </button>
         <span className="text-sm text-slate-500 whitespace-nowrap">{data?.total ?? 0} польз.</span>
       </div>
 
@@ -1182,6 +1304,13 @@ function UsersTab() {
               {/* Actions */}
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <button
+                  onClick={() => setEditUser(u)}
+                  title="Редактировать"
+                  className="p-1.5 rounded-lg transition-colors text-slate-500 hover:bg-slate-700 hover:text-white"
+                >
+                  <Pencil size={15} />
+                </button>
+                <button
                   onClick={() => toggle(u.id, 'premium')}
                   title={u.isPremium ? 'Убрать Premium' : 'Выдать Premium'}
                   className={`p-1.5 rounded-lg transition-colors ${u.isPremium ? 'bg-amber-500/20 text-amber-400 hover:bg-amber-500/30' : 'text-slate-500 hover:bg-slate-700 hover:text-amber-400'}`}
@@ -1214,6 +1343,36 @@ function UsersTab() {
           <span className="px-3 py-1.5 text-slate-400 text-sm">{page} / {totalPages}</span>
           <button disabled={page >= totalPages} onClick={() => setPage(p => p + 1)} className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-lg text-sm disabled:opacity-40">→</button>
         </div>
+      )}
+
+      {showCreate && (
+        <UserFormModal
+          title="Создать пользователя"
+          initialForm={emptyUserForm()}
+          onSubmit={f => createMut.mutate(f)}
+          isPending={createMut.isPending}
+          onClose={() => setShowCreate(false)}
+        />
+      )}
+      {editUser && (
+        <UserFormModal
+          title="Редактировать пользователя"
+          initialForm={{
+            firstName: editUser.firstName,
+            lastName: editUser.lastName,
+            email: editUser.email ?? '',
+            password: '',
+            nickname: editUser.nickname ?? '',
+            phone: editUser.phone ?? '',
+            city: editUser.city ?? '',
+            country: editUser.country ?? '',
+            bio: editUser.bio ?? '',
+            isAdmin: editUser.isAdmin,
+          }}
+          onSubmit={f => editMut.mutate(f)}
+          isPending={editMut.isPending}
+          onClose={() => setEditUser(null)}
+        />
       )}
     </div>
   );

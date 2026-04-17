@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 
 const router = Router();
 
@@ -625,6 +626,72 @@ router.delete('/custom-filters/:id', async (req, res) => {
 });
 
 // ─── User Management ──────────────────────────────────────────────────────────
+// ── POST /admin/users — create user ──────────────────────────────────────────
+router.post('/users', async (req, res) => {
+  try {
+    const { email, password, firstName, lastName, nickname, phone, city, country, bio, isAdmin } = req.body;
+    if (!firstName?.trim() || !lastName?.trim()) return res.status(400).json({ error: 'Имя и фамилия обязательны' });
+    if (!password || password.length < 6) return res.status(400).json({ error: 'Пароль минимум 6 символов' });
+    if (!email?.trim()) return res.status(400).json({ error: 'Email обязателен' });
+
+    const existing = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    if (existing) return res.status(409).json({ error: 'Email уже занят' });
+
+    const hashed = await bcrypt.hash(password, 10);
+    const user = await prisma.user.create({
+      data: {
+        email: email.trim().toLowerCase(),
+        password: hashed,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        nickname: nickname?.trim() || null,
+        phone: phone?.trim() || null,
+        city: city?.trim() || null,
+        country: country?.trim() || null,
+        bio: bio?.trim() || null,
+        isAdmin: !!isAdmin,
+      },
+      select: {
+        id: true, firstName: true, lastName: true, nickname: true,
+        email: true, avatar: true, isAdmin: true, isBlocked: true,
+        isPremium: true, isVerified: true, createdAt: true,
+        city: true, country: true, bio: true, phone: true,
+      },
+    });
+    res.status(201).json(user);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+// ── PATCH /admin/users/:id — edit user card ───────────────────────────────────
+router.patch('/users/:id', async (req, res) => {
+  try {
+    const { firstName, lastName, nickname, email, phone, city, country, bio, password, isAdmin } = req.body;
+    const data: Record<string, any> = {};
+    if (firstName !== undefined) data.firstName = firstName.trim();
+    if (lastName !== undefined) data.lastName = lastName.trim();
+    if (nickname !== undefined) data.nickname = nickname.trim() || null;
+    if (email !== undefined) data.email = email.trim().toLowerCase() || null;
+    if (phone !== undefined) data.phone = phone.trim() || null;
+    if (city !== undefined) data.city = city.trim() || null;
+    if (country !== undefined) data.country = country.trim() || null;
+    if (bio !== undefined) data.bio = bio.trim() || null;
+    if (isAdmin !== undefined) data.isAdmin = !!isAdmin;
+    if (password && password.length >= 6) data.password = await bcrypt.hash(password, 10);
+
+    const user = await prisma.user.update({
+      where: { id: req.params.id },
+      data,
+      select: {
+        id: true, firstName: true, lastName: true, nickname: true,
+        email: true, avatar: true, isAdmin: true, isBlocked: true,
+        isPremium: true, isVerified: true, createdAt: true,
+        city: true, country: true, bio: true, phone: true,
+      },
+    });
+    res.json(user);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
 router.get('/users', async (req, res) => {
   const search = (req.query.search as string) || '';
   const page = Math.max(1, Number(req.query.page) || 1);
