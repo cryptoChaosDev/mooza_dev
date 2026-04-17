@@ -560,11 +560,6 @@ export default function FriendsPage() {
                   <SectionHeader label="Мои группы" count={myGroups.length} />
                   <div className="divide-y divide-slate-800/60">
                     {myGroups.map((g: any) => {
-                      const isOwner = g.submittedById !== undefined
-                        ? false /* will be determined below */
-                        : false;
-                      const myMembership = (g.userArtists ?? []).find((ua: any) => ua.isOwner);
-                      const amOwner = !!myMembership;
                       return (
                         <button
                           key={g.id}
