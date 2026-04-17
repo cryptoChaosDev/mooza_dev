@@ -888,9 +888,9 @@ export default function ProfilePage() {
           {/* Name + badges */}
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
             <h1 className="text-2xl font-bold text-white leading-tight">{profile?.firstName} {profile?.lastName}</h1>
-            {profile?.isPremium && <Crown size={18} className="text-amber-400" title="Premium" />}
-            {profile?.isVerified && <BadgeCheck size={18} className="text-sky-400" title="Верифицирован" />}
-            {profile?.isBlocked && <Ban size={18} className="text-red-500" title="Заблокирован" />}
+            {profile?.isPremium && <span title="Premium"><Crown size={18} className="text-amber-400" /></span>}
+            {profile?.isVerified && <span title="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></span>}
+            {profile?.isBlocked && <span title="Заблокирован"><Ban size={18} className="text-red-500" /></span>}
           </div>
 
           {/* Nick + location */}
