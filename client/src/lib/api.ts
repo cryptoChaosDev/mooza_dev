@@ -351,6 +351,9 @@ export const adminAPI = {
     update: (id: string, data: { name?: string; values?: string[] }) => api.put(`${adminBase}/custom-filters/${id}`, data),
     remove: (id: string) => api.delete(`${adminBase}/custom-filters/${id}`),
   },
+  users: {
+    deleteUser: (id: string) => api.delete(`${adminBase}/users/${id}`),
+  },
 };
 
 // Search Filters Type

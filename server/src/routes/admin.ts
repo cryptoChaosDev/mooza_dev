@@ -760,4 +760,15 @@ router.patch('/users/:id/verified', async (req, res) => {
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
+router.delete('/users/:id', authenticate, requireAdmin, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    // Cascade deletes are handled by Prisma FK onDelete: Cascade rules.
+    // submittedById on Artist uses onDelete: SetNull — groups they created remain but unlinked.
+    await prisma.user.delete({ where: { id: req.params.id } });
+    res.json({ ok: true });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
 export default router;
