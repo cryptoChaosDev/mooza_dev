@@ -2,12 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userAPI, referenceAPI, connectionAPI, groupAPI } from '../lib/api';
-import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, DollarSign, Calendar, Film, Image,
-  Headphones, Edit3, User, Plus, ChevronDown, ChevronLeft, ChevronRight,
+  Headphones, Edit3, Plus, ChevronDown, ChevronLeft, ChevronRight,
   FileText, Trash2, Radio, Loader2, Crown, BadgeCheck, Ban, Link2,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
@@ -21,14 +20,6 @@ import { plural } from '../lib/plural';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
-type Tab = 'basic' | 'profession' | 'channel';
-
-const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'basic',      label: 'Основное',   icon: <User size={14} /> },
-  { id: 'profession', label: 'Мои услуги', icon: <Briefcase size={14} /> },
-  { id: 'channel',    label: 'Канал',      icon: <Radio size={14} /> },
-];
-
 type ServiceCustomFilter = { id: string; name: string; values: { id: string; value: string }[] };
 
 type UserServiceEntry = {
@@ -40,7 +31,7 @@ type UserServiceEntry = {
   serviceName: string;
   allowedFilterTypes: string[];
   serviceCustomFilters: ServiceCustomFilter[];
-  customFilterValueIds: Record<string, string[]>; // filterId → [valueId, ...]
+  customFilterValueIds: Record<string, string[]>;
   genreIds: string[];
   workFormatIds: string[];
   employmentTypeIds: string[];
@@ -65,8 +56,6 @@ export default function ProfilePage() {
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [activeTab, setActiveTab] = useState<Tab>('basic');
 
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', nickname: '', bio: '',
@@ -104,9 +93,15 @@ export default function ProfilePage() {
   const [addFlowProfessions, setAddFlowProfessions] = useState<any[]>([]);
   const [addFlowServices, setAddFlowServices] = useState<any[]>([]);
 
+  // Inline edit section flags
+  const [editingHero, setEditingHero] = useState(false);
+  const [editingBio, setEditingBio] = useState(false);
+  const [editingServices, setEditingServices] = useState(false);
+  const [editingPortfolio, setEditingPortfolio] = useState(false);
+
+  // Load service references when editing services
   useEffect(() => {
-    if (isEditing) {
-      lockScroll();
+    if (editingServices) {
       referenceAPI.getFieldsOfActivity({ all: true }).then(r => setFieldsOfActivity(r.data));
       referenceAPI.getWorkFormats().then(r => setWorkFormats(r.data));
       referenceAPI.getEmploymentTypes().then(r => setEmploymentTypes(r.data));
@@ -114,12 +109,15 @@ export default function ProfilePage() {
       referenceAPI.getAvailabilities().then(r => setAvailabilities(r.data));
       referenceAPI.getGenres().then(r => setGenres(r.data));
       referenceAPI.getGeographies().then(r => setGeographies(r.data));
-      referenceAPI.getArtists().then(r => setArtists(r.data));
-    } else {
-      unlockScroll();
     }
-    return () => unlockScroll();
-  }, [isEditing]);
+  }, [editingServices]);
+
+  // Load artists when editing hero
+  useEffect(() => {
+    if (editingHero) {
+      referenceAPI.getArtists().then(r => setArtists(r.data));
+    }
+  }, [editingHero]);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],
@@ -276,15 +274,31 @@ export default function ProfilePage() {
     ),
   });
 
-  const handleSave = async () => {
+  const handleSaveHero = async () => {
     try {
-      await Promise.all([
-        updateMutation.mutateAsync(formData),
-        updateServicesMutation.mutateAsync(userServices),
-      ]);
+      await updateMutation.mutateAsync(formData);
     } finally {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
-      setIsEditing(false);
+      setEditingHero(false);
+    }
+  };
+
+  const handleSaveBio = async () => {
+    try {
+      await updateMutation.mutateAsync(formData);
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      setEditingBio(false);
+    }
+  };
+
+  const handleSaveServices = async () => {
+    try {
+      await updateServicesMutation.mutateAsync(userServices);
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      setEditingServices(false);
+      setAddStep(null);
     }
   };
 
@@ -299,13 +313,11 @@ export default function ProfilePage() {
     );
   }
 
-  const inputCls = "w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white placeholder-slate-500";
+  const inputCls = "w-full px-3.5 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white placeholder-slate-500";
   const labelCls = "block text-xs font-semibold mb-1 text-slate-400";
 
   const friendCount = (profile?._count?.sentRequests ?? 0) + (profile?._count?.receivedRequests ?? 0);
 
-
-  // Group userServices by field → profession for view mode
   const servicesByField = profile?.userServices?.reduce((acc: Record<string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }>, us: any) => {
     const fId = us.profession?.direction?.fieldOfActivity?.id || 'unknown';
     const fName = us.profession?.direction?.fieldOfActivity?.name || '';
@@ -317,11 +329,9 @@ export default function ProfilePage() {
     return acc;
   }, {} as Record<string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }>) ?? {};
 
-  // Helper: get name from list by id
   const getName = (list: any[], id: string) => list.find(x => x.id === id)?.name ?? id;
   const getNames = (list: any[], ids: string[]) => ids.map(id => getName(list, id)).filter(Boolean);
 
-  // Update field of a userService entry
   const updateSvc = (idx: number, patch: Partial<UserServiceEntry>) =>
     setUserServices(prev => prev.map((us, i) => i === idx ? { ...us, ...patch } : us));
 
@@ -478,7 +488,7 @@ export default function ProfilePage() {
         <button onClick={() => setAddStep('profession')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors">
           <ChevronLeft size={11} />{pending.professionName}
         </button>
-        <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Headphones size={11} /> Выберите услугу:</p>
+        <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите услугу:</p>
         {addFlowServices.length === 0
           ? <p className="text-slate-500 text-xs">Нет доступных услуг</p>
           : <div className="flex flex-wrap gap-1.5">
@@ -570,183 +580,10 @@ export default function ProfilePage() {
     return null;
   };
 
-  // ── Edit-mode modal content for "Основное" tab ────────────────────────────
-  const EditBasicTab = () => (
-    <div className="p-4 space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className={labelCls}>Имя</label>
-          <input type="text" value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} className={inputCls} />
-        </div>
-        <div>
-          <label className={labelCls}>Фамилия</label>
-          <input type="text" value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} className={inputCls} />
-        </div>
-      </div>
-      <div>
-        <label className={labelCls}>Никнейм</label>
-        <input type="text" value={formData.nickname} onChange={e => setFormData({ ...formData, nickname: e.target.value })} placeholder="@nickname" className={inputCls} />
-      </div>
-      <div>
-        <label className={labelCls}>О себе</label>
-        <textarea value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} rows={4} className={`${inputCls} resize-none`} placeholder="Расскажите о себе..." />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className={labelCls}>Страна</label>
-          <input type="text" value={formData.country} onChange={e => setFormData({ ...formData, country: e.target.value })} placeholder="Россия" className={inputCls} />
-        </div>
-        <div>
-          <label className={labelCls}>Город</label>
-          <input type="text" value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="Москва" className={inputCls} />
-        </div>
-      </div>
-      <div>
-        <label className={labelCls}>Моя группа</label>
-        <SelectField label="" value={formData.artistIds.map(id => artists.find((a: any) => a.id === id)?.name ?? profile?.userArtists?.find((ua: any) => ua.artistId === id)?.artist?.name ?? '').filter(Boolean).join(', ')} placeholder="Выберите группу или артиста" icon={<Music size={13} />} onClick={() => setOpenBasicSheet('artists')} badge={formData.artistIds.length || undefined} />
-        <SelectSheet isOpen={openBasicSheet === 'artists'} onClose={() => setOpenBasicSheet(null)} title="Моя группа" options={artists.map((a: any) => ({ id: a.id, name: a.name }))} selectedIds={formData.artistIds} onSelect={ids => setFormData({ ...formData, artistIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />
-      </div>
-      <div>
-        <label className={labelCls}>Социальные сети и сервисы</label>
-        <SocialLinksEditor value={formData.socialLinks} onChange={v => setFormData({ ...formData, socialLinks: v })} />
-      </div>
-      <div>
-        <label className={labelCls}>Портфолио</label>
-        <p className="text-xs text-slate-500 mb-2">До 5 файлов, не более 5 МБ каждый</p>
-        <div className="space-y-1.5 mb-2">
-          {portfolioFiles.map((f: any) => (
-            <div key={f.id} className="flex items-center gap-2 px-3 py-2 bg-slate-700/30 rounded-xl border border-slate-600/50">
-              <FileText size={14} className="text-slate-400 flex-shrink-0" />
-              <span className="flex-1 text-xs text-slate-300 truncate">{f.originalName}</span>
-              <span className="text-xs text-slate-500 flex-shrink-0">{formatFileSize(f.size)}</span>
-              <button type="button" onClick={() => handlePortfolioDelete(f.id)} className="p-1 rounded hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all flex-shrink-0"><Trash2 size={13} /></button>
-            </div>
-          ))}
-        </div>
-        {portfolioFiles.length < 5 && (
-          <label className={`flex items-center justify-center gap-2 py-2.5 border border-dashed rounded-xl text-sm transition-all cursor-pointer ${isUploadingPortfolio ? 'border-slate-600 text-slate-500' : 'border-slate-600 text-slate-400 hover:text-primary-400 hover:border-primary-500/50'}`}>
-            <input type="file" multiple accept="*/*" className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
-            {isUploadingPortfolio ? 'Загрузка...' : `+ Добавить файл (${portfolioFiles.length}/5)`}
-          </label>
-        )}
-      </div>
-    </div>
-  );
-
-  // ── Edit-mode modal content for "Услуги" tab ───────────────────────────────
-  const EditServicesTab = () => {
-    const byField: Record<string, { fieldName: string; entries: { us: UserServiceEntry; idx: number }[] }> = {};
-    userServices.forEach((us, idx) => {
-      const fId = us.fieldOfActivityId || 'unknown';
-      if (!byField[fId]) byField[fId] = { fieldName: us.fieldOfActivityName, entries: [] };
-      byField[fId].entries.push({ us, idx });
-    });
-    return (
-      <div className="p-4 space-y-4">
-        <p className="text-xs text-slate-500">Выберите услуги, по которым вас можно найти. Для каждой услуги настройте жанры, формат и другие параметры.</p>
-        <div className="space-y-3">
-          {Object.entries(byField).map(([fId, { fieldName, entries }]) => (
-            <div key={fId}>
-              <p className="text-xs font-bold text-primary-400 uppercase tracking-wider mb-1.5">{fieldName}</p>
-              <div className="space-y-2 pl-2 border-l border-primary-500/20">
-                {entries.map(({ us, idx }) => (
-                  <div key={us.serviceId} className="bg-slate-700/30 rounded-xl border border-slate-600/50 overflow-hidden">
-                    <div className="flex items-center gap-2 px-3 py-2.5">
-                      <button type="button" onClick={() => setExpandedSvcIdx(expandedSvcIdx === idx ? null : idx)} className="flex-1 flex items-center justify-between text-left">
-                        <div>
-                          <p className="text-xs text-slate-500">{us.professionName}</p>
-                          <p className="text-sm font-semibold text-white">{us.serviceName}</p>
-                        </div>
-                        <ChevronDown size={15} className={`text-slate-400 transition-transform mr-1 ${expandedSvcIdx === idx ? 'rotate-180' : ''}`} />
-                      </button>
-                      <button type="button" onClick={() => { setUserServices(prev => prev.filter((_, i) => i !== idx)); if (expandedSvcIdx === idx) setExpandedSvcIdx(null); }} className="flex-shrink-0 p-1 rounded-lg hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all"><X size={14} /></button>
-                    </div>
-                    {expandedSvcIdx === idx && <ServiceFilterEditors idx={idx} />}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-        {addStep ? <AddServiceFlow /> : (
-          <button type="button" onClick={() => setAddStep('field')} className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm">
-            <Plus size={14} />Добавить услугу
-          </button>
-        )}
-      </div>
-    );
-  };
-
-  // ── Edit-mode modal content for "Канал" tab ────────────────────────────────
-  const EditChannelTab = () => (
-    <div className="p-4 space-y-4">
-      {myChannel ? (
-        <>
-          <div className="flex items-center gap-3">
-            <div className="relative flex-shrink-0">
-              <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-700 border border-slate-600 flex items-center justify-center">
-                {myChannel.avatar ? <img src={getAvatarUrl(myChannel.avatar)!} alt="" className="w-full h-full object-cover" /> : <Radio size={24} className="text-slate-500" />}
-              </div>
-              <button onClick={() => channelAvatarRef.current?.click()} className="absolute -bottom-1 -right-1 p-1 bg-primary-600 hover:bg-primary-500 rounded-full shadow transition-colors"><Camera size={10} className="text-white" /></button>
-              <input ref={channelAvatarRef} type="file" accept="image/*" className="hidden" onChange={handleChannelAvatarChange} />
-            </div>
-            <div className="flex-1 min-w-0">
-              {channelEditing ? (
-                <input value={channelForm.name} onChange={e => setChannelForm(f => ({ ...f, name: e.target.value }))} className="w-full px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white" placeholder="Название канала" />
-              ) : (
-                <p className="text-base font-semibold text-white truncate">{myChannel.name}</p>
-              )}
-              <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                <span>{myChannel._count.subscriptions} {plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')}</span>
-                <span>{myChannel._count.posts} {plural(myChannel._count.posts, 'пост', 'поста', 'постов')}</span>
-              </div>
-            </div>
-          </div>
-          {channelEditing ? (
-            <textarea value={channelForm.description} onChange={e => setChannelForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Описание канала..." className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-slate-500 resize-none" />
-          ) : myChannel.description ? (
-            <p className="text-sm text-slate-400 leading-relaxed">{myChannel.description}</p>
-          ) : (
-            <p className="text-sm text-slate-600 italic">Нет описания</p>
-          )}
-          {channelEditing ? (
-            <div className="flex gap-2">
-              <button onClick={() => setChannelEditing(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
-              <button onClick={() => updateChannelMut.mutate()} disabled={updateChannelMut.isPending || !channelForm.name.trim()} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-1.5">
-                {updateChannelMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}Сохранить
-              </button>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <button onClick={startEditChannel} className="flex-1 py-2 text-sm text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 rounded-xl transition-colors flex items-center justify-center gap-1.5"><Edit3 size={14} />Редактировать</button>
-              <button onClick={() => { if (confirm('Удалить канал? Все посты канала будут отвязаны.')) deleteChannelMut.mutate(); }} disabled={deleteChannelMut.isPending} className="py-2 px-3 text-sm text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 rounded-xl transition-colors">
-                {deleteChannelMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-              </button>
-            </div>
-          )}
-        </>
-      ) : (
-        <div className="space-y-3">
-          <div className="flex flex-col items-center py-4 text-center">
-            <div className="p-4 bg-slate-800/50 rounded-2xl mb-3"><Radio size={28} className="text-slate-500" /></div>
-            <p className="text-white font-semibold mb-1">У вас нет канала</p>
-            <p className="text-slate-500 text-sm">Создайте канал, чтобы публиковать посты от его имени</p>
-          </div>
-          <input value={channelForm.name} onChange={e => setChannelForm(f => ({ ...f, name: e.target.value }))} placeholder="Название канала *" className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-slate-500" />
-          <textarea value={channelForm.description} onChange={e => setChannelForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Описание (необязательно)" className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-slate-500 resize-none" />
-          <button onClick={() => createChannelMut.mutate()} disabled={createChannelMut.isPending || !channelForm.name.trim()} className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
-            {createChannelMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}Создать канал
-          </button>
-        </div>
-      )}
-    </div>
-  );
-
   const aUrl = getAvatarUrl(profile?.avatar);
   const bUrl = profile?.bannerImage ? `${API_URL}${profile.bannerImage}` : null;
   const hasSocialLinks = Object.values((profile?.socialLinks as Record<string, string>) || {}).some(Boolean);
 
-  // Unique profession names from UserService chain
   const professionNames = (() => {
     const seen = new Set<string>();
     const names: string[] = [];
@@ -757,20 +594,26 @@ export default function ProfilePage() {
     return names;
   })();
 
-  // Flat list of services for carousel
   const servicesFlat = (Object.values(servicesByField) as { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }[]).flatMap(({ fieldName, byProfession }) =>
     Object.values(byProfession).flatMap(({ profName, services }) =>
       services.map((us: any) => ({ ...us, _profName: profName, _fieldName: fieldName }))
     )
   );
 
-  // Portfolio categorised by mimeType
   const photoFiles = portfolioFiles.filter(f => f.mimeType?.startsWith('image/'));
   const audioFiles = portfolioFiles.filter(f => f.mimeType?.startsWith('audio/'));
   const videoFiles = portfolioFiles.filter(f => f.mimeType?.startsWith('video/'));
   const otherFiles = portfolioFiles.filter(f =>
     !f.mimeType?.startsWith('image/') && !f.mimeType?.startsWith('audio/') && !f.mimeType?.startsWith('video/')
   );
+
+  // Services grouped by field for inline edit view
+  const servicesByFieldEdit: Record<string, { fieldName: string; entries: { us: UserServiceEntry; idx: number }[] }> = {};
+  userServices.forEach((us, idx) => {
+    const fId = us.fieldOfActivityId || 'unknown';
+    if (!servicesByFieldEdit[fId]) servicesByFieldEdit[fId] = { fieldName: us.fieldOfActivityName, entries: [] };
+    servicesByFieldEdit[fId].entries.push({ us, idx });
+  });
 
   return (
     <>
@@ -798,40 +641,6 @@ export default function ProfilePage() {
         </div>
       )}
 
-      {/* ── EDIT MODAL (full-screen) ─────────────────────────────────────── */}
-      {isEditing && (
-        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
-          {/* Modal header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0 bg-slate-950">
-            <button onClick={() => setIsEditing(false)} className="p-2 -ml-2 text-slate-400 hover:text-white transition-colors rounded-lg hover:bg-slate-800">
-              <X size={20} />
-            </button>
-            <span className="font-semibold text-white text-sm">Редактирование профиля</span>
-            <button onClick={handleSave} disabled={updateMutation.isPending} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-colors">
-              {updateMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              Сохранить
-            </button>
-          </div>
-
-          {/* Tab bar */}
-          <div className="flex gap-1 p-2 bg-slate-950 border-b border-slate-800 flex-shrink-0">
-            {TABS.map(tab => (
-              <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-all ${activeTab === tab.id ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800'}`}>
-                {tab.icon}<span>{tab.label}</span>
-              </button>
-            ))}
-          </div>
-
-          {/* Tab content */}
-          <div className="flex-1 min-h-0 overflow-y-auto pb-6" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
-            {activeTab === 'basic' && EditBasicTab()}
-            {activeTab === 'profession' && EditServicesTab()}
-            {activeTab === 'channel' && EditChannelTab()}
-          </div>
-        </div>
-      )}
-
-      {/* ── VIEW MODE ────────────────────────────────────────────────────── */}
       <div className="max-w-2xl mx-auto pb-28">
 
         {/* ── HERO ──────────────────────────────────────────────────────────── */}
@@ -879,85 +688,165 @@ export default function ProfilePage() {
                 className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
                 iconSize={16}
               />
-              <button onClick={() => setIsEditing(true)} className="flex items-center gap-2 px-4 py-2 bg-primary-600/20 hover:bg-primary-600/30 border border-primary-500/40 text-primary-300 hover:text-primary-200 rounded-xl text-sm font-medium transition-all">
-                <Edit3 size={15} />Редактировать
+              <button
+                onClick={() => setEditingHero(v => !v)}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${editingHero ? 'bg-primary-600 border-primary-500 text-white' : 'bg-primary-600/20 hover:bg-primary-600/30 border-primary-500/40 text-primary-300 hover:text-primary-200'}`}
+              >
+                <Edit3 size={15} />{editingHero ? 'Закрыть' : 'Редактировать'}
               </button>
             </div>
           </div>
 
-          {/* Name + badges */}
-          <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <h1 className="text-2xl font-bold text-white leading-tight">{profile?.firstName} {profile?.lastName}</h1>
-            {profile?.isPremium && <span title="Premium"><Crown size={18} className="text-amber-400" /></span>}
-            {profile?.isVerified && <span title="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></span>}
-            {profile?.isBlocked && <span title="Заблокирован"><Ban size={18} className="text-red-500" /></span>}
-          </div>
-
-          {/* Nick + location */}
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-2">
-            {profile?.nickname && <span className="text-slate-500">@{profile.nickname}</span>}
-            {(profile?.city || profile?.country) && (
-              <span className="flex items-center gap-1">
-                <MapPin size={12} className="flex-shrink-0" />
-                {[profile.city, profile.country].filter(Boolean).join(', ')}
-              </span>
-            )}
-          </div>
-
-          {/* Profession tags inline */}
-          {professionNames.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {professionNames.map((name, i) => (
-                <span key={i} className="px-2.5 py-1 bg-primary-500/10 border border-primary-500/25 text-primary-300 rounded-lg text-xs font-medium">{name}</span>
-              ))}
+          {/* ── HERO INLINE EDIT ── */}
+          {editingHero ? (
+            <div className="bg-slate-900/70 border border-slate-700/60 rounded-2xl p-4 mb-5 space-y-3">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Основная информация</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Имя</label>
+                  <input type="text" value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} className={inputCls} placeholder="Имя" />
+                </div>
+                <div>
+                  <label className={labelCls}>Фамилия</label>
+                  <input type="text" value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} className={inputCls} placeholder="Фамилия" />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Никнейм</label>
+                <input type="text" value={formData.nickname} onChange={e => setFormData({ ...formData, nickname: e.target.value })} placeholder="@nickname" className={inputCls} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Страна</label>
+                  <input type="text" value={formData.country} onChange={e => setFormData({ ...formData, country: e.target.value })} placeholder="Россия" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Город</label>
+                  <input type="text" value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="Москва" className={inputCls} />
+                </div>
+              </div>
+              <div>
+                <label className={labelCls}>Моя группа</label>
+                <SelectField label="" value={formData.artistIds.map(id => artists.find((a: any) => a.id === id)?.name ?? profile?.userArtists?.find((ua: any) => ua.artistId === id)?.artist?.name ?? '').filter(Boolean).join(', ')} placeholder="Выберите группу или артиста" icon={<Music size={13} />} onClick={() => setOpenBasicSheet('artists')} badge={formData.artistIds.length || undefined} />
+                <SelectSheet isOpen={openBasicSheet === 'artists'} onClose={() => setOpenBasicSheet(null)} title="Моя группа" options={artists.map((a: any) => ({ id: a.id, name: a.name }))} selectedIds={formData.artistIds} onSelect={ids => setFormData({ ...formData, artistIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />
+              </div>
+              <div>
+                <label className={labelCls}>Социальные сети и сервисы</label>
+                <SocialLinksEditor value={formData.socialLinks} onChange={v => setFormData({ ...formData, socialLinks: v })} />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => setEditingHero(false)} className="flex-1 py-2.5 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">
+                  Отмена
+                </button>
+                <button onClick={handleSaveHero} disabled={updateMutation.isPending} className="flex-1 py-2.5 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                  {updateMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}Сохранить
+                </button>
+              </div>
             </div>
+          ) : (
+            <>
+              {/* Name + badges */}
+              <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                <h1 className="text-2xl font-bold text-white leading-tight">{profile?.firstName} {profile?.lastName}</h1>
+                {profile?.isPremium && <span title="Premium"><Crown size={18} className="text-amber-400" /></span>}
+                {profile?.isVerified && <span title="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></span>}
+                {profile?.isBlocked && <span title="Заблокирован"><Ban size={18} className="text-red-500" /></span>}
+              </div>
+
+              {/* Nick + location */}
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-2">
+                {profile?.nickname && <span className="text-slate-500">@{profile.nickname}</span>}
+                {(profile?.city || profile?.country) && (
+                  <span className="flex items-center gap-1">
+                    <MapPin size={12} className="flex-shrink-0" />
+                    {[profile.city, profile.country].filter(Boolean).join(', ')}
+                  </span>
+                )}
+              </div>
+
+              {/* Profession tags */}
+              {professionNames.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {professionNames.map((name, i) => (
+                    <span key={i} className="px-2.5 py-1 bg-primary-500/10 border border-primary-500/25 text-primary-300 rounded-lg text-xs font-medium">{name}</span>
+                  ))}
+                </div>
+              )}
+
+              {/* Social icons */}
+              {hasSocialLinks && (
+                <div className="mb-4">
+                  <SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} />
+                </div>
+              )}
+
+              {/* Stats pills */}
+              <div className="flex items-center gap-2 mb-5 flex-wrap">
+                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
+                  <span className="text-sm font-bold text-white">{friendCount}</span>
+                  <span className="text-xs text-slate-500">друзей</span>
+                </div>
+                {servicesFlat.length > 0 && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
+                    <span className="text-sm font-bold text-white">{servicesFlat.length}</span>
+                    <span className="text-xs text-slate-500">услуг</span>
+                  </div>
+                )}
+                {myConnections.length > 0 && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
+                    <span className="text-sm font-bold text-white">{myConnections.length}</span>
+                    <span className="text-xs text-slate-500">{plural(myConnections.length, 'связь', 'связи', 'связей')}</span>
+                  </div>
+                )}
+                {myChannel && (
+                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
+                    <span className="text-sm font-bold text-white">{myChannel._count.subscriptions}</span>
+                    <span className="text-xs text-slate-500">{plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')}</span>
+                  </div>
+                )}
+              </div>
+            </>
           )}
-
-          {/* Social icons (compact, no labels) */}
-          {hasSocialLinks && (
-            <div className="mb-4">
-              <SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} />
-            </div>
-          )}
-
-          {/* Stats pills */}
-          <div className="flex items-center gap-2 mb-5 flex-wrap">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
-              <span className="text-sm font-bold text-white">{friendCount}</span>
-              <span className="text-xs text-slate-500">друзей</span>
-            </div>
-            {servicesFlat.length > 0 && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
-                <span className="text-sm font-bold text-white">{servicesFlat.length}</span>
-                <span className="text-xs text-slate-500">услуг</span>
-              </div>
-            )}
-            {myConnections.length > 0 && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
-                <span className="text-sm font-bold text-white">{myConnections.length}</span>
-                <span className="text-xs text-slate-500">{plural(myConnections.length, 'связь', 'связи', 'связей')}</span>
-              </div>
-            )}
-            {myChannel && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
-                <span className="text-sm font-bold text-white">{myChannel._count.subscriptions}</span>
-                <span className="text-xs text-slate-500">{plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')}</span>
-              </div>
-            )}
-          </div>
 
           {/* ── CONTENT CARDS ──────────────────────────────────────────────── */}
           <div className="space-y-3">
 
-            {/* Bio card */}
-            {profile?.bio && (
-              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">О себе</p>
-                <p className="text-slate-300 text-sm leading-relaxed">{profile.bio}</p>
+            {/* ── Bio card ── */}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">О себе</p>
+                {!editingBio && (
+                  <button onClick={() => setEditingBio(true)} className="p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800">
+                    <Edit3 size={13} />
+                  </button>
+                )}
               </div>
-            )}
+              {editingBio ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={formData.bio}
+                    onChange={e => setFormData({ ...formData, bio: e.target.value })}
+                    rows={4}
+                    placeholder="Расскажите о себе..."
+                    className={`${inputCls} resize-none`}
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => setEditingBio(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
+                    <button onClick={handleSaveBio} disabled={updateMutation.isPending} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                      {updateMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
+                    </button>
+                  </div>
+                </div>
+              ) : profile?.bio ? (
+                <p className="text-slate-300 text-sm leading-relaxed">{profile.bio}</p>
+              ) : (
+                <button onClick={() => setEditingBio(true)} className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic">
+                  + Добавить описание
+                </button>
+              )}
+            </div>
 
-            {/* Groups card */}
+            {/* ── Groups card ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Группы</p>
               <div className="flex flex-wrap gap-2">
@@ -979,14 +868,58 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* Services card — grid, not carousel */}
-            {servicesFlat.length > 0 && (
-              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                  <Briefcase size={14} className="text-primary-400" />
-                  <span className="text-sm font-semibold text-white">Услуги</span>
-                  <span className="ml-auto text-xs text-slate-500">{servicesFlat.length}</span>
+            {/* ── Services card ── */}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                <Briefcase size={14} className="text-primary-400" />
+                <span className="text-sm font-semibold text-white">Услуги</span>
+                {servicesFlat.length > 0 && <span className="text-xs text-slate-500">{servicesFlat.length}</span>}
+                <button
+                  onClick={() => { setEditingServices(v => !v); setAddStep(null); }}
+                  className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                >
+                  {editingServices ? 'Готово' : 'Изменить'}
+                </button>
+              </div>
+
+              {editingServices ? (
+                <div className="p-3 space-y-3">
+                  <p className="text-xs text-slate-500">Выберите услуги, по которым вас можно найти.</p>
+                  {Object.entries(servicesByFieldEdit).map(([fId, { fieldName, entries }]) => (
+                    <div key={fId}>
+                      <p className="text-xs font-bold text-primary-400 uppercase tracking-wider mb-1.5">{fieldName}</p>
+                      <div className="space-y-2 pl-2 border-l border-primary-500/20">
+                        {entries.map(({ us, idx }) => (
+                          <div key={us.serviceId} className="bg-slate-700/30 rounded-xl border border-slate-600/50 overflow-hidden">
+                            <div className="flex items-center gap-2 px-3 py-2.5">
+                              <button type="button" onClick={() => setExpandedSvcIdx(expandedSvcIdx === idx ? null : idx)} className="flex-1 flex items-center justify-between text-left">
+                                <div>
+                                  <p className="text-xs text-slate-500">{us.professionName}</p>
+                                  <p className="text-sm font-semibold text-white">{us.serviceName}</p>
+                                </div>
+                                <ChevronDown size={15} className={`text-slate-400 transition-transform mr-1 ${expandedSvcIdx === idx ? 'rotate-180' : ''}`} />
+                              </button>
+                              <button type="button" onClick={() => { setUserServices(prev => prev.filter((_, i) => i !== idx)); if (expandedSvcIdx === idx) setExpandedSvcIdx(null); }} className="flex-shrink-0 p-1 rounded-lg hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all"><X size={14} /></button>
+                            </div>
+                            {expandedSvcIdx === idx && <ServiceFilterEditors idx={idx} />}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                  {addStep ? <AddServiceFlow /> : (
+                    <button type="button" onClick={() => setAddStep('field')} className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm">
+                      <Plus size={14} />Добавить услугу
+                    </button>
+                  )}
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => { setEditingServices(false); setAddStep(null); }} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
+                    <button onClick={handleSaveServices} disabled={updateServicesMutation.isPending} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                      {updateServicesMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
+                    </button>
+                  </div>
                 </div>
+              ) : servicesFlat.length > 0 ? (
                 <div className="p-3">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {servicesFlat.map((us: any) => {
@@ -1021,17 +954,48 @@ export default function ProfilePage() {
                     })}
                   </div>
                 </div>
-              </div>
-            )}
-
-            {/* Portfolio card */}
-            {portfolioFiles.length > 0 && (
-              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                  <Image size={14} className="text-primary-400" />
-                  <span className="text-sm font-semibold text-white">Портфолио</span>
-                  <span className="ml-auto text-xs text-slate-500">{portfolioFiles.length}</span>
+              ) : (
+                <div className="p-4 text-center">
+                  <p className="text-sm text-slate-600 italic">Нет добавленных услуг</p>
                 </div>
+              )}
+            </div>
+
+            {/* ── Portfolio card ── */}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                <Image size={14} className="text-primary-400" />
+                <span className="text-sm font-semibold text-white">Портфолио</span>
+                {portfolioFiles.length > 0 && <span className="text-xs text-slate-500">{portfolioFiles.length}</span>}
+                <button
+                  onClick={() => setEditingPortfolio(v => !v)}
+                  className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                >
+                  {editingPortfolio ? 'Готово' : 'Изменить'}
+                </button>
+              </div>
+
+              {editingPortfolio ? (
+                <div className="p-4 space-y-3">
+                  <p className="text-xs text-slate-500 mb-2">До 5 файлов, не более 5 МБ каждый</p>
+                  <div className="space-y-1.5">
+                    {portfolioFiles.map((f: any) => (
+                      <div key={f.id} className="flex items-center gap-2 px-3 py-2 bg-slate-700/30 rounded-xl border border-slate-600/50">
+                        <FileText size={14} className="text-slate-400 flex-shrink-0" />
+                        <span className="flex-1 text-xs text-slate-300 truncate">{f.originalName}</span>
+                        <span className="text-xs text-slate-500 flex-shrink-0">{formatFileSize(f.size)}</span>
+                        <button type="button" onClick={() => handlePortfolioDelete(f.id)} className="p-1 rounded hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all flex-shrink-0"><Trash2 size={13} /></button>
+                      </div>
+                    ))}
+                  </div>
+                  {portfolioFiles.length < 5 && (
+                    <label className={`flex items-center justify-center gap-2 py-2.5 border border-dashed rounded-xl text-sm transition-all cursor-pointer ${isUploadingPortfolio ? 'border-slate-600 text-slate-500' : 'border-slate-600 text-slate-400 hover:text-primary-400 hover:border-primary-500/50'}`}>
+                      <input type="file" multiple accept="*/*" className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+                      {isUploadingPortfolio ? 'Загрузка...' : `+ Добавить файл (${portfolioFiles.length}/5)`}
+                    </label>
+                  )}
+                </div>
+              ) : portfolioFiles.length > 0 ? (
                 <div className="p-4 space-y-4">
                   {photoFiles.length > 0 && (
                     <div>
@@ -1100,35 +1064,79 @@ export default function ProfilePage() {
                     </div>
                   )}
                 </div>
-              </div>
-            )}
-
-            {/* Channel card */}
-            {myChannel && (
-              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                  <Radio size={14} className="text-primary-400" />
-                  <span className="text-sm font-semibold text-white">Канал</span>
+              ) : (
+                <div className="p-4 text-center">
+                  <p className="text-sm text-slate-600 italic">Нет файлов в портфолио</p>
                 </div>
-                <div className="p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-800 flex items-center justify-center flex-shrink-0">
-                      {myChannel.avatar
-                        ? <img src={getAvatarUrl(myChannel.avatar)!} alt="" className="w-full h-full object-cover" />
-                        : <Radio size={20} className="text-slate-500" />
-                      }
+              )}
+            </div>
+
+            {/* ── Channel card ── */}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                <Radio size={14} className="text-primary-400" />
+                <span className="text-sm font-semibold text-white">Канал</span>
+              </div>
+              <div className="p-4">
+                {myChannel ? (
+                  <>
+                    <div className="flex items-center gap-3 mb-3">
+                      <div className="relative flex-shrink-0">
+                        <div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-800 border border-slate-700 flex items-center justify-center">
+                          {myChannel.avatar ? <img src={getAvatarUrl(myChannel.avatar)!} alt="" className="w-full h-full object-cover" /> : <Radio size={22} className="text-slate-500" />}
+                        </div>
+                        <button onClick={() => channelAvatarRef.current?.click()} className="absolute -bottom-1 -right-1 p-1 bg-primary-600 hover:bg-primary-500 rounded-full shadow transition-colors"><Camera size={10} className="text-white" /></button>
+                        <input ref={channelAvatarRef} type="file" accept="image/*" className="hidden" onChange={handleChannelAvatarChange} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        {channelEditing ? (
+                          <input value={channelForm.name} onChange={e => setChannelForm(f => ({ ...f, name: e.target.value }))} className="w-full px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white" placeholder="Название канала" />
+                        ) : (
+                          <p className="text-base font-semibold text-white truncate">{myChannel.name}</p>
+                        )}
+                        <p className="text-xs text-slate-500 mt-1">{myChannel._count.subscriptions} {plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')} · {myChannel._count.posts} {plural(myChannel._count.posts, 'пост', 'поста', 'постов')}</p>
+                      </div>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-white truncate">{myChannel.name}</p>
-                      {myChannel.description && <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{myChannel.description}</p>}
-                      <p className="text-xs text-slate-600 mt-1">{myChannel._count.subscriptions} {plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')} · {myChannel._count.posts} {plural(myChannel._count.posts, 'пост', 'поста', 'постов')}</p>
+                    {channelEditing ? (
+                      <>
+                        <textarea value={channelForm.description} onChange={e => setChannelForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Описание канала..." className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-slate-500 resize-none mb-2" />
+                        <div className="flex gap-2">
+                          <button onClick={() => setChannelEditing(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
+                          <button onClick={() => updateChannelMut.mutate()} disabled={updateChannelMut.isPending || !channelForm.name.trim()} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                            {updateChannelMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}Сохранить
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        {myChannel.description && <p className="text-sm text-slate-400 leading-relaxed mb-3">{myChannel.description}</p>}
+                        <div className="flex gap-2">
+                          <button onClick={startEditChannel} className="flex-1 py-2 text-sm text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 rounded-xl transition-colors flex items-center justify-center gap-1.5"><Edit3 size={14} />Редактировать</button>
+                          <button onClick={() => { if (confirm('Удалить канал? Все посты канала будут отвязаны.')) deleteChannelMut.mutate(); }} disabled={deleteChannelMut.isPending} className="py-2 px-3 text-sm text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 rounded-xl transition-colors">
+                            {deleteChannelMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex flex-col items-center py-2 text-center">
+                      <div className="p-3 bg-slate-800/50 rounded-2xl mb-2"><Radio size={24} className="text-slate-500" /></div>
+                      <p className="text-white font-semibold mb-0.5 text-sm">У вас нет канала</p>
+                      <p className="text-slate-500 text-xs">Создайте канал, чтобы публиковать посты от его имени</p>
                     </div>
+                    <input value={channelForm.name} onChange={e => setChannelForm(f => ({ ...f, name: e.target.value }))} placeholder="Название канала *" className={inputCls} />
+                    <textarea value={channelForm.description} onChange={e => setChannelForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Описание (необязательно)" className={`${inputCls} resize-none`} />
+                    <button onClick={() => createChannelMut.mutate()} disabled={createChannelMut.isPending || !channelForm.name.trim()} className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
+                      {createChannelMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}Создать канал
+                    </button>
                   </div>
-                </div>
+                )}
               </div>
-            )}
+            </div>
 
-            {/* Connections card */}
+            {/* ── Connections card ── */}
             {myConnections.length > 0 && (() => {
               const LIMIT = 4;
               const visible = connExpanded ? myConnections : myConnections.slice(0, LIMIT);
