@@ -64,6 +64,7 @@ export default function GroupPage() {
 
   // Invite member state
   const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [inviteFriendId, setInviteFriendId] = useState('');
   const [inviteProfessionId, setInviteProfessionId] = useState('');
   const [inviteFriendSearch, setInviteFriendSearch] = useState('');
@@ -196,6 +197,10 @@ export default function GroupPage() {
   const removeMemberMut = useMutation({
     mutationFn: (membershipId: string) => groupAPI.removeMember(id!, membershipId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+  });
+  const deleteGroupMut = useMutation({
+    mutationFn: () => groupAPI.deleteGroup(id!),
+    onSuccess: () => navigate('/friends', { replace: true }),
   });
 
   const set = (key: keyof EditForm, value: string | string[] | Record<string, string>) =>
@@ -370,12 +375,21 @@ export default function GroupPage() {
         <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
           <ShareButton url={`/groups/${id}`} title={group?.name} />
           {isOwner && (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
-            >
-              <Edit3 size={16} className="text-white" />
-            </button>
+            <>
+              <button
+                onClick={() => setIsEditing(true)}
+                className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
+              >
+                <Edit3 size={16} className="text-white" />
+              </button>
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
+                title="Удалить группу"
+              >
+                <Trash2 size={16} className="text-red-400" />
+              </button>
+            </>
           )}
           {currentUser && !isMember && (
             <button
@@ -663,6 +677,34 @@ export default function GroupPage() {
           </button>
         )}
       </div>
+
+      {/* Delete confirm dialog */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-6" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+            <h3 className="text-white font-semibold text-base mb-2">Удалить группу?</h3>
+            <p className="text-slate-400 text-sm mb-5">
+              Группа «{group.name}» и все данные о ней будут удалены безвозвратно.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm font-medium"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => deleteGroupMut.mutate()}
+                disabled={deleteGroupMut.isPending}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+              >
+                {deleteGroupMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Edit modal */}
       {isEditing && EditModal()}

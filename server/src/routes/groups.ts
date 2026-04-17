@@ -292,6 +292,30 @@ router.patch('/invites/:membershipId/decline', authenticate, async (req: AuthReq
   }
 });
 
+// ── DELETE /api/groups/:id ────────────────────────────────────────────────────
+// Delete group entirely (owner only)
+router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const group = await prisma.artist.findUnique({ where: { id: req.params.id } });
+    if (!group) return res.status(404).json({ error: 'Не найдено' });
+    if (group.submittedById !== meId) return res.status(403).json({ error: 'Только владелец может удалить группу' });
+
+    // Cascade: remove members, followers, genres, then the group itself
+    await prisma.$transaction([
+      prisma.userArtist.deleteMany({ where: { artistId: group.id } }),
+      prisma.artistFollower.deleteMany({ where: { artistId: group.id } }),
+      prisma.artistGenre.deleteMany({ where: { artistId: group.id } }),
+      prisma.artist.delete({ where: { id: group.id } }),
+    ]);
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[groups] DELETE /:id', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 // ── DELETE /api/groups/:id/members/:membershipId ──────────────────────────────
 // Remove member (owner only) or leave (self)
 router.delete('/:id/members/:membershipId', authenticate, async (req: AuthRequest, res: Response) => {

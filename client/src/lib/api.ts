@@ -284,6 +284,7 @@ export const groupAPI = {
   declineInvite: (membershipId: string) => api.patch(`/groups/invites/${membershipId}/decline`),
   removeMember: (groupId: string, membershipId: string) =>
     api.delete(`/groups/${groupId}/members/${membershipId}`),
+  deleteGroup: (id: string) => api.delete(`/groups/${id}`),
 };
 
 export const favoriteAPI = {
