@@ -1,8 +1,8 @@
 import { useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Mail, Lock, Eye, EyeOff, AlertCircle, Loader2,
-  Check, MapPin, User, Globe, ArrowRight, ArrowLeft,
+  Mail, Eye, EyeOff, AlertCircle, Loader2,
+  Check, Globe, ArrowRight, ArrowLeft,
 } from 'lucide-react';
 import { authAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
