@@ -1131,7 +1131,6 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
   onUpdated: () => void;
   onDeleted: () => void;
 }) {
-  const [drawerTab, setDrawerTab] = useState<'info' | 'danger'>('info');
   const [form, setForm] = useState<UserForm>({
     firstName: user.firstName,
     lastName: user.lastName,
@@ -1144,7 +1143,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
     bio: user.bio ?? '',
     isAdmin: user.isAdmin,
   });
-  const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const set = (k: keyof UserForm, v: string | boolean) => setForm(f => ({ ...f, [k]: v }));
   const qc = useQueryClient();
 
@@ -1164,14 +1163,11 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
   });
 
   const fullName = `${user.firstName} ${user.lastName}`.trim();
-
   const inputCls = 'w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500';
 
   return (
     <div className="fixed inset-0 z-50 flex" onClick={onClose}>
-      {/* Backdrop */}
       <div className="flex-1 bg-black/60" />
-      {/* Drawer panel */}
       <div
         className="w-full max-w-md bg-slate-950 border-l border-slate-800 flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
@@ -1204,10 +1200,10 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
           <button
             onClick={() => toggleMut.mutate('block')}
             disabled={toggleMut.isPending}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors ${
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors border ${
               user.isBlocked
-                ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border border-red-500/30'
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/30'
+                : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border-slate-700'
             }`}
           >
             {user.isBlocked ? <ShieldOff size={13} /> : <Shield size={13} />}
@@ -1216,136 +1212,130 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
           <button
             onClick={() => toggleMut.mutate('premium')}
             disabled={toggleMut.isPending}
+            title={user.isPremium ? 'Убрать Premium' : 'Выдать Premium'}
             className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
               user.isPremium ? 'bg-amber-500/20 text-amber-400 border-amber-500/30 hover:bg-amber-500/30' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
             }`}
-            title={user.isPremium ? 'Убрать Premium' : 'Выдать Premium'}
           >
             <Crown size={13} />
           </button>
           <button
             onClick={() => toggleMut.mutate('verified')}
             disabled={toggleMut.isPending}
+            title={user.isVerified ? 'Убрать Verified' : 'Выдать Verified'}
             className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
               user.isVerified ? 'bg-sky-500/20 text-sky-400 border-sky-500/30 hover:bg-sky-500/30' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
             }`}
-            title={user.isVerified ? 'Убрать Verified' : 'Выдать Verified'}
           >
             <BadgeCheck size={13} />
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 px-5 pt-3 flex-shrink-0">
-          {(['info', 'danger'] as const).map(t => (
-            <button
-              key={t}
-              onClick={() => setDrawerTab(t)}
-              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors ${
-                drawerTab === t
-                  ? t === 'danger' ? 'bg-red-500/20 text-red-400' : 'bg-primary-500/20 text-primary-400'
-                  : 'text-slate-500 hover:text-slate-300'
-              }`}
-            >
-              {t === 'info' ? 'Данные' : 'Опасная зона'}
-            </button>
-          ))}
-        </div>
-
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-5 py-4">
-          {drawerTab === 'info' && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Имя *</label>
-                  <input value={form.firstName} onChange={e => set('firstName', e.target.value)} className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Фамилия *</label>
-                  <input value={form.lastName} onChange={e => set('lastName', e.target.value)} className={inputCls} />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Email *</label>
-                <input type="email" value={form.email} onChange={e => set('email', e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Новый пароль <span className="text-slate-600">(оставьте пустым, чтобы не менять)</span></label>
-                <input type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="••••••••" className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Никнейм</label>
-                <input value={form.nickname} onChange={e => set('nickname', e.target.value)} className={inputCls} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Телефон</label>
-                  <input value={form.phone} onChange={e => set('phone', e.target.value)} className={inputCls} />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Город</label>
-                  <input value={form.city} onChange={e => set('city', e.target.value)} className={inputCls} />
-                </div>
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Страна</label>
-                <input value={form.country} onChange={e => set('country', e.target.value)} className={inputCls} />
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">О себе</label>
-                <textarea rows={3} value={form.bio} onChange={e => set('bio', e.target.value)} className={`${inputCls} resize-none`} />
-              </div>
-              <label className="flex items-center gap-2 cursor-pointer select-none py-1">
-                <input type="checkbox" checked={form.isAdmin} onChange={e => set('isAdmin', e.target.checked)} className="w-4 h-4 rounded accent-purple-500" />
-                <span className="text-sm text-slate-300">Права администратора</span>
-              </label>
+        {/* Scrollable form */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Имя *</label>
+              <input value={form.firstName} onChange={e => set('firstName', e.target.value)} className={inputCls} />
             </div>
-          )}
-
-          {drawerTab === 'danger' && (
-            <div className="space-y-4">
-              <div className="bg-red-500/5 border border-red-500/20 rounded-xl p-4">
-                <p className="text-sm font-semibold text-red-400 mb-1">Удалить профиль</p>
-                <p className="text-xs text-slate-400 mb-4">
-                  Удаление необратимо. Будут удалены все данные пользователя: сообщения, посты, подписки, профессии. Группы, созданные этим пользователем, останутся без владельца.
-                </p>
-                <label className="block text-xs text-slate-500 mb-1.5">
-                  Введите <span className="font-mono text-red-400">{fullName}</span> для подтверждения
-                </label>
-                <input
-                  value={deleteConfirm}
-                  onChange={e => setDeleteConfirm(e.target.value)}
-                  placeholder={fullName}
-                  className="w-full bg-slate-900 border border-red-500/30 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 mb-3"
-                />
-                <button
-                  onClick={() => deleteMut.mutate()}
-                  disabled={deleteConfirm !== fullName || deleteMut.isPending}
-                  className="w-full py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
-                >
-                  {deleteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                  Удалить профиль навсегда
-                </button>
-              </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Фамилия *</label>
+              <input value={form.lastName} onChange={e => set('lastName', e.target.value)} className={inputCls} />
             </div>
-          )}
-        </div>
-
-        {/* Footer save button (only on info tab) */}
-        {drawerTab === 'info' && (
-          <div className="px-5 pb-5 pt-3 border-t border-slate-800 flex-shrink-0">
-            <button
-              onClick={() => saveMut.mutate()}
-              disabled={saveMut.isPending || !form.firstName.trim() || !form.lastName.trim() || !form.email.trim()}
-              className="w-full py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
-            >
-              {saveMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-              Сохранить изменения
-            </button>
           </div>
-        )}
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Email *</label>
+            <input type="email" value={form.email} onChange={e => set('email', e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">
+              Новый пароль <span className="text-slate-600">(оставьте пустым, чтобы не менять)</span>
+            </label>
+            <input type="password" value={form.password} onChange={e => set('password', e.target.value)} placeholder="••••••••" className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Никнейм</label>
+            <input value={form.nickname} onChange={e => set('nickname', e.target.value)} className={inputCls} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Телефон</label>
+              <input value={form.phone} onChange={e => set('phone', e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Город</label>
+              <input value={form.city} onChange={e => set('city', e.target.value)} className={inputCls} />
+            </div>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Страна</label>
+            <input value={form.country} onChange={e => set('country', e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">О себе</label>
+            <textarea rows={3} value={form.bio} onChange={e => set('bio', e.target.value)} className={`${inputCls} resize-none`} />
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none py-1">
+            <input type="checkbox" checked={form.isAdmin} onChange={e => set('isAdmin', e.target.checked)} className="w-4 h-4 rounded accent-purple-500" />
+            <span className="text-sm text-slate-300">Права администратора</span>
+          </label>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 pb-5 pt-3 border-t border-slate-800 flex-shrink-0 flex gap-2">
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-red-500/40 text-red-400 hover:bg-red-500/10 text-sm font-medium transition-colors flex-shrink-0"
+          >
+            <Trash2 size={15} />
+            Удалить
+          </button>
+          <button
+            onClick={() => saveMut.mutate()}
+            disabled={saveMut.isPending || !form.firstName.trim() || !form.lastName.trim() || !form.email.trim()}
+            className="flex-1 py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+          >
+            {saveMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+            Сохранить
+          </button>
+        </div>
       </div>
+
+      {/* Delete confirmation overlay */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-60 bg-black/80 flex items-center justify-center px-4" onClick={e => e.stopPropagation()}>
+          <div className="bg-slate-900 border border-red-500/30 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                <Trash2 size={18} className="text-red-400" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold text-white">Удалить профиль?</p>
+                <p className="text-xs text-slate-500">{fullName}</p>
+              </div>
+            </div>
+            <p className="text-xs text-slate-400 mb-4">
+              Удаление необратимо. Все данные пользователя будут удалены: сообщения, посты, подписки, профессии.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm hover:bg-slate-800 transition-colors"
+              >
+                Отмена
+              </button>
+              <button
+                onClick={() => deleteMut.mutate()}
+                disabled={deleteMut.isPending}
+                className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors"
+              >
+                {deleteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                Удалить
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
