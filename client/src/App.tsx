@@ -10,6 +10,7 @@ import Layout from './components/Layout';
 const LandingPage        = lazy(() => import('./pages/LandingPage'));
 const LoginPage          = lazy(() => import('./pages/LoginPage'));
 const RegisterPage       = lazy(() => import('./pages/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const FeedPage           = lazy(() => import('./pages/FeedPage'));
 const ProfilePage        = lazy(() => import('./pages/ProfilePage'));
 const UserProfilePage    = lazy(() => import('./pages/UserProfilePage'));
@@ -312,7 +313,8 @@ function App() {
         <Routes>
           <Route path="/"         element={<LandingPage />} />
           <Route path="/login"    element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/register"        element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/privacy"  element={<PrivacyPolicyPage />} />
           <Route path="/terms"    element={<TermsPage />} />
           <Route path="*"         element={<Navigate to="/" replace />} />

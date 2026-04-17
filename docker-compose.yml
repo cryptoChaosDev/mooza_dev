@@ -44,6 +44,8 @@ services:
       VAPID_EMAIL: ${VAPID_EMAIL:-mailto:admin@moooza.ru}
       SMTP_USER: ${SMTP_USER:-register@moooza.ru}
       SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_RECOVER_USER: ${SMTP_RECOVER_USER:-recover@moooza.ru}
+      SMTP_RECOVER_PASS: ${SMTP_RECOVER_PASS:-}
     volumes:
       - ./server:/app
       - /app/node_modules

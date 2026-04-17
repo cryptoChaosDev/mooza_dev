@@ -331,12 +331,17 @@ export default function LoginPage() {
             </div>
           </div> */}
 
-          <p className="mt-4 text-center text-slate-400">
-            Нет аккаунта?{' '}
-            <a href="/register" className="text-primary-400 hover:text-primary-300 font-medium transition-colors">
-              Зарегистрироваться
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <a href="/forgot-password" className="text-sm text-slate-500 hover:text-slate-300 transition-colors">
+              Забыли пароль?
             </a>
-          </p>
+            <p className="text-slate-400 text-sm">
+              Нет аккаунта?{' '}
+              <a href="/register" className="text-primary-400 hover:text-primary-300 font-medium transition-colors">
+                Зарегистрироваться
+              </a>
+            </p>
+          </div>
         </div>
       </div>
     </div>

@@ -5,7 +5,7 @@ import { prisma } from '../index';
 import { z } from 'zod';
 import { authLimiter, registerLimiter } from '../middleware/rateLimiter';
 import { generateToken } from '../utils/jwt';
-import { sendVerificationEmail } from '../utils/mailer';
+import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/mailer';
 
 // ─── Telegram bot-based auth (deep link + polling) ───────────────────────────
 // Map: token → { telegramId, firstName, lastName, username, photoUrl, resolvedAt }
@@ -712,6 +712,67 @@ router.post('/telegram', authLimiter, async (req, res) => {
   } catch (error) {
     console.error('Telegram auth error:', error);
     res.status(500).json({ error: 'Ошибка авторизации через Telegram' });
+  }
+});
+
+// ── POST /auth/forgot-password ────────────────────────────────────────────────
+router.post('/forgot-password', authLimiter, async (req, res) => {
+  try {
+    const { email } = req.body as { email: string };
+    if (!email?.trim()) return res.status(400).json({ error: 'Укажите email' });
+
+    const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    // Always respond OK to prevent user enumeration
+    if (!user) return res.json({ ok: true });
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expires = new Date(Date.now() + 15 * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { passwordResetCode: code, passwordResetExpires: expires },
+    });
+
+    try {
+      await sendPasswordResetEmail(email.trim().toLowerCase(), code);
+    } catch (mailErr) {
+      console.error('[forgot-password] mail error:', mailErr);
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[forgot-password]', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── POST /auth/reset-password ─────────────────────────────────────────────────
+router.post('/reset-password', async (req, res) => {
+  try {
+    const { email, code, password } = req.body as { email: string; code: string; password: string };
+    if (!email || !code || !password) return res.status(400).json({ error: 'Все поля обязательны' });
+    if (password.length < 6) return res.status(400).json({ error: 'Пароль минимум 6 символов' });
+
+    const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+
+    if (!user.passwordResetCode || user.passwordResetCode !== code) {
+      return res.status(400).json({ error: 'Неверный код' });
+    }
+    if (user.passwordResetExpires && user.passwordResetExpires < new Date()) {
+      return res.status(400).json({ error: 'Код истёк. Запросите новый.' });
+    }
+
+    const hashed = await bcrypt.hash(password, 10);
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { password: hashed, passwordResetCode: null, passwordResetExpires: null, emailVerified: true },
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[reset-password]', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });
 
