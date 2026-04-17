@@ -55,6 +55,10 @@ export const authAPI = {
     artistIds?: string[];
     employerId?: string;
   }) => api.post('/auth/register', data),
+  verifyEmail: (email: string, code: string) =>
+    api.post('/auth/verify-email', { email, code }),
+  resendVerification: (email: string) =>
+    api.post('/auth/resend-verification', { email }),
 };
 
 // User API

@@ -5,6 +5,7 @@ import { prisma } from '../index';
 import { z } from 'zod';
 import { authLimiter, registerLimiter } from '../middleware/rateLimiter';
 import { generateToken } from '../utils/jwt';
+import { sendVerificationEmail } from '../utils/mailer';
 
 // ─── Telegram bot-based auth (deep link + polling) ───────────────────────────
 // Map: token → { telegramId, firstName, lastName, username, photoUrl, resolvedAt }
@@ -150,16 +151,103 @@ router.post('/register', registerLimiter, async (req, res) => {
       }
     });
 
-    // Generate token
-    const token = generateToken({ userId: user.id });
+    // Generate 6-digit verification code
+    const verificationCode = String(Math.floor(100000 + Math.random() * 900000));
+    const expires = new Date(Date.now() + 15 * 60 * 1000);
 
-    res.status(201).json({ user, token });
+    await prisma.user.update({
+      where: { id: user.id },
+      data: {
+        emailVerificationCode: verificationCode,
+        emailVerificationExpires: expires,
+      },
+    });
+
+    try {
+      await sendVerificationEmail(data.email, verificationCode);
+    } catch (mailErr) {
+      console.error('[register] Failed to send verification email:', mailErr);
+    }
+
+    res.status(201).json({ pendingVerification: true, email: data.email });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json({ error: error.errors });
     }
     console.error('Register error:', error);
     res.status(500).json({ error: 'Ошибка регистрации' });
+  }
+});
+
+// ── POST /auth/verify-email ────────────────────────────────────────────────────
+router.post('/verify-email', async (req, res) => {
+  try {
+    const { email, code } = req.body as { email: string; code: string };
+    if (!email || !code) return res.status(400).json({ error: 'email и code обязательны' });
+
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+      include: {
+        fieldOfActivity: { select: { id: true, name: true } },
+        userProfessions: {
+          include: { profession: { include: { direction: { select: { id: true, name: true } } } } },
+        },
+        userArtists: { include: { artist: { select: { id: true, name: true } } } },
+        employer: { select: { id: true, name: true, inn: true, ogrn: true } },
+      },
+    });
+
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    if (user.emailVerified) {
+      // Already verified — just issue token
+      const token = generateToken({ userId: user.id });
+      const { password: _, emailVerificationCode: __, emailVerificationExpires: ___, ...safe } = user as any;
+      return res.json({ user: safe, token });
+    }
+    if (!user.emailVerificationCode || user.emailVerificationCode !== code) {
+      return res.status(400).json({ error: 'Неверный код' });
+    }
+    if (user.emailVerificationExpires && user.emailVerificationExpires < new Date()) {
+      return res.status(400).json({ error: 'Код истёк. Запросите новый.' });
+    }
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerified: true, emailVerificationCode: null, emailVerificationExpires: null },
+    });
+
+    const token = generateToken({ userId: user.id });
+    const { password: _, emailVerificationCode: __, emailVerificationExpires: ___, ...safe } = user as any;
+    return res.json({ user: safe, token });
+  } catch (err) {
+    console.error('[verify-email]', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── POST /auth/resend-verification ────────────────────────────────────────────
+router.post('/resend-verification', registerLimiter, async (req, res) => {
+  try {
+    const { email } = req.body as { email: string };
+    if (!email) return res.status(400).json({ error: 'email обязателен' });
+
+    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
+    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    if (user.emailVerified) return res.status(400).json({ error: 'Email уже подтверждён' });
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expires = new Date(Date.now() + 15 * 60 * 1000);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { emailVerificationCode: code, emailVerificationExpires: expires },
+    });
+
+    await sendVerificationEmail(email, code);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[resend-verification]', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });
 
@@ -194,6 +282,11 @@ router.post('/login', authLimiter, async (req, res) => {
     // Check if blocked
     if ((user as any).isBlocked) {
       return res.status(403).json({ error: 'Аккаунт заблокирован. Обратитесь в поддержку.' });
+    }
+
+    // Block login if email not verified AND a verification code exists (i.e. went through new registration flow)
+    if (!(user as any).emailVerified && (user as any).emailVerificationCode) {
+      return res.status(403).json({ error: 'EMAIL_NOT_VERIFIED', email: user.email });
     }
 
     // Check password

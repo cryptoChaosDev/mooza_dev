@@ -338,6 +338,9 @@ model User {
   isBlocked  Boolean  @default(false)
   isPremium  Boolean  @default(false)
   isVerified Boolean  @default(false)
+  emailVerified          Boolean   @default(false)
+  emailVerificationCode  String?
+  emailVerificationExpires DateTime?
   genres    String[]
   professions String[] // legacy flat list, kept for backward compat
 

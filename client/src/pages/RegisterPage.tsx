@@ -97,6 +97,11 @@ export default function RegisterPage() {
   const [geoLoading, setGeoLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  // email verification
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [verifyCode, setVerifyCode] = useState('');
+  const [verifyError, setVerifyError] = useState('');
+  const [resendCooldown, setResendCooldown] = useState(0);
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
 
@@ -165,14 +170,44 @@ export default function RegisterPage() {
       if (formData.city) payload.city = formData.city;
 
       const { data } = await authAPI.register(payload);
-      setAuth(data.user, data.token);
-      navigate('/');
+      if (data.pendingVerification) {
+        setPendingEmail(data.email);
+        setResendCooldown(60);
+        const interval = setInterval(() => setResendCooldown(c => { if (c <= 1) { clearInterval(interval); return 0; } return c - 1; }), 1000);
+      } else {
+        setAuth(data.user, data.token);
+        navigate('/');
+      }
     } catch (err: any) {
       const msg = err.response?.data?.error;
       setError(typeof msg === 'string' ? msg : 'Ошибка регистрации');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleVerify = async () => {
+    if (!pendingEmail || verifyCode.length < 6) return;
+    setLoading(true);
+    setVerifyError('');
+    try {
+      const { data } = await authAPI.verifyEmail(pendingEmail, verifyCode.trim());
+      setAuth(data.user, data.token);
+      navigate('/');
+    } catch (err: any) {
+      setVerifyError(err.response?.data?.error || 'Неверный код');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResend = async () => {
+    if (!pendingEmail || resendCooldown > 0) return;
+    try {
+      await authAPI.resendVerification(pendingEmail);
+      setResendCooldown(60);
+      const interval = setInterval(() => setResendCooldown(c => { if (c <= 1) { clearInterval(interval); return 0; } return c - 1; }), 1000);
+    } catch {}
   };
 
   const stepInfo = STEPS[step - 1];
@@ -267,6 +302,62 @@ export default function RegisterPage() {
       default: return null;
     }
   };
+
+  if (pendingEmail) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4 py-8">
+        <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
+          <div className="flex flex-col items-center text-center mb-6">
+            <div className="w-14 h-14 rounded-2xl bg-primary-600/20 flex items-center justify-center mb-4">
+              <Mail size={26} className="text-primary-400" />
+            </div>
+            <h2 className="text-xl font-bold text-white mb-2">Подтвердите email</h2>
+            <p className="text-slate-400 text-sm">
+              Мы отправили 6-значный код на<br />
+              <span className="text-white font-medium">{pendingEmail}</span>
+            </p>
+          </div>
+
+          <div className="mb-4">
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={verifyCode}
+              onChange={e => setVerifyCode(e.target.value.replace(/\D/g, ''))}
+              placeholder="000000"
+              className="w-full text-center text-3xl font-bold tracking-[16px] bg-slate-800 border border-slate-700 rounded-xl px-4 py-4 text-white placeholder-slate-600 focus:outline-none focus:border-primary-500"
+              autoFocus
+            />
+          </div>
+
+          {verifyError && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-red-400 text-sm">
+              <AlertCircle size={14} className="flex-shrink-0" />
+              {verifyError}
+            </div>
+          )}
+
+          <button
+            onClick={handleVerify}
+            disabled={loading || verifyCode.length < 6}
+            className="w-full py-3 rounded-xl bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-2 transition-colors mb-3"
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+            Подтвердить
+          </button>
+
+          <button
+            onClick={handleResend}
+            disabled={resendCooldown > 0}
+            className="w-full py-2 text-sm text-slate-400 hover:text-white disabled:opacity-50 transition-colors"
+          >
+            {resendCooldown > 0 ? `Отправить повторно через ${resendCooldown}с` : 'Отправить код повторно'}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4 py-8">
