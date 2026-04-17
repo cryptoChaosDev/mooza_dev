@@ -1731,21 +1731,21 @@ export default function AdminPage() {
       <div className="max-w-3xl mx-auto space-y-6">
         <h1 className="text-2xl font-bold text-white">Администрирование справочников</h1>
 
-        {/* Tab bar — scrollable on narrow screens */}
-        <div className="overflow-x-auto pb-0.5">
-          <div className="flex gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800 w-max min-w-full">
-            {TABS.map(t => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${
-                  tab === t.id ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
+        {/* Tab bar */}
+        <div className="flex flex-wrap gap-1.5">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={`px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${
+                tab === t.id
+                  ? 'bg-primary-600 text-white'
+                  : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
 
         {tab === 'structure' && <StructureTree />}
