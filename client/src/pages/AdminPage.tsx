@@ -1166,10 +1166,10 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
   const inputCls = 'w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500';
 
   return (
-    <div className="fixed inset-0 z-50 flex" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-stretch" onClick={onClose}>
       <div className="flex-1 bg-black/60" />
       <div
-        className="w-full max-w-md bg-slate-950 border-l border-slate-800 flex flex-col overflow-hidden"
+        className="w-full max-w-md h-full bg-slate-950 border-l border-slate-800 flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
