@@ -1,23 +1,13 @@
 import { useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  MapPin, Phone, Mail, User, Lock, Eye, EyeOff, AlertCircle, Loader2,
-  Check, Globe, ChevronRight, ChevronLeft, UserCircle, Mic2,
+  Mail, Lock, Eye, EyeOff, AlertCircle, Loader2,
+  Check, MapPin, User, Globe, ArrowRight, ArrowLeft,
 } from 'lucide-react';
 import { authAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 
-interface FormData {
-  email: string;
-  password: string;
-  passwordConfirm: string;
-  firstName: string;
-  lastName: string;
-  nickname: string;
-  country: string;
-  city: string;
-  phone: string;
-}
+// ── helpers ───────────────────────────────────────────────────────────────────
 
 function formatPhone(value: string): string {
   const digits = value.replace(/\D/g, '');
@@ -34,146 +24,129 @@ function unformatPhone(formatted: string): string {
   return formatted.replace(/\D/g, '');
 }
 
-const STEPS = [
-  {
-    icon: Lock,
-    title: 'Создайте аккаунт',
-    sub: 'Займёт меньше минуты. Email и пароль — и вы внутри.',
-    color: 'from-primary-500 to-purple-600',
-  },
-  {
-    icon: UserCircle,
-    title: 'Как вас зовут?',
-    sub: 'Другие участники будут видеть ваше имя в профиле.',
-    color: 'from-purple-500 to-pink-600',
-  },
-  {
-    icon: MapPin,
-    title: 'Где вы находитесь?',
-    sub: 'Помогает находить коллег рядом. Можно пропустить.',
-    color: 'from-blue-500 to-cyan-600',
-  },
-];
+// ── input ─────────────────────────────────────────────────────────────────────
 
-const TOTAL_STEPS = STEPS.length;
-
-function InputField({
-  icon: Icon, type = 'text', value, onChange, placeholder, right, autoFocus,
-}: {
-  icon: any; type?: string; value: string; onChange: (v: string) => void;
-  placeholder?: string; right?: React.ReactNode; autoFocus?: boolean;
-}) {
+function Field({
+  label, hint, children,
+}: { label: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="relative">
-      <Icon size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
-      <input
-        type={type} value={value} onChange={e => onChange(e.target.value)}
-        placeholder={placeholder} autoFocus={autoFocus}
-        className="w-full pl-10 pr-10 py-3 bg-slate-800/60 border border-slate-700/60 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/60 focus:border-primary-500/40 transition-all text-sm"
-      />
-      {right && <div className="absolute right-3 top-1/2 -translate-y-1/2">{right}</div>}
+    <div className="space-y-1.5">
+      <label className="block text-sm font-medium text-slate-300">{label}</label>
+      {children}
+      {hint && <p className="text-xs text-slate-500">{hint}</p>}
     </div>
   );
 }
 
-function FieldLabel({ children, optional }: { children: React.ReactNode; optional?: boolean }) {
+function Input({
+  type = 'text', value, onChange, placeholder, autoFocus, right, disabled,
+}: {
+  type?: string; value: string; onChange: (v: string) => void;
+  placeholder?: string; autoFocus?: boolean; right?: React.ReactNode; disabled?: boolean;
+}) {
   return (
-    <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1.5">
-      {children}
-      {optional && <span className="normal-case font-normal text-slate-600 tracking-normal">(необязательно)</span>}
-    </label>
+    <div className="relative">
+      <input
+        type={type} value={value} onChange={e => onChange(e.target.value)}
+        placeholder={placeholder} autoFocus={autoFocus} disabled={disabled}
+        className="w-full px-4 py-3.5 bg-slate-800/70 border border-slate-700/60 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 transition-all text-sm disabled:opacity-50"
+      />
+      {right && <div className="absolute right-4 top-1/2 -translate-y-1/2">{right}</div>}
+    </div>
   );
 }
 
+// ── step definitions ──────────────────────────────────────────────────────────
+
+const STEPS = [
+  {
+    emoji: '👋',
+    title: 'Добро пожаловать\nв Moooza',
+    why: 'Moooza — это сеть для музыкантов. Email и пароль нужны, чтобы войти с любого устройства и защитить ваш аккаунт.',
+    optional: false,
+  },
+  {
+    emoji: '🎵',
+    title: 'Как вас зовут?',
+    why: 'Ваше имя видят другие участники, когда ищут коллег, получают приглашение в группу или смотрят ваш профиль.',
+    optional: false,
+  },
+  {
+    emoji: '📍',
+    title: 'Где вы\nнаходитесь?',
+    why: 'Город помогает найти музыкантов поблизости и появиться в локальных поисках. Можно заполнить позже.',
+    optional: true,
+  },
+];
+
+// ── main component ────────────────────────────────────────────────────────────
+
 export default function RegisterPage() {
-  const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState<FormData>({
-    email: '', password: '', passwordConfirm: '',
-    firstName: '', lastName: '', nickname: '',
-    country: '', city: '', phone: '',
-  });
+  const navigate = useNavigate();
+  const { setAuth } = useAuthStore();
+
+  const [step, setStep] = useState(0); // 0-based
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [city, setCity] = useState('');
+  const [country, setCountry] = useState('');
+  const [phone, setPhone] = useState('');
+
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
+
   // email verification
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [verifyCode, setVerifyCode] = useState('');
   const [verifyError, setVerifyError] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
-  const navigate = useNavigate();
-  const { setAuth } = useAuthStore();
 
-  const set = (field: keyof FormData) => (v: string) =>
-    setFormData(p => ({ ...p, [field]: v }));
-
-  const detectLocation = useCallback(() => {
-    setGeoLoading(true);
-    if (!('geolocation' in navigator)) { setGeoLoading(false); return; }
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        try {
-          const { latitude, longitude } = pos.coords;
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&accept-language=ru`
-          );
-          const data = await res.json();
-          if (data.address) {
-            setFormData(prev => ({
-              ...prev,
-              country: data.address.country || '',
-              city: data.address.city || data.address.town || data.address.village || '',
-            }));
-          }
-        } finally { setGeoLoading(false); }
-      },
-      () => setGeoLoading(false),
-      { timeout: 10000 }
-    );
-  }, []);
+  const startCooldown = () => {
+    setResendCooldown(60);
+    const t = setInterval(() => setResendCooldown(c => { if (c <= 1) { clearInterval(t); return 0; } return c - 1; }), 1000);
+  };
 
   const validate = (): boolean => {
     setError('');
-    if (step === 1) {
-      if (!formData.email) { setError('Укажите email'); return false; }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) { setError('Некорректный email'); return false; }
-      if (!formData.password || formData.password.length < 6) { setError('Пароль — минимум 6 символов'); return false; }
-      if (formData.password !== formData.passwordConfirm) { setError('Пароли не совпадают'); return false; }
+    if (step === 0) {
+      if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Укажите корректный email'); return false; }
+      if (password.length < 6) { setError('Пароль — минимум 6 символов'); return false; }
     }
-    if (step === 2) {
-      if (!formData.firstName.trim()) { setError('Укажите имя'); return false; }
-      if (!formData.lastName.trim()) { setError('Укажите фамилию'); return false; }
+    if (step === 1) {
+      if (!firstName.trim()) { setError('Укажите имя'); return false; }
+      if (!lastName.trim()) { setError('Укажите фамилию'); return false; }
     }
     return true;
   };
 
-  const next = () => { if (validate()) setStep(s => Math.min(s + 1, TOTAL_STEPS)); };
-  const prev = () => { setError(''); setStep(s => Math.max(s - 1, 1)); };
+  const next = () => { if (validate()) setStep(s => s + 1); };
+  const prev = () => { setError(''); setStep(s => s - 1); };
 
   const handleSubmit = async () => {
     setLoading(true);
     setError('');
     try {
       const payload: any = {
-        email: formData.email,
-        password: formData.password,
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
+        email: email.trim().toLowerCase(),
+        password,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
       };
-      if (formData.nickname.trim()) payload.nickname = formData.nickname.trim();
-      if (formData.phone) {
-        const d = unformatPhone(formData.phone);
-        if (d.length >= 11) payload.phone = '+' + d;
-      }
-      if (formData.country) payload.country = formData.country;
-      if (formData.city) payload.city = formData.city;
+      if (nickname.trim()) payload.nickname = nickname.trim();
+      if (city.trim()) payload.city = city.trim();
+      if (country.trim()) payload.country = country.trim();
+      const digits = unformatPhone(phone);
+      if (digits.length >= 11) payload.phone = '+' + digits;
 
       const { data } = await authAPI.register(payload);
       if (data.pendingVerification) {
         setPendingEmail(data.email);
-        setResendCooldown(60);
-        const interval = setInterval(() => setResendCooldown(c => { if (c <= 1) { clearInterval(interval); return 0; } return c - 1; }), 1000);
+        startCooldown();
       } else {
         setAuth(data.user, data.token);
         navigate('/');
@@ -203,248 +176,243 @@ export default function RegisterPage() {
 
   const handleResend = async () => {
     if (!pendingEmail || resendCooldown > 0) return;
-    try {
-      await authAPI.resendVerification(pendingEmail);
-      setResendCooldown(60);
-      const interval = setInterval(() => setResendCooldown(c => { if (c <= 1) { clearInterval(interval); return 0; } return c - 1; }), 1000);
-    } catch {}
+    try { await authAPI.resendVerification(pendingEmail); startCooldown(); } catch {}
   };
 
-  const stepInfo = STEPS[step - 1];
-  const StepIcon = stepInfo.icon;
-  const progress = (step / TOTAL_STEPS) * 100;
+  const detectLocation = useCallback(() => {
+    setGeoLoading(true);
+    if (!('geolocation' in navigator)) { setGeoLoading(false); return; }
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        try {
+          const r = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json&accept-language=ru`);
+          const d = await r.json();
+          if (d.address) {
+            setCountry(d.address.country || '');
+            setCity(d.address.city || d.address.town || d.address.village || '');
+          }
+        } finally { setGeoLoading(false); }
+      },
+      () => setGeoLoading(false),
+      { timeout: 10000 }
+    );
+  }, []);
 
-  const renderContent = () => {
-    switch (step) {
-      case 1: return (
-        <div className="space-y-3">
-          <div>
-            <FieldLabel>Email</FieldLabel>
-            <InputField icon={Mail} type="email" value={formData.email} onChange={set('email')} placeholder="you@example.com" autoFocus />
-          </div>
-          <div>
-            <FieldLabel>Пароль</FieldLabel>
-            <InputField
-              icon={Lock} type={showPassword ? 'text' : 'password'}
-              value={formData.password} onChange={set('password')}
-              placeholder="Минимум 6 символов"
-              right={
-                <button type="button" onClick={() => setShowPassword(p => !p)} className="text-slate-400 hover:text-slate-300">
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              }
-            />
-          </div>
-          <div>
-            <FieldLabel>Повтор пароля</FieldLabel>
-            <InputField
-              icon={Lock} type={showConfirm ? 'text' : 'password'}
-              value={formData.passwordConfirm} onChange={set('passwordConfirm')}
-              placeholder="Повторите пароль"
-              right={
-                <button type="button" onClick={() => setShowConfirm(p => !p)} className="text-slate-400 hover:text-slate-300">
-                  {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
-                </button>
-              }
-            />
-          </div>
-        </div>
-      );
-
-      case 2: return (
-        <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <FieldLabel>Имя</FieldLabel>
-              <InputField icon={User} value={formData.firstName} onChange={set('firstName')} placeholder="Иван" autoFocus />
-            </div>
-            <div>
-              <FieldLabel>Фамилия</FieldLabel>
-              <InputField icon={User} value={formData.lastName} onChange={set('lastName')} placeholder="Иванов" />
-            </div>
-          </div>
-          <div>
-            <FieldLabel optional>Никнейм</FieldLabel>
-            <InputField icon={Mic2} value={formData.nickname} onChange={set('nickname')} placeholder="@username" />
-          </div>
-        </div>
-      );
-
-      case 3: return (
-        <div className="space-y-3">
-          <button
-            type="button" onClick={detectLocation} disabled={geoLoading}
-            className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary-500/10 border border-primary-500/30 hover:bg-primary-500/15 text-primary-300 rounded-xl text-sm transition-all"
-          >
-            {geoLoading ? <Loader2 size={16} className="animate-spin" /> : <Globe size={16} />}
-            {geoLoading ? 'Определяем...' : 'Определить автоматически'}
-          </button>
-          <div>
-            <FieldLabel optional>Страна</FieldLabel>
-            <InputField icon={MapPin} value={formData.country} onChange={set('country')} placeholder="Россия" />
-          </div>
-          <div>
-            <FieldLabel optional>Город</FieldLabel>
-            <InputField icon={MapPin} value={formData.city} onChange={set('city')} placeholder="Москва" />
-          </div>
-          <div>
-            <FieldLabel optional>Телефон</FieldLabel>
-            <InputField
-              icon={Phone} type="tel"
-              value={formData.phone}
-              onChange={v => set('phone')(formatPhone(v))}
-              placeholder="+7 (___) ___ __ __"
-            />
-          </div>
-        </div>
-      );
-
-      default: return null;
-    }
-  };
-
+  // ── Email verification screen ─────────────────────────────────────────────
   if (pendingEmail) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4 py-8">
-        <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
-          <div className="flex flex-col items-center text-center mb-6">
-            <div className="w-14 h-14 rounded-2xl bg-primary-600/20 flex items-center justify-center mb-4">
-              <Mail size={26} className="text-primary-400" />
-            </div>
-            <h2 className="text-xl font-bold text-white mb-2">Подтвердите email</h2>
-            <p className="text-slate-400 text-sm">
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center px-6">
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <div className="text-5xl mb-4">📬</div>
+            <h2 className="text-2xl font-bold text-white mb-2">Проверьте почту</h2>
+            <p className="text-slate-400 text-sm leading-relaxed">
               Мы отправили 6-значный код на<br />
               <span className="text-white font-medium">{pendingEmail}</span>
             </p>
           </div>
 
-          <div className="mb-4">
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={verifyCode}
-              onChange={e => setVerifyCode(e.target.value.replace(/\D/g, ''))}
-              placeholder="000000"
-              className="w-full text-center text-3xl font-bold tracking-[16px] bg-slate-800 border border-slate-700 rounded-xl px-4 py-4 text-white placeholder-slate-600 focus:outline-none focus:border-primary-500"
-              autoFocus
-            />
-          </div>
+          <input
+            type="text" inputMode="numeric" maxLength={6}
+            value={verifyCode}
+            onChange={e => setVerifyCode(e.target.value.replace(/\D/g, ''))}
+            placeholder="000000"
+            autoFocus
+            className="w-full text-center text-4xl font-bold tracking-[18px] bg-slate-800 border border-slate-700 rounded-2xl px-4 py-5 text-white placeholder-slate-700 focus:outline-none focus:border-primary-500 mb-4"
+          />
 
           {verifyError && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-red-400 text-sm">
-              <AlertCircle size={14} className="flex-shrink-0" />
-              {verifyError}
+            <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-red-400 text-sm">
+              <AlertCircle size={15} className="flex-shrink-0" />{verifyError}
             </div>
           )}
 
           <button
             onClick={handleVerify}
             disabled={loading || verifyCode.length < 6}
-            className="w-full py-3 rounded-xl bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-2 transition-colors mb-3"
+            className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-40 text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base mb-3"
           >
-            {loading ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+            {loading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
             Подтвердить
           </button>
 
           <button
-            onClick={handleResend}
-            disabled={resendCooldown > 0}
-            className="w-full py-2 text-sm text-slate-400 hover:text-white disabled:opacity-50 transition-colors"
+            onClick={handleResend} disabled={resendCooldown > 0}
+            className="w-full py-2.5 text-sm text-slate-500 hover:text-slate-300 disabled:opacity-50 transition-colors"
           >
-            {resendCooldown > 0 ? `Отправить повторно через ${resendCooldown}с` : 'Отправить код повторно'}
+            {resendCooldown > 0 ? `Повторный код через ${resendCooldown} с` : 'Отправить код повторно'}
           </button>
         </div>
       </div>
     );
   }
 
+  // ── Step content ──────────────────────────────────────────────────────────
+  const stepDef = STEPS[step];
+  const isLast = step === STEPS.length - 1;
+
+  const stepContent = () => {
+    if (step === 0) return (
+      <div className="space-y-4">
+        <Field label="Email" hint="Используется для входа и восстановления пароля">
+          <Input type="email" value={email} onChange={setEmail} placeholder="you@example.com" autoFocus />
+        </Field>
+        <Field label="Пароль" hint="Минимум 6 символов">
+          <Input
+            type={showPassword ? 'text' : 'password'}
+            value={password} onChange={setPassword}
+            placeholder="Придумайте пароль"
+            right={
+              <button type="button" onClick={() => setShowPassword(p => !p)} className="text-slate-500 hover:text-slate-300 transition-colors">
+                {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
+              </button>
+            }
+          />
+        </Field>
+      </div>
+    );
+
+    if (step === 1) return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Имя">
+            <Input value={firstName} onChange={setFirstName} placeholder="Иван" autoFocus />
+          </Field>
+          <Field label="Фамилия">
+            <Input value={lastName} onChange={setLastName} placeholder="Иванов" />
+          </Field>
+        </div>
+        <Field label="Никнейм" hint="Необязательно — короткое имя для поиска">
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm select-none">@</span>
+            <input
+              value={nickname} onChange={e => setNickname(e.target.value)}
+              placeholder="username"
+              className="w-full pl-8 pr-4 py-3.5 bg-slate-800/70 border border-slate-700/60 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 transition-all text-sm"
+            />
+          </div>
+        </Field>
+      </div>
+    );
+
+    if (step === 2) return (
+      <div className="space-y-4">
+        <button
+          type="button" onClick={detectLocation} disabled={geoLoading}
+          className="w-full flex items-center justify-center gap-2.5 py-3.5 bg-primary-500/10 border border-primary-500/25 hover:bg-primary-500/15 text-primary-300 rounded-2xl text-sm font-medium transition-all"
+        >
+          {geoLoading ? <Loader2 size={16} className="animate-spin" /> : <Globe size={16} />}
+          {geoLoading ? 'Определяем местоположение...' : 'Определить автоматически'}
+        </button>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Город">
+            <Input value={city} onChange={setCity} placeholder="Москва" />
+          </Field>
+          <Field label="Страна">
+            <Input value={country} onChange={setCountry} placeholder="Россия" />
+          </Field>
+        </div>
+
+        <Field label="Телефон" hint="Необязательно — для связи с коллегами">
+          <Input
+            type="tel" value={phone}
+            onChange={v => setPhone(formatPhone(v))}
+            placeholder="+7 (___) ___ __ __"
+          />
+        </Field>
+      </div>
+    );
+  };
+
+  // ── Layout ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4 py-8">
-      <div className="pointer-events-none fixed inset-0 overflow-hidden">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[400px] rounded-full bg-primary-600/10 blur-[120px]" />
+    <div className="min-h-screen bg-slate-950 flex flex-col">
+      {/* top bar */}
+      <div className="flex items-center justify-between px-5 pt-5 pb-2 flex-shrink-0">
+        {step > 0 ? (
+          <button onClick={prev} className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+            <ArrowLeft size={18} />
+          </button>
+        ) : (
+          <Link to="/login" className="text-slate-500 hover:text-slate-300 text-sm transition-colors">
+            Войти
+          </Link>
+        )}
+        {/* step dots */}
+        <div className="flex gap-1.5">
+          {STEPS.map((_, i) => (
+            <div
+              key={i}
+              className={`rounded-full transition-all duration-300 ${
+                i === step ? 'w-5 h-2 bg-primary-500' :
+                i < step ? 'w-2 h-2 bg-primary-500/50' :
+                'w-2 h-2 bg-slate-700'
+              }`}
+            />
+          ))}
+        </div>
+        <div className="w-9" />
       </div>
 
-      <div className="relative w-full max-w-md">
-        {/* Progress bar */}
-        <div className="h-1 bg-slate-800 rounded-full mb-6 overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-primary-500 to-purple-500 rounded-full transition-all duration-500"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
+      {/* content */}
+      <div className="flex-1 flex flex-col px-5 pt-6 pb-8 overflow-y-auto">
 
-        {/* Card */}
-        <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800/60 rounded-2xl overflow-hidden shadow-2xl">
-
-          {/* Step header */}
-          <div className={`bg-gradient-to-r ${stepInfo.color} p-5`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
-                  <StepIcon size={18} className="text-white" />
-                </div>
-                <div>
-                  <p className="text-white/70 text-xs font-medium">Шаг {step} из {TOTAL_STEPS}</p>
-                  <h2 className="text-white font-bold text-base leading-tight">{stepInfo.title}</h2>
-                </div>
-              </div>
-              <div className="flex gap-1">
-                {STEPS.map((_, i) => (
-                  <div key={i} className={`rounded-full transition-all ${i + 1 === step ? 'w-4 h-2 bg-white' : i + 1 < step ? 'w-2 h-2 bg-white/60' : 'w-2 h-2 bg-white/25'}`} />
-                ))}
-              </div>
-            </div>
-            <p className="text-white/70 text-xs mt-2">{stepInfo.sub}</p>
-          </div>
-
-          {/* Content */}
-          <div className="p-5">
-            {error && (
-              <div className="flex items-center gap-2 px-3 py-2.5 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-red-400 text-sm">
-                <AlertCircle size={15} className="flex-shrink-0" />
-                {error}
-              </div>
-            )}
-
-            <div className="min-h-[200px]">
-              {renderContent()}
-            </div>
-
-            {/* Navigation */}
-            <div className="flex items-center justify-between mt-5 pt-4 border-t border-slate-800/60">
-              {step > 1 ? (
-                <button type="button" onClick={prev}
-                  className="flex items-center gap-1.5 px-4 py-2.5 text-slate-400 hover:text-slate-200 rounded-xl hover:bg-slate-800/60 transition-all text-sm">
-                  <ChevronLeft size={16} /> Назад
-                </button>
-              ) : (
-                <Link to="/login" className="text-slate-500 hover:text-slate-300 text-sm transition-colors">
-                  Уже есть аккаунт
-                </Link>
-              )}
-
-              {step < TOTAL_STEPS ? (
-                <button type="button" onClick={next}
-                  className="flex items-center gap-1.5 px-5 py-2.5 bg-gradient-to-r from-primary-600 to-purple-600 hover:from-primary-500 hover:to-purple-500 text-white rounded-xl text-sm font-semibold transition-all shadow-lg shadow-primary-900/30">
-                  Далее <ChevronRight size={16} />
-                </button>
-              ) : (
-                <button type="button" onClick={handleSubmit} disabled={loading}
-                  className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:from-slate-700 disabled:to-slate-700 text-white rounded-xl text-sm font-semibold transition-all shadow-lg">
-                  {loading ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                  {loading ? 'Создаём...' : 'Создать аккаунт'}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {step === 3 && (
-          <p className="text-center text-slate-600 text-xs mt-3">
-            Местоположение можно заполнить позже в профиле
+        {/* hero */}
+        <div className="mb-8">
+          <div className="text-4xl mb-3">{stepDef.emoji}</div>
+          <h1 className="text-2xl font-bold text-white leading-tight whitespace-pre-line mb-3">
+            {stepDef.title}
+          </h1>
+          <p className="text-sm text-slate-400 leading-relaxed">
+            {stepDef.why}
           </p>
-        )}
+        </div>
+
+        {/* form */}
+        <div className="flex-1">
+          {error && (
+            <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-red-400 text-sm">
+              <AlertCircle size={15} className="flex-shrink-0" />{error}
+            </div>
+          )}
+          {stepContent()}
+        </div>
+
+        {/* action */}
+        <div className="mt-8 space-y-3">
+          {isLast ? (
+            <>
+              <button
+                onClick={handleSubmit} disabled={loading}
+                className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base"
+              >
+                {loading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+                {loading ? 'Создаём аккаунт...' : 'Создать аккаунт'}
+              </button>
+              <button
+                onClick={handleSubmit} disabled={loading}
+                className="w-full py-3 text-sm text-slate-500 hover:text-slate-300 transition-colors"
+              >
+                Пропустить и создать
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={next}
+              className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base"
+            >
+              Далее <ArrowRight size={18} />
+            </button>
+          )}
+
+          {step === 0 && (
+            <p className="text-center text-xs text-slate-600">
+              Регистрируясь, вы принимаете{' '}
+              <a href="/terms" className="text-slate-500 hover:text-slate-400 underline">условия использования</a>
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
