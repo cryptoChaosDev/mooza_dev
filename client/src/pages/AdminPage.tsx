@@ -1123,7 +1123,7 @@ const emptyUserForm = (): UserForm => ({
   firstName: '', lastName: '', email: '', password: '', nickname: '', phone: '', city: '', country: '', bio: '', isAdmin: false,
 });
 
-// ─── User Drawer ─────────────────────────────────────────────────────────────
+// ─── User Modal ───────────────────────────────────────────────────────────────
 
 function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
   user: AdminUser;
@@ -1166,11 +1166,10 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
   const inputCls = 'w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500';
 
   return (
-    <div className="fixed inset-0 z-50 flex" onClick={onClose}>
-      <div className="flex-1 bg-black/60" />
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
       <div
-        className="w-full max-w-md bg-slate-950 border-l border-slate-800 flex flex-col"
-        style={{ height: '100vh' }}
+        className="bg-slate-900 rounded-2xl w-full max-w-md shadow-2xl flex flex-col"
+        style={{ maxHeight: 'calc(100vh - 2rem)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -1214,7 +1213,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
             onClick={() => toggleMut.mutate('premium')}
             disabled={toggleMut.isPending}
             title={user.isPremium ? 'Убрать Premium' : 'Выдать Premium'}
-            className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
+            className={`flex items-center justify-center px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
               user.isPremium ? 'bg-amber-500/20 text-amber-400 border-amber-500/30 hover:bg-amber-500/30' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
             }`}
           >
@@ -1224,7 +1223,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
             onClick={() => toggleMut.mutate('verified')}
             disabled={toggleMut.isPending}
             title={user.isVerified ? 'Убрать Verified' : 'Выдать Verified'}
-            className={`flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
+            className={`flex items-center justify-center px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
               user.isVerified ? 'bg-sky-500/20 text-sky-400 border-sky-500/30 hover:bg-sky-500/30' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
             }`}
           >
@@ -1233,7 +1232,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
         </div>
 
         {/* Scrollable form */}
-        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3">
+        <div className="overflow-y-auto px-5 py-4 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-xs text-slate-500 mb-1">Имя *</label>
@@ -1274,7 +1273,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
           </div>
           <div>
             <label className="block text-xs text-slate-500 mb-1">О себе</label>
-            <textarea rows={3} value={form.bio} onChange={e => set('bio', e.target.value)} className={`${inputCls} resize-none`} />
+            <textarea rows={2} value={form.bio} onChange={e => set('bio', e.target.value)} className={`${inputCls} resize-none`} />
           </div>
           <label className="flex items-center gap-2 cursor-pointer select-none py-1">
             <input type="checkbox" checked={form.isAdmin} onChange={e => set('isAdmin', e.target.checked)} className="w-4 h-4 rounded accent-purple-500" />
@@ -1286,7 +1285,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
         <div className="px-5 pb-5 pt-3 border-t border-slate-800 flex-shrink-0 flex gap-2">
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-red-500/40 text-red-400 hover:bg-red-500/10 text-sm font-medium transition-colors flex-shrink-0"
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-red-500/40 text-red-400 hover:bg-red-500/10 text-sm font-medium transition-colors"
           >
             <Trash2 size={15} />
             Удалить
@@ -1302,9 +1301,9 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
         </div>
       </div>
 
-      {/* Delete confirmation overlay */}
+      {/* Delete confirmation */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 z-60 bg-black/80 flex items-center justify-center px-4" onClick={e => e.stopPropagation()}>
+        <div className="absolute inset-0 bg-black/60 flex items-center justify-center p-4" onClick={e => e.stopPropagation()}>
           <div className="bg-slate-900 border border-red-500/30 rounded-2xl w-full max-w-sm p-6 shadow-2xl">
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0">
