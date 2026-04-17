@@ -49,7 +49,7 @@ function Input({
       <input
         type={type} value={value} onChange={e => onChange(e.target.value)}
         placeholder={placeholder} autoFocus={autoFocus} disabled={disabled}
-        className="w-full px-4 py-3.5 bg-slate-800/70 border border-slate-700/60 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 transition-all text-sm disabled:opacity-50"
+        className={`w-full pl-4 py-3.5 bg-slate-800/70 border border-slate-700/60 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 transition-all text-sm disabled:opacity-50 ${right ? 'pr-12' : 'pr-4'}`}
       />
       {right && <div className="absolute right-4 top-1/2 -translate-y-1/2">{right}</div>}
     </div>
