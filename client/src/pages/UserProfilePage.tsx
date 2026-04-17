@@ -552,8 +552,8 @@ export default function UserProfilePage() {
                         >
                           <div className="flex items-center gap-2.5 mb-2">
                             <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-700 flex-shrink-0">
-                              {c.partner.avatar
-                                ? <img src={`${API_URL}${c.partner.avatar}`} alt="" className="w-full h-full object-cover" />
+                              {getAvatarUrl(c.partner.avatar)
+                                ? <img src={getAvatarUrl(c.partner.avatar)!} alt="" className="w-full h-full object-cover" />
                                 : <div className="w-full h-full bg-primary-600/30 flex items-center justify-center text-xs text-primary-300 font-bold">{c.partner.firstName?.[0]}</div>
                               }
                             </div>
