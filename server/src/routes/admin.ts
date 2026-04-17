@@ -190,6 +190,23 @@ router.delete('/work-formats/:id', async (req, res) => {
   catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
+// ─── ProfessionFeature ────────────────────────────────────────────────────
+router.get('/profession-features', async (_req, res) => {
+  res.json(await prisma.professionFeature.findMany({ orderBy: { name: 'asc' } }));
+});
+router.post('/profession-features', async (req, res) => {
+  try { res.json(await prisma.professionFeature.create({ data: { name: req.body.name } })); }
+  catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+router.put('/profession-features/:id', async (req, res) => {
+  try { res.json(await prisma.professionFeature.update({ where: { id: req.params.id }, data: { name: req.body.name } })); }
+  catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+router.delete('/profession-features/:id', async (req, res) => {
+  try { await prisma.professionFeature.delete({ where: { id: req.params.id } }); res.json({ ok: true }); }
+  catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
 // ─── EmploymentType ────────────────────────────────────────────────────────
 router.get('/employment-types', async (_req, res) => {
   res.json(await prisma.employmentType.findMany({ orderBy: { sortOrder: 'asc' } }));

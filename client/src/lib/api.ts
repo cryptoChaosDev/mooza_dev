@@ -320,6 +320,7 @@ export const adminAPI = {
   services: crudFor('services'),
   genres: crudFor('genres'),
   workFormats: crudFor('work-formats'),
+  professionFeatures: crudFor('profession-features'),
   employmentTypes: crudFor('employment-types'),
   skillLevels: crudFor('skill-levels'),
   availabilities: crudFor('availabilities'),
