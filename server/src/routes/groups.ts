@@ -276,10 +276,17 @@ router.patch('/invites/:membershipId/accept', authenticate, async (req: AuthRequ
         });
 
         if (!existingConn) {
-          const userServices = await prisma.userService.findMany({
+          // First try services matching the invited profession, fallback to all member's services
+          let userServices = await prisma.userService.findMany({
             where: { userId: meId, professionId: membership.professionId },
             select: { serviceId: true },
           });
+          if (userServices.length === 0) {
+            userServices = await prisma.userService.findMany({
+              where: { userId: meId },
+              select: { serviceId: true },
+            });
+          }
 
           await prisma.connection.create({
             data: {
