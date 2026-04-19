@@ -14,6 +14,8 @@ function formatConnection(conn: any, meId: string) {
     id: conn.id,
     status: conn.status,
     breakRequestedBy: conn.breakRequestedBy,
+    breakReasonRequester: conn.breakReasonRequester ?? null,
+    breakReasonReceiver: conn.breakReasonReceiver ?? null,
     services: conn.services?.map((cs: any) => cs.service) ?? [],
     profession: conn.profession ?? null,
     createdAt: conn.createdAt,
@@ -280,11 +282,55 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// ── GET /api/connections/my-break-requests ───────────────────────────────────
+// Connections where I requested the break (awaiting partner's confirmation)
+router.get('/my-break-requests', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const conns = await prisma.connection.findMany({
+      where: { status: 'BREAK_REQUESTED', breakRequestedBy: meId },
+      include: CONN_INCLUDE,
+      orderBy: { updatedAt: 'desc' },
+    });
+    return res.json(conns.map(c => formatConnection(c, meId)));
+  } catch (err) {
+    console.error('[connections] GET /my-break-requests', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── GET /api/connections/history ─────────────────────────────────────────────
+router.get('/history', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const history = await prisma.connectionHistory.findMany({
+      where: { OR: [{ requesterId: meId }, { receiverId: meId }] },
+      include: {
+        requester: { select: { id: true, firstName: true, lastName: true, avatar: true, nickname: true } },
+        receiver:  { select: { id: true, firstName: true, lastName: true, avatar: true, nickname: true } },
+      },
+      orderBy: { endedAt: 'desc' },
+    });
+    return res.json(history.map(h => ({
+      ...h,
+      partner: h.requesterId === meId ? h.receiver : h.requester,
+      iAmRequester: h.requesterId === meId,
+      iInitiatedBreak: h.breakInitiatorId === meId,
+    })));
+  } catch (err) {
+    console.error('[connections] GET /history', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 // ── PATCH /api/connections/:id/break ─────────────────────────────────────────
-// Request to dissolve an accepted connection
+// Request to dissolve an accepted connection (requires reason)
 router.patch('/:id/break', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
+    const { reason } = req.body as { reason?: string };
+    if (!reason?.trim()) return res.status(400).json({ error: 'Укажите причину разрыва связи' });
+
     const conn = await prisma.connection.findUnique({ where: { id: req.params.id } });
     if (!conn) return res.status(404).json({ error: 'Не найдено' });
     if (conn.requesterId !== meId && conn.receiverId !== meId) return res.status(403).json({ error: 'Нет прав' });
@@ -292,11 +338,10 @@ router.patch('/:id/break', authenticate, async (req: AuthRequest, res: Response)
 
     const updated = await prisma.connection.update({
       where: { id: conn.id },
-      data: { status: 'BREAK_REQUESTED', breakRequestedBy: meId },
+      data: { status: 'BREAK_REQUESTED', breakRequestedBy: meId, breakReasonRequester: reason.trim() },
       include: CONN_INCLUDE,
     });
 
-    // Notify the other party
     const otherId = conn.requesterId === meId ? conn.receiverId : conn.requesterId;
     try {
       const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
@@ -320,17 +365,34 @@ router.patch('/:id/break', authenticate, async (req: AuthRequest, res: Response)
 });
 
 // ── PATCH /api/connections/:id/confirm-break ──────────────────────────────────
-// Other party confirms the break → delete connection
+// Other party confirms the break (requires reason) → save to history, delete connection
 router.patch('/:id/confirm-break', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
+    const { reason } = req.body as { reason?: string };
+    if (!reason?.trim()) return res.status(400).json({ error: 'Укажите причину разрыва связи' });
+
     const conn = await prisma.connection.findUnique({ where: { id: req.params.id } });
     if (!conn) return res.status(404).json({ error: 'Не найдено' });
     if (conn.requesterId !== meId && conn.receiverId !== meId) return res.status(403).json({ error: 'Нет прав' });
     if (conn.status !== 'BREAK_REQUESTED') return res.status(400).json({ error: 'Запрос разрыва не найден' });
     if (conn.breakRequestedBy === meId) return res.status(400).json({ error: 'Вы сами запросили разрыв' });
 
-    await prisma.connection.delete({ where: { id: conn.id } });
+    await prisma.$transaction([
+      prisma.connectionHistory.create({
+        data: {
+          requesterId: conn.requesterId,
+          receiverId: conn.receiverId,
+          professionId: conn.professionId,
+          breakInitiatorId: conn.breakRequestedBy!,
+          breakReasonRequester: conn.breakReasonRequester,
+          breakReasonReceiver: reason.trim(),
+          connectedAt: conn.createdAt,
+        },
+      }),
+      prisma.connection.delete({ where: { id: conn.id } }),
+    ]);
+
     return res.json({ ok: true });
   } catch (err) {
     console.error('[connections] PATCH /:id/confirm-break', err);

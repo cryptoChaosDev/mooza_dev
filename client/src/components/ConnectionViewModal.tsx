@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { X, Link2, Check, Clock, CheckCheck, Loader2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 import { connectionAPI } from '../lib/api';
 import AvatarComponent from './Avatar';
 import { useNavigate } from 'react-router-dom';
@@ -10,6 +11,7 @@ interface Connection {
   status: string;
   iAmRequester: boolean;
   breakRequestedBy: string | null;
+  breakReasonRequester?: string | null;
   services: { id: string; name: string }[];
   profession?: { id: string; name: string } | null;
   partner: {
@@ -30,13 +32,19 @@ interface Props {
 export default function ConnectionViewModal({ connection, onClose }: Props) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { partner, services, profession, status, iAmRequester, breakRequestedBy } = connection;
+  const { partner, services, profession, status, iAmRequester, breakRequestedBy, breakReasonRequester } = connection;
+
+  const [breakReason, setBreakReason] = useState('');
+  const [showBreakForm, setShowBreakForm] = useState(false);
+  const [showConfirmForm, setShowConfirmForm] = useState(false);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['connections-accepted'] });
     queryClient.invalidateQueries({ queryKey: ['connections-requests'] });
     queryClient.invalidateQueries({ queryKey: ['connections-sent'] });
     queryClient.invalidateQueries({ queryKey: ['connections-break-requests'] });
+    queryClient.invalidateQueries({ queryKey: ['connections-my-break-requests'] });
+    queryClient.invalidateQueries({ queryKey: ['connections-history'] });
     queryClient.invalidateQueries({ queryKey: ['connection-with', partner.id] });
     queryClient.invalidateQueries({ queryKey: ['user-connections', partner.id] });
   };
@@ -54,11 +62,11 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
     onSuccess: () => { invalidate(); onClose(); },
   });
   const requestBreakMut = useMutation({
-    mutationFn: () => connectionAPI.requestBreak(connection.id),
+    mutationFn: () => connectionAPI.requestBreak(connection.id, breakReason),
     onSuccess: () => { invalidate(); onClose(); },
   });
   const confirmBreakMut = useMutation({
-    mutationFn: () => connectionAPI.confirmBreak(connection.id),
+    mutationFn: () => connectionAPI.confirmBreak(connection.id, breakReason),
     onSuccess: () => { invalidate(); onClose(); },
   });
   const cancelBreakMut = useMutation({
@@ -77,7 +85,7 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
     }
     if (status === 'BREAK_REQUESTED') {
       return breakRequestedBy !== partner.id
-        ? { text: 'Вы запросили разрыв', color: 'text-red-400', icon: <Clock size={13} /> }
+        ? { text: 'Вы запросили разрыв — ожидаем подтверждения', color: 'text-red-400', icon: <Clock size={13} /> }
         : { text: 'Запрос на разрыв', color: 'text-red-400', icon: <X size={13} /> };
     }
     return null;
@@ -102,7 +110,7 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
           </button>
         </div>
 
-        <div className="px-5 py-4 space-y-4">
+        <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
           {/* Partner card */}
           <button
             onClick={() => { navigate(`/profile/${partner.id}`); onClose(); }}
@@ -127,7 +135,7 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
             </div>
           )}
 
-          {/* Profession (group-based connection) */}
+          {/* Profession */}
           {profession && (
             <div>
               <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Профессия</p>
@@ -152,10 +160,46 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
               </div>
             </div>
           )}
+
+          {/* Break reason from requester (visible to receiver) */}
+          {status === 'BREAK_REQUESTED' && breakRequestedBy === partner.id && breakReasonRequester && (
+            <div className="p-3 bg-red-500/5 border border-red-500/20 rounded-xl">
+              <p className="text-[11px] font-semibold text-red-400/70 uppercase tracking-wide mb-1">Причина разрыва</p>
+              <p className="text-sm text-slate-300">{breakReasonRequester}</p>
+            </div>
+          )}
+
+          {/* Break request form (for initiator — ACCEPTED state) */}
+          {status === 'ACCEPTED' && showBreakForm && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Причина разрыва</p>
+              <textarea
+                value={breakReason}
+                onChange={e => setBreakReason(e.target.value)}
+                placeholder="Укажите причину разрыва связи..."
+                rows={3}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 resize-none focus:outline-none focus:border-red-500/50"
+              />
+            </div>
+          )}
+
+          {/* Confirm break form (for receiver) */}
+          {status === 'BREAK_REQUESTED' && breakRequestedBy === partner.id && showConfirmForm && (
+            <div className="space-y-2">
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Ваша причина</p>
+              <textarea
+                value={breakReason}
+                onChange={e => setBreakReason(e.target.value)}
+                placeholder="Укажите вашу причину разрыва связи..."
+                rows={3}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-white placeholder-slate-500 resize-none focus:outline-none focus:border-red-500/50"
+              />
+            </div>
+          )}
         </div>
 
         {/* Actions */}
-        <div className="px-5 pb-5 flex gap-2.5">
+        <div className="px-5 pb-5 flex gap-2.5 border-t border-slate-800 pt-4">
           {/* PENDING incoming → Accept + Reject */}
           {status === 'PENDING' && !iAmRequester && (
             <>
@@ -193,25 +237,38 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
             </>
           )}
 
-          {/* ACCEPTED → close + request break */}
-          {status === 'ACCEPTED' && (
+          {/* ACCEPTED → close + request break (with reason form) */}
+          {status === 'ACCEPTED' && !showBreakForm && (
             <>
               <button onClick={onClose} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
                 Закрыть
               </button>
               <button
-                onClick={() => requestBreakMut.mutate()}
-                disabled={requestBreakMut.isPending}
-                className="flex-1 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/25 text-red-400 rounded-xl text-sm font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                onClick={() => setShowBreakForm(true)}
+                className="flex-1 py-2.5 bg-red-500/10 hover:bg-red-500/20 border border-red-500/25 text-red-400 rounded-xl text-sm font-medium transition-all"
               >
-                {requestBreakMut.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
                 Разорвать связь
               </button>
             </>
           )}
+          {status === 'ACCEPTED' && showBreakForm && (
+            <>
+              <button onClick={() => setShowBreakForm(false)} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
+                Отмена
+              </button>
+              <button
+                onClick={() => requestBreakMut.mutate()}
+                disabled={requestBreakMut.isPending || !breakReason.trim()}
+                className="flex-1 py-2.5 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-xl text-sm font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {requestBreakMut.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
+                Подтвердить
+              </button>
+            </>
+          )}
 
-          {/* BREAK_REQUESTED by partner → confirm or cancel their request */}
-          {status === 'BREAK_REQUESTED' && breakRequestedBy === partner.id && (
+          {/* BREAK_REQUESTED by partner → show reason input then confirm */}
+          {status === 'BREAK_REQUESTED' && breakRequestedBy === partner.id && !showConfirmForm && (
             <>
               <button
                 onClick={() => cancelBreakMut.mutate()}
@@ -221,17 +278,30 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
                 Отклонить
               </button>
               <button
-                onClick={() => confirmBreakMut.mutate()}
-                disabled={confirmBreakMut.isPending}
-                className="flex-1 py-2.5 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-xl text-sm font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+                onClick={() => setShowConfirmForm(true)}
+                className="flex-1 py-2.5 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-xl text-sm font-medium transition-all"
               >
-                {confirmBreakMut.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
                 Разорвать связь
               </button>
             </>
           )}
+          {status === 'BREAK_REQUESTED' && breakRequestedBy === partner.id && showConfirmForm && (
+            <>
+              <button onClick={() => setShowConfirmForm(false)} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
+                Назад
+              </button>
+              <button
+                onClick={() => confirmBreakMut.mutate()}
+                disabled={confirmBreakMut.isPending || !breakReason.trim()}
+                className="flex-1 py-2.5 bg-red-500/15 hover:bg-red-500/25 border border-red-500/30 text-red-400 rounded-xl text-sm font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-1.5"
+              >
+                {confirmBreakMut.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
+                Подтвердить разрыв
+              </button>
+            </>
+          )}
 
-          {/* BREAK_REQUESTED by me → close or cancel my request */}
+          {/* BREAK_REQUESTED by me → waiting, can cancel */}
           {status === 'BREAK_REQUESTED' && breakRequestedBy !== partner.id && (
             <>
               <button onClick={onClose} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">

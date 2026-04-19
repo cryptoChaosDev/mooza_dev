@@ -269,10 +269,12 @@ export const connectionAPI = {
   accept: (id: string) => api.patch(`/connections/${id}/accept`),
   reject: (id: string) => api.patch(`/connections/${id}/reject`),
   cancel: (id: string) => api.delete(`/connections/${id}`),
-  requestBreak: (id: string) => api.patch(`/connections/${id}/break`),
-  confirmBreak: (id: string) => api.patch(`/connections/${id}/confirm-break`),
+  requestBreak: (id: string, reason: string) => api.patch(`/connections/${id}/break`, { reason }),
+  confirmBreak: (id: string, reason: string) => api.patch(`/connections/${id}/confirm-break`, { reason }),
   cancelBreak: (id: string) => api.patch(`/connections/${id}/cancel-break`),
   addServices: (id: string, serviceIds: string[]) => api.patch(`/connections/${id}/add-services`, { serviceIds }),
+  getMyBreakRequests: () => api.get('/connections/my-break-requests'),
+  getHistory: () => api.get('/connections/history'),
 };
 
 export const groupAPI = {

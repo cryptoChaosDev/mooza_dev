@@ -200,12 +200,14 @@ enum ConnectionStatus {
 }
 
 model Connection {
-  id               String           @id @default(uuid())
-  requesterId      String
-  receiverId       String
-  status           ConnectionStatus @default(PENDING)
-  breakRequestedBy String?
-  professionId     String?
+  id                    String           @id @default(uuid())
+  requesterId           String
+  receiverId            String
+  status                ConnectionStatus @default(PENDING)
+  breakRequestedBy      String?
+  breakReasonRequester  String?
+  breakReasonReceiver   String?
+  professionId          String?
 
   requester     User        @relation("ConnectionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
   receiver      User        @relation("ConnectionReceiver",  fields: [receiverId],  references: [id], onDelete: Cascade)
@@ -219,6 +221,24 @@ model Connection {
   @@index([requesterId])
   @@index([receiverId])
   @@index([status])
+}
+
+model ConnectionHistory {
+  id                   String   @id @default(uuid())
+  requesterId          String
+  receiverId           String
+  professionId         String?
+  breakInitiatorId     String
+  breakReasonRequester String?
+  breakReasonReceiver  String?
+  connectedAt          DateTime
+  endedAt              DateTime @default(now())
+
+  requester User @relation("ConnHistoryRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  receiver  User @relation("ConnHistoryReceiver",  fields: [receiverId],  references: [id], onDelete: Cascade)
+
+  @@index([requesterId])
+  @@index([receiverId])
 }
 
 model ConnectionService {
@@ -370,6 +390,10 @@ model User {
   // Connections
   sentConnections     Connection[] @relation("ConnectionRequester")
   receivedConnections Connection[] @relation("ConnectionReceiver")
+
+  // Connection history
+  sentConnHistory     ConnectionHistory[] @relation("ConnHistoryRequester")
+  receivedConnHistory ConnectionHistory[] @relation("ConnHistoryReceiver")
 
   // Favorites
   favorites   Favorite[] @relation("FavoriteAdder")

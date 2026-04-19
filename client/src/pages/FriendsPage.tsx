@@ -72,6 +72,14 @@ export default function FriendsPage() {
     queryKey: ['connections-break-requests'],
     queryFn: async () => { const { data } = await connectionAPI.getBreakRequests(); return data; },
   });
+  const { data: myBreakRequests = [] } = useQuery({
+    queryKey: ['connections-my-break-requests'],
+    queryFn: async () => { const { data } = await connectionAPI.getMyBreakRequests(); return data; },
+  });
+  const { data: connHistory = [] } = useQuery({
+    queryKey: ['connections-history'],
+    queryFn: async () => { const { data } = await connectionAPI.getHistory(); return data; },
+  });
 
   // ── Favorites ──
   const { data: favorites = [] } = useQuery({
@@ -498,7 +506,44 @@ export default function FriendsPage() {
                 </div>
               )}
 
-              {connections.length === 0 && connRequests.length === 0 && connSent.length === 0 && breakRequests.length === 0 && (
+              {myBreakRequests.length > 0 && (
+                <div>
+                  <SectionHeader label="Ожидают подтверждения разрыва" count={myBreakRequests.length} danger />
+                  <div className="divide-y divide-slate-800/60">
+                    {myBreakRequests.map((c: any) => (
+                      <div key={c.id} onClick={() => setViewConn(c)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer">
+                        <div className="flex-shrink-0"><UserAvatar user={c.partner} /></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</p>
+                          <p className="text-xs text-red-400/80 mt-0.5">Ожидает подтверждения разрыва</p>
+                        </div>
+                        <Clock size={14} className="text-red-400/60 flex-shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {connHistory.length > 0 && (
+                <div>
+                  <SectionHeader label="История связей" count={connHistory.length} />
+                  <div className="divide-y divide-slate-800/60">
+                    {connHistory.map((h: any) => (
+                      <div key={h.id} className="flex items-center gap-3 px-4 py-3 opacity-60">
+                        <div className="flex-shrink-0"><UserAvatar user={h.partner} /></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{h.partner.firstName} {h.partner.lastName}</p>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            {h.iInitiatedBreak ? 'Вы разорвали связь' : 'Партнёр разорвал связь'} · {new Date(h.endedAt).toLocaleDateString('ru')}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {connections.length === 0 && connRequests.length === 0 && connSent.length === 0 && breakRequests.length === 0 && myBreakRequests.length === 0 && connHistory.length === 0 && (
                 <div className="flex flex-col items-center py-16 px-6 text-center">
                   <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Link2 size={32} className="text-slate-600" /></div>
                   <p className="text-white font-semibold mb-1">Нет профессиональных связей</p>
