@@ -144,7 +144,8 @@ export default function ChatPage() {
   }, [getDistFromBottom]);
 
   const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const el = messagesScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
     setUnreadNewCount(0);
   }, []);
 
@@ -295,7 +296,8 @@ export default function ChatPage() {
       prevMsgCount.current = messages.length;
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'instant' });
+          const el = messagesScrollRef.current;
+          if (el) el.scrollTop = el.scrollHeight;
         });
       });
       return;
@@ -313,8 +315,8 @@ export default function ChatPage() {
     const atBottom = dist < 150;
 
     if (atBottom || isMyMessage) {
-      // At bottom or sent by me — scroll to new message
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      const el = messagesScrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
       setUnreadNewCount(0);
     } else {
       // Scrolled up and message from someone else — show badge
