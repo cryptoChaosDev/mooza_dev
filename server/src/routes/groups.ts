@@ -258,7 +258,7 @@ router.patch('/invites/:membershipId/accept', authenticate, async (req: AuthRequ
             type: 'group_invite_accepted',
             title: `${me?.firstName} ${me?.lastName} вступил(а) в группу «${group.name}»`,
             body: '',
-            link: `/groups/${membership.artistId}/manage`,
+            link: `/groups/${membership.artistId}`,
           },
         });
       }

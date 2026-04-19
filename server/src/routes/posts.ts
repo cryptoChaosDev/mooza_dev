@@ -285,14 +285,14 @@ router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
           type: 'post_reply',
           title: 'Новый комментарий',
           body: `${comment.author.firstName} ${comment.author.lastName}: ${comment.content.length > 60 ? comment.content.slice(0, 60) + '…' : comment.content}`,
-          link: `/`,
+          link: `/?post=${req.params.id}`,
         },
         include: { actor: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true } } },
       });
       notifyUser(post.authorId, 'post_reply', { comment, postId: req.params.id }, {
         title: 'Новый комментарий',
         body: `${comment.author.firstName} ${comment.author.lastName}: ${comment.content.length > 60 ? comment.content.slice(0, 60) + '…' : comment.content}`,
-        link: '/',
+        link: `/?post=${req.params.id}`,
       });
       emitToUser(post.authorId, 'new_notification', notification);
     }

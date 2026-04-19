@@ -1,6 +1,6 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Users, Check, X, MessageCircle, UserX, Clock,
   Pin, PinOff, Search, Wifi, Link2, Star, Crown, BadgeCheck, Music2,
@@ -33,8 +33,16 @@ function SectionHeader({ label, count, danger }: { label: string; count?: number
 export default function FriendsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<Tab>('friends');
+  const [searchParams] = useSearchParams();
+  const [activeTab, setActiveTab] = useState<Tab>((searchParams.get('tab') as Tab) || 'friends');
   const [viewConn, setViewConn] = useState<any>(null);
+
+  useEffect(() => {
+    const tab = searchParams.get('tab') as Tab | null;
+    if (tab && ['friends', 'connections', 'favorites', 'groups'].includes(tab)) {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
   const [search, setSearch] = useState('');
   const [onlineOnly, setOnlineOnly] = useState(false);
   const [pinnedIds, setPinnedIds] = useState<string[]>(getPinned);

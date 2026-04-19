@@ -69,7 +69,7 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         type: 'friend_request',
         title: 'Заявка в друзья',
         body: `${requester?.firstName} ${requester?.lastName} хочет добавить вас в друзья`,
-        link: `/friends`,
+        link: `/friends?tab=requests`,
       },
       include: { actor: { select: { id: true, firstName: true, lastName: true, avatar: true } } },
     });
@@ -77,7 +77,7 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     notifyUser(receiverId, 'friend_request', { friendship, requester }, {
       title: 'Заявка в друзья',
       body: `${requester?.firstName} ${requester?.lastName} хочет добавить вас в друзья`,
-      link: '/friends',
+      link: '/friends?tab=requests',
     });
     emitToUser(receiverId, 'new_notification', notification);
 

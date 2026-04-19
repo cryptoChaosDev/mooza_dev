@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import {
   Newspaper, Send, Heart, MessageCircle, Trash2, Loader2, X,
   MoreHorizontal, Image, Music, Smile, Pencil, Check,
@@ -391,7 +391,7 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'] }
 
 // ─── Post Card ─────────────────────────────────────────────────────────────────
 
-function PostCard({ post, currentUserId, feedQueryKey = ['feed'] }: { post: any; currentUserId: string; feedQueryKey?: string[] }) {
+function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = false }: { post: any; currentUserId: string; feedQueryKey?: string[]; highlight?: boolean }) {
   const queryClient = useQueryClient();
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
@@ -489,7 +489,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'] }: { post: any;
   };
 
   return (
-    <div className="px-4 py-4 hover:bg-slate-900/30 transition-colors">
+    <div id={`post-${post.id}`} className={`px-4 py-4 hover:bg-slate-900/30 transition-colors ${highlight ? 'ring-2 ring-primary-500/40 ring-inset bg-primary-500/5' : ''}`}>
       {/* Author row */}
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-3 min-w-0">
@@ -747,7 +747,9 @@ type ChannelSubTab = 'mine' | 'subscribed';
 
 export default function FeedPage() {
   const { user: currentUser } = useAuthStore();
-  const [activeTab, setActiveTab] = useState<MainTab>('channels');
+  const [searchParams] = useSearchParams();
+  const targetPostId = searchParams.get('post');
+  const [activeTab, setActiveTab] = useState<MainTab>(targetPostId ? 'friends' : 'channels');
   const [channelSubTab, setChannelSubTab] = useState<ChannelSubTab>('mine');
 
   // Fetch user's own channel
@@ -787,6 +789,12 @@ export default function FeedPage() {
   const posts = activeTab === 'friends'
     ? friendPosts
     : channelSubTab === 'mine' ? myChannelPosts : subscribedPosts;
+
+  useEffect(() => {
+    if (!targetPostId || !posts) return;
+    const el = document.getElementById(`post-${targetPostId}`);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [targetPostId, posts]);
 
   const isLoading = activeTab === 'friends'
     ? friendsLoading
@@ -868,7 +876,7 @@ export default function FeedPage() {
           ) : posts && posts.length > 0 ? (
             <div className="divide-y divide-slate-800/60">
               {posts.map((post: any) => (
-                <PostCard key={post.id} post={post} currentUserId={currentUser?.id ?? ''} feedQueryKey={feedQueryKey} />
+                <PostCard key={post.id} post={post} currentUserId={currentUser?.id ?? ''} feedQueryKey={feedQueryKey} highlight={post.id === targetPostId} />
               ))}
             </div>
           ) : activeTab === 'channels' && channelSubTab === 'mine' ? (

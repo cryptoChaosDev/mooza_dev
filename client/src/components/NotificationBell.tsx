@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Bell, MessageCircle, UserPlus, UserCheck, MessageSquare, X, CheckCheck } from 'lucide-react';
+import { Bell, MessageCircle, UserPlus, UserCheck, MessageSquare, X, CheckCheck, Link2, Users, UserX } from 'lucide-react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useBadgeStore } from '../stores/badgeStore';
 import AvatarComponent from './Avatar';
@@ -11,7 +11,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 interface Notification {
   id: string;
-  type: 'message' | 'friend_request' | 'friend_accepted' | 'post_reply';
+  type: string;
   title: string;
   body: string;
   link?: string;
@@ -55,12 +55,18 @@ async function markAllRead() {
   });
 }
 
-function typeIcon(type: Notification['type']) {
+function typeIcon(type: string) {
   switch (type) {
-    case 'message':         return <MessageCircle size={13} className="text-blue-400" />;
-    case 'friend_request':  return <UserPlus      size={13} className="text-yellow-400" />;
-    case 'friend_accepted': return <UserCheck     size={13} className="text-green-400" />;
-    case 'post_reply':      return <MessageSquare size={13} className="text-purple-400" />;
+    case 'message':               return <MessageCircle size={13} className="text-blue-400" />;
+    case 'friend_request':        return <UserPlus      size={13} className="text-yellow-400" />;
+    case 'friend_accepted':       return <UserCheck     size={13} className="text-green-400" />;
+    case 'post_reply':            return <MessageSquare size={13} className="text-purple-400" />;
+    case 'connection_request':    return <Link2         size={13} className="text-primary-400" />;
+    case 'connection_accepted':   return <Link2         size={13} className="text-emerald-400" />;
+    case 'connection_break':      return <UserX         size={13} className="text-red-400" />;
+    case 'group_invite':          return <Users         size={13} className="text-amber-400" />;
+    case 'group_invite_accepted': return <Users         size={13} className="text-green-400" />;
+    default:                      return <Bell          size={13} className="text-slate-400" />;
   }
 }
 
