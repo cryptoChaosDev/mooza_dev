@@ -246,7 +246,7 @@ router.patch('/invites/:membershipId/accept', authenticate, async (req: AuthRequ
       include: MEMBER_INCLUDE,
     });
 
-    // Notify owner
+    // Notify owner + auto-create connection
     try {
       const group = await prisma.artist.findUnique({ where: { id: membership.artistId }, select: { name: true, submittedById: true } });
       const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
@@ -261,6 +261,37 @@ router.patch('/invites/:membershipId/accept', authenticate, async (req: AuthRequ
             link: `/groups/${membership.artistId}/manage`,
           },
         });
+      }
+
+      // Auto-create connection between inviter and new member based on member's profession
+      const inviterId = membership.invitedById;
+      if (inviterId && membership.professionId) {
+        const existingConn = await prisma.connection.findFirst({
+          where: {
+            OR: [
+              { requesterId: inviterId, receiverId: meId },
+              { requesterId: meId, receiverId: inviterId },
+            ],
+          },
+        });
+
+        if (!existingConn) {
+          const userServices = await prisma.userService.findMany({
+            where: { userId: meId, professionId: membership.professionId },
+            select: { serviceId: true },
+          });
+
+          await prisma.connection.create({
+            data: {
+              requesterId: inviterId,
+              receiverId: meId,
+              status: 'ACCEPTED',
+              ...(userServices.length > 0 && {
+                services: { create: userServices.map(us => ({ serviceId: us.serviceId })) },
+              }),
+            },
+          });
+        }
       }
     } catch {}
 
