@@ -93,6 +93,7 @@ export const userAPI = {
   catalog: (params?: { query?: string; fieldOfActivityId?: string; directionId?: string; professionId?: string }) =>
     api.get('/users/catalog', { params }),
   getUser: (id: string) => api.get(`/users/${id}`),
+  getUserServices: (id: string) => api.get(`/users/${id}/services`),
   uploadPortfolio: (formData: FormData) =>
     api.post('/users/me/portfolio', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

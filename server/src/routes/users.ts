@@ -511,6 +511,24 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Get user by ID — public (no sensitive fields)
+// ── GET /api/users/:id/services ──────────────────────────────────────────────
+router.get('/:id/services', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const services = await prisma.userService.findMany({
+      where: { userId: req.params.id },
+      include: {
+        profession: { select: { id: true, name: true } },
+        service: { select: { id: true, name: true } },
+      },
+      orderBy: [{ professionId: 'asc' }],
+    });
+    return res.json(services);
+  } catch (err) {
+    console.error('[users] GET /:id/services', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
   try {
     const user = await prisma.user.findUnique({
