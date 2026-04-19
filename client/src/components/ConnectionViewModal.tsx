@@ -127,7 +127,7 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
             </div>
           )}
 
-          {/* Profession */}
+          {/* Profession (group-based connection) */}
           {profession && (
             <div>
               <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Профессия</p>
@@ -137,8 +137,8 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
             </div>
           )}
 
-          {/* Services */}
-          {services.length > 0 && (
+          {/* Services (manual connection) */}
+          {!profession && services.length > 0 && (
             <div>
               <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
                 {status === 'ACCEPTED' ? 'Услуги' : 'Запрошенные услуги'}

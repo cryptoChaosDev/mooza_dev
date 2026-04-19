@@ -479,13 +479,16 @@ export default function FriendsPage() {
                             {c.partner.isVerified && <BadgeCheck size={13} className="text-sky-400 flex-shrink-0" />}
                           </div>
                           <div className="flex flex-wrap gap-1 mt-1">
-                            {c.profession && (
+                            {c.profession ? (
                               <span className="text-[11px] bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded-md px-1.5 py-0.5">{c.profession.name}</span>
+                            ) : (
+                              <>
+                                {c.services?.slice(0, 3).map((s: any) => (
+                                  <span key={s.id} className="text-[11px] bg-primary-500/10 text-primary-300 border border-primary-500/20 rounded-md px-1.5 py-0.5">{s.name}</span>
+                                ))}
+                                {c.services?.length > 3 && <span className="text-[11px] text-slate-500">+{c.services.length - 3}</span>}
+                              </>
                             )}
-                            {c.services?.slice(0, 2).map((s: any) => (
-                              <span key={s.id} className="text-[11px] bg-primary-500/10 text-primary-300 border border-primary-500/20 rounded-md px-1.5 py-0.5">{s.name}</span>
-                            ))}
-                            {c.services?.length > 2 && <span className="text-[11px] text-slate-500">+{c.services.length - 2}</span>}
                           </div>
                         </div>
                         <Link2 size={14} className="text-primary-400/60 flex-shrink-0" />
