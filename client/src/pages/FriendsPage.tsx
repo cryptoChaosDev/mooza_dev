@@ -529,13 +529,24 @@ export default function FriendsPage() {
                   <SectionHeader label="История связей" count={connHistory.length} />
                   <div className="divide-y divide-slate-800/60">
                     {connHistory.map((h: any) => (
-                      <div key={h.id} className="flex items-center gap-3 px-4 py-3 opacity-60">
-                        <div className="flex-shrink-0"><UserAvatar user={h.partner} /></div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-white truncate">{h.partner.firstName} {h.partner.lastName}</p>
-                          <p className="text-xs text-slate-500 mt-0.5">
-                            {h.iInitiatedBreak ? 'Вы разорвали связь' : 'Партнёр разорвал связь'} · {new Date(h.endedAt).toLocaleDateString('ru')}
-                          </p>
+                      <div key={h.id} className="px-4 py-3 opacity-70">
+                        <div className="flex items-center gap-3">
+                          <div className="flex-shrink-0"><UserAvatar user={h.partner} /></div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-white truncate">{h.partner.firstName} {h.partner.lastName}</p>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                              {h.profession && (
+                                <span className="text-[11px] bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded-md px-1.5 py-0.5">{h.profession.name}</span>
+                              )}
+                              <span className="text-[11px] text-slate-500">
+                                {h.iInitiatedBreak ? 'Вы инициировали разрыв' : 'Партнёр инициировал разрыв'}
+                              </span>
+                              <span className="text-[11px] text-slate-600">·</span>
+                              <span className="text-[11px] text-slate-500">
+                                {new Date(h.endedAt).toLocaleString('ru', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     ))}

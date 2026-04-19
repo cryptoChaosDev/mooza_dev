@@ -311,11 +311,19 @@ router.get('/history', authenticate, async (req: AuthRequest, res: Response) => 
       },
       orderBy: { endedAt: 'desc' },
     });
+
+    // Enrich with profession names (professionId stored as plain string, no relation)
+    const professionIds = [...new Set(history.map(h => h.professionId).filter(Boolean))] as string[];
+    const professions = professionIds.length
+      ? await prisma.profession.findMany({ where: { id: { in: professionIds } }, select: { id: true, name: true } })
+      : [];
+    const profMap = Object.fromEntries(professions.map(p => [p.id, p]));
     return res.json(history.map(h => ({
       ...h,
       partner: h.requesterId === meId ? h.receiver : h.requester,
       iAmRequester: h.requesterId === meId,
       iInitiatedBreak: h.breakInitiatorId === meId,
+      profession: h.professionId ? (profMap[h.professionId] ?? null) : null,
     })));
   } catch (err) {
     console.error('[connections] GET /history', err);
