@@ -293,6 +293,7 @@ router.patch('/invites/:membershipId/accept', authenticate, async (req: AuthRequ
               requesterId: inviterId,
               receiverId: meId,
               status: 'ACCEPTED',
+              professionId: membership.professionId,
               ...(userServices.length > 0 && {
                 services: { create: userServices.map(us => ({ serviceId: us.serviceId })) },
               }),

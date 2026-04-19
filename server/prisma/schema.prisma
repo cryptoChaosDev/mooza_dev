@@ -44,6 +44,7 @@ model Profession {
   userProfessions UserProfession[]
   userServices    UserService[]
   groupMembers    UserArtist[]
+  connections     Connection[]
 
   createdAt DateTime @default(now())
 
@@ -204,9 +205,11 @@ model Connection {
   receiverId       String
   status           ConnectionStatus @default(PENDING)
   breakRequestedBy String?
+  professionId     String?
 
-  requester     User   @relation("ConnectionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
-  receiver      User   @relation("ConnectionReceiver",  fields: [receiverId],  references: [id], onDelete: Cascade)
+  requester     User        @relation("ConnectionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  receiver      User        @relation("ConnectionReceiver",  fields: [receiverId],  references: [id], onDelete: Cascade)
+  profession    Profession? @relation(fields: [professionId], references: [id], onDelete: SetNull)
 
   services      ConnectionService[]
 

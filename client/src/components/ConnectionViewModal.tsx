@@ -11,6 +11,7 @@ interface Connection {
   iAmRequester: boolean;
   breakRequestedBy: string | null;
   services: { id: string; name: string }[];
+  profession?: { id: string; name: string } | null;
   partner: {
     id: string;
     firstName: string;
@@ -29,7 +30,7 @@ interface Props {
 export default function ConnectionViewModal({ connection, onClose }: Props) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { partner, services, status, iAmRequester, breakRequestedBy } = connection;
+  const { partner, services, profession, status, iAmRequester, breakRequestedBy } = connection;
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['connections-accepted'] });
@@ -126,11 +127,21 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
             </div>
           )}
 
+          {/* Profession */}
+          {profession && (
+            <div>
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">Профессия</p>
+              <span className="px-2.5 py-1 bg-amber-500/10 border border-amber-500/25 text-amber-300 rounded-lg text-xs font-medium">
+                {profession.name}
+              </span>
+            </div>
+          )}
+
           {/* Services */}
           {services.length > 0 && (
             <div>
               <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                {status === 'ACCEPTED' ? 'Услуги связи' : 'Запрошенные услуги'}
+                {status === 'ACCEPTED' ? 'Услуги' : 'Запрошенные услуги'}
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {services.map(s => (

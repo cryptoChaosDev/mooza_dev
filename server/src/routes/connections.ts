@@ -15,6 +15,7 @@ function formatConnection(conn: any, meId: string) {
     status: conn.status,
     breakRequestedBy: conn.breakRequestedBy,
     services: conn.services?.map((cs: any) => cs.service) ?? [],
+    profession: conn.profession ?? null,
     createdAt: conn.createdAt,
     updatedAt: conn.updatedAt,
     requester: conn.requester,
@@ -26,8 +27,9 @@ function formatConnection(conn: any, meId: string) {
 
 const CONN_INCLUDE = {
   services: { include: { service: { select: { id: true, name: true } } } },
-  requester: { select: USER_SELECT },
-  receiver:  { select: USER_SELECT },
+  requester:  { select: USER_SELECT },
+  receiver:   { select: USER_SELECT },
+  profession: { select: { id: true, name: true } },
 };
 
 // ── POST /api/connections ─────────────────────────────────────────────────────
