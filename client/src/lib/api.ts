@@ -186,6 +186,7 @@ export const channelAPI = {
   getSubscribedFeed: (params?: { limit?: number; offset?: number }) =>
     api.get('/channels/feed/subscribed', { params }),
   getSubscriptions: () => api.get('/channels/subscriptions'),
+  getMySubscribers: () => api.get('/channels/my/subscribers'),
 };
 
 // Friendship API

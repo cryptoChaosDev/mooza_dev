@@ -1,22 +1,24 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { userAPI, referenceAPI, connectionAPI, groupAPI } from '../lib/api';
+import { userAPI, referenceAPI, connectionAPI, groupAPI, channelAPI, friendshipAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, DollarSign, Calendar, Film, Image,
   Headphones, Edit3, Plus, ChevronDown, ChevronLeft, ChevronRight,
   FileText, Trash2, Radio, Loader2, Crown, BadgeCheck, Ban, Link2,
+  Users, UserCheck, Bell, Music2,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
-import { channelAPI } from '../lib/api';
 import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import ShareButton from '../components/ShareButton';
 import { plural } from '../lib/plural';
+import AvatarComponent from '../components/Avatar';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -50,12 +52,36 @@ const emptyEntry = (): UserServiceEntry => ({
   availabilityIds: [], geographyIds: [], priceFrom: '', priceTo: '',
 });
 
+// ── Bottom sheet panel ─────────────────────────────────────────────────────────
+function BottomPanel({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
+  if (!open) return null;
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-x-0 bottom-0 z-[61] bg-slate-900 rounded-t-2xl border-t border-slate-800 flex flex-col"
+        style={{ maxHeight: '80vh' }}>
+        <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800 flex-shrink-0">
+          <span className="font-semibold text-white text-sm">{title}</span>
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+            <X size={16} className="text-slate-400" />
+          </button>
+        </div>
+        <div className="overflow-y-auto flex-1 p-4">
+          {children}
+        </div>
+      </div>
+    </>,
+    document.body
+  );
+}
+
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { logout } = useAuthStore();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
+  const servicesRef = useRef<HTMLDivElement>(null);
 
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', nickname: '', bio: '',
@@ -66,7 +92,6 @@ export default function ProfilePage() {
     artistIds: [] as string[],
   });
 
-  // Reference lists
   const [fieldsOfActivity, setFieldsOfActivity] = useState<any[]>([]);
   const [genres, setGenres] = useState<any[]>([]);
   const [workFormats, setWorkFormats] = useState<any[]>([]);
@@ -75,7 +100,6 @@ export default function ProfilePage() {
   const [availabilities, setAvailabilities] = useState<any[]>([]);
   const [geographies, setGeographies] = useState<any[]>([]);
 
-  // User services state
   const [userServices, setUserServices] = useState<UserServiceEntry[]>([]);
   const [expandedSvcIdx, setExpandedSvcIdx] = useState<number | null>(null);
   const [openFilterSheet, setOpenFilterSheet] = useState<string | null>(null);
@@ -83,23 +107,27 @@ export default function ProfilePage() {
   const [portfolioFiles, setPortfolioFiles] = useState<any[]>([]);
   const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
   const [lightboxFile, setLightboxFile] = useState<any>(null);
-  const [artists, setArtists] = useState<any[]>([]);
   const [openBasicSheet, setOpenBasicSheet] = useState<string | null>(null);
+  const [portfolioTab, setPortfolioTab] = useState<'av' | 'photo' | 'other'>('av');
 
-  // Add-service multi-step flow
   const [addStep, setAddStep] = useState<'field' | 'direction' | 'profession' | 'service' | 'filters' | null>(null);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
   const [addFlowDirections, setAddFlowDirections] = useState<any[]>([]);
   const [addFlowProfessions, setAddFlowProfessions] = useState<any[]>([]);
   const [addFlowServices, setAddFlowServices] = useState<any[]>([]);
 
-  // Inline edit section flags
   const [editingHero, setEditingHero] = useState(false);
   const [editingBio, setEditingBio] = useState(false);
   const [editingServices, setEditingServices] = useState(false);
   const [editingPortfolio, setEditingPortfolio] = useState(false);
 
-  // Load service references when editing services
+  // Chip panels
+  const [friendsOpen, setFriendsOpen] = useState(false);
+  const [subscribersOpen, setSubscribersOpen] = useState(false);
+
+  const [viewConn, setViewConn] = useState<any>(null);
+  const [connExpanded, setConnExpanded] = useState(false);
+
   useEffect(() => {
     if (editingServices) {
       referenceAPI.getFieldsOfActivity({ all: true }).then(r => setFieldsOfActivity(r.data));
@@ -111,13 +139,6 @@ export default function ProfilePage() {
       referenceAPI.getGeographies().then(r => setGeographies(r.data));
     }
   }, [editingServices]);
-
-  // Load artists when editing hero
-  useEffect(() => {
-    if (editingHero) {
-      referenceAPI.getArtists().then(r => setArtists(r.data));
-    }
-  }, [editingHero]);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],
@@ -166,6 +187,36 @@ export default function ProfilePage() {
     },
   });
 
+  const { data: myConnections = [] } = useQuery({
+    queryKey: ['connections-accepted'],
+    queryFn: async () => { const { data } = await connectionAPI.getAccepted(); return data; },
+  });
+
+  const { data: myGroups = [] } = useQuery({
+    queryKey: ['my-groups'],
+    queryFn: async () => { const { data } = await groupAPI.getMyGroups(); return data as any[]; },
+  });
+
+  const { data: myFriends = [] } = useQuery({
+    queryKey: ['friends-list'],
+    queryFn: async () => { const { data } = await friendshipAPI.getFriends(); return data as any[]; },
+    enabled: friendsOpen,
+  });
+
+  const { data: myChannel, refetch: refetchChannel } = useQuery({
+    queryKey: ['my-channel'],
+    queryFn: async () => {
+      const { data } = await channelAPI.getMyChannel();
+      return data as { id: string; name: string; description: string | null; avatar: string | null; _count: { subscriptions: number; posts: number } } | null;
+    },
+  });
+
+  const { data: mySubscribers = [] } = useQuery({
+    queryKey: ['my-subscribers'],
+    queryFn: async () => { const { data } = await channelAPI.getMySubscribers(); return data as any[]; },
+    enabled: subscribersOpen,
+  });
+
   const uploadAvatarMutation = useMutation({
     mutationFn: async (file: File) => {
       const fd = new FormData();
@@ -186,51 +237,25 @@ export default function ProfilePage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['profile'] }),
   });
 
-  const updateMutation = useMutation({
-    mutationFn: userAPI.updateMe,
-  });
+  const updateMutation = useMutation({ mutationFn: userAPI.updateMe });
 
   // ── Channel ────────────────────────────────────────────────────────────────
   const [channelForm, setChannelForm] = useState({ name: '', description: '' });
   const [channelEditing, setChannelEditing] = useState(false);
   const channelAvatarRef = useRef<HTMLInputElement>(null);
 
-  const [viewConn, setViewConn] = useState<any>(null);
-  const [connExpanded, setConnExpanded] = useState(false);
-
-  const { data: myConnections = [] } = useQuery({
-    queryKey: ['connections-accepted'],
-    queryFn: async () => { const { data } = await connectionAPI.getAccepted(); return data; },
-  });
-
-  const { data: myGroups = [] } = useQuery({
-    queryKey: ['my-groups'],
-    queryFn: async () => { const { data } = await groupAPI.getMyGroups(); return data as any[]; },
-  });
-
-  const { data: myChannel, refetch: refetchChannel } = useQuery({
-    queryKey: ['my-channel'],
-    queryFn: async () => {
-      const { data } = await channelAPI.getMyChannel();
-      return data as { id: string; name: string; description: string | null; avatar: string | null; _count: { subscriptions: number; posts: number } } | null;
-    },
-  });
-
   const createChannelMut = useMutation({
     mutationFn: () => channelAPI.createChannel({ name: channelForm.name.trim(), description: channelForm.description.trim() || undefined }),
     onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['my-channel'] }); setChannelForm({ name: '', description: '' }); },
   });
-
   const updateChannelMut = useMutation({
     mutationFn: () => channelAPI.updateChannel({ name: channelForm.name.trim(), description: channelForm.description.trim() || undefined }),
     onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['my-channel'] }); setChannelEditing(false); },
   });
-
   const deleteChannelMut = useMutation({
     mutationFn: () => channelAPI.deleteChannel(),
     onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['my-channel'] }); },
   });
-
   const uploadChannelAvatarMut = useMutation({
     mutationFn: async (file: File) => {
       const fd = new FormData();
@@ -240,21 +265,9 @@ export default function ProfilePage() {
     },
     onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['my-channel'] }); },
   });
-
-  const handleChannelAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) uploadChannelAvatarMut.mutate(file);
-    e.target.value = '';
-  };
-
   const startEditChannel = () => {
-    if (myChannel) {
-      setChannelForm({ name: myChannel.name, description: myChannel.description || '' });
-      setChannelEditing(true);
-    }
+    if (myChannel) { setChannelForm({ name: myChannel.name, description: myChannel.description || '' }); setChannelEditing(true); }
   };
-
-  // ── End Channel ─────────────────────────────────────────────────────────────
 
   const updateServicesMutation = useMutation({
     mutationFn: (services: typeof userServices) => userAPI.updateServices(
@@ -275,31 +288,25 @@ export default function ProfilePage() {
   });
 
   const handleSaveHero = async () => {
-    try {
-      await updateMutation.mutateAsync(formData);
-    } finally {
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
-      setEditingHero(false);
-    }
+    try { await updateMutation.mutateAsync(formData); }
+    finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingHero(false); }
   };
 
   const handleSaveBio = async () => {
-    try {
-      await updateMutation.mutateAsync(formData);
-    } finally {
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
-      setEditingBio(false);
-    }
+    try { await updateMutation.mutateAsync(formData); }
+    finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingBio(false); }
   };
 
   const handleSaveServices = async () => {
-    try {
-      await updateServicesMutation.mutateAsync(userServices);
-    } finally {
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
-      setEditingServices(false);
-      setAddStep(null);
-    }
+    try { await updateServicesMutation.mutateAsync(userServices); }
+    finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingServices(false); setAddStep(null); }
+  };
+
+  const handleDeleteService = async (idx: number) => {
+    const newServices = userServices.filter((_, i) => i !== idx);
+    setUserServices(newServices);
+    await updateServicesMutation.mutateAsync(newServices);
+    queryClient.invalidateQueries({ queryKey: ['profile'] });
   };
 
   if (isLoading) {
@@ -327,7 +334,7 @@ export default function ProfilePage() {
     if (!acc[fId].byProfession[pId]) acc[fId].byProfession[pId] = { profName: pName, services: [] };
     acc[fId].byProfession[pId].services.push(us);
     return acc;
-  }, {} as Record<string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }>) ?? {};
+  }, {}) ?? {};
 
   const getName = (list: any[], id: string) => list.find(x => x.id === id)?.name ?? id;
   const getNames = (list: any[], ids: string[]) => ids.map(id => getName(list, id)).filter(Boolean);
@@ -342,10 +349,8 @@ export default function ProfilePage() {
       const fd = new FormData();
       fd.append('file', file);
       setIsUploadingPortfolio(true);
-      try {
-        const { data } = await userAPI.uploadPortfolio(fd);
-        setPortfolioFiles(prev => [...prev, data]);
-      } catch { /* ignore */ }
+      try { const { data } = await userAPI.uploadPortfolio(fd); setPortfolioFiles(prev => [...prev, data]); }
+      catch { /* ignore */ }
       finally { setIsUploadingPortfolio(false); }
     }
   };
@@ -361,7 +366,6 @@ export default function ProfilePage() {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   };
 
-  // Filter selectors for a service entry (edit mode expanded)
   const ServiceFilterEditors = ({ idx }: { idx: number }) => {
     const us = userServices[idx];
     const key = (k: string) => `${k}-${idx}`;
@@ -393,7 +397,6 @@ export default function ProfilePage() {
         {us.serviceCustomFilters.map(cf => (
           <SelectField key={cf.id} label={cf.name} value={(us.customFilterValueIds[cf.id] || []).map(vid => cf.values.find(v => v.id === vid)?.value || vid).join(', ')} placeholder="Выберите значение" icon={<Star size={13} />} onClick={() => setOpenFilterSheet(key(`cf-${cf.id}`))} badge={(us.customFilterValueIds[cf.id] || []).length || undefined} />
         ))}
-
         {show('genre') && <SelectSheet isOpen={openFilterSheet === key('genre')} onClose={() => setOpenFilterSheet(null)} title="Жанры" options={genres.map(g => ({ id: g.id, name: g.name }))} selectedIds={us.genreIds} onSelect={ids => updateSvc(idx, { genreIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />}
         {show('workFormat') && <SelectSheet isOpen={openFilterSheet === key('workFormat')} onClose={() => setOpenFilterSheet(null)} title="Формат работы" options={workFormats.map(w => ({ id: w.id, name: w.name }))} selectedIds={us.workFormatIds} onSelect={ids => updateSvc(idx, { workFormatIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />}
         {show('employmentType') && <SelectSheet isOpen={openFilterSheet === key('employmentType')} onClose={() => setOpenFilterSheet(null)} title="Тип занятости" options={employmentTypes.map(e => ({ id: e.id, name: e.name }))} selectedIds={us.employmentTypeIds} onSelect={ids => updateSvc(idx, { employmentTypeIds: ids as string[] })} mode="multiple" showConfirm searchable={false} height="auto" />}
@@ -407,7 +410,6 @@ export default function ProfilePage() {
     );
   };
 
-  // Add-service flow UI
   const AddServiceFlow = () => {
     if (addStep === 'field') return (
       <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
@@ -429,12 +431,9 @@ export default function ProfilePage() {
         <button onClick={() => setAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
       </div>
     );
-
     if (addStep === 'direction') return (
       <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
-        <button onClick={() => setAddStep('field')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors">
-          <ChevronLeft size={11} />Назад
-        </button>
+        <button onClick={() => setAddStep('field')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors"><ChevronLeft size={11} />Назад</button>
         <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите направление:</p>
         {addFlowDirections.length === 0
           ? <p className="text-slate-500 text-xs">Нет направлений в этой сфере</p>
@@ -455,12 +454,9 @@ export default function ProfilePage() {
         <button onClick={() => setAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
       </div>
     );
-
     if (addStep === 'profession') return (
       <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
-        <button onClick={() => setAddStep('direction')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors">
-          <ChevronLeft size={11} />Назад
-        </button>
+        <button onClick={() => setAddStep('direction')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors"><ChevronLeft size={11} />Назад</button>
         <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите профессию:</p>
         {addFlowProfessions.length === 0
           ? <p className="text-slate-500 text-xs">Нет профессий в этом направлении</p>
@@ -482,12 +478,9 @@ export default function ProfilePage() {
         <button onClick={() => setAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
       </div>
     );
-
     if (addStep === 'service') return (
       <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
-        <button onClick={() => setAddStep('profession')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors">
-          <ChevronLeft size={11} />{pending.professionName}
-        </button>
+        <button onClick={() => setAddStep('profession')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors"><ChevronLeft size={11} />{pending.professionName}</button>
         <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите услугу:</p>
         {addFlowServices.length === 0
           ? <p className="text-slate-500 text-xs">Нет доступных услуг</p>
@@ -511,18 +504,15 @@ export default function ProfilePage() {
         <button onClick={() => setAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
       </div>
     );
-
     if (addStep === 'filters') return (
       <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
         <div className="flex items-center justify-between mb-2">
           <div>
-            <button onClick={() => setAddStep('service')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors">
-              <ChevronLeft size={11} />{pending.professionName}
-            </button>
+            <button onClick={() => setAddStep('service')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"><ChevronLeft size={11} />{pending.professionName}</button>
             <p className="text-sm font-semibold text-white mt-0.5">{pending.serviceName}</p>
           </div>
         </div>
-        <p className="text-xs text-slate-400 mb-2">Настройте фильтры для этой услуги (необязательно):</p>
+        <p className="text-xs text-slate-400 mb-2">Настройте фильтры (необязательно):</p>
         {(() => {
           const pAllowed = pending.allowedFilterTypes;
           const pShow = (k: string) => pAllowed.includes(k);
@@ -554,17 +544,10 @@ export default function ProfilePage() {
         <div className="flex gap-2 mt-3">
           <button onClick={() => setAddStep(null)} className="flex-1 py-2 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors">Отмена</button>
           <button
-            onClick={() => {
-              setUserServices(prev => [...prev, { ...pending }]);
-              setPending(emptyEntry());
-              setAddStep(null);
-            }}
+            onClick={() => { setUserServices(prev => [...prev, { ...pending }]); setPending(emptyEntry()); setAddStep(null); }}
             className="flex-1 py-2 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold transition-colors"
-          >
-            Добавить
-          </button>
+          >Добавить</button>
         </div>
-
         <SelectSheet isOpen={openFilterSheet === 'pending-genre'} onClose={() => setOpenFilterSheet(null)} title="Жанры" options={genres.map(g => ({ id: g.id, name: g.name }))} selectedIds={pending.genreIds} onSelect={ids => setPending(p => ({ ...p, genreIds: ids as string[] }))} mode="multiple" showConfirm searchable height="half" />
         <SelectSheet isOpen={openFilterSheet === 'pending-workFormat'} onClose={() => setOpenFilterSheet(null)} title="Формат работы" options={workFormats.map(w => ({ id: w.id, name: w.name }))} selectedIds={pending.workFormatIds} onSelect={ids => setPending(p => ({ ...p, workFormatIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} height="auto" />
         <SelectSheet isOpen={openFilterSheet === 'pending-employmentType'} onClose={() => setOpenFilterSheet(null)} title="Тип занятости" options={employmentTypes.map(e => ({ id: e.id, name: e.name }))} selectedIds={pending.employmentTypeIds} onSelect={ids => setPending(p => ({ ...p, employmentTypeIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} height="auto" />
@@ -576,7 +559,6 @@ export default function ProfilePage() {
         ))}
       </div>
     );
-
     return null;
   };
 
@@ -606,8 +588,8 @@ export default function ProfilePage() {
   const otherFiles = portfolioFiles.filter(f =>
     !f.mimeType?.startsWith('image/') && !f.mimeType?.startsWith('audio/') && !f.mimeType?.startsWith('video/')
   );
+  const avFiles = [...audioFiles, ...videoFiles];
 
-  // Services grouped by field for inline edit view
   const servicesByFieldEdit: Record<string, { fieldName: string; entries: { us: UserServiceEntry; idx: number }[] }> = {};
   userServices.forEach((us, idx) => {
     const fId = us.fieldOfActivityId || 'unknown';
@@ -619,32 +601,21 @@ export default function ProfilePage() {
     <>
     <div className="min-h-screen bg-slate-950">
 
-      {/* ── LIGHTBOX ─────────────────────────────────────────────────────── */}
+      {/* Lightbox */}
       {lightboxFile && (
-        <div
-          className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center"
-          onClick={() => setLightboxFile(null)}
-        >
-          <button
-            className="absolute top-4 right-4 p-2 bg-slate-800/80 hover:bg-slate-700 text-white rounded-full transition-colors"
-            onClick={() => setLightboxFile(null)}
-          >
+        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center" onClick={() => setLightboxFile(null)}>
+          <button className="absolute top-4 right-4 p-2 bg-slate-800/80 hover:bg-slate-700 text-white rounded-full transition-colors" onClick={() => setLightboxFile(null)}>
             <X size={20} />
           </button>
-          <img
-            src={`${API_URL}${lightboxFile.url}`}
-            alt={lightboxFile.originalName}
-            className="max-w-full max-h-[85vh] object-contain rounded-lg"
-            onClick={e => e.stopPropagation()}
-          />
+          <img src={`${API_URL}${lightboxFile.url}`} alt={lightboxFile.originalName} className="max-w-full max-h-[85vh] object-contain rounded-lg" onClick={e => e.stopPropagation()} />
           <p className="mt-3 text-xs text-slate-500">{lightboxFile.originalName}</p>
         </div>
       )}
 
       <div className="max-w-2xl mx-auto pb-28">
 
-        {/* ── HERO ──────────────────────────────────────────────────────────── */}
-        <div className="relative group">
+        {/* ── HERO ─────────────────────────────────────────────────────────── */}
+        <div className="relative">
           <div className="h-44 overflow-hidden bg-gradient-to-br from-primary-900 via-purple-900/70 to-slate-900">
             {bUrl
               ? <img src={bUrl} alt="" className="w-full h-full object-cover" />
@@ -652,9 +623,10 @@ export default function ProfilePage() {
             }
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
           </div>
+          {/* Always-visible banner button */}
           <button
             onClick={() => bannerInputRef.current?.click()}
-            className="absolute bottom-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white/80 hover:text-white rounded-lg text-xs font-medium transition-all opacity-0 group-hover:opacity-100"
+            className="absolute bottom-3 right-3 flex items-center gap-1.5 px-2.5 py-1.5 bg-black/50 hover:bg-black/70 backdrop-blur-sm text-white/80 hover:text-white rounded-lg text-xs font-medium transition-all"
           >
             <Camera size={12} />Сменить фон
           </button>
@@ -726,18 +698,11 @@ export default function ProfilePage() {
                 </div>
               </div>
               <div>
-                <label className={labelCls}>Моя группа</label>
-                <SelectField label="" value={formData.artistIds.map(id => artists.find((a: any) => a.id === id)?.name ?? profile?.userArtists?.find((ua: any) => ua.artistId === id)?.artist?.name ?? '').filter(Boolean).join(', ')} placeholder="Выберите группу или артиста" icon={<Music size={13} />} onClick={() => setOpenBasicSheet('artists')} badge={formData.artistIds.length || undefined} />
-                <SelectSheet isOpen={openBasicSheet === 'artists'} onClose={() => setOpenBasicSheet(null)} title="Моя группа" options={artists.map((a: any) => ({ id: a.id, name: a.name }))} selectedIds={formData.artistIds} onSelect={ids => setFormData({ ...formData, artistIds: ids as string[] })} mode="multiple" showConfirm searchable height="half" />
-              </div>
-              <div>
                 <label className={labelCls}>Социальные сети и сервисы</label>
                 <SocialLinksEditor value={formData.socialLinks} onChange={v => setFormData({ ...formData, socialLinks: v })} />
               </div>
               <div className="flex gap-2 pt-1">
-                <button onClick={() => setEditingHero(false)} className="flex-1 py-2.5 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">
-                  Отмена
-                </button>
+                <button onClick={() => setEditingHero(false)} className="flex-1 py-2.5 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
                 <button onClick={handleSaveHero} disabled={updateMutation.isPending} className="flex-1 py-2.5 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
                   {updateMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}Сохранить
                 </button>
@@ -745,15 +710,12 @@ export default function ProfilePage() {
             </div>
           ) : (
             <>
-              {/* Name + badges */}
               <div className="flex items-center gap-2 flex-wrap mb-0.5">
                 <h1 className="text-2xl font-bold text-white leading-tight">{profile?.firstName} {profile?.lastName}</h1>
                 {profile?.isPremium && <span title="Premium"><Crown size={18} className="text-amber-400" /></span>}
                 {profile?.isVerified && <span title="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></span>}
                 {profile?.isBlocked && <span title="Заблокирован"><Ban size={18} className="text-red-500" /></span>}
               </div>
-
-              {/* Nick + location */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-2">
                 {profile?.nickname && <span className="text-slate-500">@{profile.nickname}</span>}
                 {(profile?.city || profile?.country) && (
@@ -763,8 +725,6 @@ export default function ProfilePage() {
                   </span>
                 )}
               </div>
-
-              {/* Profession tags */}
               {professionNames.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-3">
                   {professionNames.map((name, i) => (
@@ -772,64 +732,67 @@ export default function ProfilePage() {
                   ))}
                 </div>
               )}
+              {hasSocialLinks && <div className="mb-4"><SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} /></div>}
 
-              {/* Social icons */}
-              {hasSocialLinks && (
-                <div className="mb-4">
-                  <SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} />
-                </div>
-              )}
-
-              {/* Stats pills */}
+              {/* ── Stats chips ── */}
               <div className="flex items-center gap-2 mb-5 flex-wrap">
-                <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
+                <button
+                  onClick={() => setFriendsOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 hover:border-slate-600 rounded-xl transition-all group"
+                >
+                  <Users size={13} className="text-primary-400 group-hover:text-primary-300" />
                   <span className="text-sm font-bold text-white">{friendCount}</span>
                   <span className="text-xs text-slate-500">друзей</span>
-                </div>
+                </button>
+
+                <button
+                  onClick={() => navigate('/friends?tab=connections')}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 hover:border-slate-600 rounded-xl transition-all group"
+                >
+                  <Link2 size={13} className="text-emerald-400 group-hover:text-emerald-300" />
+                  <span className="text-sm font-bold text-white">{myConnections.length}</span>
+                  <span className="text-xs text-slate-500">{plural(myConnections.length, 'связь', 'связи', 'связей')}</span>
+                </button>
+
                 {servicesFlat.length > 0 && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
+                  <button
+                    onClick={() => { setEditingServices(true); setTimeout(() => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 hover:border-slate-600 rounded-xl transition-all group"
+                  >
+                    <Briefcase size={13} className="text-amber-400 group-hover:text-amber-300" />
                     <span className="text-sm font-bold text-white">{servicesFlat.length}</span>
                     <span className="text-xs text-slate-500">услуг</span>
-                  </div>
+                  </button>
                 )}
-                {myConnections.length > 0 && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
-                    <span className="text-sm font-bold text-white">{myConnections.length}</span>
-                    <span className="text-xs text-slate-500">{plural(myConnections.length, 'связь', 'связи', 'связей')}</span>
-                  </div>
-                )}
+
                 {myChannel && (
-                  <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/60 rounded-xl">
+                  <button
+                    onClick={() => setSubscribersOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 hover:border-slate-600 rounded-xl transition-all group"
+                  >
+                    <Bell size={13} className="text-sky-400 group-hover:text-sky-300" />
                     <span className="text-sm font-bold text-white">{myChannel._count.subscriptions}</span>
                     <span className="text-xs text-slate-500">{plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')}</span>
-                  </div>
+                  </button>
                 )}
               </div>
             </>
           )}
 
-          {/* ── CONTENT CARDS ──────────────────────────────────────────────── */}
+          {/* ── CONTENT CARDS ────────────────────────────────────────────────── */}
           <div className="space-y-3">
 
-            {/* ── Bio card ── */}
+            {/* Bio */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">О себе</p>
                 {!editingBio && (
-                  <button onClick={() => setEditingBio(true)} className="p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800">
-                    <Edit3 size={13} />
-                  </button>
+                  <button onClick={() => setEditingBio(true)} className="p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800"><Edit3 size={13} /></button>
                 )}
               </div>
               {editingBio ? (
                 <div className="space-y-2">
-                  <textarea
-                    value={formData.bio}
-                    onChange={e => setFormData({ ...formData, bio: e.target.value })}
-                    rows={4}
-                    placeholder="Расскажите о себе..."
-                    className={`${inputCls} resize-none`}
-                  />
+                  <textarea value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} rows={4} placeholder="Расскажите о себе..." className={`${inputCls} resize-none`} />
                   <div className="flex gap-2">
                     <button onClick={() => setEditingBio(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
                     <button onClick={handleSaveBio} disabled={updateMutation.isPending} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
@@ -840,36 +803,43 @@ export default function ProfilePage() {
               ) : profile?.bio ? (
                 <p className="text-slate-300 text-sm leading-relaxed">{profile.bio}</p>
               ) : (
-                <button onClick={() => setEditingBio(true)} className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic">
-                  + Добавить описание
-                </button>
+                <button onClick={() => setEditingBio(true)} className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic">+ Добавить описание</button>
               )}
             </div>
 
-            {/* ── Groups card ── */}
+            {/* ── Groups card — avatar carousel ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Группы</p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
                 {myGroups.map((g: any) => (
                   <button
                     key={g.id}
                     onClick={() => navigate('/groups/' + g.id)}
-                    className="px-3 py-1.5 bg-primary-600/15 border border-primary-500/30 text-primary-400 rounded-xl text-xs font-medium hover:bg-primary-600/25 transition-colors"
+                    className="flex flex-col items-center gap-1.5 flex-shrink-0 w-16 group"
                   >
-                    {g.name}
+                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-800/60 to-purple-800/60 border border-primary-600/30 flex items-center justify-center overflow-hidden group-hover:border-primary-500/60 transition-colors">
+                      {g.avatar
+                        ? <img src={getAvatarUrl(g.avatar) ?? ''} alt={g.name} className="w-full h-full object-cover" />
+                        : <Music2 size={22} className="text-primary-400" />
+                      }
+                    </div>
+                    <span className="text-[10px] text-slate-400 text-center leading-tight w-full truncate">{g.name}</span>
                   </button>
                 ))}
                 <button
                   onClick={() => navigate('/groups/create')}
-                  className="px-3 py-1.5 bg-slate-800/60 border border-slate-700/60 text-slate-400 rounded-xl text-xs font-medium hover:bg-slate-700/60 transition-colors flex items-center gap-1"
+                  className="flex flex-col items-center gap-1.5 flex-shrink-0 w-16 group"
                 >
-                  <Plus size={11} />Создать группу
+                  <div className="w-14 h-14 rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
+                    <Plus size={20} className="text-slate-500 group-hover:text-primary-400 transition-colors" />
+                  </div>
+                  <span className="text-[10px] text-slate-500 group-hover:text-slate-400 transition-colors">Создать</span>
                 </button>
               </div>
             </div>
 
-            {/* ── Services card ── */}
-            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+            {/* ── Services card — carousel ── */}
+            <div ref={servicesRef} className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <Briefcase size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Услуги</span>
@@ -920,38 +890,55 @@ export default function ProfilePage() {
                   </div>
                 </div>
               ) : servicesFlat.length > 0 ? (
-                <div className="p-3">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    {servicesFlat.map((us: any) => {
-                      const tags = [
-                        ...(us.genres?.map((g: any) => g.name) ?? []),
-                        ...(us.workFormats?.map((w: any) => w.name) ?? []),
-                        ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
-                        ...(us.skillLevels?.map((s: any) => s.name) ?? []),
-                        ...(us.availabilities?.map((a: any) => a.name) ?? []),
-                        ...(us.geographies?.map((g: any) => g.name) ?? []),
-                      ];
-                      const price = us.priceFrom != null || us.priceTo != null
-                        ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
-                        : null;
-                      return (
-                        <div key={us.id} className="rounded-xl border border-slate-700/50 bg-slate-800/40 p-3 flex flex-col gap-1.5">
-                          <div>
-                            <p className="text-[11px] text-slate-500 leading-none mb-1">{us._fieldName} · {us._profName}</p>
-                            <p className="text-sm font-bold text-white leading-snug">{us.service?.name}</p>
-                          </div>
-                          {price && <span className="text-xs font-semibold text-primary-400">{price}</span>}
-                          {tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-auto pt-0.5">
-                              {tags.slice(0, 3).map((t: string, i: number) => (
-                                <span key={i} className="px-1.5 py-0.5 bg-slate-700/60 text-slate-400 rounded text-[10px]">{t}</span>
-                              ))}
-                              {tags.length > 3 && <span className="px-1.5 py-0.5 text-slate-600 text-[10px]">+{tags.length - 3}</span>}
+                <div className="px-3 py-3">
+                  <div className="overflow-x-auto scrollbar-none -mx-1 px-1">
+                    <div className="flex gap-3" style={{ width: 'max-content' }}>
+                      {servicesFlat.map((us: any, i: number) => {
+                        const tags = [
+                          ...(us.genres?.map((g: any) => g.name) ?? []),
+                          ...(us.workFormats?.map((w: any) => w.name) ?? []),
+                          ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
+                          ...(us.skillLevels?.map((s: any) => s.name) ?? []),
+                          ...(us.availabilities?.map((a: any) => a.name) ?? []),
+                          ...(us.geographies?.map((g: any) => g.name) ?? []),
+                        ];
+                        const price = us.priceFrom != null || us.priceTo != null
+                          ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
+                          : null;
+                        return (
+                          <div key={us.id} className="w-48 flex-shrink-0 rounded-xl border border-slate-700/50 bg-slate-800/40 p-3 flex flex-col gap-2">
+                            <div className="flex-1">
+                              <p className="text-[10px] text-slate-500 leading-none mb-1">{us._profName}</p>
+                              <p className="text-sm font-bold text-white leading-snug">{us.service?.name}</p>
+                              {price && <span className="text-xs font-semibold text-primary-400 mt-1 block">{price}</span>}
+                              {tags.length > 0 && (
+                                <div className="flex flex-wrap gap-1 mt-2">
+                                  {tags.slice(0, 3).map((t: string, j: number) => (
+                                    <span key={j} className="px-1.5 py-0.5 bg-slate-700/60 text-slate-400 rounded text-[10px]">{t}</span>
+                                  ))}
+                                  {tags.length > 3 && <span className="px-1.5 py-0.5 text-slate-600 text-[10px]">+{tags.length - 3}</span>}
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                            <div className="flex gap-1.5 mt-1 border-t border-slate-700/40 pt-2">
+                              <button
+                                onClick={() => { setEditingServices(true); setExpandedSvcIdx(i); setTimeout(() => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }}
+                                className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-white text-xs transition-all"
+                              >
+                                <Edit3 size={11} />
+                              </button>
+                              <button
+                                onClick={() => handleDeleteService(i)}
+                                disabled={updateServicesMutation.isPending}
+                                className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg bg-slate-700/50 hover:bg-red-500/15 text-slate-400 hover:text-red-400 text-xs transition-all"
+                              >
+                                {updateServicesMutation.isPending ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -961,16 +948,13 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* ── Portfolio card ── */}
+            {/* ── Portfolio card — tabs ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <Image size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Портфолио</span>
                 {portfolioFiles.length > 0 && <span className="text-xs text-slate-500">{portfolioFiles.length}</span>}
-                <button
-                  onClick={() => setEditingPortfolio(v => !v)}
-                  className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
-                >
+                <button onClick={() => setEditingPortfolio(v => !v)} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
                   {editingPortfolio ? 'Готово' : 'Изменить'}
                 </button>
               </div>
@@ -996,73 +980,68 @@ export default function ProfilePage() {
                   )}
                 </div>
               ) : portfolioFiles.length > 0 ? (
-                <div className="p-4 space-y-4">
-                  {photoFiles.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <Image size={12} className="text-slate-500" />
-                        <span className="text-xs text-slate-500 font-medium">Фото</span>
-                      </div>
-                      <div className="grid grid-cols-3 gap-1.5">
-                        {photoFiles.map((f: any) => (
-                          <button key={f.id} onClick={() => setLightboxFile(f)}
-                            className="aspect-square rounded-xl overflow-hidden bg-slate-800 hover:opacity-90 transition-opacity">
-                            <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {audioFiles.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <Headphones size={12} className="text-slate-500" />
-                        <span className="text-xs text-slate-500 font-medium">Аудио</span>
-                      </div>
-                      <div className="space-y-2">
-                        {audioFiles.map((f: any) => (
-                          <div key={f.id} className="rounded-xl bg-slate-800/60 border border-slate-700/40 px-3 pt-3 pb-2">
-                            <p className="text-xs text-slate-400 truncate mb-2">{f.originalName}</p>
-                            <audio controls src={`${API_URL}${f.url}`} className="w-full h-9" />
+                <div>
+                  {/* Tabs */}
+                  <div className="flex border-b border-slate-800/60">
+                    {([
+                      { key: 'av', label: 'Аудио/Видео', count: avFiles.length, icon: <Headphones size={12} /> },
+                      { key: 'photo', label: 'Фото', count: photoFiles.length, icon: <Image size={12} /> },
+                      { key: 'other', label: 'Другое', count: otherFiles.length, icon: <FileText size={12} /> },
+                    ] as const).map(tab => (
+                      <button
+                        key={tab.key}
+                        onClick={() => setPortfolioTab(tab.key)}
+                        className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium border-b-2 transition-all ${portfolioTab === tab.key ? 'border-primary-500 text-primary-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
+                      >
+                        {tab.icon}{tab.label}{tab.count > 0 && <span className="text-[10px] opacity-60">({tab.count})</span>}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="p-4 space-y-3">
+                    {portfolioTab === 'av' && (
+                      avFiles.length === 0
+                        ? <p className="text-sm text-slate-600 italic text-center py-4">Нет аудио и видео файлов</p>
+                        : <>
+                            {audioFiles.map((f: any) => (
+                              <div key={f.id} className="rounded-xl bg-slate-800/60 border border-slate-700/40 px-3 pt-3 pb-2">
+                                <p className="text-xs text-slate-400 truncate mb-2">{f.originalName}</p>
+                                <audio controls src={`${API_URL}${f.url}`} className="w-full h-9" />
+                              </div>
+                            ))}
+                            {videoFiles.map((f: any) => (
+                              <div key={f.id} className="rounded-xl overflow-hidden bg-slate-800/60 border border-slate-700/40">
+                                <video controls src={`${API_URL}${f.url}`} className="w-full max-h-52 object-contain bg-black" />
+                                <p className="text-xs text-slate-500 truncate px-3 py-1.5">{f.originalName}</p>
+                              </div>
+                            ))}
+                          </>
+                    )}
+                    {portfolioTab === 'photo' && (
+                      photoFiles.length === 0
+                        ? <p className="text-sm text-slate-600 italic text-center py-4">Нет фотографий</p>
+                        : <div className="grid grid-cols-3 gap-1.5">
+                            {photoFiles.map((f: any) => (
+                              <button key={f.id} onClick={() => setLightboxFile(f)} className="aspect-square rounded-xl overflow-hidden bg-slate-800 hover:opacity-90 transition-opacity">
+                                <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
+                              </button>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {videoFiles.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <Film size={12} className="text-slate-500" />
-                        <span className="text-xs text-slate-500 font-medium">Видео</span>
-                      </div>
-                      <div className="space-y-2">
-                        {videoFiles.map((f: any) => (
-                          <div key={f.id} className="rounded-xl overflow-hidden bg-slate-800/60 border border-slate-700/40">
-                            <video controls src={`${API_URL}${f.url}`} className="w-full max-h-52 object-contain bg-black" />
-                            <p className="text-xs text-slate-500 truncate px-3 py-1.5">{f.originalName}</p>
+                    )}
+                    {portfolioTab === 'other' && (
+                      otherFiles.length === 0
+                        ? <p className="text-sm text-slate-600 italic text-center py-4">Нет других файлов</p>
+                        : <div className="space-y-1">
+                            {otherFiles.map((f: any) => (
+                              <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
+                                className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/40 hover:bg-slate-700/40 border border-slate-700/40 transition-colors group">
+                                <FileText size={14} className="text-slate-500 flex-shrink-0 group-hover:text-primary-400 transition-colors" />
+                                <span className="flex-1 text-sm text-slate-300 truncate group-hover:text-white transition-colors">{f.originalName}</span>
+                                <span className="text-xs text-slate-600 flex-shrink-0">{formatFileSize(f.size)}</span>
+                              </a>
+                            ))}
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {otherFiles.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-1.5 mb-2">
-                        <FileText size={12} className="text-slate-500" />
-                        <span className="text-xs text-slate-500 font-medium">Другое</span>
-                      </div>
-                      <div className="space-y-1">
-                        {otherFiles.map((f: any) => (
-                          <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/40 hover:bg-slate-700/40 border border-slate-700/40 transition-colors group">
-                            <FileText size={14} className="text-slate-500 flex-shrink-0 group-hover:text-primary-400 transition-colors" />
-                            <span className="flex-1 text-sm text-slate-300 truncate group-hover:text-white transition-colors">{f.originalName}</span>
-                            <span className="text-xs text-slate-600 flex-shrink-0">{formatFileSize(f.size)}</span>
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               ) : (
                 <div className="p-4 text-center">
@@ -1086,14 +1065,13 @@ export default function ProfilePage() {
                           {myChannel.avatar ? <img src={getAvatarUrl(myChannel.avatar)!} alt="" className="w-full h-full object-cover" /> : <Radio size={22} className="text-slate-500" />}
                         </div>
                         <button onClick={() => channelAvatarRef.current?.click()} className="absolute -bottom-1 -right-1 p-1 bg-primary-600 hover:bg-primary-500 rounded-full shadow transition-colors"><Camera size={10} className="text-white" /></button>
-                        <input ref={channelAvatarRef} type="file" accept="image/*" className="hidden" onChange={handleChannelAvatarChange} />
+                        <input ref={channelAvatarRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadChannelAvatarMut.mutate(f); e.target.value = ''; }} />
                       </div>
                       <div className="flex-1 min-w-0">
-                        {channelEditing ? (
-                          <input value={channelForm.name} onChange={e => setChannelForm(f => ({ ...f, name: e.target.value }))} className="w-full px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white" placeholder="Название канала" />
-                        ) : (
-                          <p className="text-base font-semibold text-white truncate">{myChannel.name}</p>
-                        )}
+                        {channelEditing
+                          ? <input value={channelForm.name} onChange={e => setChannelForm(f => ({ ...f, name: e.target.value }))} className="w-full px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white" placeholder="Название канала" />
+                          : <p className="text-base font-semibold text-white truncate">{myChannel.name}</p>
+                        }
                         <p className="text-xs text-slate-500 mt-1">{myChannel._count.subscriptions} {plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')} · {myChannel._count.posts} {plural(myChannel._count.posts, 'пост', 'поста', 'постов')}</p>
                       </div>
                     </div>
@@ -1150,11 +1128,7 @@ export default function ProfilePage() {
                   <div className="p-3">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {visible.map((c: any) => (
-                        <button
-                          key={c.id}
-                          onClick={() => setViewConn(c)}
-                          className="text-left p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl hover:border-primary-500/30 hover:bg-slate-800/70 transition-all"
-                        >
+                        <button key={c.id} onClick={() => setViewConn(c)} className="text-left p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl hover:border-primary-500/30 hover:bg-slate-800/70 transition-all">
                           <div className="flex items-center gap-2.5 mb-2">
                             <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-700 flex-shrink-0">
                               {getAvatarUrl(c.partner.avatar)
@@ -1167,7 +1141,7 @@ export default function ProfilePage() {
                               {c.partner.city && <p className="text-[11px] text-slate-500 truncate">{c.partner.city}</p>}
                             </div>
                           </div>
-                          {c.services.length > 0 && (
+                          {c.services?.length > 0 && (
                             <div className="flex flex-wrap gap-1">
                               {c.services.slice(0, 2).map((s: any) => (
                                 <span key={s.id} className="text-[10px] bg-primary-500/10 text-primary-300 border border-primary-500/20 rounded px-1.5 py-0.5">{s.name}</span>
@@ -1179,10 +1153,7 @@ export default function ProfilePage() {
                       ))}
                     </div>
                     {myConnections.length > LIMIT && (
-                      <button
-                        onClick={() => setConnExpanded(v => !v)}
-                        className="mt-3 w-full py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors text-center"
-                      >
+                      <button onClick={() => setConnExpanded(v => !v)} className="mt-3 w-full py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors text-center">
                         {connExpanded ? 'Свернуть' : `Показать ещё ${myConnections.length - LIMIT}`}
                       </button>
                     )}
@@ -1192,22 +1163,61 @@ export default function ProfilePage() {
             })()}
 
             {/* Logout */}
-            <button
-              onClick={() => logout()}
-              className="w-full flex items-center justify-center gap-2 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/8 border border-red-500/20 hover:border-red-500/40 rounded-xl text-sm font-medium transition-all"
-            >
+            <button onClick={() => logout()} className="w-full flex items-center justify-center gap-2 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/8 border border-red-500/20 hover:border-red-500/40 rounded-xl text-sm font-medium transition-all">
               <LogOut size={16} />Выйти из профиля
             </button>
 
           </div>
         </div>
-
       </div>
     </div>
 
-    {viewConn && (
-      <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />
-    )}
+    {viewConn && <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />}
+
+    {/* Friends panel */}
+    <BottomPanel open={friendsOpen} onClose={() => setFriendsOpen(false)} title={`Друзья (${friendCount})`}>
+      {myFriends.length === 0
+        ? <p className="text-sm text-slate-500 text-center py-4">Нет друзей</p>
+        : <div className="space-y-1">
+            {myFriends.map((f: any) => {
+              const friend = f.requester?.id === profile?.id ? f.receiver : f.requester;
+              if (!friend) return null;
+              return (
+                <button key={f.id} onClick={() => { setFriendsOpen(false); navigate(`/profile/${friend.id}`); }}
+                  className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/60 transition-colors text-left">
+                  <AvatarComponent src={friend.avatar} name={`${friend.firstName} ${friend.lastName}`} size={40} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{friend.firstName} {friend.lastName}</p>
+                    {friend.city && <p className="text-xs text-slate-500 truncate">{friend.city}</p>}
+                  </div>
+                  <ChevronRight size={14} className="text-slate-600 flex-shrink-0" />
+                </button>
+              );
+            })}
+          </div>
+      }
+    </BottomPanel>
+
+    {/* Subscribers panel */}
+    <BottomPanel open={subscribersOpen} onClose={() => setSubscribersOpen(false)} title={`Подписчики (${myChannel?._count?.subscriptions ?? 0})`}>
+      {mySubscribers.length === 0
+        ? <p className="text-sm text-slate-500 text-center py-4">Нет подписчиков</p>
+        : <div className="space-y-1">
+            {mySubscribers.map((sub: any) => (
+              <button key={sub.id} onClick={() => { setSubscribersOpen(false); navigate(`/profile/${sub.id}`); }}
+                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/60 transition-colors text-left">
+                <AvatarComponent src={sub.avatar} name={`${sub.firstName} ${sub.lastName}`} size={40} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white truncate">{sub.firstName} {sub.lastName}</p>
+                  {sub.city && <p className="text-xs text-slate-500 truncate">{sub.city}</p>}
+                </div>
+                <ChevronRight size={14} className="text-slate-600 flex-shrink-0" />
+              </button>
+            ))}
+          </div>
+      }
+    </BottomPanel>
+
     </>
   );
 }

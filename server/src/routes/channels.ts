@@ -124,6 +124,21 @@ router.get('/subscriptions', authenticate, async (req: AuthRequest, res) => {
 });
 
 // GET /channels/my — current user's channel
+router.get('/my/subscribers', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const channel = await prisma.channel.findUnique({ where: { ownerId: req.userId! } });
+    if (!channel) return res.json([]);
+    const subs = await prisma.channelSubscription.findMany({
+      where: { channelId: channel.id },
+      include: { user: { select: { id: true, firstName: true, lastName: true, avatar: true, nickname: true, city: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(subs.map(s => s.user));
+  } catch (e) {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
 router.get('/my', authenticate, async (req: AuthRequest, res) => {
   try {
     const channel = await prisma.channel.findUnique({
