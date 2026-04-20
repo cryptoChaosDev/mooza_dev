@@ -6,6 +6,7 @@ import { useBadgeStore } from './stores/badgeStore';
 import { usePresenceStore } from './stores/presenceStore';
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket';
 import Layout from './components/Layout';
+import OnboardingModal, { useOnboarding } from './components/OnboardingModal';
 
 const LandingPage        = lazy(() => import('./pages/LandingPage'));
 const LoginPage          = lazy(() => import('./pages/LoginPage'));
@@ -99,9 +100,11 @@ function BadgeClearer() {
 
 function AppRoutes() {
   const { user } = useAuthStore();
+  const { show: showOnboarding, dismiss: dismissOnboarding } = useOnboarding();
   return (
     <Layout>
       <BadgeClearer />
+      {showOnboarding && <OnboardingModal onDone={dismissOnboarding} />}
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/"                 element={<FeedPage />} />
