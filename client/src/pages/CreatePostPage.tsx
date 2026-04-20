@@ -3,12 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Image, Music, Smile, Send, X, Loader2,
-  FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench,
+  FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench, Plus,
 } from 'lucide-react';
 import { postAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import AvatarComponent from '../components/Avatar';
 import EmojiPicker from '../components/EmojiPicker';
+import ServicePicker, { PickedService } from '../components/ServicePicker';
 
 const POST_TYPES: Record<string, { label: string; icon: React.FC<any>; placeholder: string; inDev: boolean }> = {
   blog:       { label: 'Блог',         icon: FileText,    placeholder: 'Напишите что-нибудь...', inDev: false },
@@ -34,6 +35,8 @@ export default function CreatePostPage() {
   const [audioFile, setAudioFile] = useState<{ name: string; serverUrl: string } | null>(null);
   const [showEmoji, setShowEmoji] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [pickedServices, setPickedServices] = useState<PickedService[]>([]);
+  const [showServicePicker, setShowServicePicker] = useState(false);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -98,12 +101,20 @@ export default function CreatePostPage() {
     },
   });
 
-  const canPost = (content.trim() || imagePreview || audioFile) && !uploading;
+  const isService = type === 'service';
+  const canPost = (content.trim() || imagePreview || audioFile || (isService && pickedServices.length > 0)) && !uploading;
 
   const handlePublish = () => {
     if (!canPost) return;
+    let finalContent = content;
+    if (isService && pickedServices.length > 0) {
+      const serviceLines = pickedServices.map(s =>
+        `🎸 ${s.serviceName} · ${s.professionName} · ${s.directionName}`
+      ).join('\n');
+      finalContent = serviceLines + (content.trim() ? '\n\n' + content : '');
+    }
     createMut.mutate({
-      content,
+      content: finalContent,
       imageUrl: imagePreview?.serverUrl,
       audioUrl: audioFile?.serverUrl,
       audioName: audioFile?.name,
@@ -163,13 +174,57 @@ export default function CreatePostPage() {
             </div>
           )}
 
+          {/* Service selector — only for type=service */}
+          {isService && (
+            <div className="mb-4">
+              {/* Picked services */}
+              {pickedServices.length > 0 && (
+                <div className="space-y-2 mb-3">
+                  {pickedServices.map((s, i) => (
+                    <div key={s.serviceId} className="flex items-start gap-3 bg-slate-800/60 border border-slate-700/50 rounded-2xl px-4 py-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-white">{s.serviceName}</p>
+                        <p className="text-xs text-slate-400 mt-0.5">
+                          {s.professionName} · {s.directionName} · {s.fieldName}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setPickedServices(prev => prev.filter((_, idx) => idx !== i))}
+                        className="text-slate-500 hover:text-red-400 transition-colors p-1 flex-shrink-0"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add service button */}
+              <button
+                type="button"
+                onClick={() => setShowServicePicker(true)}
+                className="w-full flex items-center justify-center gap-2 py-3 border-2 border-dashed border-slate-700 hover:border-primary-500/50 hover:bg-primary-500/5 rounded-2xl text-slate-400 hover:text-primary-400 text-sm font-medium transition-all"
+              >
+                <Plus size={16} />
+                {pickedServices.length === 0 ? 'Выбрать услугу из справочника' : 'Добавить ещё услугу'}
+              </button>
+
+              {pickedServices.length > 0 && (
+                <div className="mt-3 border-t border-slate-800 pt-3">
+                  <p className="text-xs text-slate-500 mb-2">Дополнительное описание (необязательно)</p>
+                </div>
+              )}
+            </div>
+          )}
+
           <textarea
             ref={textareaRef}
             value={content}
             onChange={e => { setContent(e.target.value); autoResize(); }}
-            placeholder={meta.placeholder}
-            className="w-full bg-transparent text-base text-white placeholder-slate-500 focus:outline-none resize-none min-h-[140px] leading-relaxed"
-            rows={6}
+            placeholder={isService && pickedServices.length > 0 ? 'Опишите подробнее — цены, условия, опыт...' : meta.placeholder}
+            className="w-full bg-transparent text-base text-white placeholder-slate-500 focus:outline-none resize-none min-h-[100px] leading-relaxed"
+            rows={isService && pickedServices.length > 0 ? 3 : 6}
           />
 
           {/* Image preview */}
@@ -248,6 +303,14 @@ export default function CreatePostPage() {
           </div>
         </div>
       </div>
+
+      {showServicePicker && (
+        <ServicePicker
+          onSelect={s => { setPickedServices(prev => [...prev, s]); setShowServicePicker(false); }}
+          onClose={() => setShowServicePicker(false)}
+          excludeServiceIds={pickedServices.map(s => s.serviceId)}
+        />
+      )}
     </div>
   );
 }
