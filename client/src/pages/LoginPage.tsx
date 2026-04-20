@@ -79,6 +79,12 @@ export default function LoginPage() {
     navigate('/');
   }, [setAuth, navigate]);
 
+  const handleVkAuth = useCallback(async (user: any, token: string) => {
+    setAuth(user, token);
+    localStorage.setItem('termsAgreed', '1');
+    navigate('/');
+  }, [setAuth, navigate]);
+
   const handleSocialError = (msg: string) => {
     if (msg) setError(msg);
   };
@@ -361,7 +367,7 @@ export default function LoginPage() {
             </div>
             <div className="space-y-2.5">
               <TelegramLoginButton onAuth={handleTelegramAuth} onError={handleSocialError} disabled={loading || !agreed} />
-              <VkLoginButton disabled={loading || !agreed} />
+              <VkLoginButton onAuth={handleVkAuth} onError={handleSocialError} disabled={loading || !agreed} />
             </div>
           </div>
 
