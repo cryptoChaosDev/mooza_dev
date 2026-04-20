@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { Home, Search, Users, User, MessageCircle, Menu, X, Bell, ShieldCheck } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, UserPlus } from 'lucide-react';
 import BottomNav from './BottomNav';
 import NotificationBell from './NotificationBell';
 import { useAuthStore } from '../stores/authStore';
@@ -10,9 +10,9 @@ interface LayoutProps {
 }
 
 export default function Layout({ children }: LayoutProps) {
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notifDismissed, setNotifDismissed] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const { user } = useAuthStore();
 
   const notifPending = 'Notification' in window && Notification.permission === 'default' && !notifDismissed;
@@ -64,10 +64,11 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex items-center gap-1">
             <NotificationBell />
             <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
+              onClick={() => navigate('/invite')}
               className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
+              title="Пригласить друзей"
             >
-              {sidebarOpen ? <X size={24} className="text-slate-300" /> : <Menu size={24} className="text-slate-300" />}
+              <UserPlus size={22} className="text-slate-300" />
             </button>
           </div>
         </header>
@@ -123,58 +124,6 @@ export default function Layout({ children }: LayoutProps) {
             <p className="text-xs text-slate-500">Социальная сеть для музыкантов</p>
           </div>
         </div>
-      </aside>
-
-      {/* Mobile Sidebar Overlay */}
-      {sidebarOpen && (
-        <div className="lg:hidden fixed inset-0 z-30 bg-black/50 backdrop-blur-sm" onClick={() => setSidebarOpen(false)} />
-      )}
-      
-      {/* Mobile Sidebar */}
-      <aside className={`lg:hidden fixed top-0 right-0 bottom-0 w-72 bg-slate-950 border-l border-slate-800/50 z-50 transform transition-transform duration-300 ${
-        sidebarOpen ? 'translate-x-0' : 'translate-x-full'
-      }`}>
-        <div className="p-6 border-b border-slate-800/50 flex items-center justify-between">
-          <span className="text-lg font-semibold text-white">Меню</span>
-          <button onClick={() => setSidebarOpen(false)} className="p-2 hover:bg-slate-800 rounded-lg transition-colors">
-            <X size={20} className="text-slate-400" />
-          </button>
-        </div>
-        
-        <nav className="p-4 space-y-2">
-          {navItems.map(({ path, icon: Icon, label }) => {
-            const active = isActive(path);
-            return (
-              <Link
-                key={path}
-                to={path}
-                onClick={() => setSidebarOpen(false)}
-                className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                  active
-                    ? 'bg-primary-500/10 text-primary-400'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-                }`}
-              >
-                <Icon size={22} strokeWidth={active ? 2.5 : 2} />
-                <span className="font-medium">{label}</span>
-              </Link>
-            );
-          })}
-          {user?.isAdmin && (
-            <Link
-              to="/admin"
-              onClick={() => setSidebarOpen(false)}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                isActive('/admin')
-                  ? 'bg-primary-500/10 text-primary-400'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-              }`}
-            >
-              <ShieldCheck size={22} strokeWidth={isActive('/admin') ? 2.5 : 2} />
-              <span className="font-medium">Администрирование</span>
-            </Link>
-          )}
-        </nav>
       </aside>
 
       {/* Main Content */}

@@ -18,7 +18,7 @@ export default function BottomNav() {
   const isActive = (path: string) => location.pathname === path;
 
   const navItems = [
-    { path: '/',         icon: Home,          label: 'Главная',   badge: 0 },
+    { path: '/',         icon: Home,          label: 'Поток',     badge: 0 },
     { path: '/search',   icon: Search,        label: 'Каталог',   badge: 0 },
     { path: '/messages', icon: MessageCircle, label: 'Сообщения', badge: unreadMessages },
     { path: '/friends',  icon: Users,         label: 'Друзья',    badge: pendingFriendRequests },

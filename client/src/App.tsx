@@ -27,6 +27,9 @@ const GroupCreatePage    = lazy(() => import('./pages/GroupCreatePage'));
 const GroupInvitesPage   = lazy(() => import('./pages/GroupInvitesPage'));
 const PrivacyPolicyPage  = lazy(() => import('./pages/PrivacyPolicyPage'));
 const TermsPage          = lazy(() => import('./pages/TermsPage'));
+const FlowSettingsPage   = lazy(() => import('./pages/FlowSettingsPage'));
+const CreatePostPage     = lazy(() => import('./pages/CreatePostPage'));
+const InvitePage         = lazy(() => import('./pages/InvitePage'));
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -120,6 +123,9 @@ function AppRoutes() {
             <Route path="/messages"         element={<MessagesPage />} />
             <Route path="/messages/:id"     element={<ChatPage />} />
             <Route path="/chat/:id"         element={<ChatPage />} />
+            <Route path="/flow-settings"    element={<FlowSettingsPage />} />
+            <Route path="/create-post"      element={<CreatePostPage />} />
+            <Route path="/invite"           element={<InvitePage />} />
             <Route path="/privacy"          element={<PrivacyPolicyPage />} />
             <Route path="/terms"            element={<TermsPage />} />
             {user?.isAdmin && <Route path="/admin" element={<AdminPage />} />}
