@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser, notifyUser } from '../socket';
+import { tgLog } from '../utils/telegram';
 
 const router = Router();
 
@@ -195,6 +196,7 @@ router.put('/:id/accept', authenticate, async (req: AuthRequest, res) => {
     });
     emitToUser(updated.requester.id, 'new_notification', notification);
 
+    tgLog(`🤝 <b>Новая дружба</b>\n${accepter?.firstName} ${accepter?.lastName} ↔ ${updated.requester.firstName} ${updated.requester.lastName}`);
     res.json(updated);
   } catch (error) {
     console.error('Accept request error:', error);

@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { authLimiter, registerLimiter, codeLimiter } from '../middleware/rateLimiter';
 import { generateToken } from '../utils/jwt';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/mailer';
+import { tgLog } from '../utils/telegram';
 
 // ─── Telegram bot-based auth (deep link + polling) ───────────────────────────
 // Map: token → { telegramId, firstName, lastName, username, photoUrl, resolvedAt }
@@ -168,6 +169,7 @@ router.post('/register', registerLimiter, async (req, res) => {
       console.error('[register] Failed to send verification email:', mailErr);
     }
 
+    tgLog(`🆕 <b>Новый пользователь</b>\n👤 ${user.firstName} ${user.lastName}\n📧 ${normalizedEmail}\n🌍 ${user.city || '—'}`);
     res.status(201).json({ pendingVerification: true, email: data.email });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -304,6 +306,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
     const { password: _, ...userWithoutPassword } = user;
 
+    tgLog(`🔑 <b>Вход в аккаунт</b>\n👤 ${user.firstName} ${user.lastName}\n📧 ${user.email}`);
     res.json({ user: userWithoutPassword, token });
   } catch (error) {
     if (error instanceof z.ZodError) {

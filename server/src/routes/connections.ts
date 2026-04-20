@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { tgLog } from '../utils/telegram';
 
 const router = Router();
 
@@ -85,6 +86,10 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       });
     } catch {}
 
+    const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
+    const them = await prisma.user.findUnique({ where: { id: receiverId }, select: { firstName: true, lastName: true } });
+    const services = conn.services.map((cs: any) => cs.service.name).join(', ');
+    tgLog(`🔗 <b>Новая связь</b>\n${me?.firstName} ${me?.lastName} → ${them?.firstName} ${them?.lastName}\n📋 ${services}`);
     return res.status(201).json(formatConnection(conn, meId));
   } catch (err) {
     console.error('[connections] POST /', err);

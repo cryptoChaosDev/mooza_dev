@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser, notifyUser } from '../socket';
 import { uploadPostMedia } from '../middleware/upload';
+import { tgLog } from '../utils/telegram';
 
 const router = Router();
 
@@ -126,6 +127,10 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
       }
     });
 
+    const author = post.author;
+    const preview = (content || '').slice(0, 80) + ((content || '').length > 80 ? '…' : '');
+    const media = [imageUrl && '🖼', audioUrl && '🎵'].filter(Boolean).join(' ');
+    tgLog(`📝 <b>Новый пост</b>\n👤 ${author.firstName} ${author.lastName}\n${preview}${media ? '\n' + media : ''}`);
     res.status(201).json(post);
   } catch (error) {
     console.error('Create post error:', error);

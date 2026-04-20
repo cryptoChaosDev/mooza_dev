@@ -4,6 +4,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser, notifyUser, isUserOnline } from '../socket';
 import { uploadChatAttachment } from '../middleware/upload';
 import { messageLimiter } from '../middleware/rateLimiter';
+import { tgLog } from '../utils/telegram';
 
 const router = Router();
 // Lazy proxy — avoids circular-import TDZ when this module loads before prisma is initialized
@@ -71,6 +72,8 @@ async function findOrCreateDM(userAId: string, userBId: string): Promise<{ conv:
     },
     include: { members: { include: MEMBER_USER } },
   });
+  const names = conv.members.map((m: any) => `${m.user.firstName} ${m.user.lastName}`).join(' ↔ ');
+  tgLog(`💬 <b>Новый диалог</b>\n${names}`);
   return { conv };
 }
 
