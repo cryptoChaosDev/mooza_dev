@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronDown, ShieldAlert, CheckCircle2, Check } from 'lucide-react';
 import { authAPI, userAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
-// import TelegramLoginButton from '../components/TelegramLoginButton';
-// import VkLoginButton from '../components/VkLoginButton';
+import TelegramLoginButton from '../components/TelegramLoginButton';
+import VkLoginButton from '../components/VkLoginButton';
 
 function DocSection({ title, children }: { title: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
@@ -44,9 +44,21 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const { setAuth, setUser } = useAuthStore();
 
-  // Telegram/VK handlers — kept for when buttons are re-enabled
-  // const handleTelegramAuth = useCallback(async (user: any, token: string) => { ... }, [setAuth]);
-  // const handleVkAuth = useCallback(async (user: any, token: string) => { ... }, [setAuth]);
+  const handleTelegramAuth = useCallback(async (user: any, token: string) => {
+    setAuth(user, token);
+    localStorage.setItem('termsAgreed', '1');
+    navigate('/');
+  }, [setAuth, navigate]);
+
+  const handleVkAuth = useCallback(async (user: any, token: string) => {
+    setAuth(user, token);
+    localStorage.setItem('termsAgreed', '1');
+    navigate('/');
+  }, [setAuth, navigate]);
+
+  const handleSocialError = (msg: string) => {
+    if (msg) setError(msg);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -318,18 +330,17 @@ export default function LoginPage() {
             </button>
           </form>
 
-          {/* Telegram/VK login — temporarily hidden */}
-          {/* <div className="mt-6">
+          <div className="mt-6">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex-1 h-px bg-slate-700" />
               <span className="text-xs text-slate-500 uppercase tracking-wide">или</span>
               <div className="flex-1 h-px bg-slate-700" />
             </div>
             <div className="space-y-2.5">
-              <TelegramLoginButton onAuth={handleTelegramAuth} onError={handleTelegramError} disabled={loading || !agreed} />
-              <VkLoginButton onAuth={handleVkAuth} onError={handleVkError} disabled={loading || !agreed} />
+              <TelegramLoginButton onAuth={handleTelegramAuth} onError={handleSocialError} disabled={loading || !agreed} />
+              <VkLoginButton onAuth={handleVkAuth} onError={handleSocialError} disabled={loading || !agreed} />
             </div>
-          </div> */}
+          </div>
 
           <div className="mt-4 flex flex-col items-center gap-2">
             <a href="/forgot-password" className="text-sm text-slate-500 hover:text-slate-300 transition-colors">
