@@ -202,23 +202,38 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
     <div id={`post-${post.id}`} className={`px-4 py-4 hover:bg-slate-900/30 transition-colors ${highlight ? 'ring-2 ring-primary-500/40 ring-inset bg-primary-500/5' : ''}`}>
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-3 min-w-0">
-          <Link to={`/profile/${post.author.id}`} className="flex-shrink-0"><Avatar user={post.author} size={10} /></Link>
+          {post.channel ? (
+            <Link to={`/profile/${post.author.id}`} className="flex-shrink-0">
+              {post.channel.avatar
+                ? <img src={`${API_URL}${post.channel.avatar}`} alt={post.channel.name} className="w-10 h-10 rounded-full object-cover" />
+                : <div className="w-10 h-10 rounded-full bg-primary-600/20 border border-primary-500/30 flex items-center justify-center"><Radio size={18} className="text-primary-400" /></div>
+              }
+            </Link>
+          ) : (
+            <Link to={`/profile/${post.author.id}`} className="flex-shrink-0"><Avatar user={post.author} size={10} /></Link>
+          )}
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <Link to={`/profile/${post.author.id}`} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate">
-                {post.author.firstName} {post.author.lastName}
-              </Link>
-              {post.author.isPremium && <span title="Premium"><Crown size={13} className="text-amber-400 flex-shrink-0" /></span>}
-              {post.author.isVerified && <span title="Верифицирован"><BadgeCheck size={13} className="text-sky-400 flex-shrink-0" /></span>}
-              {post.author.isBlocked && <span title="Заблокирован"><Ban size={13} className="text-red-500 flex-shrink-0" /></span>}
-              {post.channel && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-primary-600/15 border border-primary-600/30 rounded-full text-[10px] text-primary-400 font-medium flex-shrink-0">
-                  <Radio size={9} />{post.channel.name}
-                </span>
+              {post.channel ? (
+                <Link to={`/profile/${post.author.id}`} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate">
+                  {post.channel.name}
+                </Link>
+              ) : (
+                <>
+                  <Link to={`/profile/${post.author.id}`} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate">
+                    {post.author.firstName} {post.author.lastName}
+                  </Link>
+                  {post.author.isPremium && <span title="Premium"><Crown size={13} className="text-amber-400 flex-shrink-0" /></span>}
+                  {post.author.isVerified && <span title="Верифицирован"><BadgeCheck size={13} className="text-sky-400 flex-shrink-0" /></span>}
+                  {post.author.isBlocked && <span title="Заблокирован"><Ban size={13} className="text-red-500 flex-shrink-0" /></span>}
+                </>
               )}
             </div>
             <p className="text-xs text-slate-500 truncate">
-              {timeAgo(post.createdAt)}{post.author.role ? ` · ${post.author.role}` : ''}
+              {post.channel
+                ? <>{post.author.firstName} {post.author.lastName} · {timeAgo(post.createdAt)}</>
+                : <>{timeAgo(post.createdAt)}{post.author.role ? ` · ${post.author.role}` : ''}</>
+              }
               {new Date(post.updatedAt).getTime() - new Date(post.createdAt).getTime() > 5000 && <span className="text-slate-600"> · изменён {timeAgo(post.updatedAt)}</span>}
             </p>
           </div>
