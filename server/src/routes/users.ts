@@ -79,6 +79,7 @@ const userSelect = {
       _count: { select: { subscriptions: true, posts: true } },
     },
   },
+  lastSeenAt: true,
   termsAgreedAt: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
@@ -113,6 +114,7 @@ const publicUserSelect = {
     include: { artist: { select: { id: true, name: true } } },
   },
   socialLinks: true,
+  lastSeenAt: true,
   channel: {
     select: {
       id: true,

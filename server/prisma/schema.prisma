@@ -427,6 +427,7 @@ model User {
   channel              Channel?
   channelSubscriptions ChannelSubscription[]
 
+  lastSeenAt    DateTime?
   termsAgreedAt DateTime?
 
   createdAt DateTime @default(now())

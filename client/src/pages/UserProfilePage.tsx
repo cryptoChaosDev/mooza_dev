@@ -18,6 +18,8 @@ import { plural } from '../lib/plural';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import { useAuthStore } from '../stores/authStore';
 import { createPortal } from 'react-dom';
+import { formatLastSeen } from '../lib/lastSeen';
+import { usePresenceStore } from '../stores/presenceStore';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -56,6 +58,7 @@ export default function UserProfilePage() {
   const [portfolioTab, setPortfolioTab] = useState<'av' | 'photo' | 'other'>('av');
   const [servicesOpen, setServicesOpen] = useState(false);
   const servicesRef = useRef<HTMLDivElement>(null);
+  const onlineUsers = usePresenceStore(s => s.onlineUsers);
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['user', userId],
@@ -312,6 +315,13 @@ export default function UserProfilePage() {
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-2">
             {user.nickname && <span className="text-slate-500">@{user.nickname}</span>}
+            {me?.id !== user.id && (
+              onlineUsers.has(user.id)
+                ? <span className="flex items-center gap-1 text-emerald-400 text-xs"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />В сети</span>
+                : user.lastSeenAt
+                  ? <span className="text-xs text-slate-600">{formatLastSeen(user.lastSeenAt)}</span>
+                  : null
+            )}
             {(user.city || user.country) && (
               <span className="flex items-center gap-1">
                 <MapPin size={12} className="flex-shrink-0" />

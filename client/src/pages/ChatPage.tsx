@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, BadgeCheck, Ban, Search, Link2 } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import { plural } from '../lib/plural';
+import { formatLastSeen } from '../lib/lastSeen';
 import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
@@ -755,7 +756,7 @@ export default function ChatPage() {
                 ) : (
                   <p className={`text-xs flex items-center gap-1 ${otherOnline ? 'text-emerald-400' : 'text-slate-500'}`}>
                     <span className={`inline-block w-1.5 h-1.5 rounded-full ${otherOnline ? 'bg-emerald-400' : 'bg-slate-500'}`} />
-                    {otherOnline ? 'В сети' : 'Не в сети'}
+                    {otherOnline ? 'В сети' : (formatLastSeen((otherMember as any)?.lastSeenAt) || 'Не в сети')}
                   </p>
                 )}
               </div>

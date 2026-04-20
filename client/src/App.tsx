@@ -269,6 +269,12 @@ function App() {
       presence().removeOnline(userId);
     });
 
+    // Heartbeat every 30s to keep lastSeenAt fresh
+    const heartbeat = setInterval(() => {
+      const s = getSocket();
+      if (s?.connected) s.emit('ping');
+    }, 30_000);
+
     socket.on('post_reply', ({ comment }: any) => {
       queryClient.invalidateQueries({ queryKey: ['posts'] });
       const commenter = comment?.author;
@@ -302,6 +308,7 @@ function App() {
         s.off('user:online');
         s.off('user:offline');
       }
+      clearInterval(heartbeat);
       window.removeEventListener('focus', handleFocus);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
