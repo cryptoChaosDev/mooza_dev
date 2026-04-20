@@ -241,6 +241,7 @@ export const messageAPI = {
 
 // Artist API
 export const artistAPI = {
+  suggest: (q: string) => api.get('/artists/suggest', { params: { q } }),
   getArtist: (id: string) => api.get(`/artists/${id}`),
   createArtist: (data: any) => api.post('/artists', data),
   updateArtist: (id: string, data: any) => api.put(`/artists/${id}`, data),

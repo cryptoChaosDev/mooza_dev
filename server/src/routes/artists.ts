@@ -20,6 +20,36 @@ async function isMember(artistId: string, userId: string): Promise<boolean> {
   return !!(await prisma.userArtist.findFirst({ where: { artistId, userId } }));
 }
 
+// ── GET /api/artists/suggest?q= ─────────────────────────────────────────────
+router.get('/suggest', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+    if (q.length < 2) return res.json([]);
+
+    const artists = await prisma.artist.findMany({
+      where: {
+        name: { contains: q, mode: 'insensitive' },
+        status: 'DRAFT',
+        submittedById: null,
+      },
+      include: {
+        artistGenres: { include: { genre: { select: { id: true, name: true } } } },
+      },
+      take: 8,
+      orderBy: { name: 'asc' },
+    });
+
+    res.json(artists.map(a => ({
+      id: a.id,
+      name: a.name,
+      thumb: a.avatar,
+      genres: a.artistGenres.map((ag: any) => ({ id: ag.genre.id, name: ag.genre.name })),
+    })));
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to suggest artists' });
+  }
+});
+
 // ── GET /api/artists/:id ─────────────────────────────────────────────────────
 router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response) => {
   try {

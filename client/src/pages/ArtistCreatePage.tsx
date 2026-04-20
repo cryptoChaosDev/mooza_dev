@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Loader2, Save } from 'lucide-react';
+import { ArrowLeft, Loader2, Save, Sparkles } from 'lucide-react';
 import { artistAPI, referenceAPI } from '../lib/api';
 import { SocialLinksEditor } from '../components/SocialLinks';
 import SelectSheet from '../components/SelectSheet';
@@ -38,8 +38,44 @@ export default function ArtistCreatePage() {
   });
   const [genreSheetOpen, setGenreSheetOpen] = useState(false);
   const [typeSheetOpen, setTypeSheetOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<{ id: string; name: string; thumb: string | null; genres: { id: string; name: string }[] }[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [fromCatalog, setFromCatalog] = useState(false);
+  const suggestRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const set = (key: keyof Form, value: any) => setForm(f => ({ ...f, [key]: value }));
+
+  // Закрываем дропдаун при клике вне
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (suggestRef.current && !suggestRef.current.contains(e.target as Node)) setShowSuggestions(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleNameChange = (value: string) => {
+    set('name', value);
+    setFromCatalog(false);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (value.trim().length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const { data } = await artistAPI.suggest(value.trim());
+        setSuggestions(data);
+        setShowSuggestions(data.length > 0);
+      } catch { setSuggestions([]); }
+    }, 300);
+  };
+
+  const applySuggestion = (s: typeof suggestions[0]) => {
+    const matchedGenreIds = s.genres.map(g => g.id);
+    setForm(f => ({ ...f, name: s.name, genreIds: matchedGenreIds }));
+    setFromCatalog(true);
+    setShowSuggestions(false);
+    setSuggestions([]);
+  };
 
   const { data: genreOptions = [] } = useQuery({
     queryKey: ['genres'],
@@ -88,15 +124,46 @@ export default function ArtistCreatePage() {
           После создания отправьте карточку на модерацию — администраторы проверят информацию и одобрят публикацию в каталоге.
         </p>
 
-        {/* Название */}
-        <div>
+        {/* Название с автокомплитом */}
+        <div ref={suggestRef} className="relative">
           <label className="block text-xs text-slate-500 mb-1">Название *</label>
           <input
             className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
             value={form.name}
-            onChange={e => set('name', e.target.value)}
+            onChange={e => handleNameChange(e.target.value)}
+            onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
             placeholder="Название коллектива"
+            autoComplete="off"
           />
+          {fromCatalog && (
+            <div className="mt-1.5 flex items-center gap-1.5 text-xs text-primary-400">
+              <Sparkles size={11} />
+              Данные подтянуты из каталога — можешь изменить
+            </div>
+          )}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl overflow-hidden">
+              {suggestions.map(s => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={() => applySuggestion(s)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-700 transition-colors text-left"
+                >
+                  {s.thumb
+                    ? <img src={s.thumb} alt={s.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                    : <div className="w-8 h-8 rounded-lg bg-slate-700 flex-shrink-0" />
+                  }
+                  <div className="min-w-0">
+                    <p className="text-sm text-white font-medium truncate">{s.name}</p>
+                    {s.genres.length > 0 && (
+                      <p className="text-xs text-slate-400 truncate">{s.genres.map(g => g.name).join(', ')}</p>
+                    )}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Тип */}
