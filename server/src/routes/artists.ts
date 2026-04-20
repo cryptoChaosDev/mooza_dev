@@ -33,7 +33,7 @@ router.get('/suggest', authenticate, async (req: AuthRequest, res: Response) => 
         submittedById: null,
       },
       include: {
-        artistGenres: { include: { genre: { select: { id: true, name: true } } } },
+        genres: { include: { genre: { select: { id: true, name: true } } } },
       },
       take: 8,
       orderBy: { name: 'asc' },
@@ -43,7 +43,7 @@ router.get('/suggest', authenticate, async (req: AuthRequest, res: Response) => 
       id: a.id,
       name: a.name,
       thumb: a.avatar,
-      genres: a.artistGenres.map((ag: any) => ({ id: ag.genre.id, name: ag.genre.name })),
+      genres: a.genres.map((ag: any) => ({ id: ag.genre.id, name: ag.genre.name })),
     })));
   } catch (e) {
     res.status(500).json({ error: 'Failed to suggest artists' });
