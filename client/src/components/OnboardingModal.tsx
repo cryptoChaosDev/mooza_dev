@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -7,7 +7,6 @@ import {
   ArrowRight, Sparkles,
 } from 'lucide-react';
 
-const STORAGE_KEY = 'mooza_onboarding_done_v1';
 
 interface Step {
   emoji: string;

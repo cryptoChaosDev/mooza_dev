@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { userAPI, referenceAPI, connectionAPI, groupAPI, channelAPI, friendshipAPI } from '../lib/api';
+import { userAPI, referenceAPI, connectionAPI, groupAPI, channelAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
