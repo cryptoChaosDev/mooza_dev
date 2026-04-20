@@ -250,6 +250,7 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
             isPremium: true,
             isVerified: true,
             isBlocked: true,
+            lastSeenAt: true,
           }
         },
         receiver: {
@@ -263,6 +264,7 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
             isPremium: true,
             isVerified: true,
             isBlocked: true,
+            lastSeenAt: true,
           }
         }
       }

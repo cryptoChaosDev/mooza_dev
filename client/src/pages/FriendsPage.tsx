@@ -8,6 +8,7 @@ import {
 import { friendshipAPI, connectionAPI, favoriteAPI, groupAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { usePresenceStore } from '../stores/presenceStore';
+import { formatLastSeen } from '../lib/lastSeen';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 
 type Tab = 'friends' | 'connections' | 'favorites' | 'groups';
@@ -369,9 +370,13 @@ export default function FriendsPage() {
                             {isPinned && <Pin size={11} className="text-primary-400 flex-shrink-0" />}
                             {isOnline && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />}
                           </div>
-                          {(friend.role || friend.city) && (
+                          {isOnline ? (
+                            <p className="text-xs text-emerald-500 truncate mt-0.5">В сети</p>
+                          ) : formatLastSeen(friend.lastSeenAt) ? (
+                            <p className="text-xs text-slate-500 truncate mt-0.5">{formatLastSeen(friend.lastSeenAt)}</p>
+                          ) : (friend.role || friend.city) ? (
                             <p className="text-xs text-slate-500 truncate mt-0.5">{[friend.role, friend.city].filter(Boolean).join(' · ')}</p>
-                          )}
+                          ) : null}
                         </div>
                         <div className="flex items-center gap-0.5 flex-shrink-0" onClick={e => e.stopPropagation()}>
                           <button onClick={() => navigate(`/messages/${friend.id}`)} className="p-2 text-slate-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg transition-all" title="Написать">
