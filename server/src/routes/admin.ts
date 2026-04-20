@@ -415,7 +415,6 @@ router.delete('/directions/:id', async (req, res) => {
 router.get('/groups', authenticate, requireAdmin, async (_req, res) => {
   try {
     const groups = await prisma.artist.findMany({
-      where: { type: { in: ['GROUP', 'COVER_GROUP'] } },
       include: {
         _count: { select: { userArtists: true } },
         submittedByUser: { select: { id: true, firstName: true, lastName: true } },

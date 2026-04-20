@@ -1737,6 +1737,8 @@ function GroupsAdminTab() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState<Record<string, string>>({ name: '', type: 'GROUP', city: '', description: '' });
   const [search, setSearch] = useState('');
+  const [filterType, setFilterType] = useState<string>('ALL');
+  const [filterStatus, setFilterStatus] = useState<string>('ALL');
 
   const { data: groups = [], isLoading } = useQuery<any[]>({
     queryKey: ['admin-groups'],
@@ -1758,9 +1760,15 @@ function GroupsAdminTab() {
     onSuccess: invalidate,
   });
 
-  const filtered = search
-    ? groups.filter(g => g.name.toLowerCase().includes(search.toLowerCase()))
-    : groups;
+  const filtered = groups.filter(g => {
+    if (search && !g.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (filterType !== 'ALL') {
+      if (filterType === 'NONE' && g.type !== null) return false;
+      if (filterType !== 'NONE' && g.type !== filterType) return false;
+    }
+    if (filterStatus !== 'ALL' && g.status !== filterStatus) return false;
+    return true;
+  });
 
   const startEdit = (g: any) => {
     setEditId(g.id);
@@ -1810,22 +1818,39 @@ function GroupsAdminTab() {
 
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-white">Группы</h3>
-          <span className="text-xs text-slate-500">{groups.length}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="relative">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
-            <input value={search} onChange={e => setSearch(e.target.value)}
-              className="pl-8 pr-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-primary-500 w-36"
-              placeholder="Поиск..." />
+      <div className="px-4 py-3 border-b border-slate-800 space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h3 className="font-semibold text-white">Каталог артистов</h3>
+            <span className="text-xs text-slate-500">{filtered.length} / {groups.length}</span>
           </div>
-          <button onClick={() => { setShowCreate(true); setEditId(null); setForm({ name: '', type: 'GROUP', city: '', description: '' }); }}
-            className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
-            <Plus size={14} /> Создать
-          </button>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input value={search} onChange={e => setSearch(e.target.value)}
+                className="pl-8 pr-3 py-1.5 bg-slate-800 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-primary-500 w-36"
+                placeholder="Поиск..." />
+            </div>
+            <button onClick={() => { setShowCreate(true); setEditId(null); setForm({ name: '', type: 'GROUP', city: '', description: '' }); }}
+              className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+              <Plus size={14} /> Создать
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {(['ALL', 'NONE', 'SOLO', 'GROUP', 'COVER_GROUP'] as const).map(t => (
+            <button key={t} onClick={() => setFilterType(t)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${filterType === t ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+              {t === 'ALL' ? 'Все типы' : t === 'NONE' ? 'Без типа' : TYPE_LABELS[t] ?? t}
+            </button>
+          ))}
+          <span className="text-slate-700 self-center">|</span>
+          {(['ALL', 'DRAFT', 'PENDING', 'APPROVED', 'VERIFIED', 'REJECTED'] as const).map(s => (
+            <button key={s} onClick={() => setFilterStatus(s)}
+              className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${filterStatus === s ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}>
+              {s === 'ALL' ? 'Все статусы' : STATUS_LABELS[s] ?? s}
+            </button>
+          ))}
         </div>
       </div>
 
