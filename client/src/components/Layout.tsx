@@ -1,15 +1,16 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, UserPlus, X } from 'lucide-react';
+import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, UserPlus, X, HelpCircle } from 'lucide-react';
 import BottomNav from './BottomNav';
 import NotificationBell from './NotificationBell';
 import { useAuthStore } from '../stores/authStore';
 
 interface LayoutProps {
   children: ReactNode;
+  onOpenOnboarding?: () => void;
 }
 
-export default function Layout({ children }: LayoutProps) {
+export default function Layout({ children, onOpenOnboarding }: LayoutProps) {
   const [notifDismissed, setNotifDismissed] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
@@ -63,6 +64,15 @@ export default function Layout({ children }: LayoutProps) {
           </Link>
           <div className="flex items-center gap-1">
             <NotificationBell />
+            {onOpenOnboarding && (
+              <button
+                onClick={onOpenOnboarding}
+                className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
+                title="Как пользоваться"
+              >
+                <HelpCircle size={22} className="text-slate-300" />
+              </button>
+            )}
             <button
               onClick={() => navigate('/invite')}
               className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
@@ -81,7 +91,18 @@ export default function Layout({ children }: LayoutProps) {
             <Link to="/" className="flex items-center">
               <img src="/logo.png" alt="Moooza" className="h-14 w-auto" />
             </Link>
-            <NotificationBell />
+            <div className="flex items-center gap-1">
+              {onOpenOnboarding && (
+                <button
+                  onClick={onOpenOnboarding}
+                  className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
+                  title="Как пользоваться"
+                >
+                  <HelpCircle size={20} className="text-slate-400 hover:text-white" />
+                </button>
+              )}
+              <NotificationBell />
+            </div>
           </div>
         </div>
         

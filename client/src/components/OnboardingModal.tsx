@@ -205,19 +205,12 @@ const STEPS: Step[] = [
 ];
 
 export function useOnboarding() {
-  const [show, setShow] = useState(false);
+  const [show, setShow] = useState(true);
 
-  useEffect(() => {
-    const done = localStorage.getItem(STORAGE_KEY);
-    if (!done) setShow(true);
-  }, []);
+  const dismiss = () => setShow(false);
+  const open = () => setShow(true);
 
-  const dismiss = () => {
-    localStorage.setItem(STORAGE_KEY, '1');
-    setShow(false);
-  };
-
-  return { show, dismiss };
+  return { show, dismiss, open };
 }
 
 interface Props {

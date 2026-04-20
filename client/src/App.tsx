@@ -103,9 +103,9 @@ function BadgeClearer() {
 
 function AppRoutes() {
   const { user } = useAuthStore();
-  const { show: showOnboarding, dismiss: dismissOnboarding } = useOnboarding();
+  const { show: showOnboarding, dismiss: dismissOnboarding, open: openOnboarding } = useOnboarding();
   return (
-    <Layout>
+    <Layout onOpenOnboarding={openOnboarding}>
       <BadgeClearer />
       {showOnboarding && <OnboardingModal onDone={dismissOnboarding} />}
         <Suspense fallback={<PageLoader />}>
