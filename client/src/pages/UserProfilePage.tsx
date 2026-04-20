@@ -4,9 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, MessageCircle, Loader2,
   Crown, BadgeCheck, Ban, X,
-  Headphones, Film, Image, FileText, Briefcase, Radio,
+  Headphones, Image, FileText, Briefcase, Radio,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
-  Users, ChevronRight, Bell,
+  Users, Bell,
 } from 'lucide-react';
 import { userAPI, channelAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
@@ -54,7 +54,6 @@ export default function UserProfilePage() {
   const [viewConn, setViewConn] = useState<any>(null);
   const [connExpanded, setConnExpanded] = useState(false);
   const [portfolioTab, setPortfolioTab] = useState<'av' | 'photo' | 'other'>('av');
-  const [connectionsOpen, setConnectionsOpen] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
   const servicesRef = useRef<HTMLDivElement>(null);
 
@@ -341,7 +340,7 @@ export default function UserProfilePage() {
 
             {userConnections.length > 0 && (
               <button
-                onClick={() => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) || setConnectionsOpen(true)}
+                onClick={() => document.querySelector('[data-connections]')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 hover:border-slate-600 rounded-xl transition-all group"
               >
                 <Link2 size={13} className="text-emerald-400 group-hover:text-emerald-300" />

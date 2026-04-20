@@ -6,10 +6,10 @@ import { userAPI, referenceAPI, connectionAPI, groupAPI, channelAPI, friendshipA
 import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
-  Globe, DollarSign, Calendar, Film, Image,
+  Globe, DollarSign, Calendar, Image,
   Headphones, Edit3, Plus, ChevronDown, ChevronLeft, ChevronRight,
   FileText, Trash2, Radio, Loader2, Crown, BadgeCheck, Ban, Link2,
-  Users, UserCheck, Bell, Music2,
+  Users, Bell, Music2,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import SelectField from '../components/SelectField';
@@ -107,7 +107,6 @@ export default function ProfilePage() {
   const [portfolioFiles, setPortfolioFiles] = useState<any[]>([]);
   const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
   const [lightboxFile, setLightboxFile] = useState<any>(null);
-  const [openBasicSheet, setOpenBasicSheet] = useState<string | null>(null);
   const [portfolioTab, setPortfolioTab] = useState<'av' | 'photo' | 'other'>('av');
 
   const [addStep, setAddStep] = useState<'field' | 'direction' | 'profession' | 'service' | 'filters' | null>(null);
