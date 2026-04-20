@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import {
   Home, Search, User, Users, MessageCircle,
-  ChevronRight, X, Music2, Mic2, Star, Briefcase,
+  ChevronRight, X, Music2, Mic2,
   ArrowRight, Sparkles,
 } from 'lucide-react';
 
@@ -127,24 +127,6 @@ function MessagesVisual() {
   );
 }
 
-function GroupsVisual() {
-  return (
-    <div className="w-full space-y-2.5">
-      <div className="flex gap-2">
-        {['🎸', '🎹', '🥁'].map((e, i) => (
-          <div key={i} className="flex-1 bg-slate-800/60 rounded-2xl p-3 border border-slate-700/40 flex flex-col items-center gap-1">
-            <span className="text-xl">{e}</span>
-            <p className="text-[10px] text-slate-400 text-center">Группа {i + 1}</p>
-          </div>
-        ))}
-      </div>
-      <div className="flex items-center gap-2 bg-primary-600/10 rounded-2xl p-3 border border-primary-500/20">
-        <Star size={14} className="text-primary-400" />
-        <p className="text-xs text-slate-300">Создайте свой коллектив</p>
-      </div>
-    </div>
-  );
-}
 
 const STEPS: Step[] = [
   {
