@@ -145,7 +145,7 @@ export default function FlowSettingsPage() {
           )}
         </div>
 
-        <div className="pb-24">
+        <div className="pb-44 lg:pb-24">
           <Section title="Тип поста">
             {POST_TYPES.map(t => (
               <Chip key={t.id} label={t.label} active={filters.postType === t.id} onClick={() => set('postType', t.id)} />
