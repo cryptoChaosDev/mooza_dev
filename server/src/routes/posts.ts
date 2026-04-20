@@ -43,10 +43,23 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
       f.requesterId === req.userId ? f.receiverId : f.requesterId
     );
 
+    // Get channels the user is subscribed to
+    const channelSubs = await prisma.channelSubscription.findMany({
+      where: { userId: req.userId! },
+      select: { channelId: true },
+    });
+    const subscribedChannelIds = channelSubs.map((s: { channelId: string }) => s.channelId);
+
     const posts = await prisma.post.findMany({
       where: {
-        authorId: { in: [...friendIds, req.userId!] },
-        channelId: null,
+        OR: [
+          // Personal posts from friends and self (no channel)
+          { authorId: { in: [...friendIds, req.userId!] }, channelId: null },
+          // Own channel posts
+          { authorId: req.userId!, channelId: { not: null } },
+          // Posts from subscribed channels
+          ...(subscribedChannelIds.length > 0 ? [{ channelId: { in: subscribedChannelIds } }] : []),
+        ],
       },
       include: {
         author: {
