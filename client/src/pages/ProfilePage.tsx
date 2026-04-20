@@ -121,7 +121,6 @@ export default function ProfilePage() {
   const [editingPortfolio, setEditingPortfolio] = useState(false);
 
   // Chip panels
-  const [friendsOpen, setFriendsOpen] = useState(false);
   const [subscribersOpen, setSubscribersOpen] = useState(false);
 
   const [viewConn, setViewConn] = useState<any>(null);
@@ -194,12 +193,6 @@ export default function ProfilePage() {
   const { data: myGroups = [] } = useQuery({
     queryKey: ['my-groups'],
     queryFn: async () => { const { data } = await groupAPI.getMyGroups(); return data as any[]; },
-  });
-
-  const { data: myFriends = [] } = useQuery({
-    queryKey: ['friends-list'],
-    queryFn: async () => { const { data } = await friendshipAPI.getFriends(); return data as any[]; },
-    enabled: friendsOpen,
   });
 
   const { data: myChannel, refetch: refetchChannel } = useQuery({
@@ -736,7 +729,7 @@ export default function ProfilePage() {
               {/* ── Stats chips ── */}
               <div className="flex items-center gap-2 mb-5 flex-wrap">
                 <button
-                  onClick={() => setFriendsOpen(true)}
+                  onClick={() => navigate('/friends')}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 hover:border-slate-600 rounded-xl transition-all group"
                 >
                   <Users size={13} className="text-primary-400 group-hover:text-primary-300" />
@@ -1173,29 +1166,6 @@ export default function ProfilePage() {
 
     {viewConn && <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />}
 
-    {/* Friends panel */}
-    <BottomPanel open={friendsOpen} onClose={() => setFriendsOpen(false)} title={`Друзья (${friendCount})`}>
-      {myFriends.length === 0
-        ? <p className="text-sm text-slate-500 text-center py-4">Нет друзей</p>
-        : <div className="space-y-1">
-            {myFriends.map((f: any) => {
-              const friend = f.requester?.id === profile?.id ? f.receiver : f.requester;
-              if (!friend) return null;
-              return (
-                <button key={f.id} onClick={() => { setFriendsOpen(false); navigate(`/profile/${friend.id}`); }}
-                  className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/60 transition-colors text-left">
-                  <AvatarComponent src={friend.avatar} name={`${friend.firstName} ${friend.lastName}`} size={40} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{friend.firstName} {friend.lastName}</p>
-                    {friend.city && <p className="text-xs text-slate-500 truncate">{friend.city}</p>}
-                  </div>
-                  <ChevronRight size={14} className="text-slate-600 flex-shrink-0" />
-                </button>
-              );
-            })}
-          </div>
-      }
-    </BottomPanel>
 
     {/* Subscribers panel */}
     <BottomPanel open={subscribersOpen} onClose={() => setSubscribersOpen(false)} title={`Подписчики (${myChannel?._count?.subscriptions ?? 0})`}>
