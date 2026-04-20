@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation } from '@tanstack/react-query';
-import { ArrowLeft, Loader2 } from 'lucide-react';
-import { groupAPI } from '../lib/api';
+import { ArrowLeft, Loader2, Sparkles } from 'lucide-react';
+import { groupAPI, artistAPI } from '../lib/api';
 
 const TYPE_OPTIONS = [
   { id: 'GROUP', name: 'Группа' },
   { id: 'COVER_GROUP', name: 'Кавер-группа' },
 ];
+
+type Suggestion = { id: string; name: string; thumb: string | null; genres: { id: string; name: string }[] };
 
 export default function GroupCreatePage() {
   const navigate = useNavigate();
@@ -15,6 +17,40 @@ export default function GroupCreatePage() {
   const [description, setDescription] = useState('');
   const [city, setCity] = useState('');
   const [type, setType] = useState('GROUP');
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [fromCatalog, setFromCatalog] = useState(false);
+  const suggestRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (suggestRef.current && !suggestRef.current.contains(e.target as Node)) setShowSuggestions(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const handleNameChange = (value: string) => {
+    setName(value);
+    setFromCatalog(false);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (value.trim().length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const { data } = await artistAPI.suggest(value.trim());
+        setSuggestions(data);
+        setShowSuggestions(data.length > 0);
+      } catch { setSuggestions([]); }
+    }, 300);
+  };
+
+  const applySuggestion = (s: Suggestion) => {
+    setName(s.name);
+    setFromCatalog(true);
+    setShowSuggestions(false);
+    setSuggestions([]);
+  };
 
   const createMutation = useMutation({
     mutationFn: () => groupAPI.create({ name, description, city, type }),
@@ -53,14 +89,45 @@ export default function GroupCreatePage() {
           </div>
 
           {/* Name */}
-          <div>
+          <div ref={suggestRef} className="relative">
             <label className="block text-xs font-medium text-slate-400 mb-1.5">Название группы *</label>
             <input
               value={name}
-              onChange={e => setName(e.target.value)}
+              onChange={e => handleNameChange(e.target.value)}
+              onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
               placeholder="Введите название..."
+              autoComplete="off"
               className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 outline-none focus:border-primary-500 transition-colors"
             />
+            {fromCatalog && (
+              <div className="mt-1.5 flex items-center gap-1.5 text-xs text-primary-400">
+                <Sparkles size={11} />
+                Данные подтянуты из каталога — можешь изменить
+              </div>
+            )}
+            {showSuggestions && suggestions.length > 0 && (
+              <div className="absolute z-20 left-0 right-0 top-full mt-1 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl overflow-hidden">
+                {suggestions.map(s => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => applySuggestion(s)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-slate-700 transition-colors text-left"
+                  >
+                    {s.thumb
+                      ? <img src={s.thumb} alt={s.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0" />
+                      : <div className="w-8 h-8 rounded-lg bg-slate-700 flex-shrink-0" />
+                    }
+                    <div className="min-w-0">
+                      <p className="text-sm text-white font-medium truncate">{s.name}</p>
+                      {s.genres.length > 0 && (
+                        <p className="text-xs text-slate-400 truncate">{s.genres.map(g => g.name).join(', ')}</p>
+                      )}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Type */}
