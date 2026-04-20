@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useCallback, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronDown, ShieldAlert, CheckCircle2, Check } from 'lucide-react';
 import { authAPI, userAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
@@ -42,15 +42,38 @@ export default function LoginPage() {
   const [verifyError, setVerifyError] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { setAuth, setUser } = useAuthStore();
 
-  const handleTelegramAuth = useCallback(async (user: any, token: string) => {
-    setAuth(user, token);
-    localStorage.setItem('termsAgreed', '1');
-    navigate('/');
-  }, [setAuth, navigate]);
+  // Handle VK server-side OAuth callback: ?vk_token=JWT or ?vk_error=reason
+  useEffect(() => {
+    const vkToken = searchParams.get('vk_token');
+    const vkError = searchParams.get('vk_error');
+    if (vkToken) {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+      fetch(`${apiUrl}/api/users/me`, { headers: { Authorization: `Bearer ${vkToken}` } })
+        .then(r => r.json())
+        .then(u => {
+          setAuth(u, vkToken);
+          setUser(u);
+          localStorage.setItem('termsAgreed', '1');
+          navigate('/');
+        })
+        .catch(() => setError('Ошибка авторизации через ВКонтакте'));
+    } else if (vkError) {
+      const msgs: Record<string, string> = {
+        cancelled: 'Вы отменили авторизацию через ВКонтакте',
+        state: 'Ошибка безопасности. Попробуйте ещё раз',
+        token: 'VK не выдал токен. Попробуйте ещё раз',
+        userinfo: 'Не удалось получить данные профиля VK',
+        server: 'Ошибка сервера при входе через ВКонтакте',
+      };
+      setError(msgs[vkError] || 'Ошибка входа через ВКонтакте');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleVkAuth = useCallback(async (user: any, token: string) => {
+  const handleTelegramAuth = useCallback(async (user: any, token: string) => {
     setAuth(user, token);
     localStorage.setItem('termsAgreed', '1');
     navigate('/');
@@ -338,7 +361,7 @@ export default function LoginPage() {
             </div>
             <div className="space-y-2.5">
               <TelegramLoginButton onAuth={handleTelegramAuth} onError={handleSocialError} disabled={loading || !agreed} />
-              <VkLoginButton onAuth={handleVkAuth} onError={handleSocialError} disabled={loading || !agreed} />
+              <VkLoginButton disabled={loading || !agreed} />
             </div>
           </div>
 
