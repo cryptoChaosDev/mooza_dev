@@ -1442,7 +1442,7 @@ export default function ChatPage() {
               value={newMessage}
               onChange={e => setNewMessage(e.target.value)}
               onKeyDown={e => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
                   e.preventDefault();
                   e.currentTarget.form?.requestSubmit();
                 }
