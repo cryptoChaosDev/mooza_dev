@@ -333,7 +333,7 @@ router.get('/directions', async (_req, res) => {
 router.post('/directions', async (req, res) => {
   try {
     if (!req.body.name) return res.status(400).json({ error: 'Name required' });
-    const item = await prisma.direction.create({ data: { name: req.body.name } });
+    const item = await prisma.direction.create({ data: { name: req.body.name, allowedFilterTypes: [] } });
     res.json(item);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
