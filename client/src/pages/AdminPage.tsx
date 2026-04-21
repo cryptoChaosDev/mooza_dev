@@ -1963,7 +1963,6 @@ export default function AdminPage() {
                 <SimpleTable collapsible title="Уровень мастерства" queryKey="admin-skill-levels" apiModule={adminAPI.skillLevels} />
                 <SimpleTable collapsible title="Готовность к работе" queryKey="admin-availabilities" apiModule={adminAPI.availabilities} />
                 <SimpleTable collapsible title="География" queryKey="admin-geographies" apiModule={adminAPI.geographies} />
-                <SimpleTable collapsible title="Особенности профессии" queryKey="admin-profession-features" apiModule={adminAPI.professionFeatures} />
                 <SimpleTable
                   collapsible
                   title="Ценовые диапазоны"
