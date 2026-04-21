@@ -171,14 +171,23 @@ function SimpleTable({
 
 // ─── Structure tree shared helpers ──────────────────────────────────────────
 
+function useDesktopFocus() {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (navigator.maxTouchPoints === 0) ref.current?.focus();
+  }, []);
+  return ref;
+}
+
 function InlineEdit({ value, onSave, onCancel }: {
   value: string; onSave: (name: string) => void; onCancel: () => void;
 }) {
   const [name, setName] = useState(value);
+  const ref = useDesktopFocus();
   return (
     <div className="flex items-center gap-2 flex-1">
       <input
-        autoFocus
+        ref={ref}
         value={name}
         onChange={e => setName(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter') onSave(name); if (e.key === 'Escape') onCancel(); }}
@@ -194,10 +203,11 @@ function AddRow({ placeholder, onAdd, onCancel }: {
   placeholder: string; onAdd: (name: string) => void; onCancel: () => void;
 }) {
   const [name, setName] = useState('');
+  const ref = useDesktopFocus();
   return (
     <div className="flex items-center gap-2">
       <input
-        autoFocus
+        ref={ref}
         value={name}
         onChange={e => setName(e.target.value)}
         onKeyDown={e => { if (e.key === 'Enter' && name.trim()) onAdd(name.trim()); if (e.key === 'Escape') onCancel(); }}
