@@ -268,7 +268,6 @@ export default function ChatPage() {
       setConversation(convRes.data.conversation);
       setMessages(convRes.data.messages);
     } catch (err: any) {
-      const status = err?.response?.status;
       console.error('Failed to load chat:', err);
     } finally {
       setLoading(false);
