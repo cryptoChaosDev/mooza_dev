@@ -74,11 +74,6 @@ const MusicNoteIcon = () => (
   </svg>
 );
 
-const DriveIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-    <path d="M7.71 3.5L1.15 15l3.43 6 6.57-12zm.57 12.5H2.43l3.43 6h5.71l-3.29-6zm8 0l-3.29 6h5.72l3.43-6zm1.15-12.5L9.14 16h5.71l6.57-12z"/>
-  </svg>
-);
 
 const LinkIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-full h-full">
