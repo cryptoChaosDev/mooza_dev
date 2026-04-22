@@ -86,22 +86,16 @@ const portfolioStorage = multer.diskStorage({
 
 const portfolioFileFilter = (req: any, file: any, cb: any) => {
   const allowedMimes = [
-    'image/jpeg', 'image/jpg', 'image/png', 'image/webp',
     'application/pdf',
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'text/plain',
-    'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/ogg', 'audio/flac',
-    'audio/x-wav', 'audio/wave',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   ];
-  const allowedExts = [
-    '.jpg', '.jpeg', '.png', '.webp',
-    '.pdf', '.doc', '.docx', '.txt',
-    '.mp3', '.wav', '.ogg', '.flac',
-  ];
+  const allowedExts = ['.pdf', '.doc', '.docx', '.xls', '.xlsx'];
   const ext = path.extname(file.originalname).toLowerCase();
   if (!allowedMimes.includes(file.mimetype) || !allowedExts.includes(ext)) {
-    return cb(new Error('Недопустимый тип файла для портфолио'), false);
+    return cb(new Error('Допустимые форматы: PDF, DOC, DOCX, XLS, XLSX'), false);
   }
   cb(null, true);
 };

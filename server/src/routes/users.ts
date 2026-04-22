@@ -83,6 +83,7 @@ const userSelect = {
   termsAgreedAt: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
+  portfolioLinks: { select: { id: true, type: true, url: true, title: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
   _count: {
     select: {
       sentRequests: { where: { status: 'accepted' } },
@@ -126,6 +127,7 @@ const publicUserSelect = {
   },
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
+  portfolioLinks: { select: { id: true, type: true, url: true, title: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
   _count: {
     select: {
       sentRequests: { where: { status: 'accepted' } },
@@ -604,6 +606,38 @@ router.delete('/me/portfolio/:fileId', authenticate, async (req: AuthRequest, re
   } catch (error) {
     console.error('Portfolio delete error:', error);
     res.status(500).json({ error: 'Failed to delete portfolio file' });
+  }
+});
+
+// Add portfolio link (audio / video)
+router.post('/me/portfolio/links', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { type, url, title = '' } = req.body;
+    if (!type || !url) return res.status(400).json({ error: 'type and url required' });
+    if (!['audio', 'video'].includes(type)) return res.status(400).json({ error: 'type must be audio or video' });
+    const count = await prisma.portfolioLink.count({ where: { userId: req.userId!, type } });
+    if (count >= 5) return res.status(400).json({ error: `Max 5 ${type} links allowed` });
+    const link = await prisma.portfolioLink.create({
+      data: { userId: req.userId!, type, url, title },
+      select: { id: true, type: true, url: true, title: true, createdAt: true },
+    });
+    res.json(link);
+  } catch (error) {
+    console.error('Portfolio link add error:', error);
+    res.status(500).json({ error: 'Failed to add portfolio link' });
+  }
+});
+
+// Delete portfolio link
+router.delete('/me/portfolio/links/:linkId', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const link = await prisma.portfolioLink.findFirst({ where: { id: req.params.linkId, userId: req.userId! } });
+    if (!link) return res.status(404).json({ error: 'Link not found' });
+    await prisma.portfolioLink.delete({ where: { id: req.params.linkId } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Portfolio link delete error:', error);
+    res.status(500).json({ error: 'Failed to delete portfolio link' });
   }
 });
 

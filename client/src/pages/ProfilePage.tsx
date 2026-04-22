@@ -5,7 +5,7 @@ import { userAPI, referenceAPI, connectionAPI, groupAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
-  Globe, DollarSign, Calendar, Image,
+  Globe, DollarSign, Calendar,
   Headphones, Edit3, Plus, ChevronDown, ChevronLeft, ChevronRight,
   FileText, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2,
   Users, Music2,
@@ -19,6 +19,73 @@ import ShareButton from '../components/ShareButton';
 import { plural } from '../lib/plural';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
+function getVideoEmbedUrl(url: string): string | null {
+  const rt = url.match(/rutube\.ru\/video\/([a-zA-Z0-9]+)/);
+  if (rt) return `https://rutube.ru/play/embed/${rt[1]}/`;
+  const vk = url.match(/vk\.com\/video(-?\d+)_(\d+)/);
+  if (vk) return `https://vk.com/video_ext.php?oid=${vk[1]}&id=${vk[2]}`;
+  return null;
+}
+
+function detectAudioPlatform(url: string): 'yandex' | 'google' | 'other' {
+  if (url.includes('disk.yandex') || url.includes('yadi.sk')) return 'yandex';
+  if (url.includes('drive.google') || url.includes('docs.google')) return 'google';
+  return 'other';
+}
+
+function PortfolioAudioItem({ link, onDelete }: { link: any; onDelete?: () => void }) {
+  const [failed, setFailed] = useState(false);
+  const platform = detectAudioPlatform(link.url);
+  const platformLabel = platform === 'yandex' ? 'Яндекс Диск' : platform === 'google' ? 'Google Диск' : 'Облако';
+  return (
+    <div className="rounded-xl bg-slate-800/60 border border-slate-700/40 px-3 pt-3 pb-2">
+      <div className="flex items-center gap-2 mb-2">
+        <Headphones size={13} className="text-primary-400 flex-shrink-0" />
+        <span className="flex-1 text-xs text-slate-300 truncate">{link.title || platformLabel}</span>
+        <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0">↗</a>
+        {onDelete && <button onClick={onDelete} className="p-0.5 rounded hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all flex-shrink-0"><Trash2 size={12} /></button>}
+      </div>
+      {!failed
+        ? <audio controls src={link.url} className="w-full h-9" onError={() => setFailed(true)} />
+        : <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 py-1.5 text-xs text-primary-400 hover:text-primary-300 transition-colors">
+            <span>Открыть в браузере →</span>
+          </a>
+      }
+    </div>
+  );
+}
+
+function PortfolioVideoItem({ link, onDelete }: { link: any; onDelete?: () => void }) {
+  const embedUrl = getVideoEmbedUrl(link.url);
+  const isRutube = link.url.includes('rutube.ru');
+  const isVk = link.url.includes('vk.com');
+  const platformLabel = isRutube ? 'RuTube' : isVk ? 'VK Видео' : 'Видео';
+  return (
+    <div className="rounded-xl overflow-hidden bg-slate-800/60 border border-slate-700/40">
+      {embedUrl
+        ? <iframe src={embedUrl} className="w-full aspect-video" allowFullScreen frameBorder="0" allow="clipboard-write; autoplay" />
+        : <div className="p-3 text-center">
+            <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary-400 hover:text-primary-300 transition-colors">Открыть {platformLabel} →</a>
+          </div>
+      }
+      <div className="flex items-center gap-2 px-3 py-2">
+        <span className="flex-1 text-xs text-slate-400 truncate">{link.title || platformLabel}</span>
+        <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0">↗</a>
+        {onDelete && <button onClick={onDelete} className="p-0.5 rounded hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all flex-shrink-0"><Trash2 size={12} /></button>}
+      </div>
+    </div>
+  );
+}
+
+function DocIcon({ mimeType, name }: { mimeType?: string; name: string }) {
+  const ext = name.split('.').pop()?.toLowerCase() ?? '';
+  if (mimeType === 'application/pdf' || ext === 'pdf')
+    return <FileText size={15} className="text-red-400 flex-shrink-0" />;
+  if (ext === 'xlsx' || ext === 'xls' || mimeType?.includes('spreadsheet') || mimeType?.includes('excel'))
+    return <FileText size={15} className="text-green-400 flex-shrink-0" />;
+  return <FileText size={15} className="text-blue-400 flex-shrink-0" />;
+}
 
 type ServiceCustomFilter = { id: string; name: string; values: { id: string; value: string }[] };
 
@@ -81,9 +148,13 @@ export default function ProfilePage() {
   const [openFilterSheet, setOpenFilterSheet] = useState<string | null>(null);
 
   const [portfolioFiles, setPortfolioFiles] = useState<any[]>([]);
+  const [portfolioLinks, setPortfolioLinks] = useState<any[]>([]);
   const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
-  const [lightboxFile, setLightboxFile] = useState<any>(null);
-  const [portfolioTab, setPortfolioTab] = useState<'av' | 'photo' | 'other'>('av');
+  const [portfolioTab, setPortfolioTab] = useState<'audio' | 'video' | 'other'>('audio');
+  const [newLinkType, setNewLinkType] = useState<'audio' | 'video'>('audio');
+  const [newLinkUrl, setNewLinkUrl] = useState('');
+  const [newLinkTitle, setNewLinkTitle] = useState('');
+  const [addingLink, setAddingLink] = useState(false);
 
   const [addStep, setAddStep] = useState<'field' | 'direction' | 'profession' | 'service' | 'filters' | null>(null);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
@@ -131,6 +202,7 @@ export default function ProfilePage() {
         artistIds: data.userArtists?.map((ua: any) => ua.artistId || ua.artist?.id) || [],
       });
       setPortfolioFiles(data.portfolioFiles ?? []);
+      setPortfolioLinks(data.portfolioLinks ?? []);
       setUserServices(
         data.userServices?.map((us: any) => ({
           fieldOfActivityId: us.profession?.direction?.fieldOfActivity?.id || '',
@@ -282,6 +354,25 @@ export default function ProfilePage() {
   const handlePortfolioDelete = async (fileId: string) => {
     await userAPI.deletePortfolioFile(fileId);
     setPortfolioFiles(prev => prev.filter((f: any) => f.id !== fileId));
+  };
+
+  const handleAddLink = async () => {
+    if (!newLinkUrl.trim()) return;
+    const linksOfType = portfolioLinks.filter((l: any) => l.type === newLinkType);
+    if (linksOfType.length >= 5) return;
+    setAddingLink(true);
+    try {
+      const { data } = await userAPI.addPortfolioLink({ type: newLinkType, url: newLinkUrl.trim(), title: newLinkTitle.trim() });
+      setPortfolioLinks(prev => [...prev, data]);
+      setNewLinkUrl('');
+      setNewLinkTitle('');
+    } catch { /* ignore */ }
+    finally { setAddingLink(false); }
+  };
+
+  const handleDeleteLink = async (linkId: string) => {
+    await userAPI.deletePortfolioLink(linkId);
+    setPortfolioLinks(prev => prev.filter((l: any) => l.id !== linkId));
   };
 
   const formatFileSize = (bytes: number) => {
@@ -506,13 +597,8 @@ export default function ProfilePage() {
     )
   );
 
-  const photoFiles = portfolioFiles.filter(f => f.mimeType?.startsWith('image/'));
-  const audioFiles = portfolioFiles.filter(f => f.mimeType?.startsWith('audio/'));
-  const videoFiles = portfolioFiles.filter(f => f.mimeType?.startsWith('video/'));
-  const otherFiles = portfolioFiles.filter(f =>
-    !f.mimeType?.startsWith('image/') && !f.mimeType?.startsWith('audio/') && !f.mimeType?.startsWith('video/')
-  );
-  const avFiles = [...audioFiles, ...videoFiles];
+  const audioLinks = portfolioLinks.filter((l: any) => l.type === 'audio');
+  const videoLinks = portfolioLinks.filter((l: any) => l.type === 'video');
 
   const servicesByFieldEdit: Record<string, { fieldName: string; entries: { us: UserServiceEntry; idx: number }[] }> = {};
   userServices.forEach((us, idx) => {
@@ -525,16 +611,6 @@ export default function ProfilePage() {
     <>
     <div className="min-h-screen bg-slate-950">
 
-      {/* Lightbox */}
-      {lightboxFile && (
-        <div className="fixed inset-0 z-50 bg-black/95 flex flex-col items-center justify-center" onClick={() => setLightboxFile(null)}>
-          <button className="absolute top-4 right-4 p-2 bg-slate-800/80 hover:bg-slate-700 text-white rounded-full transition-colors" onClick={() => setLightboxFile(null)}>
-            <X size={20} />
-          </button>
-          <img src={`${API_URL}${lightboxFile.url}`} alt={lightboxFile.originalName} className="max-w-full max-h-[85vh] object-contain rounded-lg" onClick={e => e.stopPropagation()} />
-          <p className="mt-3 text-xs text-slate-500">{lightboxFile.originalName}</p>
-        </div>
-      )}
 
       <div className="max-w-2xl mx-auto pb-28">
 
@@ -862,104 +938,93 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* ── Portfolio card — tabs ── */}
+            {/* ── Portfolio card ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                <Image size={14} className="text-primary-400" />
+                <Headphones size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Портфолио</span>
-                {portfolioFiles.length > 0 && <span className="text-xs text-slate-500">{portfolioFiles.length}</span>}
                 <button onClick={() => setEditingPortfolio(v => !v)} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
                   {editingPortfolio ? 'Готово' : 'Изменить'}
                 </button>
               </div>
+              {/* Tabs */}
+              <div className="flex border-b border-slate-800/60">
+                {([
+                  { key: 'audio' as const, label: 'Аудио', count: audioLinks.length },
+                  { key: 'video' as const, label: 'Видео', count: videoLinks.length },
+                  { key: 'other' as const, label: 'Прочее', count: portfolioFiles.length },
+                ]).map(tab => (
+                  <button key={tab.key} onClick={() => { setPortfolioTab(tab.key); setNewLinkType(tab.key === 'other' ? 'audio' : tab.key as 'audio' | 'video'); }}
+                    className={`flex-1 py-2.5 text-xs font-medium border-b-2 transition-all ${portfolioTab === tab.key ? 'border-primary-500 text-primary-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+                    {tab.label}{tab.count > 0 && <span className="ml-1 opacity-60">({tab.count})</span>}
+                  </button>
+                ))}
+              </div>
 
-              {editingPortfolio ? (
+              {/* Audio tab */}
+              {portfolioTab === 'audio' && (
                 <div className="p-4 space-y-3">
-                  <p className="text-xs text-slate-500 mb-2">До 5 файлов, не более 5 МБ каждый</p>
-                  <div className="space-y-1.5">
-                    {portfolioFiles.map((f: any) => (
-                      <div key={f.id} className="flex items-center gap-2 px-3 py-2 bg-slate-700/30 rounded-xl border border-slate-600/50">
-                        <FileText size={14} className="text-slate-400 flex-shrink-0" />
-                        <span className="flex-1 text-xs text-slate-300 truncate">{f.originalName}</span>
-                        <span className="text-xs text-slate-500 flex-shrink-0">{formatFileSize(f.size)}</span>
-                        <button type="button" onClick={() => handlePortfolioDelete(f.id)} className="p-1 rounded hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all flex-shrink-0"><Trash2 size={13} /></button>
+                  {audioLinks.map((l: any) => (
+                    <PortfolioAudioItem key={l.id} link={l} onDelete={editingPortfolio ? () => handleDeleteLink(l.id) : undefined} />
+                  ))}
+                  {audioLinks.length === 0 && !editingPortfolio && (
+                    <p className="text-sm text-slate-600 italic text-center py-2">Нет аудио ссылок</p>
+                  )}
+                  {editingPortfolio && audioLinks.length < 5 && (
+                    <div className="space-y-2 pt-1 border-t border-slate-800/60">
+                      <p className="text-xs text-slate-500 pt-1">Добавить ссылку на Яндекс Диск или Google Диск:</p>
+                      <input value={newLinkTitle} onChange={e => setNewLinkTitle(e.target.value)} placeholder="Название (необязательно)" className="w-full px-3 py-2 bg-slate-800/60 border border-slate-700/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                      <div className="flex gap-2">
+                        <input value={newLinkUrl} onChange={e => setNewLinkUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddLink()} placeholder="https://disk.yandex.ru/d/... или drive.google.com/..." className="flex-1 px-3 py-2 bg-slate-800/60 border border-slate-700/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                        <button onClick={() => { setNewLinkType('audio'); handleAddLink(); }} disabled={addingLink || !newLinkUrl.trim()} className="px-3 py-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-40 text-white text-xs rounded-xl transition-colors">+</button>
                       </div>
-                    ))}
-                  </div>
-                  {portfolioFiles.length < 5 && (
-                    <label className={`flex items-center justify-center gap-2 py-2.5 border border-dashed rounded-xl text-sm transition-all cursor-pointer ${isUploadingPortfolio ? 'border-slate-600 text-slate-500' : 'border-slate-600 text-slate-400 hover:text-primary-400 hover:border-primary-500/50'}`}>
-                      <input type="file" multiple accept="*/*" className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
-                      {isUploadingPortfolio ? 'Загрузка...' : `+ Добавить файл (${portfolioFiles.length}/5)`}
-                    </label>
+                    </div>
                   )}
                 </div>
-              ) : portfolioFiles.length > 0 ? (
-                <div>
-                  {/* Tabs */}
-                  <div className="flex border-b border-slate-800/60">
-                    {([
-                      { key: 'av', label: 'Аудио/Видео', count: avFiles.length, icon: <Headphones size={12} /> },
-                      { key: 'photo', label: 'Фото', count: photoFiles.length, icon: <Image size={12} /> },
-                      { key: 'other', label: 'Другое', count: otherFiles.length, icon: <FileText size={12} /> },
-                    ] as const).map(tab => (
-                      <button
-                        key={tab.key}
-                        onClick={() => setPortfolioTab(tab.key)}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs font-medium border-b-2 transition-all ${portfolioTab === tab.key ? 'border-primary-500 text-primary-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
-                      >
-                        {tab.icon}{tab.label}{tab.count > 0 && <span className="text-[10px] opacity-60">({tab.count})</span>}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="p-4 space-y-3">
-                    {portfolioTab === 'av' && (
-                      avFiles.length === 0
-                        ? <p className="text-sm text-slate-600 italic text-center py-4">Нет аудио и видео файлов</p>
-                        : <>
-                            {audioFiles.map((f: any) => (
-                              <div key={f.id} className="rounded-xl bg-slate-800/60 border border-slate-700/40 px-3 pt-3 pb-2">
-                                <p className="text-xs text-slate-400 truncate mb-2">{f.originalName}</p>
-                                <audio controls src={`${API_URL}${f.url}`} className="w-full h-9" />
-                              </div>
-                            ))}
-                            {videoFiles.map((f: any) => (
-                              <div key={f.id} className="rounded-xl overflow-hidden bg-slate-800/60 border border-slate-700/40">
-                                <video controls src={`${API_URL}${f.url}`} className="w-full max-h-52 object-contain bg-black" />
-                                <p className="text-xs text-slate-500 truncate px-3 py-1.5">{f.originalName}</p>
-                              </div>
-                            ))}
-                          </>
-                    )}
-                    {portfolioTab === 'photo' && (
-                      photoFiles.length === 0
-                        ? <p className="text-sm text-slate-600 italic text-center py-4">Нет фотографий</p>
-                        : <div className="grid grid-cols-3 gap-1.5">
-                            {photoFiles.map((f: any) => (
-                              <button key={f.id} onClick={() => setLightboxFile(f)} className="aspect-square rounded-xl overflow-hidden bg-slate-800 hover:opacity-90 transition-opacity">
-                                <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
-                              </button>
-                            ))}
-                          </div>
-                    )}
-                    {portfolioTab === 'other' && (
-                      otherFiles.length === 0
-                        ? <p className="text-sm text-slate-600 italic text-center py-4">Нет других файлов</p>
-                        : <div className="space-y-1">
-                            {otherFiles.map((f: any) => (
-                              <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
-                                className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/40 hover:bg-slate-700/40 border border-slate-700/40 transition-colors group">
-                                <FileText size={14} className="text-slate-500 flex-shrink-0 group-hover:text-primary-400 transition-colors" />
-                                <span className="flex-1 text-sm text-slate-300 truncate group-hover:text-white transition-colors">{f.originalName}</span>
-                                <span className="text-xs text-slate-600 flex-shrink-0">{formatFileSize(f.size)}</span>
-                              </a>
-                            ))}
-                          </div>
-                    )}
-                  </div>
+              )}
+
+              {/* Video tab */}
+              {portfolioTab === 'video' && (
+                <div className="p-4 space-y-3">
+                  {videoLinks.map((l: any) => (
+                    <PortfolioVideoItem key={l.id} link={l} onDelete={editingPortfolio ? () => handleDeleteLink(l.id) : undefined} />
+                  ))}
+                  {videoLinks.length === 0 && !editingPortfolio && (
+                    <p className="text-sm text-slate-600 italic text-center py-2">Нет видео ссылок</p>
+                  )}
+                  {editingPortfolio && videoLinks.length < 5 && (
+                    <div className="space-y-2 pt-1 border-t border-slate-800/60">
+                      <p className="text-xs text-slate-500 pt-1">Добавить видео из RuTube или VK Видео:</p>
+                      <input value={newLinkTitle} onChange={e => setNewLinkTitle(e.target.value)} placeholder="Название (необязательно)" className="w-full px-3 py-2 bg-slate-800/60 border border-slate-700/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                      <div className="flex gap-2">
+                        <input value={newLinkUrl} onChange={e => setNewLinkUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddLink()} placeholder="https://rutube.ru/video/... или vk.com/video..." className="flex-1 px-3 py-2 bg-slate-800/60 border border-slate-700/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                        <button onClick={() => { setNewLinkType('video'); handleAddLink(); }} disabled={addingLink || !newLinkUrl.trim()} className="px-3 py-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-40 text-white text-xs rounded-xl transition-colors">+</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              ) : (
-                <div className="p-4 text-center">
-                  <p className="text-sm text-slate-600 italic">Нет файлов в портфолио</p>
+              )}
+
+              {/* Documents tab */}
+              {portfolioTab === 'other' && (
+                <div className="p-4 space-y-2">
+                  {portfolioFiles.map((f: any) => (
+                    <div key={f.id} className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/40 group">
+                      <DocIcon mimeType={f.mimeType} name={f.originalName} />
+                      <a href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm text-slate-300 hover:text-white truncate transition-colors">{f.originalName}</a>
+                      <span className="text-xs text-slate-600 flex-shrink-0">{formatFileSize(f.size)}</span>
+                      {editingPortfolio && <button onClick={() => handlePortfolioDelete(f.id)} className="p-1 rounded hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all flex-shrink-0"><Trash2 size={13} /></button>}
+                    </div>
+                  ))}
+                  {portfolioFiles.length === 0 && !editingPortfolio && (
+                    <p className="text-sm text-slate-600 italic text-center py-2">Нет документов</p>
+                  )}
+                  {editingPortfolio && portfolioFiles.length < 5 && (
+                    <label className={`flex items-center justify-center gap-2 py-2.5 border border-dashed rounded-xl text-sm transition-all cursor-pointer mt-1 ${isUploadingPortfolio ? 'border-slate-600 text-slate-500' : 'border-slate-600 text-slate-400 hover:text-primary-400 hover:border-primary-500/50'}`}>
+                      <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx" className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+                      {isUploadingPortfolio ? 'Загрузка...' : `+ PDF, DOC, DOCX, XLS, XLSX (${portfolioFiles.length}/5)`}
+                    </label>
+                  )}
                 </div>
               )}
             </div>

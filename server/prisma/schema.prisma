@@ -338,6 +338,19 @@ model PortfolioFile {
   @@index([userId])
 }
 
+model PortfolioLink {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // 'audio' | 'video'
+  url       String
+  title     String   @default("")
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 // ============ USER MODEL ============
 
 model User {
@@ -400,6 +413,7 @@ model User {
   favoritedBy Favorite[] @relation("FavoriteTarget")
 
   portfolioFiles PortfolioFile[]
+  portfolioLinks PortfolioLink[]
 
   // Employer (many-to-one)
   employerId String?

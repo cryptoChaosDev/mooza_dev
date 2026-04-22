@@ -99,6 +99,8 @@ export const userAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   deletePortfolioFile: (fileId: string) => api.delete(`/users/me/portfolio/${fileId}`),
+  addPortfolioLink: (data: { type: string; url: string; title?: string }) => api.post('/users/me/portfolio/links', data),
+  deletePortfolioLink: (linkId: string) => api.delete(`/users/me/portfolio/links/${linkId}`),
   agreeToTerms: () => api.post('/users/me/agree-terms'),
 };
 

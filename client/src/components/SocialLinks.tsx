@@ -10,8 +10,6 @@ export type SocialKey =
   | 'youtube'
   | 'bandlink'
   | 'yandex_music'
-  | 'yandex_disk'
-  | 'google_drive'
   | 'dropbox'
   | 'spotify'
   | 'lastfm'
@@ -152,24 +150,6 @@ export const SOCIAL_SERVICES: SocialService[] = [
     color: 'yellow',
     iconBg: '#FFCC00',
     icon: <MusicNoteIcon />,
-  },
-  {
-    key: 'yandex_disk',
-    label: 'Яндекс Диск',
-    baseUrl: 'https://disk.yandex.ru/d/',
-    placeholder: 'ссылка или хэш',
-    color: 'yellow',
-    iconBg: '#FFCC00',
-    icon: <DriveIcon />,
-  },
-  {
-    key: 'google_drive',
-    label: 'Google Диск',
-    baseUrl: 'https://drive.google.com/drive/folders/',
-    placeholder: 'ID папки',
-    color: 'green',
-    iconBg: '#34A853',
-    icon: <DriveIcon />,
   },
   {
     key: 'dropbox',
