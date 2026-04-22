@@ -861,13 +861,13 @@ export default function ProfilePage() {
                               </button>
                               <button type="button" onClick={() => { setUserServices(prev => prev.filter((_, i) => i !== idx)); if (expandedSvcIdx === idx) setExpandedSvcIdx(null); }} className="flex-shrink-0 p-1 rounded-lg hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all"><X size={14} /></button>
                             </div>
-                            {expandedSvcIdx === idx && <ServiceFilterEditors idx={idx} />}
+                            {expandedSvcIdx === idx && ServiceFilterEditors({ idx })}
                           </div>
                         ))}
                       </div>
                     </div>
                   ))}
-                  {addStep ? <AddServiceFlow /> : (
+                  {addStep ? AddServiceFlow() : (
                     <button type="button" onClick={() => setAddStep('field')} className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm">
                       <Plus size={14} />Добавить услугу
                     </button>
