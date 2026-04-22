@@ -30,9 +30,8 @@ const MEMBER_USER = {
   user: { select: { id: true, firstName: true, lastName: true, avatar: true, isPremium: true, isVerified: true, isBlocked: true } },
 };
 
-/** Find or create a 1-to-1 conversation between two users.
- *  Returns { conv, forbidden: true } if users are not friends and no DM exists yet. */
-async function findOrCreateDM(userAId: string, userBId: string): Promise<{ conv: any; forbidden?: boolean }> {
+/** Find or create a 1-to-1 conversation between two users. */
+async function findOrCreateDM(userAId: string, userBId: string): Promise<{ conv: any }> {
   const all = await db.conversation.findMany({
     where: { isGroup: false },
     include: { members: true },
@@ -49,20 +48,6 @@ async function findOrCreateDM(userAId: string, userBId: string): Promise<{ conv:
       include: { members: { include: MEMBER_USER } },
     });
     return { conv };
-  }
-
-  // No existing DM — require friendship before creating
-  const friendship = await db.friendship.findFirst({
-    where: {
-      OR: [
-        { requesterId: userAId, receiverId: userBId, status: 'accepted' },
-        { requesterId: userBId, receiverId: userAId, status: 'accepted' },
-      ],
-    },
-  });
-
-  if (!friendship) {
-    return { conv: null, forbidden: true };
   }
 
   const conv = await db.conversation.create({
