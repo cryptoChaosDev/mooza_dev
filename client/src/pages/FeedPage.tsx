@@ -354,14 +354,15 @@ function PostTypePicker({ onClose }: { onClose: () => void }) {
           {POST_TYPE_OPTIONS.map(({ type, label, icon: Icon, desc, inDev }) => (
             <button
               key={type}
+              disabled={inDev}
               onClick={() => { onClose(); navigate(`/create-post?type=${type}`); }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl hover:bg-slate-800 transition-colors text-left"
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors text-left ${inDev ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-800'}`}
             >
               <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${inDev ? 'bg-slate-800' : 'bg-primary-600/20'}`}>
                 <Icon size={20} className={inDev ? 'text-slate-500' : 'text-primary-400'} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className={`text-sm font-semibold ${inDev ? 'text-slate-400' : 'text-white'}`}>{label}</p>
+                <p className={`text-sm font-semibold ${inDev ? 'text-slate-500' : 'text-white'}`}>{label}</p>
                 <p className="text-xs text-slate-500">{desc}</p>
               </div>
             </button>
