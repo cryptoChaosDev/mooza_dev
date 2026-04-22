@@ -295,11 +295,9 @@ export default function UserProfilePage() {
                       <UserCheck size={16} />
                     </button>
                   )}
-                  {user.isFriend && (
-                    <button onClick={() => navigate(`/messages/${user.id}`)} className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all shadow-lg shadow-primary-500/20" title="Написать сообщение">
-                      <MessageCircle size={16} />
-                    </button>
-                  )}
+                  <button onClick={() => navigate(`/messages/${user.id}`)} className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all shadow-lg shadow-primary-500/20" title="Написать сообщение">
+                    <MessageCircle size={16} />
+                  </button>
                 </>
               )}
             </div>
