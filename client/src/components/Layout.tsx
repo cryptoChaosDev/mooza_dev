@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, UserPlus, X, HelpCircle } from 'lucide-react';
+import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, Gift, X, HelpCircle } from 'lucide-react';
 import BottomNav from './BottomNav';
 import NotificationBell from './NotificationBell';
 import { useAuthStore } from '../stores/authStore';
@@ -78,7 +78,7 @@ export default function Layout({ children, onOpenOnboarding }: LayoutProps) {
               className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
               title="Пригласить друзей"
             >
-              <UserPlus size={22} className="text-slate-300" />
+              <Gift size={22} className="text-slate-300" />
             </button>
           </div>
         </header>
