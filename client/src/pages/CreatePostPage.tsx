@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Image, Music, Smile, Send, X, Loader2,
-  FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench, Plus, Radio,
+  FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench, Plus,
 } from 'lucide-react';
-import { postAPI, channelAPI } from '../lib/api';
+import { postAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import AvatarComponent from '../components/Avatar';
 import EmojiPicker from '../components/EmojiPicker';
@@ -37,15 +37,7 @@ export default function CreatePostPage() {
   const [uploading, setUploading] = useState(false);
   const [pickedServices, setPickedServices] = useState<PickedService[]>([]);
   const [showServicePicker, setShowServicePicker] = useState(false);
-  const [postToChannel, setPostToChannel] = useState(false);
-
   const isBlog = type === 'blog';
-  const { data: myChannel } = useQuery({
-    queryKey: ['my-channel'],
-    queryFn: async () => { try { const { data } = await channelAPI.getMyChannel(); return data; } catch { return null; } },
-    enabled: isBlog,
-    staleTime: 60_000,
-  });
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -127,7 +119,6 @@ export default function CreatePostPage() {
       imageUrl: imagePreview?.serverUrl,
       audioUrl: audioFile?.serverUrl,
       audioName: audioFile?.name,
-      channelId: isBlog && postToChannel && myChannel ? myChannel.id : undefined,
     });
   };
 
@@ -181,20 +172,6 @@ export default function CreatePostPage() {
                 <p className="text-sm font-semibold text-white">{currentUser.firstName} {currentUser.lastName}</p>
                 <p className="text-xs text-slate-500">{meta.label}</p>
               </div>
-              {isBlog && myChannel && (
-                <button
-                  type="button"
-                  onClick={() => setPostToChannel(v => !v)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-medium transition-all flex-shrink-0 self-start ${
-                    postToChannel
-                      ? 'bg-primary-600/20 border-primary-500/50 text-primary-400'
-                      : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-primary-400 hover:border-primary-500/30'
-                  }`}
-                >
-                  <Radio size={12} />
-                  {postToChannel ? myChannel.name : 'В канал'}
-                </button>
-              )}
             </div>
           )}
 

@@ -23,50 +23,15 @@ router.post('/upload', authenticate, uploadPostMedia.single('file'), async (req:
   }
 });
 
-// Get feed (posts from friends and own posts)
+// Get feed (all posts from the social network)
 router.get('/feed', authenticate, async (req: AuthRequest, res) => {
   try {
     const { limit = 20, offset = 0 } = req.query;
 
-    // Get user's friends
-    const friendships = await prisma.friendship.findMany({
-      where: {
-        OR: [
-          { requesterId: req.userId, status: 'accepted' },
-          { receiverId: req.userId, status: 'accepted' }
-        ]
-      },
-      select: { requesterId: true, receiverId: true }
-    });
-
-    const friendIds = friendships.map(f =>
-      f.requesterId === req.userId ? f.receiverId : f.requesterId
-    );
-
-    // Get channels the user is subscribed to
-    const channelSubs = await prisma.channelSubscription.findMany({
-      where: { userId: req.userId! },
-      select: { channelId: true },
-    });
-    const subscribedChannelIds = channelSubs.map((s: { channelId: string }) => s.channelId);
-
     const posts = await prisma.post.findMany({
-      where: {
-        OR: [
-          // Personal posts from friends and self (no channel)
-          { authorId: { in: [...friendIds, req.userId!] }, channelId: null },
-          // Own channel posts
-          { authorId: req.userId!, channelId: { not: null } },
-          // Posts from subscribed channels
-          ...(subscribedChannelIds.length > 0 ? [{ channelId: { in: subscribedChannelIds } }] : []),
-        ],
-      },
       include: {
         author: {
           select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true }
-        },
-        channel: {
-          select: { id: true, name: true, avatar: true, ownerId: true }
         },
         likes: {
           where: { userId: req.userId },
@@ -95,13 +60,7 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
       skip: Number(offset),
     });
 
-    // Add isLiked property to each post
-    const postsWithLikeStatus = posts.map(post => ({
-      ...post,
-      isLiked: post.likes.length > 0
-    }));
-
-    res.json(postsWithLikeStatus);
+    res.json(posts.map(post => ({ ...post, isLiked: post.likes.length > 0 })));
   } catch (error) {
     console.error('Get feed error:', error);
     res.status(500).json({ error: 'Failed to get feed' });
@@ -111,18 +70,10 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
 // Create post
 router.post('/', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { content, imageUrl, audioUrl, audioName, channelId } = req.body;
+    const { content, imageUrl, audioUrl, audioName } = req.body;
 
     if (!content && !imageUrl && !audioUrl) {
       return res.status(400).json({ error: 'Post cannot be empty' });
-    }
-
-    // If channelId provided, verify user owns that channel
-    if (channelId) {
-      const channel = await prisma.channel.findUnique({ where: { id: channelId } });
-      if (!channel || channel.ownerId !== req.userId) {
-        return res.status(403).json({ error: 'Нет доступа к этому каналу' });
-      }
     }
 
     const post = await prisma.post.create({
@@ -132,11 +83,9 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         audioUrl: audioUrl || null,
         audioName: audioName || null,
         authorId: req.userId!,
-        channelId: channelId || null,
       },
       include: {
         author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true } },
-        channel: { select: { id: true, name: true, avatar: true, ownerId: true } },
       }
     });
 

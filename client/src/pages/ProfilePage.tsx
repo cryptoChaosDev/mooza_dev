@@ -2,13 +2,13 @@ import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { userAPI, referenceAPI, connectionAPI, groupAPI, channelAPI } from '../lib/api';
+import { userAPI, referenceAPI, connectionAPI, groupAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, DollarSign, Calendar, Image,
   Headphones, Edit3, Plus, ChevronDown, ChevronLeft, ChevronRight,
-  FileText, Trash2, Radio, Loader2, Crown, BadgeCheck, Ban, Link2,
+  FileText, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2,
   Users, Bell, Music2,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
@@ -121,7 +121,6 @@ export default function ProfilePage() {
   const [editingPortfolio, setEditingPortfolio] = useState(false);
 
   // Chip panels
-  const [subscribersOpen, setSubscribersOpen] = useState(false);
 
   const [viewConn, setViewConn] = useState<any>(null);
   const [connExpanded, setConnExpanded] = useState(false);
@@ -195,20 +194,6 @@ export default function ProfilePage() {
     queryFn: async () => { const { data } = await groupAPI.getMyGroups(); return data as any[]; },
   });
 
-  const { data: myChannel, refetch: refetchChannel } = useQuery({
-    queryKey: ['my-channel'],
-    queryFn: async () => {
-      const { data } = await channelAPI.getMyChannel();
-      return data as { id: string; name: string; description: string | null; avatar: string | null; _count: { subscriptions: number; posts: number } } | null;
-    },
-  });
-
-  const { data: mySubscribers = [] } = useQuery({
-    queryKey: ['my-subscribers'],
-    queryFn: async () => { const { data } = await channelAPI.getMySubscribers(); return data as any[]; },
-    enabled: subscribersOpen,
-  });
-
   const uploadAvatarMutation = useMutation({
     mutationFn: async (file: File) => {
       const fd = new FormData();
@@ -231,35 +216,6 @@ export default function ProfilePage() {
 
   const updateMutation = useMutation({ mutationFn: userAPI.updateMe });
 
-  // ── Channel ────────────────────────────────────────────────────────────────
-  const [channelForm, setChannelForm] = useState({ name: '', description: '' });
-  const [channelEditing, setChannelEditing] = useState(false);
-  const channelAvatarRef = useRef<HTMLInputElement>(null);
-
-  const createChannelMut = useMutation({
-    mutationFn: () => channelAPI.createChannel({ name: channelForm.name.trim(), description: channelForm.description.trim() || undefined }),
-    onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['my-channel'] }); setChannelForm({ name: '', description: '' }); },
-  });
-  const updateChannelMut = useMutation({
-    mutationFn: () => channelAPI.updateChannel({ name: channelForm.name.trim(), description: channelForm.description.trim() || undefined }),
-    onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['my-channel'] }); setChannelEditing(false); },
-  });
-  const deleteChannelMut = useMutation({
-    mutationFn: () => channelAPI.deleteChannel(),
-    onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['my-channel'] }); },
-  });
-  const uploadChannelAvatarMut = useMutation({
-    mutationFn: async (file: File) => {
-      const fd = new FormData();
-      fd.append('avatar', file);
-      const { data } = await channelAPI.uploadAvatar(fd);
-      return data;
-    },
-    onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['my-channel'] }); },
-  });
-  const startEditChannel = () => {
-    if (myChannel) { setChannelForm({ name: myChannel.name, description: myChannel.description || '' }); setChannelEditing(true); }
-  };
 
   const updateServicesMutation = useMutation({
     mutationFn: (services: typeof userServices) => userAPI.updateServices(
@@ -757,16 +713,6 @@ export default function ProfilePage() {
                   </button>
                 )}
 
-                {myChannel && (
-                  <button
-                    onClick={() => setSubscribersOpen(true)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 hover:border-slate-600 rounded-xl transition-all group"
-                  >
-                    <Bell size={13} className="text-sky-400 group-hover:text-sky-300" />
-                    <span className="text-sm font-bold text-white">{myChannel._count.subscriptions}</span>
-                    <span className="text-xs text-slate-500">{plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')}</span>
-                  </button>
-                )}
               </div>
             </>
           )}
@@ -1042,70 +988,6 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* ── Channel card ── */}
-            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                <Radio size={14} className="text-primary-400" />
-                <span className="text-sm font-semibold text-white">Канал</span>
-              </div>
-              <div className="p-4">
-                {myChannel ? (
-                  <>
-                    <div className="flex items-center gap-3 mb-3">
-                      <div className="relative flex-shrink-0">
-                        <div className="w-14 h-14 rounded-xl overflow-hidden bg-slate-800 border border-slate-700 flex items-center justify-center">
-                          {myChannel.avatar ? <img src={getAvatarUrl(myChannel.avatar)!} alt="" className="w-full h-full object-cover" /> : <Radio size={22} className="text-slate-500" />}
-                        </div>
-                        <button onClick={() => channelAvatarRef.current?.click()} className="absolute -bottom-1 -right-1 p-1 bg-primary-600 hover:bg-primary-500 rounded-full shadow transition-colors"><Camera size={10} className="text-white" /></button>
-                        <input ref={channelAvatarRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadChannelAvatarMut.mutate(f); e.target.value = ''; }} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        {channelEditing
-                          ? <input value={channelForm.name} onChange={e => setChannelForm(f => ({ ...f, name: e.target.value }))} className="w-full px-2.5 py-1.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white" placeholder="Название канала" />
-                          : <p className="text-base font-semibold text-white truncate">{myChannel.name}</p>
-                        }
-                        <p className="text-xs text-slate-500 mt-1">{myChannel._count.subscriptions} {plural(myChannel._count.subscriptions, 'подписчик', 'подписчика', 'подписчиков')} · {myChannel._count.posts} {plural(myChannel._count.posts, 'пост', 'поста', 'постов')}</p>
-                      </div>
-                    </div>
-                    {channelEditing ? (
-                      <>
-                        <textarea value={channelForm.description} onChange={e => setChannelForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Описание канала..." className="w-full px-3.5 py-2.5 bg-slate-700/50 border border-slate-600/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 text-white placeholder-slate-500 resize-none mb-2" />
-                        <div className="flex gap-2">
-                          <button onClick={() => setChannelEditing(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
-                          <button onClick={() => updateChannelMut.mutate()} disabled={updateChannelMut.isPending || !channelForm.name.trim()} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-1.5">
-                            {updateChannelMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}Сохранить
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        {myChannel.description && <p className="text-sm text-slate-400 leading-relaxed mb-3">{myChannel.description}</p>}
-                        <div className="flex gap-2">
-                          <button onClick={startEditChannel} className="flex-1 py-2 text-sm text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 rounded-xl transition-colors flex items-center justify-center gap-1.5"><Edit3 size={14} />Редактировать</button>
-                          <button onClick={() => { if (confirm('Удалить канал? Все посты канала будут отвязаны.')) deleteChannelMut.mutate(); }} disabled={deleteChannelMut.isPending} className="py-2 px-3 text-sm text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-500/50 rounded-xl transition-colors">
-                            {deleteChannelMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="flex flex-col items-center py-2 text-center">
-                      <div className="p-3 bg-slate-800/50 rounded-2xl mb-2"><Radio size={24} className="text-slate-500" /></div>
-                      <p className="text-white font-semibold mb-0.5 text-sm">У вас нет канала</p>
-                      <p className="text-slate-500 text-xs">Создайте канал, чтобы публиковать посты от его имени</p>
-                    </div>
-                    <input value={channelForm.name} onChange={e => setChannelForm(f => ({ ...f, name: e.target.value }))} placeholder="Название канала *" className={inputCls} />
-                    <textarea value={channelForm.description} onChange={e => setChannelForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Описание (необязательно)" className={`${inputCls} resize-none`} />
-                    <button onClick={() => createChannelMut.mutate()} disabled={createChannelMut.isPending || !channelForm.name.trim()} className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
-                      {createChannelMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Plus size={15} />}Создать канал
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-
             {/* ── Connections card ── */}
             {myConnections.length > 0 && (() => {
               const LIMIT = 4;
@@ -1167,25 +1049,6 @@ export default function ProfilePage() {
     {viewConn && <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />}
 
 
-    {/* Subscribers panel */}
-    <BottomPanel open={subscribersOpen} onClose={() => setSubscribersOpen(false)} title={`Подписчики (${myChannel?._count?.subscriptions ?? 0})`}>
-      {mySubscribers.length === 0
-        ? <p className="text-sm text-slate-500 text-center py-4">Нет подписчиков</p>
-        : <div className="space-y-1">
-            {mySubscribers.map((sub: any) => (
-              <button key={sub.id} onClick={() => { setSubscribersOpen(false); navigate(`/profile/${sub.id}`); }}
-                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-800/60 transition-colors text-left">
-                <AvatarComponent src={sub.avatar} name={`${sub.firstName} ${sub.lastName}`} size={40} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white truncate">{sub.firstName} {sub.lastName}</p>
-                  {sub.city && <p className="text-xs text-slate-500 truncate">{sub.city}</p>}
-                </div>
-                <ChevronRight size={14} className="text-slate-600 flex-shrink-0" />
-              </button>
-            ))}
-          </div>
-      }
-    </BottomPanel>
 
     </>
   );

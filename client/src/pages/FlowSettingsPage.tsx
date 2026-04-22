@@ -8,7 +8,6 @@ export interface FlowFilters {
   location: string;
   period: string;
   genre: string;
-  relationship: string;
 }
 
 export const FLOW_FILTERS_KEY = 'mooza_flow_filters';
@@ -19,7 +18,6 @@ export const DEFAULT_FILTERS: FlowFilters = {
   location: '',
   period: 'all',
   genre: '',
-  relationship: 'all',
 };
 
 export function loadFilters(): FlowFilters {
@@ -89,13 +87,6 @@ const PERIODS = [
   { id: 'week', label: 'Неделя' },
   { id: 'month', label: 'Месяц' },
   { id: 'year', label: 'Год' },
-];
-
-const RELATIONSHIPS = [
-  { id: 'all', label: 'Все' },
-  { id: 'friends', label: 'Друзья' },
-  { id: 'connections', label: 'Связи' },
-  { id: 'favorites', label: 'Избранное' },
 ];
 
 const GENRES = [
@@ -179,11 +170,6 @@ export default function FlowSettingsPage() {
             </div>
           </Section>
 
-          <Section title="Отношения">
-            {RELATIONSHIPS.map(t => (
-              <Chip key={t.id} label={t.label} active={filters.relationship === t.id} onClick={() => set('relationship', t.id)} />
-            ))}
-          </Section>
         </div>
 
         {/* Apply button */}
