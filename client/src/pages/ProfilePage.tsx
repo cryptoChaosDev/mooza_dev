@@ -403,8 +403,8 @@ export default function ProfilePage() {
           <div>
             <p className="text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1"><DollarSign size={13} />Бюджет (₽)</p>
             <div className="flex gap-2">
-              <input type="number" min={0} placeholder="От" value={us.priceFrom} onChange={e => updateSvc(idx, { priceFrom: e.target.value })} className="flex-1 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-              <input type="number" min={0} placeholder="До" value={us.priceTo} onChange={e => updateSvc(idx, { priceTo: e.target.value })} className="flex-1 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+              <input type="number" min={0} placeholder="От" value={us.priceFrom} onChange={e => updateSvc(idx, { priceFrom: e.target.value })} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+              <input type="number" min={0} placeholder="До" value={us.priceTo} onChange={e => updateSvc(idx, { priceTo: e.target.value })} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
             </div>
           </div>
         )}
@@ -544,8 +544,8 @@ export default function ProfilePage() {
                 <div>
                   <p className="text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1"><DollarSign size={13} />Бюджет (₽)</p>
                   <div className="flex gap-2">
-                    <input type="number" min={0} placeholder="От" value={pending.priceFrom} onChange={e => setPending(p => ({ ...p, priceFrom: e.target.value }))} className="flex-1 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-                    <input type="number" min={0} placeholder="До" value={pending.priceTo} onChange={e => setPending(p => ({ ...p, priceTo: e.target.value }))} className="flex-1 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                    <input type="number" min={0} placeholder="От" value={pending.priceFrom} onChange={e => setPending(p => ({ ...p, priceFrom: e.target.value }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                    <input type="number" min={0} placeholder="До" value={pending.priceTo} onChange={e => setPending(p => ({ ...p, priceTo: e.target.value }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
                   </div>
                 </div>
               )}
