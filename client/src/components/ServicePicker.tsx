@@ -116,81 +116,76 @@ export default function ServicePicker({ onSelect, onClose, excludeServiceIds = [
   };
 
   return createPortal(
-    <div className="fixed inset-0 z-[70] flex items-end justify-center" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-      <div
-        className="relative w-full max-w-lg bg-slate-900 rounded-t-3xl border-t border-slate-800 flex flex-col shadow-2xl"
-        style={{ maxHeight: '85vh' }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Handle */}
-        <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-2 flex-shrink-0" />
-
-        {/* Header */}
-        <div className="flex items-center gap-3 px-4 pb-3 flex-shrink-0">
-          <button onClick={handleBack} className="p-2 -ml-1 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors">
-            <ArrowLeft size={20} />
-          </button>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-white">{levelLabel[level]}</p>
-            {breadcrumb.length > 0 && (
-              <div className="flex items-center gap-1 flex-wrap mt-0.5">
-                {breadcrumb.map((b, i) => (
-                  <span key={i} className="flex items-center gap-1">
-                    {i > 0 && <ChevronRight size={10} className="text-slate-600" />}
-                    <button onClick={b.onClick} className="text-[11px] text-primary-400 hover:text-primary-300 transition-colors truncate max-w-[100px]">
-                      {b.label}
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors">
-            <X size={18} />
-          </button>
-        </div>
-
-        {/* Search */}
-        <div className="px-4 pb-3 flex-shrink-0">
-          <div className="flex items-center gap-2 bg-slate-800 rounded-2xl px-3 py-2.5">
-            <Search size={16} className="text-slate-500 flex-shrink-0" />
-            <input
-              type="text"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Поиск..."
-              className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
-              autoFocus
-            />
-            {search && <button onClick={() => setSearch('')} className="text-slate-500 hover:text-white transition-colors"><X size={14} /></button>}
-          </div>
-        </div>
-
-        {/* List */}
-        <div className="flex-1 overflow-y-auto px-2 pb-6">
-          {loading ? (
-            <div className="flex justify-center py-8"><Loader2 size={24} className="animate-spin text-primary-400" /></div>
-          ) : currentItems.length === 0 ? (
-            <div className="text-center py-10 text-slate-500 text-sm">
-              {search ? 'Ничего не найдено' : 'Нет вариантов'}
+    <div
+      className="fixed inset-0 z-[70] bg-slate-900 flex flex-col"
+      style={{
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-800 flex-shrink-0">
+        <button onClick={handleBack} className="p-2 -ml-1 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors">
+          <ArrowLeft size={20} />
+        </button>
+        <div className="flex-1 min-w-0">
+          <p className="text-base font-bold text-white">{levelLabel[level]}</p>
+          {breadcrumb.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap mt-0.5">
+              {breadcrumb.map((b, i) => (
+                <span key={i} className="flex items-center gap-1">
+                  {i > 0 && <ChevronRight size={10} className="text-slate-600" />}
+                  <button onClick={b.onClick} className="text-[11px] text-primary-400 hover:text-primary-300 transition-colors truncate max-w-[100px]">
+                    {b.label}
+                  </button>
+                </span>
+              ))}
             </div>
-          ) : (
-            currentItems.map(item => (
-              <button
-                key={item.id}
-                onClick={() => handleSelect(item)}
-                className="w-full flex items-center justify-between px-4 py-3 rounded-2xl hover:bg-slate-800 transition-colors text-left group"
-              >
-                <span className="text-sm text-slate-200 group-hover:text-white transition-colors">{item.name}</span>
-                {level === 'service'
-                  ? <Check size={16} className="text-primary-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                  : <ChevronRight size={16} className="text-slate-600 group-hover:text-slate-400 transition-colors" />
-                }
-              </button>
-            ))
           )}
         </div>
+        <button onClick={onClose} className="p-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors">
+          <X size={18} />
+        </button>
+      </div>
+
+      {/* Search */}
+      <div className="px-4 py-3 border-b border-slate-800/60 flex-shrink-0">
+        <div className="flex items-center gap-2 bg-slate-800 rounded-2xl px-3 py-2.5">
+          <Search size={16} className="text-slate-500 flex-shrink-0" />
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Поиск..."
+            className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+          />
+          {search && <button onClick={() => setSearch('')} className="text-slate-500 hover:text-white transition-colors"><X size={14} /></button>}
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="flex-1 overflow-y-auto px-2 py-2" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+        {loading ? (
+          <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-primary-400" /></div>
+        ) : currentItems.length === 0 ? (
+          <div className="text-center py-12 text-slate-500 text-sm">
+            {search ? 'Ничего не найдено' : 'Нет вариантов'}
+          </div>
+        ) : (
+          currentItems.map(item => (
+            <button
+              key={item.id}
+              onClick={() => handleSelect(item)}
+              className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl hover:bg-slate-800 transition-colors text-left group"
+            >
+              <span className="text-sm text-slate-200 group-hover:text-white transition-colors">{item.name}</span>
+              {level === 'service'
+                ? <Check size={16} className="text-primary-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                : <ChevronRight size={16} className="text-slate-600 group-hover:text-slate-400 transition-colors" />
+              }
+            </button>
+          ))
+        )}
       </div>
     </div>,
     document.body

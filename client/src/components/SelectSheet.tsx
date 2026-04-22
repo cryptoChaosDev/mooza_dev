@@ -35,7 +35,7 @@ export default function SelectSheet({
   searchable = true,
   searchPlaceholder = 'Поиск...',
   emptyText = 'Ничего не найдено',
-  height = 'half',
+  height = 'full',
   showConfirm = false,
 }: SelectSheetProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -104,7 +104,6 @@ export default function SelectSheet({
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder={searchPlaceholder}
               className="w-full pl-12 pr-4 py-3.5 bg-slate-700/50 border border-slate-600/50 rounded-2xl text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 transition-all"
-              autoFocus
             />
           </div>
         )}
