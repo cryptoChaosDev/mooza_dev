@@ -4,11 +4,11 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, MessageCircle, Loader2,
   Crown, BadgeCheck, Ban, X,
-  Headphones, FileText, Briefcase, Radio,
+  Headphones, FileText, Briefcase,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
-  Users, Bell,
+  Users,
 } from 'lucide-react';
-import { userAPI, channelAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
+import { userAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { SocialIconRow } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
@@ -132,16 +132,6 @@ export default function UserProfilePage() {
     enabled: !!userId,
   });
 
-  const channelId = user?.channel?.id;
-  const { data: channelInfo, refetch: refetchChannel } = useQuery({
-    queryKey: ['channel', channelId],
-    queryFn: async () => {
-      const { data } = await channelAPI.getChannel(channelId!);
-      return data as { id: string; name: string; description: string | null; avatar: string | null; isSubscribed: boolean; _count: { subscriptions: number; posts: number } };
-    },
-    enabled: !!channelId,
-  });
-
   const { data: userConnections = [] } = useQuery({
     queryKey: ['user-connections', userId],
     queryFn: async () => { const { data } = await connectionAPI.getUserConnections(userId!); return data; },
@@ -187,15 +177,6 @@ export default function UserProfilePage() {
   const removeFriendMut = useMutation({
     mutationFn: () => friendshipAPI.removeFriend(user?.friendshipId!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
-  });
-
-  const subscribeMut = useMutation({
-    mutationFn: () => channelAPI.subscribe(channelId!),
-    onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['channel-feed-subscribed'] }); },
-  });
-  const unsubscribeMut = useMutation({
-    mutationFn: () => channelAPI.unsubscribe(channelId!),
-    onSuccess: () => { refetchChannel(); queryClient.invalidateQueries({ queryKey: ['channel-feed-subscribed'] }); },
   });
 
   if (isLoading) {
@@ -254,8 +235,6 @@ export default function UserProfilePage() {
   const friendCount = (user._count?.sentRequests ?? 0) + (user._count?.receivedRequests ?? 0);
   const hasSocialLinks = Object.values((user.socialLinks as Record<string, string>) || {}).some(Boolean);
   const bUrl = user.bannerImage ? getAvatarUrl(user.bannerImage) : null;
-  const chanSubs = channelInfo?._count?.subscriptions ?? user.channel?._count?.subscriptions ?? 0;
-  const chanPosts = channelInfo?._count?.posts ?? user.channel?._count?.posts ?? 0;
 
   return (
     <>
@@ -421,13 +400,6 @@ export default function UserProfilePage() {
               </button>
             )}
 
-            {user.channel && (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 border border-slate-700/60 rounded-xl">
-                <Bell size={13} className="text-sky-400" />
-                <span className="text-sm font-bold text-white">{chanSubs}</span>
-                <span className="text-xs text-slate-500">{plural(chanSubs, 'подписчик', 'подписчика', 'подписчиков')}</span>
-              </div>
-            )}
           </div>
 
           <div className="space-y-3">
@@ -550,42 +522,6 @@ export default function UserProfilePage() {
                         ))}
                       </div>
                   )}
-                </div>
-              </div>
-            )}
-
-            {/* Channel */}
-            {user.channel && (
-              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                  <Radio size={14} className="text-primary-400" />
-                  <span className="text-sm font-semibold text-white">Канал</span>
-                </div>
-                <div className="p-4">
-                  <div className="flex items-center gap-3 mb-3">
-                    <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0">
-                      <AvatarComponent src={user.channel.avatar} name={user.channel.name} size={48} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-white truncate">{user.channel.name}</p>
-                      <p className="text-xs text-slate-500 mt-0.5">{chanSubs} {plural(chanSubs, 'подписчик', 'подписчика', 'подписчиков')} · {chanPosts} {plural(chanPosts, 'пост', 'поста', 'постов')}</p>
-                    </div>
-                  </div>
-                  {user.channel.description && <p className="text-sm text-slate-400 leading-relaxed mb-3">{user.channel.description}</p>}
-                  <button
-                    onClick={() => channelInfo?.isSubscribed ? unsubscribeMut.mutate() : subscribeMut.mutate()}
-                    disabled={subscribeMut.isPending || unsubscribeMut.isPending}
-                    className={`w-full py-2.5 text-sm font-semibold rounded-xl transition-all flex items-center justify-center gap-2 ${
-                      channelInfo?.isSubscribed
-                        ? 'bg-slate-800 hover:bg-red-500/15 border border-slate-700 hover:border-red-500/40 text-slate-300 hover:text-red-400'
-                        : 'bg-primary-600 hover:bg-primary-500 text-white shadow-lg shadow-primary-500/20'
-                    }`}
-                  >
-                    {(subscribeMut.isPending || unsubscribeMut.isPending)
-                      ? <Loader2 size={15} className="animate-spin" />
-                      : channelInfo?.isSubscribed ? 'Отписаться' : 'Подписаться'
-                    }
-                  </button>
                 </div>
               </div>
             )}
