@@ -379,23 +379,14 @@ function PostTypePicker({ onClose }: { onClose: () => void }) {
 function applyFilters(posts: any[], filters: FlowFilters): any[] {
   let result = [...posts];
 
+  if (filters.postType !== 'all') {
+    result = result.filter(p => p.type === filters.postType);
+  }
+
   if (filters.period !== 'all') {
     const ms: Record<string, number> = { day: 86400000, week: 604800000, month: 2592000000, year: 31536000000 };
     const cutoff = Date.now() - (ms[filters.period] || 0);
     result = result.filter(p => new Date(p.createdAt).getTime() >= cutoff);
-  }
-
-  if (filters.location) {
-    const loc = filters.location.toLowerCase();
-    result = result.filter(p => p.author?.city?.toLowerCase().includes(loc));
-  }
-
-  if (filters.genre) {
-    const genre = filters.genre.toLowerCase();
-    result = result.filter(p =>
-      p.author?.genres?.some((g: string) => g.toLowerCase().includes(genre)) ||
-      p.author?.role?.toLowerCase().includes(genre)
-    );
   }
 
   return result;
@@ -404,10 +395,7 @@ function applyFilters(posts: any[], filters: FlowFilters): any[] {
 function countActiveFilters(f: FlowFilters): number {
   return [
     f.postType !== 'all',
-    f.profileType !== 'all',
-    !!f.location,
     f.period !== 'all',
-    !!f.genre,
   ].filter(Boolean).length;
 }
 

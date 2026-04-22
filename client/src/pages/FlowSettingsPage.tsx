@@ -4,20 +4,14 @@ import { ArrowLeft, SlidersHorizontal } from 'lucide-react';
 
 export interface FlowFilters {
   postType: string;
-  profileType: string;
-  location: string;
   period: string;
-  genre: string;
 }
 
 export const FLOW_FILTERS_KEY = 'mooza_flow_filters';
 
 export const DEFAULT_FILTERS: FlowFilters = {
   postType: 'all',
-  profileType: 'all',
-  location: '',
   period: 'all',
-  genre: '',
 };
 
 export function loadFilters(): FlowFilters {
@@ -53,17 +47,6 @@ function Chip({ label, active, onClick }: { label: string; active: boolean; onCl
   );
 }
 
-function TextChip({ value, placeholder, onChange }: { value: string; placeholder: string; onChange: (v: string) => void }) {
-  return (
-    <input
-      type="text"
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      placeholder={placeholder}
-      className="px-3 py-1.5 rounded-full text-sm bg-slate-800 border border-slate-700 text-white placeholder-slate-500 focus:outline-none focus:border-primary-500 transition-colors min-w-[160px]"
-    />
-  );
-}
 
 const POST_TYPES = [
   { id: 'all', label: 'Все' },
@@ -75,12 +58,6 @@ const POST_TYPES = [
   { id: 'service', label: 'Услуга' },
 ];
 
-const PROFILE_TYPES = [
-  { id: 'all', label: 'Все' },
-  { id: 'private', label: 'Частные' },
-  { id: 'artist', label: 'Артист' },
-];
-
 const PERIODS = [
   { id: 'all', label: 'За всё время' },
   { id: 'day', label: 'День' },
@@ -89,11 +66,6 @@ const PERIODS = [
   { id: 'year', label: 'Год' },
 ];
 
-const GENRES = [
-  'Rock', 'Pop', 'Jazz', 'Hip-Hop', 'Electronic', 'Classical',
-  'R&B', 'Folk', 'Metal', 'Indie', 'Rap', 'Soul', 'Funk',
-  'Reggae', 'Blues', 'Country', 'Punk', 'Alternative',
-];
 
 export default function FlowSettingsPage() {
   const navigate = useNavigate();
@@ -143,31 +115,10 @@ export default function FlowSettingsPage() {
             ))}
           </Section>
 
-          <Section title="Тип профиля">
-            {PROFILE_TYPES.map(t => (
-              <Chip key={t.id} label={t.label} active={filters.profileType === t.id} onClick={() => set('profileType', t.id)} />
-            ))}
-          </Section>
-
-          <Section title="Локация">
-            <TextChip value={filters.location} placeholder="Город, страна..." onChange={v => set('location', v)} />
-          </Section>
-
           <Section title="Период">
             {PERIODS.map(t => (
               <Chip key={t.id} label={t.label} active={filters.period === t.id} onClick={() => set('period', t.id)} />
             ))}
-          </Section>
-
-          <Section title="Жанр">
-            <div className="w-full mb-2">
-              <TextChip value={filters.genre} placeholder="Введите жанр..." onChange={v => set('genre', v)} />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {GENRES.map(g => (
-                <Chip key={g} label={g} active={filters.genre === g} onClick={() => set('genre', filters.genre === g ? '' : g)} />
-              ))}
-            </div>
           </Section>
 
         </div>
