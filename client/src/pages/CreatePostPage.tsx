@@ -37,8 +37,6 @@ export default function CreatePostPage() {
   const [uploading, setUploading] = useState(false);
   const [pickedServices, setPickedServices] = useState<PickedService[]>([]);
   const [showServicePicker, setShowServicePicker] = useState(false);
-  const isBlog = type === 'blog';
-
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);

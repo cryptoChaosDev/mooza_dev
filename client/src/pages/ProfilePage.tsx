@@ -1,6 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userAPI, referenceAPI, connectionAPI, groupAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
@@ -9,7 +8,7 @@ import {
   Globe, DollarSign, Calendar, Image,
   Headphones, Edit3, Plus, ChevronDown, ChevronLeft, ChevronRight,
   FileText, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2,
-  Users, Bell, Music2,
+  Users, Music2,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import SelectField from '../components/SelectField';
@@ -18,7 +17,6 @@ import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import ShareButton from '../components/ShareButton';
 import { plural } from '../lib/plural';
-import AvatarComponent from '../components/Avatar';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -52,28 +50,6 @@ const emptyEntry = (): UserServiceEntry => ({
   availabilityIds: [], geographyIds: [], priceFrom: '', priceTo: '',
 });
 
-// ── Bottom sheet panel ─────────────────────────────────────────────────────────
-function BottomPanel({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
-  if (!open) return null;
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-x-0 bottom-0 z-[61] bg-slate-900 rounded-t-2xl border-t border-slate-800 flex flex-col"
-        style={{ maxHeight: '80vh' }}>
-        <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800 flex-shrink-0">
-          <span className="font-semibold text-white text-sm">{title}</span>
-          <button onClick={onClose} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
-            <X size={16} className="text-slate-400" />
-          </button>
-        </div>
-        <div className="overflow-y-auto flex-1 p-4">
-          {children}
-        </div>
-      </div>
-    </>,
-    document.body
-  );
-}
 
 export default function ProfilePage() {
   const navigate = useNavigate();
