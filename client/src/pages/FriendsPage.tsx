@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Users, Check, X, MessageCircle, UserX, Clock,
   Pin, PinOff, Search, Wifi, Link2, Star, Crown, BadgeCheck, Music2,
+  CheckCheck, ArrowDownLeft,
 } from 'lucide-react';
 import { friendshipAPI, connectionAPI, favoriteAPI, groupAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
@@ -436,7 +437,7 @@ export default function FriendsPage() {
                             </div>
                           )}
                         </div>
-                        <span className="text-xs text-primary-400 font-medium flex-shrink-0">Открыть →</span>
+                        <ArrowDownLeft size={16} className="text-primary-400 flex-shrink-0" />
                       </div>
                     ))}
                   </div>
@@ -512,7 +513,7 @@ export default function FriendsPage() {
                             )}
                           </div>
                         </div>
-                        <Link2 size={14} className="text-primary-400/60 flex-shrink-0" />
+                        <CheckCheck size={15} className="text-emerald-400 flex-shrink-0" />
                       </div>
                     ))}
                   </div>
