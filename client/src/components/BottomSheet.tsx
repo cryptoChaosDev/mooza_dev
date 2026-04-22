@@ -13,15 +13,14 @@ interface BottomSheetProps {
 
 export default function BottomSheet({ isOpen, onClose, title, children, height = 'half' }: BottomSheetProps) {
   useEffect(() => {
-    if (isOpen) {
-      lockScroll();
-    } else {
-      unlockScroll();
-    }
+    // Полноэкранный режим не требует блокировки — модал и так перекрывает весь экран
+    if (height === 'full') return;
+    if (!isOpen) return;
+    lockScroll();
     return () => {
       unlockScroll();
     };
-  }, [isOpen]);
+  }, [isOpen, height]);
 
   if (!isOpen) return null;
 
