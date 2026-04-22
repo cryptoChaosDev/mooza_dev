@@ -51,10 +51,6 @@ function Chip({ label, active, onClick }: { label: string; active: boolean; onCl
 const POST_TYPES = [
   { id: 'all', label: 'Все' },
   { id: 'blog', label: 'Блог' },
-  { id: 'vacancy', label: 'Вакансия' },
-  { id: 'event', label: 'Мероприятие' },
-  { id: 'task', label: 'Задание' },
-  { id: 'offer', label: 'Предложение' },
   { id: 'service', label: 'Услуга' },
 ];
 
