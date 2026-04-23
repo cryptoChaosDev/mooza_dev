@@ -166,6 +166,7 @@ export default function ProfilePage() {
   const [editingBio, setEditingBio] = useState(false);
   const [editingServices, setEditingServices] = useState(false);
   const [editingPortfolio, setEditingPortfolio] = useState(false);
+  const [editingContacts, setEditingContacts] = useState(false);
 
   // Chip panels
 
@@ -291,6 +292,11 @@ export default function ProfilePage() {
   const handleSaveBio = async () => {
     try { await updateMutation.mutateAsync(formData); }
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingBio(false); }
+  };
+
+  const handleSaveContacts = async () => {
+    try { await updateMutation.mutateAsync(formData); }
+    finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingContacts(false); }
   };
 
   const handleSaveServices = async () => {
@@ -732,8 +738,6 @@ export default function ProfilePage() {
                   ))}
                 </div>
               )}
-              {hasSocialLinks && <div className="mb-4"><SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} /></div>}
-
               {/* ── Stats chips ── */}
               <div className="flex items-center gap-2 mb-5 flex-wrap">
                 <button
@@ -938,6 +942,54 @@ export default function ProfilePage() {
               )}
             </div>
 
+            {/* ── Connections card ── */}
+            {myConnections.length > 0 && (() => {
+              const LIMIT = 4;
+              const visible = connExpanded ? myConnections : myConnections.slice(0, LIMIT);
+              return (
+                <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                    <Link2 size={14} className="text-primary-400" />
+                    <span className="text-sm font-semibold text-white">Профессиональные связи</span>
+                    <span className="ml-auto text-xs text-slate-500">{myConnections.length}</span>
+                  </div>
+                  <div className="p-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {visible.map((c: any) => (
+                        <button key={c.id} onClick={() => setViewConn(c)} className="text-left p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl hover:border-primary-500/30 hover:bg-slate-800/70 transition-all">
+                          <div className="flex items-center gap-2.5 mb-2">
+                            <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-700 flex-shrink-0">
+                              {getAvatarUrl(c.partner.avatar)
+                                ? <img src={getAvatarUrl(c.partner.avatar)!} alt="" className="w-full h-full object-cover" />
+                                : <div className="w-full h-full bg-primary-600/30 flex items-center justify-center text-xs text-primary-300 font-bold">{c.partner.firstName?.[0]}</div>
+                              }
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-semibold text-white truncate leading-tight">{c.partner.firstName} {c.partner.lastName}</p>
+                              {c.partner.city && <p className="text-[11px] text-slate-500 truncate">{c.partner.city}</p>}
+                            </div>
+                          </div>
+                          {c.services?.length > 0 && (
+                            <div className="flex flex-wrap gap-1">
+                              {c.services.slice(0, 2).map((s: any) => (
+                                <span key={s.id} className="text-[10px] bg-primary-500/10 text-primary-300 border border-primary-500/20 rounded px-1.5 py-0.5">{s.name}</span>
+                              ))}
+                              {c.services.length > 2 && <span className="text-[10px] bg-slate-700/60 text-slate-400 rounded px-1.5 py-0.5">+{c.services.length - 2}</span>}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    {myConnections.length > LIMIT && (
+                      <button onClick={() => setConnExpanded(v => !v)} className="mt-3 w-full py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors text-center">
+                        {connExpanded ? 'Свернуть' : `Показать ещё ${myConnections.length - LIMIT}`}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* ── Portfolio card ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
@@ -1029,53 +1081,30 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* ── Connections card ── */}
-            {myConnections.length > 0 && (() => {
-              const LIMIT = 4;
-              const visible = connExpanded ? myConnections : myConnections.slice(0, LIMIT);
-              return (
-                <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-                  <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                    <Link2 size={14} className="text-primary-400" />
-                    <span className="text-sm font-semibold text-white">Профессиональные связи</span>
-                    <span className="ml-auto text-xs text-slate-500">{myConnections.length}</span>
+            {/* ── Contacts card ── */}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                <Globe size={14} className="text-primary-400" />
+                <span className="text-sm font-semibold text-white">Контакты</span>
+                <button onClick={() => setEditingContacts(v => !v)} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
+                  {editingContacts ? 'Готово' : 'Изменить'}
+                </button>
+              </div>
+              <div className="p-4">
+                {editingContacts ? (
+                  <div className="space-y-3">
+                    <SocialLinksEditor value={formData.socialLinks} onChange={v => setFormData({ ...formData, socialLinks: v })} />
+                    <button onClick={handleSaveContacts} disabled={updateMutation.isPending} className="w-full py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                      {updateMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
+                    </button>
                   </div>
-                  <div className="p-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {visible.map((c: any) => (
-                        <button key={c.id} onClick={() => setViewConn(c)} className="text-left p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl hover:border-primary-500/30 hover:bg-slate-800/70 transition-all">
-                          <div className="flex items-center gap-2.5 mb-2">
-                            <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-700 flex-shrink-0">
-                              {getAvatarUrl(c.partner.avatar)
-                                ? <img src={getAvatarUrl(c.partner.avatar)!} alt="" className="w-full h-full object-cover" />
-                                : <div className="w-full h-full bg-primary-600/30 flex items-center justify-center text-xs text-primary-300 font-bold">{c.partner.firstName?.[0]}</div>
-                              }
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-white truncate leading-tight">{c.partner.firstName} {c.partner.lastName}</p>
-                              {c.partner.city && <p className="text-[11px] text-slate-500 truncate">{c.partner.city}</p>}
-                            </div>
-                          </div>
-                          {c.services?.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {c.services.slice(0, 2).map((s: any) => (
-                                <span key={s.id} className="text-[10px] bg-primary-500/10 text-primary-300 border border-primary-500/20 rounded px-1.5 py-0.5">{s.name}</span>
-                              ))}
-                              {c.services.length > 2 && <span className="text-[10px] bg-slate-700/60 text-slate-400 rounded px-1.5 py-0.5">+{c.services.length - 2}</span>}
-                            </div>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                    {myConnections.length > LIMIT && (
-                      <button onClick={() => setConnExpanded(v => !v)} className="mt-3 w-full py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors text-center">
-                        {connExpanded ? 'Свернуть' : `Показать ещё ${myConnections.length - LIMIT}`}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })()}
+                ) : hasSocialLinks ? (
+                  <SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} />
+                ) : (
+                  <button onClick={() => setEditingContacts(true)} className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic">+ Добавить контакты</button>
+                )}
+              </div>
+            </div>
 
             {/* Logout */}
             <button onClick={() => logout()} className="w-full flex items-center justify-center gap-2 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/8 border border-red-500/20 hover:border-red-500/40 rounded-xl text-sm font-medium transition-all">

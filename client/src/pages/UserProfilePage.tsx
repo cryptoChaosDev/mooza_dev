@@ -6,7 +6,7 @@ import {
   Crown, BadgeCheck, Ban, X,
   Headphones, FileText, Briefcase,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
-  Users,
+  Users, Globe,
 } from 'lucide-react';
 import { userAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
@@ -368,8 +368,6 @@ export default function UserProfilePage() {
             </div>
           )}
 
-          {hasSocialLinks && <div className="mb-4"><SocialIconRow links={(user.socialLinks as Record<string, string>) || {}} /></div>}
-
           {/* ── Stats chips ── */}
           <div className="flex items-center gap-2 mb-5 flex-wrap">
             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 border border-slate-700/60 rounded-xl">
@@ -481,51 +479,6 @@ export default function UserProfilePage() {
               </div>
             )}
 
-            {/* Portfolio — tabs */}
-            {(portfolioLinks.length > 0 || portfolioFiles.length > 0) && (
-              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                  <Headphones size={14} className="text-primary-400" />
-                  <span className="text-sm font-semibold text-white">Портфолио</span>
-                </div>
-                <div className="flex border-b border-slate-800/60">
-                  {([
-                    { key: 'audio' as const, label: 'Аудио', count: audioLinks.length },
-                    { key: 'video' as const, label: 'Видео', count: videoLinks.length },
-                    { key: 'other' as const, label: 'Прочее', count: portfolioFiles.length },
-                  ]).map(tab => (
-                    <button key={tab.key} onClick={() => setPortfolioTab(tab.key)}
-                      className={`flex-1 py-2.5 text-xs font-medium border-b-2 transition-all ${portfolioTab === tab.key ? 'border-primary-500 text-primary-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
-                      {tab.label}{tab.count > 0 && <span className="ml-1 opacity-60">({tab.count})</span>}
-                    </button>
-                  ))}
-                </div>
-                <div className="p-4 space-y-3">
-                  {portfolioTab === 'audio' && (audioLinks.length === 0
-                    ? <p className="text-sm text-slate-600 italic text-center py-2">Нет аудио ссылок</p>
-                    : audioLinks.map((l: any) => <PortfolioAudioItem key={l.id} link={l} />)
-                  )}
-                  {portfolioTab === 'video' && (videoLinks.length === 0
-                    ? <p className="text-sm text-slate-600 italic text-center py-2">Нет видео ссылок</p>
-                    : videoLinks.map((l: any) => <PortfolioVideoItem key={l.id} link={l} />)
-                  )}
-                  {portfolioTab === 'other' && (portfolioFiles.length === 0
-                    ? <p className="text-sm text-slate-600 italic text-center py-2">Нет документов</p>
-                    : <div className="space-y-1.5">
-                        {portfolioFiles.map((f: any) => (
-                          <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/40 hover:bg-slate-700/40 border border-slate-700/40 transition-colors group">
-                            <DocIcon mimeType={f.mimeType} name={f.originalName} />
-                            <span className="flex-1 text-sm text-slate-300 truncate group-hover:text-white transition-colors">{f.originalName}</span>
-                            <span className="text-xs text-slate-600 flex-shrink-0">{formatFileSize(f.size)}</span>
-                          </a>
-                        ))}
-                      </div>
-                  )}
-                </div>
-              </div>
-            )}
-
             {/* Connections */}
             {userConnections.length > 0 && (() => {
               const LIMIT = 4;
@@ -573,6 +526,64 @@ export default function UserProfilePage() {
                 </div>
               );
             })()}
+
+            {/* Portfolio — tabs */}
+            {(portfolioLinks.length > 0 || portfolioFiles.length > 0) && (
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                  <Headphones size={14} className="text-primary-400" />
+                  <span className="text-sm font-semibold text-white">Портфолио</span>
+                </div>
+                <div className="flex border-b border-slate-800/60">
+                  {([
+                    { key: 'audio' as const, label: 'Аудио', count: audioLinks.length },
+                    { key: 'video' as const, label: 'Видео', count: videoLinks.length },
+                    { key: 'other' as const, label: 'Прочее', count: portfolioFiles.length },
+                  ]).map(tab => (
+                    <button key={tab.key} onClick={() => setPortfolioTab(tab.key)}
+                      className={`flex-1 py-2.5 text-xs font-medium border-b-2 transition-all ${portfolioTab === tab.key ? 'border-primary-500 text-primary-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
+                      {tab.label}{tab.count > 0 && <span className="ml-1 opacity-60">({tab.count})</span>}
+                    </button>
+                  ))}
+                </div>
+                <div className="p-4 space-y-3">
+                  {portfolioTab === 'audio' && (audioLinks.length === 0
+                    ? <p className="text-sm text-slate-600 italic text-center py-2">Нет аудио ссылок</p>
+                    : audioLinks.map((l: any) => <PortfolioAudioItem key={l.id} link={l} />)
+                  )}
+                  {portfolioTab === 'video' && (videoLinks.length === 0
+                    ? <p className="text-sm text-slate-600 italic text-center py-2">Нет видео ссылок</p>
+                    : videoLinks.map((l: any) => <PortfolioVideoItem key={l.id} link={l} />)
+                  )}
+                  {portfolioTab === 'other' && (portfolioFiles.length === 0
+                    ? <p className="text-sm text-slate-600 italic text-center py-2">Нет документов</p>
+                    : <div className="space-y-1.5">
+                        {portfolioFiles.map((f: any) => (
+                          <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/40 hover:bg-slate-700/40 border border-slate-700/40 transition-colors group">
+                            <DocIcon mimeType={f.mimeType} name={f.originalName} />
+                            <span className="flex-1 text-sm text-slate-300 truncate group-hover:text-white transition-colors">{f.originalName}</span>
+                            <span className="text-xs text-slate-600 flex-shrink-0">{formatFileSize(f.size)}</span>
+                          </a>
+                        ))}
+                      </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Contacts */}
+            {hasSocialLinks && (
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                  <Globe size={14} className="text-primary-400" />
+                  <span className="text-sm font-semibold text-white">Контакты</span>
+                </div>
+                <div className="p-4">
+                  <SocialIconRow links={(user.socialLinks as Record<string, string>) || {}} />
+                </div>
+              </div>
+            )}
 
           </div>
         </div>
