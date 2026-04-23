@@ -51,14 +51,16 @@ export default function LandingPage() {
           {/* CTA */}
           <motion.div {...fadeUp(0.3)} className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
-              onClick={() => navigate('/register')}
-              className="group w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-500 transition-all duration-300 flex items-center justify-center gap-2"
+              disabled
+              title="Регистрация временно недоступна"
+              className="group w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-white/40 bg-primary-600/30 cursor-not-allowed transition-all duration-300 flex items-center justify-center gap-2"
             >
               Зарегистрироваться
             </button>
             <button
-              onClick={() => navigate('/login')}
-              className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-slate-300 border border-slate-700 hover:border-primary-500/50 hover:text-white hover:bg-slate-800/60 transition-all duration-300"
+              disabled
+              title="Вход временно недоступен"
+              className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-slate-500 border border-slate-800 cursor-not-allowed transition-all duration-300"
             >
               Войти
             </button>
@@ -178,8 +180,9 @@ export default function LandingPage() {
               Регистрация занимает меньше минуты. Начни прямо сейчас.
             </motion.p>
             <motion.button {...fadeUp(0.3)}
-              onClick={() => navigate('/register')}
-              className="px-10 py-3.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-500 transition-all duration-300 flex items-center gap-2 mx-auto"
+              disabled
+              title="Регистрация временно недоступна"
+              className="px-10 py-3.5 rounded-xl font-semibold text-white/40 bg-primary-600/30 cursor-not-allowed transition-all duration-300 flex items-center gap-2 mx-auto"
             >
               Зарегистрироваться
             </motion.button>
