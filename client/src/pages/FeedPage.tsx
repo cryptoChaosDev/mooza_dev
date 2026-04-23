@@ -37,13 +37,16 @@ function Avatar({ user, size = 10 }: { user: { firstName: string; lastName: stri
 
 // ─── Comment Item ──────────────────────────────────────────────────────────────
 
-function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'] }: {
-  comment: any; postId: string; postAuthorId?: string; currentUserId: string; feedQueryKey?: string[];
+function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], isReply = false, onReply }: {
+  comment: any; postId: string; postAuthorId?: string; currentUserId: string; feedQueryKey?: string[]; isReply?: boolean; onReply?: (name: string) => void;
 }) {
   const queryClient = useQueryClient();
   const isOwner = comment.author.id === currentUserId;
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState(comment.content);
+  const [showReplyInput, setShowReplyInput] = useState(false);
+  const [replyText, setReplyText] = useState('');
+  const replyInputRef = useRef<HTMLInputElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -55,6 +58,10 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'] }
       el.selectionStart = el.selectionEnd = el.value.length;
     }
   }, [editing]);
+
+  useEffect(() => {
+    if (showReplyInput) replyInputRef.current?.focus();
+  }, [showReplyInput]);
 
   const deleteMut = useMutation({
     mutationFn: () => postAPI.deleteComment(postId, comment.id),
@@ -76,65 +83,110 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'] }
     onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }),
   });
 
+  const replyMut = useMutation({
+    mutationFn: (content: string) => postAPI.commentPost(postId, content, comment.id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setReplyText(''); setShowReplyInput(false); },
+  });
+
   const isEdited = new Date(comment.updatedAt).getTime() - new Date(comment.createdAt).getTime() > 3000;
 
   return (
-    <div className="flex gap-2.5 group/comment">
-      <Link to={`/profile/${comment.author.id}`}><Avatar user={comment.author} size={7} /></Link>
-      <div className="flex-1 min-w-0">
-        <DoubleTapReactWrapper
-          reactions={comment.reactions ?? []}
-          currentUserId={currentUserId}
-          onReact={(emoji) => reactMut.mutate(emoji)}
-          onUnreact={() => unreactMut.mutate()}
-        >
-          <div className="bg-slate-800/60 rounded-xl px-3 py-2">
-            <div className="flex items-center justify-between gap-2">
-              <Link to={`/profile/${comment.author.id}`} className="text-xs font-semibold text-white hover:text-primary-400 transition-colors truncate">
-                {comment.author.firstName} {comment.author.lastName}
-              </Link>
-              {isOwner && !editing && (
-                <div className="flex items-center gap-0.5 opacity-0 group-hover/comment:opacity-100 transition-all flex-shrink-0">
-                  <button onClick={() => { setEditText(comment.content); setEditing(true); }} className="text-slate-500 hover:text-slate-300 p-0.5 transition-colors">
-                    <Pencil size={11} />
-                  </button>
-                  <button onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending} className="text-slate-500 hover:text-red-400 p-0.5 transition-colors">
-                    {deleteMut.isPending ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
-                  </button>
+    <div className={isReply ? 'ml-9' : ''}>
+      <div className="flex gap-2.5 group/comment">
+        <Link to={`/profile/${comment.author.id}`}><Avatar user={comment.author} size={isReply ? 6 : 7} /></Link>
+        <div className="flex-1 min-w-0">
+          <DoubleTapReactWrapper
+            reactions={comment.reactions ?? []}
+            currentUserId={currentUserId}
+            onReact={(emoji) => reactMut.mutate(emoji)}
+            onUnreact={() => unreactMut.mutate()}
+          >
+            <div className="bg-slate-800/60 rounded-xl px-3 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <Link to={`/profile/${comment.author.id}`} className="text-xs font-semibold text-white hover:text-primary-400 transition-colors truncate">
+                  {comment.author.firstName} {comment.author.lastName}
+                </Link>
+                {isOwner && !editing && (
+                  <div className="flex items-center gap-0.5 opacity-0 group-hover/comment:opacity-100 transition-all flex-shrink-0">
+                    <button onClick={() => { setEditText(comment.content); setEditing(true); }} className="text-slate-500 hover:text-slate-300 p-0.5 transition-colors">
+                      <Pencil size={11} />
+                    </button>
+                    <button onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending} className="text-slate-500 hover:text-red-400 p-0.5 transition-colors">
+                      {deleteMut.isPending ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
+                    </button>
+                  </div>
+                )}
+              </div>
+              {editing ? (
+                <div className="mt-1 space-y-1.5">
+                  <textarea
+                    ref={editRef}
+                    value={editText}
+                    onChange={e => { setEditText(e.target.value); const el = e.target; el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (editText.trim()) editMut.mutate(); } if (e.key === 'Escape') setEditing(false); }}
+                    className="w-full bg-slate-700/60 border border-slate-600 focus:border-primary-500 rounded-lg px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none resize-none transition-colors"
+                    rows={1}
+                  />
+                  <div className="flex gap-1.5 justify-end">
+                    <button onClick={() => setEditing(false)} className="text-xs text-slate-400 hover:text-white px-2 py-0.5 transition-colors">Отмена</button>
+                    <button onClick={() => { if (editText.trim()) editMut.mutate(); }} disabled={editMut.isPending || !editText.trim()} className="flex items-center gap-1 text-xs px-2 py-0.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white rounded-md transition-colors">
+                      {editMut.isPending ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}
+                      Сохранить
+                    </button>
+                  </div>
                 </div>
+              ) : (
+                <p className="text-xs text-slate-300 leading-relaxed mt-0.5 break-words">{comment.content}</p>
               )}
             </div>
-            {editing ? (
-              <div className="mt-1 space-y-1.5">
-                <textarea
-                  ref={editRef}
-                  value={editText}
-                  onChange={e => { setEditText(e.target.value); const el = e.target; el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (editText.trim()) editMut.mutate(); } if (e.key === 'Escape') setEditing(false); }}
-                  className="w-full bg-slate-700/60 border border-slate-600 focus:border-primary-500 rounded-lg px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none resize-none transition-colors"
-                  rows={1}
-                />
-                <div className="flex gap-1.5 justify-end">
-                  <button onClick={() => setEditing(false)} className="text-xs text-slate-400 hover:text-white px-2 py-0.5 transition-colors">Отмена</button>
-                  <button onClick={() => { if (editText.trim()) editMut.mutate(); }} disabled={editMut.isPending || !editText.trim()} className="flex items-center gap-1 text-xs px-2 py-0.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white rounded-md transition-colors">
-                    {editMut.isPending ? <Loader2 size={10} className="animate-spin" /> : <Check size={10} />}
-                    Сохранить
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-slate-300 leading-relaxed mt-0.5 break-words">{comment.content}</p>
+          </DoubleTapReactWrapper>
+          <div className="px-1 flex items-center gap-3">
+            <ReactionBar reactions={comment.reactions ?? []} currentUserId={currentUserId} onReact={(emoji) => reactMut.mutate(emoji)} onUnreact={() => unreactMut.mutate()} />
+            {!isReply && (
+              <button
+                onClick={() => setShowReplyInput(v => !v)}
+                className="text-[11px] text-slate-500 hover:text-primary-400 transition-colors py-0.5"
+              >
+                Ответить
+              </button>
             )}
           </div>
-        </DoubleTapReactWrapper>
-        <div className="px-1">
-          <ReactionBar reactions={comment.reactions ?? []} currentUserId={currentUserId} onReact={(emoji) => reactMut.mutate(emoji)} onUnreact={() => unreactMut.mutate()} />
+          <p className="text-xs text-slate-600 mt-0.5 px-1">
+            {timeAgo(comment.createdAt)}
+            {isEdited && <span className="text-slate-700"> · изм. {timeAgo(comment.updatedAt)}</span>}
+          </p>
+
+          {/* Reply input */}
+          {showReplyInput && (
+            <form
+              onSubmit={e => { e.preventDefault(); if (replyText.trim()) replyMut.mutate(replyText.trim()); }}
+              className="flex gap-1.5 items-center mt-1.5"
+            >
+              <input
+                ref={replyInputRef}
+                type="text"
+                value={replyText}
+                onChange={e => setReplyText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Escape') setShowReplyInput(false); }}
+                placeholder={`Ответить ${comment.author.firstName}...`}
+                className="flex-1 bg-slate-800/60 border border-slate-700/60 focus:border-primary-500/60 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none transition-colors"
+              />
+              <button type="submit" disabled={!replyText.trim() || replyMut.isPending} className="p-1.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white rounded-lg transition-colors flex-shrink-0">
+                {replyMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+              </button>
+            </form>
+          )}
         </div>
-        <p className="text-xs text-slate-600 mt-0.5 px-1">
-          {timeAgo(comment.createdAt)}
-          {isEdited && <span className="text-slate-700"> · изм. {timeAgo(comment.updatedAt)}</span>}
-        </p>
       </div>
+
+      {/* Replies */}
+      {!isReply && comment.replies?.length > 0 && (
+        <div className="mt-2 space-y-2">
+          {comment.replies.map((reply: any) => (
+            <CommentItem key={reply.id} comment={reply} postId={postId} currentUserId={currentUserId} feedQueryKey={feedQueryKey} isReply />
+          ))}
+        </div>
+      )}
     </div>
   );
 }

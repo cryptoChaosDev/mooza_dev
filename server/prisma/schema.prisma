@@ -585,6 +585,10 @@ model Comment {
   post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
   postId String
 
+  parentComment   Comment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  parentCommentId String?
+  replies         Comment[] @relation("CommentReplies")
+
   reactions CommentReaction[]
 
   createdAt DateTime @default(now())
@@ -593,6 +597,7 @@ model Comment {
   @@index([postId])
   @@index([authorId])
   @@index([postId, createdAt])
+  @@index([parentCommentId])
 }
 
 model Conversation {

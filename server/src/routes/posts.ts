@@ -38,14 +38,26 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
           select: { id: true }
         },
         comments: {
+          where: { parentCommentId: null } as any,
           include: {
             author: {
               select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true }
             },
             reactions: {
               select: { id: true, emoji: true, userId: true }
-            }
-          },
+            },
+            replies: {
+              include: {
+                author: {
+                  select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true }
+                },
+                reactions: {
+                  select: { id: true, emoji: true, userId: true }
+                },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          } as any,
           orderBy: { createdAt: 'asc' },
         },
         reactions: {
@@ -127,17 +139,27 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
           }
         },
         comments: {
+          where: { parentCommentId: null } as any,
           include: {
             author: {
-              select: {
-                id: true,
-                firstName: true,
-                lastName: true,
-                avatar: true,
-              }
-            }
-          },
-          orderBy: { createdAt: 'desc' }
+              select: { id: true, firstName: true, lastName: true, avatar: true }
+            },
+            reactions: {
+              select: { id: true, emoji: true, userId: true }
+            },
+            replies: {
+              include: {
+                author: {
+                  select: { id: true, firstName: true, lastName: true, avatar: true }
+                },
+                reactions: {
+                  select: { id: true, emoji: true, userId: true }
+                },
+              },
+              orderBy: { createdAt: 'asc' },
+            },
+          } as any,
+          orderBy: { createdAt: 'asc' }
         },
         _count: {
           select: { likes: true }
@@ -214,7 +236,7 @@ router.delete('/:id/like', authenticate, async (req: AuthRequest, res) => {
 // Comment on post
 router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { content } = req.body;
+    const { content, parentCommentId } = req.body;
 
     if (!content) {
       return res.status(400).json({ error: 'Content is required' });
@@ -225,26 +247,22 @@ router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
       select: { authorId: true },
     });
 
-    const comment = await prisma.comment.create({
+    const comment = await (prisma.comment as any).create({
       data: {
         content,
         authorId: req.userId!,
         postId: req.params.id,
+        ...(parentCommentId ? { parentCommentId } : {}),
       },
       include: {
         author: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
-          }
+          select: { id: true, firstName: true, lastName: true, avatar: true }
         }
       }
     });
 
     // Notify post author (unless they commented on their own post)
-    if (post && post.authorId !== req.userId) {
+    if (post && post.authorId !== req.userId && !parentCommentId) {
       const notification = await prisma.notification.create({
         data: {
           userId: post.authorId,
@@ -262,6 +280,28 @@ router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
         link: `/?post=${req.params.id}`,
       });
       emitToUser(post.authorId, 'new_notification', notification);
+    }
+
+    // Notify parent comment author if this is a reply
+    if (parentCommentId) {
+      const parentComment = await (prisma.comment as any).findUnique({
+        where: { id: parentCommentId },
+        select: { authorId: true },
+      });
+      if (parentComment && parentComment.authorId !== req.userId) {
+        const notification = await (prisma as any).notification.create({
+          data: {
+            userId: parentComment.authorId,
+            actorId: req.userId!,
+            type: 'post_reply',
+            title: 'Ответ на комментарий',
+            body: `${comment.author.firstName} ${comment.author.lastName}: ${comment.content.length > 60 ? comment.content.slice(0, 60) + '…' : comment.content}`,
+            link: `/?post=${req.params.id}`,
+          },
+          include: { actor: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true } } },
+        });
+        emitToUser(parentComment.authorId, 'new_notification', notification);
+      }
     }
 
     res.status(201).json(comment);
