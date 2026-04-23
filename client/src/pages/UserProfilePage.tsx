@@ -6,7 +6,7 @@ import {
   Crown, BadgeCheck, Ban, X,
   Headphones, FileText, Briefcase,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
-  Users, Globe, ShoppingCart, Play,
+  Globe, ShoppingCart,
 } from 'lucide-react';
 import { userAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
@@ -14,7 +14,6 @@ import { SocialIconRow } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
 import ShareButton from '../components/ShareButton';
 import ConnectionRequestModal from '../components/ConnectionRequestModal';
-import { plural } from '../lib/plural';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import { useAuthStore } from '../stores/authStore';
 import { createPortal } from 'react-dom';
@@ -122,7 +121,6 @@ export default function UserProfilePage() {
   const [viewConn, setViewConn] = useState<any>(null);
   const [connExpanded, setConnExpanded] = useState(false);
   const [portfolioTab, setPortfolioTab] = useState<'audio' | 'video' | 'other'>('audio');
-  const [portfolioExpanded, setPortfolioExpanded] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
   const servicesRef = useRef<HTMLDivElement>(null);
@@ -234,7 +232,6 @@ export default function UserProfilePage() {
   const audioLinks = portfolioLinks.filter((l: any) => l.type === 'audio');
   const videoLinks = portfolioLinks.filter((l: any) => l.type === 'video');
 
-  const friendCount = (user._count?.sentRequests ?? 0) + (user._count?.receivedRequests ?? 0);
   const hasSocialLinks = Object.values((user.socialLinks as Record<string, string>) || {}).some(Boolean);
   const bUrl = user.bannerImage ? getAvatarUrl(user.bannerImage) : null;
 
