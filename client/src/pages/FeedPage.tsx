@@ -37,8 +37,8 @@ function Avatar({ user, size = 10 }: { user: { firstName: string; lastName: stri
 
 // ─── Comment Item ──────────────────────────────────────────────────────────────
 
-function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], isReply = false, onReply }: {
-  comment: any; postId: string; postAuthorId?: string; currentUserId: string; feedQueryKey?: string[]; isReply?: boolean; onReply?: (name: string) => void;
+function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], isReply = false }: {
+  comment: any; postId: string; postAuthorId?: string; currentUserId: string; feedQueryKey?: string[]; isReply?: boolean;
 }) {
   const queryClient = useQueryClient();
   const isOwner = comment.author.id === currentUserId;
