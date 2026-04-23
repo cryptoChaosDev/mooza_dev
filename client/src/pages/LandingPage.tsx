@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+// import { useNavigate } from 'react-router-dom';
 import { motion, type Transition } from 'framer-motion';
 import {
   Search,
@@ -16,7 +16,7 @@ const fadeUp = (delay = 0) => ({
 });
 
 export default function LandingPage() {
-  const navigate = useNavigate();
+  // const navigate = useNavigate();
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 overflow-x-hidden">
