@@ -88,6 +88,7 @@ const userSelect = {
     select: {
       sentRequests: { where: { status: 'accepted' } },
       receivedRequests: { where: { status: 'accepted' } },
+      posts: true,
     }
   },
 } as const;
@@ -132,6 +133,7 @@ const publicUserSelect = {
     select: {
       sentRequests: { where: { status: 'accepted' } },
       receivedRequests: { where: { status: 'accepted' } },
+      posts: true,
     }
   },
 } as const;

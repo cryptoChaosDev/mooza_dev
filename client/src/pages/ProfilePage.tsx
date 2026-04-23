@@ -8,7 +8,7 @@ import {
   Globe, DollarSign, Calendar,
   Headphones, Edit3, Plus, ChevronDown, ChevronLeft, ChevronRight,
   FileText, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2,
-  Users, Music2,
+  Music2,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import SelectField from '../components/SelectField';
@@ -16,7 +16,7 @@ import SelectSheet from '../components/SelectSheet';
 import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import ShareButton from '../components/ShareButton';
-import { plural } from '../lib/plural';
+
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -167,6 +167,7 @@ export default function ProfilePage() {
   const [editingServices, setEditingServices] = useState(false);
   const [editingPortfolio, setEditingPortfolio] = useState(false);
   const [editingContacts, setEditingContacts] = useState(false);
+  const [bioExpanded, setBioExpanded] = useState(false);
 
   // Chip panels
 
@@ -324,8 +325,6 @@ export default function ProfilePage() {
 
   const inputCls = "w-full px-3.5 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white placeholder-slate-500";
   const labelCls = "block text-xs font-semibold mb-1 text-slate-400";
-
-  const friendCount = (profile?._count?.sentRequests ?? 0) + (profile?._count?.receivedRequests ?? 0);
 
   const servicesByField = profile?.userServices?.reduce((acc: Record<string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }>, us: any) => {
     const fId = us.profession?.direction?.fieldOfActivity?.id || 'unknown';
@@ -738,37 +737,19 @@ export default function ProfilePage() {
                   ))}
                 </div>
               )}
-              {/* ── Stats chips ── */}
-              <div className="flex items-center gap-2 mb-5 flex-wrap">
-                <button
-                  onClick={() => navigate('/friends')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 hover:border-slate-600 rounded-xl transition-all group"
-                >
-                  <Users size={13} className="text-primary-400 group-hover:text-primary-300" />
-                  <span className="text-sm font-bold text-white">{friendCount}</span>
-                  <span className="text-xs text-slate-500">друзей</span>
-                </button>
-
-                <button
-                  onClick={() => navigate('/friends?tab=connections')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 hover:border-slate-600 rounded-xl transition-all group"
-                >
-                  <Link2 size={13} className="text-emerald-400 group-hover:text-emerald-300" />
-                  <span className="text-sm font-bold text-white">{myConnections.length}</span>
-                  <span className="text-xs text-slate-500">{plural(myConnections.length, 'связь', 'связи', 'связей')}</span>
-                </button>
-
-                {servicesFlat.length > 0 && (
-                  <button
-                    onClick={() => { setEditingServices(true); setTimeout(() => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 hover:border-slate-600 rounded-xl transition-all group"
-                  >
-                    <Briefcase size={13} className="text-amber-400 group-hover:text-amber-300" />
-                    <span className="text-sm font-bold text-white">{servicesFlat.length}</span>
-                    <span className="text-xs text-slate-500">услуг</span>
+              {/* ── Stats row ── */}
+              <div className="grid grid-cols-4 divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+                {[
+                  { num: myConnections.length, label: 'Связи', onClick: () => navigate('/friends?tab=connections') },
+                  { num: myGroups.length, label: 'Проекты', onClick: () => navigate('/groups') },
+                  { num: servicesFlat.length, label: 'Услуги', onClick: () => { setTimeout(() => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); } },
+                  { num: profile?._count?.posts ?? 0, label: 'Публикации', onClick: null },
+                ].map((stat, i) => (
+                  <button key={i} onClick={stat.onClick ?? undefined} disabled={!stat.onClick} className="flex flex-col items-center py-3 px-1 hover:bg-slate-800/40 disabled:pointer-events-none transition-colors">
+                    <span className="text-base font-bold text-white">{stat.num}</span>
+                    <span className="text-[10px] text-slate-500 mt-0.5">{stat.label}</span>
                   </button>
-                )}
-
+                ))}
               </div>
             </>
           )}
@@ -795,7 +776,14 @@ export default function ProfilePage() {
                   </div>
                 </div>
               ) : profile?.bio ? (
-                <p className="text-slate-300 text-sm leading-relaxed">{profile.bio}</p>
+                <>
+                  <p className={`text-slate-300 text-sm leading-relaxed ${!bioExpanded ? 'line-clamp-3' : ''}`}>{profile.bio}</p>
+                  {profile.bio.length > 120 && (
+                    <button onClick={() => setBioExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-1.5 transition-colors">
+                      {bioExpanded ? 'Свернуть' : 'Показать больше'}
+                    </button>
+                  )}
+                </>
               ) : (
                 <button onClick={() => setEditingBio(true)} className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic">+ Добавить описание</button>
               )}
@@ -886,48 +874,41 @@ export default function ProfilePage() {
               ) : servicesFlat.length > 0 ? (
                 <div className="px-3 py-3">
                   <div className="overflow-x-auto scrollbar-none -mx-1 px-1">
-                    <div className="flex gap-3" style={{ width: 'max-content' }}>
+                    <div className="flex gap-2.5" style={{ width: 'max-content' }}>
                       {servicesFlat.map((us: any, i: number) => {
                         const tags = [
                           ...(us.genres?.map((g: any) => g.name) ?? []),
                           ...(us.workFormats?.map((w: any) => w.name) ?? []),
-                          ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
-                          ...(us.skillLevels?.map((s: any) => s.name) ?? []),
-                          ...(us.availabilities?.map((a: any) => a.name) ?? []),
-                          ...(us.geographies?.map((g: any) => g.name) ?? []),
                         ];
                         const price = us.priceFrom != null || us.priceTo != null
                           ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
                           : null;
                         return (
-                          <div key={us.id} className="w-48 flex-shrink-0 rounded-xl border border-slate-700/50 bg-slate-800/40 p-3 flex flex-col gap-2">
-                            <div className="flex-1">
-                              <p className="text-[10px] text-slate-500 leading-none mb-1">{us._profName}</p>
-                              <p className="text-sm font-bold text-white leading-snug">{us.service?.name}</p>
-                              {price && <span className="text-xs font-semibold text-primary-400 mt-1 block">{price}</span>}
-                              {tags.length > 0 && (
-                                <div className="flex flex-wrap gap-1 mt-2">
-                                  {tags.slice(0, 3).map((t: string, j: number) => (
-                                    <span key={j} className="px-1.5 py-0.5 bg-slate-700/60 text-slate-400 rounded text-[10px]">{t}</span>
-                                  ))}
-                                  {tags.length > 3 && <span className="px-1.5 py-0.5 text-slate-600 text-[10px]">+{tags.length - 3}</span>}
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex gap-1.5 mt-1 border-t border-slate-700/40 pt-2">
-                              <button
-                                onClick={() => { setEditingServices(true); setExpandedSvcIdx(i); setTimeout(() => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }}
-                                className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg bg-slate-700/50 hover:bg-slate-700 text-slate-400 hover:text-white text-xs transition-all"
-                              >
-                                <Edit3 size={11} />
-                              </button>
-                              <button
-                                onClick={() => handleDeleteService(i)}
-                                disabled={updateServicesMutation.isPending}
-                                className="flex-1 flex items-center justify-center gap-1 py-1 rounded-lg bg-slate-700/50 hover:bg-red-500/15 text-slate-400 hover:text-red-400 text-xs transition-all"
-                              >
-                                {updateServicesMutation.isPending ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
-                              </button>
+                          <div key={us.id} className="w-44 flex-shrink-0 rounded-2xl border border-slate-700/40 bg-slate-800/50 p-3.5 flex flex-col">
+                            <p className="text-[10px] text-slate-500 mb-1 truncate">{us._profName}</p>
+                            <p className="text-sm font-bold text-white leading-snug flex-1">{us.service?.name}</p>
+                            {tags.length > 0 && (
+                              <p className="text-[10px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                                {tags.slice(0, 3).join(' · ')}
+                              </p>
+                            )}
+                            <div className="flex items-center justify-between mt-3">
+                              <span className="text-xs font-semibold text-primary-400">{price ?? '—'}</span>
+                              <div className="flex items-center gap-1.5">
+                                <button
+                                  onClick={() => { setEditingServices(true); setExpandedSvcIdx(i); setTimeout(() => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }}
+                                  className="p-1.5 bg-slate-700/50 hover:bg-slate-700 rounded-xl text-slate-400 hover:text-white transition-all"
+                                >
+                                  <Edit3 size={11} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteService(i)}
+                                  disabled={updateServicesMutation.isPending}
+                                  className="p-1.5 bg-slate-700/50 hover:bg-red-500/15 rounded-xl text-slate-400 hover:text-red-400 transition-all"
+                                >
+                                  {updateServicesMutation.isPending ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
+                                </button>
+                              </div>
                             </div>
                           </div>
                         );

@@ -6,7 +6,7 @@ import {
   Crown, BadgeCheck, Ban, X,
   Headphones, FileText, Briefcase,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
-  Users, Globe,
+  Users, Globe, ShoppingCart, Play,
 } from 'lucide-react';
 import { userAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
@@ -122,6 +122,8 @@ export default function UserProfilePage() {
   const [viewConn, setViewConn] = useState<any>(null);
   const [connExpanded, setConnExpanded] = useState(false);
   const [portfolioTab, setPortfolioTab] = useState<'audio' | 'video' | 'other'>('audio');
+  const [portfolioExpanded, setPortfolioExpanded] = useState(false);
+  const [bioExpanded, setBioExpanded] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
   const servicesRef = useRef<HTMLDivElement>(null);
   const onlineUsers = usePresenceStore(s => s.onlineUsers);
@@ -368,36 +370,19 @@ export default function UserProfilePage() {
             </div>
           )}
 
-          {/* ── Stats chips ── */}
-          <div className="flex items-center gap-2 mb-5 flex-wrap">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 border border-slate-700/60 rounded-xl">
-              <Users size={13} className="text-primary-400" />
-              <span className="text-sm font-bold text-white">{friendCount}</span>
-              <span className="text-xs text-slate-500">друзей</span>
-            </div>
-
-            {userConnections.length > 0 && (
-              <button
-                onClick={() => document.querySelector('[data-connections]')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 hover:border-slate-600 rounded-xl transition-all group"
-              >
-                <Link2 size={13} className="text-emerald-400 group-hover:text-emerald-300" />
-                <span className="text-sm font-bold text-white">{userConnections.length}</span>
-                <span className="text-xs text-slate-500">{plural(userConnections.length, 'связь', 'связи', 'связей')}</span>
+          {/* ── Stats row ── */}
+          <div className="grid grid-cols-4 divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+            {[
+              { num: userConnections.length, label: 'Связи', onClick: () => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
+              { num: user.userArtists?.length ?? 0, label: 'Проекты', onClick: null },
+              { num: servicesFlat.length, label: 'Услуги', onClick: () => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
+              { num: user._count?.posts ?? 0, label: 'Публикации', onClick: null },
+            ].map((stat, i) => (
+              <button key={i} onClick={stat.onClick ?? undefined} disabled={!stat.onClick} className="flex flex-col items-center py-3 px-1 hover:bg-slate-800/40 disabled:pointer-events-none transition-colors">
+                <span className="text-base font-bold text-white">{stat.num}</span>
+                <span className="text-[10px] text-slate-500 mt-0.5">{stat.label}</span>
               </button>
-            )}
-
-            {servicesFlat.length > 0 && (
-              <button
-                onClick={() => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 hover:border-slate-600 rounded-xl transition-all group"
-              >
-                <Briefcase size={13} className="text-amber-400 group-hover:text-amber-300" />
-                <span className="text-sm font-bold text-white">{servicesFlat.length}</span>
-                <span className="text-xs text-slate-500">услуг</span>
-              </button>
-            )}
-
+            ))}
           </div>
 
           <div className="space-y-3">
@@ -406,7 +391,12 @@ export default function UserProfilePage() {
             {user.bio && (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">О себе</p>
-                <p className="text-slate-300 text-sm leading-relaxed">{user.bio}</p>
+                <p className={`text-slate-300 text-sm leading-relaxed ${!bioExpanded ? 'line-clamp-3' : ''}`}>{user.bio}</p>
+                {user.bio.length > 120 && (
+                  <button onClick={() => setBioExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-1.5 transition-colors">
+                    {bioExpanded ? 'Свернуть' : 'Показать больше'}
+                  </button>
+                )}
               </div>
             )}
 
@@ -440,36 +430,35 @@ export default function UserProfilePage() {
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                   <Briefcase size={14} className="text-primary-400" />
                   <span className="text-sm font-semibold text-white">Услуги</span>
-                  <span className="ml-auto text-xs text-slate-500">{servicesFlat.length}</span>
+                  <span className="text-xs text-slate-500">({servicesFlat.length})</span>
+                  <span className="ml-auto text-xs text-primary-400 font-medium">Смотреть все</span>
                 </div>
                 <div className="px-3 py-3">
                   <div className="overflow-x-auto scrollbar-none -mx-1 px-1">
-                    <div className="flex gap-3" style={{ width: 'max-content' }}>
+                    <div className="flex gap-2.5" style={{ width: 'max-content' }}>
                       {servicesFlat.map((us: any) => {
                         const tags = [
                           ...(us.genres?.map((g: any) => g.name) ?? []),
                           ...(us.workFormats?.map((w: any) => w.name) ?? []),
-                          ...(us.employmentTypes?.map((e: any) => e.name) ?? []),
-                          ...(us.skillLevels?.map((s: any) => s.name) ?? []),
-                          ...(us.availabilities?.map((a: any) => a.name) ?? []),
-                          ...(us.geographies?.map((g: any) => g.name) ?? []),
                         ];
                         const price = us.priceFrom != null || us.priceTo != null
                           ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
                           : null;
                         return (
-                          <div key={us.id} className="w-48 flex-shrink-0 rounded-xl border border-slate-700/50 bg-slate-800/40 p-3 flex flex-col gap-1.5">
-                            <p className="text-[10px] text-slate-500 leading-none mb-0.5">{us._profName}</p>
-                            <p className="text-sm font-bold text-white leading-snug">{us.service?.name}</p>
-                            {price && <span className="text-xs font-semibold text-primary-400">{price}</span>}
+                          <div key={us.id} className="w-44 flex-shrink-0 rounded-2xl border border-slate-700/40 bg-slate-800/50 p-3.5 flex flex-col">
+                            <p className="text-[10px] text-slate-500 mb-1 truncate">{us._profName}</p>
+                            <p className="text-sm font-bold text-white leading-snug flex-1">{us.service?.name}</p>
                             {tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-auto pt-1">
-                                {tags.slice(0, 3).map((t: string, i: number) => (
-                                  <span key={i} className="px-1.5 py-0.5 bg-slate-700/60 text-slate-400 rounded text-[10px]">{t}</span>
-                                ))}
-                                {tags.length > 3 && <span className="px-1.5 py-0.5 text-slate-600 text-[10px]">+{tags.length - 3}</span>}
-                              </div>
+                              <p className="text-[10px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+                                {tags.slice(0, 3).join(' · ')}
+                              </p>
                             )}
+                            <div className="flex items-center justify-between mt-3">
+                              <span className="text-xs font-semibold text-primary-400">{price ?? '—'}</span>
+                              <div className="p-1.5 bg-primary-600/20 rounded-xl">
+                                <ShoppingCart size={13} className="text-primary-400" />
+                              </div>
+                            </div>
                           </div>
                         );
                       })}
