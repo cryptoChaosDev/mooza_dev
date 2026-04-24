@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConfirmDialog from '../components/ConfirmDialog';
+import AvatarComponent from '../components/Avatar';
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
 import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
@@ -928,7 +929,7 @@ export default function ProfilePage() {
 
             {/* ── Connections card ── */}
             {myConnections.length > 0 && (() => {
-              const LIMIT = 4;
+              const LIMIT = 5;
               const visible = connExpanded ? myConnections : myConnections.slice(0, LIMIT);
               return (
                 <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
@@ -937,39 +938,30 @@ export default function ProfilePage() {
                     <span className="text-sm font-semibold text-white">Профессиональные связи</span>
                     <span className="ml-auto text-xs text-slate-500">{myConnections.length}</span>
                   </div>
-                  <div className="p-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      {visible.map((c: any) => (
-                        <button key={c.id} onClick={() => setViewConn(c)} className="text-left p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl hover:border-primary-500/30 hover:bg-slate-800/70 transition-all">
-                          <div className="flex items-center gap-2.5 mb-2">
-                            <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-700 flex-shrink-0">
-                              {getAvatarUrl(c.partner.avatar)
-                                ? <img src={getAvatarUrl(c.partner.avatar)!} alt="" className="w-full h-full object-cover" />
-                                : <div className="w-full h-full bg-primary-600/30 flex items-center justify-center text-xs text-primary-300 font-bold">{c.partner.firstName?.[0]}</div>
-                              }
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm font-semibold text-white truncate leading-tight">{c.partner.firstName} {c.partner.lastName}</p>
-                              {c.partner.city && <p className="text-[11px] text-slate-500 truncate">{c.partner.city}</p>}
-                            </div>
+                  <div className="divide-y divide-slate-800/40">
+                    {visible.map((c: any) => {
+                      const subtitle = c.profession?.name
+                        || c.services?.slice(0, 2).map((s: any) => s.name).join(', ')
+                        || c.partner.city || null;
+                      return (
+                        <button key={c.id} onClick={() => setViewConn(c)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-800/40 transition-colors text-left">
+                          <AvatarComponent src={c.partner.avatar} name={`${c.partner.firstName} ${c.partner.lastName}`} size={36} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</p>
+                            {subtitle && <p className="text-xs text-slate-500 truncate mt-0.5">{subtitle}</p>}
                           </div>
-                          {c.services?.length > 0 && (
-                            <div className="flex flex-wrap gap-1">
-                              {c.services.slice(0, 2).map((s: any) => (
-                                <span key={s.id} className="text-[10px] bg-primary-500/10 text-primary-300 border border-primary-500/20 rounded px-1.5 py-0.5">{s.name}</span>
-                              ))}
-                              {c.services.length > 2 && <span className="text-[10px] bg-slate-700/60 text-slate-400 rounded px-1.5 py-0.5">+{c.services.length - 2}</span>}
-                            </div>
-                          )}
+                          <span className={`text-[10px] rounded-lg px-2 py-0.5 border flex-shrink-0 font-medium ${c.iAmRequester ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+                            {c.iAmRequester ? 'Заказчик' : 'Исполнитель'}
+                          </span>
                         </button>
-                      ))}
-                    </div>
-                    {myConnections.length > LIMIT && (
-                      <button onClick={() => setConnExpanded(v => !v)} className="mt-3 w-full py-2 text-xs text-slate-500 hover:text-slate-300 transition-colors text-center">
-                        {connExpanded ? 'Свернуть' : `Показать ещё ${myConnections.length - LIMIT}`}
-                      </button>
-                    )}
+                      );
+                    })}
                   </div>
+                  {myConnections.length > LIMIT && (
+                    <button onClick={() => setConnExpanded(v => !v)} className="w-full py-2.5 text-xs text-slate-500 hover:text-slate-300 transition-colors text-center border-t border-slate-800/40">
+                      {connExpanded ? 'Свернуть' : `Показать ещё ${myConnections.length - LIMIT}`}
+                    </button>
+                  )}
                 </div>
               );
             })()}
