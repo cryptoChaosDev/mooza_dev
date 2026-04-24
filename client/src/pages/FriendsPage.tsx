@@ -81,11 +81,7 @@ export default function FriendsPage() {
     queryKey: ['connections-sent'],
     queryFn: async () => { const { data } = await connectionAPI.getSent(); return data; },
   });
-  const { data: breakRequests = [] } = useQuery({
-    queryKey: ['connections-break-requests'],
-    queryFn: async () => { const { data } = await connectionAPI.getBreakRequests(); return data; },
-  });
-  const { data: myBreakRequests = [] } = useQuery({
+const { data: myBreakRequests = [] } = useQuery({
     queryKey: ['connections-my-break-requests'],
     queryFn: async () => { const { data } = await connectionAPI.getMyBreakRequests(); return data; },
   });
@@ -177,7 +173,7 @@ export default function FriendsPage() {
   }, [friends, search, onlineOnly, pinnedIds, onlineUsers]);
 
   const friendsBadge = requests.length;
-  const connBadge = connRequests.length + breakRequests.length;
+  const connBadge = connRequests.length;
   const groupsBadge = groupInvites.length;
 
   const TABS: { id: Tab; label: string; badge: number }[] = [
@@ -447,25 +443,7 @@ export default function FriendsPage() {
                 </div>
               )}
 
-              {breakRequests.length > 0 && (
-                <div>
-                  <SectionHeader label="Запросы на разрыв" count={breakRequests.length} danger />
-                  <div className="divide-y divide-slate-800/60">
-                    {breakRequests.map((c: any) => (
-                      <div key={c.id} onClick={() => setViewConn(c)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer">
-                        <div className="flex-shrink-0"><UserAvatar user={c.partner} /></div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</p>
-                          <p className="text-xs text-red-400/80 mt-0.5">Запрашивает разрыв связи</p>
-                        </div>
-                        <span className="text-xs text-red-400 font-medium flex-shrink-0">Открыть →</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {connSent.length > 0 && (
+{connSent.length > 0 && (
                 <div>
                   <SectionHeader label="Отправленные запросы" count={connSent.length} />
                   <div className="divide-y divide-slate-800/60">
@@ -571,7 +549,7 @@ export default function FriendsPage() {
                 </div>
               )}
 
-              {connections.length === 0 && connRequests.length === 0 && connSent.length === 0 && breakRequests.length === 0 && myBreakRequests.length === 0 && connHistory.length === 0 && (
+              {connections.length === 0 && connRequests.length === 0 && connSent.length === 0 && myBreakRequests.length === 0 && connHistory.length === 0 && (
                 <div className="flex flex-col items-center py-16 px-6 text-center">
                   <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Link2 size={32} className="text-slate-600" /></div>
                   <p className="text-white font-semibold mb-1">Нет профессиональных связей</p>
