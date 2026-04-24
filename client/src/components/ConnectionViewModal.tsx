@@ -118,6 +118,16 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
             </div>
           )}
 
+          {/* Roles */}
+          <div className="flex flex-wrap gap-2">
+            <span className={`text-xs rounded-xl px-3 py-1 border font-medium ${iAmRequester ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
+              Я — {iAmRequester ? 'заказчик' : 'исполнитель'}
+            </span>
+            <span className={`text-xs rounded-xl px-3 py-1 border font-medium ${iAmRequester ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-sky-500/10 text-sky-400 border-sky-500/20'}`}>
+              {partner.firstName} — {iAmRequester ? 'исполнитель' : 'заказчик'}
+            </span>
+          </div>
+
           {/* Profession */}
           {profession && (
             <div>
