@@ -380,21 +380,33 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
 
     if (query) {
       const words = (query as string).trim().split(/\s+/).filter(Boolean);
+      const m = 'insensitive' as const;
       const wordClauses = words.map(word => ({
         OR: [
-          { firstName: { contains: word, mode: 'insensitive' as const } },
-          { lastName: { contains: word, mode: 'insensitive' as const } },
-          { nickname: { contains: word, mode: 'insensitive' as const } },
-          { bio: { contains: word, mode: 'insensitive' as const } },
-          { city: { contains: word, mode: 'insensitive' as const } },
-          { country: { contains: word, mode: 'insensitive' as const } },
-          { userServices: { some: { profession: { name: { contains: word, mode: 'insensitive' as const } } } } },
-          { userServices: { some: { service: { name: { contains: word, mode: 'insensitive' as const } } } } },
-          { userServices: { some: { profession: { direction: { name: { contains: word, mode: 'insensitive' as const } } } } } },
-          { userServices: { some: { profession: { direction: { fieldOfActivity: { name: { contains: word, mode: 'insensitive' as const } } } } } } },
-          { userServices: { some: { genres: { some: { name: { contains: word, mode: 'insensitive' as const } } } } } },
-          { userServices: { some: { workFormats: { some: { name: { contains: word, mode: 'insensitive' as const } } } } } },
-          { userArtists: { some: { artist: { name: { contains: word, mode: 'insensitive' as const } } } } },
+          // Identity
+          { firstName: { contains: word, mode: m } },
+          { lastName: { contains: word, mode: m } },
+          { nickname: { contains: word, mode: m } },
+          // Profile text
+          { bio: { contains: word, mode: m } },
+          { city: { contains: word, mode: m } },
+          { country: { contains: word, mode: m } },
+          // Service taxonomy
+          { userServices: { some: { profession: { name: { contains: word, mode: m } } } } },
+          { userServices: { some: { service: { name: { contains: word, mode: m } } } } },
+          { userServices: { some: { profession: { direction: { name: { contains: word, mode: m } } } } } },
+          { userServices: { some: { profession: { direction: { fieldOfActivity: { name: { contains: word, mode: m } } } } } } },
+          // Service filters
+          { userServices: { some: { genres: { some: { name: { contains: word, mode: m } } } } } },
+          { userServices: { some: { workFormats: { some: { name: { contains: word, mode: m } } } } } },
+          { userServices: { some: { employmentTypes: { some: { name: { contains: word, mode: m } } } } } },
+          { userServices: { some: { skillLevels: { some: { name: { contains: word, mode: m } } } } } },
+          { userServices: { some: { availabilities: { some: { name: { contains: word, mode: m } } } } } },
+          { userServices: { some: { geographies: { some: { name: { contains: word, mode: m } } } } } },
+          // Custom filter values
+          { userServices: { some: { selectedCustomFilterValues: { some: { value: { contains: word, mode: m } } } } } },
+          // Collectives
+          { userArtists: { some: { artist: { name: { contains: word, mode: m } } } } },
         ],
       }));
       andClauses.push({ AND: wordClauses });
