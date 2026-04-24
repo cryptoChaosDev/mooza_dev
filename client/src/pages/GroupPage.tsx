@@ -16,6 +16,7 @@ import AvatarComponent from '../components/Avatar';
 import SelectSheet from '../components/SelectSheet';
 import ShareButton from '../components/ShareButton';
 import { useAuthStore } from '../stores/authStore';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -64,6 +65,7 @@ export default function GroupPage() {
 
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [confirmRemoveMember, setConfirmRemoveMember] = useState<string | null>(null);
   const [inviteFriendId, setInviteFriendId] = useState('');
   const [inviteProfessionId, setInviteProfessionId] = useState('');
   const [inviteFriendSearch, setInviteFriendSearch] = useState('');
@@ -285,21 +287,18 @@ export default function GroupPage() {
         </>
       )}
 
-      {/* ── Delete confirm ────────────────────────────────────────────────── */}
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center px-6" onClick={() => setShowDeleteConfirm(false)}>
-          <div className="bg-slate-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
-            <h3 className="text-white font-semibold text-base mb-2">Удалить группу?</h3>
-            <p className="text-slate-400 text-sm mb-5">Группа «{group.name}» и все данные о ней будут удалены безвозвратно.</p>
-            <div className="flex gap-3">
-              <button onClick={() => setShowDeleteConfirm(false)} className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 text-sm font-medium">Отмена</button>
-              <button onClick={() => deleteGroupMut.mutate()} disabled={deleteGroupMut.isPending} className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white text-sm font-semibold flex items-center justify-center gap-2 transition-colors">
-                {deleteGroupMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}Удалить
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmDialog
+        open={showDeleteConfirm}
+        message={`Удалить группу «${group.name}»? Все данные будут удалены безвозвратно.`}
+        onConfirm={() => deleteGroupMut.mutate()}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
+      <ConfirmDialog
+        open={!!confirmRemoveMember}
+        message="Удалить участника из группы?"
+        onConfirm={() => { if (confirmRemoveMember) removeMemberMut.mutate(confirmRemoveMember); }}
+        onCancel={() => setConfirmRemoveMember(null)}
+      />
 
       {/* ── Invite modal ──────────────────────────────────────────────────── */}
       {showInviteModal && (
@@ -596,7 +595,7 @@ export default function GroupPage() {
                           <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-400 rounded-md flex-shrink-0">ожидает</span>
                         )}
                         {isOwner && !m.isOwner && (
-                          <button onClick={() => removeMemberMut.mutate(m.membershipId)} disabled={removeMemberMut.isPending} className="p-1.5 text-slate-600 hover:text-red-400 transition-colors flex-shrink-0">
+                          <button onClick={() => setConfirmRemoveMember(m.membershipId)} disabled={removeMemberMut.isPending} className="p-1.5 text-slate-600 hover:text-red-400 transition-colors flex-shrink-0">
                             <Trash2 size={14} />
                           </button>
                         )}

@@ -10,6 +10,7 @@ import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
 import { groupReactions } from '../components/ReactionBar';
 import ConnectionRequestModal from '../components/ConnectionRequestModal';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -97,6 +98,7 @@ export default function ChatPage() {
 
   // Reaction picker
   const [reactionPickerMsgId, setReactionPickerMsgId] = useState<string | null>(null);
+  const [confirmDeleteMsgId, setConfirmDeleteMsgId] = useState<string | null>(null);
 
   // Context menu (long-press)
   const [contextMenu, setContextMenu] = useState<{ msg: Message; x: number; y: number } | null>(null);
@@ -1240,7 +1242,7 @@ export default function ChatPage() {
                                   <Pencil size={14} />
                                 </button>
                                 <button
-                                  onClick={() => handleDelete(msg.id)}
+                                  onClick={() => setConfirmDeleteMsgId(msg.id)}
                                   className="p-1.5 rounded-lg text-slate-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
                                   title="Удалить"
                                 >
@@ -1304,7 +1306,7 @@ export default function ChatPage() {
                 ? { label: 'Редактировать', icon: '✏️', action: () => { startEdit(contextMenu.msg); setContextMenu(null); } }
                 : null,
               contextMenu.msg.senderId === me?.id
-                ? { label: 'Удалить', icon: '🗑️', danger: true, action: () => { handleDelete(contextMenu.msg.id); setContextMenu(null); } }
+                ? { label: 'Удалить', icon: '🗑️', danger: true, action: () => { setConfirmDeleteMsgId(contextMenu.msg.id); setContextMenu(null); } }
                 : null,
             ].filter(Boolean).map((item: any, i) => (
               <button
@@ -1462,6 +1464,13 @@ export default function ChatPage() {
           onClose={() => setShowConnModal(false)}
         />
       )}
+
+      <ConfirmDialog
+        open={!!confirmDeleteMsgId}
+        message="Удалить сообщение?"
+        onConfirm={() => { if (confirmDeleteMsgId) handleDelete(confirmDeleteMsgId); }}
+        onCancel={() => setConfirmDeleteMsgId(null)}
+      />
     </div>
   );
 }

@@ -11,6 +11,7 @@ import AvatarComponent from '../components/Avatar';
 import { usePresenceStore } from '../stores/presenceStore';
 import { formatLastSeen } from '../lib/lastSeen';
 import ConnectionViewModal from '../components/ConnectionViewModal';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 type Tab = 'friends' | 'connections' | 'favorites' | 'groups';
 
@@ -38,6 +39,8 @@ export default function FriendsPage() {
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<Tab>((searchParams.get('tab') as Tab) || 'friends');
   const [viewConn, setViewConn] = useState<any>(null);
+  const [confirmRemoveFriend, setConfirmRemoveFriend] = useState<string | null>(null);
+  const [confirmRemoveFav, setConfirmRemoveFav] = useState<string | null>(null);
 
   useEffect(() => {
     const tab = searchParams.get('tab') as Tab | null;
@@ -391,7 +394,7 @@ export default function FriendsPage() {
                             {isPinned ? <PinOff size={15} /> : <Pin size={15} />}
                           </button>
                           {friendshipId && (
-                            <button onClick={() => removeMutation.mutate(friendshipId)} disabled={removeMutation.isPending} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-50" title="Удалить из друзей">
+                            <button onClick={() => setConfirmRemoveFriend(friendshipId)} disabled={removeMutation.isPending} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-50" title="Удалить из друзей">
                               <UserX size={15} />
                             </button>
                           )}
@@ -715,7 +718,7 @@ export default function FriendsPage() {
                         <MessageCircle size={16} />
                       </button>
                       <button
-                        onClick={() => removeFavMutation.mutate(fav.user.id)}
+                        onClick={() => setConfirmRemoveFav(fav.user.id)}
                         disabled={removeFavMutation.isPending}
                         className="p-2 text-amber-400/60 hover:text-slate-400 hover:bg-slate-700/50 rounded-lg transition-all disabled:opacity-50"
                         title="Убрать из избранного"
@@ -741,6 +744,19 @@ export default function FriendsPage() {
     {viewConn && (
       <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />
     )}
+    <ConfirmDialog
+      open={!!confirmRemoveFriend}
+      message="Удалить из друзей? Это действие нельзя отменить."
+      onConfirm={() => { if (confirmRemoveFriend) removeMutation.mutate(confirmRemoveFriend); }}
+      onCancel={() => setConfirmRemoveFriend(null)}
+    />
+    <ConfirmDialog
+      open={!!confirmRemoveFav}
+      message="Убрать из избранного?"
+      confirmLabel="Убрать"
+      onConfirm={() => { if (confirmRemoveFav) removeFavMutation.mutate(confirmRemoveFav); }}
+      onCancel={() => setConfirmRemoveFav(null)}
+    />
     </>
   );
 }

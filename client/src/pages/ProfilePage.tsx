@@ -11,6 +11,7 @@ import {
   Music2,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
+import ConfirmDialog from '../components/ConfirmDialog';
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
 import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
@@ -168,6 +169,8 @@ export default function ProfilePage() {
   const [editingPortfolio, setEditingPortfolio] = useState(false);
   const [editingContacts, setEditingContacts] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
+  const [confirmDeleteServiceIdx, setConfirmDeleteServiceIdx] = useState<number | null>(null);
+  const [confirmDeleteLinkId, setConfirmDeleteLinkId] = useState<string | null>(null);
 
   // Chip panels
 
@@ -902,7 +905,7 @@ export default function ProfilePage() {
                                   <Edit3 size={11} />
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteService(i)}
+                                  onClick={() => setConfirmDeleteServiceIdx(i)}
                                   disabled={updateServicesMutation.isPending}
                                   className="p-1.5 bg-slate-700/50 hover:bg-red-500/15 rounded-xl text-slate-400 hover:text-red-400 transition-all"
                                 >
@@ -998,7 +1001,7 @@ export default function ProfilePage() {
               {portfolioTab === 'audio' && (
                 <div className="p-4 space-y-3">
                   {audioLinks.map((l: any) => (
-                    <PortfolioAudioItem key={l.id} link={l} onDelete={editingPortfolio ? () => handleDeleteLink(l.id) : undefined} />
+                    <PortfolioAudioItem key={l.id} link={l} onDelete={editingPortfolio ? () => setConfirmDeleteLinkId(l.id) : undefined} />
                   ))}
                   {audioLinks.length === 0 && !editingPortfolio && (
                     <p className="text-sm text-slate-600 italic text-center py-2">Нет аудио ссылок</p>
@@ -1020,7 +1023,7 @@ export default function ProfilePage() {
               {portfolioTab === 'video' && (
                 <div className="p-4 space-y-3">
                   {videoLinks.map((l: any) => (
-                    <PortfolioVideoItem key={l.id} link={l} onDelete={editingPortfolio ? () => handleDeleteLink(l.id) : undefined} />
+                    <PortfolioVideoItem key={l.id} link={l} onDelete={editingPortfolio ? () => setConfirmDeleteLinkId(l.id) : undefined} />
                   ))}
                   {videoLinks.length === 0 && !editingPortfolio && (
                     <p className="text-sm text-slate-600 italic text-center py-2">Нет видео ссылок</p>
@@ -1099,7 +1102,18 @@ export default function ProfilePage() {
 
     {viewConn && <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />}
 
-
+    <ConfirmDialog
+      open={confirmDeleteServiceIdx !== null}
+      message="Удалить услугу из профиля?"
+      onConfirm={() => { if (confirmDeleteServiceIdx !== null) handleDeleteService(confirmDeleteServiceIdx); }}
+      onCancel={() => setConfirmDeleteServiceIdx(null)}
+    />
+    <ConfirmDialog
+      open={!!confirmDeleteLinkId}
+      message="Удалить ссылку из портфолио?"
+      onConfirm={() => { if (confirmDeleteLinkId) handleDeleteLink(confirmDeleteLinkId); }}
+      onCancel={() => setConfirmDeleteLinkId(null)}
+    />
 
     </>
   );
