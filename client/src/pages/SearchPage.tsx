@@ -190,9 +190,9 @@ export default function SearchPage() {
 
   // ── Reference data ─────────────────────────────────────────────────────────
   const { data: fields, isLoading: fieldsLoading } = useQuery({
-    queryKey: ['fields-all'],
+    queryKey: ['fields-with-users', currentUser?.id],
     queryFn: async () => {
-      const { data } = await referenceAPI.getFieldsOfActivity({ all: true });
+      const { data } = await referenceAPI.getFieldsOfActivity({ excludeUserId: currentUser?.id });
       return data as any[];
     },
   });
