@@ -542,8 +542,19 @@ router.delete('/conversations/:id', authenticate, async (req: AuthRequest, res) 
       include: { members: { select: { userId: true, isAdmin: true } } },
     });
     if (!conv) return res.status(404).json({ error: 'Not found' });
-    if (!conv.isGroup) return res.status(400).json({ error: 'Not a group' });
 
+    // DM — soft delete only for the current user
+    if (!conv.isGroup) {
+      const member = conv.members.find((m: any) => m.userId === userId);
+      if (!member) return res.status(403).json({ error: 'Not a member' });
+      await db.conversationMember.update({
+        where: { conversationId_userId: { conversationId: id, userId } },
+        data: { deletedAt: new Date(), isPinned: false, isArchived: false },
+      });
+      return res.json({ ok: true });
+    }
+
+    // Group — hard delete, admin only
     const me = conv.members.find((m: any) => m.userId === userId);
     if (!me?.isAdmin) return res.status(403).json({ error: 'Only admins can delete the group' });
 
@@ -554,8 +565,8 @@ router.delete('/conversations/:id', authenticate, async (req: AuthRequest, res) 
     await db.conversation.delete({ where: { id } });
     res.json({ ok: true });
   } catch (err) {
-    console.error('Delete group error:', err);
-    res.status(500).json({ error: 'Failed to delete group' });
+    console.error('Delete conversation error:', err);
+    res.status(500).json({ error: 'Failed to delete conversation' });
   }
 });
 
@@ -616,25 +627,6 @@ router.patch('/conversations/:id/archive', authenticate, async (req: AuthRequest
     res.json({ isArchived: updated.isArchived });
   } catch {
     res.status(500).json({ error: 'Failed to toggle archive' });
-  }
-});
-
-// ─── DELETE /conversations/:id — soft-delete for current user ────────────────
-router.delete('/conversations/:id', authenticate, async (req: AuthRequest, res) => {
-  try {
-    const userId = req.userId!;
-    const { id: conversationId } = req.params;
-    const member = await db.conversationMember.findUnique({
-      where: { conversationId_userId: { conversationId, userId } },
-    });
-    if (!member) return res.status(404).json({ error: 'Conversation not found' });
-    await db.conversationMember.update({
-      where: { conversationId_userId: { conversationId, userId } },
-      data: { deletedAt: new Date(), isPinned: false, isArchived: false },
-    });
-    res.json({ ok: true });
-  } catch {
-    res.status(500).json({ error: 'Failed to delete conversation' });
   }
 });
 
