@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Search, Plus, X, Check, User, FolderKanban, Crown, BadgeCheck, Ban, Pin, Archive, ArchiveX, Trash2 } from 'lucide-react';
+import { MessageCircle, Search, Plus, X, Check, User, FolderKanban, Crown, BadgeCheck, Ban, Pin, Archive, ArchiveX, Trash2, MoreHorizontal } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
@@ -227,7 +227,7 @@ export default function MessagesPage() {
               className="absolute bg-slate-800 border border-slate-700 rounded-2xl py-1.5 shadow-2xl min-w-[180px]"
               style={{
                 left: Math.min(convMenu.x, window.innerWidth - 200),
-                top: Math.min(convMenu.y, window.innerHeight - 160),
+                top: Math.min(convMenu.y, window.innerHeight - 220),
               }}
               onClick={e => e.stopPropagation()}
             >
@@ -356,6 +356,14 @@ export default function MessagesPage() {
                         <p className="text-sm text-slate-500 italic">Нет сообщений</p>
                       )}
                     </div>
+                  </button>
+
+                  {/* Explicit menu button */}
+                  <button
+                    onClick={e => { e.stopPropagation(); openConvMenu(e, conv); }}
+                    className="flex-shrink-0 p-2 -mr-1 text-slate-600 hover:text-slate-300 hover:bg-slate-700/60 rounded-xl transition-all"
+                  >
+                    <MoreHorizontal size={18} />
                   </button>
                 </div>
               ))}
