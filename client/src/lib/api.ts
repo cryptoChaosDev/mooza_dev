@@ -237,6 +237,7 @@ export const messageAPI = {
     api.delete(`/messages/conversations/${conversationId}/members/${memberId}`),
   togglePin: (conversationId: string) => api.patch(`/messages/conversations/${conversationId}/pin`),
   toggleArchive: (conversationId: string) => api.patch(`/messages/conversations/${conversationId}/archive`),
+  deleteConversation: (conversationId: string) => api.delete(`/messages/conversations/${conversationId}`),
   searchMessages: (conversationId: string, q: string) => api.get(`/messages/conversations/${conversationId}/search`, { params: { q } }),
   getAttachments: (conversationId: string) => api.get(`/messages/conversations/${conversationId}/attachments`),
 };

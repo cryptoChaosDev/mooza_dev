@@ -68,7 +68,7 @@ router.get('/unread/count', authenticate, async (req: AuthRequest, res) => {
     const userId = req.userId!;
 
     const memberships = await db.conversationMember.findMany({
-      where: { userId },
+      where: { userId, deletedAt: null },
       select: { conversationId: true, lastReadAt: true },
     });
 
@@ -98,7 +98,7 @@ router.get('/conversations', authenticate, async (req: AuthRequest, res) => {
     const userId = req.userId!;
 
     const memberships = await db.conversationMember.findMany({
-      where: { userId },
+      where: { userId, deletedAt: null },
       include: {
         conversation: {
           include: {
@@ -437,6 +437,12 @@ router.post('/conversations/:id/messages', authenticate, messageLimiter, async (
       data: { lastReadAt: new Date() },
     });
 
+    // Restore conversation for members who had deleted it
+    await db.conversationMember.updateMany({
+      where: { conversationId, deletedAt: { not: null } },
+      data: { deletedAt: null },
+    });
+
     const sender = await prisma.user.findUnique({
       where: { id: userId },
       select: { firstName: true, lastName: true, avatar: true },
@@ -610,6 +616,25 @@ router.patch('/conversations/:id/archive', authenticate, async (req: AuthRequest
     res.json({ isArchived: updated.isArchived });
   } catch {
     res.status(500).json({ error: 'Failed to toggle archive' });
+  }
+});
+
+// ─── DELETE /conversations/:id — soft-delete for current user ────────────────
+router.delete('/conversations/:id', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const { id: conversationId } = req.params;
+    const member = await db.conversationMember.findUnique({
+      where: { conversationId_userId: { conversationId, userId } },
+    });
+    if (!member) return res.status(404).json({ error: 'Conversation not found' });
+    await db.conversationMember.update({
+      where: { conversationId_userId: { conversationId, userId } },
+      data: { deletedAt: new Date(), isPinned: false, isArchived: false },
+    });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to delete conversation' });
   }
 });
 

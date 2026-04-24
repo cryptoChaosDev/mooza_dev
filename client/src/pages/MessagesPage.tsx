@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Search, Plus, X, Check, User, FolderKanban, Crown, BadgeCheck, Ban, Pin, Archive, ArchiveX } from 'lucide-react';
+import { MessageCircle, Search, Plus, X, Check, User, FolderKanban, Crown, BadgeCheck, Ban, Pin, Archive, ArchiveX, Trash2 } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
@@ -121,6 +121,14 @@ export default function MessagesPage() {
     } catch { /* ignore */ }
   };
 
+  const handleDeleteConversation = async (conv: ConvItem) => {
+    setConvMenu(null);
+    try {
+      await messageAPI.deleteConversation(conv.id);
+      setConversations(prev => prev.filter(c => c.id !== conv.id));
+    } catch { /* ignore */ }
+  };
+
   const openConvMenu = (e: React.MouseEvent | React.TouchEvent, conv: ConvItem) => {
     e.preventDefault();
     const x = 'clientX' in e ? e.clientX : (e as React.TouchEvent).touches[0].clientX;
@@ -236,6 +244,14 @@ export default function MessagesPage() {
               >
                 {convMenu.conv.isArchived ? <ArchiveX size={15} className="text-slate-400" /> : <Archive size={15} className="text-slate-400" />}
                 {convMenu.conv.isArchived ? 'Из архива' : 'В архив'}
+              </button>
+              <div className="my-1 border-t border-slate-700/60" />
+              <button
+                onClick={() => handleDeleteConversation(convMenu.conv)}
+                className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
+              >
+                <Trash2 size={15} />
+                Удалить чат
               </button>
             </div>
           </div>
