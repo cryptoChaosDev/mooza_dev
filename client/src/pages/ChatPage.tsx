@@ -1306,7 +1306,7 @@ export default function ChatPage() {
                 ? { label: 'Редактировать', icon: '✏️', action: () => { startEdit(contextMenu.msg); setContextMenu(null); } }
                 : null,
               contextMenu.msg.senderId === me?.id
-                ? { label: 'Удалить', icon: '🗑️', danger: true, action: () => { setConfirmDeleteMsgId(contextMenu.msg.id); setContextMenu(null); } }
+                ? { label: 'Удалить', icon: '🗑️', danger: true, action: () => { const id = contextMenu.msg.id; setContextMenu(null); setTimeout(() => setConfirmDeleteMsgId(id), 150); } }
                 : null,
             ].filter(Boolean).map((item: any, i) => (
               <button

@@ -4,6 +4,7 @@ import { MessageCircle, Search, Plus, X, Check, User, FolderKanban, Crown, Badge
 import { messageAPI, friendshipAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 interface ConvItem {
   id: string;
@@ -37,6 +38,7 @@ export default function MessagesPage() {
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [convMenu, setConvMenu] = useState<{ conv: ConvItem; x: number; y: number } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<ConvItem | null>(null);
   const navigate = useNavigate();
   const convLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const convLongPressMoved = useRef(false);
@@ -247,7 +249,7 @@ export default function MessagesPage() {
               </button>
               <div className="my-1 border-t border-slate-700/60" />
               <button
-                onClick={() => handleDeleteConversation(convMenu.conv)}
+                onClick={() => { const c = convMenu.conv; setConvMenu(null); setTimeout(() => setConfirmDelete(c), 150); }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
               >
                 <Trash2 size={15} />
@@ -444,6 +446,14 @@ export default function MessagesPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        message="Удалить чат? Он исчезнет только у вас."
+        confirmLabel="Удалить"
+        onConfirm={() => confirmDelete && handleDeleteConversation(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   );
 }
