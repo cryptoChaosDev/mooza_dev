@@ -198,18 +198,18 @@ export default function SearchPage() {
   });
 
   const { data: directions, isLoading: directionsLoading } = useQuery({
-    queryKey: ['directions-all', selectedField?.id],
+    queryKey: ['directions-with-users', selectedField?.id, currentUser?.id],
     queryFn: async () => {
-      const { data } = await referenceAPI.getDirections({ fieldOfActivityId: selectedField?.id, all: true });
+      const { data } = await referenceAPI.getDirections({ fieldOfActivityId: selectedField?.id, excludeUserId: currentUser?.id });
       return data as any[];
     },
     enabled: !!selectedField,
   });
 
   const { data: professions, isLoading: professionsLoading } = useQuery({
-    queryKey: ['professions-direction', selectedDirection?.id],
+    queryKey: ['professions-with-users', selectedDirection?.id, currentUser?.id],
     queryFn: async () => {
-      const { data } = await referenceAPI.getProfessions({ directionId: selectedDirection?.id });
+      const { data } = await referenceAPI.getProfessions({ directionId: selectedDirection?.id, excludeUserId: currentUser?.id });
       return data as any[];
     },
     enabled: !!selectedDirection,
