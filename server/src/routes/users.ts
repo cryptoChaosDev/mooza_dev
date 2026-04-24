@@ -379,13 +379,25 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
     const andClauses: any[] = [];
 
     if (query) {
-      andClauses.push({
+      const words = (query as string).trim().split(/\s+/).filter(Boolean);
+      const wordClauses = words.map(word => ({
         OR: [
-          { firstName: { contains: query as string, mode: 'insensitive' } },
-          { lastName: { contains: query as string, mode: 'insensitive' } },
-          { nickname: { contains: query as string, mode: 'insensitive' } },
+          { firstName: { contains: word, mode: 'insensitive' as const } },
+          { lastName: { contains: word, mode: 'insensitive' as const } },
+          { nickname: { contains: word, mode: 'insensitive' as const } },
+          { bio: { contains: word, mode: 'insensitive' as const } },
+          { city: { contains: word, mode: 'insensitive' as const } },
+          { country: { contains: word, mode: 'insensitive' as const } },
+          { userServices: { some: { profession: { name: { contains: word, mode: 'insensitive' as const } } } } },
+          { userServices: { some: { service: { name: { contains: word, mode: 'insensitive' as const } } } } },
+          { userServices: { some: { profession: { direction: { name: { contains: word, mode: 'insensitive' as const } } } } } },
+          { userServices: { some: { profession: { direction: { fieldOfActivity: { name: { contains: word, mode: 'insensitive' as const } } } } } } },
+          { userServices: { some: { genres: { some: { name: { contains: word, mode: 'insensitive' as const } } } } } },
+          { userServices: { some: { workFormats: { some: { name: { contains: word, mode: 'insensitive' as const } } } } } },
+          { userArtists: { some: { artist: { name: { contains: word, mode: 'insensitive' as const } } } } },
         ],
-      });
+      }));
+      andClauses.push({ AND: wordClauses });
     }
 
     // Apply only the most specific filter available (most→least specific: profession > direction > field)
