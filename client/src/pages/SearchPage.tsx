@@ -154,6 +154,7 @@ export default function SearchPage() {
   const [selectedField, setSelectedField] = useState<{ id: string; name: string } | null>(null);
   const [selectedDirection, setSelectedDirection] = useState<{ id: string; name: string } | null>(null);
   const [selectedProfession, setSelectedProfession] = useState<{ id: string; name: string } | null>(null);
+  const [hideEmpty, setHideEmpty] = useState(false);
 
   // ── Artists tab state ──────────────────────────────────────────────────────
   const [artistQuery, setArtistQuery] = useState('');
@@ -190,26 +191,36 @@ export default function SearchPage() {
 
   // ── Reference data ─────────────────────────────────────────────────────────
   const { data: fields, isLoading: fieldsLoading } = useQuery({
-    queryKey: ['fields-with-users', currentUser?.id],
+    queryKey: ['fields', hideEmpty, currentUser?.id],
     queryFn: async () => {
-      const { data } = await referenceAPI.getFieldsOfActivity({ excludeUserId: currentUser?.id });
+      const { data } = await referenceAPI.getFieldsOfActivity(
+        hideEmpty ? { excludeUserId: currentUser?.id } : { all: true }
+      );
       return data as any[];
     },
   });
 
   const { data: directions, isLoading: directionsLoading } = useQuery({
-    queryKey: ['directions-with-users', selectedField?.id, currentUser?.id],
+    queryKey: ['directions', selectedField?.id, hideEmpty, currentUser?.id],
     queryFn: async () => {
-      const { data } = await referenceAPI.getDirections({ fieldOfActivityId: selectedField?.id, excludeUserId: currentUser?.id });
+      const { data } = await referenceAPI.getDirections(
+        hideEmpty
+          ? { fieldOfActivityId: selectedField?.id, excludeUserId: currentUser?.id }
+          : { fieldOfActivityId: selectedField?.id, all: true }
+      );
       return data as any[];
     },
     enabled: !!selectedField,
   });
 
   const { data: professions, isLoading: professionsLoading } = useQuery({
-    queryKey: ['professions-with-users', selectedDirection?.id, currentUser?.id],
+    queryKey: ['professions', selectedDirection?.id, hideEmpty, currentUser?.id],
     queryFn: async () => {
-      const { data } = await referenceAPI.getProfessions({ directionId: selectedDirection?.id, excludeUserId: currentUser?.id });
+      const { data } = await referenceAPI.getProfessions(
+        hideEmpty
+          ? { directionId: selectedDirection?.id, excludeUserId: currentUser?.id }
+          : { directionId: selectedDirection?.id, all: true }
+      );
       return data as any[];
     },
     enabled: !!selectedDirection,
@@ -340,6 +351,18 @@ export default function SearchPage() {
               </button>
             )}
             <h2 className="text-lg font-bold text-white">Каталог</h2>
+            {activeTab === 'services' && !debouncedServiceQuery && (
+              <button
+                onClick={() => setHideEmpty(v => !v)}
+                className={`ml-auto flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all border ${
+                  hideEmpty
+                    ? 'bg-primary-600/20 border-primary-500/40 text-primary-300'
+                    : 'bg-slate-800/80 border-slate-700/50 text-slate-500 hover:text-slate-300 hover:border-slate-600'
+                }`}
+              >
+                Скрыть пустые
+              </button>
+            )}
           </div>
 
           {/* Tabs */}
@@ -447,7 +470,7 @@ export default function SearchPage() {
                         >
                           <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
                           <div className="relative">
-                            <p className="text-white font-semibold text-xs leading-snug line-clamp-2">{tile.name}</p>
+                            <p className={`text-white font-semibold text-xs leading-snug line-clamp-2 ${serviceView === 'fields' ? 'uppercase tracking-wide' : ''}`}>{tile.name}</p>
                           </div>
                           {serviceView !== 'professions' && (
                             <ChevronRight size={14} className="absolute right-2 bottom-2 text-white/50 group-hover:text-white/80 transition-colors" />
