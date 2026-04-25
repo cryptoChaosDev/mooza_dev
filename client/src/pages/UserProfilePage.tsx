@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -122,9 +122,6 @@ export default function UserProfilePage() {
   const [viewConn, setViewConn] = useState<any>(null);
   const [connExpanded, setConnExpanded] = useState(false);
   const [portfolioTab, setPortfolioTab] = useState<'audio' | 'video' | 'other'>('audio');
-  const [bioExpanded, setBioExpanded] = useState(false);
-  const [bioOverflows, setBioOverflows] = useState(false);
-  const bioRef = useRef<HTMLParagraphElement>(null);
   const [servicesOpen, setServicesOpen] = useState(false);
   const servicesRef = useRef<HTMLDivElement>(null);
   const onlineUsers = usePresenceStore(s => s.onlineUsers);
@@ -228,12 +225,6 @@ export default function UserProfilePage() {
 
   const hasSocialLinks = Object.values((user.socialLinks as Record<string, string>) || {}).some(Boolean);
   const bUrl = user.bannerImage ? getAvatarUrl(user.bannerImage) : null;
-
-  useEffect(() => {
-    if (!bioExpanded && bioRef.current) {
-      setBioOverflows(bioRef.current.scrollHeight > bioRef.current.clientHeight);
-    }
-  }, [user?.bio, bioExpanded]);
 
   return (
     <>
@@ -379,16 +370,7 @@ export default function UserProfilePage() {
 
             {/* Bio */}
             {user.bio && (
-              <div>
-                <p ref={bioRef} className="text-slate-300 text-sm leading-relaxed break-words w-full" style={!bioExpanded ? { overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } : undefined}>
-                  {user.bio}
-                </p>
-                {bioOverflows && (
-                  <button onClick={() => setBioExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-1 transition-colors">
-                    {bioExpanded ? 'Свернуть' : 'Ещё'}
-                  </button>
-                )}
-              </div>
+              <p className="text-slate-300 text-sm leading-relaxed break-words">{user.bio}</p>
             )}
 
             {/* Groups / Коллективы — avatar carousel */}

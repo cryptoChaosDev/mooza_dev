@@ -170,9 +170,6 @@ export default function ProfilePage() {
   const [editingServices, setEditingServices] = useState(false);
   const [editingPortfolio, setEditingPortfolio] = useState(false);
   const [editingContacts, setEditingContacts] = useState(false);
-  const [bioExpanded, setBioExpanded] = useState(false);
-  const [bioOverflows, setBioOverflows] = useState(false);
-  const bioRef = useRef<HTMLParagraphElement>(null);
   const [confirmDeleteServiceIdx, setConfirmDeleteServiceIdx] = useState<number | null>(null);
   const [confirmDeleteLinkId, setConfirmDeleteLinkId] = useState<string | null>(null);
 
@@ -187,12 +184,6 @@ export default function ProfilePage() {
   const [profFlowDirections, setProfFlowDirections] = useState<any[]>([]);
   const [profFlowProfessions, setProfFlowProfessions] = useState<any[]>([]);
   const [savingProfessions, setSavingProfessions] = useState(false);
-
-  useEffect(() => {
-    if (!bioExpanded && bioRef.current) {
-      setBioOverflows(bioRef.current.scrollHeight > bioRef.current.clientHeight);
-    }
-  }, [profile?.bio, bioExpanded]);
 
   useEffect(() => {
     if (editingProfessions || editingServices) {
@@ -785,7 +776,7 @@ export default function ProfilePage() {
             {/* Bio */}
             {editingBio ? (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-2">
-                <textarea value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} rows={4} placeholder="Расскажите о себе..." className={`${inputCls} resize-none`} />
+                <textarea value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} maxLength={100} rows={3} placeholder="Расскажите о себе..." className={`${inputCls} resize-none`} />
                 <div className="flex gap-2">
                   <button onClick={() => setEditingBio(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
                   <button onClick={handleSaveBio} disabled={updateMutation.isPending} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
@@ -796,20 +787,10 @@ export default function ProfilePage() {
             ) : (
               <div className="flex items-start gap-2">
                 <div className="flex-1 min-w-0">
-                  {profile?.bio ? (
-                    <>
-                      <p ref={bioRef} className="text-slate-300 text-sm leading-relaxed break-words w-full" style={!bioExpanded ? { overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } : undefined}>
-                        {profile.bio}
-                      </p>
-                      {bioOverflows && (
-                        <button onClick={() => setBioExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-1 transition-colors">
-                          {bioExpanded ? 'Свернуть' : 'Ещё'}
-                        </button>
-                      )}
-                    </>
-                  ) : (
-                    <button onClick={() => setEditingBio(true)} className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic">+ Добавить описание</button>
-                  )}
+                  {profile?.bio
+                    ? <p className="text-slate-300 text-sm leading-relaxed break-words">{profile.bio}</p>
+                    : <button onClick={() => setEditingBio(true)} className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic">+ Добавить описание</button>
+                  }
                 </div>
                 <button onClick={() => setEditingBio(true)} className="p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800 flex-shrink-0 mt-0.5"><Edit3 size={13} /></button>
               </div>
