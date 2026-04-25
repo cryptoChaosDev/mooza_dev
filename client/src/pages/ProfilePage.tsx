@@ -1059,6 +1059,7 @@ export default function ProfilePage() {
                 <Headphones size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Аудио</span>
                 {(audioLinks.length + audioFiles.length) > 0 && <span className="text-xs text-slate-500">{audioLinks.length + audioFiles.length}</span>}
+                <span className="ml-auto text-[10px] text-slate-600">до 20 МБ · mp3, wav, flac, ogg</span>
               </div>
               <div className="p-3">
                 <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
@@ -1088,6 +1089,7 @@ export default function ProfilePage() {
                 <Image size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Изображения</span>
                 {imageFiles.length > 0 && <span className="text-xs text-slate-500">{imageFiles.length}</span>}
+                <span className="ml-auto text-[10px] text-slate-600">до 20 МБ · jpg, png, gif, webp</span>
               </div>
               <div className="p-3">
                 <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
@@ -1118,6 +1120,7 @@ export default function ProfilePage() {
                 <File size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Другое</span>
                 {otherFiles.length > 0 && <span className="text-xs text-slate-500">{otherFiles.length}</span>}
+                <span className="ml-auto text-[10px] text-slate-600">до 20 МБ · pdf, doc, xls</span>
               </div>
               <div className="p-3">
                 <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
