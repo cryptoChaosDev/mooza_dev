@@ -165,13 +165,13 @@ export default function ServicePage() {
           {editing ? (
             <div>
               <p className="text-xs font-semibold text-slate-400 mb-1.5 flex items-center gap-1"><DollarSign size={12} />Стоимость (₽)</p>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="От" value={priceFrom}
                   onChange={e => setPriceFrom(e.target.value.replace(/\D/g, ''))}
-                  className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
                 <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="До" value={priceTo}
                   onChange={e => setPriceTo(e.target.value.replace(/\D/g, ''))}
-                  className="flex-1 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
               </div>
             </div>
           ) : price ? (
