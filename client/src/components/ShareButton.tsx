@@ -23,8 +23,9 @@ export default function ShareButton({ url, title, text, className = '', iconSize
       try {
         await navigator.share({ title, text, url: fullUrl });
         return;
-      } catch {
-        // User cancelled or not supported — fall through to clipboard
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return; // user dismissed share sheet
+        // share failed for other reason — fall through to clipboard
       }
     }
 
