@@ -158,7 +158,7 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
           ? <button onClick={goBack} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><ArrowLeft size={20} /></button>
           : <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><ArrowLeft size={20} /></button>
         }
-        <h2 className="text-base font-semibold text-white flex-1">{isAccepted ? 'Добавить к связи' : 'Установить связь'}</h2>
+        <h2 className="text-base font-semibold text-white flex-1">Установить связь</h2>
         <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
       </div>
 
@@ -325,7 +325,7 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
               disabled={sendMutation.isPending}
               className="flex-1 py-3 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2">
               {sendMutation.isPending && <Loader2 size={15} className="animate-spin" />}
-              {isAccepted ? 'Добавить' : 'Отправить запрос'}{selected.size > 0 ? ` (${selected.size})` : ''}
+              Отправить запрос{selected.size > 0 ? ` (${selected.size})` : ''}
             </button>
           </div>
         </>
