@@ -6,7 +6,7 @@ import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, DollarSign, Calendar,
-  Headphones, Edit3, Plus, ChevronDown, ChevronLeft, ChevronRight,
+  Headphones, Edit3, Plus, ChevronLeft, ChevronRight,
   FileText, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
   Music2,
 } from 'lucide-react';
@@ -148,7 +148,6 @@ export default function ProfilePage() {
   const [geographies, setGeographies] = useState<any[]>([]);
 
   const [userServices, setUserServices] = useState<UserServiceEntry[]>([]);
-  const [expandedSvcIdx, setExpandedSvcIdx] = useState<number | null>(null);
   const [openFilterSheet, setOpenFilterSheet] = useState<string | null>(null);
 
   const [portfolioFiles, setPortfolioFiles] = useState<any[]>([]);
@@ -443,59 +442,6 @@ export default function ProfilePage() {
     return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   };
 
-  const ServiceFilterEditors = ({ idx }: { idx: number }) => {
-    const us = userServices[idx];
-    const key = (k: string) => `${k}-${idx}`;
-    const allowed = us.allowedFilterTypes;
-    const show = (k: string) => allowed.includes(k);
-    const hasAny = show('genre') || show('workFormat') || show('employmentType') || show('skillLevel') || show('availability') || show('priceRange') || show('geography') || us.serviceCustomFilters.length > 0;
-    if (!hasAny) return (
-      <div className="px-3 pb-3 border-t border-slate-600/30 pt-2">
-        <p className="text-xs text-slate-500">Фильтры не настроены для этой услуги</p>
-      </div>
-    );
-    return (
-      <div className="px-3 pb-3 border-t border-slate-600/30 space-y-2 pt-2">
-        {show('genre') && <SelectField label="Жанры" value={getNames(genres, us.genreIds).join(', ')} placeholder="Выберите жанры" icon={<Music size={13} />} onClick={() => setOpenFilterSheet(key('genre'))} badge={us.genreIds.length || undefined} />}
-        {show('workFormat') && <SelectField label="Формат работы" value={getNames(workFormats, us.workFormatIds).join(', ')} placeholder="Не указан" icon={<Globe size={13} />} onClick={() => setOpenFilterSheet(key('workFormat'))} badge={us.workFormatIds.length || undefined} />}
-        {show('employmentType') && <SelectField label="Тип занятости" value={getNames(employmentTypes, us.employmentTypeIds).join(', ')} placeholder="Не указан" icon={<Briefcase size={13} />} onClick={() => setOpenFilterSheet(key('employmentType'))} badge={us.employmentTypeIds.length || undefined} />}
-        {show('skillLevel') && <SelectField label="Уровень" value={getNames(skillLevels, us.skillLevelIds).join(', ')} placeholder="Не указан" icon={<Star size={13} />} onClick={() => setOpenFilterSheet(key('skillLevel'))} badge={us.skillLevelIds.length || undefined} />}
-        {show('availability') && <SelectField label="Доступность" value={getNames(availabilities, us.availabilityIds).join(', ')} placeholder="Не указана" icon={<Calendar size={13} />} onClick={() => setOpenFilterSheet(key('availability'))} badge={us.availabilityIds.length || undefined} />}
-        {show('priceRange') && (
-          <div>
-            <p className="text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1"><DollarSign size={13} />Бюджет (₽)</p>
-            <div className="flex gap-2">
-              <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="От" value={us.priceFrom} onChange={e => updateSvc(idx, { priceFrom: e.target.value.replace(/\D/g, '') })} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-              <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="До" value={us.priceTo} onChange={e => updateSvc(idx, { priceTo: e.target.value.replace(/\D/g, '') })} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-            </div>
-          </div>
-        )}
-        {show('geography') && <SelectField label="Город / Регион" value={getNames(geographies, us.geographyIds).join(', ')} placeholder="Не указан" icon={<MapPin size={13} />} onClick={() => setOpenFilterSheet(key('geography'))} badge={us.geographyIds.length || undefined} />}
-        {us.serviceCustomFilters.map(cf => (
-          <SelectField key={cf.id} label={cf.name} value={(us.customFilterValueIds[cf.id] || []).map(vid => cf.values.find(v => v.id === vid)?.value || vid).join(', ')} placeholder="Выберите значение" icon={<Star size={13} />} onClick={() => setOpenFilterSheet(key(`cf-${cf.id}`))} badge={(us.customFilterValueIds[cf.id] || []).length || undefined} />
-        ))}
-        {show('genre') && <SelectSheet isOpen={openFilterSheet === key('genre')} onClose={() => setOpenFilterSheet(null)} title="Жанры" options={genres.map(g => ({ id: g.id, name: g.name }))} selectedIds={us.genreIds} onSelect={ids => updateSvc(idx, { genreIds: ids as string[] })} mode="multiple" showConfirm searchable />}
-        {show('workFormat') && <SelectSheet isOpen={openFilterSheet === key('workFormat')} onClose={() => setOpenFilterSheet(null)} title="Формат работы" options={workFormats.map(w => ({ id: w.id, name: w.name }))} selectedIds={us.workFormatIds} onSelect={ids => updateSvc(idx, { workFormatIds: ids as string[] })} mode="multiple" showConfirm searchable={false} />}
-        {show('employmentType') && <SelectSheet isOpen={openFilterSheet === key('employmentType')} onClose={() => setOpenFilterSheet(null)} title="Тип занятости" options={employmentTypes.map(e => ({ id: e.id, name: e.name }))} selectedIds={us.employmentTypeIds} onSelect={ids => updateSvc(idx, { employmentTypeIds: ids as string[] })} mode="multiple" showConfirm searchable={false} />}
-        {show('skillLevel') && <SelectSheet isOpen={openFilterSheet === key('skillLevel')} onClose={() => setOpenFilterSheet(null)} title="Уровень" options={skillLevels.map(s => ({ id: s.id, name: s.name }))} selectedIds={us.skillLevelIds} onSelect={ids => updateSvc(idx, { skillLevelIds: ids as string[] })} mode="multiple" showConfirm searchable={false} />}
-        {show('availability') && <SelectSheet isOpen={openFilterSheet === key('availability')} onClose={() => setOpenFilterSheet(null)} title="Доступность" options={availabilities.map(a => ({ id: a.id, name: a.name }))} selectedIds={us.availabilityIds} onSelect={ids => updateSvc(idx, { availabilityIds: ids as string[] })} mode="multiple" showConfirm searchable={false} />}
-        {show('geography') && <SelectSheet isOpen={openFilterSheet === key('geography')} onClose={() => setOpenFilterSheet(null)} title="Город / Регион" options={geographies.map(g => ({ id: g.id, name: g.name }))} selectedIds={us.geographyIds} onSelect={ids => updateSvc(idx, { geographyIds: ids as string[] })} mode="multiple" showConfirm searchable />}
-        {us.serviceCustomFilters.map(cf => (
-          <SelectSheet key={cf.id} isOpen={openFilterSheet === key(`cf-${cf.id}`)} onClose={() => setOpenFilterSheet(null)} title={cf.name} options={cf.values.map(v => ({ id: v.id, name: v.value }))} selectedIds={us.customFilterValueIds[cf.id] || []} onSelect={ids => updateSvc(idx, { customFilterValueIds: { ...us.customFilterValueIds, [cf.id]: ids as string[] } })} mode="multiple" showConfirm searchable={false} />
-        ))}
-        <div>
-          <p className="text-xs font-semibold mb-1 text-slate-400">Описание услуги</p>
-          <textarea
-            value={us.description}
-            onChange={e => updateSvc(idx, { description: e.target.value })}
-            placeholder="Расскажите подробнее об услуге..."
-            rows={3}
-            className="w-full px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
-          />
-        </div>
-      </div>
-    );
-  };
 
   const AddServiceFlow = () => {
     if (addStep === 'search') return (
