@@ -1084,6 +1084,11 @@ export default function ProfilePage() {
               {/* Content */}
               <div className="px-4 py-3">
                 {portfolioTab === 'audio' && (
+                  <div className="space-y-3">
+                  <div className="px-3 py-2.5 bg-amber-500/8 border border-amber-500/20 rounded-xl">
+                    <p className="text-xs font-semibold text-amber-400 mb-0.5">⚠️ Важно</p>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">Загружая файл, ты подтверждаешь, что у тебя есть права на его использование. Не заливай чужой контент без разрешения — можем удалить и ограничить доступ.</p>
+                  </div>
                   <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
                     <label className="flex flex-col gap-1 flex-shrink-0 cursor-pointer group w-16">
                       <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
@@ -1098,6 +1103,7 @@ export default function ProfilePage() {
                     {audioLinks.map((l: any) => (
                       <AudioTile key={l.id} url={l.url} title={l.title || l.url} onDelete={() => setConfirmDeleteLinkId(l.id)} />
                     ))}
+                  </div>
                   </div>
                 )}
                 {portfolioTab === 'images' && (
