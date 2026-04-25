@@ -798,7 +798,7 @@ export default function ProfilePage() {
                 <div className="flex-1 min-w-0">
                   {profile?.bio ? (
                     <>
-                      <p ref={bioRef} className={`text-slate-300 text-sm leading-relaxed break-words w-full ${bioExpanded ? 'line-clamp-none' : 'line-clamp-2'}`}>
+                      <p ref={bioRef} className="text-slate-300 text-sm leading-relaxed break-words w-full" style={!bioExpanded ? { overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' } : undefined}>
                         {profile.bio}
                       </p>
                       {bioOverflows && (
