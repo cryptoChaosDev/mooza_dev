@@ -183,18 +183,21 @@ router.get('/services/search', async (req, res) => {
       orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
     });
     const results: any[] = [];
+    const seen = new Set<string>();
     for (const s of services) {
-      for (const dir of s.directions) {
-        const firstProf = dir.professions[0];
-        results.push({
-          serviceId: s.id, serviceName: s.name,
-          professionId: firstProf?.id ?? '', professionName: firstProf?.name ?? '',
-          directionId: dir.id, directionName: dir.name,
-          fieldOfActivityId: dir.fieldOfActivity.id, fieldOfActivityName: dir.fieldOfActivity.name,
-          allowedFilterTypes: dir.allowedFilterTypes,
-          customFilters: dir.customFilters,
-        });
-      }
+      if (seen.has(s.id)) continue;
+      const dir = s.directions[0];
+      if (!dir) continue;
+      seen.add(s.id);
+      const firstProf = dir.professions[0];
+      results.push({
+        serviceId: s.id, serviceName: s.name,
+        professionId: firstProf?.id ?? '', professionName: firstProf?.name ?? '',
+        directionId: dir.id, directionName: dir.name,
+        fieldOfActivityId: dir.fieldOfActivity.id, fieldOfActivityName: dir.fieldOfActivity.name,
+        allowedFilterTypes: dir.allowedFilterTypes,
+        customFilters: dir.customFilters,
+      });
     }
     res.json(results.slice(0, 30));
   } catch (e: any) { res.status(500).json({ error: e.message }); }
