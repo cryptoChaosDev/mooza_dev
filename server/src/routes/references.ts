@@ -174,7 +174,7 @@ router.get('/services/search', async (req, res) => {
         directions: {
           include: {
             fieldOfActivity: { select: { id: true, name: true } },
-            professions: { select: { id: true, name: true }, orderBy: { sortOrder: 'asc' } },
+            professions: { select: { id: true, name: true }, orderBy: { name: 'asc' } },
             customFilters: { select: { id: true, name: true, values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } } } },
           },
         },
