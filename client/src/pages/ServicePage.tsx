@@ -3,10 +3,12 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Briefcase, Music, DollarSign, MapPin, Send } from 'lucide-react';
 import { userAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
+import { useAuthStore } from '../stores/authStore';
 
 export default function ServicePage() {
   const { serviceId } = useParams<{ serviceId: string }>();
   const navigate = useNavigate();
+  const me = useAuthStore(s => s.user);
 
   const { data: us, isLoading } = useQuery({
     queryKey: ['user-service', serviceId],
@@ -123,7 +125,7 @@ export default function ServicePage() {
           </div>
 
           {/* Order button */}
-          {us.user && (
+          {us.user && me?.id !== us.user.id && (
             <button
               onClick={() => navigate(`/messages`)}
               className="w-full py-3.5 bg-primary-600 hover:bg-primary-500 active:bg-primary-700 text-white font-semibold rounded-2xl transition-colors flex items-center justify-center gap-2 text-sm"
