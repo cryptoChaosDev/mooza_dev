@@ -380,7 +380,7 @@ export default function UserProfilePage() {
             {/* Bio */}
             {user.bio && (
               <div>
-                <p ref={bioRef} className={`text-slate-300 text-sm leading-relaxed ${!bioExpanded ? 'line-clamp-2' : ''}`}>
+                <p ref={bioRef} className={`text-slate-300 text-sm leading-relaxed break-words ${!bioExpanded ? 'line-clamp-2' : ''}`}>
                   {user.bio}
                 </p>
                 {bioOverflows && (

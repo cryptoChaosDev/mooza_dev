@@ -795,10 +795,10 @@ export default function ProfilePage() {
               </div>
             ) : (
               <div className="flex items-start gap-2">
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   {profile?.bio ? (
                     <>
-                      <p ref={bioRef} className={`text-slate-300 text-sm leading-relaxed ${!bioExpanded ? 'line-clamp-2' : ''}`}>
+                      <p ref={bioRef} className={`text-slate-300 text-sm leading-relaxed break-words ${!bioExpanded ? 'line-clamp-2' : ''}`}>
                         {profile.bio}
                       </p>
                       {bioOverflows && (
