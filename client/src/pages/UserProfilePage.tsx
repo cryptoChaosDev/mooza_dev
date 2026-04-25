@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -123,6 +123,9 @@ export default function UserProfilePage() {
   const [connExpanded, setConnExpanded] = useState(false);
   const [portfolioTab, setPortfolioTab] = useState<'audio' | 'video' | 'other'>('audio');
   const [servicesOpen, setServicesOpen] = useState(false);
+  const [profsExpanded, setProfsExpanded] = useState(false);
+  const [profsOverflows, setProfsOverflows] = useState(false);
+  const profsRef = useRef<HTMLDivElement>(null);
   const servicesRef = useRef<HTMLDivElement>(null);
   const onlineUsers = usePresenceStore(s => s.onlineUsers);
 
@@ -225,6 +228,12 @@ export default function UserProfilePage() {
 
   const hasSocialLinks = Object.values((user.socialLinks as Record<string, string>) || {}).some(Boolean);
   const bUrl = user.bannerImage ? getAvatarUrl(user.bannerImage) : null;
+
+  useEffect(() => {
+    if (!profsExpanded && profsRef.current) {
+      setProfsOverflows(profsRef.current.scrollHeight > profsRef.current.clientHeight);
+    }
+  }, [user?.userProfessions, profsExpanded]);
 
   return (
     <>
@@ -405,12 +414,23 @@ export default function UserProfilePage() {
                   <span className="text-sm font-semibold text-white">Профессии</span>
                   <span className="text-xs text-slate-500">{user.userProfessions.length}</span>
                 </div>
-                <div className="px-4 py-3 flex flex-wrap gap-2">
-                  {user.userProfessions.map((up: any) => (
-                    <span key={up.professionId} className="px-3 py-1.5 bg-primary-500/10 border border-primary-500/25 text-primary-300 rounded-xl text-xs font-medium">
-                      {up.profession?.name}
-                    </span>
-                  ))}
+                <div className="px-4 pt-3 pb-2">
+                  <div
+                    ref={profsRef}
+                    className="flex flex-wrap gap-2 overflow-hidden"
+                    style={profsExpanded ? undefined : { maxHeight: '68px' }}
+                  >
+                    {user.userProfessions.map((up: any) => (
+                      <span key={up.professionId} className="px-3 py-1.5 bg-primary-500/10 border border-primary-500/25 text-primary-300 rounded-xl text-xs font-medium">
+                        {up.profession?.name}
+                      </span>
+                    ))}
+                  </div>
+                  {profsOverflows && (
+                    <button onClick={() => setProfsExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-2 transition-colors">
+                      {profsExpanded ? 'Свернуть' : 'Ещё'}
+                    </button>
+                  )}
                 </div>
               </div>
             )}

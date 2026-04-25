@@ -183,10 +183,19 @@ export default function ProfilePage() {
 
   const [myStandaloneProfessions, setMyStandaloneProfessions] = useState<{ professionId: string; professionName: string }[]>([]);
   const [editingProfessions, setEditingProfessions] = useState(false);
+  const [profsExpanded, setProfsExpanded] = useState(false);
+  const [profsOverflows, setProfsOverflows] = useState(false);
+  const profsRef = useRef<HTMLDivElement>(null);
   const [profAddStep, setProfAddStep] = useState<'field' | 'direction' | 'profession' | null>(null);
   const [profFlowDirections, setProfFlowDirections] = useState<any[]>([]);
   const [profFlowProfessions, setProfFlowProfessions] = useState<any[]>([]);
   const [savingProfessions, setSavingProfessions] = useState(false);
+
+  useEffect(() => {
+    if (!profsExpanded && profsRef.current) {
+      setProfsOverflows(profsRef.current.scrollHeight > profsRef.current.clientHeight);
+    }
+  }, [myStandaloneProfessions, profsExpanded]);
 
   useEffect(() => {
     if (!serviceQuery.trim()) { setServiceSearchResults([]); return; }
@@ -1011,12 +1020,23 @@ export default function ProfilePage() {
                   </div>
                 </div>
               ) : myStandaloneProfessions.length > 0 ? (
-                <div className="px-4 py-3 flex flex-wrap gap-2">
-                  {myStandaloneProfessions.map(p => (
-                    <span key={p.professionId} className="px-3 py-1.5 bg-primary-500/10 border border-primary-500/25 text-primary-300 rounded-xl text-xs font-medium">
-                      {p.professionName}
-                    </span>
-                  ))}
+                <div className="px-4 pt-3 pb-2">
+                  <div
+                    ref={profsRef}
+                    className="flex flex-wrap gap-2 overflow-hidden"
+                    style={profsExpanded ? undefined : { maxHeight: '68px' }}
+                  >
+                    {myStandaloneProfessions.map(p => (
+                      <span key={p.professionId} className="px-3 py-1.5 bg-primary-500/10 border border-primary-500/25 text-primary-300 rounded-xl text-xs font-medium">
+                        {p.professionName}
+                      </span>
+                    ))}
+                  </div>
+                  {profsOverflows && (
+                    <button onClick={() => setProfsExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-2 transition-colors">
+                      {profsExpanded ? 'Свернуть' : 'Ещё'}
+                    </button>
+                  )}
                 </div>
               ) : (
                 <div className="p-4 text-center">
