@@ -353,16 +353,16 @@ export default function UserProfilePage() {
           </div>
 
           {/* ── Stats row ── */}
-          <div className="grid grid-cols-4 divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden w-1/2 mx-auto">
+          <div className="grid grid-cols-4 divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
             {[
               { num: userConnections.length, label: 'Связи', onClick: () => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
               { num: user.userArtists?.length ?? 0, label: 'Проекты', onClick: null },
               { num: servicesFlat.length, label: 'Услуги', onClick: () => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }) },
               { num: user._count?.posts ?? 0, label: 'Публикации', onClick: null },
             ].map((stat, i) => (
-              <button key={i} onClick={stat.onClick ?? undefined} disabled={!stat.onClick} className="flex flex-col items-center py-3 px-1 hover:bg-slate-800/40 disabled:pointer-events-none transition-colors">
-                <span className="text-base font-bold text-white">{stat.num}</span>
-                <span className="text-[10px] text-slate-500 mt-0.5">{stat.label}</span>
+              <button key={i} onClick={stat.onClick ?? undefined} disabled={!stat.onClick} className="flex flex-col items-center py-1.5 px-1 hover:bg-slate-800/40 disabled:pointer-events-none transition-colors">
+                <span className="text-sm font-bold text-white">{stat.num}</span>
+                <span className="text-[9px] text-slate-500">{stat.label}</span>
               </button>
             ))}
           </div>
