@@ -834,18 +834,15 @@ export default function ProfilePage() {
                 )}
               </div>
               {/* ── Stats row ── */}
-              <div className="grid grid-cols-4 divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-                {[
-                  { num: myConnections.length, label: 'Связи', onClick: () => navigate('/friends?tab=connections') },
-                  { num: myGroups.length, label: 'Проекты', onClick: () => navigate('/groups') },
-                  { num: servicesFlat.length, label: 'Услуги', onClick: () => { setTimeout(() => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); } },
-                  { num: profile?._count?.posts ?? 0, label: 'Публикации', onClick: null },
-                ].map((stat, i) => (
-                  <button key={i} onClick={stat.onClick ?? undefined} disabled={!stat.onClick} className="flex flex-col items-center py-1.5 px-1 hover:bg-slate-800/40 disabled:pointer-events-none transition-colors">
-                    <span className="text-sm font-bold text-white">{stat.num}</span>
-                    <span className="text-[9px] text-slate-500">{stat.label}</span>
-                  </button>
-                ))}
+              <div className="grid grid-cols-2 divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+                <button onClick={() => navigate('/friends?tab=connections')} className="flex flex-col items-center py-1.5 px-1 hover:bg-slate-800/40 transition-colors">
+                  <span className="text-sm font-bold text-white">{myConnections.length}</span>
+                  <span className="text-[9px] text-slate-500">Связи</span>
+                </button>
+                <button disabled className="flex flex-col items-center py-1.5 px-1 pointer-events-none opacity-40">
+                  <span className="text-sm font-bold text-white">0</span>
+                  <span className="text-[9px] text-slate-500">Сделки</span>
+                </button>
               </div>
             </>
           )}
