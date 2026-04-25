@@ -28,13 +28,13 @@ export default function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/50 z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div className="max-w-lg mx-auto px-2 flex items-center justify-around h-[56px]">
-          {navItems.map(({ path, icon: Icon, label, badge }) => {
+          {navItems.map(({ path, icon: Icon, badge }) => {
             const active = isActive(path);
             return (
               <Link
                 key={path}
                 to={path}
-                className={`relative flex flex-col items-center justify-center gap-1 flex-1 py-1 rounded-xl transition-all duration-200 touch-manipulation ${
+                className={`relative flex items-center justify-center flex-1 py-1 rounded-xl transition-all duration-200 touch-manipulation ${
                   active ? 'text-primary-400' : 'text-slate-500 hover:text-slate-200'
                 }`}
               >
@@ -46,7 +46,6 @@ export default function BottomNav() {
                   />
                   <Badge count={badge} />
                 </div>
-                <span className={`text-[10px] font-medium leading-none ${active ? 'text-primary-400' : 'text-slate-500'}`}>{label}</span>
                 {active && (
                   <span className="absolute inset-0 rounded-xl bg-primary-500/10 animate-fade-in" />
                 )}
