@@ -396,8 +396,6 @@ export default function ProfilePage() {
   const getName = (list: any[], id: string) => list.find(x => x.id === id)?.name ?? id;
   const getNames = (list: any[], ids: string[]) => ids.map(id => getName(list, id)).filter(Boolean);
 
-  const updateSvc = (idx: number, patch: Partial<UserServiceEntry>) =>
-    setUserServices(prev => prev.map((us, i) => i === idx ? { ...us, ...patch } : us));
 
   const handlePortfolioUpload = async (files: FileList | null) => {
     if (!files) return;
