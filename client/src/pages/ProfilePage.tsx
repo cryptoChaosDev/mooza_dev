@@ -11,6 +11,7 @@ import {
   Music2, Play, Pause,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
+import ConnectionCard from '../components/ConnectionCard';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AvatarComponent from '../components/Avatar';
 import BadgeTooltip from '../components/BadgeTooltip';
@@ -137,7 +138,6 @@ export default function ProfilePage() {
   // Chip panels
 
   const [viewConn, setViewConn] = useState<any>(null);
-  const [connExpanded, setConnExpanded] = useState(false);
 
   const [myStandaloneProfessions, setMyStandaloneProfessions] = useState<{ professionId: string; professionName: string }[]>([]);
   const [editingProfessions, setEditingProfessions] = useState(false);
@@ -1015,43 +1015,27 @@ export default function ProfilePage() {
             </div>
 
             {/* ── Connections card ── */}
-            {myConnections.length > 0 && (() => {
-              const LIMIT = 5;
-              const visible = connExpanded ? myConnections : myConnections.slice(0, LIMIT);
-              return (
-                <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-                  <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                    <Link2 size={14} className="text-primary-400" />
-                    <span className="text-sm font-semibold text-white">Профессиональные связи</span>
-                    <span className="ml-auto text-xs text-slate-500">{myConnections.length}</span>
-                  </div>
-                  <div className="divide-y divide-slate-800/40">
-                    {visible.map((c: any) => {
-                      const subtitle = c.profession?.name
-                        || c.services?.slice(0, 2).map((s: any) => s.name).join(', ')
-                        || c.partner.city || null;
-                      return (
-                        <button key={c.id} onClick={() => setViewConn(c)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-800/40 transition-colors text-left">
-                          <AvatarComponent src={c.partner.avatar} name={`${c.partner.firstName} ${c.partner.lastName}`} size={36} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</p>
-                            {subtitle && <p className="text-xs text-slate-500 truncate mt-0.5">{subtitle}</p>}
-                          </div>
-                          <span className={`text-[10px] rounded-lg px-2 py-0.5 border flex-shrink-0 font-medium ${c.iAmRequester ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
-                            {c.iAmRequester ? 'Заказчик' : 'Исполнитель'}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {myConnections.length > LIMIT && (
-                    <button onClick={() => setConnExpanded(v => !v)} className="w-full py-2.5 text-xs text-slate-500 hover:text-slate-300 transition-colors text-center border-t border-slate-800/40">
-                      {connExpanded ? 'Свернуть' : `Показать ещё ${myConnections.length - LIMIT}`}
-                    </button>
-                  )}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                <Link2 size={14} className="text-primary-400" />
+                <span className="text-sm font-semibold text-white">Связи</span>
+                {myConnections.length > 0 && <span className="text-xs text-slate-500">{myConnections.length}</span>}
+                {myConnections.length > 3 && profile?.id && (
+                  <button onClick={() => navigate(`/profile/${profile.id}/connections`)} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
+                    Смотреть все
+                  </button>
+                )}
+              </div>
+              {myConnections.length === 0 ? (
+                <div className="px-4 py-4 text-sm text-slate-600 italic">Связей пока нет</div>
+              ) : (
+                <div className="divide-y divide-slate-800/40">
+                  {myConnections.slice(0, 3).map((c: any) => (
+                    <ConnectionCard key={c.id} connection={c} onClick={() => setViewConn(c)} />
+                  ))}
                 </div>
-              );
-            })()}
+              )}
+            </div>
 
             {/* ── Portfolio ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">

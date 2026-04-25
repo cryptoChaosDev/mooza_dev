@@ -32,6 +32,7 @@ const CreatePostPage     = lazy(() => import('./pages/CreatePostPage'));
 const InvitePage         = lazy(() => import('./pages/InvitePage'));
 const ServicePage        = lazy(() => import('./pages/ServicePage'));
 const ServicesPage       = lazy(() => import('./pages/ServicesPage'));
+const ConnectionsPage    = lazy(() => import('./pages/ConnectionsPage'));
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -128,6 +129,7 @@ function AppRoutes() {
             <Route path="/invite"           element={<InvitePage />} />
             <Route path="/services/:serviceId" element={<ServicePage />} />
             <Route path="/profile/:userId/services" element={<ServicesPage />} />
+            <Route path="/profile/:userId/connections" element={<ConnectionsPage />} />
             <Route path="/privacy"          element={<PrivacyPolicyPage />} />
             <Route path="/terms"            element={<TermsPage />} />
             {user?.isAdmin && <Route path="/admin" element={<AdminPage />} />}
