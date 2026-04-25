@@ -185,16 +185,15 @@ router.get('/services/search', async (req, res) => {
     const results: any[] = [];
     for (const s of services) {
       for (const dir of s.directions) {
-        for (const prof of dir.professions) {
-          results.push({
-            serviceId: s.id, serviceName: s.name,
-            professionId: prof.id, professionName: prof.name,
-            directionId: dir.id, directionName: dir.name,
-            fieldOfActivityId: dir.fieldOfActivity.id, fieldOfActivityName: dir.fieldOfActivity.name,
-            allowedFilterTypes: dir.allowedFilterTypes,
-            customFilters: dir.customFilters,
-          });
-        }
+        const firstProf = dir.professions[0];
+        results.push({
+          serviceId: s.id, serviceName: s.name,
+          professionId: firstProf?.id ?? '', professionName: firstProf?.name ?? '',
+          directionId: dir.id, directionName: dir.name,
+          fieldOfActivityId: dir.fieldOfActivity.id, fieldOfActivityName: dir.fieldOfActivity.name,
+          allowedFilterTypes: dir.allowedFilterTypes,
+          customFilters: dir.customFilters,
+        });
       }
     }
     res.json(results.slice(0, 30));

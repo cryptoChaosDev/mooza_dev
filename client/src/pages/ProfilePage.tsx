@@ -516,7 +516,7 @@ export default function ProfilePage() {
               >
                 <p className="text-sm font-medium text-white">{r.serviceName}</p>
                 <p className="text-[10px] text-slate-500 mt-0.5 truncate">
-                  {r.fieldOfActivityName} · {r.directionName} · {r.professionName}
+                  {r.fieldOfActivityName} · {r.directionName}
                 </p>
               </button>
             ))}
