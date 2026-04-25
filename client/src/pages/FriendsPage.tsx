@@ -520,8 +520,16 @@ const { data: myBreakRequests = [] } = useQuery({
                                 {c.services?.length > 3 && <span className="text-[11px] text-slate-500">+{c.services.length - 3}</span>}
                               </>
                             )}
-                            <span className={`text-[11px] rounded-md px-1.5 py-0.5 border ${c.iAmRequester ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
-                              {c.iAmRequester ? 'Я заказчик' : 'Я исполнитель'}
+                            <span className={`text-[11px] rounded-md px-1.5 py-0.5 border ${
+                              c.myRole === 'CUSTOMER'  ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' :
+                              c.myRole === 'EXECUTOR'  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                              c.myRole === 'COLLEAGUE' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' :
+                              c.iAmRequester ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                            }`}>
+                              {c.myRole === 'CUSTOMER'  ? 'Я заказчик' :
+                               c.myRole === 'EXECUTOR'  ? 'Я исполнитель' :
+                               c.myRole === 'COLLEAGUE' ? 'Я коллега' :
+                               c.iAmRequester ? 'Я заказчик' : 'Я исполнитель'}
                             </span>
                           </div>
                         </div>
