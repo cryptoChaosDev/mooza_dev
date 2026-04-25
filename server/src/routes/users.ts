@@ -66,6 +66,13 @@ const userSelect = {
   fieldOfActivityId: true,
   fieldOfActivity: { select: { id: true, name: true } },
   userServices: { include: userServiceInclude },
+  userProfessions: {
+    select: {
+      id: true,
+      professionId: true,
+      profession: { select: { id: true, name: true } },
+    },
+  },
   userArtists: {
     include: { artist: { select: { id: true, name: true } } },
   },
@@ -112,6 +119,13 @@ const publicUserSelect = {
   fieldOfActivityId: true,
   fieldOfActivity: { select: { id: true, name: true } },
   userServices: { include: userServiceInclude },
+  userProfessions: {
+    select: {
+      id: true,
+      professionId: true,
+      profession: { select: { id: true, name: true } },
+    },
+  },
   userArtists: {
     include: { artist: { select: { id: true, name: true } } },
   },

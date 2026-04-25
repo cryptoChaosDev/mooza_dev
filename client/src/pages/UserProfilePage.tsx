@@ -421,6 +421,24 @@ export default function UserProfilePage() {
               </div>
             )}
 
+            {/* Standalone professions */}
+            {(user.userProfessions?.length ?? 0) > 0 && (
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                  <Briefcase size={14} className="text-primary-400" />
+                  <span className="text-sm font-semibold text-white">Профессии</span>
+                  <span className="text-xs text-slate-500">{user.userProfessions.length}</span>
+                </div>
+                <div className="px-4 py-3 flex flex-wrap gap-2">
+                  {user.userProfessions.map((up: any) => (
+                    <span key={up.professionId} className="px-3 py-1.5 bg-primary-500/10 border border-primary-500/25 text-primary-300 rounded-xl text-xs font-medium">
+                      {up.profession?.name}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Services — carousel */}
             {servicesFlat.length > 0 && (
               <div ref={servicesRef} className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">

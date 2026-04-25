@@ -178,17 +178,26 @@ export default function ProfilePage() {
   const [viewConn, setViewConn] = useState<any>(null);
   const [connExpanded, setConnExpanded] = useState(false);
 
+  const [myStandaloneProfessions, setMyStandaloneProfessions] = useState<{ professionId: string; professionName: string }[]>([]);
+  const [editingProfessions, setEditingProfessions] = useState(false);
+  const [profAddStep, setProfAddStep] = useState<'field' | 'direction' | 'profession' | null>(null);
+  const [profFlowDirections, setProfFlowDirections] = useState<any[]>([]);
+  const [profFlowProfessions, setProfFlowProfessions] = useState<any[]>([]);
+  const [savingProfessions, setSavingProfessions] = useState(false);
+
   useEffect(() => {
-    if (editingServices) {
+    if (editingProfessions || editingServices) {
       referenceAPI.getFieldsOfActivity({ all: true }).then(r => setFieldsOfActivity(r.data));
-      referenceAPI.getWorkFormats().then(r => setWorkFormats(r.data));
-      referenceAPI.getEmploymentTypes().then(r => setEmploymentTypes(r.data));
-      referenceAPI.getSkillLevels().then(r => setSkillLevels(r.data));
-      referenceAPI.getAvailabilities().then(r => setAvailabilities(r.data));
-      referenceAPI.getGenres().then(r => setGenres(r.data));
-      referenceAPI.getGeographies().then(r => setGeographies(r.data));
+      if (editingServices) {
+        referenceAPI.getWorkFormats().then(r => setWorkFormats(r.data));
+        referenceAPI.getEmploymentTypes().then(r => setEmploymentTypes(r.data));
+        referenceAPI.getSkillLevels().then(r => setSkillLevels(r.data));
+        referenceAPI.getAvailabilities().then(r => setAvailabilities(r.data));
+        referenceAPI.getGenres().then(r => setGenres(r.data));
+        referenceAPI.getGeographies().then(r => setGeographies(r.data));
+      }
     }
-  }, [editingServices]);
+  }, [editingProfessions, editingServices]);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],
@@ -207,6 +216,12 @@ export default function ProfilePage() {
         })) || [],
         artistIds: data.userArtists?.map((ua: any) => ua.artistId || ua.artist?.id) || [],
       });
+      setMyStandaloneProfessions(
+        data.userProfessions?.map((up: any) => ({
+          professionId: up.professionId,
+          professionName: up.profession?.name || '',
+        })) || []
+      );
       setPortfolioFiles(data.portfolioFiles ?? []);
       setPortfolioLinks(data.portfolioLinks ?? []);
       setUserServices(
@@ -307,6 +322,18 @@ export default function ProfilePage() {
   const handleSaveServices = async () => {
     try { await updateServicesMutation.mutateAsync(userServices); }
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingServices(false); setAddStep(null); }
+  };
+
+  const handleSaveProfessions = async (list: { professionId: string; professionName: string }[]) => {
+    setSavingProfessions(true);
+    try {
+      await updateMutation.mutateAsync({ userProfessions: list.map(p => ({ professionId: p.professionId })) });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      setEditingProfessions(false);
+      setProfAddStep(null);
+    } finally {
+      setSavingProfessions(false);
+    }
   };
 
   const handleDeleteService = async (idx: number) => {
@@ -822,6 +849,133 @@ export default function ProfilePage() {
                   <span className="text-[10px] text-slate-500 group-hover:text-slate-400 transition-colors">Создать</span>
                 </button>
               </div>
+            </div>
+
+            {/* ── Professions card ── */}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                <Briefcase size={14} className="text-primary-400" />
+                <span className="text-sm font-semibold text-white">Профессии</span>
+                {myStandaloneProfessions.length > 0 && <span className="text-xs text-slate-500">{myStandaloneProfessions.length}</span>}
+                <button
+                  onClick={() => { setEditingProfessions(v => !v); setProfAddStep(null); }}
+                  className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                >
+                  {editingProfessions ? 'Готово' : 'Изменить'}
+                </button>
+              </div>
+
+              {editingProfessions ? (
+                <div className="p-3 space-y-3">
+                  {/* Existing professions */}
+                  {myStandaloneProfessions.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {myStandaloneProfessions.map((p, i) => (
+                        <div key={p.professionId} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500/10 border border-primary-500/25 rounded-xl">
+                          <span className="text-xs text-primary-300 font-medium">{p.professionName}</span>
+                          <button onClick={() => setMyStandaloneProfessions(prev => prev.filter((_, idx) => idx !== i))} className="text-primary-400/60 hover:text-red-400 transition-colors">
+                            <X size={12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add flow */}
+                  {profAddStep === null && (
+                    <button onClick={() => setProfAddStep('field')} className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm">
+                      <Plus size={14} />Добавить профессию
+                    </button>
+                  )}
+                  {profAddStep === 'field' && (
+                    <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
+                      <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите сферу деятельности:</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {fieldsOfActivity.map((f: any) => (
+                          <button key={f.id} type="button"
+                            onClick={() => {
+                              referenceAPI.getDirections({ fieldOfActivityId: f.id, all: true }).then(r => setProfFlowDirections(r.data));
+                              setProfAddStep('direction');
+                            }}
+                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
+                          >
+                            <ChevronRight size={11} />{f.name}
+                          </button>
+                        ))}
+                      </div>
+                      <button onClick={() => setProfAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
+                    </div>
+                  )}
+                  {profAddStep === 'direction' && (
+                    <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
+                      <button onClick={() => setProfAddStep('field')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors"><ChevronLeft size={11} />Назад</button>
+                      <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите направление:</p>
+                      {profFlowDirections.length === 0
+                        ? <p className="text-slate-500 text-xs">Нет направлений в этой сфере</p>
+                        : <div className="flex flex-wrap gap-1.5">
+                            {profFlowDirections.map((d: any) => (
+                              <button key={d.id} type="button"
+                                onClick={() => {
+                                  referenceAPI.getProfessions({ directionId: d.id, all: true }).then(r => setProfFlowProfessions(r.data));
+                                  setProfAddStep('profession');
+                                }}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
+                              >
+                                <ChevronRight size={11} />{d.name}
+                              </button>
+                            ))}
+                          </div>
+                      }
+                      <button onClick={() => setProfAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
+                    </div>
+                  )}
+                  {profAddStep === 'profession' && (
+                    <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
+                      <button onClick={() => setProfAddStep('direction')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors"><ChevronLeft size={11} />Назад</button>
+                      <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите профессию:</p>
+                      {profFlowProfessions.length === 0
+                        ? <p className="text-slate-500 text-xs">Нет профессий в этом направлении</p>
+                        : <div className="flex flex-wrap gap-1.5">
+                            {profFlowProfessions.map((p: any) => {
+                              const alreadyAdded = myStandaloneProfessions.some(x => x.professionId === p.id);
+                              return (
+                                <button key={p.id} type="button" disabled={alreadyAdded}
+                                  onClick={() => {
+                                    setMyStandaloneProfessions(prev => [...prev, { professionId: p.id, professionName: p.name }]);
+                                    setProfAddStep(null);
+                                  }}
+                                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium ${alreadyAdded ? 'bg-slate-800/20 border-slate-700/30 text-slate-600 cursor-default' : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300'}`}
+                                >
+                                  {alreadyAdded ? <span className="text-emerald-500">✓</span> : <Plus size={11} />}{p.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                      }
+                      <button onClick={() => setProfAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
+                    </div>
+                  )}
+
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => { setEditingProfessions(false); setProfAddStep(null); setMyStandaloneProfessions(profile?.userProfessions?.map((up: any) => ({ professionId: up.professionId, professionName: up.profession?.name || '' })) || []); }} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
+                    <button onClick={() => handleSaveProfessions(myStandaloneProfessions)} disabled={savingProfessions} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                      {savingProfessions ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
+                    </button>
+                  </div>
+                </div>
+              ) : myStandaloneProfessions.length > 0 ? (
+                <div className="px-4 py-3 flex flex-wrap gap-2">
+                  {myStandaloneProfessions.map(p => (
+                    <span key={p.professionId} className="px-3 py-1.5 bg-primary-500/10 border border-primary-500/25 text-primary-300 rounded-xl text-xs font-medium">
+                      {p.professionName}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 text-center">
+                  <p className="text-sm text-slate-600 italic">Нет добавленных профессий</p>
+                </div>
+              )}
             </div>
 
             {/* ── Services card — carousel ── */}
