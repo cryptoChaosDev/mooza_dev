@@ -8,7 +8,7 @@ import {
   Globe, DollarSign, Calendar,
   Headphones, Edit3, Plus, ChevronLeft, ChevronRight,
   FileText, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
-  Music2, Play, Pause, Image, File,
+  Music2, Play, Pause,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -117,6 +117,7 @@ export default function ProfilePage() {
   const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
   const [imageFullscreen, setImageFullscreen] = useState<string | null>(null);
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
+  const [portfolioTab, setPortfolioTab] = useState<'audio' | 'images' | 'other'>('audio');
   const [addStep, setAddStep] = useState<'search' | 'field' | 'direction' | 'profession' | 'service' | 'filters' | null>(null);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
   const [addFlowDirections, setAddFlowDirections] = useState<any[]>([]);
@@ -1053,97 +1054,94 @@ export default function ProfilePage() {
             })()}
 
             {/* ── Portfolio ── */}
-            {/* Audio */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              {/* Header */}
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <Headphones size={14} className="text-primary-400" />
-                <span className="text-sm font-semibold text-white">Аудио</span>
-                {(audioLinks.length + audioFiles.length) > 0 && <span className="text-xs text-slate-500">{audioLinks.length + audioFiles.length}</span>}
-                <span className="ml-auto text-[10px] text-slate-600">до 20 МБ · mp3, wav, flac, ogg</span>
+                <span className="text-sm font-semibold text-white">Портфолио</span>
               </div>
+              {/* Tabs */}
+              <div className="flex border-b border-slate-800/60">
+                {([
+                  { key: 'audio', label: 'Аудио', count: audioLinks.length + audioFiles.length },
+                  { key: 'images', label: 'Изображения', count: imageFiles.length },
+                  { key: 'other', label: 'Другое', count: otherFiles.length },
+                ] as const).map(tab => (
+                  <button key={tab.key} onClick={() => setPortfolioTab(tab.key)}
+                    className={`flex-1 py-2 text-xs font-medium transition-colors relative ${portfolioTab === tab.key ? 'text-primary-400' : 'text-slate-500 hover:text-slate-300'}`}>
+                    {tab.label}
+                    {tab.count > 0 && <span className="ml-1 text-[10px] opacity-70">{tab.count}</span>}
+                    {portfolioTab === tab.key && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500 rounded-full" />}
+                  </button>
+                ))}
+              </div>
+              {/* Hint */}
+              <div className="px-4 pt-2 pb-0">
+                {portfolioTab === 'audio' && <p className="text-[10px] text-slate-600">до 20 МБ · mp3, wav, flac, ogg</p>}
+                {portfolioTab === 'images' && <p className="text-[10px] text-slate-600">до 20 МБ · jpg, png, gif, webp</p>}
+                {portfolioTab === 'other' && <p className="text-[10px] text-slate-600">до 20 МБ · pdf, doc, xls</p>}
+              </div>
+              {/* Content */}
               <div className="p-3">
-                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-                  {/* Add tile */}
-                  <label className="flex flex-col gap-2 flex-shrink-0 cursor-pointer group" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
-                    <div className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
-                      {isUploadingPortfolio ? <Loader2 size={20} className="text-slate-500 animate-spin" /> : <Plus size={22} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
-                    </div>
-                    <span className="text-[11px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
-                    <input type="file" accept="audio/*" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
-                  </label>
-                  {/* Audio files */}
-                  {audioFiles.map((f: any) => (
-                    <AudioTile key={f.id} url={`${API_URL}${f.url}`} title={f.originalName} onDelete={() => handlePortfolioDelete(f.id)} />
-                  ))}
-                  {/* Audio links */}
-                  {audioLinks.map((l: any) => (
-                    <AudioTile key={l.id} url={l.url} title={l.title || l.url} onDelete={() => setConfirmDeleteLinkId(l.id)} />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Images */}
-            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                <Image size={14} className="text-primary-400" />
-                <span className="text-sm font-semibold text-white">Изображения</span>
-                {imageFiles.length > 0 && <span className="text-xs text-slate-500">{imageFiles.length}</span>}
-                <span className="ml-auto text-[10px] text-slate-600">до 20 МБ · jpg, png, gif, webp</span>
-              </div>
-              <div className="p-3">
-                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-                  {/* Add tile */}
-                  <label className="flex flex-col gap-2 flex-shrink-0 cursor-pointer group" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
-                    <div className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
-                      {isUploadingPortfolio ? <Loader2 size={20} className="text-slate-500 animate-spin" /> : <Plus size={22} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
-                    </div>
-                    <span className="text-[11px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
-                    <input type="file" accept="image/*" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
-                  </label>
-                  {imageFiles.map((f: any) => (
-                    <button key={f.id} onClick={() => setImageFullscreen(`${API_URL}${f.url}`)}
-                      className="flex flex-col gap-2 flex-shrink-0 group relative" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
-                      <div className="w-full aspect-square rounded-2xl overflow-hidden border border-slate-700/40 group-hover:border-primary-500/40 transition-colors">
-                        <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
+                {portfolioTab === 'audio' && (
+                  <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                    <label className="flex flex-col gap-2 flex-shrink-0 cursor-pointer group" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
+                      <div className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
+                        {isUploadingPortfolio ? <Loader2 size={20} className="text-slate-500 animate-spin" /> : <Plus size={22} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
                       </div>
-                      <button onClick={e => { e.stopPropagation(); handlePortfolioDelete(f.id); }} className="absolute top-1 right-1 p-1 rounded-lg bg-slate-900/80 text-slate-400 hover:text-red-400 transition-colors"><X size={11} /></button>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Other / Documents */}
-            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                <File size={14} className="text-primary-400" />
-                <span className="text-sm font-semibold text-white">Другое</span>
-                {otherFiles.length > 0 && <span className="text-xs text-slate-500">{otherFiles.length}</span>}
-                <span className="ml-auto text-[10px] text-slate-600">до 20 МБ · pdf, doc, xls</span>
-              </div>
-              <div className="p-3">
-                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-                  {/* Add tile */}
-                  <label className="flex flex-col gap-2 flex-shrink-0 cursor-pointer group" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
-                    <div className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
-                      {isUploadingPortfolio ? <Loader2 size={20} className="text-slate-500 animate-spin" /> : <Plus size={22} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
-                    </div>
-                    <span className="text-[11px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
-                    <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
-                  </label>
-                  {otherFiles.map((f: any) => (
-                    <button key={f.id} onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.originalName })}
-                      className="flex flex-col gap-2 flex-shrink-0 text-left group relative" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
-                      <div className="w-full aspect-square rounded-2xl bg-slate-800/60 border border-slate-700/40 group-hover:border-primary-500/40 flex flex-col items-center justify-center gap-2 p-2 transition-colors">
-                        <span className="text-xl font-black text-primary-400">{getFileExt(f.originalName)}</span>
-                        <FileText size={18} className="text-slate-500" />
+                      <span className="text-[11px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
+                      <input type="file" accept="audio/*" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+                    </label>
+                    {audioFiles.map((f: any) => (
+                      <AudioTile key={f.id} url={`${API_URL}${f.url}`} title={f.originalName} onDelete={() => handlePortfolioDelete(f.id)} />
+                    ))}
+                    {audioLinks.map((l: any) => (
+                      <AudioTile key={l.id} url={l.url} title={l.title || l.url} onDelete={() => setConfirmDeleteLinkId(l.id)} />
+                    ))}
+                  </div>
+                )}
+                {portfolioTab === 'images' && (
+                  <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                    <label className="flex flex-col gap-2 flex-shrink-0 cursor-pointer group" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
+                      <div className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
+                        {isUploadingPortfolio ? <Loader2 size={20} className="text-slate-500 animate-spin" /> : <Plus size={22} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
                       </div>
-                      <p className="text-[10px] text-slate-400 text-center leading-tight line-clamp-2 w-full">{f.originalName}</p>
-                      <button onClick={e => { e.stopPropagation(); handlePortfolioDelete(f.id); }} className="absolute top-1 right-1 p-1 rounded-lg bg-slate-900/80 text-slate-400 hover:text-red-400 transition-colors"><X size={11} /></button>
-                    </button>
-                  ))}
-                </div>
+                      <span className="text-[11px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
+                      <input type="file" accept="image/*" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+                    </label>
+                    {imageFiles.map((f: any) => (
+                      <button key={f.id} onClick={() => setImageFullscreen(`${API_URL}${f.url}`)}
+                        className="flex flex-col gap-2 flex-shrink-0 group relative" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
+                        <div className="w-full aspect-square rounded-2xl overflow-hidden border border-slate-700/40 group-hover:border-primary-500/40 transition-colors">
+                          <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
+                        </div>
+                        <button onClick={e => { e.stopPropagation(); handlePortfolioDelete(f.id); }} className="absolute top-1 right-1 p-1 rounded-lg bg-slate-900/80 text-slate-400 hover:text-red-400 transition-colors"><X size={11} /></button>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {portfolioTab === 'other' && (
+                  <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                    <label className="flex flex-col gap-2 flex-shrink-0 cursor-pointer group" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
+                      <div className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
+                        {isUploadingPortfolio ? <Loader2 size={20} className="text-slate-500 animate-spin" /> : <Plus size={22} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
+                      </div>
+                      <span className="text-[11px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
+                      <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+                    </label>
+                    {otherFiles.map((f: any) => (
+                      <button key={f.id} onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.originalName })}
+                        className="flex flex-col gap-2 flex-shrink-0 text-left group relative" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
+                        <div className="w-full aspect-square rounded-2xl bg-slate-800/60 border border-slate-700/40 group-hover:border-primary-500/40 flex flex-col items-center justify-center gap-2 p-2 transition-colors">
+                          <span className="text-xl font-black text-primary-400">{getFileExt(f.originalName)}</span>
+                          <FileText size={18} className="text-slate-500" />
+                        </div>
+                        <p className="text-[10px] text-slate-400 text-center leading-tight line-clamp-2 w-full">{f.originalName}</p>
+                        <button onClick={e => { e.stopPropagation(); handlePortfolioDelete(f.id); }} className="absolute top-1 right-1 p-1 rounded-lg bg-slate-900/80 text-slate-400 hover:text-red-400 transition-colors"><X size={11} /></button>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
 
