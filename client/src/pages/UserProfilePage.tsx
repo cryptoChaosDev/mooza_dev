@@ -217,15 +217,6 @@ export default function UserProfilePage() {
     )
   );
 
-  const professionNames = (() => {
-    const seen = new Set<string>();
-    const names: string[] = [];
-    for (const us of user.userServices ?? []) {
-      const name = us.profession?.name;
-      if (name && !seen.has(name)) { seen.add(name); names.push(name); }
-    }
-    return names;
-  })();
 
   const portfolioFiles: any[] = user.portfolioFiles ?? [];
   const portfolioLinks: any[] = user.portfolioLinks ?? [];
@@ -358,14 +349,6 @@ export default function UserProfilePage() {
               </span>
             )}
           </div>
-
-          {professionNames.length > 0 && (
-            <div className="flex flex-wrap gap-1.5 mb-3">
-              {professionNames.map((name, i) => (
-                <span key={i} className="px-2.5 py-1 bg-primary-500/10 border border-primary-500/25 text-primary-300 rounded-lg text-xs font-medium">{name}</span>
-              ))}
-            </div>
-          )}
 
           {/* ── Stats row ── */}
           <div className="grid grid-cols-4 divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
