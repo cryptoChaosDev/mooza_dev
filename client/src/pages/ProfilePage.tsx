@@ -873,34 +873,45 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* ── Groups card — avatar carousel ── */}
+            {/* ── Collectives tile slider ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Группы</p>
-              <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
-                {myGroups.map((g: any) => (
-                  <button
-                    key={g.id}
-                    onClick={() => navigate('/groups/' + g.id)}
-                    className="flex flex-col items-center gap-1.5 flex-shrink-0 w-16 group"
-                  >
-                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-800/60 to-purple-800/60 border border-primary-600/30 flex items-center justify-center overflow-hidden group-hover:border-primary-500/60 transition-colors">
-                      {g.avatar
-                        ? <img src={getAvatarUrl(g.avatar) ?? ''} alt={g.name} className="w-full h-full object-cover" />
-                        : <Music2 size={22} className="text-primary-400" />
-                      }
-                    </div>
-                    <span className="text-[10px] text-slate-400 text-center leading-tight w-full truncate">{g.name}</span>
-                  </button>
-                ))}
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Коллективы</p>
+              <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                {/* Add tile — first */}
                 <button
                   onClick={() => navigate('/groups/create')}
-                  className="flex flex-col items-center gap-1.5 flex-shrink-0 w-16 group"
+                  className="flex flex-col gap-2 flex-shrink-0 group"
+                  style={{ width: 'calc((100% - 24px) / 2.5)' }}
                 >
-                  <div className="w-14 h-14 rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
-                    <Plus size={20} className="text-slate-500 group-hover:text-primary-400 transition-colors" />
+                  <div className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
+                    <Plus size={22} className="text-slate-500 group-hover:text-primary-400 transition-colors" />
                   </div>
-                  <span className="text-[10px] text-slate-500 group-hover:text-slate-400 transition-colors">Создать</span>
+                  <span className="text-[11px] text-slate-500 group-hover:text-slate-400 transition-colors text-center leading-tight">Добавить</span>
                 </button>
+
+                {myGroups.map((g: any) => {
+                  const myMembership = (g.userArtists ?? []).find((ua: any) => ua.user?.id === profile?.id);
+                  const role = myMembership?.profession?.name ?? (myMembership?.isOwner ? 'Основатель' : null);
+                  return (
+                    <button
+                      key={g.id}
+                      onClick={() => navigate('/groups/' + g.id)}
+                      className="flex flex-col gap-2 flex-shrink-0 text-left group"
+                      style={{ width: 'calc((100% - 24px) / 2.5)' }}
+                    >
+                      <div className="w-full aspect-square rounded-2xl bg-gradient-to-br from-primary-800/60 to-purple-800/60 border border-primary-600/30 flex items-center justify-center overflow-hidden group-hover:border-primary-500/60 transition-colors">
+                        {g.avatar
+                          ? <img src={getAvatarUrl(g.avatar) ?? ''} alt={g.name} className="w-full h-full object-cover" />
+                          : <Music2 size={22} className="text-primary-400" />
+                        }
+                      </div>
+                      <div className="w-full">
+                        <p className="text-[11px] font-semibold text-white leading-tight line-clamp-2">{g.name}</p>
+                        {role && <p className="text-[10px] text-slate-500 leading-tight mt-0.5 truncate">{role}</p>}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
