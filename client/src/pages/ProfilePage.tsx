@@ -171,6 +171,8 @@ export default function ProfilePage() {
   const [editingPortfolio, setEditingPortfolio] = useState(false);
   const [editingContacts, setEditingContacts] = useState(false);
   const [bioExpanded, setBioExpanded] = useState(false);
+  const [bioOverflows, setBioOverflows] = useState(false);
+  const bioRef = useRef<HTMLParagraphElement>(null);
   const [confirmDeleteServiceIdx, setConfirmDeleteServiceIdx] = useState<number | null>(null);
   const [confirmDeleteLinkId, setConfirmDeleteLinkId] = useState<string | null>(null);
 
@@ -185,6 +187,12 @@ export default function ProfilePage() {
   const [profFlowDirections, setProfFlowDirections] = useState<any[]>([]);
   const [profFlowProfessions, setProfFlowProfessions] = useState<any[]>([]);
   const [savingProfessions, setSavingProfessions] = useState(false);
+
+  useEffect(() => {
+    if (!bioExpanded && bioRef.current) {
+      setBioOverflows(bioRef.current.scrollHeight > bioRef.current.clientHeight);
+    }
+  }, [profile?.bio, bioExpanded]);
 
   useEffect(() => {
     if (editingProfessions || editingServices) {
@@ -790,10 +798,10 @@ export default function ProfilePage() {
                 <div className="flex-1">
                   {profile?.bio ? (
                     <>
-                      <p className="text-slate-300 text-sm leading-relaxed line-clamp-2">
-                        {bioExpanded ? profile.bio : profile.bio.slice(0, 100)}
+                      <p ref={bioRef} className={`text-slate-300 text-sm leading-relaxed ${!bioExpanded ? 'line-clamp-2' : ''}`}>
+                        {profile.bio}
                       </p>
-                      {profile.bio.length > 100 && (
+                      {bioOverflows && (
                         <button onClick={() => setBioExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-1 transition-colors">
                           {bioExpanded ? 'Свернуть' : 'Ещё'}
                         </button>

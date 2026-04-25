@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -123,6 +123,8 @@ export default function UserProfilePage() {
   const [connExpanded, setConnExpanded] = useState(false);
   const [portfolioTab, setPortfolioTab] = useState<'audio' | 'video' | 'other'>('audio');
   const [bioExpanded, setBioExpanded] = useState(false);
+  const [bioOverflows, setBioOverflows] = useState(false);
+  const bioRef = useRef<HTMLParagraphElement>(null);
   const [servicesOpen, setServicesOpen] = useState(false);
   const servicesRef = useRef<HTMLDivElement>(null);
   const onlineUsers = usePresenceStore(s => s.onlineUsers);
@@ -226,6 +228,12 @@ export default function UserProfilePage() {
 
   const hasSocialLinks = Object.values((user.socialLinks as Record<string, string>) || {}).some(Boolean);
   const bUrl = user.bannerImage ? getAvatarUrl(user.bannerImage) : null;
+
+  useEffect(() => {
+    if (!bioExpanded && bioRef.current) {
+      setBioOverflows(bioRef.current.scrollHeight > bioRef.current.clientHeight);
+    }
+  }, [user?.bio, bioExpanded]);
 
   return (
     <>
@@ -372,10 +380,10 @@ export default function UserProfilePage() {
             {/* Bio */}
             {user.bio && (
               <div>
-                <p className="text-slate-300 text-sm leading-relaxed line-clamp-2">
-                  {bioExpanded ? user.bio : user.bio.slice(0, 100)}
+                <p ref={bioRef} className={`text-slate-300 text-sm leading-relaxed ${!bioExpanded ? 'line-clamp-2' : ''}`}>
+                  {user.bio}
                 </p>
-                {user.bio.length > 100 && (
+                {bioOverflows && (
                   <button onClick={() => setBioExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-1 transition-colors">
                     {bioExpanded ? 'Свернуть' : 'Ещё'}
                   </button>
