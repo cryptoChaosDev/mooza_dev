@@ -372,11 +372,12 @@ export default function UserProfilePage() {
             {/* Bio */}
             {user.bio && (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">О себе</p>
-                <p className={`text-slate-300 text-sm leading-relaxed ${!bioExpanded ? 'line-clamp-3' : ''}`}>{user.bio}</p>
-                {user.bio.length > 120 && (
+                <p className="text-slate-300 text-sm leading-relaxed line-clamp-2">
+                  {bioExpanded ? user.bio : user.bio.slice(0, 100)}
+                </p>
+                {user.bio.length > 100 && (
                   <button onClick={() => setBioExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-1.5 transition-colors">
-                    {bioExpanded ? 'Свернуть' : 'Показать больше'}
+                    {bioExpanded ? 'Свернуть' : 'Ещё'}
                   </button>
                 )}
               </div>

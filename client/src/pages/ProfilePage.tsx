@@ -776,8 +776,7 @@ export default function ProfilePage() {
 
             {/* Bio */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">О себе</p>
+              <div className="flex items-center justify-end mb-2">
                 {!editingBio && (
                   <button onClick={() => setEditingBio(true)} className="p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800"><Edit3 size={13} /></button>
                 )}
@@ -794,10 +793,12 @@ export default function ProfilePage() {
                 </div>
               ) : profile?.bio ? (
                 <>
-                  <p className={`text-slate-300 text-sm leading-relaxed ${!bioExpanded ? 'line-clamp-3' : ''}`}>{profile.bio}</p>
-                  {profile.bio.length > 120 && (
+                  <p className="text-slate-300 text-sm leading-relaxed line-clamp-2">
+                    {bioExpanded ? profile.bio : profile.bio.slice(0, 100)}
+                  </p>
+                  {profile.bio.length > 100 && (
                     <button onClick={() => setBioExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-1.5 transition-colors">
-                      {bioExpanded ? 'Свернуть' : 'Показать больше'}
+                      {bioExpanded ? 'Свернуть' : 'Ещё'}
                     </button>
                   )}
                 </>
