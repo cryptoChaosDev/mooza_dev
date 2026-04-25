@@ -43,6 +43,7 @@ const userServiceInclude = {
   availabilities:  { select: { id: true, name: true } },
   geographies:     { select: { id: true, name: true } },
   selectedCustomFilterValues: { select: { id: true, filterId: true, value: true } },
+  description: true,
 } as const;
 
 const userSelect = {
@@ -368,6 +369,7 @@ router.put('/me/services', authenticate, async (req: AuthRequest, res) => {
           geographies:                 { connect: toConnect(us.geographyIds) },
           priceFrom:                   us.priceFrom ?? null,
           priceTo:                     us.priceTo ?? null,
+          description:                 (us as any).description ?? null,
           selectedCustomFilterValues:  { connect: toConnect(us.customFilterValueIds) },
         },
       });
@@ -558,19 +560,34 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
 
 // Get user by ID — public (no sensitive fields)
 // ── GET /api/users/:id/services ──────────────────────────────────────────────
-router.get('/:id/services', authenticate, async (req: AuthRequest, res) => {
+router.get('/:id/services', optionalAuthenticate, async (req: AuthRequest, res) => {
   try {
     const services = await prisma.userService.findMany({
       where: { userId: req.params.id },
-      include: {
-        profession: { select: { id: true, name: true } },
-        service: { select: { id: true, name: true } },
-      },
+      include: userServiceInclude,
       orderBy: [{ professionId: 'asc' }],
     });
     return res.json(services);
   } catch (err) {
     console.error('[users] GET /:id/services', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── GET /api/users/user-service/:serviceId ────────────────────────────────────
+router.get('/user-service/:serviceId', optionalAuthenticate, async (req: AuthRequest, res) => {
+  try {
+    const us = await prisma.userService.findUnique({
+      where: { id: req.params.serviceId },
+      include: {
+        ...userServiceInclude,
+        user: { select: { id: true, firstName: true, lastName: true, avatar: true, nickname: true } },
+      },
+    });
+    if (!us) return res.status(404).json({ error: 'Not found' });
+    return res.json(us);
+  } catch (err) {
+    console.error('[users] GET /user-service/:serviceId', err);
     return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });

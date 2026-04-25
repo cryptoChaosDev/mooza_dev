@@ -79,8 +79,10 @@ export const userAPI = {
     geographyIds?: string[];
     priceFrom?: number;
     priceTo?: number;
+    description?: string;
     customFilterValueIds?: string[];
   }>) => api.put('/users/me/services', services),
+  getUserService: (serviceId: string) => api.get(`/users/user-service/${serviceId}`),
   uploadAvatar: (formData: FormData) =>
     api.post('/users/me/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

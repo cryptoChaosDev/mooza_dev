@@ -170,6 +170,7 @@ model UserService {
   geographies                Geography[]
   priceFrom                  Int?
   priceTo                    Int?
+  description                String?
   selectedCustomFilterValues CustomFilterValue[]
 
   createdAt DateTime @default(now())

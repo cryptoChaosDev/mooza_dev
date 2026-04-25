@@ -110,6 +110,7 @@ type UserServiceEntry = {
   geographyIds: string[];
   priceFrom: string;
   priceTo: string;
+  description: string;
 };
 
 const emptyEntry = (): UserServiceEntry => ({
@@ -117,7 +118,7 @@ const emptyEntry = (): UserServiceEntry => ({
   professionId: '', professionName: '', serviceId: '', serviceName: '',
   allowedFilterTypes: [], serviceCustomFilters: [], customFilterValueIds: {},
   genreIds: [], workFormatIds: [], employmentTypeIds: [], skillLevelIds: [],
-  availabilityIds: [], geographyIds: [], priceFrom: '', priceTo: '',
+  availabilityIds: [], geographyIds: [], priceFrom: '', priceTo: '', description: '',
 });
 
 
@@ -270,6 +271,7 @@ export default function ProfilePage() {
           geographyIds: us.geographies?.map((g: any) => g.id) || [],
           priceFrom: us.priceFrom != null ? String(us.priceFrom) : '',
           priceTo: us.priceTo != null ? String(us.priceTo) : '',
+          description: us.description ?? '',
         })) || []
       );
       return data;
@@ -322,6 +324,7 @@ export default function ProfilePage() {
         geographyIds: us.geographyIds,
         priceFrom: us.priceFrom !== '' ? Number(us.priceFrom) : undefined,
         priceTo: us.priceTo !== '' ? Number(us.priceTo) : undefined,
+        description: us.description || undefined,
         customFilterValueIds: Object.values(us.customFilterValueIds).flat(),
       }))
     ),
@@ -480,6 +483,16 @@ export default function ProfilePage() {
         {us.serviceCustomFilters.map(cf => (
           <SelectSheet key={cf.id} isOpen={openFilterSheet === key(`cf-${cf.id}`)} onClose={() => setOpenFilterSheet(null)} title={cf.name} options={cf.values.map(v => ({ id: v.id, name: v.value }))} selectedIds={us.customFilterValueIds[cf.id] || []} onSelect={ids => updateSvc(idx, { customFilterValueIds: { ...us.customFilterValueIds, [cf.id]: ids as string[] } })} mode="multiple" showConfirm searchable={false} />
         ))}
+        <div>
+          <p className="text-xs font-semibold mb-1 text-slate-400">Описание услуги</p>
+          <textarea
+            value={us.description}
+            onChange={e => updateSvc(idx, { description: e.target.value })}
+            placeholder="Расскажите подробнее об услуге..."
+            rows={3}
+            className="w-full px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
+          />
+        </div>
       </div>
     );
   };
@@ -1053,12 +1066,15 @@ export default function ProfilePage() {
               )}
             </div>
 
-            {/* ── Services card — carousel ── */}
+            {/* ── Services card — tile slider ── */}
             <div ref={servicesRef} className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <Briefcase size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Услуги</span>
                 {servicesFlat.length > 0 && <span className="text-xs text-slate-500">{servicesFlat.length}</span>}
+                {!editingServices && servicesFlat.length > 0 && (
+                  <button onClick={() => navigate(`/profile/${profile?.id}/services`)} className="text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">Смотреть все</button>
+                )}
                 <button
                   onClick={() => { setEditingServices(v => !v); setAddStep(null); }}
                   className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
@@ -1104,54 +1120,45 @@ export default function ProfilePage() {
                     </button>
                   </div>
                 </div>
-              ) : servicesFlat.length > 0 ? (
-                <div className="px-3 py-3">
-                  <div className="overflow-x-auto scrollbar-none -mx-1 px-1">
-                    <div className="flex gap-2.5" style={{ width: 'max-content' }}>
-                      {servicesFlat.map((us: any, i: number) => {
-                        const tags = [
-                          ...(us.genres?.map((g: any) => g.name) ?? []),
-                          ...(us.workFormats?.map((w: any) => w.name) ?? []),
-                        ];
-                        const price = us.priceFrom != null || us.priceTo != null
-                          ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
-                          : null;
-                        return (
-                          <div key={us.id} className="w-44 flex-shrink-0 rounded-2xl border border-slate-700/40 bg-slate-800/50 p-3.5 flex flex-col">
-                            <p className="text-[10px] text-slate-500 mb-1 truncate">{us._profName}</p>
-                            <p className="text-sm font-bold text-white leading-snug flex-1">{us.service?.name}</p>
-                            {tags.length > 0 && (
-                              <p className="text-[10px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
-                                {tags.slice(0, 3).join(' · ')}
-                              </p>
-                            )}
-                            <div className="flex items-center justify-between mt-3">
-                              <span className="text-xs font-semibold text-primary-400">{price ?? '—'}</span>
-                              <div className="flex items-center gap-1.5">
-                                <button
-                                  onClick={() => { setEditingServices(true); setExpandedSvcIdx(i); setTimeout(() => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); }}
-                                  className="p-1.5 bg-slate-700/50 hover:bg-slate-700 rounded-xl text-slate-400 hover:text-white transition-all"
-                                >
-                                  <Edit3 size={11} />
-                                </button>
-                                <button
-                                  onClick={() => setConfirmDeleteServiceIdx(i)}
-                                  disabled={updateServicesMutation.isPending}
-                                  className="p-1.5 bg-slate-700/50 hover:bg-red-500/15 rounded-xl text-slate-400 hover:text-red-400 transition-all"
-                                >
-                                  {updateServicesMutation.isPending ? <Loader2 size={11} className="animate-spin" /> : <Trash2 size={11} />}
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
               ) : (
-                <div className="p-4 text-center">
-                  <p className="text-sm text-slate-600 italic">Нет добавленных услуг</p>
+                <div className="p-3">
+                  <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                    {/* Add tile — always first */}
+                    <button
+                      onClick={() => { setEditingServices(true); setAddStep('search'); setServiceQuery(''); setServiceSearchResults([]); }}
+                      className="flex flex-col gap-2 flex-shrink-0 group"
+                      style={{ width: 'calc((100% - 24px) / 2.5)' }}
+                    >
+                      <div className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
+                        <Plus size={22} className="text-slate-500 group-hover:text-primary-400 transition-colors" />
+                      </div>
+                      <span className="text-[11px] text-slate-500 group-hover:text-slate-400 transition-colors text-center leading-tight">Добавить</span>
+                    </button>
+
+                    {servicesFlat.map((us: any) => {
+                      const genre = us.genres?.[0]?.name ?? null;
+                      const price = us.priceFrom != null || us.priceTo != null
+                        ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
+                        : null;
+                      return (
+                        <button
+                          key={us.id}
+                          onClick={() => navigate(`/services/${us.id}`)}
+                          className="flex flex-col gap-0 flex-shrink-0 text-left group"
+                          style={{ width: 'calc((100% - 24px) / 2.5)' }}
+                        >
+                          <div className="w-full aspect-square rounded-2xl bg-gradient-to-br from-primary-900/80 to-slate-800/80 border border-primary-700/30 flex flex-col items-center justify-center gap-1.5 p-2 group-hover:border-primary-500/50 transition-colors overflow-hidden">
+                            <Briefcase size={20} className="text-primary-400 flex-shrink-0" />
+                            {genre && <span className="text-[9px] text-slate-400 text-center leading-tight line-clamp-2">{genre}</span>}
+                          </div>
+                          <div className="w-full mt-2">
+                            <p className="text-[11px] font-semibold text-white leading-tight line-clamp-2">{us.service?.name}</p>
+                            {price && <p className="text-[10px] text-primary-400 leading-tight mt-0.5">{price}</p>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               )}
             </div>

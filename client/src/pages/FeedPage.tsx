@@ -16,6 +16,7 @@ import AvatarComponent from '../components/Avatar';
 import AudioPlayer from '../components/AudioPlayer';
 import { ReactionBar, DoubleTapReactWrapper } from '../components/ReactionBar';
 import { loadFilters, DEFAULT_FILTERS, FlowFilters } from './FlowSettingsPage';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -43,6 +44,7 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
   const queryClient = useQueryClient();
   const isOwner = comment.author.id === currentUserId;
   const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [editText, setEditText] = useState(comment.content);
   const [showReplyInput, setShowReplyInput] = useState(false);
   const [replyText, setReplyText] = useState('');
@@ -111,7 +113,7 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
                     <button onClick={() => { setEditText(comment.content); setEditing(true); }} className="text-slate-500 hover:text-slate-300 p-0.5 transition-colors">
                       <Pencil size={11} />
                     </button>
-                    <button onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending} className="text-slate-500 hover:text-red-400 p-0.5 transition-colors">
+                    <button onClick={() => setConfirmDelete(true)} disabled={deleteMut.isPending} className="text-slate-500 hover:text-red-400 p-0.5 transition-colors">
                       {deleteMut.isPending ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
                     </button>
                   </div>
@@ -179,6 +181,14 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
         </div>
       </div>
 
+      <ConfirmDialog
+        open={confirmDelete}
+        message="Удалить комментарий?"
+        confirmLabel="Удалить"
+        onConfirm={() => deleteMut.mutate()}
+        onCancel={() => setConfirmDelete(false)}
+      />
+
       {/* Replies */}
       {!isReply && comment.replies?.length > 0 && (
         <div className="mt-2 space-y-2">
@@ -200,6 +210,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const [showMenu, setShowMenu] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [editContent, setEditContent] = useState(post.content);
   const [editImagePreview, setEditImagePreview] = useState<{ url: string; serverUrl: string } | null>(
     post.imageUrl ? { url: `${API_URL}${post.imageUrl}`, serverUrl: post.imageUrl } : null
@@ -276,7 +287,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
             {showMenu && (
               <div className="absolute right-0 top-8 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-10 overflow-hidden min-w-[150px]">
                 <button onClick={() => { setShowMenu(false); setEditing(true); setEditContent(post.content); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 transition-colors"><Pencil size={14} /> Редактировать</button>
-                <button onClick={() => { setShowMenu(false); deleteMut.mutate(); }} disabled={deleteMut.isPending} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-slate-700 transition-colors border-t border-slate-700">
+                <button onClick={() => { setShowMenu(false); setConfirmDelete(true); }} disabled={deleteMut.isPending} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-slate-700 transition-colors border-t border-slate-700">
                   {deleteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}Удалить пост
                 </button>
               </div>
@@ -375,6 +386,14 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
           </form>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmDelete}
+        message="Удалить пост? Это действие нельзя отменить."
+        confirmLabel="Удалить"
+        onConfirm={() => deleteMut.mutate()}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }
