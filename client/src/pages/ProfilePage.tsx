@@ -8,7 +8,7 @@ import {
   Globe, DollarSign, Calendar,
   Headphones, Edit3, Plus, ChevronLeft, ChevronRight,
   FileText, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
-  Music2,
+  Music2, Play, Pause, Image, File,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -35,6 +35,33 @@ function detectAudioPlatform(url: string): 'yandex' | 'google' | 'other' {
   if (url.includes('disk.yandex') || url.includes('yadi.sk')) return 'yandex';
   if (url.includes('drive.google') || url.includes('docs.google')) return 'google';
   return 'other';
+}
+
+function getFileExt(name: string) {
+  return (name.split('.').pop() ?? '').toUpperCase().slice(0, 4);
+}
+
+function AudioTile({ url, title, onDelete }: { url: string; title?: string; onDelete?: () => void }) {
+  const [playing, setPlaying] = useState(false);
+  const ref = useRef<HTMLAudioElement>(null);
+  const toggle = () => {
+    if (!ref.current) return;
+    if (playing) { ref.current.pause(); setPlaying(false); }
+    else { ref.current.play(); setPlaying(true); }
+  };
+  return (
+    <div className="flex flex-col gap-2 flex-shrink-0 relative" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
+      <button onClick={toggle} className="w-full aspect-square rounded-2xl bg-gradient-to-br from-primary-900/80 to-slate-800/80 border border-primary-700/30 flex flex-col items-center justify-center gap-2 hover:border-primary-500/50 transition-colors group">
+        <Music2 size={24} className="text-primary-400" />
+        <div className="w-9 h-9 rounded-full bg-primary-600/80 flex items-center justify-center group-hover:bg-primary-500 transition-colors">
+          {playing ? <Pause size={16} className="text-white" /> : <Play size={16} className="text-white ml-0.5" />}
+        </div>
+      </button>
+      {title && <p className="text-[10px] text-slate-400 text-center leading-tight line-clamp-2 w-full">{title}</p>}
+      {onDelete && <button onClick={onDelete} className="absolute top-1 right-1 p-1 rounded-lg bg-slate-900/80 text-slate-400 hover:text-red-400 transition-colors"><X size={11} /></button>}
+      <audio ref={ref} src={url} onEnded={() => setPlaying(false)} preload="none" />
+    </div>
+  );
 }
 
 function PortfolioAudioItem({ link, onDelete }: { link: any; onDelete?: () => void }) {
@@ -153,8 +180,8 @@ export default function ProfilePage() {
   const [portfolioFiles, setPortfolioFiles] = useState<any[]>([]);
   const [portfolioLinks, setPortfolioLinks] = useState<any[]>([]);
   const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
-  const [portfolioTab, setPortfolioTab] = useState<'audio' | 'video' | 'other'>('audio');
-  const [newLinkType, setNewLinkType] = useState<'audio' | 'video'>('audio');
+  const [imageFullscreen, setImageFullscreen] = useState<string | null>(null);
+  const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [newLinkTitle, setNewLinkTitle] = useState('');
   const [addingLink, setAddingLink] = useState(false);
@@ -171,7 +198,6 @@ export default function ProfilePage() {
   const [editingHero, setEditingHero] = useState(false);
   const [editingBio, setEditingBio] = useState(false);
   const [editingServices, setEditingServices] = useState(false);
-  const [editingPortfolio, setEditingPortfolio] = useState(false);
   const [editingContacts, setEditingContacts] = useState(false);
   const [confirmDeleteServiceIdx, setConfirmDeleteServiceIdx] = useState<number | null>(null);
   const [confirmDeleteLinkId, setConfirmDeleteLinkId] = useState<string | null>(null);
@@ -662,7 +688,9 @@ export default function ProfilePage() {
   );
 
   const audioLinks = portfolioLinks.filter((l: any) => l.type === 'audio');
-  const videoLinks = portfolioLinks.filter((l: any) => l.type === 'video');
+  const audioFiles = portfolioFiles.filter((f: any) => f.mimeType?.startsWith('audio/'));
+  const imageFiles = portfolioFiles.filter((f: any) => f.mimeType?.startsWith('image/'));
+  const otherFiles = portfolioFiles.filter((f: any) => !f.mimeType?.startsWith('audio/') && !f.mimeType?.startsWith('image/'));
 
   const servicesByFieldEdit: Record<string, { fieldName: string; entries: { us: UserServiceEntry; idx: number }[] }> = {};
   userServices.forEach((us, idx) => {
@@ -1113,95 +1141,96 @@ export default function ProfilePage() {
               );
             })()}
 
-            {/* ── Portfolio card ── */}
+            {/* ── Portfolio ── */}
+            {/* Audio */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <Headphones size={14} className="text-primary-400" />
-                <span className="text-sm font-semibold text-white">Портфолио</span>
-                <button onClick={() => setEditingPortfolio(v => !v)} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
-                  {editingPortfolio ? 'Готово' : 'Изменить'}
-                </button>
+                <span className="text-sm font-semibold text-white">Аудио</span>
+                {(audioLinks.length + audioFiles.length) > 0 && <span className="text-xs text-slate-500">{audioLinks.length + audioFiles.length}</span>}
               </div>
-              {/* Tabs */}
-              <div className="flex border-b border-slate-800/60">
-                {([
-                  { key: 'audio' as const, label: 'Аудио', count: audioLinks.length },
-                  { key: 'video' as const, label: 'Видео', count: videoLinks.length },
-                  { key: 'other' as const, label: 'Прочее', count: portfolioFiles.length },
-                ]).map(tab => (
-                  <button key={tab.key} onClick={() => { setPortfolioTab(tab.key); setNewLinkType(tab.key === 'other' ? 'audio' : tab.key as 'audio' | 'video'); }}
-                    className={`flex-1 py-2.5 text-xs font-medium border-b-2 transition-all ${portfolioTab === tab.key ? 'border-primary-500 text-primary-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
-                    {tab.label}{tab.count > 0 && <span className="ml-1 opacity-60">({tab.count})</span>}
-                  </button>
-                ))}
-              </div>
-
-              {/* Audio tab */}
-              {portfolioTab === 'audio' && (
-                <div className="p-4 space-y-3">
+              <div className="p-3">
+                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                  {/* Add tile */}
+                  <label className="flex flex-col gap-2 flex-shrink-0 cursor-pointer group" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
+                    <div className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
+                      {isUploadingPortfolio ? <Loader2 size={20} className="text-slate-500 animate-spin" /> : <Plus size={22} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
+                    </div>
+                    <span className="text-[11px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
+                    <input type="file" accept="audio/*" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+                  </label>
+                  {/* Audio files */}
+                  {audioFiles.map((f: any) => (
+                    <AudioTile key={f.id} url={`${API_URL}${f.url}`} title={f.originalName} onDelete={() => handlePortfolioDelete(f.id)} />
+                  ))}
+                  {/* Audio links */}
                   {audioLinks.map((l: any) => (
-                    <PortfolioAudioItem key={l.id} link={l} onDelete={editingPortfolio ? () => setConfirmDeleteLinkId(l.id) : undefined} />
+                    <AudioTile key={l.id} url={l.url} title={l.title || l.url} onDelete={() => setConfirmDeleteLinkId(l.id)} />
                   ))}
-                  {audioLinks.length === 0 && !editingPortfolio && (
-                    <p className="text-sm text-slate-600 italic text-center py-2">Нет аудио ссылок</p>
-                  )}
-                  {editingPortfolio && audioLinks.length < 5 && (
-                    <div className="space-y-2 pt-1 border-t border-slate-800/60">
-                      <p className="text-xs text-slate-500 pt-1">Добавить ссылку на Яндекс Диск или Google Диск:</p>
-                      <input value={newLinkTitle} onChange={e => setNewLinkTitle(e.target.value)} placeholder="Название (необязательно)" className="w-full px-3 py-2 bg-slate-800/60 border border-slate-700/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-                      <div className="flex gap-2">
-                        <input value={newLinkUrl} onChange={e => setNewLinkUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddLink()} placeholder="https://disk.yandex.ru/d/... или drive.google.com/..." className="flex-1 px-3 py-2 bg-slate-800/60 border border-slate-700/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-                        <button onClick={() => { setNewLinkType('audio'); handleAddLink(); }} disabled={addingLink || !newLinkUrl.trim()} className="px-3 py-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-40 text-white text-xs rounded-xl transition-colors">+</button>
-                      </div>
-                    </div>
-                  )}
                 </div>
-              )}
+              </div>
+            </div>
 
-              {/* Video tab */}
-              {portfolioTab === 'video' && (
-                <div className="p-4 space-y-3">
-                  {videoLinks.map((l: any) => (
-                    <PortfolioVideoItem key={l.id} link={l} onDelete={editingPortfolio ? () => setConfirmDeleteLinkId(l.id) : undefined} />
-                  ))}
-                  {videoLinks.length === 0 && !editingPortfolio && (
-                    <p className="text-sm text-slate-600 italic text-center py-2">Нет видео ссылок</p>
-                  )}
-                  {editingPortfolio && videoLinks.length < 5 && (
-                    <div className="space-y-2 pt-1 border-t border-slate-800/60">
-                      <p className="text-xs text-slate-500 pt-1">Добавить видео из RuTube или VK Видео:</p>
-                      <input value={newLinkTitle} onChange={e => setNewLinkTitle(e.target.value)} placeholder="Название (необязательно)" className="w-full px-3 py-2 bg-slate-800/60 border border-slate-700/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-                      <div className="flex gap-2">
-                        <input value={newLinkUrl} onChange={e => setNewLinkUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleAddLink()} placeholder="https://rutube.ru/video/... или vk.com/video..." className="flex-1 px-3 py-2 bg-slate-800/60 border border-slate-700/50 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-                        <button onClick={() => { setNewLinkType('video'); handleAddLink(); }} disabled={addingLink || !newLinkUrl.trim()} className="px-3 py-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-40 text-white text-xs rounded-xl transition-colors">+</button>
+            {/* Images */}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                <Image size={14} className="text-primary-400" />
+                <span className="text-sm font-semibold text-white">Изображения</span>
+                {imageFiles.length > 0 && <span className="text-xs text-slate-500">{imageFiles.length}</span>}
+              </div>
+              <div className="p-3">
+                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                  {/* Add tile */}
+                  <label className="flex flex-col gap-2 flex-shrink-0 cursor-pointer group" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
+                    <div className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
+                      {isUploadingPortfolio ? <Loader2 size={20} className="text-slate-500 animate-spin" /> : <Plus size={22} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
+                    </div>
+                    <span className="text-[11px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
+                    <input type="file" accept="image/*" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+                  </label>
+                  {imageFiles.map((f: any) => (
+                    <button key={f.id} onClick={() => setImageFullscreen(`${API_URL}${f.url}`)}
+                      className="flex flex-col gap-2 flex-shrink-0 group relative" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
+                      <div className="w-full aspect-square rounded-2xl overflow-hidden border border-slate-700/40 group-hover:border-primary-500/40 transition-colors">
+                        <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Documents tab */}
-              {portfolioTab === 'other' && (
-                <div className="p-4 space-y-2">
-                  {portfolioFiles.map((f: any) => (
-                    <div key={f.id} className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-slate-800/40 border border-slate-700/40 group">
-                      <DocIcon mimeType={f.mimeType} name={f.originalName} />
-                      <a href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm text-slate-300 hover:text-white truncate transition-colors">{f.originalName}</a>
-                      <span className="text-xs text-slate-600 flex-shrink-0">{formatFileSize(f.size)}</span>
-                      {editingPortfolio && <button onClick={() => handlePortfolioDelete(f.id)} className="p-1 rounded hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all flex-shrink-0"><Trash2 size={13} /></button>}
-                    </div>
+                      <button onClick={e => { e.stopPropagation(); handlePortfolioDelete(f.id); }} className="absolute top-1 right-1 p-1 rounded-lg bg-slate-900/80 text-slate-400 hover:text-red-400 transition-colors"><X size={11} /></button>
+                    </button>
                   ))}
-                  {portfolioFiles.length === 0 && !editingPortfolio && (
-                    <p className="text-sm text-slate-600 italic text-center py-2">Нет документов</p>
-                  )}
-                  {editingPortfolio && portfolioFiles.length < 5 && (
-                    <label className={`flex items-center justify-center gap-2 py-2.5 border border-dashed rounded-xl text-sm transition-all cursor-pointer mt-1 ${isUploadingPortfolio ? 'border-slate-600 text-slate-500' : 'border-slate-600 text-slate-400 hover:text-primary-400 hover:border-primary-500/50'}`}>
-                      <input type="file" multiple accept=".pdf,.doc,.docx,.xls,.xlsx" className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
-                      {isUploadingPortfolio ? 'Загрузка...' : `+ PDF, DOC, DOCX, XLS, XLSX (${portfolioFiles.length}/5)`}
-                    </label>
-                  )}
                 </div>
-              )}
+              </div>
+            </div>
+
+            {/* Other / Documents */}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                <File size={14} className="text-primary-400" />
+                <span className="text-sm font-semibold text-white">Другое</span>
+                {otherFiles.length > 0 && <span className="text-xs text-slate-500">{otherFiles.length}</span>}
+              </div>
+              <div className="p-3">
+                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                  {/* Add tile */}
+                  <label className="flex flex-col gap-2 flex-shrink-0 cursor-pointer group" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
+                    <div className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
+                      {isUploadingPortfolio ? <Loader2 size={20} className="text-slate-500 animate-spin" /> : <Plus size={22} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
+                    </div>
+                    <span className="text-[11px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
+                    <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+                  </label>
+                  {otherFiles.map((f: any) => (
+                    <button key={f.id} onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.originalName })}
+                      className="flex flex-col gap-2 flex-shrink-0 text-left group relative" style={{ width: 'calc((100% - 24px) / 2.5)' }}>
+                      <div className="w-full aspect-square rounded-2xl bg-slate-800/60 border border-slate-700/40 group-hover:border-primary-500/40 flex flex-col items-center justify-center gap-2 p-2 transition-colors">
+                        <span className="text-xl font-black text-primary-400">{getFileExt(f.originalName)}</span>
+                        <FileText size={18} className="text-slate-500" />
+                      </div>
+                      <p className="text-[10px] text-slate-400 text-center leading-tight line-clamp-2 w-full">{f.originalName}</p>
+                      <button onClick={e => { e.stopPropagation(); handlePortfolioDelete(f.id); }} className="absolute top-1 right-1 p-1 rounded-lg bg-slate-900/80 text-slate-400 hover:text-red-400 transition-colors"><X size={11} /></button>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             {/* ── Contacts card ── */}
@@ -1238,6 +1267,25 @@ export default function ProfilePage() {
         </div>
       </div>
     </div>
+
+    {/* Image fullscreen */}
+    {imageFullscreen && (
+      <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center" onClick={() => setImageFullscreen(null)}>
+        <button onClick={() => setImageFullscreen(null)} className="absolute top-4 right-4 p-2 rounded-full bg-slate-800/80 text-white hover:bg-slate-700 transition-colors z-10"><X size={20} /></button>
+        <img src={imageFullscreen} alt="" className="max-w-full max-h-full object-contain" onClick={e => e.stopPropagation()} />
+      </div>
+    )}
+
+    {/* Document fullscreen */}
+    {docFullscreen && (
+      <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
+          <span className="text-sm text-slate-300 truncate">{docFullscreen.name}</span>
+          <button onClick={() => setDocFullscreen(null)} className="p-2 rounded-full bg-slate-800 text-white hover:bg-slate-700 transition-colors flex-shrink-0"><X size={20} /></button>
+        </div>
+        <iframe src={docFullscreen.url} className="flex-1 w-full border-0" title={docFullscreen.name} />
+      </div>
+    )}
 
     {viewConn && <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />}
 

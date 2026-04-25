@@ -91,11 +91,12 @@ const portfolioFileFilter = (req: any, file: any, cb: any) => {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+    'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/aac',
+    'audio/flac', 'audio/x-wav', 'audio/x-m4a',
   ];
-  const allowedExts = ['.pdf', '.doc', '.docx', '.xls', '.xlsx'];
-  const ext = path.extname(file.originalname).toLowerCase();
-  if (!allowedMimes.includes(file.mimetype) || !allowedExts.includes(ext)) {
-    return cb(new Error('Допустимые форматы: PDF, DOC, DOCX, XLS, XLSX'), false);
+  if (!allowedMimes.includes(file.mimetype)) {
+    return cb(new Error('Неподдерживаемый тип файла'), false);
   }
   cb(null, true);
 };
@@ -104,7 +105,7 @@ export const uploadPortfolio = multer({
   storage: portfolioStorage,
   fileFilter: portfolioFileFilter,
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB max
+    fileSize: 20 * 1024 * 1024,
   },
 });
 
