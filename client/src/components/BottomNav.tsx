@@ -35,7 +35,7 @@ export default function BottomNav() {
               <Link
                 key={path}
                 to={path}
-                className={`relative flex items-center justify-center w-9 h-9 rounded-xl transition-all duration-200 touch-manipulation ${
+                className={`relative flex items-center justify-center w-9 rounded-xl transition-all duration-200 touch-manipulation ${
                   active ? 'text-primary-400' : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
