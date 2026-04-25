@@ -212,7 +212,7 @@ router.get('/user/:userId', authenticate, async (req: AuthRequest, res: Response
 });
 
 // ── GET /api/connections/with/:userId ─────────────────────────────────────────
-// Get connection status with a specific user
+// Get the most recent connection with a specific user (any status)
 router.get('/with/:userId', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
@@ -225,11 +225,29 @@ router.get('/with/:userId', authenticate, async (req: AuthRequest, res: Response
         ],
       },
       include: CONN_INCLUDE,
+      orderBy: { createdAt: 'desc' },
     });
     if (!conn) return res.json(null);
     return res.json(formatConnection(conn, meId));
   } catch (err) {
     console.error('[connections] GET /with/:userId', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── GET /api/connections/rejected ─────────────────────────────────────────────
+// My outgoing requests that were rejected
+router.get('/rejected', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const conns = await prisma.connection.findMany({
+      where: { requesterId: meId, status: 'REJECTED' },
+      include: CONN_INCLUDE,
+      orderBy: { updatedAt: 'desc' },
+    });
+    return res.json(conns.map(c => formatConnection(c, meId)));
+  } catch (err) {
+    console.error('[connections] GET /rejected', err);
     return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });
@@ -280,7 +298,32 @@ router.patch('/:id/reject', authenticate, async (req: AuthRequest, res: Response
     if (conn.receiverId !== meId) return res.status(403).json({ error: 'Нет прав' });
     if (conn.status !== 'PENDING') return res.status(400).json({ error: 'Неверный статус' });
 
-    await prisma.connection.delete({ where: { id: conn.id } });
+    await prisma.connection.update({
+      where: { id: conn.id },
+      data: { status: 'REJECTED' },
+    });
+
+    // Notify requester
+    try {
+      const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
+      const notification = await prisma.notification.create({
+        data: {
+          userId: conn.requesterId,
+          actorId: meId,
+          type: 'connection_rejected',
+          title: `${me?.firstName} ${me?.lastName} отклонил(а) запрос на связь`,
+          body: '',
+          link: `/friends?tab=connections`,
+        },
+      });
+      emitToUser(conn.requesterId, 'new_notification', notification);
+      emitToUser(conn.requesterId, 'connection_rejected', { connId: conn.id });
+      notifyUser(conn.requesterId, 'connection_rejected', { connId: conn.id }, {
+        title: `${me?.firstName} ${me?.lastName} отклонил(а) запрос на связь`,
+        body: '',
+      });
+    } catch {}
+
     return res.json({ ok: true });
   } catch (err) {
     console.error('[connections] PATCH /:id/reject', err);

@@ -249,6 +249,11 @@ function App() {
       queryClient.invalidateQueries({ queryKey: ['connections-requests'] });
     });
 
+    socket.on('connection_rejected', () => {
+      queryClient.invalidateQueries({ queryKey: ['connections-sent'] });
+      queryClient.invalidateQueries({ queryKey: ['connections-rejected'] });
+    });
+
     socket.on('friend_request', ({ requester }: any) => {
       queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
       bs().incrementFriendRequests();
@@ -319,6 +324,7 @@ function App() {
         s.off('message_edited');
         s.off('message_deleted');
         s.off('connection_request');
+        s.off('connection_rejected');
         s.off('friend_request');
         s.off('friend_accepted');
         s.off('post_reply');

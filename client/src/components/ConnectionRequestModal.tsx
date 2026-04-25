@@ -109,6 +109,9 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
     </div>, document.body
   );
 
+  // Rejected connection — show info + allow sending a new request (just open the flow below)
+  // REJECTED is intentionally not blocked here so the form renders normally
+
   // Existing pending connection — show status screen
   if (existingConn && existingConn.status === 'PENDING') {
     const { iAmRequester } = existingConn;

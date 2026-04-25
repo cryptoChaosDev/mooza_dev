@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom';
-import { X, Link2, Check, Clock, CheckCheck, Loader2 } from 'lucide-react';
+import { X, Link2, Check, Clock, CheckCheck, Loader2, XCircle } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { connectionAPI } from '../lib/api';
 import AvatarComponent from './Avatar';
@@ -9,6 +9,9 @@ interface Connection {
   id: string;
   status: string;
   iAmRequester: boolean;
+  myRole?: string | null;
+  partnerRole?: string | null;
+  needsDeal?: boolean;
   breakRequestedBy?: string | null;
   breakReasonRequester?: string | null;
   services: { id: string; name: string }[];
@@ -28,10 +31,29 @@ interface Props {
   onClose: () => void;
 }
 
+const ROLE_LABEL: Record<string, string> = {
+  CUSTOMER: 'заказчик',
+  EXECUTOR: 'исполнитель',
+  COLLEAGUE: 'коллега',
+};
+
+const ROLE_COLOR: Record<string, string> = {
+  CUSTOMER: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
+  EXECUTOR: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  COLLEAGUE: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
+};
+
+function RoleBadge({ role, label }: { role?: string | null; label: string }) {
+  const color = ROLE_COLOR[role ?? ''] ?? 'bg-slate-700/40 text-slate-400 border-slate-700';
+  return (
+    <span className={`text-xs rounded-xl px-3 py-1 border font-medium ${color}`}>{label}</span>
+  );
+}
+
 export default function ConnectionViewModal({ connection, onClose }: Props) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const { partner, services, profession, status, iAmRequester, breakRequestedBy, breakReasonRequester } = connection;
+  const { partner, services, profession, status, iAmRequester, myRole, partnerRole, needsDeal, breakRequestedBy, breakReasonRequester } = connection;
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['connections-accepted'] });
@@ -65,6 +87,9 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
     }
     if (status === 'ACCEPTED') {
       return { text: 'Связь установлена', color: 'text-emerald-400', icon: <CheckCheck size={13} /> };
+    }
+    if (status === 'REJECTED') {
+      return { text: 'Запрос отклонён', color: 'text-red-400', icon: <XCircle size={13} /> };
     }
     if (status === 'BREAK_REQUESTED') {
       return breakRequestedBy !== partner.id
@@ -119,14 +144,17 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
           )}
 
           {/* Roles */}
-          <div className="flex flex-wrap gap-2">
-            <span className={`text-xs rounded-xl px-3 py-1 border font-medium ${iAmRequester ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>
-              Я — {iAmRequester ? 'заказчик' : 'исполнитель'}
-            </span>
-            <span className={`text-xs rounded-xl px-3 py-1 border font-medium ${iAmRequester ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-sky-500/10 text-sky-400 border-sky-500/20'}`}>
-              {partner.firstName} — {iAmRequester ? 'исполнитель' : 'заказчик'}
-            </span>
-          </div>
+          {(myRole || partnerRole) && (
+            <div className="flex flex-wrap gap-2">
+              <RoleBadge role={myRole} label={`Я — ${ROLE_LABEL[myRole ?? ''] ?? myRole}`} />
+              <RoleBadge role={partnerRole} label={`${partner.firstName} — ${ROLE_LABEL[partnerRole ?? ''] ?? partnerRole}`} />
+              {needsDeal && (
+                <span className="text-xs rounded-xl px-3 py-1 border font-medium bg-amber-500/10 text-amber-400 border-amber-500/20">
+                  💰 Нужна сделка
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Profession */}
           {profession && (
@@ -205,6 +233,13 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
 
           {/* ACCEPTED → close only */}
           {status === 'ACCEPTED' && (
+            <button onClick={onClose} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
+              Закрыть
+            </button>
+          )}
+
+          {/* REJECTED → close */}
+          {status === 'REJECTED' && (
             <button onClick={onClose} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
               Закрыть
             </button>

@@ -243,10 +243,11 @@ describe('PATCH /api/connections/:id/reject', () => {
   let app: express.Application;
   beforeAll(() => { app = buildApp(); });
 
-  it('rejects and deletes a PENDING connection, returns { ok: true }', async () => {
+  it('sets status to REJECTED (does not delete), returns { ok: true }', async () => {
     const pending = makeConn({ receiverId: USER_B });
     mockPrisma.connection.findUnique.mockResolvedValue(pending);
-    mockPrisma.connection.delete.mockResolvedValue(pending);
+    mockPrisma.connection.update.mockResolvedValue({ ...pending, status: 'REJECTED' });
+    mockPrisma.user.findUnique.mockResolvedValue({ firstName: 'Bob', lastName: 'B' });
 
     const res = await request(app)
       .patch('/api/connections/conn-1/reject')
@@ -254,7 +255,19 @@ describe('PATCH /api/connections/:id/reject', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
-    expect(mockPrisma.connection.delete).toHaveBeenCalledWith({ where: { id: 'conn-1' } });
+
+    // Must update to REJECTED, not delete
+    expect(mockPrisma.connection.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: 'REJECTED' } })
+    );
+    expect(mockPrisma.connection.delete).not.toHaveBeenCalled();
+
+    // Requester must be notified
+    expect(mockPrisma.notification.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ userId: USER_A, type: 'connection_rejected' }),
+      })
+    );
   });
 
   it('returns 403 when the requester tries to reject their own request', async () => {
@@ -266,7 +279,7 @@ describe('PATCH /api/connections/:id/reject', () => {
       .set(asUser(USER_A));
 
     expect(res.status).toBe(403);
-    expect(mockPrisma.connection.delete).not.toHaveBeenCalled();
+    expect(mockPrisma.connection.update).not.toHaveBeenCalled();
   });
 
   it('returns 400 when connection is not PENDING', async () => {
@@ -278,7 +291,35 @@ describe('PATCH /api/connections/:id/reject', () => {
       .set(asUser(USER_B));
 
     expect(res.status).toBe(400);
-    expect(mockPrisma.connection.delete).not.toHaveBeenCalled();
+    expect(mockPrisma.connection.update).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/connections/rejected — my rejected outgoing requests
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('GET /api/connections/rejected', () => {
+  let app: express.Application;
+  beforeAll(() => { app = buildApp(); });
+
+  it('returns outgoing connections that were rejected', async () => {
+    const rejected = makeConn({ status: 'REJECTED' });
+    mockPrisma.connection.findMany.mockResolvedValue([rejected]);
+
+    const res = await request(app)
+      .get('/api/connections/rejected')
+      .set(asUser(USER_A));
+
+    expect(res.status).toBe(200);
+    expect(res.body[0].status).toBe('REJECTED');
+    expect(res.body[0].iAmRequester).toBe(true);
+
+    expect(mockPrisma.connection.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ requesterId: USER_A, status: 'REJECTED' }),
+      })
+    );
   });
 });
 

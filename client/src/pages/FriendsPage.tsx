@@ -85,6 +85,10 @@ const { data: myBreakRequests = [] } = useQuery({
     queryKey: ['connections-my-break-requests'],
     queryFn: async () => { const { data } = await connectionAPI.getMyBreakRequests(); return data; },
   });
+  const { data: connRejected = [] } = useQuery({
+    queryKey: ['connections-rejected'],
+    queryFn: async () => { const { data } = await connectionAPI.getRejected(); return data; },
+  });
   const { data: connHistory = [] } = useQuery({
     queryKey: ['connections-history'],
     queryFn: async () => { const { data } = await connectionAPI.getHistory(); return data; },
@@ -468,6 +472,30 @@ const { data: myBreakRequests = [] } = useQuery({
                 </div>
               )}
 
+              {connRejected.length > 0 && (
+                <div>
+                  <SectionHeader label="Отклонённые запросы" count={connRejected.length} />
+                  <div className="divide-y divide-slate-800/60">
+                    {connRejected.map((c: any) => (
+                      <div key={c.id} onClick={() => setViewConn(c)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer opacity-60">
+                        <div className="flex-shrink-0"><UserAvatar user={c.partner} /></div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</p>
+                          {c.services?.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {c.services.slice(0, 3).map((s: any) => (
+                                <span key={s.id} className="text-[11px] bg-slate-700/60 text-slate-400 rounded-md px-1.5 py-0.5">{s.name}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-red-400 flex-shrink-0">Отклонено</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {connections.length > 0 && (
                 <div>
                   <SectionHeader label="Мои связи" count={connections.length} />
@@ -552,7 +580,7 @@ const { data: myBreakRequests = [] } = useQuery({
                 </div>
               )}
 
-              {connections.length === 0 && connRequests.length === 0 && connSent.length === 0 && myBreakRequests.length === 0 && connHistory.length === 0 && (
+              {connections.length === 0 && connRequests.length === 0 && connSent.length === 0 && connRejected.length === 0 && myBreakRequests.length === 0 && connHistory.length === 0 && (
                 <div className="flex flex-col items-center py-16 px-6 text-center">
                   <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Link2 size={32} className="text-slate-600" /></div>
                   <p className="text-white font-semibold mb-1">Нет профессиональных связей</p>
