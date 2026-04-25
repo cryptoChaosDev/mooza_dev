@@ -224,6 +224,7 @@ function AddRow({ placeholder, onAdd, onCancel }: {
 
 const SYSTEM_FILTER_TYPES = [
   { key: 'genre',          label: 'Жанры' },
+  { key: 'workFormat',     label: 'Формат работы' },
   { key: 'employmentType', label: 'Тип занятости' },
   { key: 'skillLevel',     label: 'Уровень мастерства' },
   { key: 'availability',   label: 'Готовность к работе' },
