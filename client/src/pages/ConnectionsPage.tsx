@@ -7,6 +7,12 @@ import { useAuthStore } from '../stores/authStore';
 import ConnectionCard, { type ConnectionData } from '../components/ConnectionCard';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 
+const ROLE_SECTIONS: { role: string; label: string; color: string }[] = [
+  { role: 'CUSTOMER',  label: 'Заказчик',   color: 'text-sky-400' },
+  { role: 'EXECUTOR',  label: 'Исполнитель', color: 'text-emerald-400' },
+  { role: 'COLLEAGUE', label: 'Коллеги',     color: 'text-violet-400' },
+];
+
 export default function ConnectionsPage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
@@ -26,8 +32,9 @@ export default function ConnectionsPage() {
     enabled: !!userId,
   });
 
-  const asRequester = connections.filter(c => c.iAmRequester);
-  const asReceiver  = connections.filter(c => !c.iAmRequester);
+  // Group by actual myRole, with fallback for legacy connections without roles
+  const byRole = (role: string) =>
+    connections.filter(c => (c.myRole ?? (c.iAmRequester ? 'CUSTOMER' : 'EXECUTOR')) === role);
 
   return (
     <div className="min-h-screen bg-slate-950 pb-24">
@@ -57,35 +64,23 @@ export default function ConnectionsPage() {
           </div>
         )}
 
-        {/* Заказчик section */}
-        {asRequester.length > 0 && (
-          <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-slate-800/60">
-              <span className="text-[11px] font-semibold text-sky-400 uppercase tracking-wider">Заказчик</span>
-              <span className="ml-2 text-[11px] text-slate-600">{asRequester.length}</span>
+        {ROLE_SECTIONS.map(({ role, label, color }) => {
+          const group = byRole(role);
+          if (group.length === 0) return null;
+          return (
+            <div key={role} className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-slate-800/60">
+                <span className={`text-[11px] font-semibold uppercase tracking-wider ${color}`}>{label}</span>
+                <span className="ml-2 text-[11px] text-slate-600">{group.length}</span>
+              </div>
+              <div className="divide-y divide-slate-800/40">
+                {group.map(conn => (
+                  <ConnectionCard key={conn.id} connection={conn} onClick={() => setViewConn(conn)} />
+                ))}
+              </div>
             </div>
-            <div className="divide-y divide-slate-800/40">
-              {asRequester.map(conn => (
-                <ConnectionCard key={conn.id} connection={conn} onClick={() => setViewConn(conn)} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Исполнитель section */}
-        {asReceiver.length > 0 && (
-          <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-slate-800/60">
-              <span className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">Исполнитель</span>
-              <span className="ml-2 text-[11px] text-slate-600">{asReceiver.length}</span>
-            </div>
-            <div className="divide-y divide-slate-800/40">
-              {asReceiver.map(conn => (
-                <ConnectionCard key={conn.id} connection={conn} onClick={() => setViewConn(conn)} />
-              ))}
-            </div>
-          </div>
-        )}
+          );
+        })}
 
       </div>
 
