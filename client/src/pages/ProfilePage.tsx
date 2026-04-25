@@ -1072,47 +1072,14 @@ export default function ProfilePage() {
                 <Briefcase size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Услуги</span>
                 {servicesFlat.length > 0 && <span className="text-xs text-slate-500">{servicesFlat.length}</span>}
-                {!editingServices && servicesFlat.length > 0 && (
-                  <button onClick={() => navigate(`/profile/${profile?.id}/services`)} className="text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">Смотреть все</button>
+                {servicesFlat.length > 0 && (
+                  <button onClick={() => navigate(`/profile/${profile?.id}/services`)} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">Смотреть все</button>
                 )}
-                <button
-                  onClick={() => { setEditingServices(v => !v); setAddStep(null); }}
-                  className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
-                >
-                  {editingServices ? 'Готово' : 'Изменить'}
-                </button>
               </div>
 
               {editingServices ? (
                 <div className="p-3 space-y-3">
-                  <p className="text-xs text-slate-500">Выберите услуги, по которым вас можно найти.</p>
-                  {Object.entries(servicesByFieldEdit).map(([fId, { fieldName, entries }]) => (
-                    <div key={fId}>
-                      <p className="text-xs font-bold text-primary-400 uppercase tracking-wider mb-1.5">{fieldName}</p>
-                      <div className="space-y-2 pl-2 border-l border-primary-500/20">
-                        {entries.map(({ us, idx }) => (
-                          <div key={us.serviceId} className="bg-slate-700/30 rounded-xl border border-slate-600/50 overflow-hidden">
-                            <div className="flex items-center gap-2 px-3 py-2.5">
-                              <button type="button" onClick={() => setExpandedSvcIdx(expandedSvcIdx === idx ? null : idx)} className="flex-1 flex items-center justify-between text-left">
-                                <div>
-                                  <p className="text-xs text-slate-500">{us.professionName}</p>
-                                  <p className="text-sm font-semibold text-white">{us.serviceName}</p>
-                                </div>
-                                <ChevronDown size={15} className={`text-slate-400 transition-transform mr-1 ${expandedSvcIdx === idx ? 'rotate-180' : ''}`} />
-                              </button>
-                              <button type="button" onClick={() => { setUserServices(prev => prev.filter((_, i) => i !== idx)); if (expandedSvcIdx === idx) setExpandedSvcIdx(null); }} className="flex-shrink-0 p-1 rounded-lg hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all"><X size={14} /></button>
-                            </div>
-                            {expandedSvcIdx === idx && ServiceFilterEditors({ idx })}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                  {addStep ? AddServiceFlow() : (
-                    <button type="button" onClick={() => { setServiceQuery(''); setServiceSearchResults([]); setAddStep('search'); }} className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm">
-                      <Plus size={14} />Добавить услугу
-                    </button>
-                  )}
+                  {AddServiceFlow()}
                   <div className="flex gap-2 pt-1">
                     <button onClick={() => { setEditingServices(false); setAddStep(null); }} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
                     <button onClick={handleSaveServices} disabled={updateServicesMutation.isPending} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">

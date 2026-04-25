@@ -83,6 +83,8 @@ export const userAPI = {
     customFilterValueIds?: string[];
   }>) => api.put('/users/me/services', services),
   getUserService: (serviceId: string) => api.get(`/users/user-service/${serviceId}`),
+  patchUserService: (serviceId: string, data: { priceFrom?: number | null; priceTo?: number | null; description?: string }) =>
+    api.patch(`/users/me/services/${serviceId}`, data),
   uploadAvatar: (formData: FormData) =>
     api.post('/users/me/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

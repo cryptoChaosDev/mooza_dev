@@ -387,6 +387,28 @@ router.put('/me/services', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
+// ── PATCH /api/users/me/services/:serviceId ───────────────────────────────────
+router.patch('/me/services/:serviceId', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const us = await prisma.userService.findUnique({ where: { id: req.params.serviceId } });
+    if (!us || us.userId !== req.userId) return res.status(404).json({ error: 'Not found' });
+    const { priceFrom, priceTo, description } = req.body;
+    const updated = await prisma.userService.update({
+      where: { id: req.params.serviceId },
+      data: {
+        ...(priceFrom !== undefined ? { priceFrom: priceFrom !== '' && priceFrom != null ? Number(priceFrom) : null } : {}),
+        ...(priceTo   !== undefined ? { priceTo:   priceTo   !== '' && priceTo   != null ? Number(priceTo)   : null } : {}),
+        ...(description !== undefined ? { description: description || null } : {}),
+      },
+      include: userServiceInclude,
+    });
+    return res.json(updated);
+  } catch (err) {
+    console.error('[users] PATCH /me/services/:serviceId', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 // ─── GET /catalog — all users with filters, for catalog page ─────────────────
 router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
   try {
