@@ -209,6 +209,9 @@ model Connection {
   breakReasonRequester  String?
   breakReasonReceiver   String?
   professionId          String?
+  requesterRole         String?
+  receiverRole          String?
+  needsDeal             Boolean @default(false)
 
   requester     User        @relation("ConnectionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
   receiver      User        @relation("ConnectionReceiver",  fields: [receiverId],  references: [id], onDelete: Cascade)

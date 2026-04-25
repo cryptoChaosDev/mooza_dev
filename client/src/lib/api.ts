@@ -268,8 +268,8 @@ export const artistAPI = {
 
 // Connection API
 export const connectionAPI = {
-  send: (receiverId: string, serviceIds: string[]) =>
-    api.post('/connections', { receiverId, serviceIds }),
+  send: (receiverId: string, serviceIds: string[], requesterRole?: string, receiverRole?: string, needsDeal?: boolean) =>
+    api.post('/connections', { receiverId, serviceIds, requesterRole, receiverRole, needsDeal }),
   getAccepted: () => api.get('/connections'),
   getRequests: () => api.get('/connections/requests'),
   getSent: () => api.get('/connections/sent'),

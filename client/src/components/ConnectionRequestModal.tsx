@@ -1,227 +1,278 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Link2, Check, Loader2, ArrowLeft } from 'lucide-react';
+import { X, Link2, ArrowLeft, Check, Loader2, ChevronRight } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { connectionAPI, userAPI } from '../lib/api';
+import { connectionAPI, referenceAPI } from '../lib/api';
 import AvatarComponent from './Avatar';
 
 interface Props {
-  targetUser: {
-    id: string;
-    firstName: string;
-    lastName: string;
-    avatar?: string;
-  };
+  targetUser: { id: string; firstName: string; lastName: string; avatar?: string };
   onClose: () => void;
 }
 
-interface UserService {
-  id: string;
-  professionId: string;
-  serviceId: string;
-  profession: { id: string; name: string };
-  service: { id: string; name: string };
-}
+type RelType = 'customer_executor' | 'executor_customer' | 'colleague';
+type CatalogLevel = 'fields' | 'directions' | 'services';
+
+const REL_OPTIONS: { type: RelType; myRole: string; partnerRole: string; needsDeal: boolean }[] = [
+  { type: 'customer_executor', myRole: 'CUSTOMER', partnerRole: 'EXECUTOR', needsDeal: true },
+  { type: 'executor_customer', myRole: 'EXECUTOR', partnerRole: 'CUSTOMER', needsDeal: true },
+  { type: 'colleague',         myRole: 'COLLEAGUE', partnerRole: 'COLLEAGUE', needsDeal: false },
+];
+
+const ROLE_LABEL: Record<string, string> = {
+  CUSTOMER: 'Заказчик',
+  EXECUTOR: 'Исполнитель',
+  COLLEAGUE: 'Коллега',
+};
 
 export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
   const queryClient = useQueryClient();
+  const fullName = `${targetUser.firstName} ${targetUser.lastName}`.trim();
 
-  const [existingConnId, setExistingConnId] = useState<string | null>(null);
-  const [existingServices, setExistingServices] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    connectionAPI.getWith(targetUser.id).then(({ data }: any) => {
-      if (data?.id) {
-        setExistingConnId(data.id);
-        setExistingServices(new Set((data.services ?? []).map((s: any) => s.id)));
-      }
-    }).catch(() => {});
-  }, [targetUser.id]);
-
+  const [step, setStep] = useState<'relation' | 'catalog'>('relation');
+  const [relType, setRelType] = useState<RelType | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  const { data: userServices = [], isLoading } = useQuery<UserService[]>({
-    queryKey: ['user-services', targetUser.id],
-    queryFn: async () => { const { data } = await userAPI.getUserServices(targetUser.id); return data; },
+  // Catalog navigation
+  const [catalogLevel, setCatalogLevel] = useState<CatalogLevel>('fields');
+  const [fieldId, setFieldId] = useState<string | null>(null);
+  const [fieldName, setFieldName] = useState('');
+  const [directionId, setDirectionId] = useState<string | null>(null);
+  const [directionName, setDirectionName] = useState('');
+
+  // Catalog queries
+  const { data: fields = [] } = useQuery({
+    queryKey: ['ref-fields'],
+    queryFn: async () => { const { data } = await referenceAPI.getFieldsOfActivity({ all: true }); return data as any[]; },
+    enabled: step === 'catalog',
+  });
+  const { data: directions = [] } = useQuery({
+    queryKey: ['ref-directions', fieldId],
+    queryFn: async () => { const { data } = await referenceAPI.getDirections({ fieldOfActivityId: fieldId! }); return data as any[]; },
+    enabled: step === 'catalog' && catalogLevel !== 'fields' && !!fieldId,
+  });
+  const { data: services = [] } = useQuery({
+    queryKey: ['ref-services', directionId],
+    queryFn: async () => { const { data } = await referenceAPI.getServices({ directionId: directionId! }); return data as any[]; },
+    enabled: step === 'catalog' && catalogLevel === 'services' && !!directionId,
   });
 
-  // Group services by profession
-  const grouped = useMemo(() => {
-    const map = new Map<string, { profession: { id: string; name: string }; services: UserService[] }>();
-    for (const us of userServices) {
-      if (!map.has(us.professionId)) {
-        map.set(us.professionId, { profession: us.profession, services: [] });
-      }
-      map.get(us.professionId)!.services.push(us);
-    }
-    return [...map.values()];
-  }, [userServices]);
-
-  const toggle = (serviceId: string) => {
-    setSelected(prev => {
-      const next = new Set(prev);
-      next.has(serviceId) ? next.delete(serviceId) : next.add(serviceId);
-      return next;
-    });
-  };
-
-  const isEditMode = !!existingConnId;
+  const rel = REL_OPTIONS.find(r => r.type === relType);
 
   const sendMutation = useMutation({
-    mutationFn: async () => {
-      if (isEditMode) {
-        await connectionAPI.addServices(existingConnId!, [...selected]);
-      } else {
-        await connectionAPI.send(targetUser.id, [...selected]);
-      }
-    },
+    mutationFn: () => connectionAPI.send(
+      targetUser.id,
+      [...selected],
+      rel?.myRole,
+      rel?.partnerRole,
+      rel?.needsDeal,
+    ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['connection-with', targetUser.id] });
       queryClient.invalidateQueries({ queryKey: ['connections-sent'] });
-      queryClient.invalidateQueries({ queryKey: ['connections'] });
       onClose();
     },
   });
 
-  const fullName = `${targetUser.firstName} ${targetUser.lastName}`.trim();
+  const toggle = (id: string) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
 
-  const getServiceName = (serviceId: string) => {
-    const us = userServices.find(s => s.serviceId === serviceId);
-    return us?.service.name ?? serviceId;
+  const goBack = () => {
+    if (step === 'catalog') {
+      if (catalogLevel === 'services') { setCatalogLevel('directions'); setDirectionId(null); }
+      else if (catalogLevel === 'directions') { setCatalogLevel('fields'); setFieldId(null); }
+      else { setStep('relation'); }
+    }
   };
+
+  const catalogTitle = catalogLevel === 'fields' ? 'Выберите сферу'
+    : catalogLevel === 'directions' ? fieldName
+    : directionName;
 
   return createPortal(
     <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
 
       {/* Top bar */}
       <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-800 flex-shrink-0 bg-slate-900/80 backdrop-blur">
-        <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors">
-          <ArrowLeft size={20} />
-        </button>
-        <h2 className="text-base font-semibold text-white flex-1">
-          {isEditMode ? 'Добавить услуги к связи' : 'Установить связь'}
-        </h2>
-        <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors">
-          <X size={18} />
-        </button>
+        {step === 'catalog'
+          ? <button onClick={goBack} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><ArrowLeft size={20} /></button>
+          : <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><ArrowLeft size={20} /></button>
+        }
+        <h2 className="text-base font-semibold text-white flex-1">Установить связь</h2>
+        <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
       </div>
 
-      {/* Profile block */}
-      <div className="px-5 py-4 border-b border-slate-800/60 flex-shrink-0">
-        <div className="flex items-center gap-4 mb-3">
-          <AvatarComponent src={targetUser.avatar} name={fullName} size={48} className="rounded-2xl ring-2 ring-slate-700/50 flex-shrink-0" />
-          <div>
-            <p className="text-base font-bold text-white leading-tight">{fullName}</p>
-            <div className="flex items-center gap-1.5 mt-0.5">
-              <Link2 size={12} className="text-primary-400" />
-              <p className="text-xs text-primary-400">{isEditMode ? 'Добавление услуги к связи' : 'Новая профессиональная связь'}</p>
-            </div>
+      {/* Partner block */}
+      <div className="px-5 py-3 border-b border-slate-800/60 flex items-center gap-3 flex-shrink-0">
+        <AvatarComponent src={targetUser.avatar} name={fullName} size={40} className="rounded-xl ring-2 ring-slate-700/50 flex-shrink-0" />
+        <div>
+          <p className="text-sm font-bold text-white">{fullName}</p>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <Link2 size={11} className="text-primary-400" />
+            <p className="text-xs text-primary-400">Новая профессиональная связь</p>
           </div>
         </div>
-        <p className="text-sm text-slate-400 leading-relaxed">
-          Выберите услуги из профиля пользователя, в рамках которых хотите сотрудничать.
-        </p>
-        {isEditMode && existingServices.size > 0 && (
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            <p className="w-full text-[11px] text-slate-500 mb-0.5">Уже в связи:</p>
-            {[...existingServices].map(id => (
-              <span key={id} className="px-2 py-0.5 bg-slate-800 border border-slate-700 text-slate-400 rounded-lg text-xs">
-                {getServiceName(id)}
-              </span>
-            ))}
-          </div>
-        )}
       </div>
 
-      {/* Services list */}
-      <div className="flex-1 overflow-y-auto">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-16">
-            <Loader2 size={24} className="animate-spin text-slate-500" />
-          </div>
-        ) : grouped.length === 0 ? (
-          <div className="flex flex-col items-center py-16 px-6 text-center">
-            <div className="p-4 bg-slate-800/50 rounded-2xl mb-3">
-              <Link2 size={28} className="text-slate-600" />
+      {/* ── Step 1: Relation type ── */}
+      {step === 'relation' && (
+        <div className="flex-1 overflow-y-auto px-4 py-5 space-y-3">
+          <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-4">Тип связи</p>
+
+          <button onClick={() => { setRelType('customer_executor'); setStep('catalog'); }}
+            className="w-full flex items-center gap-4 p-4 bg-slate-900/60 hover:bg-slate-800/60 border border-slate-800 hover:border-sky-500/30 rounded-2xl text-left transition-all group">
+            <div className="flex flex-col items-center gap-1 w-20 flex-shrink-0">
+              <span className="text-xs font-semibold px-2 py-0.5 bg-sky-500/15 text-sky-400 rounded-full border border-sky-500/20">Заказчик</span>
+              <span className="text-[10px] text-slate-600">я</span>
             </div>
-            <p className="text-white font-semibold mb-1">Нет услуг в профиле</p>
-            <p className="text-slate-500 text-sm">Пользователь не добавил ни одной услуги</p>
-          </div>
-        ) : (
-          <div className="pb-4">
-            {grouped.map(({ profession, services }) => (
-              <div key={profession.id}>
-                <div className="px-5 py-2.5 bg-slate-900/60 border-b border-slate-800/40 sticky top-0">
-                  <span className="text-xs font-semibold text-amber-300/80 uppercase tracking-wide">{profession.name}</span>
-                </div>
-                <div className="divide-y divide-slate-800/60">
-                  {services.map(us => {
-                    const isOn = selected.has(us.serviceId);
-                    const alreadyLinked = existingServices.has(us.serviceId);
-                    return (
-                      <button
-                        key={us.serviceId}
-                        type="button"
-                        disabled={alreadyLinked}
-                        onClick={() => toggle(us.serviceId)}
-                        className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition-colors ${
-                          alreadyLinked ? 'opacity-40 cursor-not-allowed' :
-                          isOn ? 'bg-primary-500/10' : 'hover:bg-slate-800/50'
-                        }`}
-                      >
-                        <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${
-                          isOn ? 'bg-primary-500 border-primary-500' :
-                          alreadyLinked ? 'border-slate-600 bg-slate-700' : 'border-slate-600'
-                        }`}>
-                          {(isOn || alreadyLinked) && <Check size={12} className="text-white" />}
-                        </div>
-                        <span className={`flex-1 text-sm font-medium truncate ${isOn ? 'text-primary-300' : 'text-slate-200'}`}>
-                          {us.service.name}
-                        </span>
-                        {alreadyLinked && <span className="text-[10px] text-slate-500 flex-shrink-0">уже в связи</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+            <div className="text-slate-600 text-lg">↔</div>
+            <div className="flex flex-col items-center gap-1 w-20 flex-shrink-0">
+              <span className="text-xs font-semibold px-2 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full border border-emerald-500/20">Исполнитель</span>
+              <span className="text-[10px] text-slate-600">{targetUser.firstName}</span>
+            </div>
+            <div className="flex-1 min-w-0 ml-1">
+              <p className="text-xs text-slate-500 leading-relaxed">Платное сотрудничество — нужна сделка</p>
+            </div>
+            <ChevronRight size={16} className="text-slate-600 group-hover:text-slate-400 flex-shrink-0" />
+          </button>
 
-      {/* Selected chips */}
-      {selected.size > 0 && (
-        <div className="px-4 py-2.5 border-t border-slate-800 bg-slate-900/80 flex-shrink-0">
-          <p className="text-[11px] text-slate-500 mb-1.5">Выбрано ({selected.size}):</p>
-          <div className="flex flex-wrap gap-1.5">
-            {[...selected].map(id => (
-              <span key={id} className="flex items-center gap-1 pl-2 pr-1 py-0.5 bg-primary-500/15 border border-primary-500/30 text-primary-300 rounded-lg text-xs">
-                {getServiceName(id)}
-                <button onClick={() => toggle(id)} className="text-primary-400/70 hover:text-primary-300 ml-0.5"><X size={11} /></button>
-              </span>
-            ))}
-          </div>
+          <button onClick={() => { setRelType('executor_customer'); setStep('catalog'); }}
+            className="w-full flex items-center gap-4 p-4 bg-slate-900/60 hover:bg-slate-800/60 border border-slate-800 hover:border-emerald-500/30 rounded-2xl text-left transition-all group">
+            <div className="flex flex-col items-center gap-1 w-20 flex-shrink-0">
+              <span className="text-xs font-semibold px-2 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full border border-emerald-500/20">Исполнитель</span>
+              <span className="text-[10px] text-slate-600">я</span>
+            </div>
+            <div className="text-slate-600 text-lg">↔</div>
+            <div className="flex flex-col items-center gap-1 w-20 flex-shrink-0">
+              <span className="text-xs font-semibold px-2 py-0.5 bg-sky-500/15 text-sky-400 rounded-full border border-sky-500/20">Заказчик</span>
+              <span className="text-[10px] text-slate-600">{targetUser.firstName}</span>
+            </div>
+            <div className="flex-1 min-w-0 ml-1">
+              <p className="text-xs text-slate-500 leading-relaxed">Платное сотрудничество — нужна сделка</p>
+            </div>
+            <ChevronRight size={16} className="text-slate-600 group-hover:text-slate-400 flex-shrink-0" />
+          </button>
+
+          <button onClick={() => { setRelType('colleague'); setStep('catalog'); }}
+            className="w-full flex items-center gap-4 p-4 bg-slate-900/60 hover:bg-slate-800/60 border border-slate-800 hover:border-violet-500/30 rounded-2xl text-left transition-all group">
+            <div className="flex flex-col items-center gap-1 w-20 flex-shrink-0">
+              <span className="text-xs font-semibold px-2 py-0.5 bg-violet-500/15 text-violet-400 rounded-full border border-violet-500/20">Коллега</span>
+              <span className="text-[10px] text-slate-600">я</span>
+            </div>
+            <div className="text-slate-600 text-lg">↔</div>
+            <div className="flex flex-col items-center gap-1 w-20 flex-shrink-0">
+              <span className="text-xs font-semibold px-2 py-0.5 bg-violet-500/15 text-violet-400 rounded-full border border-violet-500/20">Коллега</span>
+              <span className="text-[10px] text-slate-600">{targetUser.firstName}</span>
+            </div>
+            <div className="flex-1 min-w-0 ml-1">
+              <p className="text-xs text-slate-500 leading-relaxed">Совместная работа без сделки</p>
+            </div>
+            <ChevronRight size={16} className="text-slate-600 group-hover:text-slate-400 flex-shrink-0" />
+          </button>
         </div>
       )}
 
-      {/* Footer */}
-      <div className="px-4 py-4 border-t border-slate-800 flex gap-3 flex-shrink-0 bg-slate-900/80"
-           style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>
-        <button onClick={onClose}
-          className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
-          Отмена
-        </button>
-        <button
-          onClick={() => sendMutation.mutate()}
-          disabled={selected.size === 0 || sendMutation.isPending}
-          className="flex-1 py-3 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 shadow-lg shadow-primary-500/20 disabled:shadow-none"
-        >
-          {sendMutation.isPending && <Loader2 size={15} className="animate-spin" />}
-          {selected.size > 0
-            ? (isEditMode ? `Добавить (${selected.size})` : `Отправить запрос (${selected.size})`)
-            : 'Выберите услуги'}
-        </button>
-      </div>
+      {/* ── Step 2: Service catalog ── */}
+      {step === 'catalog' && (
+        <>
+          {/* Catalog header + deal badge */}
+          <div className="px-5 py-2.5 border-b border-slate-800/60 flex items-center gap-2 flex-shrink-0">
+            <p className="text-xs font-semibold text-white flex-1">{catalogTitle}</p>
+            {rel && (
+              <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+                rel.needsDeal
+                  ? 'bg-amber-500/15 text-amber-400 border-amber-500/20'
+                  : 'bg-slate-700/40 text-slate-500 border-slate-700'
+              }`}>
+                {rel.needsDeal ? '💰 Сделка' : 'Без сделки'}
+              </span>
+            )}
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            {/* Fields level */}
+            {catalogLevel === 'fields' && (
+              <div className="divide-y divide-slate-800/40">
+                {fields.map((f: any) => (
+                  <button key={f.id} onClick={() => { setFieldId(f.id); setFieldName(f.name); setCatalogLevel('directions'); }}
+                    className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-800/40 transition-colors text-left">
+                    <span className="text-sm text-white">{f.name}</span>
+                    <ChevronRight size={15} className="text-slate-600" />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Directions level */}
+            {catalogLevel === 'directions' && (
+              <div className="divide-y divide-slate-800/40">
+                {directions.map((d: any) => (
+                  <button key={d.id} onClick={() => { setDirectionId(d.id); setDirectionName(d.name); setCatalogLevel('services'); }}
+                    className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-800/40 transition-colors text-left">
+                    <span className="text-sm text-white">{d.name}</span>
+                    <ChevronRight size={15} className="text-slate-600" />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Services level */}
+            {catalogLevel === 'services' && (
+              <div className="divide-y divide-slate-800/40">
+                {services.map((s: any) => {
+                  const isOn = selected.has(s.id);
+                  return (
+                    <button key={s.id} onClick={() => toggle(s.id)}
+                      className={`w-full flex items-center gap-3 px-5 py-3.5 text-left transition-colors ${isOn ? 'bg-primary-500/10' : 'hover:bg-slate-800/50'}`}>
+                      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-all ${isOn ? 'bg-primary-500 border-primary-500' : 'border-slate-600'}`}>
+                        {isOn && <Check size={12} className="text-white" />}
+                      </div>
+                      <span className={`text-sm font-medium ${isOn ? 'text-primary-300' : 'text-slate-200'}`}>{s.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Selected chips */}
+          {selected.size > 0 && (
+            <div className="px-4 py-2.5 border-t border-slate-800 bg-slate-900/80 flex-shrink-0">
+              <p className="text-[11px] text-slate-500 mb-1.5">Выбрано ({selected.size}):</p>
+              <div className="flex flex-wrap gap-1.5">
+                {[...selected].map(id => {
+                  const name = services.find((s: any) => s.id === id)?.name ?? id;
+                  return (
+                    <span key={id} className="flex items-center gap-1 pl-2 pr-1 py-0.5 bg-primary-500/15 border border-primary-500/30 text-primary-300 rounded-lg text-xs">
+                      {name}
+                      <button onClick={() => toggle(id)} className="text-primary-400/70 hover:text-primary-300 ml-0.5"><X size={11} /></button>
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="px-4 py-4 border-t border-slate-800 flex gap-3 flex-shrink-0 bg-slate-900/80"
+               style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}>
+            <button onClick={onClose}
+              className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
+              Отмена
+            </button>
+            <button
+              onClick={() => sendMutation.mutate()}
+              disabled={sendMutation.isPending}
+              className="flex-1 py-3 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2">
+              {sendMutation.isPending && <Loader2 size={15} className="animate-spin" />}
+              Отправить запрос{selected.size > 0 ? ` (${selected.size})` : ''}
+            </button>
+          </div>
+        </>
+      )}
     </div>,
     document.body
   );

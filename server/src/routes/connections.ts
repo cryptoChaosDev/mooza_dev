@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { tgLog } from '../utils/telegram';
+import { emitToUser, notifyUser } from '../socket';
 
 const router = Router();
 
@@ -11,6 +12,7 @@ const USER_SELECT = {
 };
 
 function formatConnection(conn: any, meId: string) {
+  const iAmRequester = conn.requesterId === meId;
   return {
     id: conn.id,
     status: conn.status,
@@ -19,12 +21,17 @@ function formatConnection(conn: any, meId: string) {
     breakReasonReceiver: conn.breakReasonReceiver ?? null,
     services: conn.services?.map((cs: any) => cs.service) ?? [],
     profession: conn.profession ?? null,
+    requesterRole: conn.requesterRole ?? null,
+    receiverRole: conn.receiverRole ?? null,
+    needsDeal: conn.needsDeal ?? false,
+    myRole: iAmRequester ? (conn.requesterRole ?? null) : (conn.receiverRole ?? null),
+    partnerRole: iAmRequester ? (conn.receiverRole ?? null) : (conn.requesterRole ?? null),
     createdAt: conn.createdAt,
     updatedAt: conn.updatedAt,
     requester: conn.requester,
     receiver: conn.receiver,
-    partner: conn.requesterId === meId ? conn.receiver : conn.requester,
-    iAmRequester: conn.requesterId === meId,
+    partner: iAmRequester ? conn.receiver : conn.requester,
+    iAmRequester,
   };
 }
 
@@ -40,10 +47,11 @@ const CONN_INCLUDE = {
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
-    const { receiverId, serviceIds } = req.body as { receiverId: string; serviceIds: string[] };
+    const { receiverId, serviceIds, requesterRole, receiverRole, needsDeal } =
+      req.body as { receiverId: string; serviceIds: string[]; requesterRole?: string; receiverRole?: string; needsDeal?: boolean };
 
-    if (!receiverId || !serviceIds?.length) {
-      return res.status(400).json({ error: 'receiverId и serviceIds обязательны' });
+    if (!receiverId) {
+      return res.status(400).json({ error: 'receiverId обязателен' });
     }
     if (receiverId === meId) {
       return res.status(400).json({ error: 'Нельзя создать связь с собой' });
@@ -66,7 +74,10 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       data: {
         requesterId: meId,
         receiverId,
-        services: { create: serviceIds.map((sid: string) => ({ serviceId: sid })) },
+        requesterRole: requesterRole ?? null,
+        receiverRole: receiverRole ?? null,
+        needsDeal: needsDeal ?? false,
+        services: { create: (serviceIds ?? []).map((sid: string) => ({ serviceId: sid })) },
       },
       include: CONN_INCLUDE,
     });
@@ -74,15 +85,21 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     // Notification for receiver
     try {
       const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
-      await prisma.notification.create({
+      const serviceNames = conn.services.map((cs: any) => cs.service.name).join(', ');
+      const notification = await prisma.notification.create({
         data: {
           userId: receiverId,
           actorId: meId,
           type: 'connection_request',
           title: `${me?.firstName} ${me?.lastName} запрашивает связь`,
-          body: `По услугам: ${conn.services.map((cs: any) => cs.service.name).join(', ')}`,
+          body: serviceNames ? `По услугам: ${serviceNames}` : 'Новый запрос на связь',
           link: `/friends?tab=connections`,
         },
+      });
+      emitToUser(receiverId, 'new_notification', notification);
+      notifyUser(receiverId, 'connection_request', { connId: conn.id }, {
+        title: `${me?.firstName} ${me?.lastName} запрашивает связь`,
+        body: serviceNames ? `По услугам: ${serviceNames}` : 'Новый запрос на связь',
       });
     } catch {}
 
