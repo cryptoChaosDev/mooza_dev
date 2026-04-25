@@ -7,7 +7,7 @@ import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, DollarSign, Calendar,
   Headphones, Edit3, Plus, ChevronDown, ChevronLeft, ChevronRight,
-  FileText, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2, Zap,
+  FileText, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
   Music2,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
@@ -159,11 +159,14 @@ export default function ProfilePage() {
   const [newLinkTitle, setNewLinkTitle] = useState('');
   const [addingLink, setAddingLink] = useState(false);
 
-  const [addStep, setAddStep] = useState<'field' | 'direction' | 'profession' | 'service' | 'filters' | null>(null);
+  const [addStep, setAddStep] = useState<'search' | 'field' | 'direction' | 'profession' | 'service' | 'filters' | null>(null);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
   const [addFlowDirections, setAddFlowDirections] = useState<any[]>([]);
   const [addFlowProfessions, setAddFlowProfessions] = useState<any[]>([]);
   const [addFlowServices, setAddFlowServices] = useState<any[]>([]);
+  const [serviceQuery, setServiceQuery] = useState('');
+  const [serviceSearchResults, setServiceSearchResults] = useState<any[]>([]);
+  const [serviceSearching, setServiceSearching] = useState(false);
 
   const [editingHero, setEditingHero] = useState(false);
   const [editingBio, setEditingBio] = useState(false);
@@ -184,6 +187,17 @@ export default function ProfilePage() {
   const [profFlowDirections, setProfFlowDirections] = useState<any[]>([]);
   const [profFlowProfessions, setProfFlowProfessions] = useState<any[]>([]);
   const [savingProfessions, setSavingProfessions] = useState(false);
+
+  useEffect(() => {
+    if (!serviceQuery.trim()) { setServiceSearchResults([]); return; }
+    const t = setTimeout(() => {
+      setServiceSearching(true);
+      referenceAPI.searchServices(serviceQuery.trim())
+        .then(r => setServiceSearchResults(r.data))
+        .finally(() => setServiceSearching(false));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [serviceQuery]);
 
   useEffect(() => {
     if (editingProfessions || editingServices) {
@@ -462,6 +476,63 @@ export default function ProfilePage() {
   };
 
   const AddServiceFlow = () => {
+    if (addStep === 'search') return (
+      <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3 space-y-2">
+        <div className="relative">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            autoFocus
+            type="text"
+            value={serviceQuery}
+            onChange={e => setServiceQuery(e.target.value)}
+            placeholder="Поиск услуги..."
+            className="w-full pl-8 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          />
+          {serviceSearching && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
+        </div>
+
+        {serviceQuery.trim() && serviceSearchResults.length === 0 && !serviceSearching && (
+          <p className="text-xs text-slate-500 text-center py-1">Ничего не найдено</p>
+        )}
+
+        {serviceSearchResults.length > 0 && (
+          <div className="max-h-52 overflow-y-auto space-y-1">
+            {serviceSearchResults.map((r: any, i: number) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => {
+                  setPending({
+                    ...emptyEntry(),
+                    fieldOfActivityId: r.fieldOfActivityId, fieldOfActivityName: r.fieldOfActivityName,
+                    professionId: r.professionId, professionName: r.professionName,
+                    serviceId: r.serviceId, serviceName: r.serviceName,
+                    allowedFilterTypes: r.allowedFilterTypes,
+                    serviceCustomFilters: r.customFilters,
+                  });
+                  setAddStep('filters');
+                }}
+                className="w-full text-left px-3 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700/40 hover:border-primary-500/40 transition-all"
+              >
+                <p className="text-sm font-medium text-white">{r.serviceName}</p>
+                <p className="text-[10px] text-slate-500 mt-0.5 truncate">
+                  {r.fieldOfActivityName} · {r.directionName} · {r.professionName}
+                </p>
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 pt-1">
+          <button onClick={() => setAddStep(null)} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
+          <span className="text-slate-700 text-xs">·</span>
+          <button
+            onClick={() => { referenceAPI.getFieldsOfActivity({ all: true }).then(r => setFieldsOfActivity(r.data)); setAddStep('field'); }}
+            className="text-xs text-slate-500 hover:text-primary-400 transition-colors"
+          >Выбрать вручную</button>
+        </div>
+      </div>
+    );
     if (addStep === 'field') return (
       <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
         <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите сферу деятельности:</p>
@@ -559,7 +630,7 @@ export default function ProfilePage() {
       <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
         <div className="flex items-center justify-between mb-2">
           <div>
-            <button onClick={() => setAddStep('service')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"><ChevronLeft size={11} />{pending.professionName}</button>
+            <button onClick={() => setAddStep(serviceQuery ? 'search' : 'service')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"><ChevronLeft size={11} />{serviceQuery ? 'Поиск' : pending.professionName}</button>
             <p className="text-sm font-semibold text-white mt-0.5">{pending.serviceName}</p>
           </div>
         </div>
@@ -994,7 +1065,7 @@ export default function ProfilePage() {
                     </div>
                   ))}
                   {addStep ? AddServiceFlow() : (
-                    <button type="button" onClick={() => setAddStep('field')} className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm">
+                    <button type="button" onClick={() => { setServiceQuery(''); setServiceSearchResults([]); setAddStep('search'); }} className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm">
                       <Plus size={14} />Добавить услугу
                     </button>
                   )}

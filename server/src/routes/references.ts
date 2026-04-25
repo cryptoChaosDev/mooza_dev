@@ -163,6 +163,44 @@ router.get('/professions', async (req, res) => {
   }
 });
 
+// Search services with full path: field → direction → profession → service
+router.get('/services/search', async (req, res) => {
+  try {
+    const q = (req.query.q as string)?.trim();
+    if (!q || q.length < 1) return res.json([]);
+    const services = await prisma.service.findMany({
+      where: { name: { contains: q, mode: 'insensitive' } },
+      include: {
+        directions: {
+          include: {
+            fieldOfActivity: { select: { id: true, name: true } },
+            professions: { select: { id: true, name: true }, orderBy: { sortOrder: 'asc' } },
+            customFilters: { select: { id: true, name: true, values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } } } },
+          },
+        },
+      },
+      take: 40,
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+    });
+    const results: any[] = [];
+    for (const s of services) {
+      for (const dir of s.directions) {
+        for (const prof of dir.professions) {
+          results.push({
+            serviceId: s.id, serviceName: s.name,
+            professionId: prof.id, professionName: prof.name,
+            directionId: dir.id, directionName: dir.name,
+            fieldOfActivityId: dir.fieldOfActivity.id, fieldOfActivityName: dir.fieldOfActivity.name,
+            allowedFilterTypes: dir.allowedFilterTypes,
+            customFilters: dir.customFilters,
+          });
+        }
+      }
+    }
+    res.json(results.slice(0, 30));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // Get services for a direction/profession (via M2M) or all services
 router.get('/services', async (req, res) => {
   try {

@@ -117,6 +117,7 @@ export const referenceAPI = {
   // Multi-level search endpoints
   getServices: (params?: { directionId?: string; professionId?: string; fieldOfActivityId?: string }) =>
     api.get('/references/services', { params }),
+  searchServices: (q: string) => api.get('/references/services/search', { params: { q } }),
   getGenres: () => api.get('/references/genres'),
   getWorkFormats: () => api.get('/references/work-formats'),
   getEmploymentTypes: () => api.get('/references/employment-types'),
