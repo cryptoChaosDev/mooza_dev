@@ -9,7 +9,7 @@ interface Connection {
   id: string;
   status: string;
   iAmRequester: boolean;
-  breakRequestedBy: string | null;
+  breakRequestedBy?: string | null;
   breakReasonRequester?: string | null;
   services: { id: string; name: string }[];
   profession?: { id: string; name: string } | null;

@@ -5,7 +5,7 @@ export interface ConnectionData {
   id: string;
   status: string;
   iAmRequester: boolean;
-  breakRequestedBy?: string | null;
+  breakRequestedBy?: string | null | undefined;
   breakReasonRequester?: string | null;
   services: { id: string; name: string }[];
   profession?: { id: string; name: string } | null;

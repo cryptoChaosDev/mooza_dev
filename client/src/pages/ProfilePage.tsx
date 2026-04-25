@@ -13,7 +13,6 @@ import {
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConnectionCard from '../components/ConnectionCard';
 import ConfirmDialog from '../components/ConfirmDialog';
-import AvatarComponent from '../components/Avatar';
 import BadgeTooltip from '../components/BadgeTooltip';
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
