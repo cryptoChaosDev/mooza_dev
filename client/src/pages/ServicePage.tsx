@@ -100,46 +100,48 @@ export default function ServicePage() {
 
   return (
     <div className="min-h-screen bg-slate-950 pb-24">
-      {/* Header */}
-      <div className="sticky top-0 z-20 bg-slate-950/90 backdrop-blur border-b border-slate-800/60 px-4 py-3 flex items-center gap-3">
-        <button onClick={() => navigate(-1)} className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all">
-          <ArrowLeft size={20} />
-        </button>
-        <span className="text-sm font-semibold text-white flex-1">Услуга</span>
-        {isOwner && !editing && (
-          <button onClick={startEdit} className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all">
-            <Edit3 size={18} />
+      <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
+        {/* Back + author row */}
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate(-1)} className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all flex-shrink-0">
+            <ArrowLeft size={20} />
           </button>
-        )}
-        {isOwner && !editing && (
-          <button onClick={() => setConfirmDelete(true)} className="p-1.5 rounded-xl hover:bg-red-500/15 text-slate-400 hover:text-red-400 transition-all">
-            <Trash2 size={18} />
-          </button>
-        )}
-      </div>
-
-      <div className="max-w-lg mx-auto px-4 pt-5 space-y-4">
-        {/* Author */}
-        {us.user && (
-          <button onClick={() => navigate(`/profile/${us.user.id}`)} className="flex items-center gap-3 w-full text-left">
-            <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-800 flex-shrink-0">
-              {authorAvatar
-                ? <img src={authorAvatar} alt={authorName ?? ''} className="w-full h-full object-cover" />
-                : <div className="w-full h-full flex items-center justify-center text-slate-400 text-sm font-bold">{(authorName?.[0] ?? '?').toUpperCase()}</div>
-              }
-            </div>
-            <div>
-              <p className="text-sm font-semibold text-white">{authorName}</p>
-              {us.user.nickname && <p className="text-xs text-slate-500">@{us.user.nickname}</p>}
-            </div>
-          </button>
-        )}
+          {us.user && (
+            <button onClick={() => navigate(`/profile/${us.user.id}`)} className="flex items-center gap-2.5 flex-1 min-w-0 text-left">
+              <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-800 flex-shrink-0">
+                {authorAvatar
+                  ? <img src={authorAvatar} alt={authorName ?? ''} className="w-full h-full object-cover" />
+                  : <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs font-bold">{(authorName?.[0] ?? '?').toUpperCase()}</div>
+                }
+              </div>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-white truncate">{authorName}</p>
+                {us.user.nickname && <p className="text-xs text-slate-500 truncate">@{us.user.nickname}</p>}
+              </div>
+            </button>
+          )}
+        </div>
 
         {/* Main card */}
         <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-5 space-y-4">
-          {us.profession?.name && (
-            <p className="text-xs font-semibold text-primary-400 uppercase tracking-wider">{us.profession.name}</p>
-          )}
+          {/* Card header: profession + edit/delete */}
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex-1 min-w-0">
+              {us.profession?.name && (
+                <p className="text-xs font-semibold text-primary-400 uppercase tracking-wider mb-2">{us.profession.name}</p>
+              )}
+            </div>
+            {isOwner && !editing && (
+              <div className="flex items-center gap-1 flex-shrink-0">
+                <button onClick={startEdit} className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-500 hover:text-white transition-all">
+                  <Edit3 size={16} />
+                </button>
+                <button onClick={() => setConfirmDelete(true)} className="p-1.5 rounded-xl hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all">
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary-900/60 border border-primary-700/30 flex items-center justify-center flex-shrink-0 mt-0.5">
