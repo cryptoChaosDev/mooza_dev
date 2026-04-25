@@ -245,7 +245,7 @@ export default function UserProfilePage() {
 
         {/* ── HERO ─────────────────────────────────────────────────────────── */}
         <div className="relative">
-          <div className="h-[132px] overflow-hidden bg-gradient-to-br from-primary-900 via-purple-900/70 to-slate-900">
+          <div className="h-[88px] overflow-hidden bg-gradient-to-br from-primary-900 via-purple-900/70 to-slate-900">
             {bUrl
               ? <img src={bUrl} alt="" className="w-full h-full object-cover" />
               : <div className="absolute inset-0 opacity-40" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(99,102,241,0.8) 0%, transparent 60%), radial-gradient(circle at 80% 20%, rgba(168,85,247,0.7) 0%, transparent 60%)' }} />
