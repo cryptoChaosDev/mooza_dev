@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Link2, ArrowLeft, Check, Loader2, ChevronRight } from 'lucide-react';
+import { X, Link2, ArrowLeft, Check, Loader2, ChevronRight, Clock } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { connectionAPI, referenceAPI } from '../lib/api';
 import AvatarComponent from './Avatar';
@@ -23,6 +23,26 @@ const REL_OPTIONS: { type: RelType; myRole: string; partnerRole: string; needsDe
 export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
   const queryClient = useQueryClient();
   const fullName = `${targetUser.firstName} ${targetUser.lastName}`.trim();
+
+  // Check for existing connection
+  const [existingConn, setExistingConn] = useState<any>(null);
+  const [checkingExisting, setCheckingExisting] = useState(true);
+
+  useEffect(() => {
+    connectionAPI.getWith(targetUser.id)
+      .then(({ data }: any) => { if (data?.id) setExistingConn(data); })
+      .catch(() => {})
+      .finally(() => setCheckingExisting(false));
+  }, [targetUser.id]);
+
+  const acceptMut = useMutation({
+    mutationFn: () => connectionAPI.accept(existingConn.id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connections-accepted'] }); onClose(); },
+  });
+  const rejectMut = useMutation({
+    mutationFn: () => connectionAPI.reject(existingConn.id),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connections-requests'] }); onClose(); },
+  });
 
   const [step, setStep] = useState<'relation' | 'catalog'>('relation');
   const [relType, setRelType] = useState<RelType | null>(null);
@@ -86,6 +106,59 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
   const catalogTitle = catalogLevel === 'fields' ? 'Выберите сферу'
     : catalogLevel === 'directions' ? fieldName
     : directionName;
+
+  // Loading state
+  if (checkingExisting) return createPortal(
+    <div className="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center">
+      <Loader2 size={28} className="animate-spin text-primary-400" />
+    </div>, document.body
+  );
+
+  // Existing connection states
+  if (existingConn) {
+    const { status, iAmRequester } = existingConn;
+    return createPortal(
+      <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
+        <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-800 flex-shrink-0 bg-slate-900/80 backdrop-blur">
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><ArrowLeft size={20} /></button>
+          <h2 className="text-base font-semibold text-white flex-1">Связь</h2>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
+        </div>
+        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-4 text-center">
+          <AvatarComponent src={targetUser.avatar} name={fullName} size={56} />
+          <p className="text-base font-bold text-white">{fullName}</p>
+          {status === 'PENDING' && iAmRequester && (
+            <>
+              <div className="flex items-center gap-2 text-slate-400 text-sm"><Clock size={16} />Запрос на связь уже отправлен</div>
+              <p className="text-xs text-slate-600">Ожидайте ответа пользователя</p>
+            </>
+          )}
+          {status === 'PENDING' && !iAmRequester && (
+            <>
+              <p className="text-sm text-primary-400">Этот пользователь уже отправил вам запрос на связь</p>
+              <div className="flex gap-3 w-full">
+                <button onClick={() => rejectMut.mutate()} disabled={rejectMut.isPending}
+                  className="flex-1 py-3 bg-slate-800 hover:bg-red-500/15 border border-slate-700 hover:border-red-500/30 text-slate-400 hover:text-red-400 rounded-xl text-sm font-medium transition-all">
+                  Отклонить
+                </button>
+                <button onClick={() => acceptMut.mutate()} disabled={acceptMut.isPending}
+                  className="flex-1 py-3 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2">
+                  {acceptMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  Принять
+                </button>
+              </div>
+            </>
+          )}
+          {status === 'ACCEPTED' && (
+            <p className="text-sm text-emerald-400">Связь уже установлена</p>
+          )}
+          {(status === 'PENDING' && iAmRequester) || status === 'ACCEPTED' ? (
+            <button onClick={onClose} className="w-full py-3 bg-slate-800 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium">Закрыть</button>
+          ) : null}
+        </div>
+      </div>, document.body
+    );
+  }
 
   return createPortal(
     <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
