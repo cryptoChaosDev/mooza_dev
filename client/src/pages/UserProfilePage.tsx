@@ -6,7 +6,7 @@ import {
   Crown, BadgeCheck, Ban, X, Zap,
   Headphones, FileText, Briefcase,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
-  Globe, ShoppingCart,
+  Globe,
 } from 'lucide-react';
 import { userAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
