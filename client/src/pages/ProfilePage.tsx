@@ -1095,7 +1095,7 @@ export default function ProfilePage() {
                         {isUploadingPortfolio ? <Loader2 size={14} className="text-slate-500 animate-spin" /> : <Plus size={16} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
                       </div>
                       <span className="text-[9px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
-                      <input type="file" accept="audio/*" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+                      <input type="file" accept=".mp3,.wav,.ogg,.flac,.aac,.m4a,audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/flac,audio/aac,audio/x-m4a,audio/mp4" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
                     </label>
                     {audioFiles.map((f: any) => (
                       <AudioTile key={f.id} url={`${API_URL}${f.url}`} title={f.originalName} onDelete={() => handlePortfolioDelete(f.id)} />
