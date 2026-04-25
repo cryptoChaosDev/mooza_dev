@@ -665,7 +665,7 @@ router.post('/me/portfolio', authenticate, uploadPortfolio.single('file'), async
     if (count >= 5) return res.status(400).json({ error: 'Max 5 portfolio files allowed' });
     const fileUrl = `/uploads/portfolio/${req.file.filename}`;
     const pf = await prisma.portfolioFile.create({
-      data: { userId: req.userId!, url: fileUrl, originalName: req.file.originalname, size: req.file.size, mimeType: req.file.mimetype },
+      data: { userId: req.userId!, url: fileUrl, originalName: Buffer.from(req.file.originalname, 'latin1').toString('utf8'), size: req.file.size, mimeType: req.file.mimetype },
     });
     res.json(pf);
   } catch (error) {
