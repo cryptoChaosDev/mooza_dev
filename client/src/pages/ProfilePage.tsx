@@ -64,58 +64,6 @@ function AudioTile({ url, title, onDelete }: { url: string; title?: string; onDe
   );
 }
 
-function PortfolioAudioItem({ link, onDelete }: { link: any; onDelete?: () => void }) {
-  const [failed, setFailed] = useState(false);
-  const platform = detectAudioPlatform(link.url);
-  const platformLabel = platform === 'yandex' ? 'Яндекс Диск' : platform === 'google' ? 'Google Диск' : 'Облако';
-  return (
-    <div className="rounded-xl bg-slate-800/60 border border-slate-700/40 px-3 pt-3 pb-2">
-      <div className="flex items-center gap-2 mb-2">
-        <Headphones size={13} className="text-primary-400 flex-shrink-0" />
-        <span className="flex-1 text-xs text-slate-300 truncate">{link.title || platformLabel}</span>
-        <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0">↗</a>
-        {onDelete && <button onClick={onDelete} className="p-0.5 rounded hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all flex-shrink-0"><Trash2 size={12} /></button>}
-      </div>
-      {!failed
-        ? <audio controls src={link.url} className="w-full h-9" onError={() => setFailed(true)} />
-        : <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 py-1.5 text-xs text-primary-400 hover:text-primary-300 transition-colors">
-            <span>Открыть в браузере →</span>
-          </a>
-      }
-    </div>
-  );
-}
-
-function PortfolioVideoItem({ link, onDelete }: { link: any; onDelete?: () => void }) {
-  const embedUrl = getVideoEmbedUrl(link.url);
-  const isRutube = link.url.includes('rutube.ru');
-  const isVk = link.url.includes('vk.com');
-  const platformLabel = isRutube ? 'RuTube' : isVk ? 'VK Видео' : 'Видео';
-  return (
-    <div className="rounded-xl overflow-hidden bg-slate-800/60 border border-slate-700/40">
-      {embedUrl
-        ? <iframe src={embedUrl} className="w-full aspect-video" allowFullScreen frameBorder="0" allow="clipboard-write; autoplay" />
-        : <div className="p-3 text-center">
-            <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary-400 hover:text-primary-300 transition-colors">Открыть {platformLabel} →</a>
-          </div>
-      }
-      <div className="flex items-center gap-2 px-3 py-2">
-        <span className="flex-1 text-xs text-slate-400 truncate">{link.title || platformLabel}</span>
-        <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0">↗</a>
-        {onDelete && <button onClick={onDelete} className="p-0.5 rounded hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all flex-shrink-0"><Trash2 size={12} /></button>}
-      </div>
-    </div>
-  );
-}
-
-function DocIcon({ mimeType, name }: { mimeType?: string; name: string }) {
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  if (mimeType === 'application/pdf' || ext === 'pdf')
-    return <FileText size={15} className="text-red-400 flex-shrink-0" />;
-  if (ext === 'xlsx' || ext === 'xls' || mimeType?.includes('spreadsheet') || mimeType?.includes('excel'))
-    return <FileText size={15} className="text-green-400 flex-shrink-0" />;
-  return <FileText size={15} className="text-blue-400 flex-shrink-0" />;
-}
 
 type ServiceCustomFilter = { id: string; name: string; values: { id: string; value: string }[] };
 
@@ -184,7 +132,6 @@ export default function ProfilePage() {
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
   const [newLinkUrl, setNewLinkUrl] = useState('');
   const [newLinkTitle, setNewLinkTitle] = useState('');
-  const [addingLink, setAddingLink] = useState(false);
 
   const [addStep, setAddStep] = useState<'search' | 'field' | 'direction' | 'profession' | 'service' | 'filters' | null>(null);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
@@ -441,29 +388,9 @@ export default function ProfilePage() {
     setPortfolioFiles(prev => prev.filter((f: any) => f.id !== fileId));
   };
 
-  const handleAddLink = async () => {
-    if (!newLinkUrl.trim()) return;
-    const linksOfType = portfolioLinks.filter((l: any) => l.type === newLinkType);
-    if (linksOfType.length >= 5) return;
-    setAddingLink(true);
-    try {
-      const { data } = await userAPI.addPortfolioLink({ type: newLinkType, url: newLinkUrl.trim(), title: newLinkTitle.trim() });
-      setPortfolioLinks(prev => [...prev, data]);
-      setNewLinkUrl('');
-      setNewLinkTitle('');
-    } catch { /* ignore */ }
-    finally { setAddingLink(false); }
-  };
-
   const handleDeleteLink = async (linkId: string) => {
     await userAPI.deletePortfolioLink(linkId);
     setPortfolioLinks(prev => prev.filter((l: any) => l.id !== linkId));
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   };
 
 
