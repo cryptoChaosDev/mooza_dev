@@ -182,6 +182,12 @@ export default function UserProfilePage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
   });
 
+  useEffect(() => {
+    if (!profsExpanded && profsRef.current) {
+      setProfsOverflows(profsRef.current.scrollHeight > profsRef.current.clientHeight);
+    }
+  }, [user?.userProfessions, profsExpanded]);
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -228,12 +234,6 @@ export default function UserProfilePage() {
 
   const hasSocialLinks = Object.values((user.socialLinks as Record<string, string>) || {}).some(Boolean);
   const bUrl = user.bannerImage ? getAvatarUrl(user.bannerImage) : null;
-
-  useEffect(() => {
-    if (!profsExpanded && profsRef.current) {
-      setProfsOverflows(profsRef.current.scrollHeight > profsRef.current.clientHeight);
-    }
-  }, [user?.userProfessions, profsExpanded]);
 
   return (
     <>
