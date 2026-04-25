@@ -13,6 +13,7 @@ import {
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AvatarComponent from '../components/Avatar';
+import BadgeTooltip from '../components/BadgeTooltip';
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
 import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
@@ -739,10 +740,10 @@ export default function ProfilePage() {
             <>
               <div className="flex items-center gap-2 flex-wrap mb-0.5">
                 <h1 className="text-2xl font-bold text-white leading-tight">{profile?.firstName} {profile?.lastName}</h1>
-                {profile?.isPro && <span title="PRO"><Zap size={18} className="text-violet-400" /></span>}
-                {profile?.isPremium && <span title="Premium"><Crown size={18} className="text-amber-400" /></span>}
-                {profile?.isVerified && <span title="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></span>}
-                {profile?.isBlocked && <span title="Заблокирован"><Ban size={18} className="text-red-500" /></span>}
+                {profile?.isPro && <BadgeTooltip label="PRO аккаунт"><Zap size={18} className="text-violet-400" /></BadgeTooltip>}
+                {profile?.isPremium && <BadgeTooltip label="Premium"><Crown size={18} className="text-amber-400" /></BadgeTooltip>}
+                {profile?.isVerified && <BadgeTooltip label="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></BadgeTooltip>}
+                {profile?.isBlocked && <BadgeTooltip label="Заблокирован"><Ban size={18} className="text-red-500" /></BadgeTooltip>}
               </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-2">
                 {profile?.nickname && <span className="text-slate-500">@{profile.nickname}</span>}
