@@ -337,18 +337,18 @@ export default function UserProfilePage() {
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-2">
             {user.nickname && <span className="text-slate-500">@{user.nickname}</span>}
+            {(user.city || user.country) && (
+              <span className="flex items-center gap-1">
+                <MapPin size={12} className="flex-shrink-0" />
+                {[user.city, user.country].filter(Boolean).join(', ')}
+              </span>
+            )}
             {me?.id !== user.id && (
               onlineUsers.has(user.id)
                 ? <span className="flex items-center gap-1 text-emerald-400 text-xs"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />В сети</span>
                 : user.lastSeenAt
                   ? <span className="text-xs text-slate-600">{formatLastSeen(user.lastSeenAt)}</span>
                   : null
-            )}
-            {(user.city || user.country) && (
-              <span className="flex items-center gap-1">
-                <MapPin size={12} className="flex-shrink-0" />
-                {[user.city, user.country].filter(Boolean).join(', ')}
-              </span>
             )}
           </div>
 
@@ -371,12 +371,12 @@ export default function UserProfilePage() {
 
             {/* Bio */}
             {user.bio && (
-              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
+              <div>
                 <p className="text-slate-300 text-sm leading-relaxed line-clamp-2">
                   {bioExpanded ? user.bio : user.bio.slice(0, 100)}
                 </p>
                 {user.bio.length > 100 && (
-                  <button onClick={() => setBioExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-1.5 transition-colors">
+                  <button onClick={() => setBioExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-1 transition-colors">
                     {bioExpanded ? 'Свернуть' : 'Ещё'}
                   </button>
                 )}

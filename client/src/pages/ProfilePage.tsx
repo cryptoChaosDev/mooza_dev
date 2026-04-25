@@ -775,37 +775,37 @@ export default function ProfilePage() {
           <div className="space-y-3">
 
             {/* Bio */}
-            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
-              <div className="flex items-center justify-end mb-2">
-                {!editingBio && (
-                  <button onClick={() => setEditingBio(true)} className="p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800"><Edit3 size={13} /></button>
-                )}
-              </div>
-              {editingBio ? (
-                <div className="space-y-2">
-                  <textarea value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} rows={4} placeholder="Расскажите о себе..." className={`${inputCls} resize-none`} />
-                  <div className="flex gap-2">
-                    <button onClick={() => setEditingBio(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
-                    <button onClick={handleSaveBio} disabled={updateMutation.isPending} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
-                      {updateMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
-                    </button>
-                  </div>
+            {editingBio ? (
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-2">
+                <textarea value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} rows={4} placeholder="Расскажите о себе..." className={`${inputCls} resize-none`} />
+                <div className="flex gap-2">
+                  <button onClick={() => setEditingBio(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
+                  <button onClick={handleSaveBio} disabled={updateMutation.isPending} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                    {updateMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
+                  </button>
                 </div>
-              ) : profile?.bio ? (
-                <>
-                  <p className="text-slate-300 text-sm leading-relaxed line-clamp-2">
-                    {bioExpanded ? profile.bio : profile.bio.slice(0, 100)}
-                  </p>
-                  {profile.bio.length > 100 && (
-                    <button onClick={() => setBioExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-1.5 transition-colors">
-                      {bioExpanded ? 'Свернуть' : 'Ещё'}
-                    </button>
+              </div>
+            ) : (
+              <div className="flex items-start gap-2">
+                <div className="flex-1">
+                  {profile?.bio ? (
+                    <>
+                      <p className="text-slate-300 text-sm leading-relaxed line-clamp-2">
+                        {bioExpanded ? profile.bio : profile.bio.slice(0, 100)}
+                      </p>
+                      {profile.bio.length > 100 && (
+                        <button onClick={() => setBioExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-1 transition-colors">
+                          {bioExpanded ? 'Свернуть' : 'Ещё'}
+                        </button>
+                      )}
+                    </>
+                  ) : (
+                    <button onClick={() => setEditingBio(true)} className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic">+ Добавить описание</button>
                   )}
-                </>
-              ) : (
-                <button onClick={() => setEditingBio(true)} className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic">+ Добавить описание</button>
-              )}
-            </div>
+                </div>
+                <button onClick={() => setEditingBio(true)} className="p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800 flex-shrink-0 mt-0.5"><Edit3 size={13} /></button>
+              </div>
+            )}
 
             {/* ── Groups card — avatar carousel ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
