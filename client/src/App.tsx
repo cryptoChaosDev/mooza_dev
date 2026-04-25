@@ -245,6 +245,10 @@ function App() {
       // handled locally in ChatPage
     });
 
+    socket.on('connection_request', () => {
+      queryClient.invalidateQueries({ queryKey: ['connections-requests'] });
+    });
+
     socket.on('friend_request', ({ requester }: any) => {
       queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
       bs().incrementFriendRequests();
@@ -314,6 +318,7 @@ function App() {
         s.off('new_message');
         s.off('message_edited');
         s.off('message_deleted');
+        s.off('connection_request');
         s.off('friend_request');
         s.off('friend_accepted');
         s.off('post_reply');

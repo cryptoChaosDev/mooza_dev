@@ -97,6 +97,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         },
       });
       emitToUser(receiverId, 'new_notification', notification);
+      emitToUser(receiverId, 'connection_request', { connId: conn.id });
       notifyUser(receiverId, 'connection_request', { connId: conn.id }, {
         title: `${me?.firstName} ${me?.lastName} запрашивает связь`,
         body: serviceNames ? `По услугам: ${serviceNames}` : 'Новый запрос на связь',
