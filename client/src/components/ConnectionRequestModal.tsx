@@ -74,16 +74,15 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
 
   const rel = REL_OPTIONS.find(r => r.type === relType);
 
+  const isAccepted = existingConn?.status === 'ACCEPTED';
+
   const sendMutation = useMutation({
-    mutationFn: () => connectionAPI.send(
-      targetUser.id,
-      [...selected],
-      rel?.myRole,
-      rel?.partnerRole,
-      rel?.needsDeal,
-    ),
+    mutationFn: () => isAccepted
+      ? connectionAPI.addServices(existingConn.id, [...selected])
+      : connectionAPI.send(targetUser.id, [...selected], rel?.myRole, rel?.partnerRole, rel?.needsDeal),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['connection-with', targetUser.id] });
+      queryClient.invalidateQueries({ queryKey: ['connections-accepted'] });
       queryClient.invalidateQueries({ queryKey: ['connections-sent'] });
       onClose();
     },
@@ -114,9 +113,9 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
     </div>, document.body
   );
 
-  // Existing connection states
-  if (existingConn) {
-    const { status, iAmRequester } = existingConn;
+  // Existing pending connection — show status screen
+  if (existingConn && existingConn.status === 'PENDING') {
+    const { iAmRequester } = existingConn;
     return createPortal(
       <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
         <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-800 flex-shrink-0 bg-slate-900/80 backdrop-blur">
@@ -127,13 +126,13 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
         <div className="flex-1 flex flex-col items-center justify-center px-6 gap-4 text-center">
           <AvatarComponent src={targetUser.avatar} name={fullName} size={56} />
           <p className="text-base font-bold text-white">{fullName}</p>
-          {status === 'PENDING' && iAmRequester && (
+          {iAmRequester ? (
             <>
               <div className="flex items-center gap-2 text-slate-400 text-sm"><Clock size={16} />Запрос на связь уже отправлен</div>
               <p className="text-xs text-slate-600">Ожидайте ответа пользователя</p>
+              <button onClick={onClose} className="w-full py-3 bg-slate-800 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium">Закрыть</button>
             </>
-          )}
-          {status === 'PENDING' && !iAmRequester && (
+          ) : (
             <>
               <p className="text-sm text-primary-400">Этот пользователь уже отправил вам запрос на связь</p>
               <div className="flex gap-3 w-full">
@@ -149,12 +148,6 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
               </div>
             </>
           )}
-          {status === 'ACCEPTED' && (
-            <p className="text-sm text-emerald-400">Связь уже установлена</p>
-          )}
-          {(status === 'PENDING' && iAmRequester) || status === 'ACCEPTED' ? (
-            <button onClick={onClose} className="w-full py-3 bg-slate-800 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium">Закрыть</button>
-          ) : null}
         </div>
       </div>, document.body
     );
@@ -169,7 +162,7 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
           ? <button onClick={goBack} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><ArrowLeft size={20} /></button>
           : <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><ArrowLeft size={20} /></button>
         }
-        <h2 className="text-base font-semibold text-white flex-1">Установить связь</h2>
+        <h2 className="text-base font-semibold text-white flex-1">{isAccepted ? 'Добавить к связи' : 'Установить связь'}</h2>
         <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
       </div>
 
@@ -336,7 +329,7 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
               disabled={sendMutation.isPending}
               className="flex-1 py-3 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2">
               {sendMutation.isPending && <Loader2 size={15} className="animate-spin" />}
-              Отправить запрос{selected.size > 0 ? ` (${selected.size})` : ''}
+              {isAccepted ? 'Добавить' : 'Отправить запрос'}{selected.size > 0 ? ` (${selected.size})` : ''}
             </button>
           </div>
         </>
