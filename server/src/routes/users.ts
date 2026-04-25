@@ -43,7 +43,6 @@ const userServiceInclude = {
   availabilities:  { select: { id: true, name: true } },
   geographies:     { select: { id: true, name: true } },
   selectedCustomFilterValues: { select: { id: true, filterId: true, value: true } },
-  description: true,
 } as const;
 
 const userSelect = {
