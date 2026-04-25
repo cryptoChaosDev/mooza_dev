@@ -7,7 +7,7 @@ import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, DollarSign, Calendar,
   Headphones, Edit3, Plus, ChevronDown, ChevronLeft, ChevronRight,
-  FileText, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2,
+  FileText, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2, Zap,
   Music2,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
@@ -739,6 +739,7 @@ export default function ProfilePage() {
             <>
               <div className="flex items-center gap-2 flex-wrap mb-0.5">
                 <h1 className="text-2xl font-bold text-white leading-tight">{profile?.firstName} {profile?.lastName}</h1>
+                {profile?.isPro && <span title="PRO"><Zap size={18} className="text-violet-400" /></span>}
                 {profile?.isPremium && <span title="Premium"><Crown size={18} className="text-amber-400" /></span>}
                 {profile?.isVerified && <span title="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></span>}
                 {profile?.isBlocked && <span title="Заблокирован"><Ban size={18} className="text-red-500" /></span>}

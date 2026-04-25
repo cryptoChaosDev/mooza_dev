@@ -373,6 +373,7 @@ model User {
   isAdmin   Boolean  @default(false)
   isBlocked  Boolean  @default(false)
   isPremium  Boolean  @default(false)
+  isPro      Boolean  @default(false)
   isVerified Boolean  @default(false)
   emailVerified          Boolean   @default(false)
   emailVerificationCode  String?

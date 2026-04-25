@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { adminAPI, api } from '../lib/api';
-import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2, ShieldCheck, Clock } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2, ShieldCheck, Clock, Zap } from 'lucide-react';
 import AvatarComponent from '../components/Avatar';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -1122,6 +1122,7 @@ interface AdminUser {
   isBlocked: boolean;
   isPremium: boolean;
   isVerified: boolean;
+  isPro: boolean;
   createdAt: string;
 }
 
@@ -1163,7 +1164,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
   });
 
   const toggleMut = useMutation({
-    mutationFn: (field: 'block' | 'premium' | 'verified') => api.patch(`/admin/users/${user.id}/${field}`),
+    mutationFn: (field: 'block' | 'premium' | 'verified' | 'pro') => api.patch(`/admin/users/${user.id}/${field}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); onUpdated(); },
   });
 
@@ -1195,6 +1196,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <p className="text-sm font-semibold text-white">{fullName}</p>
+              {user.isPro && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-500/20 text-violet-400 text-[10px] rounded-full border border-violet-500/30"><Zap size={9} />PRO</span>}
               {user.isPremium && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded-full border border-amber-500/30"><Crown size={9} />Premium</span>}
               {user.isVerified && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-[10px] rounded-full border border-sky-500/30"><BadgeCheck size={9} />Verified</span>}
               {user.isAdmin && <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-400 text-[10px] rounded-full border border-purple-500/30">Admin</span>}
@@ -1238,6 +1240,16 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
             }`}
           >
             <BadgeCheck size={13} />
+          </button>
+          <button
+            onClick={() => toggleMut.mutate('pro')}
+            disabled={toggleMut.isPending}
+            title={user.isPro ? 'Убрать PRO' : 'Выдать PRO'}
+            className={`flex items-center justify-center px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
+              user.isPro ? 'bg-violet-500/20 text-violet-400 border-violet-500/30 hover:bg-violet-500/30' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
+            }`}
+          >
+            <Zap size={13} />
           </button>
         </div>
 
@@ -1497,6 +1509,7 @@ function UsersTab() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-sm font-medium text-white">{u.firstName} {u.lastName}</span>
+                  {u.isPro && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-500/20 text-violet-400 text-xs rounded-full border border-violet-500/30"><Zap size={10} />PRO</span>}
                   {u.isPremium && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded-full border border-amber-500/30"><Crown size={10} />Premium</span>}
                   {u.isVerified && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-xs rounded-full border border-sky-500/30"><BadgeCheck size={10} />Verified</span>}
                   {u.isAdmin && <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full border border-purple-500/30">Admin</span>}

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, MessageCircle, Loader2,
-  Crown, BadgeCheck, Ban, X,
+  Crown, BadgeCheck, Ban, X, Zap,
   Headphones, FileText, Briefcase,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
   Globe, ShoppingCart,
@@ -328,6 +328,7 @@ export default function UserProfilePage() {
           {/* Name + badges */}
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
             <h1 className="text-2xl font-bold text-white leading-tight">{user.firstName} {user.lastName}</h1>
+            {user.isPro && <span title="PRO"><Zap size={18} className="text-violet-400" /></span>}
             {user.isPremium && <span title="Premium"><Crown size={18} className="text-amber-400" /></span>}
             {user.isVerified && <span title="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></span>}
             {user.isBlocked && <span title="Заблокирован"><Ban size={18} className="text-red-500" /></span>}

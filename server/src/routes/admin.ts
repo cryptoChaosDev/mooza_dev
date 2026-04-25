@@ -629,7 +629,7 @@ router.post('/users', async (req, res) => {
       select: {
         id: true, firstName: true, lastName: true, nickname: true,
         email: true, avatar: true, isAdmin: true, isBlocked: true,
-        isPremium: true, isVerified: true, createdAt: true,
+        isPremium: true, isVerified: true, isPro: true, createdAt: true,
         city: true, country: true, bio: true, phone: true,
       },
     });
@@ -659,7 +659,7 @@ router.patch('/users/:id', async (req, res) => {
       select: {
         id: true, firstName: true, lastName: true, nickname: true,
         email: true, avatar: true, isAdmin: true, isBlocked: true,
-        isPremium: true, isVerified: true, createdAt: true,
+        isPremium: true, isVerified: true, isPro: true, createdAt: true,
         city: true, country: true, bio: true, phone: true,
       },
     });
@@ -685,7 +685,7 @@ router.get('/users', async (req, res) => {
       select: {
         id: true, firstName: true, lastName: true, nickname: true,
         email: true, avatar: true, isAdmin: true, isBlocked: true,
-        isPremium: true, isVerified: true, createdAt: true,
+        isPremium: true, isVerified: true, isPro: true, createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
@@ -730,6 +730,19 @@ router.patch('/users/:id/verified', async (req, res) => {
       where: { id: req.params.id },
       data: { isVerified: !user.isVerified },
       select: { id: true, isVerified: true },
+    });
+    res.json(updated);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+router.patch('/users/:id/pro', async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { isPro: true } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { isPro: !user.isPro },
+      select: { id: true, isPro: true },
     });
     res.json(updated);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
