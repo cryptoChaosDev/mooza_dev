@@ -7,7 +7,7 @@ import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, DollarSign, Calendar,
   Headphones, Edit3, Plus, ChevronLeft, ChevronRight,
-  FileText, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
+  FileText, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
   Music2, Play, Pause, Image, File,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
@@ -23,19 +23,6 @@ import ShareButton from '../components/ShareButton';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
-function getVideoEmbedUrl(url: string): string | null {
-  const rt = url.match(/rutube\.ru\/video\/([a-zA-Z0-9]+)/);
-  if (rt) return `https://rutube.ru/play/embed/${rt[1]}/`;
-  const vk = url.match(/vk\.com\/video(-?\d+)_(\d+)/);
-  if (vk) return `https://vk.com/video_ext.php?oid=${vk[1]}&id=${vk[2]}`;
-  return null;
-}
-
-function detectAudioPlatform(url: string): 'yandex' | 'google' | 'other' {
-  if (url.includes('disk.yandex') || url.includes('yadi.sk')) return 'yandex';
-  if (url.includes('drive.google') || url.includes('docs.google')) return 'google';
-  return 'other';
-}
 
 function getFileExt(name: string) {
   return (name.split('.').pop() ?? '').toUpperCase().slice(0, 4);
@@ -130,9 +117,6 @@ export default function ProfilePage() {
   const [isUploadingPortfolio, setIsUploadingPortfolio] = useState(false);
   const [imageFullscreen, setImageFullscreen] = useState<string | null>(null);
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
-  const [newLinkUrl, setNewLinkUrl] = useState('');
-  const [newLinkTitle, setNewLinkTitle] = useState('');
-
   const [addStep, setAddStep] = useState<'search' | 'field' | 'direction' | 'profession' | 'service' | 'filters' | null>(null);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
   const [addFlowDirections, setAddFlowDirections] = useState<any[]>([]);
