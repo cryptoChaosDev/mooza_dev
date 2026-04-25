@@ -74,12 +74,8 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
 
   const rel = REL_OPTIONS.find(r => r.type === relType);
 
-  const isAccepted = existingConn?.status === 'ACCEPTED';
-
   const sendMutation = useMutation({
-    mutationFn: () => isAccepted
-      ? connectionAPI.addServices(existingConn.id, [...selected])
-      : connectionAPI.send(targetUser.id, [...selected], rel?.myRole, rel?.partnerRole, rel?.needsDeal),
+    mutationFn: () => connectionAPI.send(targetUser.id, [...selected], rel?.myRole, rel?.partnerRole, rel?.needsDeal),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['connection-with', targetUser.id] });
       queryClient.invalidateQueries({ queryKey: ['connections-accepted'] });

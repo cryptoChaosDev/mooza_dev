@@ -57,17 +57,18 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Нельзя создать связь с собой' });
     }
 
-    // Check if connection already exists between this pair
-    const existing = await prisma.connection.findFirst({
+    // Block only if a PENDING connection already exists between this pair
+    const existingPending = await prisma.connection.findFirst({
       where: {
+        status: 'PENDING',
         OR: [
           { requesterId: meId, receiverId },
           { requesterId: receiverId, receiverId: meId },
         ],
       },
     });
-    if (existing) {
-      return res.status(409).json({ error: 'Связь уже существует', connectionId: existing.id });
+    if (existingPending) {
+      return res.status(409).json({ error: 'Запрос уже отправлен', connectionId: existingPending.id });
     }
 
     const conn = await prisma.connection.create({
