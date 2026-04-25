@@ -19,11 +19,6 @@ const REL_OPTIONS: { type: RelType; myRole: string; partnerRole: string; needsDe
   { type: 'colleague',         myRole: 'COLLEAGUE', partnerRole: 'COLLEAGUE', needsDeal: false },
 ];
 
-const ROLE_LABEL: Record<string, string> = {
-  CUSTOMER: 'Заказчик',
-  EXECUTOR: 'Исполнитель',
-  COLLEAGUE: 'Коллега',
-};
 
 export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
   const queryClient = useQueryClient();
