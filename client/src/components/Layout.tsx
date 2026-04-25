@@ -57,9 +57,9 @@ export default function Layout({ children }: LayoutProps) {
             </div>
           </div>
         )}
-        <header className="flex items-center justify-between px-4 h-16">
+        <header className="flex items-center justify-between px-4 h-11">
           <Link to="/" className="flex items-center">
-            <img src="/logo.png" alt="Moooza" className="h-12 w-auto" />
+            <img src="/logo.png" alt="Moooza" className="h-8 w-auto" />
           </Link>
           <div className="flex items-center gap-1">
             <NotificationBell />
