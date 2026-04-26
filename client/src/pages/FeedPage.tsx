@@ -343,7 +343,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                 </p>
               )}
               {isLongContent && <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>}
-              {post.imageUrl && <div className="mt-2"><img src={`${API_URL}${post.imageUrl}`} alt="Вложение" className="max-h-96 w-full object-cover rounded-xl border border-slate-800" loading="lazy" /></div>}
+              {post.imageUrl && <div className="mt-2"><img src={`${API_URL}${post.imageUrl}`} alt="Вложение" className="max-h-[32rem] w-full object-contain rounded-xl border border-slate-800 bg-slate-900/40" loading="lazy" /></div>}
               {post.audioUrl && <AudioPlayer src={`${API_URL}${post.audioUrl}`} name={post.audioName || post.audioUrl.split('/').pop()} />}
             </>
           </DoubleTapReactWrapper>
