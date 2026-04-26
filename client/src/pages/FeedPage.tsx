@@ -410,7 +410,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
 
 // ─── Post type meta ────────────────────────────────────────────────────────────
 
-const POST_TYPE_META: Record<string, { label: string; icon: (p: any) => JSX.Element; accent: string; badge: string }> = {
+const POST_TYPE_META: Record<string, { label: string; icon: any; accent: string; badge: string }> = {
   blog:    { label: 'Блог',        icon: FileText,    accent: '',                                           badge: '' },
   service: { label: 'Услуга',      icon: Wrench,      accent: 'border-l-2 border-primary-500/60',           badge: 'bg-primary-500/10 text-primary-400 border-primary-500/20' },
   vacancy: { label: 'Вакансия',    icon: Briefcase,   accent: 'border-l-2 border-amber-500/60',             badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
