@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { motion, type Transition } from 'framer-motion';
 import {
   Search,
@@ -7,6 +8,7 @@ import {
   Users,
   CheckCircle2,
 } from 'lucide-react';
+import { siteSettingsAPI } from '../lib/api';
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 24 },
@@ -17,6 +19,14 @@ const fadeUp = (delay = 0) => ({
 
 export default function LandingPage() {
   const navigate = useNavigate();
+
+  const { data: settings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: async () => { const { data } = await siteSettingsAPI.get(); return data as Record<string, string>; },
+    staleTime: 60_000,
+  });
+  const loginEnabled = settings?.loginEnabled !== 'false';
+  const registrationEnabled = settings?.registrationEnabled !== 'false';
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 overflow-x-hidden">
@@ -49,20 +59,26 @@ export default function LandingPage() {
           </motion.p>
 
           {/* CTA */}
-          <motion.div {...fadeUp(0.3)} className="flex flex-col sm:flex-row items-center justify-center gap-3">
-            <button
-              onClick={() => navigate('/register')}
-              className="group w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-500 active:bg-primary-700 transition-all duration-300 flex items-center justify-center gap-2"
-            >
-              Зарегистрироваться
-            </button>
-            <button
-              onClick={() => navigate('/login')}
-              className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 transition-all duration-300"
-            >
-              Войти
-            </button>
-          </motion.div>
+          {(registrationEnabled || loginEnabled) && (
+            <motion.div {...fadeUp(0.3)} className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              {registrationEnabled && (
+                <button
+                  onClick={() => navigate('/register')}
+                  className="group w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-500 active:bg-primary-700 transition-all duration-300 flex items-center justify-center gap-2"
+                >
+                  Зарегистрироваться
+                </button>
+              )}
+              {loginEnabled && (
+                <button
+                  onClick={() => navigate('/login')}
+                  className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 transition-all duration-300"
+                >
+                  Войти
+                </button>
+              )}
+            </motion.div>
+          )}
         </div>
 
         {/* scroll cue */}
@@ -174,15 +190,19 @@ export default function LandingPage() {
               <br />
               <span className="text-white">СООБЩЕСТВА</span>
             </motion.h2>
-            <motion.p {...fadeUp(0.2)} className="text-slate-400 mb-8">
-              Регистрация занимает меньше минуты. Начни прямо сейчас.
-            </motion.p>
-            <motion.button {...fadeUp(0.3)}
-              onClick={() => navigate('/register')}
-              className="px-10 py-3.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-500 active:bg-primary-700 transition-all duration-300 flex items-center gap-2 mx-auto"
-            >
-              Зарегистрироваться
-            </motion.button>
+            {registrationEnabled && (
+              <>
+                <motion.p {...fadeUp(0.2)} className="text-slate-400 mb-8">
+                  Регистрация занимает меньше минуты. Начни прямо сейчас.
+                </motion.p>
+                <motion.button {...fadeUp(0.3)}
+                  onClick={() => navigate('/register')}
+                  className="px-10 py-3.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-500 active:bg-primary-700 transition-all duration-300 flex items-center gap-2 mx-auto"
+                >
+                  Зарегистрироваться
+                </motion.button>
+              </>
+            )}
           </div>
         </div>
       </section>

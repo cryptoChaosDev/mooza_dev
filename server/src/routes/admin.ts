@@ -759,4 +759,16 @@ router.delete('/users/:id', authenticate, requireAdmin, async (req, res) => {
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
+// ── Site Settings ──────────────────────────────────────────────────────────────
+import { updateSiteSettings } from './site-settings';
+
+router.put('/site-settings', async (req, res) => {
+  try {
+    await updateSiteSettings(req.body as Record<string, string>);
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 export default router;

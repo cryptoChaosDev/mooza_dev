@@ -370,6 +370,11 @@ export const referralAPI = {
   getStats: () => api.get('/referrals/stats'),
 };
 
+export const siteSettingsAPI = {
+  get: () => api.get('/site-settings'),
+  update: (data: Record<string, string>) => api.put('/admin/site-settings', data),
+};
+
 // Search Filters Type
 export interface SearchFilters {
   fieldId?: string;

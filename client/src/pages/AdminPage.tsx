@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
-import { adminAPI, api } from '../lib/api';
+import { adminAPI, api, siteSettingsAPI } from '../lib/api';
 import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2, ShieldCheck, Clock, Zap } from 'lucide-react';
 import AvatarComponent from '../components/Avatar';
 
@@ -1919,6 +1919,53 @@ function GroupsAdminTab() {
   );
 }
 
+// ─── Site Settings Tab ─────────────────────────────────────────────────────────
+
+function SiteSettingsTab() {
+  const queryClient = useQueryClient();
+  const { data: settings, isLoading } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: async () => { const { data } = await siteSettingsAPI.get(); return data as Record<string, string>; },
+  });
+
+  const mut = useMutation({
+    mutationFn: (upd: Record<string, string>) => siteSettingsAPI.update(upd),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['site-settings'] }),
+  });
+
+  const toggle = (key: string, current: boolean) => mut.mutate({ [key]: current ? 'false' : 'true' });
+
+  const loginEnabled = settings?.loginEnabled !== 'false';
+  const registrationEnabled = settings?.registrationEnabled !== 'false';
+
+  if (isLoading) return <div className="text-slate-500 text-sm">Загрузка...</div>;
+
+  const rows = [
+    { key: 'loginEnabled',        label: 'Кнопка «Войти» на лендинге',              value: loginEnabled },
+    { key: 'registrationEnabled', label: 'Кнопка «Зарегистрироваться» на лендинге', value: registrationEnabled },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-slate-500 mb-4">
+        Прямые ссылки /login и /register остаются рабочими вне зависимости от этих настроек.
+      </p>
+      {rows.map(({ key, label, value }) => (
+        <div key={key} className="flex items-center justify-between bg-slate-900/60 border border-slate-800 rounded-2xl px-5 py-4">
+          <span className="text-sm text-white">{label}</span>
+          <button
+            onClick={() => toggle(key, value)}
+            disabled={mut.isPending}
+            className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${value ? 'bg-primary-600' : 'bg-slate-700'}`}
+          >
+            <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${value ? 'translate-x-5' : 'translate-x-0'}`} />
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const TABS = [
   { id: 'structure',   label: 'Структура' },
   { id: 'spheres',     label: 'Сферы' },
@@ -1929,6 +1976,7 @@ const TABS = [
   { id: 'orgs',        label: 'Группы' },
   { id: 'users',       label: 'Пользователи' },
   { id: 'moderation',  label: 'Модерация' },
+  { id: 'settings',    label: 'Настройки' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
@@ -2018,6 +2066,8 @@ export default function AdminPage() {
         {tab === 'users' && <UsersTab />}
 
         {tab === 'moderation' && <ArtistModerationTab />}
+
+        {tab === 'settings' && <SiteSettingsTab />}
       </div>
     </div>
   );
