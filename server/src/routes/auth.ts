@@ -407,8 +407,8 @@ router.post('/telegram/miniapp', authLimiter, async (req, res) => {
     const { initData } = req.body as { initData: string };
     if (!initData) return res.status(400).json({ error: 'No initData' });
 
-    const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
-    if (!botToken) return res.status(500).json({ error: 'Bot not configured' });
+    const botToken = process.env.TELEGRAM_MINIAPP_BOT_TOKEN || '';
+    if (!botToken) return res.status(500).json({ error: 'Mini App bot not configured' });
 
     // Validate initData signature (HMAC-SHA256)
     const params = new URLSearchParams(initData);
