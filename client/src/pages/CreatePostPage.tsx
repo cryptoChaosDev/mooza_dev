@@ -75,7 +75,7 @@ export default function CreatePostPage() {
     }, 0);
   }, []);
 
-  const uploadFile = async (file: File, fileType: 'image' | 'audio') => {
+  const uploadFile = async (file: File) => {
     setUploading(true);
     try {
       const fd = new FormData();
@@ -243,7 +243,7 @@ export default function CreatePostPage() {
         <div className="sticky bottom-0 bg-slate-950/95 backdrop-blur border-t border-slate-800 px-4 py-3">
           <div className="flex items-center gap-1 relative">
             <input ref={imageInputRef} type="file" accept="image/*,.gif" className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f, 'image'); e.target.value = ''; }} />
+              onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ''; }} />
             <button
               type="button"
               onClick={() => imageInputRef.current?.click()}
