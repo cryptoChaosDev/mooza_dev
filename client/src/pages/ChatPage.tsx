@@ -706,8 +706,11 @@ export default function ChatPage() {
   return (
     <div
       ref={chatContainerRef}
-      className="fixed inset-x-0 top-16 z-10 lg:static lg:h-screen bg-slate-950 flex flex-col"
-      style={{ bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' }}
+      className="fixed inset-x-0 z-10 lg:static lg:h-screen bg-slate-950 flex flex-col"
+      style={{
+        top: 'calc(2.75rem + env(safe-area-inset-top, 0px))',
+        bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))',
+      }}
     >
       {/* Chat Header */}
       <div className="relative border-b border-slate-700/50 backdrop-blur-sm bg-slate-900/80 flex-shrink-0 z-30">

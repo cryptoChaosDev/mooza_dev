@@ -39,7 +39,7 @@ export default function Layout({ children }: LayoutProps) {
   return (
     <div className="min-h-screen bg-slate-950">
       {/* Mobile Header (sticky — stays in document flow so content flows naturally below it) */}
-      <div className="lg:hidden sticky top-0 z-40 bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/50">
+      <div className="lg:hidden sticky top-0 z-40 bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/50" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         {/* Notification permission banner */}
         {notifPending && (
           <div className="bg-primary-600/90 px-4 py-2 flex items-center justify-between gap-3">
