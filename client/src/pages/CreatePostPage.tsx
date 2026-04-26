@@ -114,6 +114,7 @@ export default function CreatePostPage() {
     }
     createMut.mutate({
       content: finalContent,
+      type,
       imageUrl: imagePreview?.serverUrl,
       audioUrl: audioFile?.serverUrl,
       audioName: audioFile?.name,

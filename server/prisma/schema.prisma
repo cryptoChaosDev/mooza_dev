@@ -542,6 +542,7 @@ model ChannelSubscription {
 model Post {
   id        String  @id @default(uuid())
   content   String
+  type      String  @default("blog")
   imageUrl  String?
   audioUrl  String?
   audioName String?

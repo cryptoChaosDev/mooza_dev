@@ -261,8 +261,12 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
     } finally { setEditUploading(false); }
   };
 
+  const typeMeta = POST_TYPE_META[post.type] ?? POST_TYPE_META.blog;
+  const TypeIcon = typeMeta.icon;
+  const showTypeBadge = post.type && post.type !== 'blog';
+
   return (
-    <div id={`post-${post.id}`} className={`px-4 py-4 hover:bg-slate-900/30 transition-colors ${highlight ? 'ring-2 ring-primary-500/40 ring-inset bg-primary-500/5' : ''}`}>
+    <div id={`post-${post.id}`} className={`px-4 py-4 hover:bg-slate-900/30 transition-colors ${typeMeta.accent} ${highlight ? 'ring-2 ring-primary-500/40 ring-inset bg-primary-500/5' : ''}`}>
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-3 min-w-0">
           <Link to={`/profile/${post.author.id}`} className="flex-shrink-0"><Avatar user={post.author} size={10} /></Link>
@@ -274,6 +278,12 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
               {post.author.isPremium && <span title="Premium"><Crown size={13} className="text-amber-400 flex-shrink-0" /></span>}
               {post.author.isVerified && <span title="Верифицирован"><BadgeCheck size={13} className="text-sky-400 flex-shrink-0" /></span>}
               {post.author.isBlocked && <span title="Заблокирован"><Ban size={13} className="text-red-500 flex-shrink-0" /></span>}
+              {showTypeBadge && (
+                <span className={`flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${typeMeta.badge}`}>
+                  <TypeIcon size={10} />
+                  {typeMeta.label}
+                </span>
+              )}
             </div>
             <p className="text-xs text-slate-500 truncate">
               {timeAgo(post.createdAt)}{post.author.role ? ` · ${post.author.role}` : ''}
@@ -398,6 +408,17 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   );
 }
 
+// ─── Post type meta ────────────────────────────────────────────────────────────
+
+const POST_TYPE_META: Record<string, { label: string; icon: (p: any) => JSX.Element; accent: string; badge: string }> = {
+  blog:    { label: 'Блог',        icon: FileText,    accent: '',                                           badge: '' },
+  service: { label: 'Услуга',      icon: Wrench,      accent: 'border-l-2 border-primary-500/60',           badge: 'bg-primary-500/10 text-primary-400 border-primary-500/20' },
+  vacancy: { label: 'Вакансия',    icon: Briefcase,   accent: 'border-l-2 border-amber-500/60',             badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  event:   { label: 'Мероприятие', icon: Calendar,    accent: 'border-l-2 border-purple-500/60',            badge: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+  task:    { label: 'Задача',      icon: CheckSquare, accent: 'border-l-2 border-emerald-500/60',           badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+  offer:   { label: 'Предложение', icon: Lightbulb,   accent: 'border-l-2 border-orange-500/60',            badge: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
+};
+
 // ─── Post Type Picker ──────────────────────────────────────────────────────────
 
 const POST_TYPE_OPTIONS = [
@@ -449,10 +470,6 @@ function PostTypePicker({ onClose }: { onClose: () => void }) {
 
 function applyFilters(posts: any[], filters: FlowFilters): any[] {
   let result = [...posts];
-
-  if (filters.postType !== 'all') {
-    result = result.filter(p => p.type === filters.postType);
-  }
 
   if (filters.period !== 'all') {
     const ms: Record<string, number> = { day: 86400000, week: 604800000, month: 2592000000, year: 31536000000 };
@@ -507,9 +524,11 @@ export default function FeedPage() {
     return () => window.removeEventListener('focus', onFocus);
   }, []);
 
+  const typeFilter = filters.postType !== 'all' ? filters.postType : undefined;
+
   const { data: posts, isLoading } = useQuery({
-    queryKey: ['feed'],
-    queryFn: async () => { const { data } = await postAPI.getFeed(); return data; },
+    queryKey: ['feed', typeFilter],
+    queryFn: async () => { const { data } = await postAPI.getFeed({ type: typeFilter }); return data; },
     refetchInterval: 30000,
   });
 

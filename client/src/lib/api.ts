@@ -151,9 +151,9 @@ export const referenceAPI = {
 
 // Post API
 export const postAPI = {
-  getFeed: (params?: { limit?: number; offset?: number }) =>
+  getFeed: (params?: { limit?: number; offset?: number; type?: string }) =>
     api.get('/posts/feed', { params }),
-  createPost: (data: { content: string; imageUrl?: string; audioUrl?: string; audioName?: string; channelId?: string | null }) =>
+  createPost: (data: { content: string; type?: string; imageUrl?: string; audioUrl?: string; audioName?: string; channelId?: string | null }) =>
     api.post('/posts', data),
   uploadMedia: (formData: FormData) =>
     api.post('/posts/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),

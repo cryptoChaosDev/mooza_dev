@@ -26,9 +26,10 @@ router.post('/upload', authenticate, uploadPostMedia.single('file'), async (req:
 // Get feed (all posts from the social network)
 router.get('/feed', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { limit = 20, offset = 0 } = req.query;
+    const { limit = 20, offset = 0, type } = req.query;
 
     const posts = await prisma.post.findMany({
+      where: (type && type !== 'all' ? { type: String(type) } : undefined) as any,
       include: {
         author: {
           select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true }
@@ -82,7 +83,7 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
 // Create post
 router.post('/', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { content, imageUrl, audioUrl, audioName } = req.body;
+    const { content, imageUrl, audioUrl, audioName, type } = req.body;
 
     if (!content && !imageUrl && !audioUrl) {
       return res.status(400).json({ error: 'Post cannot be empty' });
@@ -91,11 +92,12 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     const post = await prisma.post.create({
       data: {
         content: content || '',
+        type: type || 'blog',
         imageUrl: imageUrl || null,
         audioUrl: audioUrl || null,
         audioName: audioName || null,
         authorId: req.userId!,
-      },
+      } as any,
       include: {
         author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true } },
       }
