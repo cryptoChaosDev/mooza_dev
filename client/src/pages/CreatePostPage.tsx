@@ -128,29 +128,46 @@ export default function CreatePostPage() {
       <div className="max-w-2xl w-full mx-auto flex flex-col flex-1">
 
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center justify-between gap-3">
+        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center gap-2">
           <button
             onClick={handleCancel}
-            className="flex items-center gap-2 p-2 -ml-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors"
+            className="p-2 -ml-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors flex-shrink-0"
           >
             <ArrowLeft size={20} />
           </button>
-          <div className="flex items-center gap-2 flex-1">
-            <TypeIcon size={18} className="text-primary-400" />
-            <h2 className="text-base font-bold text-white">{meta.label}</h2>
-            {meta.inDev && (
-              <span className="px-2 py-0.5 bg-amber-500/15 text-amber-400 text-xs rounded-full border border-amber-500/30">
-                Скоро шаблон
-              </span>
-            )}
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+            <TypeIcon size={16} className="text-primary-400 flex-shrink-0" />
+            <h2 className="text-sm font-bold text-white truncate">{meta.label}</h2>
           </div>
+
+          {/* Attachment buttons — always visible, not affected by keyboard */}
+          <input ref={imageInputRef} type="file" accept="image/*,.gif" className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ''; }} />
+          <button
+            type="button"
+            onClick={() => imageInputRef.current?.click()}
+            disabled={uploading || !!imagePreview}
+            title="Фото / GIF"
+            className="p-2 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-40 flex-shrink-0"
+          >
+            {uploading ? <Loader2 size={18} className="animate-spin" /> : <Image size={18} />}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowEmoji(e => !e)}
+            title="Эмодзи"
+            className={`p-2 rounded-xl transition-colors flex-shrink-0 ${showEmoji ? 'text-primary-400 bg-slate-800' : 'text-slate-400 hover:text-primary-400 hover:bg-slate-800'}`}
+          >
+            <Smile size={18} />
+          </button>
+
           <button
             onClick={handlePublish}
             disabled={!canPost || createMut.isPending}
-            className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors flex-shrink-0"
           >
-            {createMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-            Опубликовать
+            {createMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            <span className="hidden sm:inline">Опубликовать</span>
           </button>
         </div>
 
@@ -239,43 +256,15 @@ export default function CreatePostPage() {
 
         </div>
 
-        {/* Toolbar */}
-        <div className="sticky bottom-0 bg-slate-950/95 backdrop-blur border-t border-slate-800 px-4 py-3">
-          <div className="flex items-center gap-1 relative">
-            <input ref={imageInputRef} type="file" accept="image/*,.gif" className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ''; }} />
-            <button
-              type="button"
-              onClick={() => imageInputRef.current?.click()}
-              disabled={uploading || !!imagePreview}
-              title="Фото / GIF"
-              className="p-2.5 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-40"
-            >
-              {uploading ? <Loader2 size={20} className="animate-spin" /> : <Image size={20} />}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowEmoji(e => !e)}
-              title="Эмодзи"
-              className={`p-2.5 rounded-xl transition-colors ${showEmoji ? 'text-primary-400 bg-slate-800' : 'text-slate-400 hover:text-primary-400 hover:bg-slate-800'}`}
-            >
-              <Smile size={20} />
-            </button>
-
-            {/* Emoji picker — does NOT close on emoji select */}
-            {showEmoji && (
-              <EmojiPicker
-                onSelect={emoji => insertEmoji(emoji)}
-                onClose={() => setShowEmoji(false)}
-              />
-            )}
-
-            {content && (
-              <span className="ml-auto text-xs text-slate-600">Черновик сохранён</span>
-            )}
+        {/* Emoji picker (portal, opened from header) */}
+        {showEmoji && (
+          <div className="relative">
+            <EmojiPicker
+              onSelect={emoji => insertEmoji(emoji)}
+              onClose={() => setShowEmoji(false)}
+            />
           </div>
-        </div>
+        )}
       </div>
 
       {showServicePicker && (
