@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Users, Check, X, MessageCircle, UserX, Clock,
   Pin, PinOff, Search, Wifi, Link2, Star, Crown, BadgeCheck, Music2,
-  CheckCheck, ArrowDownLeft, ChevronRight,
+  ArrowDownLeft, ChevronRight,
 } from 'lucide-react';
 import { friendshipAPI, connectionAPI, favoriteAPI, groupAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
@@ -512,7 +512,6 @@ const { data: myBreakRequests = [] } = useQuery({
                   <SectionHeader label="Мои связи" count={connPartners.length} />
                   <div className="divide-y divide-slate-800/60">
                     {connPartners.map((g: any) => {
-                      const c = g.connections[0];
                       const roles = [...new Set(g.connections.map((x: any) => x.myRole ?? (x.iAmRequester ? 'CUSTOMER' : 'EXECUTOR')))] as string[];
                       const ROLE_LABEL_SHORT: Record<string, string> = { CUSTOMER: 'Заказчик', EXECUTOR: 'Исполнитель', COLLEAGUE: 'Коллега' };
                       const ROLE_CLR: Record<string, string> = {

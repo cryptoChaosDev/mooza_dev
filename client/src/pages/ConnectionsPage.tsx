@@ -120,7 +120,6 @@ export default function ConnectionsPage() {
                     <div className="flex items-center gap-1">
                       {accepted.length > 0 && <CheckCheck size={12} className="text-emerald-400" />}
                       {pending.length > 0  && <Clock size={12} className="text-slate-400" />}
-                      {statusDot}
                     </div>
                     {conns.length > 1 && (
                       <span className="text-[10px] text-slate-500">{conns.length} связей</span>
