@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Link2, CheckCheck, Clock, XCircle, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Link2, CheckCheck, Clock, ChevronRight } from 'lucide-react';
 import { connectionAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import { type ConnectionData } from '../components/ConnectionCard';
@@ -19,12 +19,6 @@ const ROLE_COLOR: Record<string, string> = {
   COLLEAGUE: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
 };
 
-function statusDot(status: string) {
-  if (status === 'ACCEPTED') return <CheckCheck size={12} className="text-emerald-400" />;
-  if (status === 'PENDING')  return <Clock size={12} className="text-slate-400" />;
-  if (status === 'REJECTED') return <XCircle size={12} className="text-red-400" />;
-  return null;
-}
 
 interface PartnerGroup {
   partner: ConnectionData['partner'];
