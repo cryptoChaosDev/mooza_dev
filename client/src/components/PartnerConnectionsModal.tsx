@@ -73,7 +73,7 @@ export default function PartnerConnectionsModal({ partner, connections, onClose,
         </button>
 
         {/* Connections list */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto overscroll-contain">
           <p className="px-5 pt-4 pb-2 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
             Всего связей: {connections.length}
           </p>

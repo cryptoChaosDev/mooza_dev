@@ -120,7 +120,7 @@ export default function FlowSettingsPage() {
         </div>
 
         {/* Apply button */}
-        <div className="fixed bottom-0 left-0 right-0 p-4 pb-[calc(1rem+56px)] lg:pb-4 bg-slate-950/95 border-t border-slate-800 backdrop-blur">
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-950/95 border-t border-slate-800 backdrop-blur lg:pb-4" style={{ paddingBottom: 'calc(1rem + 56px + env(safe-area-inset-bottom, 0px))' }}>
           <button
             onClick={() => navigate(-1)}
             className="w-full max-w-2xl mx-auto block py-3 bg-primary-600 hover:bg-primary-500 text-white font-semibold rounded-2xl transition-colors"

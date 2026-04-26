@@ -24,7 +24,9 @@ body {
 }
 
 #root {
-  min-height: 100vh;
+  /* dvh = dynamic viewport height — correctly excludes browser chrome on iOS */
+  min-height: 100dvh;
+  min-height: 100vh; /* fallback for older browsers */
   display: flex;
   flex-direction: column;
 }
@@ -66,15 +68,36 @@ input, textarea, select {
   background: #64748b;
 }
 
-/* Safe area padding for modern mobile devices */
+/* Safe area padding for modern mobile devices (requires viewport-fit=cover) */
 @supports (padding: max(0px)) {
   .pb-safe {
     padding-bottom: max(1rem, env(safe-area-inset-bottom));
   }
-  
   .pt-safe {
     padding-top: max(1rem, env(safe-area-inset-top));
   }
+  /* Bottom nav clearance: nav height + safe area */
+  .pb-nav {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* Prevent body scroll when modal is open on iOS */
+body.modal-open {
+  overflow: hidden;
+  position: fixed;
+  width: 100%;
+}
+
+/* iOS momentum scrolling for scroll containers */
+.overflow-y-auto,
+.overflow-y-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Modal overlay — prevent scroll bleed-through on iOS */
+.modal-overlay {
+  overscroll-behavior: contain;
 }
 
 /* Focus styles for accessibility */
