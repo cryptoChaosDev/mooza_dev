@@ -116,6 +116,23 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   }
 });
 
+// ── GET /api/connections/all ──────────────────────────────────────────────────
+// All my connections regardless of status, ordered by most recent
+router.get('/all', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const conns = await prisma.connection.findMany({
+      where: { OR: [{ requesterId: meId }, { receiverId: meId }] },
+      include: CONN_INCLUDE,
+      orderBy: { updatedAt: 'desc' },
+    });
+    return res.json(conns.map(c => formatConnection(c, meId)));
+  } catch (err) {
+    console.error('[connections] GET /all', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 // ── GET /api/connections ──────────────────────────────────────────────────────
 // My accepted connections
 router.get('/', authenticate, async (req: AuthRequest, res: Response) => {

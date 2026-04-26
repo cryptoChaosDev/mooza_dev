@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConnectionCard from '../components/ConnectionCard';
+import PartnerConnectionsModal from '../components/PartnerConnectionsModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import BadgeTooltip from '../components/BadgeTooltip';
 import SelectField from '../components/SelectField';
@@ -137,6 +138,7 @@ export default function ProfilePage() {
   // Chip panels
 
   const [viewConn, setViewConn] = useState<any>(null);
+  const [viewPartner, setViewPartner] = useState<{ partner: any; connections: any[] } | null>(null);
 
   const [myStandaloneProfessions, setMyStandaloneProfessions] = useState<{ professionId: string; professionName: string }[]>([]);
   const [editingProfessions, setEditingProfessions] = useState(false);
@@ -234,10 +236,19 @@ export default function ProfilePage() {
     },
   });
 
-  const { data: myConnections = [] } = useQuery({
-    queryKey: ['connections-accepted'],
-    queryFn: async () => { const { data } = await connectionAPI.getAccepted(); return data; },
+  const { data: myConnectionsRaw = [] } = useQuery({
+    queryKey: ['connections-all'],
+    queryFn: async () => { const { data } = await connectionAPI.getAll(); return data as any[]; },
   });
+  // One entry per unique partner
+  const myConnPartners = Array.from(
+    myConnectionsRaw.reduce((map: Map<string, { partner: any; connections: any[] }>, c: any) => {
+      const pid = c.partner.id;
+      if (!map.has(pid)) map.set(pid, { partner: c.partner, connections: [] });
+      map.get(pid)!.connections.push(c);
+      return map;
+    }, new Map()).values()
+  );
 
   const { data: myGroups = [] } = useQuery({
     queryKey: ['my-groups'],
@@ -732,7 +743,7 @@ export default function ProfilePage() {
               {/* ── Stats row ── */}
               <div className="grid grid-cols-2 divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
                 <button onClick={() => navigate('/friends?tab=connections')} className="flex flex-col items-center py-1.5 px-1 hover:bg-slate-800/40 transition-colors">
-                  <span className="text-sm font-bold text-white">{myConnections.length}</span>
+                  <span className="text-sm font-bold text-white">{myConnPartners.length}</span>
                   <span className="text-[9px] text-slate-500">Связи</span>
                 </button>
                 <button disabled className="flex flex-col items-center py-1.5 px-1 pointer-events-none opacity-40">
@@ -1018,19 +1029,23 @@ export default function ProfilePage() {
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <Link2 size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Связи</span>
-                {myConnections.length > 0 && <span className="text-xs text-slate-500">{myConnections.length}</span>}
-                {myConnections.length > 3 && profile?.id && (
+                {myConnPartners.length > 0 && <span className="text-xs text-slate-500">{myConnPartners.length}</span>}
+                {myConnPartners.length > 3 && profile?.id && (
                   <button onClick={() => navigate(`/profile/${profile.id}/connections`)} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
                     Смотреть все
                   </button>
                 )}
               </div>
-              {myConnections.length === 0 ? (
+              {myConnPartners.length === 0 ? (
                 <div className="px-4 py-4 text-sm text-slate-600 italic">Связей пока нет</div>
               ) : (
                 <div className="divide-y divide-slate-800/40">
-                  {myConnections.slice(0, 3).map((c: any) => (
-                    <ConnectionCard key={c.id} connection={c} onClick={() => setViewConn(c)} />
+                  {myConnPartners.slice(0, 3).map((g: any) => (
+                    <ConnectionCard
+                      key={g.partner.id}
+                      connection={{ ...g.connections[0], partner: g.partner }}
+                      onClick={() => setViewPartner(g)}
+                    />
                   ))}
                 </div>
               )}
@@ -1189,6 +1204,13 @@ export default function ProfilePage() {
     )}
 
     {viewConn && <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />}
+    {viewPartner && (
+      <PartnerConnectionsModal
+        partner={viewPartner.partner}
+        connections={viewPartner.connections}
+        onClose={() => setViewPartner(null)}
+      />
+    )}
 
     <ConfirmDialog
       open={confirmDeleteServiceIdx !== null}

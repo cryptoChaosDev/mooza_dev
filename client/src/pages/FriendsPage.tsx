@@ -4,13 +4,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Users, Check, X, MessageCircle, UserX, Clock,
   Pin, PinOff, Search, Wifi, Link2, Star, Crown, BadgeCheck, Music2,
-  CheckCheck, ArrowDownLeft,
+  CheckCheck, ArrowDownLeft, ChevronRight,
 } from 'lucide-react';
 import { friendshipAPI, connectionAPI, favoriteAPI, groupAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { usePresenceStore } from '../stores/presenceStore';
 import { formatLastSeen } from '../lib/lastSeen';
 import ConnectionViewModal from '../components/ConnectionViewModal';
+import PartnerConnectionsModal from '../components/PartnerConnectionsModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 
 type Tab = 'friends' | 'connections' | 'favorites' | 'groups';
@@ -39,6 +40,7 @@ export default function FriendsPage() {
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<Tab>((searchParams.get('tab') as Tab) || 'friends');
   const [viewConn, setViewConn] = useState<any>(null);
+  const [viewPartner, setViewPartner] = useState<{ partner: any; connections: any[] } | null>(null);
   const [confirmRemoveFriend, setConfirmRemoveFriend] = useState<string | null>(null);
   const [confirmRemoveFav, setConfirmRemoveFav] = useState<string | null>(null);
 
@@ -69,10 +71,19 @@ export default function FriendsPage() {
   });
 
   // ── Connections ──
-  const { data: connections = [] } = useQuery({
-    queryKey: ['connections-accepted'],
-    queryFn: async () => { const { data } = await connectionAPI.getAccepted(); return data; },
+  const { data: connectionsRaw = [] } = useQuery({
+    queryKey: ['connections-all'],
+    queryFn: async () => { const { data } = await connectionAPI.getAll(); return data as any[]; },
   });
+  // Group by partner — one entry per unique person
+  const connPartners: { partner: any; connections: any[] }[] = Array.from(
+    connectionsRaw.reduce((map: Map<string, { partner: any; connections: any[] }>, c: any) => {
+      const pid = c.partner.id;
+      if (!map.has(pid)) map.set(pid, { partner: c.partner, connections: [] });
+      map.get(pid)!.connections.push(c);
+      return map;
+    }, new Map()).values()
+  );
   const { data: connRequests = [] } = useQuery({
     queryKey: ['connections-requests'],
     queryFn: async () => { const { data } = await connectionAPI.getRequests(); return data; },
@@ -496,46 +507,43 @@ const { data: myBreakRequests = [] } = useQuery({
                 </div>
               )}
 
-              {connections.length > 0 && (
+              {connPartners.length > 0 && (
                 <div>
-                  <SectionHeader label="Мои связи" count={connections.length} />
+                  <SectionHeader label="Мои связи" count={connPartners.length} />
                   <div className="divide-y divide-slate-800/60">
-                    {connections.map((c: any) => (
-                      <div key={c.id} onClick={() => setViewConn(c)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer">
-                        <div className="flex-shrink-0"><UserAvatar user={c.partner} /></div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</span>
-                            {c.partner.isPremium && <Crown size={13} className="text-amber-400 flex-shrink-0" />}
-                            {c.partner.isVerified && <BadgeCheck size={13} className="text-sky-400 flex-shrink-0" />}
+                    {connPartners.map((g: any) => {
+                      const c = g.connections[0];
+                      const roles = [...new Set(g.connections.map((x: any) => x.myRole ?? (x.iAmRequester ? 'CUSTOMER' : 'EXECUTOR')))] as string[];
+                      const ROLE_LABEL_SHORT: Record<string, string> = { CUSTOMER: 'Заказчик', EXECUTOR: 'Исполнитель', COLLEAGUE: 'Коллега' };
+                      const ROLE_CLR: Record<string, string> = {
+                        CUSTOMER: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
+                        EXECUTOR: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                        COLLEAGUE: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
+                      };
+                      return (
+                        <div key={g.partner.id} onClick={() => setViewPartner(g)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer">
+                          <div className="flex-shrink-0"><UserAvatar user={g.partner} /></div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-sm font-semibold text-white truncate">{g.partner.firstName} {g.partner.lastName}</span>
+                              {g.partner.isPremium && <Crown size={13} className="text-amber-400 flex-shrink-0" />}
+                              {g.partner.isVerified && <BadgeCheck size={13} className="text-sky-400 flex-shrink-0" />}
+                            </div>
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {roles.map((r: string) => (
+                                <span key={r} className={`text-[11px] rounded-md px-1.5 py-0.5 border ${ROLE_CLR[r] ?? 'bg-slate-700/40 text-slate-400 border-slate-700'}`}>
+                                  {ROLE_LABEL_SHORT[r] ?? r}
+                                </span>
+                              ))}
+                              {g.connections.length > 1 && (
+                                <span className="text-[11px] text-slate-500">{g.connections.length} связей</span>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {c.profession ? (
-                              <span className="text-[11px] bg-amber-500/10 text-amber-300 border border-amber-500/20 rounded-md px-1.5 py-0.5">{c.profession.name}</span>
-                            ) : (
-                              <>
-                                {c.services?.slice(0, 3).map((s: any) => (
-                                  <span key={s.id} className="text-[11px] bg-primary-500/10 text-primary-300 border border-primary-500/20 rounded-md px-1.5 py-0.5">{s.name}</span>
-                                ))}
-                                {c.services?.length > 3 && <span className="text-[11px] text-slate-500">+{c.services.length - 3}</span>}
-                              </>
-                            )}
-                            <span className={`text-[11px] rounded-md px-1.5 py-0.5 border ${
-                              c.myRole === 'CUSTOMER'  ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' :
-                              c.myRole === 'EXECUTOR'  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                              c.myRole === 'COLLEAGUE' ? 'bg-violet-500/10 text-violet-400 border-violet-500/20' :
-                              c.iAmRequester ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
-                            }`}>
-                              {c.myRole === 'CUSTOMER'  ? 'Я заказчик' :
-                               c.myRole === 'EXECUTOR'  ? 'Я исполнитель' :
-                               c.myRole === 'COLLEAGUE' ? 'Я коллега' :
-                               c.iAmRequester ? 'Я заказчик' : 'Я исполнитель'}
-                            </span>
-                          </div>
+                          <ChevronRight size={14} className="text-slate-500 flex-shrink-0" />
                         </div>
-                        <CheckCheck size={15} className="text-emerald-400 flex-shrink-0" />
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -588,7 +596,7 @@ const { data: myBreakRequests = [] } = useQuery({
                 </div>
               )}
 
-              {connections.length === 0 && connRequests.length === 0 && connSent.length === 0 && connRejected.length === 0 && myBreakRequests.length === 0 && connHistory.length === 0 && (
+              {connPartners.length === 0 && connRequests.length === 0 && connSent.length === 0 && connRejected.length === 0 && myBreakRequests.length === 0 && connHistory.length === 0 && (
                 <div className="flex flex-col items-center py-16 px-6 text-center">
                   <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Link2 size={32} className="text-slate-600" /></div>
                   <p className="text-white font-semibold mb-1">Нет профессиональных связей</p>
@@ -760,6 +768,14 @@ const { data: myBreakRequests = [] } = useQuery({
 
     {viewConn && (
       <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />
+    )}
+    {viewPartner && (
+      <PartnerConnectionsModal
+        partner={viewPartner.partner}
+        connections={viewPartner.connections}
+        onClose={() => setViewPartner(null)}
+        onConnectionUpdated={() => setViewPartner(null)}
+      />
     )}
     <ConfirmDialog
       open={!!confirmRemoveFriend}

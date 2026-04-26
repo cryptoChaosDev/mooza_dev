@@ -284,6 +284,7 @@ export const connectionAPI = {
   cancelBreak: (id: string) => api.patch(`/connections/${id}/cancel-break`),
   addServices: (id: string, serviceIds: string[]) => api.patch(`/connections/${id}/add-services`, { serviceIds }),
   getMyBreakRequests: () => api.get('/connections/my-break-requests'),
+  getAll: () => api.get('/connections/all'),
   getRejected: () => api.get('/connections/rejected'),
   getHistory: () => api.get('/connections/history'),
 };
