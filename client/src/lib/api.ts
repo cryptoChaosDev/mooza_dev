@@ -37,6 +37,8 @@ export const authAPI = {
     api.post('/auth/login', { email, password }),
   telegramLogin: (data: Record<string, string | number>) =>
     api.post('/auth/telegram', data),
+  telegramMiniApp: (initData: string) =>
+    api.post('/auth/telegram/miniapp', { initData }),
   telegramToken: () => api.post('/auth/telegram/token'),
   telegramPoll: (token: string) => api.get(`/auth/telegram/poll/${token}`),
   vkToken: (accessToken: string) =>

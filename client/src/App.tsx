@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from './stores/authStore';
@@ -6,6 +6,8 @@ import { useBadgeStore } from './stores/badgeStore';
 import { usePresenceStore } from './stores/presenceStore';
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket';
 import Layout from './components/Layout';
+import { IS_TMA, initTelegramApp, twa } from './lib/telegram';
+import { authAPI } from './lib/api';
 
 
 const LandingPage        = lazy(() => import('./pages/LandingPage'));
@@ -104,11 +106,29 @@ function BadgeClearer() {
   return null;
 }
 
+function TelegramBackButton() {
+  const location = useLocation();
+  useEffect(() => {
+    const app = twa();
+    if (!app) return;
+    if (location.pathname === '/') {
+      app.BackButton.hide();
+    } else {
+      app.BackButton.show();
+      const handler = () => window.history.back();
+      app.BackButton.onClick(handler);
+      return () => app.BackButton.offClick(handler);
+    }
+  }, [location.pathname]);
+  return null;
+}
+
 function AppRoutes() {
   const { user } = useAuthStore();
   return (
     <Layout>
       <BadgeClearer />
+      {IS_TMA && <TelegramBackButton />}
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/"                 element={<FeedPage />} />
@@ -140,12 +160,45 @@ function AppRoutes() {
   );
 }
 
+// ─── Telegram Mini App auto-login screen ─────────────────────────────────────
+function TelegramAutoLogin({ onDone }: { onDone: () => void }) {
+  const { setAuth } = useAuthStore();
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    initTelegramApp();
+    const initData = twa()?.initData || '';
+    authAPI.telegramMiniApp(initData)
+      .then(({ data }) => { setAuth(data.user, data.token); onDone(); })
+      .catch(() => setError('Не удалось войти через Telegram'));
+  }, []);
+
+  if (error) return (
+    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 px-6 text-center">
+      <p className="text-red-400 text-sm">{error}</p>
+      <button onClick={onDone} className="text-primary-400 text-sm underline">Открыть в браузере</button>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent" />
+    </div>
+  );
+}
+
 function App() {
   const { token } = useAuthStore();
   const queryClient = useQueryClient();
+  const [tmaLoading, setTmaLoading] = useState(() => IS_TMA && !token);
   // useBadgeStore.getState() is called inside callbacks — no subscription, no re-renders
   const bs = () => useBadgeStore.getState();
   const presence = () => usePresenceStore.getState();
+
+  // Initialize TG SDK for already-authenticated users
+  useEffect(() => {
+    if (IS_TMA && token) initTelegramApp();
+  }, [token]);
 
   useEffect(() => {
     if (!token) {
@@ -337,6 +390,11 @@ function App() {
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, queryClient]);
+
+  // Telegram Mini App: auto-login before anything else
+  if (tmaLoading) {
+    return <TelegramAutoLogin onDone={() => setTmaLoading(false)} />;
+  }
 
   if (!token) {
     return (

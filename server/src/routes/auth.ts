@@ -401,6 +401,74 @@ router.post('/telegram/webhook', async (req, res) => {
   }
 });
 
+// ─── 4. Telegram Mini App — initData auth ────────────────────────────────────
+router.post('/telegram/miniapp', authLimiter, async (req, res) => {
+  try {
+    const { initData } = req.body as { initData: string };
+    if (!initData) return res.status(400).json({ error: 'No initData' });
+
+    const botToken = process.env.TELEGRAM_BOT_TOKEN || '';
+    if (!botToken) return res.status(500).json({ error: 'Bot not configured' });
+
+    // Validate initData signature (HMAC-SHA256)
+    const params = new URLSearchParams(initData);
+    const hash = params.get('hash');
+    if (!hash) return res.status(400).json({ error: 'No hash in initData' });
+
+    params.delete('hash');
+    const dataCheckString = [...params.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([k, v]) => `${k}=${v}`)
+      .join('\n');
+
+    const secretKey = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
+    const computedHash = crypto.createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+
+    if (computedHash !== hash) return res.status(401).json({ error: 'Invalid initData' });
+
+    // Check auth_date freshness (24h)
+    const authDate = Number(params.get('auth_date') || 0);
+    if (Date.now() / 1000 - authDate > 86400) {
+      return res.status(401).json({ error: 'initData expired' });
+    }
+
+    // Parse user from initData
+    const userJson = params.get('user');
+    if (!userJson) return res.status(400).json({ error: 'No user in initData' });
+    const tgUser = JSON.parse(userJson) as {
+      id: number; first_name: string; last_name?: string; username?: string; photo_url?: string;
+    };
+    const telegramId = String(tgUser.id);
+
+    // Find or create user
+    let user = await prisma.user.findUnique({ where: { telegramId } });
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          telegramId,
+          telegramUsername: tgUser.username || null,
+          firstName: tgUser.first_name || 'Пользователь',
+          lastName: tgUser.last_name || '',
+          nickname: tgUser.username || null,
+          avatar: tgUser.photo_url || null,
+        },
+      });
+    } else {
+      user = await prisma.user.update({
+        where: { telegramId },
+        data: { telegramUsername: tgUser.username || user.telegramUsername },
+      });
+    }
+
+    const token = generateToken({ userId: user.id });
+    const { password: _, ...safe } = user as any;
+    res.json({ user: safe, token });
+  } catch (e) {
+    console.error('[TMA auth]', e);
+    res.status(500).json({ error: 'Ошибка авторизации' });
+  }
+});
+
 // ─── VK OAuth 2.0 (standard, oauth.vk.com) ───────────────────────────────────
 const vkStateSet = new Set<string>();
 setInterval(() => { if (vkStateSet.size > 1000) vkStateSet.clear(); }, 60_000);
