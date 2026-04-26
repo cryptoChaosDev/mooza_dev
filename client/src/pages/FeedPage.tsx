@@ -258,6 +258,8 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
       const { data } = await postAPI.uploadMedia(fd);
       if (type === 'image') setEditImagePreview({ url: URL.createObjectURL(file), serverUrl: data.url });
       else setEditAudioFile({ name: file.name, serverUrl: data.url });
+    } catch {
+      alert('Не удалось загрузить файл. Проверьте формат и размер (до 20 МБ).');
     } finally { setEditUploading(false); }
   };
 
@@ -335,7 +337,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                 <button type="button" onClick={() => editImageRef.current?.click()} disabled={editUploading || !!editImagePreview} className="p-1.5 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-40">
                   {editUploading && !editAudioFile ? <Loader2 size={14} className="animate-spin" /> : <Image size={14} />}
                 </button>
-                <input ref={editAudioRef} type="file" accept="audio/mp3,audio/mpeg,audio/wav,audio/ogg,.mp3,.wav,.ogg" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadEditFile(f, 'audio'); e.target.value = ''; }} />
+                <input ref={editAudioRef} type="file" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadEditFile(f, 'audio'); e.target.value = ''; }} />
                 <button type="button" onClick={() => editAudioRef.current?.click()} disabled={editUploading || !!editAudioFile} className="p-1.5 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-40">
                   {editUploading && !editImagePreview ? <Loader2 size={14} className="animate-spin" /> : <Music size={14} />}
                 </button>

@@ -86,6 +86,8 @@ export default function CreatePostPage() {
       const { data } = await postAPI.uploadMedia(fd);
       if (fileType === 'image') setImagePreview({ url: URL.createObjectURL(file), serverUrl: data.url });
       else setAudioFile({ name: file.name, serverUrl: data.url });
+    } catch {
+      alert('Не удалось загрузить файл. Проверьте формат и размер (до 20 МБ).');
     } finally {
       setUploading(false);
     }
@@ -268,7 +270,7 @@ export default function CreatePostPage() {
               {uploading && !audioFile ? <Loader2 size={20} className="animate-spin" /> : <Image size={20} />}
             </button>
 
-            <input ref={audioInputRef} type="file" accept="audio/mp3,audio/mpeg,audio/wav,audio/ogg,audio/flac,.mp3,.wav,.ogg,.flac" className="hidden"
+            <input ref={audioInputRef} type="file" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac" className="hidden"
               onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f, 'audio'); e.target.value = ''; }} />
             <button
               type="button"

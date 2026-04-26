@@ -151,7 +151,8 @@ const postMediaFilter = (req: any, file: any, cb: any) => {
   const allowedTypes = [
     'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
     'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/wave', 'audio/x-wav',
-    'audio/ogg', 'audio/flac',
+    'audio/ogg', 'audio/flac', 'audio/mp4', 'audio/x-m4a', 'audio/aac',
+    'audio/x-aac', 'audio/3gpp', 'audio/3gpp2',
   ];
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
