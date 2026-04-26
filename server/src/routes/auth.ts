@@ -55,6 +55,8 @@ const registerSchema = z.object({
   artistIds: z.array(z.string()).optional(),
   // Step 7: Password
   password: z.string().min(8),
+  // Referral
+  referrerId: z.string().optional(),
 });
 
 const loginSchema = z.object({
@@ -104,6 +106,7 @@ router.post('/register', registerLimiter, async (req, res) => {
         country: data.country,
         city: data.city,
         fieldOfActivityId: data.fieldOfActivityId || undefined,
+        referrerId: data.referrerId || undefined,
         // Create user professions
         userProfessions: data.userProfessions && data.userProfessions.length > 0
           ? {

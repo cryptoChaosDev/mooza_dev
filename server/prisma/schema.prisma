@@ -446,6 +446,11 @@ model User {
   channel              Channel?
   channelSubscriptions ChannelSubscription[]
 
+  // Referrals
+  referrerId String?
+  referrer   User?  @relation("UserReferrals", fields: [referrerId], references: [id], onDelete: SetNull)
+  referrals  User[] @relation("UserReferrals")
+
   lastSeenAt    DateTime?
   termsAgreedAt DateTime?
 
@@ -457,6 +462,7 @@ model User {
   @@index([role])
   @@index([fieldOfActivityId])
   @@index([employerId])
+  @@index([referrerId])
 }
 
 // ============ JOIN TABLES ============

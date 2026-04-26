@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Eye, EyeOff, AlertCircle, Loader2,
   Check, Globe, ArrowRight, ArrowLeft,
@@ -84,6 +84,8 @@ const STEPS = [
 export default function RegisterPage() {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
+  const [searchParams] = useSearchParams();
+  const referrerId = searchParams.get('ref') || undefined;
 
   const [step, setStep] = useState(0); // 0-based
   const [email, setEmail] = useState('');
@@ -143,6 +145,7 @@ export default function RegisterPage() {
       const digits = unformatPhone(phone);
       if (digits.length >= 11) payload.phone = '+' + digits;
 
+      if (referrerId) payload.referrerId = referrerId;
       const { data } = await authAPI.register(payload);
       if (data.pendingVerification) {
         setPendingEmail(data.email);

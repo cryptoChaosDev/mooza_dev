@@ -366,6 +366,10 @@ export const adminAPI = {
   },
 };
 
+export const referralAPI = {
+  getStats: () => api.get('/referrals/stats'),
+};
+
 // Search Filters Type
 export interface SearchFilters {
   fieldId?: string;

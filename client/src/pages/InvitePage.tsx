@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Copy, Check, Share2, Users, Star, Music2 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import { referralAPI } from '../lib/api';
 
 const APP_URL = 'https://moooza.ru';
 
@@ -9,6 +11,13 @@ export default function InvitePage() {
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const [copied, setCopied] = useState(false);
+
+  const { data: stats } = useQuery({
+    queryKey: ['referral-stats'],
+    queryFn: async () => { const { data } = await referralAPI.getStats(); return data as { count: number }; },
+  });
+  const referralCount = stats?.count ?? 0;
+  const GOAL = 100;
 
   const refLink = `${APP_URL}/register?ref=${user?.id ?? ''}`;
 
@@ -112,28 +121,29 @@ export default function InvitePage() {
             Поделиться ссылкой
           </button>
 
-          {/* Stats placeholder */}
+          {/* Stats */}
           <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Ваш прогресс</p>
             <div className="flex items-center gap-4">
               <div className="text-center flex-1">
-                <p className="text-2xl font-bold text-white">0</p>
-                <p className="text-xs text-slate-500 mt-0.5">Приглашено</p>
-              </div>
-              <div className="w-px h-10 bg-slate-800" />
-              <div className="text-center flex-1">
-                <p className="text-2xl font-bold text-white">0</p>
+                <p className="text-2xl font-bold text-white">{referralCount}</p>
                 <p className="text-xs text-slate-500 mt-0.5">Зарегистрировались</p>
               </div>
               <div className="w-px h-10 bg-slate-800" />
               <div className="text-center flex-1">
-                <p className="text-2xl font-bold text-amber-400">100</p>
+                <p className="text-2xl font-bold text-amber-400">{GOAL}</p>
                 <p className="text-xs text-slate-500 mt-0.5">Цель</p>
               </div>
             </div>
             <div className="mt-4 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-              <div className="h-full w-0 bg-primary-500 rounded-full transition-all" />
+              <div
+                className="h-full bg-primary-500 rounded-full transition-all"
+                style={{ width: `${Math.min(100, (referralCount / GOAL) * 100)}%` }}
+              />
             </div>
+            {referralCount >= GOAL && (
+              <p className="mt-3 text-xs text-amber-400 font-semibold text-center">🎉 Цель достигнута! Вы Амбасадор Moooza</p>
+            )}
           </div>
 
           {/* How it works */}

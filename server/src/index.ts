@@ -32,6 +32,7 @@ import artistRoutes from './routes/artists';
 import connectionRoutes from './routes/connections';
 import favoriteRoutes from './routes/favorites';
 import groupRoutes from './routes/groups';
+import referralRoutes from './routes/referrals';
 
 // Load environment variables
 dotenv.config();
@@ -141,6 +142,7 @@ app.use('/api/artists', artistRoutes);
 app.use('/api/connections', connectionRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/groups', groupRoutes);
+app.use('/api/referrals', referralRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
