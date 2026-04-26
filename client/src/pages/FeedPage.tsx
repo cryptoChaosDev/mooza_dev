@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Send, Heart, MessageCircle, Trash2, Loader2, X,
-  MoreHorizontal, Image, Music, Pencil, Check,
+  MoreHorizontal, Image, Pencil, Check,
   Crown, BadgeCheck, Ban, SlidersHorizontal,
   Plus, FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench,
   Zap,
@@ -215,12 +215,8 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const [editImagePreview, setEditImagePreview] = useState<{ url: string; serverUrl: string } | null>(
     post.imageUrl ? { url: `${API_URL}${post.imageUrl}`, serverUrl: post.imageUrl } : null
   );
-  const [editAudioFile, setEditAudioFile] = useState<{ name: string; serverUrl: string } | null>(
-    post.audioUrl ? { name: post.audioName || post.audioUrl.split('/').pop() || 'audio', serverUrl: post.audioUrl } : null
-  );
   const [editUploading, setEditUploading] = useState(false);
   const editImageRef = useRef<HTMLInputElement>(null);
-  const editAudioRef = useRef<HTMLInputElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const commentInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -245,19 +241,18 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
 
   const likeMut = useMutation({ mutationFn: () => post.isLiked ? postAPI.unlikePost(post.id) : postAPI.likePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
   const commentMut = useMutation({ mutationFn: (content: string) => postAPI.commentPost(post.id, content), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setCommentText(''); } });
-  const editMut = useMutation({ mutationFn: () => postAPI.editPost(post.id, { content: editContent, imageUrl: editImagePreview?.serverUrl ?? null, audioUrl: editAudioFile?.serverUrl ?? null, audioName: editAudioFile?.name ?? null }), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setEditing(false); } });
+  const editMut = useMutation({ mutationFn: () => postAPI.editPost(post.id, { content: editContent, imageUrl: editImagePreview?.serverUrl ?? null, audioUrl: null, audioName: null }), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setEditing(false); } });
   const deleteMut = useMutation({ mutationFn: () => postAPI.deletePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
   const reactMut = useMutation({ mutationFn: (emoji: string) => postAPI.reactPost(post.id, emoji), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
   const unreactMut = useMutation({ mutationFn: () => postAPI.unreactPost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
 
-  const uploadEditFile = async (file: File, type: 'image' | 'audio') => {
+  const uploadEditFile = async (file: File) => {
     setEditUploading(true);
     try {
       const fd = new FormData();
       fd.append('file', file);
       const { data } = await postAPI.uploadMedia(fd);
-      if (type === 'image') setEditImagePreview({ url: URL.createObjectURL(file), serverUrl: data.url });
-      else setEditAudioFile({ name: file.name, serverUrl: data.url });
+      setEditImagePreview({ url: URL.createObjectURL(file), serverUrl: data.url });
     } catch {
       alert('Не удалось загрузить файл. Проверьте формат и размер (до 20 МБ).');
     } finally { setEditUploading(false); }
@@ -324,22 +319,11 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                 <button type="button" onClick={() => setEditImagePreview(null)} className="absolute top-1.5 right-1.5 p-1 bg-slate-900/80 hover:bg-slate-900 rounded-full text-white"><X size={12} /></button>
               </div>
             )}
-            {editAudioFile && (
-              <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2">
-                <Music size={13} className="text-primary-400 flex-shrink-0" />
-                <span className="text-xs text-slate-300 truncate flex-1">{editAudioFile.name}</span>
-                <button type="button" onClick={() => setEditAudioFile(null)} className="text-slate-500 hover:text-white transition-colors"><X size={13} /></button>
-              </div>
-            )}
             <div className="flex items-center justify-between">
               <div className="flex gap-1">
-                <input ref={editImageRef} type="file" accept="image/*,.gif" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadEditFile(f, 'image'); e.target.value = ''; }} />
+                <input ref={editImageRef} type="file" accept="image/*,.gif" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadEditFile(f); e.target.value = ''; }} />
                 <button type="button" onClick={() => editImageRef.current?.click()} disabled={editUploading || !!editImagePreview} className="p-1.5 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-40">
-                  {editUploading && !editAudioFile ? <Loader2 size={14} className="animate-spin" /> : <Image size={14} />}
-                </button>
-                <input ref={editAudioRef} type="file" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadEditFile(f, 'audio'); e.target.value = ''; }} />
-                <button type="button" onClick={() => editAudioRef.current?.click()} disabled={editUploading || !!editAudioFile} className="p-1.5 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-40">
-                  {editUploading && !editImagePreview ? <Loader2 size={14} className="animate-spin" /> : <Music size={14} />}
+                  {editUploading ? <Loader2 size={14} className="animate-spin" /> : <Image size={14} />}
                 </button>
               </div>
               <div className="flex gap-2">

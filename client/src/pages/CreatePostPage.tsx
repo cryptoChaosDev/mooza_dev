@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, Image, Music, Smile, Send, X, Loader2,
+  ArrowLeft, Image, Smile, Send, X, Loader2,
   FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench, Plus,
 } from 'lucide-react';
 import { postAPI } from '../lib/api';
@@ -32,15 +32,12 @@ export default function CreatePostPage() {
 
   const [content, setContent] = useState(() => localStorage.getItem(DRAFT_KEY) || '');
   const [imagePreview, setImagePreview] = useState<{ url: string; serverUrl: string } | null>(null);
-  const [audioFile, setAudioFile] = useState<{ name: string; serverUrl: string } | null>(null);
   const [showEmoji, setShowEmoji] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [pickedServices, setPickedServices] = useState<PickedService[]>([]);
   const [showServicePicker, setShowServicePicker] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
-  const audioInputRef = useRef<HTMLInputElement>(null);
-
   // Autosave draft
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -84,8 +81,7 @@ export default function CreatePostPage() {
       const fd = new FormData();
       fd.append('file', file);
       const { data } = await postAPI.uploadMedia(fd);
-      if (fileType === 'image') setImagePreview({ url: URL.createObjectURL(file), serverUrl: data.url });
-      else setAudioFile({ name: file.name, serverUrl: data.url });
+      setImagePreview({ url: URL.createObjectURL(file), serverUrl: data.url });
     } catch {
       alert('Не удалось загрузить файл. Проверьте формат и размер (до 20 МБ).');
     } finally {
@@ -103,7 +99,7 @@ export default function CreatePostPage() {
   });
 
   const isService = type === 'service';
-  const canPost = (content.trim() || imagePreview || audioFile || (isService && pickedServices.length > 0)) && !uploading;
+  const canPost = (content.trim() || imagePreview || (isService && pickedServices.length > 0)) && !uploading;
 
   const handlePublish = () => {
     if (!canPost) return;
@@ -118,8 +114,6 @@ export default function CreatePostPage() {
       content: finalContent,
       type,
       imageUrl: imagePreview?.serverUrl,
-      audioUrl: audioFile?.serverUrl,
-      audioName: audioFile?.name,
     });
   };
 
@@ -243,16 +237,6 @@ export default function CreatePostPage() {
             </div>
           )}
 
-          {/* Audio preview */}
-          {audioFile && (
-            <div className="mt-3 flex items-center gap-2 bg-slate-800/60 border border-slate-700 rounded-2xl px-4 py-3">
-              <Music size={16} className="text-primary-400 flex-shrink-0" />
-              <span className="text-sm text-slate-300 truncate flex-1">{audioFile.name}</span>
-              <button type="button" onClick={() => setAudioFile(null)} className="text-slate-500 hover:text-white transition-colors">
-                <X size={15} />
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Toolbar */}
@@ -267,19 +251,7 @@ export default function CreatePostPage() {
               title="Фото / GIF"
               className="p-2.5 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-40"
             >
-              {uploading && !audioFile ? <Loader2 size={20} className="animate-spin" /> : <Image size={20} />}
-            </button>
-
-            <input ref={audioInputRef} type="file" accept="audio/*,.mp3,.wav,.ogg,.flac,.m4a,.aac" className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f, 'audio'); e.target.value = ''; }} />
-            <button
-              type="button"
-              onClick={() => audioInputRef.current?.click()}
-              disabled={uploading || !!audioFile}
-              title="Музыка"
-              className="p-2.5 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-40"
-            >
-              {uploading && !imagePreview ? <Loader2 size={20} className="animate-spin" /> : <Music size={20} />}
+              {uploading ? <Loader2 size={20} className="animate-spin" /> : <Image size={20} />}
             </button>
 
             <button
