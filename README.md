@@ -308,7 +308,10 @@ docker exec mooza-api npx prisma migrate dev
 
 ## 📄 Лицензия
 
-MIT License
+Copyright (c) 2026 Anton Semin and Dmitry Dubrovin
+All rights reserved.
+This code is proprietary and confidential.
+Unauthorized copying, distribution, or use is strictly prohibited.
 
 ## 👥 Команда
 
