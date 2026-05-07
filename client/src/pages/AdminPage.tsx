@@ -1,12 +1,22 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { adminAPI, api, siteSettingsAPI } from '../lib/api';
-import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2, ShieldCheck, Clock, Zap } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2, ShieldCheck, Clock, Zap, Download } from 'lucide-react';
 import AvatarComponent from '../components/Avatar';
+import * as XLSX from 'xlsx';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
 interface Item { id: string; name: string; [key: string]: any }
+
+// ─── Export helper ──────────────────────────────────────────────────────────
+
+function exportToExcel(rows: Record<string, any>[], filename: string) {
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Данные');
+  XLSX.writeFile(wb, `${filename}.xlsx`);
+}
 
 // ─── Simple name-only CRUD table (used in Filters / Orgs tabs) ──────────────
 
@@ -73,12 +83,28 @@ function SimpleTable({
           <span className="text-xs text-slate-500">{items.length}</span>
         </div>
         {(!collapsible || open) && (
-          <button
-            onClick={() => { setAdding(true); setForm({}); }}
-            className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors"
-          >
-            <Plus size={14} /> Добавить
-          </button>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={() => {
+                const rows = items.map((item, i) => {
+                  const row: Record<string, any> = { '№': i + 1, 'Название': item.name };
+                  extraFields?.forEach(ef => { row[ef.label] = item[ef.key] ?? ''; });
+                  return row;
+                });
+                exportToExcel(rows, title);
+              }}
+              className="flex items-center gap-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2.5 py-1.5 rounded-lg transition-colors"
+              title="Экспорт в Excel"
+            >
+              <Download size={13} />
+            </button>
+            <button
+              onClick={() => { setAdding(true); setForm({}); }}
+              className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <Plus size={14} /> Добавить
+            </button>
+          </div>
         )}
       </div>
 
@@ -863,9 +889,16 @@ function DirectionsTab() {
           <h3 className="font-semibold text-white">Направления</h3>
           <span className="text-xs text-slate-500">{directions.length}</span>
         </div>
-        <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
-          <Plus size={14} /> Добавить
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => exportToExcel(directions.map((d, i) => ({ '№': i + 1, 'Название': d.name })), 'Направления')}
+            className="flex items-center gap-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2.5 py-1.5 rounded-lg transition-colors"
+            title="Экспорт в Excel"
+          ><Download size={13} /></button>
+          <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+            <Plus size={14} /> Добавить
+          </button>
+        </div>
       </div>
       <div className="px-3 py-2 border-b border-slate-800">
         <div className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-2.5 py-1">
@@ -949,9 +982,16 @@ function ProfessionsTab() {
           <h3 className="font-semibold text-white">Профессии</h3>
           <span className="text-xs text-slate-500">{professions.length}</span>
         </div>
-        <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
-          <Plus size={14} /> Добавить
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => exportToExcel(professions.map((p, i) => ({ '№': i + 1, 'Название': p.name })), 'Профессии')}
+            className="flex items-center gap-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2.5 py-1.5 rounded-lg transition-colors"
+            title="Экспорт в Excel"
+          ><Download size={13} /></button>
+          <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+            <Plus size={14} /> Добавить
+          </button>
+        </div>
       </div>
       <div className="px-3 py-2 border-b border-slate-800">
         <div className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-2.5 py-1">
@@ -1052,9 +1092,16 @@ function ServicesTab() {
           <h3 className="font-semibold text-white">Услуги</h3>
           <span className="text-xs text-slate-500">{services.length}</span>
         </div>
-        <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
-          <Plus size={14} /> Добавить
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => exportToExcel(services.map((s, i) => ({ '№': i + 1, 'Название': s.name, 'Порядок': s.sortOrder ?? '' })), 'Услуги')}
+            className="flex items-center gap-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2.5 py-1.5 rounded-lg transition-colors"
+            title="Экспорт в Excel"
+          ><Download size={13} /></button>
+          <button onClick={() => setAdding(true)} className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-lg transition-colors">
+            <Plus size={14} /> Добавить
+          </button>
+        </div>
       </div>
       <div className="px-3 py-2 border-b border-slate-800">
         <div className="flex items-center gap-2 bg-slate-800/60 rounded-lg px-2.5 py-1">
@@ -1477,6 +1524,29 @@ function UsersTab() {
             className="w-full pl-9 pr-4 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500"
           />
         </div>
+        <button
+          onClick={async () => {
+            const r = await api.get('/admin/users', { params: { search: '', page: 1, limit: 9999 } });
+            const users = r.data.users as AdminUser[];
+            exportToExcel(users.map((u, i) => ({
+              '№': i + 1,
+              'Имя': `${u.firstName} ${u.lastName}`.trim(),
+              'Никнейм': u.nickname ?? '',
+              'Email': u.email ?? '',
+              'Телефон': u.phone ?? '',
+              'Город': u.city ?? '',
+              'Страна': u.country ?? '',
+              'Администратор': u.isAdmin ? 'Да' : 'Нет',
+              'Premium': u.isPremium ? 'Да' : 'Нет',
+              'Pro': u.isPro ? 'Да' : 'Нет',
+              'Верифицирован': u.isVerified ? 'Да' : 'Нет',
+              'Заблокирован': u.isBlocked ? 'Да' : 'Нет',
+              'Дата регистрации': u.createdAt ? new Date(u.createdAt).toLocaleDateString('ru-RU') : '',
+            })), 'Пользователи');
+          }}
+          className="flex items-center gap-1.5 px-3 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-medium rounded-xl transition-colors whitespace-nowrap"
+          title="Экспорт в Excel"
+        ><Download size={15} /></button>
         <button
           onClick={() => setShowCreate(true)}
           className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-xl transition-colors whitespace-nowrap"
