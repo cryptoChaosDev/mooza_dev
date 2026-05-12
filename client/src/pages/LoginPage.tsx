@@ -228,6 +228,18 @@ export default function LoginPage() {
             </div>
           )}
 
+          {/* Social login — VK first, Telegram second */}
+          <div className="space-y-2.5 mb-5">
+            <VkLoginButton onAuth={handleVkAuth} onError={handleSocialError} disabled={loading || !agreed} />
+            <TelegramLoginButton onAuth={handleTelegramAuth} onError={handleSocialError} disabled={loading || !agreed} />
+          </div>
+
+          <div className="flex items-center gap-3 mb-5">
+            <div className="flex-1 h-px bg-slate-700" />
+            <span className="text-xs text-slate-500 uppercase tracking-wide">или войти по email</span>
+            <div className="flex-1 h-px bg-slate-700" />
+          </div>
+
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email */}
             <div>
@@ -359,18 +371,6 @@ export default function LoginPage() {
               {loading ? 'Вход...' : 'Войти'}
             </button>
           </form>
-
-          <div className="mt-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex-1 h-px bg-slate-700" />
-              <span className="text-xs text-slate-500 uppercase tracking-wide">или</span>
-              <div className="flex-1 h-px bg-slate-700" />
-            </div>
-            <div className="space-y-2.5">
-              <TelegramLoginButton onAuth={handleTelegramAuth} onError={handleSocialError} disabled={loading || !agreed} />
-              <VkLoginButton onAuth={handleVkAuth} onError={handleSocialError} disabled={loading || !agreed} />
-            </div>
-          </div>
 
           <div className="mt-4 flex flex-col items-center gap-2">
             <a href="/forgot-password" className="text-sm text-slate-500 hover:text-slate-300 transition-colors">
