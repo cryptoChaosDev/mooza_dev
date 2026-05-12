@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -6,7 +7,7 @@ import {
   Crown, BadgeCheck, Ban, X, Zap,
   Headphones, FileText, Briefcase,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
-  Globe,
+  Globe, Play, Pause, ChevronRight,
 } from 'lucide-react';
 import { userAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
@@ -16,100 +17,72 @@ import ShareButton from '../components/ShareButton';
 import BadgeTooltip from '../components/BadgeTooltip';
 import ConnectionRequestModal from '../components/ConnectionRequestModal';
 import ConnectionViewModal from '../components/ConnectionViewModal';
+import ReviewsBlock from '../components/ReviewsBlock';
 import { useAuthStore } from '../stores/authStore';
-import { createPortal } from 'react-dom';
 import { formatLastSeen } from '../lib/lastSeen';
 import { usePresenceStore } from '../stores/presenceStore';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
-function getVideoEmbedUrl(url: string): string | null {
-  const rt = url.match(/rutube\.ru\/video\/([a-zA-Z0-9]+)/);
-  if (rt) return `https://rutube.ru/play/embed/${rt[1]}/`;
-  const vk = url.match(/vk\.com\/video(-?\d+)_(\d+)/);
-  if (vk) return `https://vk.com/video_ext.php?oid=${vk[1]}&id=${vk[2]}`;
-  return null;
+function getFileExt(name: string) {
+  return (name.split('.').pop() ?? '').toUpperCase().slice(0, 4);
 }
 
-function detectAudioPlatform(url: string): 'yandex' | 'google' | 'other' {
-  if (url.includes('disk.yandex') || url.includes('yadi.sk')) return 'yandex';
-  if (url.includes('drive.google') || url.includes('docs.google')) return 'google';
-  return 'other';
-}
-
-function PortfolioAudioItem({ link, onDelete }: { link: any; onDelete?: () => void }) {
-  const [failed, setFailed] = useState(false);
-  const platform = detectAudioPlatform(link.url);
-  const platformLabel = platform === 'yandex' ? 'Яндекс Диск' : platform === 'google' ? 'Google Диск' : 'Облако';
+function AudioTile({ url, title }: { url: string; title?: string }) {
+  const [playing, setPlaying] = useState(false);
+  const ref = useRef<HTMLAudioElement>(null);
+  const toggle = () => {
+    if (!ref.current) return;
+    if (playing) { ref.current.pause(); setPlaying(false); }
+    else { ref.current.play(); setPlaying(true); }
+  };
   return (
-    <div className="rounded-xl bg-slate-800/60 border border-slate-700/40 px-3 pt-3 pb-2">
-      <div className="flex items-center gap-2 mb-2">
-        <Headphones size={13} className="text-primary-400 flex-shrink-0" />
-        <span className="flex-1 text-xs text-slate-300 truncate">{link.title || platformLabel}</span>
-        <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0">↗</a>
-        {onDelete && <button onClick={onDelete} className="p-0.5 rounded hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all flex-shrink-0"><X size={12} /></button>}
-      </div>
-      {!failed
-        ? <audio controls src={link.url} className="w-full h-9" onError={() => setFailed(true)} />
-        : <a href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 py-1.5 text-xs text-primary-400 hover:text-primary-300 transition-colors">
-            <span>Открыть в браузере →</span>
-          </a>
-      }
-    </div>
-  );
-}
-
-function PortfolioVideoItem({ link, onDelete }: { link: any; onDelete?: () => void }) {
-  const embedUrl = getVideoEmbedUrl(link.url);
-  const isRutube = link.url.includes('rutube.ru');
-  const isVk = link.url.includes('vk.com');
-  const platformLabel = isRutube ? 'RuTube' : isVk ? 'VK Видео' : 'Видео';
-  return (
-    <div className="rounded-xl overflow-hidden bg-slate-800/60 border border-slate-700/40">
-      {embedUrl
-        ? <iframe src={embedUrl} className="w-full aspect-video" allowFullScreen frameBorder="0" allow="clipboard-write; autoplay" />
-        : <div className="p-3 text-center">
-            <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary-400 hover:text-primary-300 transition-colors">Открыть {platformLabel} →</a>
-          </div>
-      }
-      <div className="flex items-center gap-2 px-3 py-2">
-        <span className="flex-1 text-xs text-slate-400 truncate">{link.title || platformLabel}</span>
-        <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-xs text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0">↗</a>
-        {onDelete && <button onClick={onDelete} className="p-0.5 rounded hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all flex-shrink-0"><X size={12} /></button>}
-      </div>
-    </div>
-  );
-}
-
-function DocIcon({ mimeType, name }: { mimeType?: string; name: string }) {
-  const ext = name.split('.').pop()?.toLowerCase() ?? '';
-  if (mimeType === 'application/pdf' || ext === 'pdf')
-    return <FileText size={15} className="text-red-400 flex-shrink-0" />;
-  if (ext === 'xlsx' || ext === 'xls' || mimeType?.includes('spreadsheet') || mimeType?.includes('excel'))
-    return <FileText size={15} className="text-green-400 flex-shrink-0" />;
-  return <FileText size={15} className="text-blue-400 flex-shrink-0" />;
-}
-
-const formatFileSize = (bytes: number) => {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-};
-
-function BottomPanel({ open, onClose, title, children }: { open: boolean; onClose: () => void; title: string; children: React.ReactNode }) {
-  if (!open) return null;
-  return createPortal(
-    <>
-      <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="fixed inset-x-0 bottom-0 z-[61] bg-slate-900 rounded-t-2xl border-t border-slate-800 flex flex-col" style={{ maxHeight: '80vh' }}>
-        <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800 flex-shrink-0">
-          <span className="font-semibold text-white text-sm">{title}</span>
-          <button onClick={onClose} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors"><X size={16} className="text-slate-400" /></button>
+    <div className="flex flex-col gap-1 flex-shrink-0" style={{ width: 'calc((100% - 24px) / 3.5)' }}>
+      <button
+        onClick={toggle}
+        className="w-full aspect-square rounded-xl bg-gradient-to-br from-primary-900/80 to-slate-800/80 border border-primary-700/30 flex flex-col items-center justify-center gap-2 hover:border-primary-500/50 transition-colors group"
+      >
+        <Music2 size={16} className="text-primary-400" />
+        <div className="w-7 h-7 rounded-full bg-primary-600/80 flex items-center justify-center group-hover:bg-primary-500 transition-colors">
+          {playing ? <Pause size={12} className="text-white" /> : <Play size={12} className="text-white ml-0.5" />}
         </div>
-        <div className="overflow-y-auto flex-1 p-4">{children}</div>
-      </div>
-    </>,
-    document.body
+      </button>
+      {title && <p className="text-[9px] text-slate-400 text-center leading-tight line-clamp-2">{title}</p>}
+      <audio ref={ref} src={url} onEnded={() => setPlaying(false)} preload="none" />
+    </div>
+  );
+}
+
+function TapButton({ isConfirming, onOpen, onConfirm, tooltip, disabled, className, children }: {
+  isConfirming: boolean;
+  onOpen: () => void;
+  onConfirm: () => void;
+  tooltip: string;
+  disabled?: boolean;
+  className: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <button
+        onClick={e => {
+          e.stopPropagation();
+          if (disabled) return;
+          if (isConfirming) onConfirm();
+          else onOpen();
+        }}
+        disabled={disabled}
+        className={className}
+      >
+        {children}
+      </button>
+      {isConfirming && (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white whitespace-nowrap z-20 shadow-xl pointer-events-none">
+          {tooltip}
+          <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-4 border-transparent border-t-slate-700" />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -118,16 +91,22 @@ export default function UserProfilePage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const me = useAuthStore(s => s.user);
+  const onlineUsers = usePresenceStore(s => s.onlineUsers);
+
   const [showConnModal, setShowConnModal] = useState(false);
   const [viewConn, setViewConn] = useState<any>(null);
-  const [connExpanded, setConnExpanded] = useState(false);
-  const [portfolioTab, setPortfolioTab] = useState<'audio' | 'video' | 'other'>('audio');
-  const [servicesOpen, setServicesOpen] = useState(false);
-  const [profsExpanded, setProfsExpanded] = useState(false);
-  const [profsOverflows, setProfsOverflows] = useState(false);
-  const profsRef = useRef<HTMLDivElement>(null);
-  const servicesRef = useRef<HTMLDivElement>(null);
-  const onlineUsers = usePresenceStore(s => s.onlineUsers);
+  const [portfolioTab, setPortfolioTab] = useState<'audio' | 'images' | 'other'>('audio');
+  const [imageFullscreen, setImageFullscreen] = useState<string | null>(null);
+  const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
+  const [selectedProfession, setSelectedProfession] = useState<any>(null);
+  const [confirming, setConfirming] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!confirming) return;
+    const handler = () => setConfirming(null);
+    document.addEventListener('click', handler, true);
+    return () => document.removeEventListener('click', handler, true);
+  }, [confirming]);
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['user', userId],
@@ -143,10 +122,7 @@ export default function UserProfilePage() {
 
   const { data: conn } = useQuery({
     queryKey: ['connection-with', userId],
-    queryFn: async () => {
-      const { data } = await connectionAPI.getWith(userId!);
-      return data as { id: string; status: string; iAmRequester: boolean; breakRequestedBy: string | null; services: { id: string; name: string }[] } | null;
-    },
+    queryFn: async () => { const { data } = await connectionAPI.getWith(userId!); return data as any; },
     enabled: !!userId && !!me && me.id !== userId,
   });
 
@@ -158,13 +134,12 @@ export default function UserProfilePage() {
 
   const addFavMut = useMutation({
     mutationFn: () => favoriteAPI.add(userId!),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['favorite-status', userId] }); queryClient.invalidateQueries({ queryKey: ['favorites'] }); },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['favorite-status', userId] }),
   });
   const removeFavMut = useMutation({
     mutationFn: () => favoriteAPI.remove(userId!),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['favorite-status', userId] }); queryClient.invalidateQueries({ queryKey: ['favorites'] }); },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['favorite-status', userId] }),
   });
-
   const sendFriendMut = useMutation({
     mutationFn: () => friendshipAPI.sendRequest(userId!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
@@ -182,17 +157,11 @@ export default function UserProfilePage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
   });
 
-  useEffect(() => {
-    if (!profsExpanded && profsRef.current) {
-      setProfsOverflows(profsRef.current.scrollHeight > profsRef.current.clientHeight);
-    }
-  }, [user?.userProfessions, profsExpanded]);
-
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent mx-auto shadow-lg shadow-primary-500/30" />
+          <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent mx-auto" />
           <p className="text-slate-400 mt-3 text-sm">Загрузка профиля...</p>
         </div>
       </div>
@@ -202,45 +171,29 @@ export default function UserProfilePage() {
   if (!user) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 gap-3">
-        <Loader2 size={32} className="text-slate-600" />
         <p className="text-slate-400 text-sm">Пользователь не найден</p>
-        <button onClick={() => navigate(-1)} className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-xl transition-all text-sm">Назад</button>
+        <button onClick={() => navigate(-1)} className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-xl text-sm">Назад</button>
       </div>
     );
   }
 
-  const servicesByField = (user.userServices ?? []).reduce((acc: any, us: any) => {
-    const fId = us.profession?.direction?.fieldOfActivity?.id || 'unknown';
-    const fName = us.profession?.direction?.fieldOfActivity?.name || '';
-    const pId = us.professionId;
-    const pName = us.profession?.name || '';
-    if (!acc[fId]) acc[fId] = { fieldName: fName, byProfession: {} };
-    if (!acc[fId].byProfession[pId]) acc[fId].byProfession[pId] = { profName: pName, services: [] };
-    acc[fId].byProfession[pId].services.push(us);
-    return acc;
-  }, {});
-
-  const servicesFlat = (Object.values(servicesByField) as any[]).flatMap(({ fieldName, byProfession }) =>
-    (Object.values(byProfession) as any[]).flatMap(({ profName, services }) =>
-      services.map((us: any) => ({ ...us, _profName: profName, _fieldName: fieldName }))
-    )
-  );
-
-
+  const servicesFlat: any[] = user.userServices ?? [];
   const portfolioFiles: any[] = user.portfolioFiles ?? [];
   const portfolioLinks: any[] = user.portfolioLinks ?? [];
   const audioLinks = portfolioLinks.filter((l: any) => l.type === 'audio');
-  const videoLinks = portfolioLinks.filter((l: any) => l.type === 'video');
-
+  const audioFiles = portfolioFiles.filter((f: any) => f.mimeType?.startsWith('audio/'));
+  const imageFiles = portfolioFiles.filter((f: any) => f.mimeType?.startsWith('image/'));
+  const otherFiles = portfolioFiles.filter((f: any) => !f.mimeType?.startsWith('audio/') && !f.mimeType?.startsWith('image/'));
+  const allAudio = [...audioFiles, ...audioLinks];
+  const hasPortfolio = allAudio.length > 0 || imageFiles.length > 0 || otherFiles.length > 0;
   const hasSocialLinks = Object.values((user.socialLinks as Record<string, string>) || {}).some(Boolean);
   const bUrl = user.bannerImage ? getAvatarUrl(user.bannerImage) : null;
+  const isMe = me?.id === user.id;
 
   return (
     <>
     <div className="min-h-screen bg-slate-950">
-
       {viewConn && <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />}
-
       {showConnModal && (
         <ConnectionRequestModal
           targetUser={{ id: user.id, firstName: user.firstName, lastName: user.lastName, avatar: user.avatar }}
@@ -248,10 +201,9 @@ export default function UserProfilePage() {
         />
       )}
 
-
       <div className="max-w-2xl mx-auto pb-28">
 
-        {/* ── HERO ─────────────────────────────────────────────────────────── */}
+        {/* ── HERO ── */}
         <div className="relative">
           <div className="h-44 overflow-hidden bg-gradient-to-br from-primary-900 via-purple-900/70 to-slate-900">
             {bUrl
@@ -260,86 +212,152 @@ export default function UserProfilePage() {
             }
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />
           </div>
-          <button onClick={() => navigate(-1)} className="absolute top-3 left-3 p-2 bg-black/40 hover:bg-black/60 backdrop-blur-sm text-white rounded-xl transition-all">
+          <button
+            onClick={() => navigate(-1)}
+            className="absolute top-3 left-3 p-2 bg-black/40 hover:bg-black/60 backdrop-blur-sm text-white rounded-xl transition-all"
+            style={{ marginTop: 'env(safe-area-inset-top, 0px)' }}
+          >
             <ArrowLeft size={18} />
           </button>
         </div>
 
         <div className="px-4">
-          {/* Avatar + action buttons */}
+          {/* ── Avatar + action buttons ── */}
           <div className="flex items-end justify-between -mt-14 mb-4">
             <div className="relative z-10 flex-shrink-0">
               <div className="rounded-full ring-4 ring-slate-950 shadow-2xl">
                 <AvatarComponent src={user.avatar} name={`${user.firstName} ${user.lastName}`} size={112} />
               </div>
             </div>
-            <div className="flex items-center gap-2 mb-1 flex-wrap justify-end">
-              <ShareButton
-                url={`/profile/${user.id}`}
-                title={`${user.firstName} ${user.lastName} — Moooza`}
-                text={user.bio?.slice(0, 100)}
-                className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
-                iconSize={16}
-              />
-              {me && me.id !== user.id && (
-                <>
-                  {conn && conn.status === 'PENDING' && !conn.iAmRequester && (
-                    <button onClick={() => setViewConn(conn)} className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all" title="Входящий запрос на связь">
-                      <Link2 size={16} />
-                    </button>
-                  )}
-                  <button onClick={() => setShowConnModal(true)} className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-primary-400 rounded-xl transition-all" title="Установить связь">
+
+            {me && !isMe && (
+              <div className="flex items-center gap-2 mb-1 flex-wrap justify-end">
+                <ShareButton
+                  url={`/profile/${user.id}`}
+                  title={`${user.firstName} ${user.lastName} — Moooza`}
+                  text={user.bio?.slice(0, 100)}
+                  className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
+                  iconSize={16}
+                />
+
+                {/* Connection */}
+                {conn?.status === 'PENDING' && !conn.iAmRequester ? (
+                  <button onClick={() => setViewConn(conn)} className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all">
                     <Link2 size={16} />
                   </button>
-                  {favStatus !== undefined && (
-                    <button
-                      onClick={() => favStatus.isFavorite ? removeFavMut.mutate() : addFavMut.mutate()}
-                      disabled={addFavMut.isPending || removeFavMut.isPending}
-                      className={`p-2 border rounded-xl transition-all disabled:opacity-50 ${favStatus.isFavorite ? 'bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20' : 'bg-slate-800/80 hover:bg-slate-700 border-slate-700/60 text-slate-400 hover:text-amber-400'}`}
-                      title={favStatus.isFavorite ? 'Убрать из избранного' : 'Добавить в избранное'}
+                ) : (
+                  <TapButton
+                    isConfirming={confirming === 'conn'}
+                    onOpen={() => setConfirming('conn')}
+                    onConfirm={() => { setShowConnModal(true); setConfirming(null); }}
+                    tooltip="Установить связь"
+                    className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-primary-400 rounded-xl transition-all"
+                  >
+                    <Link2 size={16} />
+                  </TapButton>
+                )}
+
+                {/* Favorite */}
+                {favStatus !== undefined && (
+                  favStatus.isFavorite ? (
+                    <TapButton
+                      isConfirming={confirming === 'fav'}
+                      onOpen={() => setConfirming('fav')}
+                      onConfirm={() => { removeFavMut.mutate(); setConfirming(null); }}
+                      tooltip="Убрать из избранного"
+                      disabled={removeFavMut.isPending}
+                      className="p-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 rounded-xl transition-all disabled:opacity-50"
                     >
-                      <Star size={16} fill={favStatus.isFavorite ? 'currentColor' : 'none'} />
-                    </button>
-                  )}
-                  {user.friendshipStatus === 'none' && (
-                    <button onClick={() => sendFriendMut.mutate()} disabled={sendFriendMut.isPending} className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-primary-400 rounded-xl transition-all disabled:opacity-50" title="Добавить в друзья">
-                      <UserPlus size={16} />
-                    </button>
-                  )}
-                  {user.friendshipStatus === 'pending_sent' && (
-                    <button onClick={() => cancelFriendMut.mutate()} disabled={cancelFriendMut.isPending} className="p-2 bg-slate-800/80 hover:bg-red-500/10 border border-slate-700/60 hover:border-red-500/30 text-slate-500 hover:text-red-400 rounded-xl transition-all disabled:opacity-50" title="Заявка отправлена — нажмите чтобы отменить">
-                      <Clock size={16} />
-                    </button>
-                  )}
-                  {user.friendshipStatus === 'pending_received' && (
-                    <>
-                      <button onClick={() => acceptFriendMut.mutate()} disabled={acceptFriendMut.isPending} className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all disabled:opacity-50" title="Принять заявку в друзья">
-                        <UserCheck size={16} />
-                      </button>
-                      <button onClick={() => cancelFriendMut.mutate()} disabled={cancelFriendMut.isPending} className="p-2 bg-slate-800/80 hover:bg-red-500/10 border border-slate-700/60 hover:border-red-500/30 text-slate-500 hover:text-red-400 rounded-xl transition-all disabled:opacity-50" title="Отклонить заявку">
-                        <UserX size={16} />
-                      </button>
-                    </>
-                  )}
-                  {user.friendshipStatus === 'accepted' && (
-                    <button onClick={() => removeFriendMut.mutate()} disabled={removeFriendMut.isPending} className="p-2 bg-green-500/10 hover:bg-red-500/10 border border-green-500/30 hover:border-red-500/30 text-green-400 hover:text-red-400 rounded-xl transition-all disabled:opacity-50" title="В друзьях — нажмите чтобы удалить">
+                      <Star size={16} fill="currentColor" />
+                    </TapButton>
+                  ) : (
+                    <TapButton
+                      isConfirming={confirming === 'fav'}
+                      onOpen={() => setConfirming('fav')}
+                      onConfirm={() => { addFavMut.mutate(); setConfirming(null); }}
+                      tooltip="Добавить в избранное"
+                      disabled={addFavMut.isPending}
+                      className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-amber-400 rounded-xl transition-all disabled:opacity-50"
+                    >
+                      <Star size={16} />
+                    </TapButton>
+                  )
+                )}
+
+                {/* Friend */}
+                {user.friendshipStatus === 'none' && (
+                  <TapButton
+                    isConfirming={confirming === 'friend'}
+                    onOpen={() => setConfirming('friend')}
+                    onConfirm={() => { sendFriendMut.mutate(); setConfirming(null); }}
+                    tooltip="Добавить в друзья"
+                    disabled={sendFriendMut.isPending}
+                    className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-primary-400 rounded-xl transition-all disabled:opacity-50"
+                  >
+                    <UserPlus size={16} />
+                  </TapButton>
+                )}
+                {user.friendshipStatus === 'pending_sent' && (
+                  <TapButton
+                    isConfirming={confirming === 'friend'}
+                    onOpen={() => setConfirming('friend')}
+                    onConfirm={() => { cancelFriendMut.mutate(); setConfirming(null); }}
+                    tooltip="Отменить заявку"
+                    disabled={cancelFriendMut.isPending}
+                    className="p-2 bg-slate-800/80 border border-slate-700/60 text-slate-500 rounded-xl transition-all disabled:opacity-50"
+                  >
+                    <Clock size={16} />
+                  </TapButton>
+                )}
+                {user.friendshipStatus === 'pending_received' && (
+                  <>
+                    <button
+                      onClick={() => acceptFriendMut.mutate()}
+                      disabled={acceptFriendMut.isPending}
+                      className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all disabled:opacity-50"
+                    >
                       <UserCheck size={16} />
                     </button>
-                  )}
-                  <button onClick={() => navigate(`/messages/${user.id}`)} className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all shadow-lg shadow-primary-500/20" title="Написать сообщение">
-                    <MessageCircle size={16} />
-                  </button>
-                </>
-              )}
-            </div>
+                    <button
+                      onClick={() => cancelFriendMut.mutate()}
+                      disabled={cancelFriendMut.isPending}
+                      className="p-2 bg-slate-800/80 border border-slate-700/60 text-slate-400 hover:text-red-400 rounded-xl transition-all disabled:opacity-50"
+                    >
+                      <UserX size={16} />
+                    </button>
+                  </>
+                )}
+                {user.friendshipStatus === 'accepted' && (
+                  <TapButton
+                    isConfirming={confirming === 'friend'}
+                    onOpen={() => setConfirming('friend')}
+                    onConfirm={() => { removeFriendMut.mutate(); setConfirming(null); }}
+                    tooltip="Удалить из друзей"
+                    disabled={removeFriendMut.isPending}
+                    className="p-2 bg-green-500/10 hover:bg-red-500/10 border border-green-500/30 hover:border-red-500/30 text-green-400 hover:text-red-400 rounded-xl transition-all disabled:opacity-50"
+                  >
+                    <UserCheck size={16} />
+                  </TapButton>
+                )}
+
+                {/* Message */}
+                <button
+                  onClick={() => navigate(`/messages/${user.id}`)}
+                  className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all shadow-lg shadow-primary-500/20"
+                >
+                  <MessageCircle size={16} />
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Name + badges */}
+          {/* ── Name + badges ── */}
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
             <h1 className="text-2xl font-bold text-white leading-tight">{user.firstName} {user.lastName}</h1>
             {user.isPro && <BadgeTooltip label="PRO аккаунт"><Zap size={18} className="text-violet-400" /></BadgeTooltip>}
             {user.isPremium && <BadgeTooltip label="Premium"><Crown size={18} className="text-amber-400" /></BadgeTooltip>}
             {user.isVerified && <BadgeTooltip label="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></BadgeTooltip>}
+            {(user._count?.referrals ?? 0) >= 100 && <BadgeTooltip label="Амбасадор Moooza"><Star size={18} className="text-orange-400" /></BadgeTooltip>}
             {user.isBlocked && <BadgeTooltip label="Заблокирован"><Ban size={18} className="text-red-500" /></BadgeTooltip>}
           </div>
 
@@ -351,7 +369,7 @@ export default function UserProfilePage() {
                 {[user.city, user.country].filter(Boolean).join(', ')}
               </span>
             )}
-            {me?.id !== user.id && (
+            {!isMe && (
               onlineUsers.has(user.id)
                 ? <span className="flex items-center gap-1 text-emerald-400 text-xs"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />В сети</span>
                 : user.lastSeenAt
@@ -360,9 +378,12 @@ export default function UserProfilePage() {
             )}
           </div>
 
-          {/* ── Stats row ── */}
+          {/* ── Stats ── */}
           <div className="grid grid-cols-2 divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-            <button disabled className="flex flex-col items-center py-1.5 px-1 pointer-events-none">
+            <button
+              onClick={() => navigate(`/profile/${userId}/connections`)}
+              className="flex flex-col items-center py-1.5 px-1 hover:bg-slate-800/40 transition-colors"
+            >
               <span className="text-sm font-bold text-white">{userConnections.length}</span>
               <span className="text-[9px] text-slate-500">Связи</span>
             </button>
@@ -379,72 +400,84 @@ export default function UserProfilePage() {
               <p className="text-slate-300 text-sm leading-relaxed break-words">{user.bio}</p>
             )}
 
-            {/* Groups / Коллективы — avatar carousel */}
+            {/* ── Artists ── */}
             {(user.userArtists?.length ?? 0) > 0 && (
-              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Коллективы</p>
-                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none">
-                  {user.userArtists.filter((ua: any) => ua.artist?.name).map((ua: any) => (
-                    <button
-                      key={ua.artistId ?? ua.artist?.id}
-                      onClick={() => navigate('/artist/' + (ua.artist?.id ?? ua.artistId))}
-                      className="flex flex-col items-center gap-1.5 flex-shrink-0 w-16 group"
-                    >
-                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary-800/60 to-purple-800/60 border border-primary-600/30 flex items-center justify-center overflow-hidden group-hover:border-primary-500/60 transition-colors">
-                        {ua.artist?.avatar
-                          ? <img src={getAvatarUrl(ua.artist.avatar) ?? ''} alt={ua.artist.name} className="w-full h-full object-cover" />
-                          : <Music2 size={22} className="text-primary-400" />
-                        }
-                      </div>
-                      <span className="text-[10px] text-slate-400 text-center leading-tight w-full truncate">{ua.artist?.name}</span>
-                    </button>
-                  ))}
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                  <Music2 size={14} className="text-primary-400" />
+                  <span className="text-sm font-bold text-white">Артисты</span>
+                </div>
+                <div className="p-3">
+                  <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                    {user.userArtists.filter((ua: any) => ua.artist?.name).map((ua: any) => {
+                      const role = ua.profession?.name ?? (ua.isOwner ? 'Основатель' : null);
+                      return (
+                        <button
+                          key={ua.artistId ?? ua.artist?.id}
+                          onClick={() => navigate('/artist/' + (ua.artist?.id ?? ua.artistId))}
+                          className="flex flex-col gap-1.5 flex-shrink-0 text-left group"
+                          style={{ width: 'calc((100% - 24px) / 3.5)' }}
+                        >
+                          <div className="w-full aspect-square rounded-xl bg-gradient-to-br from-primary-800/60 to-purple-800/60 border border-primary-600/30 flex items-center justify-center overflow-hidden group-hover:border-primary-500/60 transition-colors">
+                            {ua.artist?.avatar
+                              ? <img src={getAvatarUrl(ua.artist.avatar) ?? ''} alt={ua.artist.name} className="w-full h-full object-cover" />
+                              : <Music2 size={16} className="text-primary-400" />
+                            }
+                          </div>
+                          <div className="w-full">
+                            <p className="text-[10px] font-semibold text-white leading-tight line-clamp-2">{ua.artist?.name}</p>
+                            {role && <p className="text-[9px] text-slate-500 leading-tight mt-0.5 truncate">{role}</p>}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
 
-            {/* Standalone professions */}
+            {/* ── Professions ── */}
             {(user.userProfessions?.length ?? 0) > 0 && (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                   <Briefcase size={14} className="text-primary-400" />
                   <span className="text-sm font-semibold text-white">Профессии</span>
-                  <span className="text-xs text-slate-500">{user.userProfessions.length}</span>
                 </div>
-                <div className="px-4 pt-3 pb-2">
-                  <div
-                    ref={profsRef}
-                    className="flex flex-wrap gap-2 overflow-hidden"
-                    style={profsExpanded ? undefined : { maxHeight: '68px' }}
-                  >
-                    {user.userProfessions.map((up: any) => (
-                      <span key={up.professionId} className="px-3 py-1.5 bg-primary-500/10 border border-primary-500/25 text-primary-300 rounded-xl text-xs font-medium">
-                        {up.profession?.name}
+                <div className="px-4 pt-3 pb-3">
+                  <p className="text-sm leading-relaxed">
+                    {user.userProfessions.map((up: any, i: number) => (
+                      <span key={up.professionId ?? i}>
+                        <button
+                          onClick={() => setSelectedProfession(up)}
+                          className="text-primary-400 hover:text-primary-300 font-medium underline underline-offset-2 decoration-primary-500/40 hover:decoration-primary-400 transition-colors"
+                        >
+                          {up.profession?.name}
+                        </button>
+                        {i < user.userProfessions.length - 1 && <span className="text-slate-500">, </span>}
                       </span>
                     ))}
-                  </div>
-                  {profsOverflows && (
-                    <button onClick={() => setProfsExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-2 transition-colors">
-                      {profsExpanded ? 'Свернуть' : 'Ещё'}
-                    </button>
-                  )}
+                  </p>
                 </div>
               </div>
             )}
 
-            {/* Services — tile slider */}
+            {/* ── Services ── */}
             {servicesFlat.length > 0 && (
-              <div ref={servicesRef} className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                   <Briefcase size={14} className="text-primary-400" />
                   <span className="text-sm font-semibold text-white">Услуги</span>
                   <span className="text-xs text-slate-500">{servicesFlat.length}</span>
-                  <button onClick={() => navigate(`/profile/${userId}/services`)} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">Смотреть все</button>
+                  <button
+                    onClick={() => navigate(`/profile/${userId}/services`)}
+                    className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                  >
+                    Смотреть все
+                  </button>
                 </div>
                 <div className="p-3">
                   <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
                     {servicesFlat.map((us: any) => {
-                      const genre = us.genres?.[0]?.name ?? null;
                       const price = us.priceFrom != null || us.priceTo != null
                         ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
                         : null;
@@ -452,16 +485,15 @@ export default function UserProfilePage() {
                         <button
                           key={us.id}
                           onClick={() => navigate(`/services/${us.id}`)}
-                          className="flex flex-col gap-0 flex-shrink-0 text-left group"
-                          style={{ width: 'calc((100% - 24px) / 2.5)' }}
+                          className="flex flex-col flex-shrink-0 text-left group"
+                          style={{ width: 'calc((100% - 24px) / 3.5)' }}
                         >
-                          <div className="w-full aspect-square rounded-2xl bg-gradient-to-br from-primary-900/80 to-slate-800/80 border border-primary-700/30 flex flex-col items-center justify-center gap-1.5 p-2 group-hover:border-primary-500/50 transition-colors overflow-hidden">
-                            <Briefcase size={20} className="text-primary-400 flex-shrink-0" />
-                            {genre && <span className="text-[9px] text-slate-400 text-center leading-tight line-clamp-2">{genre}</span>}
+                          <div className="w-full aspect-square rounded-xl bg-gradient-to-br from-primary-900/80 to-slate-800/80 border border-primary-700/30 flex items-center justify-center group-hover:border-primary-500/50 transition-colors">
+                            <Briefcase size={16} className="text-primary-400" />
                           </div>
-                          <div className="w-full mt-2">
-                            <p className="text-[11px] font-semibold text-white leading-tight line-clamp-2">{us.service?.name}</p>
-                            {price && <p className="text-[10px] text-primary-400 leading-tight mt-0.5">{price}</p>}
+                          <div className="w-full mt-1.5">
+                            <p className="text-[10px] font-semibold text-white leading-tight line-clamp-2">{us.service?.name}</p>
+                            {price && <p className="text-[9px] text-primary-400 leading-tight mt-0.5">{price}</p>}
                           </div>
                         </button>
                       );
@@ -471,45 +503,11 @@ export default function UserProfilePage() {
               </div>
             )}
 
-            {/* Connections */}
-            {userConnections.length > 0 && (() => {
-              const LIMIT = 5;
-              const visible = connExpanded ? userConnections : userConnections.slice(0, LIMIT);
-              return (
-                <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-                  <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                    <Link2 size={14} className="text-primary-400" />
-                    <span className="text-sm font-semibold text-white">Профессиональные связи</span>
-                    <span className="ml-auto text-xs text-slate-500">{userConnections.length}</span>
-                  </div>
-                  <div className="divide-y divide-slate-800/40">
-                    {visible.map((c: any) => {
-                      const subtitle = c.profession?.name
-                        || c.services?.slice(0, 2).map((s: any) => s.name).join(', ')
-                        || c.partner.city || null;
-                      return (
-                        <button key={c.id} onClick={() => navigate(`/profile/${c.partner.id}`)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-800/40 transition-colors text-left">
-                          <AvatarComponent src={c.partner.avatar} name={`${c.partner.firstName} ${c.partner.lastName}`} size={36} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</p>
-                            {subtitle && <p className="text-xs text-slate-500 truncate mt-0.5">{subtitle}</p>}
-                          </div>
-                          <span className="text-slate-600 flex-shrink-0">›</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {userConnections.length > LIMIT && (
-                    <button onClick={() => setConnExpanded(v => !v)} className="w-full py-2.5 text-xs text-slate-500 hover:text-slate-300 transition-colors text-center border-t border-slate-800/40">
-                      {connExpanded ? 'Свернуть' : `Показать ещё ${userConnections.length - LIMIT}`}
-                    </button>
-                  )}
-                </div>
-              );
-            })()}
+            {/* ── Reviews ── */}
+            {userId && <ReviewsBlock userId={userId} isOwner={false} />}
 
-            {/* Portfolio — tabs */}
-            {(portfolioLinks.length > 0 || portfolioFiles.length > 0) && (
+            {/* ── Portfolio ── */}
+            {hasPortfolio && (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                   <Headphones size={14} className="text-primary-400" />
@@ -517,43 +515,106 @@ export default function UserProfilePage() {
                 </div>
                 <div className="flex border-b border-slate-800/60">
                   {([
-                    { key: 'audio' as const, label: 'Аудио', count: audioLinks.length },
-                    { key: 'video' as const, label: 'Видео', count: videoLinks.length },
-                    { key: 'other' as const, label: 'Прочее', count: portfolioFiles.length },
+                    { key: 'audio' as const, label: 'Аудио', count: allAudio.length },
+                    { key: 'images' as const, label: 'Изображения', count: imageFiles.length },
+                    { key: 'other' as const, label: 'Другое', count: otherFiles.length },
                   ]).map(tab => (
                     <button key={tab.key} onClick={() => setPortfolioTab(tab.key)}
-                      className={`flex-1 py-2.5 text-xs font-medium border-b-2 transition-all ${portfolioTab === tab.key ? 'border-primary-500 text-primary-400' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
-                      {tab.label}{tab.count > 0 && <span className="ml-1 opacity-60">({tab.count})</span>}
+                      className={`flex-1 py-2 text-xs font-medium transition-colors relative ${portfolioTab === tab.key ? 'text-primary-400' : 'text-slate-500 hover:text-slate-300'}`}>
+                      {tab.label}
+                      {tab.count > 0 && <span className="ml-1 text-[10px] opacity-70">{tab.count}</span>}
+                      {portfolioTab === tab.key && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500 rounded-full" />}
                     </button>
                   ))}
                 </div>
-                <div className="p-4 space-y-3">
-                  {portfolioTab === 'audio' && (audioLinks.length === 0
-                    ? <p className="text-sm text-slate-600 italic text-center py-2">Нет аудио ссылок</p>
-                    : audioLinks.map((l: any) => <PortfolioAudioItem key={l.id} link={l} />)
+                <div className="px-3 py-3">
+                  {portfolioTab === 'audio' && (
+                    allAudio.length === 0
+                      ? <p className="text-sm text-slate-600 italic text-center py-2">Нет аудио</p>
+                      : <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                          {audioFiles.map((f: any) => <AudioTile key={f.id} url={`${API_URL}${f.url}`} title={f.originalName} />)}
+                          {audioLinks.map((l: any) => <AudioTile key={l.id} url={l.url} title={l.title} />)}
+                        </div>
                   )}
-                  {portfolioTab === 'video' && (videoLinks.length === 0
-                    ? <p className="text-sm text-slate-600 italic text-center py-2">Нет видео ссылок</p>
-                    : videoLinks.map((l: any) => <PortfolioVideoItem key={l.id} link={l} />)
+                  {portfolioTab === 'images' && (
+                    imageFiles.length === 0
+                      ? <p className="text-sm text-slate-600 italic text-center py-2">Нет изображений</p>
+                      : <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                          {imageFiles.map((f: any) => (
+                            <button
+                              key={f.id}
+                              onClick={() => setImageFullscreen(`${API_URL}${f.url}`)}
+                              className="flex-shrink-0 rounded-xl overflow-hidden border border-slate-700/40 hover:border-primary-500/40 transition-colors"
+                              style={{ width: 'calc((100% - 24px) / 3.5)' }}
+                            >
+                              <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full aspect-square object-cover" />
+                            </button>
+                          ))}
+                        </div>
                   )}
-                  {portfolioTab === 'other' && (portfolioFiles.length === 0
-                    ? <p className="text-sm text-slate-600 italic text-center py-2">Нет документов</p>
-                    : <div className="space-y-1.5">
-                        {portfolioFiles.map((f: any) => (
-                          <a key={f.id} href={`${API_URL}${f.url}`} target="_blank" rel="noopener noreferrer"
-                            className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-800/40 hover:bg-slate-700/40 border border-slate-700/40 transition-colors group">
-                            <DocIcon mimeType={f.mimeType} name={f.originalName} />
-                            <span className="flex-1 text-sm text-slate-300 truncate group-hover:text-white transition-colors">{f.originalName}</span>
-                            <span className="text-xs text-slate-600 flex-shrink-0">{formatFileSize(f.size)}</span>
-                          </a>
-                        ))}
-                      </div>
+                  {portfolioTab === 'other' && (
+                    otherFiles.length === 0
+                      ? <p className="text-sm text-slate-600 italic text-center py-2">Нет документов</p>
+                      : <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                          {otherFiles.map((f: any) => (
+                            <button
+                              key={f.id}
+                              onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.originalName })}
+                              className="flex flex-col gap-1 flex-shrink-0"
+                              style={{ width: 'calc((100% - 24px) / 3.5)' }}
+                            >
+                              <div className="w-full aspect-square rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-primary-500/40 flex flex-col items-center justify-center gap-1 transition-colors">
+                                <span className="text-sm font-black text-primary-400">{getFileExt(f.originalName)}</span>
+                                <FileText size={13} className="text-slate-500" />
+                              </div>
+                              <p className="text-[9px] text-slate-400 text-center leading-tight line-clamp-2">{f.originalName}</p>
+                            </button>
+                          ))}
+                        </div>
                   )}
                 </div>
               </div>
             )}
 
-            {/* Contacts */}
+            {/* ── Connections ── */}
+            {userConnections.length > 0 && (
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                  <Link2 size={14} className="text-primary-400" />
+                  <span className="text-sm font-semibold text-white">Связи</span>
+                  <span className="text-xs text-slate-500">{userConnections.length}</span>
+                  {userConnections.length > 3 && (
+                    <button
+                      onClick={() => navigate(`/profile/${userId}/connections`)}
+                      className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                    >
+                      Смотреть все
+                    </button>
+                  )}
+                </div>
+                <div className="divide-y divide-slate-800/40">
+                  {userConnections.slice(0, 3).map((c: any) => {
+                    const subtitle = c.services?.slice(0, 2).map((s: any) => s.name).join(', ') || null;
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => navigate(`/profile/${c.partner.id}`)}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-800/40 transition-colors text-left"
+                      >
+                        <AvatarComponent src={c.partner.avatar} name={`${c.partner.firstName} ${c.partner.lastName}`} size={36} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</p>
+                          {subtitle && <p className="text-xs text-slate-500 truncate mt-0.5">{subtitle}</p>}
+                        </div>
+                        <ChevronRight size={14} className="text-slate-600 flex-shrink-0" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── Contacts ── */}
             {hasSocialLinks && (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
@@ -561,7 +622,10 @@ export default function UserProfilePage() {
                   <span className="text-sm font-semibold text-white">Контакты</span>
                 </div>
                 <div className="p-4">
-                  <SocialIconRow links={(user.socialLinks as Record<string, string>) || {}} />
+                  {me
+                    ? <SocialIconRow links={(user.socialLinks as Record<string, string>) || {}} />
+                    : <p className="text-xs text-slate-500 italic">Войдите, чтобы видеть контакты</p>
+                  }
                 </div>
               </div>
             )}
@@ -571,23 +635,79 @@ export default function UserProfilePage() {
       </div>
     </div>
 
-    {/* Services panel */}
-    <BottomPanel open={servicesOpen} onClose={() => setServicesOpen(false)} title={`Услуги (${servicesFlat.length})`}>
-      <div className="space-y-2">
-        {servicesFlat.map((us: any) => {
-          const price = us.priceFrom != null || us.priceTo != null
-            ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
-            : null;
-          return (
-            <div key={us.id} className="p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl">
-              <p className="text-[10px] text-slate-500 mb-0.5">{us._profName}</p>
-              <p className="text-sm font-bold text-white">{us.service?.name}</p>
-              {price && <p className="text-xs text-primary-400 mt-1">{price}</p>}
-            </div>
-          );
-        })}
+    {/* ── Image fullscreen ── */}
+    {imageFullscreen && (
+      <div className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center" onClick={() => setImageFullscreen(null)}>
+        <button onClick={() => setImageFullscreen(null)} className="absolute top-4 right-4 p-2 rounded-full bg-slate-800/80 text-white z-10">
+          <X size={20} />
+        </button>
+        <img src={imageFullscreen} alt="" className="max-w-full max-h-full object-contain" onClick={e => e.stopPropagation()} />
       </div>
-    </BottomPanel>
+    )}
+
+    {/* ── Document fullscreen ── */}
+    {docFullscreen && (
+      <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
+          <span className="text-sm text-slate-300 truncate">{docFullscreen.name}</span>
+          <button onClick={() => setDocFullscreen(null)} className="p-2 rounded-full bg-slate-800 text-white flex-shrink-0">
+            <X size={20} />
+          </button>
+        </div>
+        <iframe src={docFullscreen.url} className="flex-1 w-full border-0" title={docFullscreen.name} />
+      </div>
+    )}
+
+    {/* ── Profession popup ── */}
+    {selectedProfession && createPortal(
+      <>
+        <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm" onClick={() => setSelectedProfession(null)} />
+        <div
+          className="fixed inset-x-0 bottom-0 z-[71] bg-slate-900 border-t border-slate-800 rounded-t-3xl"
+          style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+        >
+          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1" />
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800">
+            <h3 className="text-base font-bold text-white">{selectedProfession.profession?.name}</h3>
+            <button onClick={() => setSelectedProfession(null)} className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors">
+              <X size={18} className="text-slate-400" />
+            </button>
+          </div>
+          <div className="px-5 py-4">
+            {(() => {
+              const related = (user.userServices ?? []).filter(
+                (us: any) => us.professionId === selectedProfession.professionId
+              );
+              if (related.length === 0) {
+                return <p className="text-sm text-slate-500 text-center py-4">Нет услуг для этой профессии</p>;
+              }
+              return (
+                <div className="space-y-3">
+                  {related.map((us: any) => (
+                    <button
+                      key={us.id}
+                      onClick={() => { setSelectedProfession(null); navigate(`/services/${us.id}`); }}
+                      className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3 text-left hover:bg-slate-800 transition-colors"
+                    >
+                      <Briefcase size={16} className="text-primary-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white">{us.service?.name}</p>
+                        {(us.priceFrom || us.priceTo) && (
+                          <p className="text-xs text-primary-400 mt-0.5">
+                            {[us.priceFrom && `от ${us.priceFrom} ₽`, us.priceTo && `до ${us.priceTo} ₽`].filter(Boolean).join(' ')}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      </>,
+      document.body
+    )}
     </>
   );
 }
