@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userAPI, referenceAPI, connectionAPI, groupAPI } from '../lib/api';
@@ -142,6 +143,7 @@ export default function ProfilePage() {
 
   const [myStandaloneProfessions, setMyStandaloneProfessions] = useState<{ professionId: string; professionName: string }[]>([]);
   const [editingProfessions, setEditingProfessions] = useState(false);
+  const [selectedProfession, setSelectedProfession] = useState<{ professionId: string; professionName: string } | null>(null);
   const [profsExpanded, setProfsExpanded] = useState(false);
   const [profsOverflows, setProfsOverflows] = useState(false);
   const profsRef = useRef<HTMLDivElement>(null);
@@ -782,18 +784,18 @@ export default function ProfilePage() {
 
             {/* ── Collectives tile slider ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Коллективы</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Артисты</p>
               <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
                 {/* Add tile — first */}
                 <button
                   onClick={() => navigate('/groups/create')}
-                  className="flex flex-col gap-2 flex-shrink-0 group"
-                  style={{ width: 'calc((100% - 24px) / 2.5)' }}
+                  className="flex flex-col gap-1.5 flex-shrink-0 group"
+                  style={{ width: 'calc((100% - 24px) / 3.5)' }}
                 >
-                  <div className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
-                    <Plus size={22} className="text-slate-500 group-hover:text-primary-400 transition-colors" />
+                  <div className="w-full aspect-square rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
+                    <Plus size={16} className="text-slate-500 group-hover:text-primary-400 transition-colors" />
                   </div>
-                  <span className="text-[11px] text-slate-500 group-hover:text-slate-400 transition-colors text-center leading-tight">Добавить</span>
+                  <span className="text-[10px] text-slate-500 group-hover:text-slate-400 transition-colors text-center leading-tight">Добавить</span>
                 </button>
 
                 {myGroups.map((g: any) => {
@@ -803,18 +805,18 @@ export default function ProfilePage() {
                     <button
                       key={g.id}
                       onClick={() => navigate('/groups/' + g.id)}
-                      className="flex flex-col gap-2 flex-shrink-0 text-left group"
-                      style={{ width: 'calc((100% - 24px) / 2.5)' }}
+                      className="flex flex-col gap-1.5 flex-shrink-0 text-left group"
+                      style={{ width: 'calc((100% - 24px) / 3.5)' }}
                     >
-                      <div className="w-full aspect-square rounded-2xl bg-gradient-to-br from-primary-800/60 to-purple-800/60 border border-primary-600/30 flex items-center justify-center overflow-hidden group-hover:border-primary-500/60 transition-colors">
+                      <div className="w-full aspect-square rounded-xl bg-gradient-to-br from-primary-800/60 to-purple-800/60 border border-primary-600/30 flex items-center justify-center overflow-hidden group-hover:border-primary-500/60 transition-colors">
                         {g.avatar
                           ? <img src={getAvatarUrl(g.avatar) ?? ''} alt={g.name} className="w-full h-full object-cover" />
-                          : <Music2 size={22} className="text-primary-400" />
+                          : <Music2 size={16} className="text-primary-400" />
                         }
                       </div>
                       <div className="w-full">
-                        <p className="text-[11px] font-semibold text-white leading-tight line-clamp-2">{g.name}</p>
-                        {role && <p className="text-[10px] text-slate-500 leading-tight mt-0.5 truncate">{role}</p>}
+                        <p className="text-[10px] font-semibold text-white leading-tight line-clamp-2">{g.name}</p>
+                        {role && <p className="text-[9px] text-slate-500 leading-tight mt-0.5 truncate">{role}</p>}
                       </div>
                     </button>
                   );
@@ -936,22 +938,19 @@ export default function ProfilePage() {
                 </div>
               ) : myStandaloneProfessions.length > 0 ? (
                 <div className="px-4 pt-3 pb-2">
-                  <div
-                    ref={profsRef}
-                    className="flex flex-wrap gap-2 overflow-hidden"
-                    style={profsExpanded ? undefined : { maxHeight: '68px' }}
-                  >
-                    {myStandaloneProfessions.map(p => (
-                      <span key={p.professionId} className="px-3 py-1.5 bg-primary-500/10 border border-primary-500/25 text-primary-300 rounded-xl text-xs font-medium">
-                        {p.professionName}
+                  <p className="text-sm leading-relaxed">
+                    {myStandaloneProfessions.map((p, i) => (
+                      <span key={p.professionId}>
+                        <button
+                          onClick={() => setSelectedProfession(p)}
+                          className="text-primary-400 hover:text-primary-300 font-medium underline underline-offset-2 decoration-primary-500/40 hover:decoration-primary-400 transition-colors"
+                        >
+                          {p.professionName}
+                        </button>
+                        {i < myStandaloneProfessions.length - 1 && <span className="text-slate-500">, </span>}
                       </span>
                     ))}
-                  </div>
-                  {profsOverflows && (
-                    <button onClick={() => setProfsExpanded(v => !v)} className="text-primary-400 hover:text-primary-300 text-xs mt-2 transition-colors">
-                      {profsExpanded ? 'Свернуть' : 'Ещё'}
-                    </button>
-                  )}
+                  </p>
                 </div>
               ) : (
                 <div className="p-4 text-center">
@@ -988,33 +987,31 @@ export default function ProfilePage() {
                     <button
                       onClick={() => { setEditingServices(true); setAddStep('search'); setServiceQuery(''); setServiceSearchResults([]); }}
                       className="flex flex-col gap-2 flex-shrink-0 group"
-                      style={{ width: 'calc((100% - 24px) / 2.5)' }}
+                      style={{ width: 'calc((100% - 24px) / 3.5)' }}
                     >
-                      <div className="w-full aspect-square rounded-2xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
-                        <Plus size={22} className="text-slate-500 group-hover:text-primary-400 transition-colors" />
+                      <div className="w-full aspect-square rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
+                        <Plus size={16} className="text-slate-500 group-hover:text-primary-400 transition-colors" />
                       </div>
-                      <span className="text-[11px] text-slate-500 group-hover:text-slate-400 transition-colors text-center leading-tight">Добавить</span>
+                      <span className="text-[10px] text-slate-500 group-hover:text-slate-400 transition-colors text-center leading-tight">Добавить</span>
                     </button>
 
                     {servicesFlat.map((us: any) => {
-                      const genre = us.genres?.[0]?.name ?? null;
                       const price = us.priceFrom != null || us.priceTo != null
-                        ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
+                        ? [us.priceFrom != null ? `от ${us.priceFrom}₽` : null, us.priceTo != null ? `до ${us.priceTo}₽` : null].filter(Boolean).join(' ')
                         : null;
                       return (
                         <button
                           key={us.id}
                           onClick={() => navigate(`/services/${us.id}`)}
                           className="flex flex-col gap-0 flex-shrink-0 text-left group"
-                          style={{ width: 'calc((100% - 24px) / 2.5)' }}
+                          style={{ width: 'calc((100% - 24px) / 3.5)' }}
                         >
-                          <div className="w-full aspect-square rounded-2xl bg-gradient-to-br from-primary-900/80 to-slate-800/80 border border-primary-700/30 flex flex-col items-center justify-center gap-1.5 p-2 group-hover:border-primary-500/50 transition-colors overflow-hidden">
-                            <Briefcase size={20} className="text-primary-400 flex-shrink-0" />
-                            {genre && <span className="text-[9px] text-slate-400 text-center leading-tight line-clamp-2">{genre}</span>}
+                          <div className="w-full aspect-square rounded-xl bg-gradient-to-br from-primary-900/80 to-slate-800/80 border border-primary-700/30 flex items-center justify-center p-2 group-hover:border-primary-500/50 transition-colors overflow-hidden">
+                            <Briefcase size={16} className="text-primary-400 flex-shrink-0" />
                           </div>
-                          <div className="w-full mt-2">
-                            <p className="text-[11px] font-semibold text-white leading-tight line-clamp-2">{us.service?.name}</p>
-                            {price && <p className="text-[10px] text-primary-400 leading-tight mt-0.5">{price}</p>}
+                          <div className="w-full mt-1.5">
+                            <p className="text-[10px] font-semibold text-white leading-tight line-clamp-2">{us.service?.name}</p>
+                            {price && <p className="text-[9px] text-primary-400 leading-tight mt-0.5">{price}</p>}
                           </div>
                         </button>
                       );
@@ -1204,6 +1201,51 @@ export default function ProfilePage() {
     )}
 
     {viewConn && <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />}
+
+    {/* Profession detail popup */}
+    {selectedProfession && createPortal(
+      <>
+        <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm" onClick={() => setSelectedProfession(null)} />
+        <div className="fixed inset-x-0 bottom-0 z-[71] bg-slate-900 border-t border-slate-800 rounded-t-3xl" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
+          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1" />
+          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800">
+            <h3 className="text-base font-bold text-white">{selectedProfession.professionName}</h3>
+            <button onClick={() => setSelectedProfession(null)} className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors">
+              <X size={18} className="text-slate-400" />
+            </button>
+          </div>
+          <div className="px-5 py-4">
+            {(() => {
+              const relatedServices = (profile?.userServices ?? []).filter(
+                (us: any) => us.profession?.id === selectedProfession.professionId
+              );
+              if (relatedServices.length === 0) {
+                return <p className="text-sm text-slate-500 text-center py-4">Нет добавленных услуг для этой профессии</p>;
+              }
+              return (
+                <div className="space-y-3">
+                  {relatedServices.map((us: any) => (
+                    <button key={us.id} onClick={() => { setSelectedProfession(null); navigate(`/services/${us.id}`); }}
+                      className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3 text-left hover:bg-slate-800 transition-colors">
+                      <Briefcase size={16} className="text-primary-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white">{us.service?.name}</p>
+                        {(us.priceFrom || us.priceTo) && (
+                          <p className="text-xs text-primary-400 mt-0.5">
+                            {[us.priceFrom && `от ${us.priceFrom} ₽`, us.priceTo && `до ${us.priceTo} ₽`].filter(Boolean).join(' ')}
+                          </p>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      </>,
+      document.body
+    )}
     {viewPartner && (
       <PartnerConnectionsModal
         partner={viewPartner.partner}
