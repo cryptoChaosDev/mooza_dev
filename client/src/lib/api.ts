@@ -277,7 +277,7 @@ export const artistAPI = {
   },
   requestJoin: (artistId: string, professionIds: string[]) =>
     api.post(`/artists/${artistId}/join-request`, { professionIds }),
-  pendingMemberships: () => api.get('/artists/memberships/pending'),
+  pendingMemberships: (artistId: string) => api.get(`/artists/${artistId}/memberships/pending`),
   approveMembership: (id: string) => api.patch(`/artists/memberships/${id}/approve`),
   rejectMembership: (id: string) => api.patch(`/artists/memberships/${id}/reject`),
 };

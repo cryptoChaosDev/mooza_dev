@@ -469,14 +469,24 @@ router.post('/:id/join-request', authenticate, async (req: AuthRequest, res: Res
     if (!memberships.length) return res.status(400).json({ error: 'Запрос уже отправлен' });
 
     const roleNames = memberships.map(m => m.roleName).filter(Boolean).join(', ');
-    const admins = await prisma.user.findMany({ where: { isAdmin: true }, select: { id: true } });
-    await Promise.all(admins.map(admin =>
+    // Notify the artist owner
+    const ownerMembership = await prisma.userArtist.findFirst({
+      where: { artistId, isOwner: true },
+      select: { userId: true },
+    });
+    const notifyIds: string[] = ownerMembership ? [ownerMembership.userId] : [];
+    // Also notify system admins if no owner found
+    if (!notifyIds.length) {
+      const admins = await prisma.user.findMany({ where: { isAdmin: true }, select: { id: true } });
+      notifyIds.push(...admins.map(a => a.id));
+    }
+    await Promise.all(notifyIds.map(recipientId =>
       prisma.notification.create({
         data: {
-          userId: admin.id, actorId: userId, type: 'artist_join_request',
-          title: 'Запрос на участие в Артисте',
-          body: `${actorName} запрашивает подтверждение роли «${roleNames}» в «${artist.name}»`,
-          link: `/admin?tab=moderation`,
+          userId: recipientId, actorId: userId, type: 'artist_join_request',
+          title: 'Запрос на участие',
+          body: `${actorName} запрашивает роль «${roleNames}» в «${artist.name}»`,
+          link: `/artist/${artistId}`,
         },
       })
     ));
@@ -488,16 +498,17 @@ router.post('/:id/join-request', authenticate, async (req: AuthRequest, res: Res
   }
 });
 
-// ── GET /api/artists/memberships/pending — all pending join requests (admin) ─
-router.get('/memberships/pending', authenticate, async (req: AuthRequest, res: Response) => {
+// ── GET /api/artists/:id/memberships/pending — pending join requests for artist ─
+router.get('/:id/memberships/pending', authenticate, async (req: AuthRequest, res: Response) => {
   try {
+    const artistId = req.params.id;
+    const isOwner = await prisma.userArtist.findFirst({ where: { artistId, userId: req.userId!, isOwner: true } });
     const me = await prisma.user.findUnique({ where: { id: req.userId! }, select: { isAdmin: true } });
-    if (!me?.isAdmin) return res.status(403).json({ error: 'Forbidden' });
+    if (!isOwner && !me?.isAdmin) return res.status(403).json({ error: 'Forbidden' });
     const memberships = await prisma.userArtist.findMany({
-      where: { inviteStatus: 'PENDING' },
+      where: { artistId, inviteStatus: 'PENDING' },
       include: {
         user: { select: { id: true, firstName: true, lastName: true, avatar: true } },
-        artist: { select: { id: true, name: true, avatar: true } },
         profession: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: 'desc' },
@@ -508,16 +519,24 @@ router.get('/memberships/pending', authenticate, async (req: AuthRequest, res: R
   }
 });
 
+// Helper: check if current user can manage membership (artist owner or system admin)
+async function canManageMembership(membershipId: string, userId: string): Promise<{ ua: any; allowed: boolean }> {
+  const ua = await prisma.userArtist.findUnique({
+    where: { id: membershipId },
+    include: { artist: { select: { name: true } }, profession: { select: { name: true } } },
+  });
+  if (!ua) return { ua: null, allowed: false };
+  const isArtistOwner = await prisma.userArtist.findFirst({ where: { artistId: ua.artistId, userId, isOwner: true } });
+  const me = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
+  return { ua, allowed: !!(isArtistOwner || me?.isAdmin) };
+}
+
 // ── PATCH /api/artists/memberships/:id/approve ───────────────────────────────
 router.patch('/memberships/:id/approve', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const me = await prisma.user.findUnique({ where: { id: req.userId! }, select: { isAdmin: true } });
-    if (!me?.isAdmin) return res.status(403).json({ error: 'Forbidden' });
-    const ua = await prisma.userArtist.findUnique({
-      where: { id: req.params.id },
-      include: { artist: { select: { name: true } }, profession: { select: { name: true } } },
-    });
+    const { ua, allowed } = await canManageMembership(req.params.id, req.userId!);
     if (!ua) return res.status(404).json({ error: 'Not found' });
+    if (!allowed) return res.status(403).json({ error: 'Forbidden' });
     await prisma.userArtist.update({ where: { id: req.params.id }, data: { inviteStatus: 'ACCEPTED' } });
     await prisma.notification.create({
       data: {
@@ -536,13 +555,9 @@ router.patch('/memberships/:id/approve', authenticate, async (req: AuthRequest, 
 // ── PATCH /api/artists/memberships/:id/reject ────────────────────────────────
 router.patch('/memberships/:id/reject', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const me = await prisma.user.findUnique({ where: { id: req.userId! }, select: { isAdmin: true } });
-    if (!me?.isAdmin) return res.status(403).json({ error: 'Forbidden' });
-    const ua = await prisma.userArtist.findUnique({
-      where: { id: req.params.id },
-      include: { artist: { select: { name: true } }, profession: { select: { name: true } } },
-    });
+    const { ua, allowed } = await canManageMembership(req.params.id, req.userId!);
     if (!ua) return res.status(404).json({ error: 'Not found' });
+    if (!allowed) return res.status(403).json({ error: 'Forbidden' });
     await prisma.userArtist.delete({ where: { id: req.params.id } });
     await prisma.notification.create({
       data: {

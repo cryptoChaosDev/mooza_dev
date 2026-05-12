@@ -92,7 +92,10 @@ export default function ArtistPage() {
   });
 
   const isGroup = artist?.type === 'GROUP' || artist?.type === 'COVER_GROUP';
-  const isOwner = !!currentUser && artist?.submittedById === currentUser.id;
+  const isOwner = !!currentUser && (
+    artist?.submittedById === currentUser.id ||
+    artist?.members?.some((m: any) => m.id === currentUser.id && m.isOwner)
+  );
 
   const { data: friendsList = [] } = useQuery({
     queryKey: ['friends-list'],
@@ -201,6 +204,24 @@ export default function ArtistPage() {
   const removeMemberMut = useMutation({
     mutationFn: (membershipId: string) => groupAPI.removeMember(id!, membershipId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+  });
+
+  const { data: pendingMembers = [] } = useQuery<any[]>({
+    queryKey: ['artist-pending-members', id],
+    queryFn: () => artistAPI.pendingMemberships(id!).then((r: any) => r.data),
+    enabled: !!id && isOwner,
+  });
+
+  const approveMemberMut = useMutation({
+    mutationFn: (membershipId: string) => artistAPI.approveMembership(membershipId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['artist', id] });
+      queryClient.invalidateQueries({ queryKey: ['artist-pending-members', id] });
+    },
+  });
+  const rejectMemberMut = useMutation({
+    mutationFn: (membershipId: string) => artistAPI.rejectMembership(membershipId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist-pending-members', id] }),
   });
 
   const set = (key: keyof EditForm, value: string | string[] | Record<string, string>) =>
@@ -696,6 +717,44 @@ export default function ArtistPage() {
               </a>
             )}
             {hasSocialLinks && <SocialIconRow links={(artist.socialLinks as Record<string, string>) || {}} labeled />}
+          </div>
+        )}
+
+        {/* Запросы на участие — только для владельца */}
+        {isOwner && pendingMembers.length > 0 && (
+          <div className="mb-4">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">Запросы на участие</span>
+              <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full font-bold">{pendingMembers.length}</span>
+              <div className="flex-1 h-px bg-slate-800" />
+            </div>
+            <div className="space-y-2">
+              {pendingMembers.map((m: any) => (
+                <div key={m.id} className="flex items-center gap-3 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                  <AvatarComponent src={m.user.avatar} name={`${m.user.firstName} ${m.user.lastName}`} size={40} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{m.user.firstName} {m.user.lastName}</p>
+                    <p className="text-xs text-slate-400 truncate">{m.profession?.name ?? '—'}</p>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={() => rejectMemberMut.mutate(m.id)}
+                      disabled={rejectMemberMut.isPending || approveMemberMut.isPending}
+                      className="px-2.5 py-1.5 text-xs border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      Отклонить
+                    </button>
+                    <button
+                      onClick={() => approveMemberMut.mutate(m.id)}
+                      disabled={approveMemberMut.isPending || rejectMemberMut.isPending}
+                      className="px-2.5 py-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 text-white font-semibold rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      Подтвердить
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 

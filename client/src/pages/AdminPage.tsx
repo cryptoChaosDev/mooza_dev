@@ -1689,14 +1689,6 @@ function ArtistModerationTab() {
 
   return (
     <div className="space-y-6">
-      {/* Artist membership requests */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <h2 className="text-sm font-semibold text-white">Запросы на участие в Артистах</h2>
-        </div>
-        <ArtistMembershipRequests />
-      </div>
-
       {/* Pending moderation */}
       <div>
         <div className="flex items-center gap-2 mb-3">
