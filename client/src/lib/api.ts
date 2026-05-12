@@ -246,6 +246,7 @@ export const messageAPI = {
     api.delete(`/messages/conversations/${conversationId}/members/${memberId}`),
   togglePin: (conversationId: string) => api.patch(`/messages/conversations/${conversationId}/pin`),
   toggleArchive: (conversationId: string) => api.patch(`/messages/conversations/${conversationId}/archive`),
+  setType: (conversationId: string, type: 'personal' | 'business') => api.patch(`/messages/conversations/${conversationId}/type`, { type }),
   searchMessages: (conversationId: string, q: string) => api.get(`/messages/conversations/${conversationId}/search`, { params: { q } }),
   getAttachments: (conversationId: string) => api.get(`/messages/conversations/${conversationId}/attachments`),
 };

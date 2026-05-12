@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Search, Plus, X, Check, User, FolderKanban, Crown, BadgeCheck, Ban, Pin, Archive, ArchiveX, Trash2, MoreHorizontal } from 'lucide-react';
+import { MessageCircle, Search, Plus, X, Check, User, Briefcase, Users, Crown, BadgeCheck, Ban, Pin, Archive, ArchiveX, Trash2, MoreHorizontal, FolderKanban } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
@@ -9,6 +9,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 interface ConvItem {
   id: string;
   isGroup: boolean;
+  type: 'personal' | 'business' | 'group';
   name: string;
   avatar: string | null;
   otherUser: { id: string; firstName: string; lastName: string; avatar: string | null; isPremium?: boolean; isVerified?: boolean; isBlocked?: boolean } | null;
@@ -30,7 +31,7 @@ export default function MessagesPage() {
   const [conversations, setConversations] = useState<ConvItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<'personal' | 'projects'>('personal');
+  const [activeTab, setActiveTab] = useState<'personal' | 'business' | 'group'>('personal');
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -123,6 +124,14 @@ export default function MessagesPage() {
     } catch { /* ignore */ }
   };
 
+  const handleSetType = async (conv: ConvItem, type: 'personal' | 'business') => {
+    setConvMenu(null);
+    try {
+      await messageAPI.setType(conv.id, type);
+      setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, type } : c));
+    } catch { /* ignore */ }
+  };
+
   const handleDeleteConversation = async (conv: ConvItem) => {
     setConvMenu(null);
     try {
@@ -149,12 +158,13 @@ export default function MessagesPage() {
 
   const TABS = [
     { id: 'personal' as const, label: 'Личные', icon: User },
-    { id: 'projects' as const, label: 'Групповые', icon: FolderKanban },
+    { id: 'business' as const, label: 'Деловые', icon: Briefcase },
+    { id: 'group' as const, label: 'Групповые', icon: Users },
   ];
 
   const filtered = conversations
     .filter(c =>
-      (activeTab === 'personal' ? !c.isGroup : c.isGroup) &&
+      c.type === activeTab &&
       c.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
       (showArchived ? c.isArchived : !c.isArchived)
     )
@@ -164,7 +174,7 @@ export default function MessagesPage() {
     });
 
   const archivedCount = conversations.filter(c =>
-    (activeTab === 'personal' ? !c.isGroup : c.isGroup) && c.isArchived
+    c.type === activeTab && c.isArchived
   ).length;
 
   return (
@@ -179,7 +189,7 @@ export default function MessagesPage() {
                 <MessageCircle size={20} className="text-primary-400" />
                 <h2 className="text-lg font-bold text-white">Сообщения</h2>
               </div>
-              {activeTab === 'projects' && (
+              {activeTab === 'group' && (
                 <button
                   onClick={openNewGroup}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-xs font-medium transition-colors"
@@ -240,6 +250,17 @@ export default function MessagesPage() {
                 <Pin size={15} className={convMenu.conv.isPinned ? 'text-primary-400' : 'text-slate-400'} />
                 {convMenu.conv.isPinned ? 'Открепить' : 'Закрепить'}
               </button>
+              {!convMenu.conv.isGroup && (
+                <button
+                  onClick={() => handleSetType(convMenu.conv, convMenu.conv.type === 'business' ? 'personal' : 'business')}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-700/60 transition-colors"
+                >
+                  {convMenu.conv.type === 'business'
+                    ? <><User size={15} className="text-slate-400" />В Личные</>
+                    : <><Briefcase size={15} className="text-slate-400" />В Деловые</>
+                  }
+                </button>
+              )}
               <button
                 onClick={() => handleToggleArchive(convMenu.conv)}
                 className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-700/60 transition-colors"
@@ -380,12 +401,14 @@ export default function MessagesPage() {
           ) : (
             <div className="flex flex-col items-center py-16 text-center">
               <div className="p-4 bg-slate-800/50 rounded-2xl mb-3">
-                {activeTab === 'projects'
-                  ? <FolderKanban size={28} className="text-slate-600" />
+                {activeTab === 'group'
+                  ? <Users size={28} className="text-slate-600" />
+                  : activeTab === 'business'
+                  ? <Briefcase size={28} className="text-slate-600" />
                   : <MessageCircle size={28} className="text-slate-600" />}
               </div>
               <p className="text-slate-500 text-sm">
-                {activeTab === 'projects' ? 'Нет проектов' : 'Нет сообщений'}
+                {activeTab === 'group' ? 'Нет групповых чатов' : activeTab === 'business' ? 'Нет деловых чатов' : 'Нет личных сообщений'}
               </p>
             </div>
           )}

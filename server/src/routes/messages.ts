@@ -151,6 +151,7 @@ router.get('/conversations', authenticate, async (req: AuthRequest, res) => {
           updatedAt: conv.updatedAt,
           isPinned: m.isPinned,
           isArchived: m.isArchived,
+          type: conv.isGroup ? 'group' : (m.type ?? 'personal'),
         };
       })
     );
@@ -627,6 +628,27 @@ router.patch('/conversations/:id/archive', authenticate, async (req: AuthRequest
     res.json({ isArchived: updated.isArchived });
   } catch {
     res.status(500).json({ error: 'Failed to toggle archive' });
+  }
+});
+
+// ─── PATCH /conversations/:id/type — set conversation type (personal/business) ─
+router.patch('/conversations/:id/type', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const { id: conversationId } = req.params;
+    const { type } = req.body;
+    if (!['personal', 'business'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
+    const member = await db.conversationMember.findUnique({
+      where: { conversationId_userId: { conversationId, userId } },
+    });
+    if (!member) return res.status(404).json({ error: 'Conversation not found' });
+    await db.conversationMember.update({
+      where: { conversationId_userId: { conversationId, userId } },
+      data: { type },
+    });
+    res.json({ type });
+  } catch {
+    res.status(500).json({ error: 'Failed to update type' });
   }
 });
 
