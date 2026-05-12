@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Link2, Check, Clock, CheckCheck, Loader2, XCircle } from 'lucide-react';
+import { X, Link2, Check, Clock, CheckCheck, Loader2, XCircle, Star } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { connectionAPI } from '../lib/api';
+import { connectionAPI, reviewAPI } from '../lib/api';
 import AvatarComponent from './Avatar';
 import { useNavigate } from 'react-router-dom';
 
@@ -55,6 +56,22 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
   const navigate = useNavigate();
   const { partner, services, profession, status, iAmRequester, myRole, partnerRole, needsDeal, breakRequestedBy, breakReasonRequester } = connection;
 
+  const [showReview, setShowReview] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewSent, setReviewSent] = useState(false);
+
+  const reviewMut = useMutation({
+    mutationFn: () => reviewAPI.create({
+      targetId: partner.id,
+      rating,
+      text: reviewText.trim() || undefined,
+      type: 'connection',
+      serviceId: services?.[0]?.id,
+    }),
+    onSuccess: () => { setReviewSent(true); queryClient.invalidateQueries({ queryKey: ['reviews', partner.id] }); },
+  });
+
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['connections-accepted'] });
     queryClient.invalidateQueries({ queryKey: ['connections-requests'] });
@@ -64,6 +81,8 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
     queryClient.invalidateQueries({ queryKey: ['connections-history'] });
     queryClient.invalidateQueries({ queryKey: ['connection-with', partner.id] });
     queryClient.invalidateQueries({ queryKey: ['user-connections', partner.id] });
+    queryClient.invalidateQueries({ queryKey: ['connections-all'] });
+    queryClient.invalidateQueries({ queryKey: ['profile'] });
   };
 
   const acceptMut = useMutation({
@@ -182,6 +201,44 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
             </div>
           )}
 
+          {/* Review form */}
+          {showReview && !reviewSent && (
+            <div className="space-y-3 border border-amber-500/20 bg-amber-500/5 rounded-xl p-4">
+              <p className="text-sm font-semibold text-white">Оценить взаимодействие с {partner.firstName}</p>
+              {/* Stars */}
+              <div className="flex gap-1.5">
+                {[1,2,3,4,5].map(i => (
+                  <button key={i} onClick={() => setRating(i)} className="transition-transform hover:scale-110">
+                    <Star size={26} className={i <= rating ? 'text-amber-400 fill-amber-400' : 'text-slate-600'} />
+                  </button>
+                ))}
+              </div>
+              <textarea
+                value={reviewText}
+                onChange={e => setReviewText(e.target.value)}
+                placeholder="Комментарий (необязательно)..."
+                rows={3}
+                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none"
+              />
+              <div className="flex gap-2">
+                <button onClick={() => setShowReview(false)} className="flex-1 py-2 text-sm text-slate-400 border border-slate-700 rounded-xl hover:text-white transition-colors">Отмена</button>
+                <button
+                  onClick={() => reviewMut.mutate()}
+                  disabled={rating === 0 || reviewMut.isPending}
+                  className="flex-1 py-2 text-sm bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                >
+                  {reviewMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Star size={13} />}
+                  Отправить
+                </button>
+              </div>
+            </div>
+          )}
+          {reviewSent && (
+            <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2.5">
+              <Check size={15} />Оценка отправлена
+            </div>
+          )}
+
           {/* Break reason from requester (visible to receiver) */}
           {status === 'BREAK_REQUESTED' && breakRequestedBy === partner.id && breakReasonRequester && (
             <div className="p-3 bg-red-500/5 border border-red-500/20 rounded-xl">
@@ -231,11 +288,19 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
             </>
           )}
 
-          {/* ACCEPTED → close only */}
-          {status === 'ACCEPTED' && (
-            <button onClick={onClose} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
-              Закрыть
-            </button>
+          {/* ACCEPTED → close + review */}
+          {status === 'ACCEPTED' && !showReview && (
+            <>
+              <button onClick={onClose} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
+                Закрыть
+              </button>
+              <button
+                onClick={() => setShowReview(true)}
+                className="flex-1 py-2.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-400 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Star size={14} />Оценить
+              </button>
+            </>
           )}
 
           {/* REJECTED → close */}

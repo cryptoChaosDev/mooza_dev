@@ -240,12 +240,36 @@ export default function UserProfilePage() {
                   iconSize={16}
                 />
 
-                {/* Connection */}
-                {conn?.status === 'PENDING' && !conn.iAmRequester ? (
-                  <button onClick={() => setViewConn(conn)} className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all">
+                {/* Connection button — state depends on conn status */}
+                {conn?.status === 'ACCEPTED' ? (
+                  // Violet = connected
+                  <button
+                    onClick={() => navigate(`/connection/${user.id}`, { state: { partner: user, connections: [conn] } })}
+                    className="p-2 bg-violet-500/15 border border-violet-500/30 text-violet-400 rounded-xl transition-all"
+                    title="Связь установлена"
+                  >
+                    <Link2 size={16} />
+                  </button>
+                ) : conn?.status === 'PENDING' && conn.iAmRequester ? (
+                  // Grey = pending sent by me
+                  <button
+                    onClick={() => setViewConn(conn)}
+                    className="p-2 bg-slate-800/80 border border-slate-700/60 text-slate-500 rounded-xl transition-all"
+                    title="Запрос отправлен — ожидает ответа"
+                  >
+                    <Link2 size={16} />
+                  </button>
+                ) : conn?.status === 'PENDING' && !conn.iAmRequester ? (
+                  // Blue = incoming request from them
+                  <button
+                    onClick={() => setViewConn(conn)}
+                    className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all"
+                    title="Входящий запрос на связь"
+                  >
                     <Link2 size={16} />
                   </button>
                 ) : (
+                  // Default = no connection
                   <TapButton
                     isConfirming={confirming === 'conn'}
                     onOpen={() => setConfirming('conn')}
