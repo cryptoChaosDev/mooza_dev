@@ -5,6 +5,7 @@ import {
   Check, Globe, ArrowRight, ArrowLeft, X, Search,
 } from 'lucide-react';
 import { authAPI, referenceAPI } from '../lib/api';
+import CityPicker from '../components/CityPicker';
 import { useAuthStore } from '../stores/authStore';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -473,14 +474,9 @@ export default function RegisterPage() {
           {geoLoading ? <Loader2 size={16} className="animate-spin" /> : <Globe size={16} />}
           {geoLoading ? 'Определяем местоположение...' : 'Определить автоматически'}
         </button>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Город">
-            <Input value={city} onChange={setCity} placeholder="Москва" />
-          </Field>
-          <Field label="Страна">
-            <Input value={country} onChange={setCountry} placeholder="Россия" />
-          </Field>
-        </div>
+        <Field label="Город">
+          <CityPicker city={city} country={country} onChange={(c, co) => { setCity(c); setCountry(co); }} />
+        </Field>
         <Field label="Телефон" hint="Необязательно — для связи с коллегами">
           <Input type="tel" value={phone} onChange={v => setPhone(formatPhone(v))} placeholder="+7 (___) ___ __ __" />
         </Field>
