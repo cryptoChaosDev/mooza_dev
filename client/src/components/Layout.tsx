@@ -1,8 +1,9 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, Gift, X } from 'lucide-react';
+import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, Gift, X, Info } from 'lucide-react';
 import BottomNav from './BottomNav';
 import NotificationBell from './NotificationBell';
+import InfoModal from './InfoModal';
 import { useAuthStore } from '../stores/authStore';
 
 interface LayoutProps {
@@ -11,6 +12,7 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const [notifDismissed, setNotifDismissed] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -64,13 +66,21 @@ export default function Layout({ children }: LayoutProps) {
           <div className="flex items-center gap-1">
             <NotificationBell />
             <button
+              onClick={() => setShowInfo(true)}
+              className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
+              title="Информация"
+            >
+              <Info size={22} className="text-slate-300" />
+            </button>
+            <button
               onClick={() => navigate('/invite')}
               className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
-              title="Пригласить друзей"
+              title="Реферальная программа"
             >
               <Gift size={22} className="text-slate-300" />
             </button>
           </div>
+          {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
         </header>
       </div>
 
