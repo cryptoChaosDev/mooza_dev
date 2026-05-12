@@ -5,7 +5,7 @@ import {
   ArrowLeft, MapPin, ExternalLink,
   Camera, Navigation, Edit3, X, Save, Loader2,
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
-  UserPlus, Trash2, Search,
+  UserPlus, Trash2, Search, Check,
 } from 'lucide-react';
 import { artistAPI, referenceAPI, groupAPI, friendshipAPI } from '../lib/api';
 import { plural } from '../lib/plural';
@@ -66,6 +66,10 @@ export default function ArtistPage() {
   });
   const [genreSheetOpen, setGenreSheetOpen] = useState(false);
   const [typeSheetOpen, setTypeSheetOpen] = useState(false);
+
+  // Leave / transfer ownership state
+  const [showLeaveModal, setShowLeaveModal] = useState(false);
+  const [selectedNewOwnerMembershipId, setSelectedNewOwnerMembershipId] = useState('');
 
   // Invite member state
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -204,6 +208,16 @@ export default function ArtistPage() {
   const removeMemberMut = useMutation({
     mutationFn: (membershipId: string) => groupAPI.removeMember(id!, membershipId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+  });
+
+  const leaveMut = useMutation({
+    mutationFn: () => groupAPI.leave(id!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); navigate(-1); },
+  });
+
+  const transferOwnerMut = useMutation({
+    mutationFn: () => groupAPI.transferOwner(id!, selectedNewOwnerMembershipId),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); setShowLeaveModal(false); navigate(-1); },
   });
 
   const { data: pendingMembers = [] } = useQuery<any[]>({
@@ -793,11 +807,33 @@ export default function ArtistPage() {
                     {m.inviteStatus === 'PENDING' && (
                       <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-400 rounded-md flex-shrink-0">ожидает</span>
                     )}
-                    {isOwner && !m.isOwner && (
+                    {/* Owner removes a non-owner member */}
+                    {isOwner && !m.isOwner && m.id !== currentUser?.id && (
                       <button
                         onClick={() => removeMemberMut.mutate(m.membershipId)}
                         disabled={removeMemberMut.isPending}
                         className="p-1.5 text-slate-600 hover:text-red-400 transition-colors flex-shrink-0"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                    {/* Current user leaves the group */}
+                    {m.id === currentUser?.id && !m.isOwner && (
+                      <button
+                        onClick={() => leaveMut.mutate()}
+                        disabled={leaveMut.isPending}
+                        className="p-1.5 text-slate-600 hover:text-red-400 transition-colors flex-shrink-0"
+                        title="Покинуть группу"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                    {/* Owner wants to leave — must transfer first */}
+                    {m.id === currentUser?.id && m.isOwner && (
+                      <button
+                        onClick={() => { setShowLeaveModal(true); setSelectedNewOwnerMembershipId(''); }}
+                        className="p-1.5 text-slate-600 hover:text-red-400 transition-colors flex-shrink-0"
+                        title="Покинуть группу"
                       >
                         <Trash2 size={14} />
                       </button>
@@ -830,6 +866,67 @@ export default function ArtistPage() {
 
       {/* ── Edit modal ── */}
       {isEditing && EditModal()}
+
+      {/* ── Transfer ownership modal ── */}
+      {showLeaveModal && (() => {
+        const candidates = (artist?.members ?? []).filter(
+          (m: any) => m.id !== currentUser?.id && m.inviteStatus === 'ACCEPTED' && !m.isOwner
+        );
+        return (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
+            <div className="w-full max-w-sm bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800">
+                <h3 className="font-semibold text-white text-sm">Передача прав</h3>
+                <button onClick={() => setShowLeaveModal(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+                  <X size={16} className="text-slate-400" />
+                </button>
+              </div>
+              <div className="p-4">
+                {candidates.length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-4">
+                    Нет других участников. Удалите группу или сначала пригласите участника.
+                  </p>
+                ) : (
+                  <>
+                    <p className="text-xs text-slate-400 mb-3">
+                      Вы создатель группы. Выберите участника, которому передать права владельца:
+                    </p>
+                    <div className="space-y-1.5 max-h-56 overflow-y-auto mb-4">
+                      {candidates.map((m: any) => (
+                        <button
+                          key={m.membershipId}
+                          onClick={() => setSelectedNewOwnerMembershipId(m.membershipId)}
+                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
+                            selectedNewOwnerMembershipId === m.membershipId
+                              ? 'bg-primary-600/20 border border-primary-500/40'
+                              : 'hover:bg-slate-800 border border-transparent'
+                          }`}
+                        >
+                          <AvatarComponent src={m.avatar} name={`${m.firstName} ${m.lastName}`} size={36} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-white truncate">{m.firstName} {m.lastName}</p>
+                            <p className="text-xs text-slate-500 truncate">{m.profession?.name ?? '—'}</p>
+                          </div>
+                          {selectedNewOwnerMembershipId === m.membershipId && (
+                            <Check size={16} className="text-primary-400 flex-shrink-0" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      onClick={() => transferOwnerMut.mutate()}
+                      disabled={!selectedNewOwnerMembershipId || transferOwnerMut.isPending}
+                      className="w-full py-2.5 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition-colors"
+                    >
+                      {transferOwnerMut.isPending ? 'Передача...' : 'Передать права и покинуть'}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Invite member modal ── */}
       {showInviteModal && (

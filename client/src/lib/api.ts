@@ -320,6 +320,9 @@ export const groupAPI = {
   removeMember: (groupId: string, membershipId: string) =>
     api.delete(`/groups/${groupId}/members/${membershipId}`),
   deleteGroup: (id: string) => api.delete(`/groups/${id}`),
+  transferOwner: (groupId: string, newOwnerMembershipId: string) =>
+    api.patch(`/groups/${groupId}/transfer-owner`, { newOwnerMembershipId }),
+  leave: (groupId: string) => api.delete(`/groups/${groupId}/leave`),
 };
 
 export const favoriteAPI = {

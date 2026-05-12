@@ -380,4 +380,57 @@ router.delete('/:id/members/:membershipId', authenticate, async (req: AuthReques
   }
 });
 
+// ── PATCH /api/groups/:id/transfer-owner ─────────────────────────────────────
+// Transfer ownership to another member, then remove current owner
+router.patch('/:id/transfer-owner', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const artistId = req.params.id;
+    const { newOwnerMembershipId } = req.body as { newOwnerMembershipId: string };
+
+    if (!newOwnerMembershipId) return res.status(400).json({ error: 'newOwnerMembershipId обязателен' });
+
+    // Verify caller is the current owner
+    const myMembership = await prisma.userArtist.findFirst({ where: { artistId, userId: meId, isOwner: true } });
+    if (!myMembership) return res.status(403).json({ error: 'Вы не являетесь владельцем' });
+
+    // Verify new owner is an accepted member of this artist
+    const newOwnerMembership = await prisma.userArtist.findUnique({ where: { id: newOwnerMembershipId } });
+    if (!newOwnerMembership || newOwnerMembership.artistId !== artistId || newOwnerMembership.inviteStatus !== 'ACCEPTED') {
+      return res.status(400).json({ error: 'Некорректный участник для передачи прав' });
+    }
+
+    // Transfer ownership
+    await prisma.$transaction([
+      prisma.userArtist.update({ where: { id: newOwnerMembershipId }, data: { isOwner: true } }),
+      prisma.artist.update({ where: { id: artistId }, data: { submittedById: newOwnerMembership.userId } }),
+      prisma.userArtist.delete({ where: { id: myMembership.id } }),
+    ]);
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[groups] PATCH /:id/transfer-owner', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── DELETE /api/groups/:id/leave ─────────────────────────────────────────────
+// Non-owner member leaves the group
+router.delete('/:id/leave', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const artistId = req.params.id;
+
+    const myMembership = await prisma.userArtist.findFirst({ where: { artistId, userId: meId } });
+    if (!myMembership) return res.status(404).json({ error: 'Вы не участник' });
+    if (myMembership.isOwner) return res.status(400).json({ error: 'Владелец не может покинуть без передачи прав', code: 'OWNER_MUST_TRANSFER' });
+
+    await prisma.userArtist.delete({ where: { id: myMembership.id } });
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[groups] DELETE /:id/leave', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 export default router;
