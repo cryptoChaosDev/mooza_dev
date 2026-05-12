@@ -846,13 +846,13 @@ function CustomFiltersSection() {
               filters.flatMap((f, i) =>
                 f.values.length > 0
                   ? f.values.map((v, vi) => ({
-                      '№': vi === 0 ? i + 1 : '',
+                      '№': vi === 0 ? i + 1 : '' as string | number,
                       'Название фильтра': vi === 0 ? f.name : '',
-                      '№ значения': vi + 1,
+                      '№ значения': vi + 1 as string | number,
                       'Значение': v.value,
                     }))
-                  : [{ '№': i + 1, 'Название фильтра': f.name, '№ значения': '', 'Значение': '' }]
-              ),
+                  : [{ '№': i + 1 as string | number, 'Название фильтра': f.name, '№ значения': '' as string | number, 'Значение': '' }]
+              ) as Record<string, any>[],
               'Фильтры'
             )}
             className="flex items-center gap-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2.5 py-2 rounded-lg transition-colors"
