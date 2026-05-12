@@ -2,9 +2,9 @@ import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Users, Check, X, MessageCircle, UserX, Clock,
-  Pin, PinOff, Search, Wifi, Link2, Star, Crown, BadgeCheck, Music2,
-  ArrowDownLeft, ChevronRight,
+  Users, MessageCircle, UserX,
+  Pin, PinOff, Search, Wifi, Link2, Heart, Crown, BadgeCheck, Music2,
+  ChevronRight, ArrowDownLeft,
 } from 'lucide-react';
 import { friendshipAPI, connectionAPI, favoriteAPI, groupAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
@@ -279,79 +279,29 @@ const { data: myBreakRequests = [] } = useQuery({
           {/* ══ FRIENDS TAB ══ */}
           {activeTab === 'friends' && (
             <div>
-              {/* Incoming requests */}
-              {requests.length > 0 && (
-                <div>
-                  <SectionHeader label="Входящие заявки" count={requests.length} />
-                  <div className="divide-y divide-slate-800/60">
-                    {requests.map((req: any) => (
-                      <div key={req.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors">
-                        <button onClick={() => navigate(`/profile/${req.requester.id}`)} className="flex-shrink-0">
-                          <UserAvatar user={req.requester} />
-                        </button>
-                        <button onClick={() => navigate(`/profile/${req.requester.id}`)} className="flex-1 min-w-0 text-left">
-                          <p className="text-sm font-semibold text-white truncate">{req.requester.firstName} {req.requester.lastName}</p>
-                          {(req.requester.role || req.requester.city) && (
-                            <p className="text-xs text-slate-500 truncate mt-0.5">{[req.requester.role, req.requester.city].filter(Boolean).join(' · ')}</p>
-                          )}
-                        </button>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          <button
-                            onClick={() => acceptMutation.mutate(req.id)}
-                            disabled={acceptMutation.isPending}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
-                          >
-                            <Check size={13} /> Принять
-                          </button>
-                          <button
-                            onClick={() => rejectMutation.mutate(req.id)}
-                            disabled={rejectMutation.isPending}
-                            className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-50"
-                            title="Отклонить"
-                          >
-                            <X size={15} />
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+              {/* Requests navigator */}
+              <button
+                onClick={() => navigate('/friends/requests')}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors border-b border-slate-800/60 text-left"
+              >
+                <div className="w-10 h-10 rounded-full bg-primary-500/15 flex items-center justify-center flex-shrink-0">
+                  <Users size={18} className="text-primary-400" />
                 </div>
-              )}
-
-              {/* Outgoing requests */}
-              {sentRequests.length > 0 && (
-                <div>
-                  <SectionHeader label="Отправленные заявки" count={sentRequests.length} />
-                  <div className="divide-y divide-slate-800/60">
-                    {sentRequests.map((req: any) => (
-                      <div key={req.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors">
-                        <button onClick={() => navigate(`/profile/${req.receiver.id}`)} className="flex-shrink-0">
-                          <UserAvatar user={req.receiver} />
-                        </button>
-                        <button onClick={() => navigate(`/profile/${req.receiver.id}`)} className="flex-1 min-w-0 text-left">
-                          <p className="text-sm font-semibold text-white truncate">{req.receiver.firstName} {req.receiver.lastName}</p>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <Clock size={11} className="text-slate-600" />
-                            <span className="text-xs text-slate-500">{[req.receiver.role, req.receiver.city].filter(Boolean).join(' · ') || 'Ожидает ответа'}</span>
-                          </div>
-                        </button>
-                        <button
-                          onClick={() => cancelMutation.mutate(req.id)}
-                          disabled={cancelMutation.isPending}
-                          className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-red-500/10 text-slate-400 hover:text-red-400 rounded-xl text-xs font-medium border border-slate-700 hover:border-red-500/30 transition-all disabled:opacity-50 flex-shrink-0"
-                        >
-                          <X size={12} /> Отменить
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white">Запросы дружбы</p>
+                  <p className="text-xs text-slate-500">
+                    {requests.length > 0 ? `${requests.length} новых` : sentRequests.length > 0 ? `${sentRequests.length} отправлено` : 'Нет новых запросов'}
+                  </p>
                 </div>
-              )}
+                {(requests.length + sentRequests.length) > 0 && (
+                  <span className="min-w-[20px] h-5 px-1.5 bg-primary-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center flex-shrink-0">
+                    {requests.length + sentRequests.length}
+                  </span>
+                )}
+                <ChevronRight size={16} className="text-slate-600 flex-shrink-0" />
+              </button>
 
-              {/* Friends list */}
-              {(friends.length > 0 || requests.length > 0 || sentRequests.length > 0) && friends.length > 0 && (
-                <SectionHeader label="Список друзей" count={friends.length} />
-              )}
+              {friends.length > 0 && <SectionHeader label="Список друзей" count={friends.length} />}
 
               {friendsLoading ? (
                 <div className="divide-y divide-slate-800/60">
@@ -397,13 +347,6 @@ const { data: myBreakRequests = [] } = useQuery({
                           <button onClick={() => navigate(`/messages/${friend.id}`)} className="p-2 text-slate-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg transition-all" title="Написать">
                             <MessageCircle size={16} />
                           </button>
-                          <button
-                            onClick={() => togglePin(friend.id)}
-                            className={`p-2 rounded-lg transition-all ${isPinned ? 'text-primary-400 hover:text-slate-400 hover:bg-slate-700/50' : 'text-slate-400 hover:text-primary-400 hover:bg-primary-500/10'}`}
-                            title={isPinned ? 'Открепить' : 'Закрепить'}
-                          >
-                            {isPinned ? <PinOff size={15} /> : <Pin size={15} />}
-                          </button>
                           {friendshipId && (
                             <button onClick={() => setConfirmRemoveFriend(friendshipId)} disabled={removeMutation.isPending} className="p-2 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-50" title="Удалить из друзей">
                               <UserX size={15} />
@@ -433,79 +376,27 @@ const { data: myBreakRequests = [] } = useQuery({
           {/* ══ CONNECTIONS TAB ══ */}
           {activeTab === 'connections' && (
             <div className="pb-4">
-              {connRequests.length > 0 && (
-                <div>
-                  <SectionHeader label="Входящие запросы" count={connRequests.length} />
-                  <div className="divide-y divide-slate-800/60">
-                    {connRequests.map((c: any) => (
-                      <div key={c.id} onClick={() => setViewConn(c)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer">
-                        <div className="flex-shrink-0"><UserAvatar user={c.partner} /></div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</p>
-                          {c.services?.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {c.services.slice(0, 3).map((s: any) => (
-                                <span key={s.id} className="text-[11px] bg-primary-500/10 text-primary-300 border border-primary-500/20 rounded-md px-1.5 py-0.5">{s.name}</span>
-                              ))}
-                              {c.services.length > 3 && <span className="text-[11px] text-slate-500">+{c.services.length - 3}</span>}
-                            </div>
-                          )}
-                        </div>
-                        <ArrowDownLeft size={16} className="text-primary-400 flex-shrink-0" />
-                      </div>
-                    ))}
-                  </div>
+              {/* Requests navigator */}
+              <button
+                onClick={() => navigate('/connections/requests')}
+                className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors border-b border-slate-800/60 text-left"
+              >
+                <div className="w-10 h-10 rounded-full bg-primary-500/15 flex items-center justify-center flex-shrink-0">
+                  <Link2 size={18} className="text-primary-400" />
                 </div>
-              )}
-
-{connSent.length > 0 && (
-                <div>
-                  <SectionHeader label="Отправленные запросы" count={connSent.length} />
-                  <div className="divide-y divide-slate-800/60">
-                    {connSent.map((c: any) => (
-                      <div key={c.id} onClick={() => setViewConn(c)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer">
-                        <div className="flex-shrink-0"><UserAvatar user={c.partner} /></div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</p>
-                          {c.services?.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {c.services.slice(0, 3).map((s: any) => (
-                                <span key={s.id} className="text-[11px] bg-slate-700/60 text-slate-400 rounded-md px-1.5 py-0.5">{s.name}</span>
-                              ))}
-                              {c.services.length > 3 && <span className="text-[11px] text-slate-500">+{c.services.length - 3}</span>}
-                            </div>
-                          )}
-                        </div>
-                        <Clock size={14} className="text-slate-500 flex-shrink-0" />
-                      </div>
-                    ))}
-                  </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-white">Запросы связи</p>
+                  <p className="text-xs text-slate-500">
+                    {connRequests.length > 0 ? `${connRequests.length} новых` : connSent.length > 0 ? `${connSent.length} отправлено` : 'Нет новых запросов'}
+                  </p>
                 </div>
-              )}
-
-              {connRejected.length > 0 && (
-                <div>
-                  <SectionHeader label="Отклонённые запросы" count={connRejected.length} />
-                  <div className="divide-y divide-slate-800/60">
-                    {connRejected.map((c: any) => (
-                      <div key={c.id} onClick={() => setViewConn(c)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer opacity-60">
-                        <div className="flex-shrink-0"><UserAvatar user={c.partner} /></div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</p>
-                          {c.services?.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {c.services.slice(0, 3).map((s: any) => (
-                                <span key={s.id} className="text-[11px] bg-slate-700/60 text-slate-400 rounded-md px-1.5 py-0.5">{s.name}</span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-[11px] text-red-400 flex-shrink-0">Отклонено</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                {(connRequests.length + connSent.length) > 0 && (
+                  <span className="min-w-[20px] h-5 px-1.5 bg-primary-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center flex-shrink-0">
+                    {connRequests.length + connSent.length}
+                  </span>
+                )}
+                <ChevronRight size={16} className="text-slate-600 flex-shrink-0" />
+              </button>
 
               {connPartners.length > 0 && (
                 <div>
@@ -744,10 +635,10 @@ const { data: myBreakRequests = [] } = useQuery({
                       <button
                         onClick={() => setConfirmRemoveFav(fav.user.id)}
                         disabled={removeFavMutation.isPending}
-                        className="p-2 text-amber-400/60 hover:text-slate-400 hover:bg-slate-700/50 rounded-lg transition-all disabled:opacity-50"
+                        className="p-2 text-rose-400 hover:text-slate-400 hover:bg-slate-700/50 rounded-lg transition-all disabled:opacity-50"
                         title="Убрать из избранного"
                       >
-                        <Star size={15} fill="currentColor" />
+                        <Heart size={15} fill="currentColor" />
                       </button>
                     </div>
                   </div>
@@ -755,9 +646,9 @@ const { data: myBreakRequests = [] } = useQuery({
               </div>
             ) : (
               <div className="flex flex-col items-center py-16 px-6 text-center">
-                <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Star size={32} className="text-slate-600" /></div>
+                <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Heart size={32} className="text-slate-600" /></div>
                 <p className="text-white font-semibold mb-1">Нет избранных</p>
-                <p className="text-slate-500 text-sm">Нажмите ★ на профиле пользователя, чтобы следить за его новостями</p>
+                <p className="text-slate-500 text-sm">Нажмите ♥ на профиле пользователя, чтобы добавить в избранное</p>
               </div>
             )
           )}
