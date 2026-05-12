@@ -439,4 +439,123 @@ router.patch('/:id/submit-proof', authenticate, async (req: AuthRequest, res: Re
   }
 });
 
+// ── POST /api/artists/:id/join-request — request to join as member ──────────
+router.post('/:id/join-request', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+    const artistId = req.params.id;
+    const { professionIds } = req.body as { professionIds: string[] };
+    if (!professionIds?.length) return res.status(400).json({ error: 'Профессия обязательна' });
+
+    const artist = await prisma.artist.findUnique({ where: { id: artistId }, select: { id: true, name: true } });
+    if (!artist) return res.status(404).json({ error: 'Артист не найден' });
+
+    const actor = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+    const actorName = `${actor?.firstName ?? ''} ${actor?.lastName ?? ''}`.trim();
+
+    const memberships: any[] = [];
+    for (const professionId of professionIds) {
+      const existing = await prisma.userArtist.findUnique({
+        where: { userId_artistId_professionId: { userId, artistId, professionId } },
+      });
+      if (existing) continue;
+      const profession = await prisma.profession.findUnique({ where: { id: professionId }, select: { name: true } });
+      const membership = await prisma.userArtist.create({
+        data: { userId, artistId, professionId, inviteStatus: 'PENDING', isOwner: false },
+      });
+      memberships.push({ membership, roleName: profession?.name ?? '' });
+    }
+
+    if (!memberships.length) return res.status(400).json({ error: 'Запрос уже отправлен' });
+
+    const roleNames = memberships.map(m => m.roleName).filter(Boolean).join(', ');
+    const admins = await prisma.user.findMany({ where: { isAdmin: true }, select: { id: true } });
+    await Promise.all(admins.map(admin =>
+      prisma.notification.create({
+        data: {
+          userId: admin.id, actorId: userId, type: 'artist_join_request',
+          title: 'Запрос на участие в Артисте',
+          body: `${actorName} запрашивает подтверждение роли «${roleNames}» в «${artist.name}»`,
+          link: `/admin?tab=moderation`,
+        },
+      })
+    ));
+
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── GET /api/artists/memberships/pending — all pending join requests (admin) ─
+router.get('/memberships/pending', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const me = await prisma.user.findUnique({ where: { id: req.userId! }, select: { isAdmin: true } });
+    if (!me?.isAdmin) return res.status(403).json({ error: 'Forbidden' });
+    const memberships = await prisma.userArtist.findMany({
+      where: { inviteStatus: 'PENDING' },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+        artist: { select: { id: true, name: true, avatar: true } },
+        profession: { select: { id: true, name: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(memberships);
+  } catch {
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── PATCH /api/artists/memberships/:id/approve ───────────────────────────────
+router.patch('/memberships/:id/approve', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const me = await prisma.user.findUnique({ where: { id: req.userId! }, select: { isAdmin: true } });
+    if (!me?.isAdmin) return res.status(403).json({ error: 'Forbidden' });
+    const ua = await prisma.userArtist.findUnique({
+      where: { id: req.params.id },
+      include: { artist: { select: { name: true } }, profession: { select: { name: true } } },
+    });
+    if (!ua) return res.status(404).json({ error: 'Not found' });
+    await prisma.userArtist.update({ where: { id: req.params.id }, data: { inviteStatus: 'ACCEPTED' } });
+    await prisma.notification.create({
+      data: {
+        userId: ua.userId, actorId: req.userId, type: 'artist_join_approved',
+        title: 'Участие подтверждено',
+        body: `Ваш запрос на роль «${ua.profession?.name ?? ''}» в «${ua.artist.name}» подтверждён!`,
+        link: `/profile/${ua.userId}`,
+      },
+    });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── PATCH /api/artists/memberships/:id/reject ────────────────────────────────
+router.patch('/memberships/:id/reject', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const me = await prisma.user.findUnique({ where: { id: req.userId! }, select: { isAdmin: true } });
+    if (!me?.isAdmin) return res.status(403).json({ error: 'Forbidden' });
+    const ua = await prisma.userArtist.findUnique({
+      where: { id: req.params.id },
+      include: { artist: { select: { name: true } }, profession: { select: { name: true } } },
+    });
+    if (!ua) return res.status(404).json({ error: 'Not found' });
+    await prisma.userArtist.delete({ where: { id: req.params.id } });
+    await prisma.notification.create({
+      data: {
+        userId: ua.userId, actorId: req.userId, type: 'artist_join_rejected',
+        title: 'Запрос отклонён',
+        body: `Ваш запрос на роль «${ua.profession?.name ?? ''}» в «${ua.artist.name}» отклонён.`,
+        link: `/profile/${ua.userId}`,
+      },
+    });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 export default router;

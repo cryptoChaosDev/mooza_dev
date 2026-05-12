@@ -21,6 +21,7 @@ import SelectSheet from '../components/SelectSheet';
 import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import ShareButton from '../components/ShareButton';
+import JoinArtistModal from '../components/JoinArtistModal';
 import ReviewsBlock from '../components/ReviewsBlock';
 
 
@@ -145,6 +146,7 @@ export default function ProfilePage() {
   const [myStandaloneProfessions, setMyStandaloneProfessions] = useState<{ professionId: string; professionName: string }[]>([]);
   const [editingProfessions, setEditingProfessions] = useState(false);
   const [selectedProfession, setSelectedProfession] = useState<{ professionId: string; professionName: string } | null>(null);
+  const [showJoinArtist, setShowJoinArtist] = useState(false);
   const [profAddStep, setProfAddStep] = useState<'field' | 'direction' | 'profession' | null>(null);
   const [profFlowDirections, setProfFlowDirections] = useState<any[]>([]);
   const [profFlowProfessions, setProfFlowProfessions] = useState<any[]>([]);
@@ -782,7 +784,7 @@ export default function ProfilePage() {
               <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
                 {/* Add tile — first */}
                 <button
-                  onClick={() => navigate('/groups/create')}
+                  onClick={() => setShowJoinArtist(true)}
                   className="flex flex-col gap-1.5 flex-shrink-0 group"
                   style={{ width: 'calc((100% - 24px) / 3.5)' }}
                 >
@@ -1256,6 +1258,8 @@ export default function ProfilePage() {
       onConfirm={() => { if (confirmDeleteLinkId) handleDeleteLink(confirmDeleteLinkId); }}
       onCancel={() => setConfirmDeleteLinkId(null)}
     />
+
+    {showJoinArtist && <JoinArtistModal onClose={() => setShowJoinArtist(false)} />}
 
     </>
   );

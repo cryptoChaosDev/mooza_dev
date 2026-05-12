@@ -275,6 +275,11 @@ export const artistAPI = {
     const fd = new FormData(); fd.append('banner', file);
     return api.post(`/artists/${id}/banner`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
+  requestJoin: (artistId: string, professionIds: string[]) =>
+    api.post(`/artists/${artistId}/join-request`, { professionIds }),
+  pendingMemberships: () => api.get('/artists/memberships/pending'),
+  approveMembership: (id: string) => api.patch(`/artists/memberships/${id}/approve`),
+  rejectMembership: (id: string) => api.patch(`/artists/memberships/${id}/reject`),
 };
 
 // Connection API

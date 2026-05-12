@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
-import { adminAPI, api, siteSettingsAPI } from '../lib/api';
+import { adminAPI, api, siteSettingsAPI, artistAPI } from '../lib/api';
 import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2, ShieldCheck, Clock, Zap, Download } from 'lucide-react';
 import AvatarComponent from '../components/Avatar';
 import * as XLSX from 'xlsx';
@@ -1689,6 +1689,14 @@ function ArtistModerationTab() {
 
   return (
     <div className="space-y-6">
+      {/* Artist membership requests */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <h2 className="text-sm font-semibold text-white">Запросы на участие в Артистах</h2>
+        </div>
+        <ArtistMembershipRequests />
+      </div>
+
       {/* Pending moderation */}
       <div>
         <div className="flex items-center gap-2 mb-3">
@@ -2052,6 +2060,61 @@ function SiteSettingsTab() {
           >
             <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${value ? 'translate-x-5' : 'translate-x-0'}`} />
           </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Artist Membership Requests (within ArtistModerationTab) ─────────────────
+
+function ArtistMembershipRequests() {
+  const qc = useQueryClient();
+
+  const { data: memberships = [], isLoading } = useQuery<any[]>({
+    queryKey: ['admin-artist-memberships'],
+    queryFn: () => artistAPI.pendingMemberships().then((r: any) => r.data),
+  });
+
+  const approveMut = useMutation({
+    mutationFn: (id: string) => artistAPI.approveMembership(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-artist-memberships'] }),
+  });
+  const rejectMut = useMutation({
+    mutationFn: (id: string) => artistAPI.rejectMembership(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-artist-memberships'] }),
+  });
+
+  if (isLoading) return <div className="text-center py-8"><Loader2 size={20} className="animate-spin text-primary-400 mx-auto" /></div>;
+  if (!memberships.length) return <p className="text-slate-500 text-sm text-center py-6">Нет запросов на участие</p>;
+
+  return (
+    <div className="space-y-3">
+      {memberships.map((m: any) => (
+        <div key={m.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+          <p className="text-sm text-white mb-1">
+            <span className="font-semibold">{m.user.firstName} {m.user.lastName}</span>
+            {' '}запрашивает роль{' '}
+            <span className="text-primary-400 font-semibold">«{m.profession?.name ?? '—'}»</span>
+            {' '}в{' '}
+            <span className="text-emerald-400 font-semibold">«{m.artist.name}»</span>
+          </p>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => rejectMut.mutate(m.id)}
+              disabled={rejectMut.isPending || approveMut.isPending}
+              className="flex-1 py-2 text-xs font-medium border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-xl transition-colors disabled:opacity-50"
+            >
+              Отклонить
+            </button>
+            <button
+              onClick={() => approveMut.mutate(m.id)}
+              disabled={approveMut.isPending || rejectMut.isPending}
+              className="flex-1 py-2 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl transition-colors disabled:opacity-50"
+            >
+              Подтвердить
+            </button>
+          </div>
         </div>
       ))}
     </div>
