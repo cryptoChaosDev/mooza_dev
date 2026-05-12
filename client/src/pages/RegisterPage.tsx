@@ -250,7 +250,7 @@ export default function RegisterPage() {
         startCooldown();
       } else {
         setAuth(data.user, data.token);
-        navigate('/');
+        navigate('/onboarding');
       }
     } catch (err: any) {
       const msg = err.response?.data?.error;
@@ -267,7 +267,7 @@ export default function RegisterPage() {
     try {
       const { data } = await authAPI.verifyEmail(pendingEmail, verifyCode.trim());
       setAuth(data.user, data.token);
-      navigate('/');
+      navigate('/onboarding');
     } catch (err: any) {
       setVerifyError(err.response?.data?.error || 'Неверный код');
     } finally { setLoading(false); }
