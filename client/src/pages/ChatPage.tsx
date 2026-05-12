@@ -1408,7 +1408,7 @@ export default function ChatPage() {
             <div className="flex flex-wrap gap-1">
               {EMOJIS.map(e => (
                 <button key={e} type="button"
-                  onClick={() => { setNewMessage(p => p + e); setShowEmoji(false); inputRef.current?.focus(); }}
+                  onClick={() => { setNewMessage((p: string) => p + e); setShowEmoji(false); inputRef.current?.focus(); }}
                   className="text-xl hover:scale-125 transition-transform p-0.5"
                 >
                   {e}

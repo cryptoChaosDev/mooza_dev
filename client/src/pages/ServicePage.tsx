@@ -176,7 +176,7 @@ export default function ServicePage() {
                 <div key={i} className="flex items-start gap-2">
                   <span className="text-xs text-slate-500 flex-shrink-0 pt-0.5 min-w-[80px]">{f.filterName}</span>
                   <div className="flex flex-wrap gap-1">
-                    {f.values.map((v, j) => (
+                    {f.values.map((v: string, j: number) => (
                       <span key={j} className="px-2 py-0.5 bg-slate-800 border border-slate-700/50 rounded-full text-xs text-slate-300">{v}</span>
                     ))}
                   </div>
