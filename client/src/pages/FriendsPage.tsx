@@ -290,7 +290,6 @@ const { data: myBreakRequests = [] } = useQuery({
               ) : filteredFriends.length > 0 ? (
                 <div className="divide-y divide-slate-800/60">
                   {filteredFriends.map(({ friend, friendshipId }: any) => {
-                    const isPinned = pinnedIds.includes(friend.id);
                     const isOnline = onlineUsers.has(friend.id);
                     return (
                       <div
