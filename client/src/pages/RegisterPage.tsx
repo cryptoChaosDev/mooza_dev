@@ -1,8 +1,8 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Eye, EyeOff, AlertCircle, Loader2,
-  Check, Globe, ArrowRight, ArrowLeft,
+  Check, Globe, ArrowRight, ArrowLeft, X,
 } from 'lucide-react';
 import { authAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
@@ -24,14 +24,17 @@ function unformatPhone(formatted: string): string {
   return formatted.replace(/\D/g, '');
 }
 
-// ── input ─────────────────────────────────────────────────────────────────────
+// ── Field with optional required asterisk ─────────────────────────────────────
 
 function Field({
-  label, hint, children,
-}: { label: string; hint?: string; children: React.ReactNode }) {
+  label, hint, required, children,
+}: { label: string; hint?: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <label className="block text-sm font-medium text-slate-300">{label}</label>
+      <label className="block text-sm font-medium text-slate-300">
+        {label}
+        {required && <span className="text-red-400 ml-0.5">*</span>}
+      </label>
       {children}
       {hint && <p className="text-xs text-slate-500">{hint}</p>}
     </div>
@@ -87,7 +90,7 @@ export default function RegisterPage() {
   const [searchParams] = useSearchParams();
   const referrerId = searchParams.get('ref') || undefined;
 
-  const [step, setStep] = useState(0); // 0-based
+  const [step, setStep] = useState(0);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -102,6 +105,32 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [geoLoading, setGeoLoading] = useState(false);
 
+  // Nickname uniqueness check
+  const [nicknameChecking, setNicknameChecking] = useState(false);
+  const [nicknameTaken, setNicknameTaken] = useState(false);
+  const nicknameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const trimmed = nickname.trim();
+    if (!trimmed || trimmed.length < 2) {
+      setNicknameTaken(false);
+      return;
+    }
+    setNicknameChecking(true);
+    if (nicknameTimer.current) clearTimeout(nicknameTimer.current);
+    nicknameTimer.current = setTimeout(async () => {
+      try {
+        const { data } = await authAPI.checkNickname(trimmed);
+        setNicknameTaken(!data.available);
+      } catch {
+        setNicknameTaken(false);
+      } finally {
+        setNicknameChecking(false);
+      }
+    }, 500);
+    return () => { if (nicknameTimer.current) clearTimeout(nicknameTimer.current); };
+  }, [nickname]);
+
   // email verification
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [verifyCode, setVerifyCode] = useState('');
@@ -113,6 +142,9 @@ export default function RegisterPage() {
     const t = setInterval(() => setResendCooldown(c => { if (c <= 1) { clearInterval(t); return 0; } return c - 1; }), 1000);
   };
 
+  // Step 1 is valid when first name and last name are filled and nickname is not taken
+  const step1Valid = firstName.trim().length > 0 && lastName.trim().length > 0 && !nicknameTaken;
+
   const validate = (): boolean => {
     setError('');
     if (step === 0) {
@@ -122,6 +154,7 @@ export default function RegisterPage() {
     if (step === 1) {
       if (!firstName.trim()) { setError('Укажите имя'); return false; }
       if (!lastName.trim()) { setError('Укажите фамилию'); return false; }
+      if (nicknameTaken) { setError('Никнейм занят, введите другой'); return false; }
     }
     return true;
   };
@@ -144,8 +177,8 @@ export default function RegisterPage() {
       if (country.trim()) payload.country = country.trim();
       const digits = unformatPhone(phone);
       if (digits.length >= 11) payload.phone = '+' + digits;
-
       if (referrerId) payload.referrerId = referrerId;
+
       const { data } = await authAPI.register(payload);
       if (data.pendingVerification) {
         setPendingEmail(data.email);
@@ -278,10 +311,10 @@ export default function RegisterPage() {
     if (step === 1) return (
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Имя">
+          <Field label="Имя" required>
             <Input value={firstName} onChange={setFirstName} placeholder="Иван" autoFocus />
           </Field>
-          <Field label="Фамилия">
+          <Field label="Фамилия" required>
             <Input value={lastName} onChange={setLastName} placeholder="Иванов" />
           </Field>
         </div>
@@ -289,11 +322,30 @@ export default function RegisterPage() {
           <div className="relative">
             <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm select-none">@</span>
             <input
-              value={nickname} onChange={e => setNickname(e.target.value)}
+              value={nickname}
+              onChange={e => setNickname(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ''))}
               placeholder="username"
-              className="w-full pl-8 pr-4 py-3.5 bg-slate-800/70 border border-slate-700/60 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 transition-all text-sm"
+              className={`w-full pl-8 pr-10 py-3.5 bg-slate-800/70 border rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 transition-all text-sm ${
+                nicknameTaken
+                  ? 'border-red-500/60 focus:ring-red-500/30'
+                  : 'border-slate-700/60 focus:ring-primary-500/50'
+              }`}
             />
+            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+              {nicknameChecking && nickname.trim().length >= 2 && (
+                <Loader2 size={15} className="animate-spin text-slate-500" />
+              )}
+              {!nicknameChecking && nickname.trim().length >= 2 && !nicknameTaken && (
+                <Check size={15} className="text-emerald-400" />
+              )}
+              {!nicknameChecking && nicknameTaken && (
+                <X size={15} className="text-red-400" />
+              )}
+            </div>
           </div>
+          {nicknameTaken && (
+            <p className="text-xs text-red-400 mt-1">Никнейм занят, введите другой</p>
+          )}
         </Field>
       </div>
     );
@@ -327,6 +379,9 @@ export default function RegisterPage() {
       </div>
     );
   };
+
+  // Is the "Next" button disabled?
+  const nextDisabled = step === 1 && !step1Valid;
 
   // ── Layout ────────────────────────────────────────────────────────────────
   return (
@@ -403,7 +458,8 @@ export default function RegisterPage() {
           ) : (
             <button
               onClick={next}
-              className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base"
+              disabled={nextDisabled}
+              className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base"
             >
               Далее <ArrowRight size={18} />
             </button>

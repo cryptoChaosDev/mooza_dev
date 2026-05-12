@@ -64,6 +64,17 @@ const loginSchema = z.object({
   password: z.string(),
 });
 
+// Check nickname uniqueness
+router.get('/check-nickname', async (req, res) => {
+  const { nickname } = req.query as { nickname: string };
+  if (!nickname || nickname.trim().length < 2) return res.json({ available: false });
+  const existing = await prisma.user.findFirst({
+    where: { nickname: { equals: nickname.trim(), mode: 'insensitive' } },
+    select: { id: true },
+  });
+  res.json({ available: !existing });
+});
+
 // Register
 router.post('/register', registerLimiter, async (req, res) => {
   try {
