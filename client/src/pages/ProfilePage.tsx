@@ -150,11 +150,6 @@ export default function ProfilePage() {
   const [profFlowProfessions, setProfFlowProfessions] = useState<any[]>([]);
   const [savingProfessions, setSavingProfessions] = useState(false);
 
-  useEffect(() => {
-    if (!profsExpanded && profsRef.current) {
-      setProfsOverflows(profsRef.current.scrollHeight > profsRef.current.clientHeight);
-    }
-  }, [myStandaloneProfessions, profsExpanded]);
 
   useEffect(() => {
     if (!serviceQuery.trim()) { setServiceSearchResults([]); return; }
