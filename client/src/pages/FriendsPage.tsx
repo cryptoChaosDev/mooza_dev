@@ -16,12 +16,6 @@ import ConfirmDialog from '../components/ConfirmDialog';
 
 type Tab = 'friends' | 'connections' | 'favorites' | 'groups';
 
-const PINNED_KEY = 'mooza_pinned_friends';
-function getPinned(): string[] {
-  try { return JSON.parse(localStorage.getItem(PINNED_KEY) ?? '[]'); }
-  catch { return []; }
-}
-function setPinned(ids: string[]) { localStorage.setItem(PINNED_KEY, JSON.stringify(ids)); }
 
 function SectionHeader({ label, count, danger }: { label: string; count?: number; danger?: boolean }) {
   return (
@@ -52,7 +46,7 @@ export default function FriendsPage() {
   }, [searchParams]);
   const [search, setSearch] = useState('');
   const [onlineOnly, setOnlineOnly] = useState(false);
-  const [pinnedIds, setPinnedIds] = useState<string[]>(getPinned);
+  const [pinnedIds] = useState<string[]>([]);
 
   const onlineUsers = usePresenceStore((s) => s.onlineUsers);
 
@@ -310,7 +304,7 @@ const { data: myBreakRequests = [] } = useQuery({
                             <span className="text-sm font-semibold text-white truncate">{friend.firstName} {friend.lastName}</span>
                             {friend.isPremium && <Crown size={13} className="text-amber-400 flex-shrink-0" />}
                             {friend.isVerified && <BadgeCheck size={13} className="text-sky-400 flex-shrink-0" />}
-                            {isPinned && <Pin size={11} className="text-primary-400 flex-shrink-0" />}
+
                             {isOnline && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />}
                           </div>
                           {isOnline ? (
