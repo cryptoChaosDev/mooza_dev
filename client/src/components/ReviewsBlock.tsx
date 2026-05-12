@@ -72,25 +72,30 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
     }
   };
 
-  if (reviews.length === 0) return null;
-
-  const avgRating = reviews.reduce((s, r) => s + r.rating, 0) / reviews.length;
+  const avgRating = reviews.length
+    ? reviews.reduce((s, r) => s + r.rating, 0) / reviews.length
+    : 0;
 
   return (
     <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
         <Star size={14} className="text-amber-400 fill-amber-400" />
         <span className="text-sm font-semibold text-white">Отзывы</span>
-        <span className="text-xs text-slate-500">{reviews.length}</span>
-        <span className="text-xs text-amber-400 font-medium">{avgRating.toFixed(1)}</span>
-        <button
-          onClick={() => navigate(`/profile/${userId}/reviews`)}
-          className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
-        >
-          Смотреть все
-        </button>
+        {reviews.length > 0 && <span className="text-xs text-slate-500">{reviews.length}</span>}
+        {reviews.length > 0 && <span className="text-xs text-amber-400 font-medium">{avgRating.toFixed(1)}</span>}
+        {reviews.length > 0 && (
+          <button
+            onClick={() => navigate(`/profile/${userId}/reviews`)}
+            className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+          >
+            Смотреть все
+          </button>
+        )}
       </div>
       <div className="p-3">
+        {reviews.length === 0 ? (
+          <p className="text-sm text-slate-600 italic text-center py-2">Отзывов пока нет</p>
+        ) : (
         <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
           {reviews.map(r => (
             <button
@@ -118,6 +123,7 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
             </button>
           ))}
         </div>
+        )}
       </div>
 
       {selected && createPortal(
