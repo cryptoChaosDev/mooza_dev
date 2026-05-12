@@ -144,7 +144,6 @@ export default function ProfilePage() {
   const [myStandaloneProfessions, setMyStandaloneProfessions] = useState<{ professionId: string; professionName: string }[]>([]);
   const [editingProfessions, setEditingProfessions] = useState(false);
   const [selectedProfession, setSelectedProfession] = useState<{ professionId: string; professionName: string } | null>(null);
-  const profsRef = useRef<HTMLDivElement>(null);
   const [profAddStep, setProfAddStep] = useState<'field' | 'direction' | 'profession' | null>(null);
   const [profFlowDirections, setProfFlowDirections] = useState<any[]>([]);
   const [profFlowProfessions, setProfFlowProfessions] = useState<any[]>([]);
