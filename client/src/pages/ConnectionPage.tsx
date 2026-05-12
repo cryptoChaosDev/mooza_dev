@@ -4,7 +4,6 @@ import { ChevronLeft, ChevronRight, Link2 } from 'lucide-react';
 import { connectionAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import AvatarComponent from '../components/Avatar';
-import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 
 const ROLE_LABEL: Record<string, string> = {
   CUSTOMER: 'Заказчик',
