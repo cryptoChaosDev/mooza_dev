@@ -26,7 +26,7 @@ const TILE_GRADIENTS = [
   'from-lime-600 to-green-700',
 ];
 
-type CatalogTab = 'services' | 'artists';
+type CatalogTab = 'services' | 'artists' | 'people';
 type ServiceView = 'fields' | 'directions' | 'professions';
 
 const ARTIST_TYPES = [
@@ -159,6 +159,10 @@ export default function SearchPage() {
   // ── Artists tab state ──────────────────────────────────────────────────────
   const [artistQuery, setArtistQuery] = useState('');
   const [debouncedArtistQuery, setDebouncedArtistQuery] = useState('');
+
+  // ── People tab state ───────────────────────────────────────────────────────
+  const [peopleQuery, setPeopleQuery] = useState('');
+  const [debouncedPeopleQuery, setDebouncedPeopleQuery] = useState('');
   const [artistTypeFilter, setArtistTypeFilter] = useState<string[]>([]);
   const [artistGenreFilter, setArtistGenreFilter] = useState<string[]>([]);
 
@@ -188,6 +192,11 @@ export default function SearchPage() {
     const t = setTimeout(() => setDebouncedArtistQuery(artistQuery), 300);
     return () => clearTimeout(t);
   }, [artistQuery]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedPeopleQuery(peopleQuery), 300);
+    return () => clearTimeout(t);
+  }, [peopleQuery]);
 
   // ── Reference data ─────────────────────────────────────────────────────────
   const { data: fields, isLoading: fieldsLoading } = useQuery({
@@ -262,6 +271,16 @@ export default function SearchPage() {
       return result;
     },
     enabled: activeTab === 'artists',
+  });
+
+  // ── People ────────────────────────────────────────────────────────────────
+  const { data: peopleUsers, isLoading: peopleLoading } = useQuery({
+    queryKey: ['catalog-people', debouncedPeopleQuery],
+    queryFn: async () => {
+      const { data } = await userAPI.catalog({ query: debouncedPeopleQuery || undefined });
+      return (data as any[]).filter((u: any) => u.id !== currentUser?.id);
+    },
+    enabled: activeTab === 'people',
   });
 
   // ── Genres for artist filter ───────────────────────────────────────────────
@@ -369,7 +388,8 @@ export default function SearchPage() {
           <div className="flex gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
             {[
               { id: 'services' as const, label: 'Услуги' },
-              { id: 'artists' as const, label: 'Группы' },
+              { id: 'artists' as const, label: 'Артисты' },
+              { id: 'people' as const, label: 'Люди' },
             ].map(tab => (
               <button
                 key={tab.id}
@@ -388,14 +408,22 @@ export default function SearchPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
             <input
               type="text"
-              value={activeTab === 'services' ? serviceQuery : artistQuery}
-              onChange={e => activeTab === 'services' ? setServiceQuery(e.target.value) : setArtistQuery(e.target.value)}
-              placeholder={activeTab === 'services' ? 'Поиск специалистов...' : 'Поиск артистов...'}
+              value={activeTab === 'services' ? serviceQuery : activeTab === 'artists' ? artistQuery : peopleQuery}
+              onChange={e => {
+                if (activeTab === 'services') setServiceQuery(e.target.value);
+                else if (activeTab === 'artists') setArtistQuery(e.target.value);
+                else setPeopleQuery(e.target.value);
+              }}
+              placeholder={activeTab === 'services' ? 'Поиск специалистов...' : activeTab === 'artists' ? 'Поиск артистов...' : 'Поиск людей...'}
               className="w-full pl-8 pr-9 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
             />
-            {(activeTab === 'services' ? serviceQuery : artistQuery) && (
+            {(activeTab === 'services' ? serviceQuery : activeTab === 'artists' ? artistQuery : peopleQuery) && (
               <button
-                onClick={() => activeTab === 'services' ? setServiceQuery('') : setArtistQuery('')}
+                onClick={() => {
+                  if (activeTab === 'services') setServiceQuery('');
+                  else if (activeTab === 'artists') setArtistQuery('');
+                  else setPeopleQuery('');
+                }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
               >
                 <X size={16} />
@@ -690,6 +718,54 @@ export default function SearchPage() {
             </div>
           </>
         )}
+        {/* ══ PEOPLE TAB ══ */}
+        {activeTab === 'people' && (
+          <div className="mt-4">
+            <div className="flex items-center gap-2 mb-3">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                {debouncedPeopleQuery ? `Результаты: «${debouncedPeopleQuery}»` : 'Все участники · от А до Я'}
+              </p>
+              {peopleLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
+              {!peopleLoading && peopleUsers && (
+                <span className="text-xs text-slate-600">{peopleUsers.length}</span>
+              )}
+            </div>
+
+            {peopleLoading ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-slate-800/50 animate-pulse last:border-0">
+                    <div className="w-11 h-11 rounded-xl bg-slate-800 flex-shrink-0" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3.5 bg-slate-800 rounded w-2/5" />
+                      <div className="h-3 bg-slate-800 rounded w-1/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : peopleUsers && peopleUsers.length > 0 ? (
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+                {peopleUsers.map((user: any) => (
+                  <ExpandableUserRow
+                    key={user.id}
+                    user={user}
+                    onNavigate={handleNavigateToProfile}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-col items-center py-14 text-center">
+                <div className="p-4 bg-slate-800/50 rounded-2xl mb-3">
+                  <Users size={28} className="text-slate-600" />
+                </div>
+                <p className="text-slate-400 text-sm">
+                  {debouncedPeopleQuery ? 'Никого не найдено' : 'Нет участников'}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
       </div>
     </div>
   );
