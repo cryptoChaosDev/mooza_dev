@@ -2,9 +2,9 @@ import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Users, MessageCircle, UserX,
-  Pin, PinOff, Search, Wifi, Link2, Heart, Crown, BadgeCheck, Music2,
-  ChevronRight, ArrowDownLeft,
+  Users, MessageCircle, UserX, Check, X, Clock,
+  Search, Wifi, Link2, Heart, Crown, BadgeCheck, Music2,
+  ChevronRight,
 } from 'lucide-react';
 import { friendshipAPI, connectionAPI, favoriteAPI, groupAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
@@ -133,21 +133,6 @@ const { data: myBreakRequests = [] } = useQuery({
   });
 
   // ── Mutations (friends) ──
-  const acceptMutation = useMutation({
-    mutationFn: friendshipAPI.acceptRequest,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['friends'] });
-      queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
-    },
-  });
-  const rejectMutation = useMutation({
-    mutationFn: friendshipAPI.rejectRequest,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['friend-requests'] }); },
-  });
-  const cancelMutation = useMutation({
-    mutationFn: friendshipAPI.rejectRequest,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['friend-requests-sent'] }); },
-  });
   const removeMutation = useMutation({
     mutationFn: friendshipAPI.removeFriend,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['friends'] }); },
@@ -159,13 +144,6 @@ const { data: myBreakRequests = [] } = useQuery({
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['favorites'] }); },
   });
 
-  const togglePin = (friendId: string) => {
-    setPinnedIds(prev => {
-      const next = prev.includes(friendId) ? prev.filter(id => id !== friendId) : [...prev, friendId];
-      setPinned(next);
-      return next;
-    });
-  };
 
   const filteredFriends = useMemo(() => {
     return friends
