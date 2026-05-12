@@ -22,20 +22,18 @@ export default function ShareButton({ url, title, text, className = '', iconSize
     if (navigator.share) {
       try {
         await navigator.share({ title, text, url: fullUrl });
-        return;
-      } catch (err: any) {
-        if (err?.name === 'AbortError') return; // user dismissed share sheet
-        // share failed for other reason — fall through to clipboard
+      } catch {
+        // AbortError (dismissed) or any other — do nothing on iOS to avoid showing prompt
       }
+      return; // never fall through to clipboard when share API is available
     }
 
-    // Clipboard fallback
+    // Clipboard fallback (desktop only)
     try {
       await navigator.clipboard.writeText(fullUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Last resort: prompt
       window.prompt('Скопируйте ссылку:', fullUrl);
     }
   };

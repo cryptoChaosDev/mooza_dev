@@ -97,6 +97,7 @@ const userSelect = {
       sentRequests: { where: { status: 'accepted' } },
       receivedRequests: { where: { status: 'accepted' } },
       posts: true,
+      referrals: true,
     }
   },
 } as const;
