@@ -11,7 +11,7 @@ import AvatarComponent from '../components/Avatar';
 import { usePresenceStore } from '../stores/presenceStore';
 import { formatLastSeen } from '../lib/lastSeen';
 import ConnectionViewModal from '../components/ConnectionViewModal';
-import PartnerConnectionsModal from '../components/PartnerConnectionsModal';
+
 import ConfirmDialog from '../components/ConfirmDialog';
 
 type Tab = 'friends' | 'connections' | 'favorites' | 'groups';
@@ -34,7 +34,7 @@ export default function FriendsPage() {
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<Tab>((searchParams.get('tab') as Tab) || 'friends');
   const [viewConn, setViewConn] = useState<any>(null);
-  const [viewPartner, setViewPartner] = useState<{ partner: any; connections: any[] } | null>(null);
+
   const [confirmRemoveFriend, setConfirmRemoveFriend] = useState<string | null>(null);
   const [confirmRemoveFav, setConfirmRemoveFav] = useState<string | null>(null);
 
@@ -382,7 +382,7 @@ const { data: myBreakRequests = [] } = useQuery({
                         COLLEAGUE: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
                       };
                       return (
-                        <div key={g.partner.id} onClick={() => setViewPartner(g)} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer">
+                        <div key={g.partner.id} onClick={() => navigate(`/connection/${g.partner.id}`, { state: g })} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer">
                           <div className="flex-shrink-0"><UserAvatar user={g.partner} /></div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5">
@@ -629,14 +629,6 @@ const { data: myBreakRequests = [] } = useQuery({
 
     {viewConn && (
       <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />
-    )}
-    {viewPartner && (
-      <PartnerConnectionsModal
-        partner={viewPartner.partner}
-        connections={viewPartner.connections}
-        onClose={() => setViewPartner(null)}
-        onConnectionUpdated={() => setViewPartner(null)}
-      />
     )}
     <ConfirmDialog
       open={!!confirmRemoveFriend}

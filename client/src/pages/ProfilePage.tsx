@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConnectionCard from '../components/ConnectionCard';
-import PartnerConnectionsModal from '../components/PartnerConnectionsModal';
+
 import ConfirmDialog from '../components/ConfirmDialog';
 import BadgeTooltip from '../components/BadgeTooltip';
 import SelectField from '../components/SelectField';
@@ -140,7 +140,7 @@ export default function ProfilePage() {
   // Chip panels
 
   const [viewConn, setViewConn] = useState<any>(null);
-  const [viewPartner, setViewPartner] = useState<{ partner: any; connections: any[] } | null>(null);
+
 
   const [myStandaloneProfessions, setMyStandaloneProfessions] = useState<{ professionId: string; professionName: string }[]>([]);
   const [editingProfessions, setEditingProfessions] = useState(false);
@@ -1035,7 +1035,7 @@ export default function ProfilePage() {
                     <ConnectionCard
                       key={g.partner.id}
                       connection={{ ...g.connections[0], partner: g.partner }}
-                      onClick={() => setViewPartner(g)}
+                      onClick={() => navigate(`/connection/${g.partner.id}`, { state: g })}
                     />
                   ))}
                 </div>
@@ -1242,13 +1242,6 @@ export default function ProfilePage() {
         </div>
       </>,
       document.body
-    )}
-    {viewPartner && (
-      <PartnerConnectionsModal
-        partner={viewPartner.partner}
-        connections={viewPartner.connections}
-        onClose={() => setViewPartner(null)}
-      />
     )}
 
     <ConfirmDialog
