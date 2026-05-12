@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronDown, ShieldAlert, CheckCircle2, Check } from 'lucide-react';
 import { authAPI, userAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
-import TelegramLoginButton from '../components/TelegramLoginButton';
 import VkLoginButton from '../components/VkLoginButton';
 
 function DocSection({ title, children }: { title: string; children: React.ReactNode }) {
@@ -74,13 +73,7 @@ export default function LoginPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleTelegramAuth = useCallback(async (user: any, token: string) => {
-    setAuth(user, token);
-    localStorage.setItem('termsAgreed', '1');
-    navigate('/');
-  }, [setAuth, navigate]);
-
-  const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolean) => {
+const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolean) => {
     setAuth(user, token);
     localStorage.setItem('termsAgreed', '1');
     navigate(isNew ? '/vk-setup' : '/');
@@ -228,10 +221,9 @@ export default function LoginPage() {
             </div>
           )}
 
-          {/* Social login — VK first, Telegram second */}
-          <div className="space-y-2.5 mb-5">
+          {/* Social login — VK */}
+          <div className="mb-5">
             <VkLoginButton onAuth={handleVkAuth} onError={handleSocialError} disabled={loading || !agreed} />
-            <TelegramLoginButton onAuth={handleTelegramAuth} onError={handleSocialError} disabled={loading || !agreed} />
           </div>
 
           <div className="flex items-center gap-3 mb-5">
