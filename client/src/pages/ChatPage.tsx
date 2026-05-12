@@ -709,7 +709,7 @@ export default function ChatPage() {
       className="fixed inset-x-0 z-10 lg:static lg:h-screen bg-slate-950 flex flex-col"
       style={{
         top: 'calc(2.75rem + env(safe-area-inset-top, 0px))',
-        bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))',
+        bottom: 'calc(3.75rem + env(safe-area-inset-bottom, 0px))',
       }}
     >
       {/* Chat Header */}
