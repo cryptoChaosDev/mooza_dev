@@ -192,8 +192,8 @@ router.post('/:id/invite', authenticate, async (req: AuthRequest, res: Response)
     if (!friendship) return res.status(400).json({ error: 'Пользователь не является другом' });
 
     // Check not already a member
-    const existing = await prisma.userArtist.findUnique({
-      where: { userId_artistId: { userId: friendId, artistId: group.id } },
+    const existing = await prisma.userArtist.findFirst({
+      where: { userId: friendId, artistId: group.id },
     });
     if (existing) return res.status(409).json({ error: 'Пользователь уже в группе или приглашён' });
 
