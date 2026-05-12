@@ -410,6 +410,63 @@ router.patch('/me/services/:serviceId', authenticate, async (req: AuthRequest, r
   }
 });
 
+// ── PATCH /api/users/me/services/:serviceId/status ───────────────────────────
+router.patch('/me/services/:serviceId/status', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { status } = req.body;
+    if (!['active', 'draft', 'archived'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    const us = await prisma.userService.findUnique({ where: { id: req.params.serviceId } });
+    if (!us || us.userId !== req.userId) return res.status(404).json({ error: 'Not found' });
+    const updated = await prisma.userService.update({
+      where: { id: req.params.serviceId },
+      data: { status },
+      include: userServiceInclude,
+    });
+    return res.json(updated);
+  } catch (err) {
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── POST /api/users/services/:serviceId/inquire — notify owner of interest ───
+router.post('/services/:serviceId/inquire', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const us = await prisma.userService.findUnique({
+      where: { id: req.params.serviceId },
+      include: { service: { select: { name: true } }, user: { select: { id: true, firstName: true, lastName: true } } },
+    });
+    if (!us) return res.status(404).json({ error: 'Not found' });
+    if (us.userId === req.userId) return res.status(400).json({ error: 'Cannot inquire own service' });
+    const actor = await prisma.user.findUnique({ where: { id: req.userId! }, select: { firstName: true, lastName: true } });
+    const actorName = `${actor?.firstName ?? ''} ${actor?.lastName ?? ''}`.trim();
+    await prisma.notification.create({
+      data: {
+        userId: us.userId,
+        actorId: req.userId,
+        type: 'service_inquiry',
+        title: 'Интерес к услуге',
+        body: `${actorName} заинтересовался услугой «${us.service.name}»`,
+        link: `/services/${us.id}`,
+      },
+    });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Failed' });
+  }
+});
+
+// ── DELETE /api/users/me/services/:serviceId ──────────────────────────────────
+router.delete('/me/services/:serviceId', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const us = await prisma.userService.findUnique({ where: { id: req.params.serviceId } });
+    if (!us || us.userId !== req.userId) return res.status(404).json({ error: 'Not found' });
+    await prisma.userService.delete({ where: { id: req.params.serviceId } });
+    return res.json({ ok: true });
+  } catch (err) {
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 // ─── GET /catalog — all users with filters, for catalog page ─────────────────
 router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
   try {

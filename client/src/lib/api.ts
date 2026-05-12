@@ -89,6 +89,12 @@ export const userAPI = {
   getUserService: (serviceId: string) => api.get(`/users/user-service/${serviceId}`),
   patchUserService: (serviceId: string, data: { priceFrom?: number | null; priceTo?: number | null; description?: string }) =>
     api.patch(`/users/me/services/${serviceId}`, data),
+  setServiceStatus: (serviceId: string, status: 'active' | 'draft' | 'archived') =>
+    api.patch(`/users/me/services/${serviceId}/status`, { status }),
+  deleteService: (serviceId: string) =>
+    api.delete(`/users/me/services/${serviceId}`),
+  inquireService: (serviceId: string) =>
+    api.post(`/users/services/${serviceId}/inquire`),
   uploadAvatar: (formData: FormData) =>
     api.post('/users/me/avatar', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },

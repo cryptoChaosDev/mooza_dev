@@ -1,10 +1,25 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Briefcase, Music, DollarSign, MapPin, Send, Edit3, Save, X, Trash2, Loader2 } from 'lucide-react';
-import { userAPI } from '../lib/api';
+import {
+  ArrowLeft, Briefcase, DollarSign, MapPin, MessageCircle,
+  Archive, ArchiveRestore, Trash2, Loader2, HandshakeIcon, Send,
+} from 'lucide-react';
+import { userAPI, messageAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { useAuthStore } from '../stores/authStore';
+import ConfirmDialog from '../components/ConfirmDialog';
+
+const STATUS_LABEL: Record<string, string> = {
+  active: 'Действующая',
+  draft: 'Черновик',
+  archived: 'Архив',
+};
+const STATUS_COLOR: Record<string, string> = {
+  active: 'bg-emerald-500/15 text-emerald-400',
+  draft: 'bg-slate-700/60 text-slate-400',
+  archived: 'bg-amber-500/15 text-amber-400',
+};
 
 export default function ServicePage() {
   const { serviceId } = useParams<{ serviceId: string }>();
@@ -12,66 +27,48 @@ export default function ServicePage() {
   const me = useAuthStore(s => s.user);
   const queryClient = useQueryClient();
 
-  const [editing, setEditing] = useState(false);
-  const [priceFrom, setPriceFrom] = useState('');
-  const [priceTo, setPriceTo] = useState('');
-  const [description, setDescription] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [writingMessage, setWritingMessage] = useState(false);
 
   const { data: us, isLoading } = useQuery({
     queryKey: ['user-service', serviceId],
-    queryFn: async () => {
-      const { data } = await userAPI.getUserService(serviceId!);
-      return data as any;
-    },
+    queryFn: async () => { const { data } = await userAPI.getUserService(serviceId!); return data as any; },
     enabled: !!serviceId,
   });
 
-  const patchMut = useMutation({
-    mutationFn: () => userAPI.patchUserService(serviceId!, {
-      priceFrom: priceFrom !== '' ? Number(priceFrom) : null,
-      priceTo: priceTo !== '' ? Number(priceTo) : null,
-      description,
-    }),
+  const statusMut = useMutation({
+    mutationFn: (status: 'active' | 'draft' | 'archived') => userAPI.setServiceStatus(serviceId!, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-service', serviceId] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
-      setEditing(false);
+      queryClient.invalidateQueries({ queryKey: ['user-services'] });
     },
   });
 
   const deleteMut = useMutation({
-    mutationFn: async () => {
-      // Remove by saving all services minus this one
-      const { data: allServices } = await userAPI.getUserServices(me!.id);
-      const remaining = (allServices as any[]).filter((s: any) => s.id !== serviceId);
-      await userAPI.updateServices(remaining.map((s: any) => ({
-        professionId: s.professionId,
-        serviceId: s.serviceId,
-        genreIds: s.genres?.map((g: any) => g.id) ?? [],
-        workFormatIds: s.workFormats?.map((w: any) => w.id) ?? [],
-        employmentTypeIds: s.employmentTypes?.map((e: any) => e.id) ?? [],
-        skillLevelIds: s.skillLevels?.map((sl: any) => sl.id) ?? [],
-        availabilityIds: s.availabilities?.map((a: any) => a.id) ?? [],
-        geographyIds: s.geographies?.map((g: any) => g.id) ?? [],
-        priceFrom: s.priceFrom ?? undefined,
-        priceTo: s.priceTo ?? undefined,
-        description: s.description ?? undefined,
-        customFilterValueIds: s.selectedCustomFilterValues?.map((v: any) => v.id) ?? [],
-      })));
-    },
+    mutationFn: () => userAPI.deleteService(serviceId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
-      queryClient.invalidateQueries({ queryKey: ['user-services', me?.id] });
       navigate(-1);
     },
   });
 
-  const startEdit = () => {
-    setPriceFrom(us.priceFrom != null ? String(us.priceFrom) : '');
-    setPriceTo(us.priceTo != null ? String(us.priceTo) : '');
-    setDescription(us.description ?? '');
-    setEditing(true);
+  const inquireMut = useMutation({
+    mutationFn: () => userAPI.inquireService(serviceId!),
+  });
+
+  const handleWrite = async () => {
+    if (!us?.user?.id || writingMessage) return;
+    setWritingMessage(true);
+    try {
+      const { data } = await messageAPI.resolve(us.user.id);
+      const convId = data.conversationId;
+      const prefill = `Добрый день! Хочу уточнить по услуге «${us.service?.name ?? ''}»`;
+      inquireMut.mutate();
+      navigate(`/messages/${convId}`, { state: { prefillMessage: prefill } });
+    } catch {
+      setWritingMessage(false);
+    }
   };
 
   if (isLoading) {
@@ -91,22 +88,46 @@ export default function ServicePage() {
   }
 
   const isOwner = me?.id === us.user?.id;
-  const genres = us.genres?.map((g: any) => g.name) ?? [];
+  const status: 'active' | 'draft' | 'archived' = us.status ?? 'active';
+
   const price = us.priceFrom != null || us.priceTo != null
     ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
-    : null;
+    : 'По договорённости';
+
   const authorName = us.user ? `${us.user.firstName ?? ''} ${us.user.lastName ?? ''}`.trim() : null;
   const authorAvatar = us.user?.avatar ? getAvatarUrl(us.user.avatar) : null;
 
+  const customFilterValues: { filterName: string; values: string[] }[] = [];
+  if (us.selectedCustomFilterValues?.length) {
+    const grouped: Record<string, { filterName: string; values: string[] }> = {};
+    for (const v of us.selectedCustomFilterValues) {
+      const fId = v.filter?.id ?? v.filterId ?? 'unknown';
+      if (!grouped[fId]) grouped[fId] = { filterName: v.filter?.name ?? '', values: [] };
+      grouped[fId].values.push(v.value ?? v.name ?? '');
+    }
+    customFilterValues.push(...Object.values(grouped));
+  }
+
+  const allFilters = [
+    ...(us.genres?.length ? [{ filterName: 'Жанры', values: us.genres.map((g: any) => g.name) }] : []),
+    ...(us.workFormats?.length ? [{ filterName: 'Формат работы', values: us.workFormats.map((w: any) => w.name) }] : []),
+    ...(us.employmentTypes?.length ? [{ filterName: 'Тип занятости', values: us.employmentTypes.map((e: any) => e.name) }] : []),
+    ...(us.skillLevels?.length ? [{ filterName: 'Уровень', values: us.skillLevels.map((s: any) => s.name) }] : []),
+    ...(us.availabilities?.length ? [{ filterName: 'Доступность', values: us.availabilities.map((a: any) => a.name) }] : []),
+    ...(us.geographies?.length ? [{ filterName: 'География', values: us.geographies.map((g: any) => g.name) }] : []),
+    ...customFilterValues,
+  ];
+
   return (
-    <div className="min-h-screen bg-slate-950 pb-24">
+    <div className="min-h-screen bg-slate-950 pb-32">
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
-        {/* Back + author row */}
+
+        {/* Back + author */}
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all flex-shrink-0">
             <ArrowLeft size={20} />
           </button>
-          {us.user && (
+          {us.user && !isOwner && (
             <button onClick={() => navigate(`/profile/${us.user.id}`)} className="flex items-center gap-2.5 flex-1 min-w-0 text-left">
               <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-800 flex-shrink-0">
                 {authorAvatar
@@ -120,26 +141,24 @@ export default function ServicePage() {
               </div>
             </button>
           )}
+          {isOwner && (
+            <span className={`ml-auto text-[11px] font-semibold px-2.5 py-1 rounded-lg ${STATUS_COLOR[status]}`}>
+              {STATUS_LABEL[status]}
+            </span>
+          )}
         </div>
 
         {/* Main card */}
         <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-5 space-y-4">
-          {/* Card header: profession + edit/delete */}
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex-1 min-w-0">
-              {us.profession?.name && (
-                <p className="text-xs font-semibold text-primary-400 uppercase tracking-wider mb-2">{us.profession.name}</p>
-              )}
-            </div>
-            {isOwner && !editing && (
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <button onClick={startEdit} className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-500 hover:text-white transition-all">
-                  <Edit3 size={16} />
-                </button>
-                <button onClick={() => setConfirmDelete(true)} className="p-1.5 rounded-xl hover:bg-red-500/15 text-slate-500 hover:text-red-400 transition-all">
-                  <Trash2 size={16} />
-                </button>
-              </div>
+          {/* Service catalog label */}
+          <div className="space-y-0.5">
+            {us.profession?.direction?.fieldOfActivity?.name && (
+              <p className="text-[10px] text-slate-600 uppercase tracking-wider">
+                {us.profession.direction.fieldOfActivity.name} · {us.profession.direction.name}
+              </p>
+            )}
+            {us.profession?.name && (
+              <p className="text-xs font-semibold text-primary-400 uppercase tracking-wider">{us.profession.name}</p>
             )}
           </div>
 
@@ -150,96 +169,129 @@ export default function ServicePage() {
             <h1 className="text-xl font-bold text-white leading-tight">{us.service?.name}</h1>
           </div>
 
-          {genres.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <Music size={13} className="text-slate-500 flex-shrink-0" />
-              <div className="flex flex-wrap gap-1.5">
-                {genres.map((g: string) => (
-                  <span key={g} className="px-2.5 py-0.5 bg-slate-800 border border-slate-700/50 rounded-full text-xs text-slate-300">{g}</span>
-                ))}
-              </div>
+          {/* Filters */}
+          {allFilters.length > 0 && (
+            <div className="space-y-2">
+              {allFilters.map((f, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span className="text-xs text-slate-500 flex-shrink-0 pt-0.5 min-w-[80px]">{f.filterName}</span>
+                  <div className="flex flex-wrap gap-1">
+                    {f.values.map((v, j) => (
+                      <span key={j} className="px-2 py-0.5 bg-slate-800 border border-slate-700/50 rounded-full text-xs text-slate-300">{v}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* Price — editable for owner */}
-          {editing ? (
-            <div>
-              <p className="text-xs font-semibold text-slate-400 mb-1.5 flex items-center gap-1"><DollarSign size={12} />Стоимость (₽)</p>
-              <div className="grid grid-cols-2 gap-2">
-                <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="От" value={priceFrom}
-                  onChange={e => setPriceFrom(e.target.value.replace(/\D/g, ''))}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-                <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="До" value={priceTo}
-                  onChange={e => setPriceTo(e.target.value.replace(/\D/g, ''))}
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-              </div>
-            </div>
-          ) : price ? (
-            <div className="flex items-center gap-2">
-              <DollarSign size={13} className="text-slate-500 flex-shrink-0" />
-              <span className="text-base font-bold text-primary-400">{price}</span>
-            </div>
-          ) : null}
+          {/* Price */}
+          <div className="flex items-center gap-2">
+            <DollarSign size={13} className="text-slate-500 flex-shrink-0" />
+            <span className="text-base font-bold text-primary-400">{price}</span>
+          </div>
 
+          {/* Geography */}
           {(us.geographies?.length ?? 0) > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
               <MapPin size={13} className="text-slate-500 flex-shrink-0" />
               <span className="text-sm text-slate-300">{us.geographies.map((g: any) => g.name).join(', ')}</span>
             </div>
           )}
 
-          {/* Description — editable for owner */}
-          {editing ? (
-            <div>
-              <p className="text-xs font-semibold text-slate-400 mb-1.5">Описание услуги</p>
-              <textarea value={description} onChange={e => setDescription(e.target.value)}
-                placeholder="Расскажите подробнее об услуге..."
-                rows={4}
-                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none" />
-            </div>
-          ) : us.description ? (
+          {/* Description */}
+          {us.description && (
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Описание</p>
               <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{us.description}</p>
             </div>
-          ) : null}
+          )}
         </div>
 
-        {/* Edit actions */}
-        {editing && (
-          <div className="flex gap-2">
-            <button onClick={() => setEditing(false)} className="flex-1 py-3 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-2xl transition-colors flex items-center justify-center gap-1.5">
-              <X size={14} />Отмена
-            </button>
-            <button onClick={() => patchMut.mutate()} disabled={patchMut.isPending}
-              className="flex-1 py-3 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-2xl transition-colors flex items-center justify-center gap-1.5">
-              {patchMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}Сохранить
-            </button>
+        {/* ── OWNER ACTIONS ── */}
+        {isOwner && (
+          <div className="space-y-2">
+            {status === 'active' && (
+              <>
+                <button
+                  onClick={() => statusMut.mutate('archived')}
+                  disabled={statusMut.isPending}
+                  className="w-full py-3 flex items-center justify-center gap-2 text-sm font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 rounded-2xl transition-colors disabled:opacity-50"
+                >
+                  {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Archive size={15} />}
+                  Убрать в архив
+                </button>
+                <button
+                  className="w-full py-3 flex items-center justify-center gap-2 text-sm font-medium bg-primary-600/20 border border-primary-500/40 text-primary-300 rounded-2xl transition-colors opacity-50 cursor-not-allowed"
+                  disabled
+                  title="Скоро"
+                >
+                  <HandshakeIcon size={15} />
+                  Оформить сделку <span className="text-xs opacity-60">(скоро)</span>
+                </button>
+              </>
+            )}
+            {status === 'draft' && (
+              <>
+                <button
+                  onClick={() => statusMut.mutate('active')}
+                  disabled={statusMut.isPending}
+                  className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-2xl transition-colors disabled:opacity-50"
+                >
+                  {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                  Опубликовать
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  className="w-full py-3 flex items-center justify-center gap-2 text-sm font-medium border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-2xl transition-colors"
+                >
+                  <Trash2 size={15} />Удалить
+                </button>
+              </>
+            )}
+            {status === 'archived' && (
+              <button
+                onClick={() => statusMut.mutate('active')}
+                disabled={statusMut.isPending}
+                className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-2xl transition-colors disabled:opacity-50"
+              >
+                {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <ArchiveRestore size={15} />}
+                Опубликовать
+              </button>
+            )}
           </div>
         )}
 
-        {/* Order button */}
+        {/* ── CUSTOMER ACTIONS ── */}
         {!isOwner && us.user && (
-          <button onClick={() => navigate(`/messages`)}
-            className="w-full py-3.5 bg-primary-600 hover:bg-primary-500 active:bg-primary-700 text-white font-semibold rounded-2xl transition-colors flex items-center justify-center gap-2 text-sm">
-            <Send size={16} />Заказать
-          </button>
-        )}
-
-        {/* Delete confirm */}
-        {confirmDelete && (
-          <div className="bg-red-950/60 border border-red-800/60 rounded-2xl p-4 space-y-3">
-            <p className="text-sm text-red-300 font-medium">Удалить услугу «{us.service?.name}»?</p>
-            <div className="flex gap-2">
-              <button onClick={() => setConfirmDelete(false)} className="flex-1 py-2.5 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
-              <button onClick={() => deleteMut.mutate()} disabled={deleteMut.isPending}
-                className="flex-1 py-2.5 text-sm bg-red-600 hover:bg-red-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
-                {deleteMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />}Удалить
-              </button>
-            </div>
+          <div className="space-y-2">
+            <button
+              onClick={handleWrite}
+              disabled={writingMessage}
+              className="w-full py-3.5 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 active:bg-primary-700 disabled:opacity-60 text-white rounded-2xl transition-colors"
+            >
+              {writingMessage ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />}
+              Написать
+            </button>
+            <button
+              className="w-full py-3.5 flex items-center justify-center gap-2 text-sm font-medium border border-primary-500/40 text-primary-300 rounded-2xl opacity-50 cursor-not-allowed"
+              disabled
+              title="Скоро"
+            >
+              <HandshakeIcon size={16} />
+              Оформить сделку <span className="text-xs opacity-60">(скоро)</span>
+            </button>
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        message={`Удалить услугу «${us.service?.name ?? ''}»?`}
+        confirmLabel="Удалить"
+        onConfirm={() => deleteMut.mutate()}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }

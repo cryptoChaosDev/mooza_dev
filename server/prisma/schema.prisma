@@ -172,6 +172,7 @@ model UserService {
   priceFrom                  Int?
   priceTo                    Int?
   description                String?
+  status                     String    @default("active")
   selectedCustomFilterValues CustomFilterValue[]
 
   createdAt DateTime @default(now())

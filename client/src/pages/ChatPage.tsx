@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, BadgeCheck, Ban, Search, Link2 } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import { plural } from '../lib/plural';
@@ -69,6 +69,7 @@ interface Conversation {
 export default function ChatPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { user: me } = useAuthStore();
   const onlineUsers = usePresenceStore((s) => s.onlineUsers);
 
@@ -76,7 +77,7 @@ export default function ChatPage() {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
-  const [newMessage, setNewMessage] = useState('');
+  const [newMessage, setNewMessage] = useState((location.state as any)?.prefillMessage ?? '');
   const [sending, setSending] = useState(false);
 
   // Reply / edit state
