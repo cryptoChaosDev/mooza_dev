@@ -50,6 +50,7 @@ export default function LoginPage() {
     const vkToken = searchParams.get('vk_token');
     const vkError = searchParams.get('vk_error');
     if (vkToken) {
+      const isNew = searchParams.get('is_new') === '1';
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
       fetch(`${apiUrl}/api/users/me`, { headers: { Authorization: `Bearer ${vkToken}` } })
         .then(r => r.json())
@@ -57,7 +58,7 @@ export default function LoginPage() {
           setAuth(u, vkToken);
           setUser(u);
           localStorage.setItem('termsAgreed', '1');
-          navigate('/');
+          navigate(isNew ? '/onboarding' : '/');
         })
         .catch(() => setError('Ошибка авторизации через ВКонтакте'));
     } else if (vkError) {
@@ -79,10 +80,10 @@ export default function LoginPage() {
     navigate('/');
   }, [setAuth, navigate]);
 
-  const handleVkAuth = useCallback(async (user: any, token: string) => {
+  const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolean) => {
     setAuth(user, token);
     localStorage.setItem('termsAgreed', '1');
-    navigate('/');
+    navigate(isNew ? '/onboarding' : '/');
   }, [setAuth, navigate]);
 
   const handleSocialError = (msg: string) => {

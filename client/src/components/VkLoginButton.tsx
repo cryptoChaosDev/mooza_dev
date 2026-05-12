@@ -3,7 +3,7 @@ import * as VKID from '@vkid/sdk';
 import { authAPI } from '../lib/api';
 
 interface VkLoginButtonProps {
-  onAuth: (user: any, token: string) => void;
+  onAuth: (user: any, token: string, isNew?: boolean) => void;
   onError: (msg: string) => void;
   disabled?: boolean;
 }
@@ -46,7 +46,7 @@ export default function VkLoginButton({ onAuth, onError, disabled }: VkLoginButt
             return authAPI.vkToken(accessToken);
           })
           .then(({ data }) => {
-            onAuth(data.user, data.token);
+            onAuth(data.user, data.token, data.isNew);
           })
           .catch((e: any) => {
             console.error('[VK ID] auth error', e);

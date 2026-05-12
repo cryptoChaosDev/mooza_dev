@@ -551,6 +551,7 @@ router.get('/vk/callback', async (req, res) => {
     if (!user && email) {
       user = await prisma.user.findFirst({ where: { email } }) || null;
     }
+    let isNew = false;
     if (!user) {
       user = await prisma.user.create({
         data: {
@@ -562,12 +563,13 @@ router.get('/vk/callback', async (req, res) => {
           nickname: vkProfile.screen_name || null,
         },
       });
+      isNew = true;
     } else if (!user.vkId) {
       user = await prisma.user.update({ where: { id: user.id }, data: { vkId } });
     }
 
     const token = generateToken({ userId: user.id });
-    res.redirect(`${appUrl}/login?vk_token=${token}`);
+    res.redirect(`${appUrl}/login?vk_token=${token}${isNew ? '&is_new=1' : ''}`);
   } catch (e) {
     console.error('[VK auth] Error:', e);
     res.redirect(`${appUrl}/login?vk_error=server`);
@@ -597,6 +599,7 @@ router.post('/vk/token', authLimiter, async (req, res) => {
 
     let user = await prisma.user.findUnique({ where: { vkId } });
     if (!user && email) user = await prisma.user.findFirst({ where: { email } }) || null;
+    let isNew = false;
     if (!user) {
       user = await prisma.user.create({
         data: {
@@ -608,13 +611,14 @@ router.post('/vk/token', authLimiter, async (req, res) => {
           nickname: vkUser.screen_name || null,
         },
       });
+      isNew = true;
     } else if (!user.vkId) {
       user = await prisma.user.update({ where: { id: user.id }, data: { vkId } });
     }
 
     const token = generateToken({ userId: user.id });
     const { password: _, ...safe } = user as any;
-    res.json({ user: safe, token });
+    res.json({ user: safe, token, isNew });
   } catch (e) {
     console.error('[VK token] Error:', e);
     res.status(500).json({ error: 'Ошибка авторизации через ВКонтакте' });
@@ -682,6 +686,7 @@ router.post('/vk/exchange', authLimiter, async (req, res) => {
     if (!user && email) {
       user = await prisma.user.findFirst({ where: { email } }) || null;
     }
+    let isNew = false;
     if (!user) {
       user = await prisma.user.create({
         data: {
@@ -693,13 +698,14 @@ router.post('/vk/exchange', authLimiter, async (req, res) => {
           nickname: vkUser.screen_name || null,
         },
       });
+      isNew = true;
     } else if (!user.vkId) {
       user = await prisma.user.update({ where: { id: user.id }, data: { vkId } });
     }
 
     const token = generateToken({ userId: user.id });
     const { password: _, ...safe } = user as any;
-    res.json({ user: safe, token });
+    res.json({ user: safe, token, isNew });
   } catch (e) {
     console.error('[VK exchange] Error:', e);
     res.status(500).json({ error: 'Ошибка авторизации через ВКонтакте' });
