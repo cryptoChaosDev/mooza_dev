@@ -379,6 +379,17 @@ export const siteSettingsAPI = {
   update: (data: Record<string, string>) => api.put('/admin/site-settings', data),
 };
 
+export const reviewAPI = {
+  getForUser: (userId: string, sort?: string) =>
+    api.get(`/reviews/user/${userId}`, { params: sort ? { sort } : undefined }),
+  create: (data: { targetId: string; rating: number; text?: string; type?: string; serviceId?: string }) =>
+    api.post('/reviews', data),
+  reply: (id: string, reply: string) =>
+    api.patch(`/reviews/${id}/reply`, { reply }),
+  delete: (id: string) =>
+    api.delete(`/reviews/${id}`),
+};
+
 // Search Filters Type
 export interface SearchFilters {
   fieldId?: string;

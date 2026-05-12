@@ -21,6 +21,7 @@ import SelectSheet from '../components/SelectSheet';
 import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import ShareButton from '../components/ShareButton';
+import ReviewsBlock from '../components/ReviewsBlock';
 
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -1040,6 +1041,9 @@ export default function ProfilePage() {
                 </div>
               )}
             </div>
+
+            {/* ── Reviews ── */}
+            {profile?.id && <ReviewsBlock userId={profile.id} isOwner={true} />}
 
             {/* ── Portfolio ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
