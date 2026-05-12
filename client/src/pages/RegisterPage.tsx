@@ -65,18 +65,12 @@ interface SelectedProfession {
   professionId: string;
   professionName: string;
   directionName?: string;
-  features: string[];
 }
 
 interface ProfessionResult {
   id: string;
   name: string;
   direction?: { name: string };
-}
-
-interface Feature {
-  id: string;
-  name: string;
 }
 
 // ── Steps ─────────────────────────────────────────────────────────────────────
@@ -117,7 +111,6 @@ export default function RegisterPage() {
   const [profLoading, setProfLoading] = useState(false);
   const [showProfDropdown, setShowProfDropdown] = useState(false);
   const [selectedProfs, setSelectedProfs] = useState<SelectedProfession[]>([]);
-  const [profFeatures, setProfFeatures] = useState<Feature[]>([]);
   const profTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const profInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -160,11 +153,6 @@ export default function RegisterPage() {
 
   // ── Profession search ─────────────────────────────────────────────────────
   useEffect(() => {
-    // Load features once
-    referenceAPI.getProfessionFeatures().then(r => setProfFeatures(r.data));
-  }, []);
-
-  useEffect(() => {
     const q = profSearch.trim();
     if (!q) { setProfResults([]); setShowProfDropdown(false); return; }
     setProfLoading(true);
@@ -201,7 +189,6 @@ export default function RegisterPage() {
       professionId: p.id,
       professionName: p.name,
       directionName: p.direction?.name,
-      features: [],
     }]);
     setProfSearch('');
     setProfResults([]);
@@ -211,14 +198,6 @@ export default function RegisterPage() {
 
   const removeProfession = (id: string) => {
     setSelectedProfs(prev => prev.filter(p => p.professionId !== id));
-  };
-
-  const toggleFeature = (profId: string, featureId: string) => {
-    setSelectedProfs(prev => prev.map(p => {
-      if (p.professionId !== profId) return p;
-      const has = p.features.includes(featureId);
-      return { ...p, features: has ? p.features.filter(f => f !== featureId) : [...p.features, featureId] };
-    }));
   };
 
   // ── Validation ────────────────────────────────────────────────────────────
@@ -261,7 +240,6 @@ export default function RegisterPage() {
       if (!skipProfs && selectedProfs.length > 0) {
         payload.userProfessions = selectedProfs.map(p => ({
           professionId: p.professionId,
-          features: p.features,
         }));
       }
 
@@ -460,39 +438,14 @@ export default function RegisterPage() {
 
         {/* Selected professions */}
         {selectedProfs.length > 0 && (
-          <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
             {selectedProfs.map(prof => (
-              <div key={prof.professionId} className="bg-slate-800/60 border border-slate-700/50 rounded-2xl p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div>
-                    <p className="text-sm font-semibold text-white">{prof.professionName}</p>
-                    {prof.directionName && <p className="text-xs text-slate-500">{prof.directionName}</p>}
-                  </div>
-                  <button onClick={() => removeProfession(prof.professionId)} className="text-slate-500 hover:text-red-400 p-1 transition-colors flex-shrink-0">
-                    <X size={15} />
-                  </button>
-                </div>
-                {/* Features */}
-                {profFeatures.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {profFeatures.map(f => {
-                      const active = prof.features.includes(f.id);
-                      return (
-                        <button
-                          key={f.id}
-                          onClick={() => toggleFeature(prof.professionId, f.id)}
-                          className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                            active
-                              ? 'bg-primary-600/30 border-primary-500/50 text-primary-300'
-                              : 'bg-slate-700/40 border-slate-600/40 text-slate-400 hover:border-slate-500'
-                          }`}
-                        >
-                          {f.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+              <div key={prof.professionId} className="flex items-center gap-1.5 bg-slate-800/70 border border-slate-700/50 rounded-xl px-3 py-1.5">
+                <span className="text-sm text-white">{prof.professionName}</span>
+                {prof.directionName && <span className="text-xs text-slate-500">· {prof.directionName}</span>}
+                <button onClick={() => removeProfession(prof.professionId)} className="text-slate-500 hover:text-red-400 transition-colors ml-0.5">
+                  <X size={13} />
+                </button>
               </div>
             ))}
           </div>
