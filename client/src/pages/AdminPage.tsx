@@ -837,14 +837,36 @@ function CustomFiltersSection() {
               <X size={16} />
             </button>
           </div>
+
         </div>
       ) : (
-        <button
-          onClick={() => setAddingFilter(true)}
-          className="flex items-center gap-2 text-sm bg-primary-600 hover:bg-primary-500 text-white px-4 py-2 rounded-lg transition-colors"
-        >
-          <Plus size={15} /> Добавить фильтр
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportToExcel(
+              filters.flatMap((f, i) =>
+                f.values.length > 0
+                  ? f.values.map((v, vi) => ({
+                      '№': vi === 0 ? i + 1 : '',
+                      'Название фильтра': vi === 0 ? f.name : '',
+                      '№ значения': vi + 1,
+                      'Значение': v.value,
+                    }))
+                  : [{ '№': i + 1, 'Название фильтра': f.name, '№ значения': '', 'Значение': '' }]
+              ),
+              'Фильтры'
+            )}
+            className="flex items-center gap-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2.5 py-2 rounded-lg transition-colors"
+            title="Экспорт в Excel"
+          >
+            <Download size={13} />
+          </button>
+          <button
+            onClick={() => setAddingFilter(true)}
+            className="flex items-center gap-2 text-sm bg-primary-600 hover:bg-primary-500 text-white px-4 py-2 rounded-lg transition-colors"
+          >
+            <Plus size={15} /> Добавить фильтр
+          </button>
+        </div>
       )}
     </div>
   );
