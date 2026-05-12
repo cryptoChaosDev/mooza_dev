@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, MapPin, MessageCircle, Loader2,
+  ArrowLeft, MapPin, MessageCircle,
   Crown, BadgeCheck, Ban, X, Zap,
   Headphones, FileText, Briefcase,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
