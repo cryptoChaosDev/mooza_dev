@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -53,35 +53,26 @@ function AudioTile({ url, title }: { url: string; title?: string }) {
   );
 }
 
-function TapButton({ isConfirming, onOpen, onConfirm, tooltip, disabled, className, children }: {
-  isConfirming: boolean;
-  onOpen: () => void;
-  onConfirm: () => void;
+function TapButton({ onClick, tooltip, disabled, className, children }: {
+  onClick: () => void;
   tooltip: string;
   disabled?: boolean;
   className: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative">
+    <div className="relative group">
       <button
-        onClick={e => {
-          e.stopPropagation();
-          if (disabled) return;
-          if (isConfirming) onConfirm();
-          else onOpen();
-        }}
+        onClick={e => { e.stopPropagation(); if (!disabled) onClick(); }}
         disabled={disabled}
         className={className}
       >
         {children}
       </button>
-      {isConfirming && (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white whitespace-nowrap z-20 shadow-xl pointer-events-none">
-          {tooltip}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-4 border-transparent border-t-slate-700" />
-        </div>
-      )}
+      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white whitespace-nowrap z-20 shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+        {tooltip}
+        <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-4 border-transparent border-t-slate-700" />
+      </div>
     </div>
   );
 }
@@ -99,15 +90,6 @@ export default function UserProfilePage() {
   const [imageFullscreen, setImageFullscreen] = useState<string | null>(null);
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
   const [selectedProfession, setSelectedProfession] = useState<any>(null);
-  const [confirming, setConfirming] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!confirming) return;
-    const handler = () => setConfirming(null);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, [confirming]);
-
   const { data: user, isLoading } = useQuery({
     queryKey: ['user', userId],
     queryFn: async () => { const { data } = await userAPI.getUser(userId!); return data; },
@@ -271,9 +253,7 @@ export default function UserProfilePage() {
                 ) : (
                   // Default = no connection
                   <TapButton
-                    isConfirming={confirming === 'conn'}
-                    onOpen={() => setConfirming('conn')}
-                    onConfirm={() => { setShowConnModal(true); setConfirming(null); }}
+                    onClick={() => setShowConnModal(true)}
                     tooltip="Установить связь"
                     className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-primary-400 rounded-xl transition-all"
                   >
@@ -285,9 +265,7 @@ export default function UserProfilePage() {
                 {favStatus !== undefined && (
                   favStatus.isFavorite ? (
                     <TapButton
-                      isConfirming={confirming === 'fav'}
-                      onOpen={() => setConfirming('fav')}
-                      onConfirm={() => { removeFavMut.mutate(); setConfirming(null); }}
+                      onClick={() => removeFavMut.mutate()}
                       tooltip="Убрать из избранного"
                       disabled={removeFavMut.isPending}
                       className="p-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 rounded-xl transition-all disabled:opacity-50"
@@ -296,9 +274,7 @@ export default function UserProfilePage() {
                     </TapButton>
                   ) : (
                     <TapButton
-                      isConfirming={confirming === 'fav'}
-                      onOpen={() => setConfirming('fav')}
-                      onConfirm={() => { addFavMut.mutate(); setConfirming(null); }}
+                      onClick={() => addFavMut.mutate()}
                       tooltip="Добавить в избранное"
                       disabled={addFavMut.isPending}
                       className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-amber-400 rounded-xl transition-all disabled:opacity-50"
@@ -311,9 +287,7 @@ export default function UserProfilePage() {
                 {/* Friend */}
                 {user.friendshipStatus === 'none' && (
                   <TapButton
-                    isConfirming={confirming === 'friend'}
-                    onOpen={() => setConfirming('friend')}
-                    onConfirm={() => { sendFriendMut.mutate(); setConfirming(null); }}
+                    onClick={() => sendFriendMut.mutate()}
                     tooltip="Добавить в друзья"
                     disabled={sendFriendMut.isPending}
                     className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-primary-400 rounded-xl transition-all disabled:opacity-50"
@@ -323,9 +297,7 @@ export default function UserProfilePage() {
                 )}
                 {user.friendshipStatus === 'pending_sent' && (
                   <TapButton
-                    isConfirming={confirming === 'friend'}
-                    onOpen={() => setConfirming('friend')}
-                    onConfirm={() => { cancelFriendMut.mutate(); setConfirming(null); }}
+                    onClick={() => cancelFriendMut.mutate()}
                     tooltip="Отменить заявку"
                     disabled={cancelFriendMut.isPending}
                     className="p-2 bg-slate-800/80 border border-slate-700/60 text-slate-500 rounded-xl transition-all disabled:opacity-50"
@@ -353,9 +325,7 @@ export default function UserProfilePage() {
                 )}
                 {user.friendshipStatus === 'accepted' && (
                   <TapButton
-                    isConfirming={confirming === 'friend'}
-                    onOpen={() => setConfirming('friend')}
-                    onConfirm={() => { removeFriendMut.mutate(); setConfirming(null); }}
+                    onClick={() => removeFriendMut.mutate()}
                     tooltip="Удалить из друзей"
                     disabled={removeFriendMut.isPending}
                     className="p-2 bg-green-500/10 hover:bg-red-500/10 border border-green-500/30 hover:border-red-500/30 text-green-400 hover:text-red-400 rounded-xl transition-all disabled:opacity-50"
