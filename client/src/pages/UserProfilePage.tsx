@@ -104,8 +104,8 @@ export default function UserProfilePage() {
   useEffect(() => {
     if (!confirming) return;
     const handler = () => setConfirming(null);
-    document.addEventListener('click', handler, true);
-    return () => document.removeEventListener('click', handler, true);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
   }, [confirming]);
 
   const { data: user, isLoading } = useQuery({
