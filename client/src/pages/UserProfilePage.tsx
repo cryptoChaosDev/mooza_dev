@@ -617,7 +617,7 @@ export default function UserProfilePage() {
               </div>
             )}
 
-            {/* ── Contacts ── */}
+            {/* ── Contacts — visible only to users with a filled profile ── */}
             {hasSocialLinks && (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
@@ -625,10 +625,13 @@ export default function UserProfilePage() {
                   <span className="text-sm font-semibold text-white">Контакты</span>
                 </div>
                 <div className="p-4">
-                  {me
-                    ? <SocialIconRow links={(user.socialLinks as Record<string, string>) || {}} />
-                    : <p className="text-xs text-slate-500 italic">Войдите, чтобы видеть контакты</p>
-                  }
+                  {!me ? (
+                    <p className="text-xs text-slate-500 italic">Войдите, чтобы видеть контакты</p>
+                  ) : !(me.firstName && me.lastName && me.avatar) ? (
+                    <p className="text-xs text-slate-500 italic">Заполните свой профиль (имя, фото), чтобы видеть контакты</p>
+                  ) : (
+                    <SocialIconRow links={(user.socialLinks as Record<string, string>) || {}} />
+                  )}
                 </div>
               </div>
             )}

@@ -205,14 +205,19 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
           {showReview && !reviewSent && (
             <div className="space-y-3 border border-amber-500/20 bg-amber-500/5 rounded-xl p-4">
               <p className="text-sm font-semibold text-white">Оценить взаимодействие с {partner.firstName}</p>
-              {/* Stars */}
-              <div className="flex gap-1.5">
-                {[1,2,3,4,5].map(i => (
+              {/* Stars 1–10 */}
+              <div className="flex gap-1 flex-wrap">
+                {[1,2,3,4,5,6,7,8,9,10].map(i => (
                   <button key={i} onClick={() => setRating(i)} className="transition-transform hover:scale-110">
-                    <Star size={26} className={i <= rating ? 'text-amber-400 fill-amber-400' : 'text-slate-600'} />
+                    <Star size={22} className={i <= rating ? 'text-amber-400 fill-amber-400' : 'text-slate-600'} />
                   </button>
                 ))}
               </div>
+              {rating > 0 && (
+                <p className="text-xs text-amber-400/80 font-medium">
+                  {rating} — {{10:'Восхитительно',9:'Отлично',8:'Очень хорошо',7:'Хорошо',6:'Приемлемо',5:'Посредственно',4:'Ниже среднего',3:'Плохо',2:'Очень плохо',1:'Ужасно'}[rating]}
+                </p>
+              )}
               <textarea
                 value={reviewText}
                 onChange={e => setReviewText(e.target.value)}

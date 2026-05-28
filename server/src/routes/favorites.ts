@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { emitToUser } from '../socket';
 
 const router = Router();
 
@@ -45,11 +46,29 @@ router.post('/:targetId', authenticate, async (req: AuthRequest, res: Response) 
     const meId = req.userId!;
     const { targetId } = req.params;
     if (targetId === meId) return res.status(400).json({ error: 'Нельзя добавить себя' });
+    const existing = await prisma.favorite.findUnique({ where: { userId_targetId: { userId: meId, targetId } } });
     const fav = await prisma.favorite.upsert({
       where: { userId_targetId: { userId: meId, targetId } },
       create: { userId: meId, targetId },
       update: {},
     });
+    // Notify only on first add (not on re-add)
+    if (!existing) {
+      try {
+        const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
+        const notification = await prisma.notification.create({
+          data: {
+            userId: targetId,
+            actorId: meId,
+            type: 'favorite_added',
+            title: `${me?.firstName} ${me?.lastName} добавил(а) вас в Избранное`,
+            body: 'Вы появились в избранном у нового пользователя',
+            link: `/profile/${meId}`,
+          },
+        });
+        emitToUser(targetId, 'new_notification', notification);
+      } catch {}
+    }
     return res.json({ id: fav.id });
   } catch (err) {
     console.error('[favorites] POST /', err);

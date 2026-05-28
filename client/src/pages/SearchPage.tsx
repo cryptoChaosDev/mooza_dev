@@ -163,6 +163,7 @@ export default function SearchPage() {
   // ── People tab state ───────────────────────────────────────────────────────
   const [peopleQuery, setPeopleQuery] = useState('');
   const [debouncedPeopleQuery, setDebouncedPeopleQuery] = useState('');
+  const [selectedPeopleFieldId, setSelectedPeopleFieldId] = useState<string | null>(null);
   const [artistTypeFilter, setArtistTypeFilter] = useState<string[]>([]);
   const [artistGenreFilter, setArtistGenreFilter] = useState<string[]>([]);
 
@@ -275,9 +276,12 @@ export default function SearchPage() {
 
   // ── People ────────────────────────────────────────────────────────────────
   const { data: peopleUsers, isLoading: peopleLoading } = useQuery({
-    queryKey: ['catalog-people', debouncedPeopleQuery],
+    queryKey: ['catalog-people', debouncedPeopleQuery, selectedPeopleFieldId],
     queryFn: async () => {
-      const { data } = await userAPI.catalog({ query: debouncedPeopleQuery || undefined });
+      const { data } = await userAPI.catalog({
+        query: debouncedPeopleQuery || undefined,
+        fieldOfActivityId: selectedPeopleFieldId || undefined,
+      });
       return (data as any[]).filter((u: any) => u.id !== currentUser?.id);
     },
     enabled: activeTab === 'people',
@@ -721,6 +725,34 @@ export default function SearchPage() {
         {/* ══ PEOPLE TAB ══ */}
         {activeTab === 'people' && (
           <div className="mt-4">
+            {/* Field chips */}
+            {fields && fields.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-2 mb-3 scrollbar-none">
+                <button
+                  onClick={() => setSelectedPeopleFieldId(null)}
+                  className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                    !selectedPeopleFieldId
+                      ? 'bg-primary-600 border-primary-500 text-white'
+                      : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:text-white'
+                  }`}
+                >
+                  Все
+                </button>
+                {fields.map((f: any) => (
+                  <button
+                    key={f.id}
+                    onClick={() => setSelectedPeopleFieldId(prev => prev === f.id ? null : f.id)}
+                    className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                      selectedPeopleFieldId === f.id
+                        ? 'bg-primary-600 border-primary-500 text-white'
+                        : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    {f.name}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex items-center gap-2 mb-3">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                 {debouncedPeopleQuery ? `Результаты: «${debouncedPeopleQuery}»` : 'Все участники · от А до Я'}
