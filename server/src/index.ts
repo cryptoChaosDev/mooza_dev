@@ -35,6 +35,7 @@ import groupRoutes from './routes/groups';
 import referralRoutes from './routes/referrals';
 import siteSettingsRoutes from './routes/site-settings';
 import reviewRoutes from './routes/reviews';
+import dealRoutes from './routes/deals';
 
 // Load environment variables
 dotenv.config();
@@ -147,6 +148,7 @@ app.use('/api/groups', groupRoutes);
 app.use('/api/referrals', referralRoutes);
 app.use('/api/site-settings', siteSettingsRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/deals', dealRoutes);
 
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {

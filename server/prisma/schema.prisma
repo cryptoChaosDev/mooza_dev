@@ -63,6 +63,7 @@ model Service {
   userServices       UserService[]
   connectionServices ConnectionService[]
   reviews            Review[]
+  deals              Deal[]
 
   createdAt DateTime @default(now())
 }
@@ -174,6 +175,7 @@ model UserService {
   description                String?
   status                     String    @default("active")
   selectedCustomFilterValues CustomFilterValue[]
+  deals                      Deal[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -456,6 +458,9 @@ model User {
   reviewsGiven    Review[] @relation("ReviewAuthor")
   reviewsReceived Review[] @relation("ReviewTarget")
 
+  dealsAsCustomer Deal[] @relation("DealCustomer")
+  dealsAsExecutor Deal[] @relation("DealExecutor")
+
   lastSeenAt    DateTime?
   termsAgreedAt DateTime?
 
@@ -474,15 +479,17 @@ model Review {
   id        String   @id @default(uuid())
   authorId  String
   targetId  String
-  rating    Int      // 1-5
+  rating    Int
   text      String?
   reply     String?
   type      String   @default("connection") // 'connection' | 'deal'
   serviceId String?
+  dealId    String?
 
   author  User     @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
   target  User     @relation("ReviewTarget", fields: [targetId], references: [id], onDelete: Cascade)
   service Service? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+  deal    Deal?    @relation(fields: [dealId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -490,6 +497,38 @@ model Review {
   @@unique([authorId, targetId, type])
   @@index([targetId])
   @@index([authorId])
+  @@index([dealId])
+}
+
+model Deal {
+  id             String    @id @default(uuid())
+  title          String
+  status         String    @default("PENDING")
+  // PENDING | AWAITING_PAYMENT | IN_PROGRESS | REVIEW | REVISION | COMPLETED | CANCELLED
+  customerId     String
+  executorId     String
+  serviceId      String?
+  userServiceId  String?
+  price          Float?
+  deadline       DateTime?
+  acceptDeadline DateTime?
+  revisionCount  Int       @default(3)
+  revisionsUsed  Int       @default(0)
+  result         String?
+  cancelReason   String?
+
+  customer    User         @relation("DealCustomer",  fields: [customerId],   references: [id], onDelete: Cascade)
+  executor    User         @relation("DealExecutor",  fields: [executorId],   references: [id], onDelete: Cascade)
+  service     Service?     @relation(fields: [serviceId],    references: [id], onDelete: SetNull)
+  userService UserService? @relation(fields: [userServiceId], references: [id], onDelete: SetNull)
+  reviews     Review[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([executorId])
+  @@index([status])
 }
 
 model SiteSetting {

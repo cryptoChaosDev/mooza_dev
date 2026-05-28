@@ -1,0 +1,265 @@
+import { useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  ArrowLeft, Loader2, HandshakeIcon, CheckCheck, XCircle,
+  Clock, AlertCircle, Wrench, Send, Check, X,
+} from 'lucide-react';
+import { dealAPI } from '../lib/api';
+import { useAuthStore } from '../stores/authStore';
+import AvatarComponent from '../components/Avatar';
+
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
+  PENDING:           { label: 'На согласовании',  color: 'text-amber-400',   icon: Clock },
+  AWAITING_PAYMENT:  { label: 'Ожидает оплаты',   color: 'text-blue-400',    icon: AlertCircle },
+  IN_PROGRESS:       { label: 'В работе',          color: 'text-primary-400', icon: Wrench },
+  REVIEW:            { label: 'На проверке',       color: 'text-violet-400',  icon: AlertCircle },
+  REVISION:          { label: 'На доработке',      color: 'text-orange-400',  icon: Wrench },
+  COMPLETED:         { label: 'Завершена',         color: 'text-emerald-400', icon: CheckCheck },
+  CANCELLED:         { label: 'Отменена',          color: 'text-red-400',     icon: XCircle },
+};
+
+export default function DealPage() {
+  const { dealId } = useParams<{ dealId: string }>();
+  const navigate = useNavigate();
+  const me = useAuthStore(s => s.user);
+  const qc = useQueryClient();
+
+  const [revisionComment, setRevisionComment] = useState('');
+  const [showRevisionInput, setShowRevisionInput] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
+  const [showCancelInput, setShowCancelInput] = useState(false);
+
+  const { data: deal, isLoading } = useQuery({
+    queryKey: ['deal', dealId],
+    queryFn: async () => { const { data } = await dealAPI.getOne(dealId!); return data as any; },
+    enabled: !!dealId,
+  });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['deal', dealId] });
+
+  const acceptMut  = useMutation({ mutationFn: () => dealAPI.accept(dealId!),  onSuccess: invalidate });
+  const rejectMut  = useMutation({ mutationFn: (r: string) => dealAPI.reject(dealId!, r), onSuccess: invalidate });
+  const cancelMut  = useMutation({ mutationFn: (r: string) => dealAPI.cancel(dealId!, r), onSuccess: () => { invalidate(); setShowCancelInput(false); } });
+  const payMut     = useMutation({ mutationFn: () => dealAPI.pay(dealId!),     onSuccess: invalidate });
+  const submitMut  = useMutation({ mutationFn: () => dealAPI.submit(dealId!),  onSuccess: invalidate });
+  const approveMut = useMutation({ mutationFn: () => dealAPI.approve(dealId!), onSuccess: invalidate });
+  const revisionMut= useMutation({ mutationFn: () => dealAPI.revision(dealId!, revisionComment), onSuccess: () => { invalidate(); setShowRevisionInput(false); setRevisionComment(''); } });
+
+  if (isLoading) return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent" />
+    </div>
+  );
+  if (!deal) return (
+    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <p className="text-slate-400">Сделка не найдена</p>
+    </div>
+  );
+
+  const isCustomer = me?.id === deal.customerId;
+  const isExecutor = me?.id === deal.executorId;
+  const cfg = STATUS_CONFIG[deal.status] ?? { label: deal.status, color: 'text-slate-400', icon: Clock };
+  const StatusIcon = cfg.icon;
+  const partner = isCustomer ? deal.executor : deal.customer;
+  const partnerRole = isCustomer ? 'Исполнитель' : 'Заказчик';
+  const myRole = isCustomer ? 'Заказчик' : 'Исполнитель';
+  const isDone = ['COMPLETED', 'CANCELLED'].includes(deal.status);
+
+  return (
+    <div className="min-h-screen bg-slate-950 pb-32">
+      <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
+
+        {/* Back */}
+        <div className="flex items-center gap-3">
+          <button onClick={() => navigate(-1)} className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all">
+            <ArrowLeft size={20} />
+          </button>
+          <div className="flex items-center gap-2">
+            <HandshakeIcon size={16} className="text-primary-400" />
+            <h1 className="text-base font-bold text-white truncate">{deal.title}</h1>
+          </div>
+        </div>
+
+        {/* Status */}
+        <div className={`flex items-center gap-2 px-4 py-3 rounded-2xl bg-slate-900/60 border border-slate-800/60 ${cfg.color}`}>
+          <StatusIcon size={16} />
+          <span className="text-sm font-semibold">{cfg.label}</span>
+          {deal.status === 'REVISION' && (
+            <span className="ml-auto text-xs text-slate-500">Правок: {deal.revisionsUsed}/{deal.revisionCount}</span>
+          )}
+        </div>
+
+        {/* Participants */}
+        <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-3">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Участники</p>
+          <button
+            onClick={() => navigate(`/profile/${partner.id}`)}
+            className="w-full flex items-center gap-3 hover:bg-slate-800/50 rounded-xl p-2 -mx-2 transition-colors text-left"
+          >
+            <AvatarComponent src={partner.avatar} name={`${partner.firstName} ${partner.lastName}`} size={40} />
+            <div>
+              <p className="text-sm font-semibold text-white">{partner.firstName} {partner.lastName}</p>
+              <p className="text-xs text-slate-500">{partnerRole}</p>
+            </div>
+          </button>
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <span className="w-2 h-2 rounded-full bg-primary-500" />
+            <span>Вы — {myRole}</span>
+          </div>
+        </div>
+
+        {/* Details */}
+        <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-3">
+          <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Условия</p>
+          {deal.service && (
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Услуга</span>
+              <span className="text-primary-300 font-medium">{deal.service.name}</span>
+            </div>
+          )}
+          {deal.price != null && (
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Стоимость</span>
+              <span className="text-white font-semibold">{deal.price.toLocaleString('ru')} ₽</span>
+            </div>
+          )}
+          {deal.deadline && (
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Срок сдачи</span>
+              <span className="text-white">{new Date(deal.deadline).toLocaleDateString('ru')}</span>
+            </div>
+          )}
+          {deal.acceptDeadline && (
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Срок приёмки</span>
+              <span className="text-white">{new Date(deal.acceptDeadline).toLocaleDateString('ru')}</span>
+            </div>
+          )}
+          {deal.revisionCount > 0 && (
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Правок</span>
+              <span className="text-white">{deal.revisionCount}</span>
+            </div>
+          )}
+          {deal.result && (
+            <div>
+              <p className="text-xs text-slate-400 mb-1">Ожидаемый результат</p>
+              <p className="text-sm text-slate-300">{deal.result}</p>
+            </div>
+          )}
+        </div>
+
+        {deal.cancelReason && (
+          <div className="p-3 bg-red-500/5 border border-red-500/20 rounded-xl">
+            <p className="text-[11px] font-semibold text-red-400/70 uppercase tracking-wide mb-1">Причина отмены</p>
+            <p className="text-sm text-slate-300">{deal.cancelReason}</p>
+          </div>
+        )}
+
+        {/* Actions */}
+        {!isDone && (
+          <div className="space-y-2">
+            {/* Executor: PENDING → accept / reject */}
+            {isExecutor && deal.status === 'PENDING' && (
+              <>
+                <button onClick={() => acceptMut.mutate()} disabled={acceptMut.isPending}
+                  className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-2xl transition-colors disabled:opacity-50">
+                  {acceptMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Check size={15} />}
+                  Принять сделку
+                </button>
+                <button onClick={() => rejectMut.mutate('')} disabled={rejectMut.isPending}
+                  className="w-full py-3 flex items-center justify-center gap-2 text-sm font-medium border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-2xl transition-colors disabled:opacity-50">
+                  {rejectMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <X size={15} />}
+                  Отклонить
+                </button>
+              </>
+            )}
+
+            {/* Customer: AWAITING_PAYMENT → pay */}
+            {isCustomer && deal.status === 'AWAITING_PAYMENT' && (
+              <button onClick={() => payMut.mutate()} disabled={payMut.isPending}
+                className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl transition-colors disabled:opacity-50">
+                {payMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <CheckCheck size={15} />}
+                Подтвердить и начать работу
+              </button>
+            )}
+
+            {/* Executor: IN_PROGRESS / REVISION → submit */}
+            {isExecutor && ['IN_PROGRESS', 'REVISION'].includes(deal.status) && (
+              <button onClick={() => submitMut.mutate()} disabled={submitMut.isPending}
+                className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-2xl transition-colors disabled:opacity-50">
+                {submitMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                Сдать работу
+              </button>
+            )}
+
+            {/* Customer: REVIEW → approve / revision */}
+            {isCustomer && deal.status === 'REVIEW' && (
+              <>
+                <button onClick={() => approveMut.mutate()} disabled={approveMut.isPending}
+                  className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl transition-colors disabled:opacity-50">
+                  {approveMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <CheckCheck size={15} />}
+                  Принять работу
+                </button>
+                {deal.revisionsUsed < deal.revisionCount ? (
+                  showRevisionInput ? (
+                    <div className="space-y-2">
+                      <textarea
+                        value={revisionComment}
+                        onChange={e => setRevisionComment(e.target.value)}
+                        placeholder="Что нужно доработать..."
+                        rows={3}
+                        className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-orange-500 resize-none"
+                      />
+                      <div className="flex gap-2">
+                        <button onClick={() => setShowRevisionInput(false)} className="flex-1 py-2 text-sm text-slate-400 border border-slate-700 rounded-xl hover:text-white transition-colors">Отмена</button>
+                        <button onClick={() => revisionMut.mutate()} disabled={revisionMut.isPending}
+                          className="flex-1 py-2 text-sm bg-orange-600 hover:bg-orange-500 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5">
+                          {revisionMut.isPending ? <Loader2 size={13} className="animate-spin" /> : null}
+                          Отправить на доработку
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setShowRevisionInput(true)}
+                      className="w-full py-3 flex items-center justify-center gap-2 text-sm font-medium border border-orange-500/30 text-orange-400 hover:bg-orange-500/10 rounded-2xl transition-colors">
+                      На доработку ({deal.revisionCount - deal.revisionsUsed} осталось)
+                    </button>
+                  )
+                ) : null}
+              </>
+            )}
+
+            {/* Cancel */}
+            {!['COMPLETED', 'CANCELLED', 'REVIEW'].includes(deal.status) && (
+              showCancelInput ? (
+                <div className="space-y-2">
+                  <input
+                    value={cancelReason}
+                    onChange={e => setCancelReason(e.target.value)}
+                    placeholder="Причина отмены (необязательно)..."
+                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-red-500"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => setShowCancelInput(false)} className="flex-1 py-2 text-sm text-slate-400 border border-slate-700 rounded-xl hover:text-white transition-colors">Отмена</button>
+                    <button onClick={() => cancelMut.mutate(cancelReason)} disabled={cancelMut.isPending}
+                      className="flex-1 py-2 text-sm bg-red-600/80 hover:bg-red-600 text-white font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5">
+                      {cancelMut.isPending ? <Loader2 size={13} className="animate-spin" /> : null}
+                      Отменить сделку
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setShowCancelInput(true)}
+                  className="w-full py-2.5 text-sm text-slate-500 hover:text-red-400 transition-colors">
+                  Отменить сделку
+                </button>
+              )
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

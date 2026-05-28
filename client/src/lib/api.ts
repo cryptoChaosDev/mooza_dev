@@ -390,6 +390,22 @@ export const adminAPI = {
   },
 };
 
+export const dealAPI = {
+  getAll: (params?: { role?: string; status?: string }) => api.get('/deals', { params }),
+  getOne: (id: string) => api.get(`/deals/${id}`),
+  create: (data: {
+    title: string; executorId: string; serviceId?: string; userServiceId?: string;
+    price?: number; deadline?: string; acceptDeadline?: string; revisionCount?: number; result?: string;
+  }) => api.post('/deals', data),
+  accept: (id: string) => api.patch(`/deals/${id}/accept`),
+  reject: (id: string, reason?: string) => api.patch(`/deals/${id}/reject`, { reason }),
+  cancel: (id: string, reason?: string) => api.patch(`/deals/${id}/cancel`, { reason }),
+  pay: (id: string) => api.patch(`/deals/${id}/pay`),
+  submit: (id: string) => api.patch(`/deals/${id}/submit`),
+  approve: (id: string) => api.patch(`/deals/${id}/approve`),
+  revision: (id: string, comment?: string) => api.patch(`/deals/${id}/revision`, { comment }),
+};
+
 export const referralAPI = {
   getStats: () => api.get('/referrals/stats'),
 };

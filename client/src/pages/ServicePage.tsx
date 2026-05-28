@@ -10,6 +10,7 @@ import { userAPI, messageAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { useAuthStore } from '../stores/authStore';
 import ConfirmDialog from '../components/ConfirmDialog';
+import DealCreateModal from '../components/DealCreateModal';
 
 const STATUS_LABEL: Record<string, string> = {
   active: 'Действующая',
@@ -32,6 +33,7 @@ export default function ServicePage() {
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [writingMessage, setWritingMessage] = useState(false);
+  const [showDeal, setShowDeal] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editPriceFrom, setEditPriceFrom] = useState('');
   const [editPriceTo, setEditPriceTo] = useState('');
@@ -255,12 +257,11 @@ export default function ServicePage() {
                   Убрать в архив
                 </button>
                 <button
-                  className="w-full py-3 flex items-center justify-center gap-2 text-sm font-medium bg-primary-600/20 border border-primary-500/40 text-primary-300 rounded-2xl transition-colors opacity-50 cursor-not-allowed"
-                  disabled
-                  title="Скоро"
+                  onClick={() => setShowDeal(true)}
+                  className="w-full py-3 flex items-center justify-center gap-2 text-sm font-medium bg-primary-600/20 border border-primary-500/40 text-primary-300 hover:bg-primary-600/30 rounded-2xl transition-colors"
                 >
                   <HandshakeIcon size={15} />
-                  Оформить сделку <span className="text-xs opacity-60">(скоро)</span>
+                  Оформить сделку
                 </button>
               </>
             )}
@@ -313,16 +314,26 @@ export default function ServicePage() {
               Написать
             </button>
             <button
-              className="w-full py-3.5 flex items-center justify-center gap-2 text-sm font-medium border border-primary-500/40 text-primary-300 rounded-2xl opacity-50 cursor-not-allowed"
-              disabled
-              title="Скоро"
+              onClick={() => setShowDeal(true)}
+              className="w-full py-3.5 flex items-center justify-center gap-2 text-sm font-medium border border-primary-500/40 text-primary-300 hover:bg-primary-600/10 rounded-2xl transition-colors"
             >
               <HandshakeIcon size={16} />
-              Оформить сделку <span className="text-xs opacity-60">(скоро)</span>
+              Оформить сделку
             </button>
           </div>
         )}
       </div>
+
+      {showDeal && us.user && (
+        <DealCreateModal
+          executorId={isOwner ? '' : us.user.id}
+          executorName={isOwner ? '' : (authorName ?? '')}
+          serviceId={us.service?.id}
+          userServiceId={us.id}
+          serviceName={us.service?.name}
+          onClose={() => setShowDeal(false)}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmDelete}
