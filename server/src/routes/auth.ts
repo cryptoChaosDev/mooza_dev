@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { authLimiter, registerLimiter, codeLimiter } from '../middleware/rateLimiter';
 import { generateToken } from '../utils/jwt';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/mailer';
-import { tgLog } from '../utils/telegram';
+import { tgLog, tgEvent } from '../utils/telegram';
 
 // ─── Telegram bot-based auth (deep link + polling) ───────────────────────────
 // Map: token → { telegramId, firstName, lastName, username, photoUrl, resolvedAt }
@@ -842,6 +842,7 @@ router.post('/reset-password', codeLimiter, authLimiter, async (req, res) => {
       },
     });
 
+    try { tgEvent.passwordReset(user.email ?? ''); } catch {}
     return res.json({ ok: true });
   } catch (err) {
     console.error('[reset-password]', err);

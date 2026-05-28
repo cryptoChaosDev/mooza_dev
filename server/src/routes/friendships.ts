@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser, notifyUser } from '../socket';
-import { tgLog } from '../utils/telegram';
+import { tgLog, tgEvent } from '../utils/telegram';
 
 const router = Router();
 
@@ -81,6 +81,11 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
       link: '/friends?tab=requests',
     });
     emitToUser(receiverId, 'new_notification', notification);
+
+    try {
+      const recv = await prisma.user.findUnique({ where: { id: receiverId }, select: { firstName: true, lastName: true } });
+      tgEvent.friendRequest(`${requester?.firstName} ${requester?.lastName}`, `${recv?.firstName} ${recv?.lastName}`);
+    } catch {}
 
     res.status(201).json(friendship);
   } catch (error) {

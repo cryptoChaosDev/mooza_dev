@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { tgLog } from '../utils/telegram';
+import { tgLog, tgEvent } from '../utils/telegram';
 import { emitToUser, notifyUser } from '../socket';
 
 const router = Router();
@@ -301,6 +301,9 @@ router.patch('/:id/accept', authenticate, async (req: AuthRequest, res: Response
           link: `/friends?tab=connections`,
         },
       });
+      const requester = await prisma.user.findUnique({ where: { id: conn.requesterId }, select: { firstName: true, lastName: true } });
+      const me2 = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
+      tgEvent.connectionAccept(`${me2?.firstName} ${me2?.lastName}`, `${requester?.firstName} ${requester?.lastName}`);
     } catch {}
 
     return res.json(formatConnection(updated, meId));

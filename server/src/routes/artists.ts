@@ -165,6 +165,11 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       },
     });
 
+    try {
+      const creator = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+      tgEvent.artist('создан', artist.name, `${creator?.firstName} ${creator?.lastName}`);
+    } catch {}
+
     return res.status(201).json(serializeArtist({
       ...artist,
       genres: artist.genres.map((ag) => ag.genre),

@@ -4,7 +4,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser, notifyUser, isUserOnline } from '../socket';
 import { uploadChatAttachment } from '../middleware/upload';
 import { messageLimiter } from '../middleware/rateLimiter';
-import { tgLog } from '../utils/telegram';
+import { tgLog, tgEvent } from '../utils/telegram';
 
 const router = Router();
 // Lazy proxy — avoids circular-import TDZ when this module loads before prisma is initialized
@@ -482,6 +482,14 @@ router.post('/conversations/:id/messages', authenticate, messageLimiter, async (
         include: { actor: { select: { id: true, firstName: true, lastName: true, avatar: true } } },
       });
       emitToUser(receiverId, 'new_notification', notification);
+      try {
+        const recv = await prisma.user.findUnique({ where: { id: receiverId }, select: { firstName: true, lastName: true } });
+        tgEvent.message(senderName, `${recv?.firstName} ${recv?.lastName}`, preview);
+      } catch {}
+    } else if (conv.isGroup) {
+      try {
+        tgEvent.message(senderName, `группа «${conv.name}»`, preview);
+      } catch {}
     }
 
     res.status(201).json(message);

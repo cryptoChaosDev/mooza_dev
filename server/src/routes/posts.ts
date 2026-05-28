@@ -247,6 +247,10 @@ router.post('/:id/save', authenticate, async (req: AuthRequest, res) => {
       return res.json({ saved: false });
     }
     await prisma.savedPost.create({ data: { userId: meId, postId: req.params.id } });
+    try {
+      const saver = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
+      tgEvent.postSave(`${saver?.firstName} ${saver?.lastName}`);
+    } catch {}
     res.json({ saved: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
@@ -303,6 +307,11 @@ router.post('/:id/vote', authenticate, async (req: AuthRequest, res) => {
       where: { id: post.id },
       data: { pollOptions: updated },
     });
+
+    try {
+      const voter = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
+      tgEvent.pollVote(`${voter?.firstName} ${voter?.lastName}`, options[optionIndex]?.text || `#${optionIndex}`);
+    } catch {}
 
     res.json({ ok: true, options: updated, myVote: optionIndex });
   } catch (e: any) {
@@ -510,6 +519,17 @@ router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
       }
     }
 
+    try {
+      const postAuthor = post?.authorId
+        ? await prisma.user.findUnique({ where: { id: post.authorId }, select: { firstName: true, lastName: true } })
+        : null;
+      tgEvent.postComment(
+        `${comment.author.firstName} ${comment.author.lastName}`,
+        `${postAuthor?.firstName ?? '?'} ${postAuthor?.lastName ?? ''}`,
+        content,
+      );
+    } catch {}
+
     res.status(201).json(comment);
   } catch (error) {
     console.error('Comment error:', error);
@@ -606,6 +626,11 @@ router.post('/:id/reactions', authenticate, async (req: AuthRequest, res) => {
       update: { emoji },
       create: { emoji, userId: req.userId!, postId: req.params.id },
     });
+
+    try {
+      const reactor = await prisma.user.findUnique({ where: { id: req.userId! }, select: { firstName: true, lastName: true } });
+      tgEvent.postReaction(`${reactor?.firstName} ${reactor?.lastName}`, emoji);
+    } catch {}
 
     res.json(reaction);
   } catch (error) {
