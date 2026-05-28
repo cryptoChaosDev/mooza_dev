@@ -20,12 +20,6 @@ interface Review {
   service: { id: string; name: string } | null;
 }
 
-const RATING_LABELS: Record<number, string> = {
-  10: 'Восхитительно', 9: 'Отлично', 8: 'Очень хорошо', 7: 'Хорошо',
-  6: 'Приемлемо', 5: 'Посредственно', 4: 'Ниже среднего', 3: 'Плохо',
-  2: 'Очень плохо', 1: 'Ужасно',
-};
-
 function Stars({ rating, size = 10 }: { rating: number; size?: number }) {
   return (
     <div className="flex gap-0.5 flex-wrap">
