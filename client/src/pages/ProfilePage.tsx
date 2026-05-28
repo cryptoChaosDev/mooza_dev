@@ -607,30 +607,32 @@ export default function ProfilePage() {
               {pShow('skillLevel') && <SelectField label="Уровень" value={getNames(skillLevels, pending.skillLevelIds).join(', ')} placeholder="Не указан" icon={<Star size={13} />} onClick={() => setOpenFilterSheet('pending-skillLevel')} badge={pending.skillLevelIds.length || undefined} />}
               {pShow('availability') && <SelectField label="Доступность" value={getNames(availabilities, pending.availabilityIds).join(', ')} placeholder="Не указана" icon={<Calendar size={13} />} onClick={() => setOpenFilterSheet('pending-availability')} badge={pending.availabilityIds.length || undefined} />}
               {pShow('priceRange') && (
-                <div>
-                  <p className="text-xs font-semibold mb-1 text-slate-400">Название (своё — необязательно, макс. 50 символов)</p>
-                  <input
-                    type="text" maxLength={50}
-                    placeholder={`${pending.serviceName || 'Название услуги'}...`}
-                    value={pending.name}
-                    onChange={e => setPending(p => ({ ...p, name: e.target.value }))}
-                    className="w-full px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1"><DollarSign size={13} />Бюджет (₽)</p>
-                  <div className="flex gap-2">
-                    <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="От" value={pending.priceFrom} onChange={e => setPending(p => ({ ...p, priceFrom: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-                    <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="До" value={pending.priceTo} onChange={e => setPending(p => ({ ...p, priceTo: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                <>
+                  <div>
+                    <p className="text-xs font-semibold mb-1 text-slate-400">Название (своё — необязательно, макс. 50 символов)</p>
+                    <input
+                      type="text" maxLength={50}
+                      placeholder={`${pending.serviceName || 'Название услуги'}...`}
+                      value={pending.name}
+                      onChange={e => setPending(p => ({ ...p, name: e.target.value }))}
+                      className="w-full px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    />
                   </div>
-                </div>
-                <div>
-                  <p className="text-xs font-semibold mb-1 text-slate-400">Срок исполнения (дней)</p>
-                  <div className="flex gap-2">
-                    <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="От" value={pending.deadlineFrom} onChange={e => setPending(p => ({ ...p, deadlineFrom: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-                    <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="До" value={pending.deadlineTo} onChange={e => setPending(p => ({ ...p, deadlineTo: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                  <div>
+                    <p className="text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1"><DollarSign size={13} />Бюджет (₽)</p>
+                    <div className="flex gap-2">
+                      <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="От" value={pending.priceFrom} onChange={e => setPending(p => ({ ...p, priceFrom: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                      <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="До" value={pending.priceTo} onChange={e => setPending(p => ({ ...p, priceTo: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                    </div>
                   </div>
-                </div>
+                  <div>
+                    <p className="text-xs font-semibold mb-1 text-slate-400">Срок исполнения (дней)</p>
+                    <div className="flex gap-2">
+                      <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="От" value={pending.deadlineFrom} onChange={e => setPending(p => ({ ...p, deadlineFrom: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                      <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="До" value={pending.deadlineTo} onChange={e => setPending(p => ({ ...p, deadlineTo: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                    </div>
+                  </div>
+                </>
               )}
               {pShow('geography') && <SelectField label="Город / Регион" value={getNames(geographies, pending.geographyIds).join(', ')} placeholder="Не указан" icon={<MapPin size={13} />} onClick={() => setOpenFilterSheet('pending-geography')} badge={pending.geographyIds.length || undefined} />}
               {pending.serviceCustomFilters.map(cf => (
