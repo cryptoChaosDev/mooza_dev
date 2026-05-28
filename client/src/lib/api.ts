@@ -75,6 +75,7 @@ export const userAPI = {
   updateServices: (services: Array<{
     professionId: string;
     serviceId: string;
+    name?: string;
     genreIds?: string[];
     workFormatIds?: string[];
     employmentTypeIds?: string[];
@@ -83,12 +84,17 @@ export const userAPI = {
     geographyIds?: string[];
     priceFrom?: number;
     priceTo?: number;
+    deadlineFrom?: number;
+    deadlineTo?: number;
     description?: string;
     customFilterValueIds?: string[];
+    status?: string;
   }>) => api.put('/users/me/services', services),
   getUserService: (serviceId: string) => api.get(`/users/user-service/${serviceId}`),
-  patchUserService: (serviceId: string, data: { priceFrom?: number | null; priceTo?: number | null; description?: string }) =>
-    api.patch(`/users/me/services/${serviceId}`, data),
+  patchUserService: (serviceId: string, data: {
+    name?: string; priceFrom?: number | null; priceTo?: number | null;
+    deadlineFrom?: number | null; deadlineTo?: number | null; description?: string;
+  }) => api.patch(`/users/me/services/${serviceId}`, data),
   setServiceStatus: (serviceId: string, status: 'active' | 'draft' | 'archived' | 'pending_review') =>
     api.patch(`/users/me/services/${serviceId}/status`, { status }),
   deleteService: (serviceId: string) =>

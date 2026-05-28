@@ -35,8 +35,11 @@ export default function ServicePage() {
   const [writingMessage, setWritingMessage] = useState(false);
   const [showDeal, setShowDeal] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
+  const [editName, setEditName] = useState('');
   const [editPriceFrom, setEditPriceFrom] = useState('');
   const [editPriceTo, setEditPriceTo] = useState('');
+  const [editDeadlineFrom, setEditDeadlineFrom] = useState('');
+  const [editDeadlineTo, setEditDeadlineTo] = useState('');
   const [editDescription, setEditDescription] = useState('');
 
   const { data: us, isLoading } = useQuery({
@@ -47,8 +50,11 @@ export default function ServicePage() {
 
   const editMut = useMutation({
     mutationFn: () => userAPI.patchUserService(serviceId!, {
+      name: editName || undefined,
       priceFrom: editPriceFrom !== '' ? Number(editPriceFrom) : null,
       priceTo: editPriceTo !== '' ? Number(editPriceTo) : null,
+      deadlineFrom: editDeadlineFrom !== '' ? Number(editDeadlineFrom) : null,
+      deadlineTo: editDeadlineTo !== '' ? Number(editDeadlineTo) : null,
       description: editDescription || undefined,
     }),
     onSuccess: () => {
@@ -169,8 +175,11 @@ export default function ServicePage() {
               </span>
               <button
                 onClick={() => {
+                  setEditName(us.name ?? '');
                   setEditPriceFrom(us.priceFrom != null ? String(us.priceFrom) : '');
                   setEditPriceTo(us.priceTo != null ? String(us.priceTo) : '');
+                  setEditDeadlineFrom(us.deadlineFrom != null ? String(us.deadlineFrom) : '');
+                  setEditDeadlineTo(us.deadlineTo != null ? String(us.deadlineTo) : '');
                   setEditDescription(us.description ?? '');
                   setShowEdit(true);
                 }}
@@ -356,7 +365,17 @@ export default function ServicePage() {
             </div>
             <div className="px-5 py-4 space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2 block">Стоимость</label>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2 block">Своё название (необязательно)</label>
+                <input
+                  type="text" maxLength={50}
+                  placeholder={us.service?.name ?? 'Название...'}
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2 block">Стоимость (₽)</label>
                 <div className="flex gap-2">
                   <input
                     type="number"
@@ -372,6 +391,15 @@ export default function ServicePage() {
                     onChange={e => setEditPriceTo(e.target.value)}
                     className="flex-1 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2 block">Срок исполнения (дней)</label>
+                <div className="flex gap-2">
+                  <input type="number" placeholder="От" value={editDeadlineFrom} onChange={e => setEditDeadlineFrom(e.target.value)}
+                    className="flex-1 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                  <input type="number" placeholder="До" value={editDeadlineTo} onChange={e => setEditDeadlineTo(e.target.value)}
+                    className="flex-1 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
                 </div>
               </div>
               <div>

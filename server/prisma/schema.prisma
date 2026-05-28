@@ -170,8 +170,11 @@ model UserService {
   skillLevels                SkillLevel[]
   availabilities             Availability[]
   geographies                Geography[]
+  name                       String?
   priceFrom                  Int?
   priceTo                    Int?
+  deadlineFrom               Int?
+  deadlineTo                 Int?
   description                String?
   status                     String    @default("active")
   selectedCustomFilterValues CustomFilterValue[]
@@ -461,6 +464,7 @@ model User {
   dealsAsCustomer Deal[] @relation("DealCustomer")
   dealsAsExecutor Deal[] @relation("DealExecutor")
 
+  birthDate     DateTime?
   lastSeenAt    DateTime?
   termsAgreedAt DateTime?
 

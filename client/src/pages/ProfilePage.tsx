@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -74,8 +74,11 @@ type UserServiceEntry = {
   skillLevelIds: string[];
   availabilityIds: string[];
   geographyIds: string[];
+  name: string;
   priceFrom: string;
   priceTo: string;
+  deadlineFrom: string;
+  deadlineTo: string;
   description: string;
   status?: 'draft' | 'pending_review';
 };
@@ -85,7 +88,8 @@ const emptyEntry = (): UserServiceEntry => ({
   professionId: '', professionName: '', serviceId: '', serviceName: '',
   allowedFilterTypes: [], serviceCustomFilters: [], customFilterValueIds: {},
   genreIds: [], workFormatIds: [], employmentTypeIds: [], skillLevelIds: [],
-  availabilityIds: [], geographyIds: [], priceFrom: '', priceTo: '', description: '',
+  availabilityIds: [], geographyIds: [],
+  name: '', priceFrom: '', priceTo: '', deadlineFrom: '', deadlineTo: '', description: '',
   status: 'pending_review',
 });
 
@@ -105,6 +109,7 @@ export default function ProfilePage() {
     fieldOfActivityId: '',
     userProfessions: [] as { professionId: string; features: string[] }[],
     artistIds: [] as string[],
+    birthDate: '',
   });
 
   const [fieldsOfActivity, setFieldsOfActivity] = useState<any[]>([]);
@@ -137,6 +142,14 @@ export default function ProfilePage() {
   const [editingBio, setEditingBio] = useState(false);
   const [editingServices, setEditingServices] = useState(false);
   const [editingContacts, setEditingContacts] = useState(false);
+
+  // Autosave when formData changes while any section is open
+  useEffect(() => {
+    if (!editingHero && !editingBio && !editingContacts) return;
+    triggerAutoSave(formData);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData]);
+
   const [confirmDeleteServiceIdx, setConfirmDeleteServiceIdx] = useState<number | null>(null);
   const [confirmDeleteLinkId, setConfirmDeleteLinkId] = useState<string | null>(null);
 
@@ -197,6 +210,7 @@ export default function ProfilePage() {
           features: up.features || [],
         })) || [],
         artistIds: data.userArtists?.map((ua: any) => ua.artistId || ua.artist?.id) || [],
+        birthDate: data.birthDate ? new Date(data.birthDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
       });
       setMyStandaloneProfessions(
         data.userProfessions?.map((up: any) => ({
@@ -284,6 +298,20 @@ export default function ProfilePage() {
   });
 
   const updateMutation = useMutation({ mutationFn: userAPI.updateMe });
+  const [autoSaved, setAutoSaved] = useState(false);
+
+  // Debounce autosave: when editing is open and formData changes, auto-save after 1.5s
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const triggerAutoSave = useCallback((data: typeof formData) => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(async () => {
+      try {
+        await userAPI.updateMe(data);
+        setAutoSaved(true);
+        setTimeout(() => setAutoSaved(false), 2000);
+      } catch {}
+    }, 1500);
+  }, []);
 
 
   const updateServicesMutation = useMutation({
@@ -291,6 +319,7 @@ export default function ProfilePage() {
       services.map(us => ({
         professionId: us.professionId,
         serviceId: us.serviceId,
+        name: us.name || undefined,
         genreIds: us.genreIds,
         workFormatIds: us.workFormatIds,
         employmentTypeIds: us.employmentTypeIds,
@@ -299,6 +328,8 @@ export default function ProfilePage() {
         geographyIds: us.geographyIds,
         priceFrom: us.priceFrom !== '' ? Number(us.priceFrom) : undefined,
         priceTo: us.priceTo !== '' ? Number(us.priceTo) : undefined,
+        deadlineFrom: us.deadlineFrom !== '' ? Number(us.deadlineFrom) : undefined,
+        deadlineTo: us.deadlineTo !== '' ? Number(us.deadlineTo) : undefined,
         description: us.description || undefined,
         customFilterValueIds: Object.values(us.customFilterValueIds).flat(),
         status: us.status,
@@ -307,7 +338,12 @@ export default function ProfilePage() {
   });
 
   const handleSaveHero = async () => {
-    try { await updateMutation.mutateAsync(formData); }
+    // Convert DD.MM.YYYY → ISO date for server
+    const bd = formData.birthDate;
+    const birthDateISO = bd.length === 10
+      ? `${bd.slice(6)}-${bd.slice(3, 5)}-${bd.slice(0, 2)}`
+      : undefined;
+    try { await updateMutation.mutateAsync({ ...formData, birthDate: birthDateISO ?? null }); }
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingHero(false); }
   };
 
@@ -572,10 +608,27 @@ export default function ProfilePage() {
               {pShow('availability') && <SelectField label="Доступность" value={getNames(availabilities, pending.availabilityIds).join(', ')} placeholder="Не указана" icon={<Calendar size={13} />} onClick={() => setOpenFilterSheet('pending-availability')} badge={pending.availabilityIds.length || undefined} />}
               {pShow('priceRange') && (
                 <div>
+                  <p className="text-xs font-semibold mb-1 text-slate-400">Название (своё — необязательно, макс. 50 символов)</p>
+                  <input
+                    type="text" maxLength={50}
+                    placeholder={`${pending.serviceName || 'Название услуги'}...`}
+                    value={pending.name}
+                    onChange={e => setPending(p => ({ ...p, name: e.target.value }))}
+                    className="w-full px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
                   <p className="text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1"><DollarSign size={13} />Бюджет (₽)</p>
                   <div className="flex gap-2">
                     <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="От" value={pending.priceFrom} onChange={e => setPending(p => ({ ...p, priceFrom: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
                     <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="До" value={pending.priceTo} onChange={e => setPending(p => ({ ...p, priceTo: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold mb-1 text-slate-400">Срок исполнения (дней)</p>
+                  <div className="flex gap-2">
+                    <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="От" value={pending.deadlineFrom} onChange={e => setPending(p => ({ ...p, deadlineFrom: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                    <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="До" value={pending.deadlineTo} onChange={e => setPending(p => ({ ...p, deadlineTo: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
                   </div>
                 </div>
               )}
@@ -693,6 +746,9 @@ export default function ProfilePage() {
               >
                 <Edit3 size={15} />{editingHero ? 'Закрыть' : 'Редактировать'}
               </button>
+              {autoSaved && (
+                <span className="text-xs text-emerald-400 font-medium animate-pulse">✓ Сохранено</span>
+              )}
             </div>
           </div>
 
@@ -723,6 +779,26 @@ export default function ProfilePage() {
                   <label className={labelCls}>Город</label>
                   <input type="text" value={formData.city} onChange={e => setFormData({ ...formData, city: e.target.value })} placeholder="Москва" className={inputCls} />
                 </div>
+              </div>
+              <div>
+                <label className={labelCls}>Дата рождения</label>
+                <input
+                  type="text"
+                  value={formData.birthDate}
+                  placeholder="ДД.ММ.ГГГГ"
+                  maxLength={10}
+                  onChange={e => {
+                    let v = e.target.value.replace(/\D/g, '');
+                    if (v.length >= 3) v = v.slice(0, 2) + '.' + v.slice(2);
+                    if (v.length >= 6) v = v.slice(0, 5) + '.' + v.slice(5);
+                    v = v.slice(0, 10);
+                    const iso = v.length === 10
+                      ? `${v.slice(6)}-${v.slice(3, 5)}-${v.slice(0, 2)}`
+                      : '';
+                    setFormData({ ...formData, birthDate: v, ...(iso ? { _birthDateISO: iso } as any : {}) });
+                  }}
+                  className={inputCls}
+                />
               </div>
               <div>
                 <label className={labelCls}>Социальные сети и сервисы</label>
@@ -756,6 +832,12 @@ export default function ProfilePage() {
                   <span className="flex items-center gap-1">
                     <MapPin size={12} className="flex-shrink-0" />
                     {[profile.city, profile.country].filter(Boolean).join(', ')}
+                  </span>
+                )}
+                {profile?.birthDate && (
+                  <span className="flex items-center gap-1">
+                    <Calendar size={12} className="flex-shrink-0" />
+                    {new Date(profile.birthDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </span>
                 )}
               </div>

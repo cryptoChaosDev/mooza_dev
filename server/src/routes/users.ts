@@ -271,7 +271,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
   try {
     const {
       firstName, lastName, nickname, bio, country, city, role, genres,
-      socialLinks,
+      socialLinks, birthDate,
       fieldOfActivityId,
       userProfessions, artistIds,
     } = req.body;
@@ -288,6 +288,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     if (genres !== undefined) updateData.genres = genres;
     if (socialLinks !== undefined) updateData.socialLinks = socialLinks;
     if (fieldOfActivityId !== undefined) updateData.fieldOfActivityId = fieldOfActivityId || null;
+    if (birthDate !== undefined) updateData.birthDate = birthDate ? new Date(birthDate) : null;
 
     // Handle userProfessions: delete old, create new
     if (userProfessions !== undefined) {
@@ -370,8 +371,11 @@ router.put('/me/services', authenticate, async (req: AuthRequest, res) => {
             skillLevels:     { connect: toConnect(us.skillLevelIds) },
             availabilities:  { connect: toConnect(us.availabilityIds) },
             geographies:                 { connect: toConnect(us.geographyIds) },
+            name:                        (us as any).name || null,
             priceFrom:                   us.priceFrom ?? null,
             priceTo:                     us.priceTo ?? null,
+            deadlineFrom:                (us as any).deadlineFrom != null ? Number((us as any).deadlineFrom) : null,
+            deadlineTo:                  (us as any).deadlineTo  != null ? Number((us as any).deadlineTo)  : null,
             description:                 (us as any).description ?? null,
             selectedCustomFilterValues:  { connect: toConnect(us.customFilterValueIds) },
           },
@@ -397,13 +401,16 @@ router.patch('/me/services/:serviceId', authenticate, async (req: AuthRequest, r
   try {
     const us = await prisma.userService.findUnique({ where: { id: req.params.serviceId } });
     if (!us || us.userId !== req.userId) return res.status(404).json({ error: 'Not found' });
-    const { priceFrom, priceTo, description } = req.body;
+    const { priceFrom, priceTo, description, name, deadlineFrom, deadlineTo } = req.body;
     const updated = await prisma.userService.update({
       where: { id: req.params.serviceId },
       data: {
-        ...(priceFrom !== undefined ? { priceFrom: priceFrom !== '' && priceFrom != null ? Number(priceFrom) : null } : {}),
-        ...(priceTo   !== undefined ? { priceTo:   priceTo   !== '' && priceTo   != null ? Number(priceTo)   : null } : {}),
-        ...(description !== undefined ? { description: description || null } : {}),
+        ...(name !== undefined ? { name: name || null } : {}),
+        ...(priceFrom    !== undefined ? { priceFrom:    priceFrom    !== '' && priceFrom    != null ? Number(priceFrom)    : null } : {}),
+        ...(priceTo      !== undefined ? { priceTo:      priceTo      !== '' && priceTo      != null ? Number(priceTo)      : null } : {}),
+        ...(deadlineFrom !== undefined ? { deadlineFrom: deadlineFrom !== '' && deadlineFrom != null ? Number(deadlineFrom) : null } : {}),
+        ...(deadlineTo   !== undefined ? { deadlineTo:   deadlineTo   !== '' && deadlineTo   != null ? Number(deadlineTo)   : null } : {}),
+        ...(description  !== undefined ? { description: description || null } : {}),
       },
       include: userServiceInclude,
     });
