@@ -419,7 +419,7 @@ export const siteSettingsAPI = {
 export const reviewAPI = {
   getForUser: (userId: string, sort?: string) =>
     api.get(`/reviews/user/${userId}`, { params: sort ? { sort } : undefined }),
-  create: (data: { targetId: string; rating: number; text?: string; type?: string; serviceId?: string }) =>
+  create: (data: { targetId: string; rating: number; text?: string; type?: string; serviceId?: string; dealId?: string }) =>
     api.post('/reviews', data),
   reply: (id: string, reply: string) =>
     api.patch(`/reviews/${id}/reply`, { reply }),
