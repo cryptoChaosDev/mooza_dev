@@ -35,7 +35,7 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     const { targetId, rating, text, type = 'connection', serviceId } = req.body;
     if (!targetId || !rating) return res.status(400).json({ error: 'targetId and rating required' });
     if (targetId === req.userId) return res.status(400).json({ error: 'Cannot review yourself' });
-    if (rating < 1 || rating > 5) return res.status(400).json({ error: 'Rating must be 1-5' });
+    if (rating < 1 || rating > 10) return res.status(400).json({ error: 'Rating must be 1-10' });
 
     const review = await prisma.review.upsert({
       where: { authorId_targetId_type: { authorId: req.userId!, targetId, type } },

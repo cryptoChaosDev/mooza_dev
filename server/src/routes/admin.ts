@@ -696,6 +696,17 @@ router.get('/users', async (req, res) => {
   res.json({ users, total, page, limit });
 });
 
+router.patch('/users/:id/verify-email', async (req, res) => {
+  try {
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { emailVerified: true, emailVerificationCode: null, emailVerificationExpires: null },
+      select: { id: true, email: true, emailVerified: true },
+    });
+    res.json(updated);
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
 router.patch('/users/:id/block', async (req, res) => {
   try {
     const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { isBlocked: true } });

@@ -387,6 +387,7 @@ export const adminAPI = {
   },
   users: {
     deleteUser: (id: string) => api.delete(`${adminBase}/users/${id}`),
+    verifyEmail: (id: string) => api.patch(`${adminBase}/users/${id}/verify-email`),
   },
 };
 

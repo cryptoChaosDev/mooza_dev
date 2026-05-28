@@ -1238,6 +1238,11 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); onUpdated(); },
   });
 
+  const verifyEmailMut = useMutation({
+    mutationFn: () => adminAPI.users.verifyEmail(user.id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); onUpdated(); },
+  });
+
   const deleteMut = useMutation({
     mutationFn: () => adminAPI.users.deleteUser(user.id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); onDeleted(); },
@@ -1320,6 +1325,14 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
             }`}
           >
             <Zap size={13} />
+          </button>
+          <button
+            onClick={() => verifyEmailMut.mutate()}
+            disabled={verifyEmailMut.isPending}
+            title="Верифицировать email"
+            className="flex items-center justify-center px-3 py-2 rounded-lg text-xs font-medium transition-colors border bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+          >
+            {verifyEmailMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
           </button>
         </div>
 

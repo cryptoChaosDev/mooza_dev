@@ -479,7 +479,7 @@ model Review {
   id        String   @id @default(uuid())
   authorId  String
   targetId  String
-  rating    Int
+  rating    Int      // 1-10
   text      String?
   reply     String?
   type      String   @default("connection") // 'connection' | 'deal'
