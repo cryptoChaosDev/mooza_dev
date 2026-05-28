@@ -107,7 +107,7 @@ export default function ServicePage() {
   }
 
   const isOwner = me?.id === us.user?.id;
-  const status: 'active' | 'draft' | 'archived' = us.status ?? 'active';
+  const status: 'active' | 'draft' | 'archived' | 'pending_review' = us.status ?? 'active';
 
   const price = us.priceFrom != null || us.priceTo != null
     ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
