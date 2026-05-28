@@ -727,12 +727,53 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
       },
     });
 
+    // Compute average response time (in minutes) for this user
+    // Look at recent personal conversations where someone wrote and this user replied
+    let avgResponseMinutes: number | null = null;
+    try {
+      const myConvs = await prisma.conversationMember.findMany({
+        where: { userId: req.params.id, deletedAt: null },
+        select: { conversationId: true },
+        take: 30,
+      });
+      const convIds = myConvs.map(m => m.conversationId);
+      if (convIds.length > 0) {
+        const msgs = await prisma.message.findMany({
+          where: { conversationId: { in: convIds }, deletedAt: null },
+          orderBy: [{ conversationId: 'asc' }, { createdAt: 'asc' }],
+          select: { conversationId: true, senderId: true, createdAt: true },
+          take: 500,
+        });
+        // For each transition "other → this user", measure delay
+        const deltas: number[] = [];
+        const byConv = new Map<string, typeof msgs>();
+        for (const m of msgs) {
+          if (!byConv.has(m.conversationId)) byConv.set(m.conversationId, []);
+          byConv.get(m.conversationId)!.push(m);
+        }
+        for (const list of byConv.values()) {
+          for (let i = 1; i < list.length; i++) {
+            const prev = list[i - 1];
+            const cur = list[i];
+            if (prev.senderId !== req.params.id && cur.senderId === req.params.id) {
+              const dt = (cur.createdAt.getTime() - prev.createdAt.getTime()) / 60000;
+              if (dt > 0 && dt < 60 * 24 * 7) deltas.push(dt); // ignore > 7 days
+            }
+          }
+        }
+        if (deltas.length >= 3) {
+          avgResponseMinutes = Math.round(deltas.reduce((a, b) => a + b, 0) / deltas.length);
+        }
+      }
+    } catch {}
+
     res.json({
       ...user,
       isFriend: friendshipStatus === 'accepted',
       friendshipId: friendship?.id ?? null,
       friendshipStatus,
       dealsCount,
+      avgResponseMinutes,
     });
   } catch (error) {
     console.error('Get user by ID error:', error);

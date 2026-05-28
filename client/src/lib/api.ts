@@ -170,12 +170,14 @@ export const referenceAPI = {
 
 // Post API
 export const postAPI = {
-  getFeed: (params?: { limit?: number; offset?: number; type?: string }) =>
+  getFeed: (params?: { limit?: number; offset?: number; type?: string; sort?: 'new' | 'popular' }) =>
     api.get('/posts/feed', { params }),
   createPost: (data: { content: string; type?: string; imageUrl?: string; audioUrl?: string; audioName?: string; channelId?: string | null; employmentStatus?: string; pollOptions?: string[]; pollEndsAt?: string }) =>
     api.post('/posts', data),
   votePoll: (postId: string, optionIndex: number) =>
     api.post(`/posts/${postId}/vote`, { optionIndex }),
+  toggleSave: (postId: string) => api.post(`/posts/${postId}/save`),
+  getSavedPosts: () => api.get('/posts/saved/list'),
   uploadMedia: (formData: FormData) =>
     api.post('/posts/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   likePost: (postId: string) => api.post(`/posts/${postId}/like`),
@@ -291,6 +293,8 @@ export const artistAPI = {
   pendingMemberships: (artistId: string) => api.get(`/artists/${artistId}/memberships/pending`),
   approveMembership: (id: string) => api.patch(`/artists/memberships/${id}/approve`),
   rejectMembership: (id: string) => api.patch(`/artists/memberships/${id}/reject`),
+  generateInviteLink: (artistId: string, professionId?: string) =>
+    api.post(`/artists/${artistId}/invite-link`, { professionId }),
 };
 
 // Connection API

@@ -391,6 +391,14 @@ export default function UserProfilePage() {
                   ? <span className="text-xs text-slate-600">{formatLastSeen(user.lastSeenAt)}</span>
                   : null
             )}
+            {!isMe && user.avgResponseMinutes != null && (
+              <span className="text-xs text-slate-500 flex items-center gap-1">
+                <Clock size={11} />
+                Обычно отвечает за {user.avgResponseMinutes < 60
+                  ? `${user.avgResponseMinutes} мин`
+                  : `${Math.round(user.avgResponseMinutes / 60)} ч`}
+              </span>
+            )}
           </div>
 
           {/* ── Stats ── */}

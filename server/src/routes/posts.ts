@@ -26,7 +26,11 @@ router.post('/upload', authenticate, uploadPostMedia.single('file'), async (req:
 // Get feed (all posts from the social network)
 router.get('/feed', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { limit = 20, offset = 0, type } = req.query;
+    const { limit = 20, offset = 0, type, sort } = req.query;
+
+    const orderBy: any = sort === 'popular'
+      ? [{ likes: { _count: 'desc' } }, { createdAt: 'desc' }]
+      : { createdAt: 'desc' };
 
     const posts = await prisma.post.findMany({
       where: (type && type !== 'all' ? { type: String(type) } : undefined) as any,
@@ -35,6 +39,10 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
           select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true }
         },
         likes: {
+          where: { userId: req.userId },
+          select: { id: true }
+        },
+        savedBy: {
           where: { userId: req.userId },
           select: { id: true }
         },
@@ -68,12 +76,12 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
           select: { likes: true, comments: true }
         }
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy,
       take: Number(limit),
       skip: Number(offset),
     });
 
-    res.json(posts.map(post => ({ ...post, isLiked: post.likes.length > 0 })));
+    res.json(posts.map(post => ({ ...post, isLiked: post.likes.length > 0, isSaved: post.savedBy.length > 0 })));
   } catch (error) {
     console.error('Get feed error:', error);
     res.status(500).json({ error: 'Failed to get feed' });
@@ -129,6 +137,41 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     console.error('Create post error:', error);
     res.status(500).json({ error: 'Failed to create post' });
   }
+});
+
+// POST /api/posts/:id/save — toggle save post
+router.post('/:id/save', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const meId = req.userId!;
+    const existing = await prisma.savedPost.findUnique({
+      where: { userId_postId: { userId: meId, postId: req.params.id } },
+    });
+    if (existing) {
+      await prisma.savedPost.delete({ where: { id: existing.id } });
+      return res.json({ saved: false });
+    }
+    await prisma.savedPost.create({ data: { userId: meId, postId: req.params.id } });
+    res.json({ saved: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// GET /api/posts/saved — list saved posts of current user
+router.get('/saved/list', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const meId = req.userId!;
+    const saved = await prisma.savedPost.findMany({
+      where: { userId: meId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        post: {
+          include: {
+            author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, isPremium: true, isVerified: true } },
+          },
+        },
+      },
+    });
+    res.json(saved.map(s => ({ ...s.post, savedAt: s.createdAt })));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/posts/:id/vote — vote in poll

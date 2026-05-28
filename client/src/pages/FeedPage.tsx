@@ -6,7 +6,7 @@ import {
   MoreHorizontal, Image, Pencil, Check,
   Crown, BadgeCheck, Ban, SlidersHorizontal,
   Plus, FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench,
-  Zap, BarChart3,
+  Zap, BarChart3, Star,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import ShareButton from '../components/ShareButton';
@@ -246,6 +246,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const reactMut = useMutation({ mutationFn: (emoji: string) => postAPI.reactPost(post.id, emoji), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
   const unreactMut = useMutation({ mutationFn: () => postAPI.unreactPost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
   const voteMut = useMutation({ mutationFn: (optionIndex: number) => postAPI.votePoll(post.id, optionIndex), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
+  const saveMut = useMutation({ mutationFn: () => postAPI.toggleSave(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
 
   const uploadEditFile = async (file: File) => {
     setEditUploading(true);
@@ -402,6 +403,11 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
           <span className="font-medium tabular-nums">{post._count.comments}</span>
         </button>
         <ShareButton url={`/post/${post.id}`} title={`Пост от ${post.author.firstName} ${post.author.lastName}`} text={post.content?.slice(0, 100)} iconSize={15} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all" />
+        <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}
+          className={`ml-auto flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-all ${post.isSaved ? 'text-amber-400 hover:bg-amber-400/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
+          title={post.isSaved ? 'Убрать из сохранённого' : 'Сохранить'}>
+          <Star size={15} fill={post.isSaved ? 'currentColor' : 'none'} />
+        </button>
       </div>
 
       {showComments && (
@@ -546,6 +552,8 @@ export default function FeedPage() {
   const targetPostId = searchParams.get('post');
   const [showPostTypePicker, setShowPostTypePicker] = useState(false);
   const [filters, setFilters] = useState<FlowFilters>(loadFilters);
+  const [sortBy, setSortBy] = useState<'new' | 'popular'>('new');
+  const [showSavedOnly, setShowSavedOnly] = useState(false);
 
   // Reload filters when returning from settings
   useEffect(() => {
@@ -557,8 +565,15 @@ export default function FeedPage() {
   const typeFilter = filters.postType !== 'all' ? filters.postType : undefined;
 
   const { data: posts, isLoading } = useQuery({
-    queryKey: ['feed', typeFilter],
-    queryFn: async () => { const { data } = await postAPI.getFeed({ type: typeFilter }); return data; },
+    queryKey: ['feed', typeFilter, sortBy, showSavedOnly],
+    queryFn: async () => {
+      if (showSavedOnly) {
+        const { data } = await postAPI.getSavedPosts();
+        return data;
+      }
+      const { data } = await postAPI.getFeed({ type: typeFilter, sort: sortBy });
+      return data;
+    },
     refetchInterval: 30000,
   });
 
@@ -594,6 +609,27 @@ export default function FeedPage() {
                   {activeFilterCount}
                 </span>
               )}
+            </button>
+          </div>
+          {/* Sort + Saved chips */}
+          <div className="px-4 pb-2 flex gap-2 overflow-x-auto scrollbar-none">
+            <button
+              onClick={() => { setSortBy('new'); setShowSavedOnly(false); }}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${!showSavedOnly && sortBy === 'new' ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white'}`}
+            >
+              По новизне
+            </button>
+            <button
+              onClick={() => { setSortBy('popular'); setShowSavedOnly(false); }}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${!showSavedOnly && sortBy === 'popular' ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white'}`}
+            >
+              Популярное
+            </button>
+            <button
+              onClick={() => setShowSavedOnly(s => !s)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all flex items-center gap-1 ${showSavedOnly ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white'}`}
+            >
+              <Star size={12} fill={showSavedOnly ? 'currentColor' : 'none'} />Сохранённые
             </button>
           </div>
         </div>

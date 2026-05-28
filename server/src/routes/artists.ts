@@ -573,4 +573,36 @@ router.patch('/memberships/:id/reject', authenticate, async (req: AuthRequest, r
   }
 });
 
+// ── POST /api/artists/:id/invite-link — generate invite link for unregistered user
+router.post('/:id/invite-link', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const artistId = req.params.id;
+    const { professionId } = req.body;
+
+    // Check current user is owner/admin of artist
+    const myMembership = await prisma.userArtist.findFirst({
+      where: { artistId, userId: meId, isOwner: true, inviteStatus: 'ACCEPTED' },
+    });
+    const me = await prisma.user.findUnique({ where: { id: meId }, select: { isAdmin: true } });
+    if (!myMembership && !me?.isAdmin) {
+      return res.status(403).json({ error: 'Only artist owner can invite' });
+    }
+
+    const artist = await prisma.artist.findUnique({ where: { id: artistId }, select: { id: true, name: true } });
+    if (!artist) return res.status(404).json({ error: 'Artist not found' });
+
+    // Generate unique token using artistId + professionId + timestamp (base64)
+    const payload = Buffer.from(JSON.stringify({
+      artistId, artistName: artist.name, professionId: professionId || null,
+      ts: Date.now(),
+    })).toString('base64url');
+
+    const link = `https://moooza.ru/register?artistInvite=${payload}`;
+    res.json({ link, token: payload });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 export default router;
