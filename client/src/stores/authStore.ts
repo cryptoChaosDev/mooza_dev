@@ -35,6 +35,7 @@ interface User {
   employerId?: string;
   employer?: { id: string; name: string; inn?: string; ogrn?: string };
   termsAgreedAt?: string | null;
+  onboardingCompletedAt?: string | null;
 }
 
 interface AuthState {

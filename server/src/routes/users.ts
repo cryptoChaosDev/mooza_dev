@@ -90,6 +90,7 @@ const userSelect = {
   occupancyStatus: true,
   lastSeenAt: true,
   termsAgreedAt: true,
+  onboardingCompletedAt: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
   portfolioLinks: { select: { id: true, type: true, url: true, title: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
@@ -858,6 +859,18 @@ router.post('/me/agree-terms', authenticate, async (req: AuthRequest, res) => {
     console.error('Agree terms error:', error);
     res.status(500).json({ error: 'Failed to record agreement' });
   }
+});
+
+// Mark onboarding as completed for current user
+router.patch('/me/complete-onboarding', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const user = await prisma.user.update({
+      where: { id: req.userId! },
+      data: { onboardingCompletedAt: new Date() },
+      select: { id: true, onboardingCompletedAt: true },
+    });
+    res.json(user);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
 export default router;

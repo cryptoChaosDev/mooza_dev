@@ -124,6 +124,7 @@ export const userAPI = {
   addPortfolioLink: (data: { type: string; url: string; title?: string }) => api.post('/users/me/portfolio/links', data),
   deletePortfolioLink: (linkId: string) => api.delete(`/users/me/portfolio/links/${linkId}`),
   agreeToTerms: () => api.post('/users/me/agree-terms'),
+  completeOnboarding: () => api.patch('/users/me/complete-onboarding'),
 };
 
 // Reference API
