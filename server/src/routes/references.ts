@@ -547,4 +547,19 @@ router.get('/artists', async (req, res) => {
 });
 
 
+// GET /api/references/professions/:id/filters — custom filters for a profession
+router.get('/professions/:id/filters', async (req, res) => {
+  try {
+    const filters = await prisma.customFilter.findMany({
+      where: { professionId: req.params.id },
+      select: { id: true, name: true, filterValues: true },
+      orderBy: { name: 'asc' },
+    });
+    // Expose filterValues as "values" for a consistent client API
+    res.json(filters.map((f: any) => ({ id: f.id, name: f.name, values: f.filterValues })));
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 export default router;

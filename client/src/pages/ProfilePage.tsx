@@ -81,6 +81,8 @@ type UserServiceEntry = {
   deadlineTo: string;
   description: string;
   status?: 'draft' | 'pending_review';
+  professionFilters: Array<{ id: string; name: string; values: string[] }>;
+  professionFilterValues: Record<string, string[]>;
 };
 
 const emptyEntry = (): UserServiceEntry => ({
@@ -91,6 +93,8 @@ const emptyEntry = (): UserServiceEntry => ({
   availabilityIds: [], geographyIds: [],
   name: '', priceFrom: '', priceTo: '', deadlineFrom: '', deadlineTo: '', description: '',
   status: 'pending_review',
+  professionFilters: [],
+  professionFilterValues: {},
 });
 
 
@@ -244,6 +248,12 @@ export default function ProfilePage() {
           priceFrom: us.priceFrom != null ? String(us.priceFrom) : '',
           priceTo: us.priceTo != null ? String(us.priceTo) : '',
           description: us.description ?? '',
+          name: us.name ?? '',
+          deadlineFrom: us.deadlineFrom != null ? String(us.deadlineFrom) : '',
+          deadlineTo: us.deadlineTo != null ? String(us.deadlineTo) : '',
+          status: us.status,
+          professionFilters: [],
+          professionFilterValues: {},
         })) || []
       );
       return data;
@@ -470,6 +480,12 @@ export default function ProfilePage() {
                     serviceCustomFilters: r.customFilters,
                   });
                   setAddStep('filters');
+                  // Загружаем фильтры выбранной профессии
+                  if (r.professionId) {
+                    referenceAPI.getProfessionFilters(r.professionId).then((resp: any) => {
+                      setPending(prev => ({ ...prev, professionFilters: resp.data || [] }));
+                    }).catch(() => {});
+                  }
                 }}
                 className="w-full text-left px-3 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700/40 hover:border-primary-500/40 transition-all"
               >
@@ -573,6 +589,12 @@ export default function ProfilePage() {
                     onClick={() => {
                       setPending(prev => ({ ...prev, serviceId: s.id, serviceName: s.name, allowedFilterTypes: s.allowedFilterTypes || [], serviceCustomFilters: s.customFilters || [] }));
                       setAddStep('filters');
+                      // Загружаем фильтры выбранной профессии
+                      if (pending.professionId) {
+                        referenceAPI.getProfessionFilters(pending.professionId).then((resp: any) => {
+                          setPending(prev => ({ ...prev, professionFilters: resp.data || [] }));
+                        }).catch(() => {});
+                      }
                     }}
                     className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
                   >
@@ -597,7 +619,7 @@ export default function ProfilePage() {
         {(() => {
           const pAllowed = pending.allowedFilterTypes;
           const pShow = (k: string) => pAllowed.includes(k);
-          const pHasAny = pShow('genre') || pShow('workFormat') || pShow('employmentType') || pShow('skillLevel') || pShow('availability') || pShow('priceRange') || pShow('geography') || pending.serviceCustomFilters.length > 0;
+          const pHasAny = pShow('genre') || pShow('workFormat') || pShow('employmentType') || pShow('skillLevel') || pShow('availability') || pShow('priceRange') || pShow('geography') || pending.serviceCustomFilters.length > 0 || pending.professionFilters.length > 0;
           if (!pHasAny) return <p className="text-xs text-slate-500">Фильтры не настроены для этой услуги</p>;
           return (
             <div className="space-y-2">
@@ -637,6 +659,39 @@ export default function ProfilePage() {
               {pShow('geography') && <SelectField label="Город / Регион" value={getNames(geographies, pending.geographyIds).join(', ')} placeholder="Не указан" icon={<MapPin size={13} />} onClick={() => setOpenFilterSheet('pending-geography')} badge={pending.geographyIds.length || undefined} />}
               {pending.serviceCustomFilters.map(cf => (
                 <SelectField key={cf.id} label={cf.name} value={(pending.customFilterValueIds[cf.id] || []).map(vid => cf.values.find(v => v.id === vid)?.value || vid).join(', ')} placeholder="Выберите значение" icon={<Star size={13} />} onClick={() => setOpenFilterSheet(`pending-cf-${cf.id}`)} badge={(pending.customFilterValueIds[cf.id] || []).length || undefined} />
+              ))}
+              {/* Фильтры профессии из каталога */}
+              {pending.professionFilters.map(pf => (
+                <div key={pf.id}>
+                  <p className="text-xs font-semibold mb-1 text-slate-400">{pf.name}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {pf.values.map(val => {
+                      const isSelected = (pending.professionFilterValues[pf.id] || []).includes(val);
+                      return (
+                        <button
+                          key={val}
+                          type="button"
+                          onClick={() => {
+                            setPending(prev => {
+                              const cur = prev.professionFilterValues[pf.id] || [];
+                              const next = isSelected
+                                ? cur.filter(v => v !== val)
+                                : [...cur, val];
+                              return { ...prev, professionFilterValues: { ...prev.professionFilterValues, [pf.id]: next } };
+                            });
+                          }}
+                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+                            isSelected
+                              ? 'bg-primary-600 border-primary-500 text-white'
+                              : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:border-primary-500/40'
+                          }`}
+                        >
+                          {val}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               ))}
             </div>
           );

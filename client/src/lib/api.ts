@@ -146,6 +146,7 @@ export const referenceAPI = {
   getGeographies: () => api.get('/references/geographies'),
   getPriceRanges: () => api.get('/references/price-ranges'),
   getAllReferences: () => api.get('/references/all'),
+  getProfessionFilters: (professionId: string) => api.get(`/references/professions/${professionId}/filters`),
   searchMusicians: (params: {
     fieldId?: string;
     directionId?: string;

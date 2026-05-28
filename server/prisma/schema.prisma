@@ -32,6 +32,7 @@ model Direction {
 
   createdAt DateTime @default(now())
 
+  @@unique([name, fieldOfActivityId])
   @@index([fieldOfActivityId])
 }
 
@@ -45,9 +46,11 @@ model Profession {
   userServices    UserService[]
   groupMembers    UserArtist[]
   connections     Connection[]
+  customFilters   CustomFilter[] @relation("ProfessionCustomFilters")
 
   createdAt DateTime @default(now())
 
+  @@unique([name, directionId])
   @@index([directionId])
 }
 
@@ -795,11 +798,17 @@ model PushSubscription {
 // ============ CUSTOM FILTERS ============
 
 model CustomFilter {
-  id         String              @id @default(uuid())
-  name       String
-  values     CustomFilterValue[]
-  directions Direction[]         @relation("DirectionCustomFilters")
-  createdAt  DateTime            @default(now())
+  id           String              @id @default(uuid())
+  name         String
+  values       CustomFilterValue[]
+  filterValues String[]
+  directions   Direction[]         @relation("DirectionCustomFilters")
+  professionId String?
+  profession   Profession?         @relation("ProfessionCustomFilters", fields: [professionId], references: [id], onDelete: Cascade)
+  createdAt    DateTime            @default(now())
+
+  @@unique([name, professionId])
+  @@index([professionId])
 }
 
 model CustomFilterValue {
