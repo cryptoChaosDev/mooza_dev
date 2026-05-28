@@ -6,7 +6,7 @@ import {
   MoreHorizontal, Image, Pencil, Check,
   Crown, BadgeCheck, Ban, SlidersHorizontal,
   Plus, FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench,
-  Zap, BarChart3, Check,
+  Zap, BarChart3,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import ShareButton from '../components/ShareButton';
