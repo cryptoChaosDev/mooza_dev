@@ -2441,6 +2441,12 @@ export default function AdminPage() {
                     { key: 'maxValue', label: 'Макс', placeholder: 'Макс' },
                   ]}
                 />
+                <SimpleTable
+                  collapsible
+                  title="Особенности профессий"
+                  queryKey="admin-profession-features"
+                  apiModule={adminAPI.professionFeatures}
+                />
               </div>
             </div>
 
