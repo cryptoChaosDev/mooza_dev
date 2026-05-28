@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, HandshakeIcon, Clock, CheckCheck, XCircle, Wrench, AlertCircle } from 'lucide-react';
+import { ArrowLeft, HandshakeIcon } from 'lucide-react';
 import { dealAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { useAuthStore } from '../stores/authStore';
