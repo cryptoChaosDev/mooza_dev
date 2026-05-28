@@ -77,6 +77,7 @@ type UserServiceEntry = {
   priceFrom: string;
   priceTo: string;
   description: string;
+  status?: 'draft' | 'pending_review';
 };
 
 const emptyEntry = (): UserServiceEntry => ({
@@ -85,6 +86,7 @@ const emptyEntry = (): UserServiceEntry => ({
   allowedFilterTypes: [], serviceCustomFilters: [], customFilterValueIds: {},
   genreIds: [], workFormatIds: [], employmentTypeIds: [], skillLevelIds: [],
   availabilityIds: [], geographyIds: [], priceFrom: '', priceTo: '', description: '',
+  status: 'pending_review',
 });
 
 
@@ -147,6 +149,7 @@ export default function ProfilePage() {
   const [editingProfessions, setEditingProfessions] = useState(false);
   const [selectedProfession, setSelectedProfession] = useState<{ professionId: string; professionName: string } | null>(null);
   const [showJoinArtist, setShowJoinArtist] = useState(false);
+  const [showProModal, setShowProModal] = useState(false);
   const [profAddStep, setProfAddStep] = useState<'field' | 'direction' | 'profession' | null>(null);
   const [profFlowDirections, setProfFlowDirections] = useState<any[]>([]);
   const [profFlowProfessions, setProfFlowProfessions] = useState<any[]>([]);
@@ -298,6 +301,7 @@ export default function ProfilePage() {
         priceTo: us.priceTo !== '' ? Number(us.priceTo) : undefined,
         description: us.description || undefined,
         customFilterValueIds: Object.values(us.customFilterValueIds).flat(),
+        status: us.status,
       }))
     ),
   });
@@ -583,11 +587,15 @@ export default function ProfilePage() {
           );
         })()}
         <div className="flex gap-2 mt-3">
-          <button onClick={() => setAddStep(null)} className="flex-1 py-2 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors">Отмена</button>
+          <button onClick={() => setAddStep(null)} className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors flex-shrink-0">Отмена</button>
           <button
-            onClick={() => { setUserServices(prev => [...prev, { ...pending }]); setPending(emptyEntry()); setAddStep(null); }}
+            onClick={() => { setUserServices(prev => [...prev, { ...pending, status: 'draft' }]); setPending(emptyEntry()); setAddStep(null); }}
+            className="flex-1 py-2 rounded-lg border border-slate-600/50 text-slate-300 hover:bg-slate-700/40 text-sm transition-colors"
+          >В черновик</button>
+          <button
+            onClick={() => { setUserServices(prev => [...prev, { ...pending, status: 'pending_review' }]); setPending(emptyEntry()); setAddStep(null); }}
             className="flex-1 py-2 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold transition-colors"
-          >Добавить</button>
+          >Опубликовать</button>
         </div>
         <SelectSheet isOpen={openFilterSheet === 'pending-genre'} onClose={() => setOpenFilterSheet(null)} title="Жанры" options={genres.map(g => ({ id: g.id, name: g.name }))} selectedIds={pending.genreIds} onSelect={ids => setPending(p => ({ ...p, genreIds: ids as string[] }))} mode="multiple" showConfirm searchable />
         <SelectSheet isOpen={openFilterSheet === 'pending-workFormat'} onClose={() => setOpenFilterSheet(null)} title="Формат работы" options={workFormats.map(w => ({ id: w.id, name: w.name }))} selectedIds={pending.workFormatIds} onSelect={ids => setPending(p => ({ ...p, workFormatIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} />
@@ -731,7 +739,12 @@ export default function ProfilePage() {
             <>
               <div className="flex items-center gap-2 flex-wrap mb-0.5">
                 <h1 className="text-2xl font-bold text-white leading-tight">{profile?.firstName} {profile?.lastName}</h1>
-                {profile?.isPro && <BadgeTooltip label="PRO аккаунт"><Zap size={18} className="text-violet-400" /></BadgeTooltip>}
+                {profile?.isPro
+                  ? <BadgeTooltip label="PRO аккаунт"><Zap size={18} className="text-violet-400" /></BadgeTooltip>
+                  : <button onClick={() => setShowProModal(true)} className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold border border-violet-500/30 text-violet-400/60 hover:text-violet-400 hover:border-violet-500/60 rounded-lg transition-colors">
+                      <Zap size={11} />PRO
+                    </button>
+                }
                 {profile?.isPremium && <BadgeTooltip label="Premium"><Crown size={18} className="text-amber-400" /></BadgeTooltip>}
                 {profile?.isVerified && <BadgeTooltip label="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></BadgeTooltip>}
                 {(profile?._count?.referrals ?? 0) >= 100 && <BadgeTooltip label="Амбасадор Moooza"><Star size={18} className="text-orange-400" /></BadgeTooltip>}
@@ -1315,6 +1328,49 @@ export default function ProfilePage() {
     />
 
     {showJoinArtist && <JoinArtistModal onClose={() => setShowJoinArtist(false)} />}
+
+    {showProModal && createPortal(
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowProModal(false)} />
+        <div className="relative w-full sm:max-w-sm bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
+          <div className="px-5 pt-6 pb-4 text-center border-b border-slate-800">
+            <div className="w-14 h-14 rounded-2xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center mx-auto mb-3">
+              <Zap size={28} className="text-violet-400" />
+            </div>
+            <h3 className="text-lg font-bold text-white mb-1">Moooza PRO</h3>
+            <p className="text-sm text-slate-400">Расширенные возможности для профессионалов</p>
+          </div>
+          <div className="px-5 py-4 space-y-3">
+            {[
+              ['Приоритет в каталоге', 'Ваш профиль показывается выше в поиске'],
+              ['Расширенная аналитика', 'Статистика просмотров и обращений'],
+              ['Неограниченные услуги', 'Добавляйте любое количество услуг'],
+              ['PRO-бейдж на профиле', 'Подчеркните свой профессионализм'],
+              ['Расширенный портфолио', 'До 50 файлов вместо 5'],
+            ].map(([title, desc]) => (
+              <div key={title} className="flex items-start gap-3">
+                <div className="w-5 h-5 rounded-full bg-violet-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
+                  <span className="text-violet-400 text-xs font-bold">✓</span>
+                </div>
+                <div>
+                  <p className="text-sm font-medium text-white">{title}</p>
+                  <p className="text-xs text-slate-500">{desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="px-5 pb-6 space-y-2">
+            <button className="w-full py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-2xl transition-colors flex items-center justify-center gap-2">
+              <Zap size={16} />Скоро — следите за новостями
+            </button>
+            <button onClick={() => setShowProModal(false)} className="w-full py-2.5 text-sm text-slate-400 hover:text-white transition-colors">
+              Закрыть
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
 
     </>
   );

@@ -7,6 +7,7 @@ const router = Router();
 const reviewInclude = {
   author: { select: { id: true, firstName: true, lastName: true, avatar: true } },
   service: { select: { id: true, name: true } },
+  deal: { select: { id: true, createdAt: true, updatedAt: true, status: true } },
 } as const;
 
 // GET /api/reviews/user/:userId — all reviews for a user

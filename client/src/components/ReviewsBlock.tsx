@@ -18,6 +18,7 @@ interface Review {
   createdAt: string;
   author: { id: string; firstName: string; lastName: string; avatar: string | null };
   service: { id: string; name: string } | null;
+  deal: { id: string; createdAt: string; updatedAt: string; status: string } | null;
 }
 
 function Stars({ rating, size = 10 }: { rating: number; size?: number }) {
@@ -137,10 +138,17 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
             <div className="flex items-start justify-between px-5 py-3 border-b border-slate-800">
               <div className="space-y-1">
                 <Stars rating={selected.rating} size={16} />
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs text-slate-500">{TYPE_LABELS[selected.type] ?? selected.type}</span>
                   {selected.service && (
                     <span className="text-xs text-primary-400 font-medium">{selected.service.name}</span>
+                  )}
+                  {selected.deal && selected.deal.status === 'COMPLETED' && (
+                    <span className="text-xs text-slate-600">
+                      {new Date(selected.deal.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                      {' — '}
+                      {new Date(selected.deal.updatedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </span>
                   )}
                 </div>
               </div>

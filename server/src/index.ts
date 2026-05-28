@@ -150,6 +150,40 @@ app.use('/api/site-settings', siteSettingsRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/deals', dealRoutes);
 
+// ── OG tags for social bots ────────────────────────────────────────────────
+const BOT_RE = /bot|crawler|spider|facebookexternalhit|twitterbot|linkedinbot|telegrambot|whatsapp|slackbot|discordbot|vkshare/i;
+app.get('/og/profile/:userId', async (req: express.Request, res: express.Response) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.params.userId },
+      select: { firstName: true, lastName: true, avatar: true, bio: true, city: true },
+    });
+    if (!user) return res.status(404).send('Not found');
+    const name = `${user.firstName} ${user.lastName}`.trim();
+    const desc = user.bio || `${user.city ? user.city + ' · ' : ''}Музыкант на Moooza`;
+    const img = user.avatar
+      ? `https://moooza.ru/uploads/${user.avatar}`
+      : 'https://moooza.ru/logo.png';
+    const url = `https://moooza.ru/profile/${req.params.userId}`;
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(`<!DOCTYPE html><html><head>
+      <meta charset="utf-8">
+      <title>${name} — Moooza</title>
+      <meta property="og:type" content="profile">
+      <meta property="og:title" content="${name} — Moooza">
+      <meta property="og:description" content="${desc}">
+      <meta property="og:image" content="${img}">
+      <meta property="og:url" content="${url}">
+      <meta property="og:site_name" content="Moooza">
+      <meta name="twitter:card" content="summary">
+      <meta name="twitter:title" content="${name} — Moooza">
+      <meta name="twitter:description" content="${desc}">
+      <meta name="twitter:image" content="${img}">
+      <meta http-equiv="refresh" content="0; url=${url}">
+    </head><body><a href="${url}">${name}</a></body></html>`);
+  } catch { res.status(500).send('Error'); }
+});
+
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   // Логируем детали ошибки

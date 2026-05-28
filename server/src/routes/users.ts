@@ -353,14 +353,17 @@ router.put('/me/services', authenticate, async (req: AuthRequest, res) => {
     const toConnect = (ids: string[] = []) => ids.map((id) => ({ id }));
 
     // Delete and recreate in a transaction to prevent data loss on error
+    const VALID_STATUS = new Set(['draft', 'active', 'archived', 'pending_review']);
     await prisma.$transaction(async (tx) => {
       await tx.userService.deleteMany({ where: { userId: req.userId } });
       for (const us of services) {
+        const status = VALID_STATUS.has((us as any).status) ? (us as any).status : 'draft';
         await tx.userService.create({
           data: {
             userId: req.userId!,
             professionId: us.professionId,
             serviceId: us.serviceId,
+            status,
             genres:          { connect: toConnect(us.genreIds) },
             workFormats:     { connect: toConnect(us.workFormatIds) },
             employmentTypes: { connect: toConnect(us.employmentTypeIds) },
