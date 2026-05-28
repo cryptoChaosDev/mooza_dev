@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Loader2, HandshakeIcon, CheckCheck, XCircle,
-  Clock, AlertCircle, Wrench, Send, Check, X, Star, Copy,
+  Clock, AlertCircle, Wrench, Send, Check, X, Star, Copy, Pencil, Calendar,
 } from 'lucide-react';
 import { dealAPI, reviewAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
@@ -17,6 +17,8 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }>
   REVISION:          { label: 'На доработке',      color: 'text-orange-400',  icon: Wrench },
   COMPLETED:         { label: 'Завершена',         color: 'text-emerald-400', icon: CheckCheck },
   CANCELLED:         { label: 'Отменена',          color: 'text-red-400',     icon: XCircle },
+  AWAITING_EVENT:        { label: 'Ожидает события',        color: 'text-cyan-400',   icon: Calendar },
+  AWAITING_CONFIRMATION: { label: 'Ожидает подтверждения', color: 'text-violet-400', icon: AlertCircle },
 };
 
 export default function DealPage() {
@@ -33,6 +35,9 @@ export default function DealPage() {
   const [reviewRating, setReviewRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
   const [reviewSent, setReviewSent] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editDeadline, setEditDeadline] = useState('');
+  const [editRevisions, setEditRevisions] = useState('');
 
   const { data: deal, isLoading } = useQuery({
     queryKey: ['deal', dealId],
@@ -60,6 +65,24 @@ export default function DealPage() {
   const submitMut  = useMutation({ mutationFn: () => dealAPI.submit(dealId!),  onSuccess: invalidate });
   const approveMut = useMutation({ mutationFn: () => dealAPI.approve(dealId!), onSuccess: invalidate });
   const revisionMut= useMutation({ mutationFn: () => dealAPI.revision(dealId!, revisionComment), onSuccess: () => { invalidate(); setShowRevisionInput(false); setRevisionComment(''); } });
+  const confirmMut = useMutation({ mutationFn: () => dealAPI.confirm(dealId!), onSuccess: invalidate });
+
+  const requestEditMut = useMutation({
+    mutationFn: () => dealAPI.requestEdit(dealId!, {
+      deadline: editDeadline || undefined,
+      revisionCount: editRevisions ? Number(editRevisions) : undefined,
+    }),
+    onSuccess: () => { invalidate(); setShowEditForm(false); setEditDeadline(''); setEditRevisions(''); },
+  });
+
+  const acceptEditMut = useMutation({
+    mutationFn: (reqId: string) => dealAPI.acceptEdit(reqId),
+    onSuccess: invalidate,
+  });
+  const rejectEditMut = useMutation({
+    mutationFn: (reqId: string) => dealAPI.rejectEdit(reqId),
+    onSuccess: invalidate,
+  });
 
   if (isLoading) return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -80,6 +103,7 @@ export default function DealPage() {
   const partnerRole = isCustomer ? 'Исполнитель' : 'Заказчик';
   const myRole = isCustomer ? 'Заказчик' : 'Исполнитель';
   const isDone = ['COMPLETED', 'CANCELLED'].includes(deal.status);
+  const pendingEdit = deal.editRequests?.[0];
 
   return (
     <div className="min-h-screen bg-slate-950 pb-32">
@@ -150,19 +174,31 @@ export default function DealPage() {
               <span className="text-white font-semibold">{deal.price.toLocaleString('ru')} ₽</span>
             </div>
           )}
-          {deal.deadline && (
+          {deal.dealType === 'event' && deal.eventDate && (
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Дата события</span>
+              <span className="text-white font-semibold">{new Date(deal.eventDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+            </div>
+          )}
+          {deal.dealType === 'event' && deal.deposit != null && (
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-400">Депозит (невозвратный)</span>
+              <span className="text-amber-400 font-medium">{deal.deposit.toLocaleString('ru')} ₽</span>
+            </div>
+          )}
+          {deal.dealType !== 'event' && deal.deadline && (
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Срок сдачи</span>
               <span className="text-white">{new Date(deal.deadline).toLocaleDateString('ru')}</span>
             </div>
           )}
-          {deal.acceptDeadline && (
+          {deal.dealType !== 'event' && deal.acceptDeadline && (
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Срок приёмки</span>
               <span className="text-white">{new Date(deal.acceptDeadline).toLocaleDateString('ru')}</span>
             </div>
           )}
-          {deal.revisionCount > 0 && (
+          {deal.dealType !== 'event' && deal.revisionCount > 0 && (
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Правок</span>
               <span className="text-white">{deal.revisionCount}</span>
@@ -251,8 +287,8 @@ export default function DealPage() {
               </button>
             )}
 
-            {/* Executor: IN_PROGRESS / REVISION → submit */}
-            {isExecutor && ['IN_PROGRESS', 'REVISION'].includes(deal.status) && (
+            {/* Executor: IN_PROGRESS / REVISION → submit (только для process) */}
+            {isExecutor && deal.dealType !== 'event' && ['IN_PROGRESS', 'REVISION'].includes(deal.status) && (
               <button onClick={() => submitMut.mutate()} disabled={submitMut.isPending}
                 className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-2xl transition-colors disabled:opacity-50">
                 {submitMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
@@ -260,8 +296,17 @@ export default function DealPage() {
               </button>
             )}
 
+            {/* Event deal: customer confirms */}
+            {isCustomer && deal.dealType === 'event' && ['AWAITING_EVENT', 'AWAITING_CONFIRMATION'].includes(deal.status) && (
+              <button onClick={() => confirmMut.mutate()} disabled={confirmMut.isPending}
+                className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl transition-colors disabled:opacity-50">
+                {confirmMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <CheckCheck size={15} />}
+                Подтвердить оказание услуги
+              </button>
+            )}
+
             {/* Customer: REVIEW → approve / revision */}
-            {isCustomer && deal.status === 'REVIEW' && (
+            {isCustomer && deal.dealType !== 'event' && deal.status === 'REVIEW' && (
               <>
                 <button onClick={() => approveMut.mutate()} disabled={approveMut.isPending}
                   className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl transition-colors disabled:opacity-50">
@@ -295,6 +340,67 @@ export default function DealPage() {
                   )
                 ) : null}
               </>
+            )}
+
+            {/* Pending edit request — counterparty needs to approve/reject */}
+            {pendingEdit && pendingEdit.requesterId !== me?.id && (
+              <div className="space-y-3 border border-amber-500/30 bg-amber-500/5 rounded-2xl p-4">
+                <p className="text-sm font-semibold text-amber-300">Запрос на изменение условий</p>
+                <div className="space-y-1 text-sm">
+                  {pendingEdit.changes?.deadline && (
+                    <p className="text-slate-300">Новый срок сдачи: {new Date(pendingEdit.changes.deadline).toLocaleDateString('ru-RU')}</p>
+                  )}
+                  {pendingEdit.changes?.acceptDeadline && (
+                    <p className="text-slate-300">Новый срок приёмки: {new Date(pendingEdit.changes.acceptDeadline).toLocaleDateString('ru-RU')}</p>
+                  )}
+                  {pendingEdit.changes?.revisionCount != null && (
+                    <p className="text-slate-300">Новое кол-во правок: {pendingEdit.changes.revisionCount}</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={() => rejectEditMut.mutate(pendingEdit.id)} disabled={rejectEditMut.isPending}
+                    className="flex-1 py-2 text-sm border border-slate-700 text-slate-400 rounded-xl hover:text-white transition-colors">Отклонить</button>
+                  <button onClick={() => acceptEditMut.mutate(pendingEdit.id)} disabled={acceptEditMut.isPending}
+                    className="flex-1 py-2 text-sm bg-amber-600 hover:bg-amber-500 text-white rounded-xl font-semibold transition-colors">Принять</button>
+                </div>
+              </div>
+            )}
+
+            {/* Pending edit request — author waiting for counterparty */}
+            {pendingEdit && pendingEdit.requesterId === me?.id && (
+              <div className="border border-slate-700/60 bg-slate-900/60 rounded-2xl p-4 text-sm text-slate-400">
+                Запрос на изменение условий отправлен — ожидание подтверждения второй стороны.
+              </div>
+            )}
+
+            {/* Edit conditions — either party, only when in active progress statuses */}
+            {!isDone && !pendingEdit && ['IN_PROGRESS', 'REVIEW', 'REVISION'].includes(deal.status) && (
+              showEditForm ? (
+                <div className="space-y-2 border border-slate-700/60 rounded-2xl p-4">
+                  <p className="text-sm font-semibold text-white mb-2">Запросить изменение условий</p>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Новый срок сдачи</label>
+                    <input type="date" value={editDeadline} onChange={e => setEditDeadline(e.target.value)}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Новое количество правок</label>
+                    <input type="number" value={editRevisions} onChange={e => setEditRevisions(e.target.value)}
+                      placeholder={String(deal.revisionCount)}
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white" />
+                  </div>
+                  <div className="flex gap-2 pt-1">
+                    <button onClick={() => setShowEditForm(false)} className="flex-1 py-2 text-sm text-slate-400 border border-slate-700 rounded-xl hover:text-white transition-colors">Отмена</button>
+                    <button onClick={() => requestEditMut.mutate()} disabled={requestEditMut.isPending || (!editDeadline && !editRevisions)}
+                      className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 text-white rounded-xl font-semibold transition-colors disabled:opacity-50">Отправить</button>
+                  </div>
+                </div>
+              ) : (
+                <button onClick={() => setShowEditForm(true)}
+                  className="w-full py-2.5 text-sm text-slate-400 hover:text-white border border-slate-700/60 rounded-xl flex items-center justify-center gap-1.5 transition-colors">
+                  <Pencil size={14} />Изменить условия
+                </button>
+              )
             )}
 
             {/* Cancel */}

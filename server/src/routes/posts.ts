@@ -83,9 +83,14 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
 // Create post
 router.post('/', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { content, imageUrl, audioUrl, audioName, type, employmentStatus } = req.body;
+    const { content, imageUrl, audioUrl, audioName, type, employmentStatus, pollOptions, pollEndsAt } = req.body;
 
-    if (!content && !imageUrl && !audioUrl && !(type === 'employment' && employmentStatus)) {
+    const isPoll = type === 'poll';
+    if (isPoll) {
+      if (!Array.isArray(pollOptions) || pollOptions.filter((o: string) => o?.trim()).length < 2) {
+        return res.status(400).json({ error: 'Poll requires at least 2 non-empty options' });
+      }
+    } else if (!content && !imageUrl && !audioUrl && !(type === 'employment' && employmentStatus)) {
       return res.status(400).json({ error: 'Post cannot be empty' });
     }
 
@@ -97,6 +102,10 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         audioUrl: audioUrl || null,
         audioName: audioName || null,
         authorId: req.userId!,
+        ...(isPoll ? {
+          pollOptions: (pollOptions as string[]).filter(o => o?.trim()).map(text => ({ text, votes: 0 })),
+          pollEndsAt: pollEndsAt ? new Date(pollEndsAt) : null,
+        } : {}),
       } as any,
       include: {
         author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true } },
@@ -119,6 +128,46 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('Create post error:', error);
     res.status(500).json({ error: 'Failed to create post' });
+  }
+});
+
+// POST /api/posts/:id/vote — vote in poll
+router.post('/:id/vote', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const meId = req.userId!;
+    const { optionIndex } = req.body;
+    if (typeof optionIndex !== 'number') return res.status(400).json({ error: 'optionIndex required' });
+
+    const post = await prisma.post.findUnique({ where: { id: req.params.id } });
+    if (!post || post.type !== 'poll') return res.status(404).json({ error: 'Poll not found' });
+    if (post.pollEndsAt && new Date(post.pollEndsAt) < new Date()) {
+      return res.status(400).json({ error: 'Poll ended' });
+    }
+
+    const existing = await prisma.pollVote.findUnique({
+      where: { postId_userId: { postId: post.id, userId: meId } },
+    });
+    if (existing) {
+      await prisma.pollVote.update({ where: { id: existing.id }, data: { optionIndex } });
+    } else {
+      await prisma.pollVote.create({ data: { postId: post.id, userId: meId, optionIndex } });
+    }
+
+    // Recalculate vote counts
+    const votes = await prisma.pollVote.findMany({ where: { postId: post.id } });
+    const options = (post.pollOptions as any[]) || [];
+    const updated = options.map((opt: any, i: number) => ({
+      text: opt.text,
+      votes: votes.filter(v => v.optionIndex === i).length,
+    }));
+    await prisma.post.update({
+      where: { id: post.id },
+      data: { pollOptions: updated },
+    });
+
+    res.json({ ok: true, options: updated, myVote: optionIndex });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 

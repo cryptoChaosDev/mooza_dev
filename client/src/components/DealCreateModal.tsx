@@ -19,11 +19,14 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
   const navigate = useNavigate();
 
   const [title, setTitle] = useState(serviceName ? `Сделка: ${serviceName}` : '');
+  const [dealType, setDealType] = useState<'process' | 'event'>('process');
   const [price, setPrice] = useState('');
   const [deadline, setDeadline] = useState('');
   const [acceptDeadline, setAcceptDeadline] = useState('');
   const [revisionCount, setRevisionCount] = useState('3');
   const [result, setResult] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [deposit, setDeposit] = useState('');
 
   const createMut = useMutation({
     mutationFn: () => dealAPI.create({
@@ -32,10 +35,18 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
       serviceId: serviceId || undefined,
       userServiceId: userServiceId || undefined,
       price: price ? Number(price) : undefined,
-      deadline: deadline || undefined,
-      acceptDeadline: acceptDeadline || undefined,
-      revisionCount: Number(revisionCount) || 3,
       result: result.trim() || undefined,
+      dealType,
+      ...(dealType === 'event'
+        ? {
+            eventDate: eventDate || undefined,
+            deposit: deposit ? Number(deposit) : undefined,
+          }
+        : {
+            deadline: deadline || undefined,
+            acceptDeadline: acceptDeadline || undefined,
+            revisionCount: Number(revisionCount) || 3,
+          }),
     }),
     onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ['deals'] });
@@ -44,7 +55,7 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
     },
   });
 
-  const canSubmit = title.trim().length >= 3;
+  const canSubmit = title.trim().length >= 3 && (dealType !== 'event' || !!eventDate);
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -78,6 +89,23 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
           </div>
 
           <div>
+            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Тип сделки</label>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setDealType('process')}
+                className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-all ${dealType === 'process' ? 'bg-primary-600/20 border-primary-500/40 text-primary-300' : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white'}`}>
+                Процессная
+              </button>
+              <button type="button" onClick={() => setDealType('event')}
+                className={`flex-1 py-2 rounded-xl text-sm font-medium border transition-all ${dealType === 'event' ? 'bg-primary-600/20 border-primary-500/40 text-primary-300' : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white'}`}>
+                Событийная
+              </button>
+            </div>
+            <p className="text-[10px] text-slate-600 mt-1">
+              {dealType === 'process' ? 'Работа сдаётся по завершении' : 'Услуга оказывается в конкретную дату'}
+            </p>
+          </div>
+
+          <div>
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Исполнитель</label>
             <p className="px-3 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm text-white">{executorName}</p>
           </div>
@@ -101,38 +129,66 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Срок сдачи</label>
-              <input
-                type="date"
-                value={deadline}
-                onChange={e => setDeadline(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Срок приёмки</label>
-              <input
-                type="date"
-                value={acceptDeadline}
-                onChange={e => setAcceptDeadline(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Количество правок</label>
-            <input
-              type="number"
-              value={revisionCount}
-              onChange={e => setRevisionCount(e.target.value)}
-              min={0}
-              max={20}
-              className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
-            />
-          </div>
+          {dealType === 'process' ? (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Срок сдачи</label>
+                  <input
+                    type="date"
+                    value={deadline}
+                    onChange={e => setDeadline(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Срок приёмки</label>
+                  <input
+                    type="date"
+                    value={acceptDeadline}
+                    onChange={e => setAcceptDeadline(e.target.value)}
+                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Количество правок</label>
+                <input
+                  type="number"
+                  value={revisionCount}
+                  onChange={e => setRevisionCount(e.target.value)}
+                  min={0}
+                  max={20}
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Дата события *</label>
+                <input
+                  type="date"
+                  value={eventDate}
+                  onChange={e => setEventDate(e.target.value)}
+                  min={new Date().toISOString().split('T')[0]}
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Невозвратный депозит (₽)</label>
+                <input
+                  type="number"
+                  value={deposit}
+                  onChange={e => setDeposit(e.target.value)}
+                  min={0}
+                  placeholder="0"
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+                <p className="text-[10px] text-slate-600 mt-1">Сумма, которая не возвращается при отмене после оплаты</p>
+              </div>
+            </>
+          )}
 
           <div>
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Ожидаемый результат</label>

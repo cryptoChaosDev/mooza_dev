@@ -6,7 +6,7 @@ import {
   MoreHorizontal, Image, Pencil, Check,
   Crown, BadgeCheck, Ban, SlidersHorizontal,
   Plus, FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench,
-  Zap,
+  Zap, BarChart3, Check,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import ShareButton from '../components/ShareButton';
@@ -245,6 +245,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const deleteMut = useMutation({ mutationFn: () => postAPI.deletePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
   const reactMut = useMutation({ mutationFn: (emoji: string) => postAPI.reactPost(post.id, emoji), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
   const unreactMut = useMutation({ mutationFn: () => postAPI.unreactPost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
+  const voteMut = useMutation({ mutationFn: (optionIndex: number) => postAPI.votePoll(post.id, optionIndex), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
 
   const uploadEditFile = async (file: File) => {
     setEditUploading(true);
@@ -343,6 +344,39 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                   <span className="text-xs font-semibold text-amber-400">Апдейт занятости</span>
                 </div>
               )}
+              {post.type === 'poll' && Array.isArray(post.pollOptions) && (() => {
+                const opts = post.pollOptions as Array<{text: string; votes: number}>;
+                const total = opts.reduce((s, o) => s + (o.votes || 0), 0);
+                const ended = post.pollEndsAt && new Date(post.pollEndsAt) < new Date();
+                const myVoteIdx = post.pollVotes?.find((v: any) => v.userId === currentUserId)?.optionIndex;
+                return (
+                  <div className="space-y-2 mb-2">
+                    {opts.map((opt, idx) => {
+                      const pct = total > 0 ? Math.round((opt.votes / total) * 100) : 0;
+                      const isMyVote = myVoteIdx === idx;
+                      return (
+                        <button key={idx} type="button"
+                          disabled={ended || voteMut.isPending}
+                          onClick={() => voteMut.mutate(idx)}
+                          className="w-full relative overflow-hidden bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/50 rounded-xl px-3 py-2 text-left transition-all disabled:cursor-default disabled:opacity-80">
+                          <div className="absolute inset-0 bg-cyan-500/15" style={{ width: `${pct}%` }} />
+                          <div className="relative flex items-center justify-between gap-3">
+                            <span className="text-sm text-white font-medium flex items-center gap-2">
+                              {isMyVote && <Check size={12} className="text-cyan-400" />}
+                              {opt.text}
+                            </span>
+                            <span className="text-xs text-slate-400 flex-shrink-0">{pct}% · {opt.votes}</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                    <p className="text-[11px] text-slate-500">
+                      {total} {total === 1 ? 'голос' : (total > 1 && total < 5 ? 'голоса' : 'голосов')}
+                      {ended ? ' · опрос завершён' : post.pollEndsAt ? ` · до ${new Date(post.pollEndsAt).toLocaleDateString('ru-RU')}` : ''}
+                    </p>
+                  </div>
+                );
+              })()}
               {post.content && (
                 <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
                   {isLongContent && !expanded ? post.content.slice(0, 280) + '…' : post.content}
@@ -410,6 +444,7 @@ const POST_TYPE_META: Record<string, { label: string; icon: any; accent: string;
   task:       { label: 'Задача',            icon: CheckSquare, accent: 'border-l-2 border-emerald-500/60',           badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
   offer:      { label: 'Предложение',       icon: Lightbulb,   accent: 'border-l-2 border-orange-500/60',            badge: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
   employment: { label: 'Апдейт занятости', icon: Zap,         accent: 'border-l-2 border-amber-400/60',             badge: 'bg-amber-400/10 text-amber-400 border-amber-400/20' },
+  poll:       { label: 'Опрос',             icon: BarChart3,   accent: 'border-l-2 border-cyan-500/60',              badge: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' },
 };
 
 // ─── Post Type Picker ──────────────────────────────────────────────────────────
@@ -422,6 +457,7 @@ const POST_TYPE_OPTIONS = [
   { type: 'offer',      label: 'Предложение',        icon: Lightbulb,   desc: 'В разработке',        inDev: true },
   { type: 'service',    label: 'Услуга',             icon: Wrench,      desc: 'Свободная форма',     inDev: false },
   { type: 'employment', label: 'Апдейт занятости',  icon: Zap,         desc: 'Обновить статус',     inDev: false },
+  { type: 'poll',       label: 'Опрос',              icon: BarChart3,   desc: 'Голосование',         inDev: false },
 ];
 
 function PostTypePicker({ onClose }: { onClose: () => void }) {

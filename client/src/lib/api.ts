@@ -172,8 +172,10 @@ export const referenceAPI = {
 export const postAPI = {
   getFeed: (params?: { limit?: number; offset?: number; type?: string }) =>
     api.get('/posts/feed', { params }),
-  createPost: (data: { content: string; type?: string; imageUrl?: string; audioUrl?: string; audioName?: string; channelId?: string | null }) =>
+  createPost: (data: { content: string; type?: string; imageUrl?: string; audioUrl?: string; audioName?: string; channelId?: string | null; employmentStatus?: string; pollOptions?: string[]; pollEndsAt?: string }) =>
     api.post('/posts', data),
+  votePoll: (postId: string, optionIndex: number) =>
+    api.post(`/posts/${postId}/vote`, { optionIndex }),
   uploadMedia: (formData: FormData) =>
     api.post('/posts/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   likePost: (postId: string) => api.post(`/posts/${postId}/like`),
@@ -406,6 +408,7 @@ export const dealAPI = {
   create: (data: {
     title: string; executorId: string; serviceId?: string; userServiceId?: string;
     price?: number; deadline?: string; acceptDeadline?: string; revisionCount?: number; result?: string;
+    dealType?: 'process' | 'event'; eventDate?: string; deposit?: number;
   }) => api.post('/deals', data),
   accept: (id: string) => api.patch(`/deals/${id}/accept`),
   reject: (id: string, reason?: string) => api.patch(`/deals/${id}/reject`, { reason }),
@@ -414,6 +417,11 @@ export const dealAPI = {
   submit: (id: string) => api.patch(`/deals/${id}/submit`),
   approve: (id: string) => api.patch(`/deals/${id}/approve`),
   revision: (id: string, comment?: string) => api.patch(`/deals/${id}/revision`, { comment }),
+  confirm: (id: string) => api.patch(`/deals/${id}/confirm`),
+  requestEdit: (id: string, data: { deadline?: string; acceptDeadline?: string; revisionCount?: number }) =>
+    api.post(`/deals/${id}/edit-request`, data),
+  acceptEdit: (reqId: string) => api.patch(`/deals/edit-request/${reqId}/accept`),
+  rejectEdit: (reqId: string) => api.patch(`/deals/edit-request/${reqId}/reject`),
 };
 
 export const referralAPI = {

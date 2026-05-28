@@ -798,10 +798,10 @@ router.patch('/user-services/:id/approve', async (req, res) => {
       const notif = await prisma.notification.create({
         data: {
           userId: us.userId,
-          type: 'service_approved',
+          type: 'service_approved_ready_to_post',
           title: 'Услуга опубликована',
           body: `Ваша услуга «${us.service.name}» прошла модерацию и теперь видна в каталоге`,
-          link: `/services/${us.id}`,
+          link: `/services/${us.id}?showPostDialog=1`,
         },
       });
       const { emitToUser } = await import('../socket');

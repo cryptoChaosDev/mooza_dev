@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Briefcase, DollarSign, MapPin, MessageCircle,
-  Archive, ArchiveRestore, Trash2, Loader2, HandshakeIcon, Send, Pencil, X, Plus,
+  Archive, ArchiveRestore, Trash2, Loader2, HandshakeIcon, Send, Pencil, X, Plus, Check,
 } from 'lucide-react';
 import { userAPI, messageAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
@@ -28,6 +28,8 @@ const STATUS_COLOR: Record<string, string> = {
 export default function ServicePage() {
   const { serviceId } = useParams<{ serviceId: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const showPostDialog = searchParams.get('showPostDialog') === '1';
   const me = useAuthStore(s => s.user);
   const queryClient = useQueryClient();
 
@@ -42,6 +44,7 @@ export default function ServicePage() {
   const [editDeadlineTo, setEditDeadlineTo] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [editPriceItems, setEditPriceItems] = useState<Array<{name: string; price: string}>>([]);
+  const [postDialogOpen, setPostDialogOpen] = useState(false);
 
   const { data: us, isLoading } = useQuery({
     queryKey: ['user-service', serviceId],
@@ -85,6 +88,12 @@ export default function ServicePage() {
   const inquireMut = useMutation({
     mutationFn: () => userAPI.inquireService(serviceId!),
   });
+
+  useEffect(() => {
+    if (showPostDialog && us?.status === 'active') {
+      setPostDialogOpen(true);
+    }
+  }, [showPostDialog, us?.status]);
 
   const handleWrite = async () => {
     if (!us?.user?.id || writingMessage) return;
@@ -475,6 +484,34 @@ export default function ServicePage() {
               >
                 {editMut.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
                 Сохранить
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {postDialogOpen && createPortal(
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setPostDialogOpen(false)} />
+          <div className="relative w-full sm:max-w-sm bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
+            <div className="px-5 pt-6 pb-4 text-center border-b border-slate-800">
+              <div className="w-14 h-14 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center mx-auto mb-3">
+                <Check size={28} className="text-emerald-400" />
+              </div>
+              <h3 className="text-lg font-bold text-white mb-1">Услуга опубликована</h3>
+              <p className="text-sm text-slate-400">Поделитесь ею в Потоке, чтобы получить заказы быстрее</p>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              <button
+                onClick={() => navigate(`/create-post?type=service&serviceId=${us.id}`)}
+                className="w-full py-3 bg-primary-600 hover:bg-primary-500 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-colors"
+              >
+                <Send size={15} />Опубликовать в Поток
+              </button>
+              <button onClick={() => setPostDialogOpen(false)}
+                className="w-full py-2.5 text-sm text-slate-400 hover:text-white transition-colors">
+                Не сейчас
               </button>
             </div>
           </div>

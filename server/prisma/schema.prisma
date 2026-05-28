@@ -440,6 +440,7 @@ model User {
   // Relationships
   posts        Post[]
   likes        Like[]
+  pollVotes    PollVote[]
   comments     Comment[]
   postReactions    PostReaction[]
   commentReactions CommentReaction[]
@@ -466,6 +467,7 @@ model User {
 
   dealsAsCustomer Deal[] @relation("DealCustomer")
   dealsAsExecutor Deal[] @relation("DealExecutor")
+  dealEditRequests DealEditRequest[] @relation("DealEditRequester")
 
   occupancyStatus  String?  // 'closed' | 'considering' | 'open'
 
@@ -513,7 +515,9 @@ model Deal {
   id             String    @id @default(uuid())
   title          String
   status         String    @default("PENDING")
-  // PENDING | AWAITING_PAYMENT | IN_PROGRESS | REVIEW | REVISION | COMPLETED | CANCELLED
+  // Type A: PENDING | AWAITING_PAYMENT | IN_PROGRESS | REVIEW | REVISION | COMPLETED | CANCELLED
+  // Type B: PENDING | AWAITING_PAYMENT | AWAITING_EVENT | AWAITING_CONFIRMATION | COMPLETED | CANCELLED
+  dealType       String    @default("process")  // 'process' | 'event'
   customerId     String
   executorId     String
   serviceId      String?
@@ -525,12 +529,15 @@ model Deal {
   revisionsUsed  Int       @default(0)
   result         String?
   cancelReason   String?
+  eventDate      DateTime?
+  deposit        Float?
 
   customer    User         @relation("DealCustomer",  fields: [customerId],   references: [id], onDelete: Cascade)
   executor    User         @relation("DealExecutor",  fields: [executorId],   references: [id], onDelete: Cascade)
   service     Service?     @relation(fields: [serviceId],    references: [id], onDelete: SetNull)
   userService UserService? @relation(fields: [userServiceId], references: [id], onDelete: SetNull)
   reviews     Review[]
+  editRequests DealEditRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -538,6 +545,22 @@ model Deal {
   @@index([customerId])
   @@index([executorId])
   @@index([status])
+}
+
+model DealEditRequest {
+  id          String   @id @default(uuid())
+  dealId      String
+  requesterId String
+  status      String   @default("PENDING")  // PENDING | APPROVED | REJECTED
+  changes     Json     // {deadline?, acceptDeadline?, revisionCount?}
+
+  deal      Deal @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  requester User @relation("DealEditRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([dealId])
 }
 
 model SiteSetting {
@@ -634,6 +657,9 @@ model Post {
   audioUrl  String?
   audioName String?
 
+  pollOptions Json?
+  pollEndsAt  DateTime?
+
   author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId String
 
@@ -643,6 +669,7 @@ model Post {
   likes     Like[]
   comments  Comment[]
   reactions PostReaction[]
+  pollVotes PollVote[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -651,6 +678,21 @@ model Post {
   @@index([createdAt])
   @@index([authorId, createdAt])
   @@index([channelId])
+}
+
+model PollVote {
+  id          String   @id @default(uuid())
+  postId      String
+  userId      String
+  optionIndex Int
+
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([postId, userId])
+  @@index([postId])
 }
 
 model Like {

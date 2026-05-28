@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Image, Smile, Send, X, Loader2,
-  FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench, Plus, Zap,
+  FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench, Plus, Zap, BarChart3,
 } from 'lucide-react';
 import { postAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
@@ -19,6 +19,7 @@ const POST_TYPES: Record<string, { label: string; icon: React.FC<any>; placehold
   offer:      { label: 'Предложение',       icon: Lightbulb,   placeholder: 'Что вы предлагаете?',   inDev: true },
   service:    { label: 'Услуга',            icon: Wrench,      placeholder: 'Опишите услугу...',      inDev: false },
   employment: { label: 'Апдейт занятости', icon: Zap,         placeholder: 'Расскажите об изменении статуса...', inDev: false },
+  poll:       { label: 'Опрос',             icon: BarChart3,   placeholder: 'Контекст опроса (необязательно)...', inDev: false },
 };
 
 export default function CreatePostPage() {
@@ -38,6 +39,8 @@ export default function CreatePostPage() {
   const [pickedServices, setPickedServices] = useState<PickedService[]>([]);
   const [showServicePicker, setShowServicePicker] = useState(false);
   const [employmentStatus, setEmploymentStatus] = useState('');
+  const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
+  const [pollDuration, setPollDuration] = useState('7');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   // Autosave draft
@@ -102,7 +105,15 @@ export default function CreatePostPage() {
 
   const isService = type === 'service';
   const isEmployment = type === 'employment';
-  const canPost = (content.trim() || imagePreview || (isService && pickedServices.length > 0) || (isEmployment && !!employmentStatus)) && !uploading;
+  const isPoll = type === 'poll';
+  const validPollOptions = pollOptions.filter(o => o.trim());
+  const canPost = (
+    content.trim() ||
+    imagePreview ||
+    (isService && pickedServices.length > 0) ||
+    (isEmployment && !!employmentStatus) ||
+    (isPoll && validPollOptions.length >= 2)
+  ) && !uploading;
 
   const handlePublish = () => {
     if (!canPost) return;
@@ -118,6 +129,10 @@ export default function CreatePostPage() {
       type,
       imageUrl: imagePreview?.serverUrl,
       ...(isEmployment && employmentStatus ? { employmentStatus } : {}),
+      ...(isPoll ? {
+        pollOptions: validPollOptions,
+        pollEndsAt: new Date(Date.now() + Number(pollDuration) * 24 * 60 * 60 * 1000).toISOString(),
+      } : {}),
     });
   };
 
@@ -257,6 +272,49 @@ export default function CreatePostPage() {
                 ))}
               </div>
               <p className="text-[10px] text-slate-600">При публикации статус в профиле обновится автоматически.</p>
+            </div>
+          )}
+
+          {isPoll && (
+            <div className="mb-4 space-y-3">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Варианты ответа</p>
+              <div className="space-y-2">
+                {pollOptions.map((opt, idx) => (
+                  <div key={idx} className="flex gap-2 items-center">
+                    <input
+                      type="text" maxLength={80}
+                      placeholder={`Вариант ${idx + 1}`}
+                      value={opt}
+                      onChange={e => setPollOptions(prev => prev.map((x, i) => i === idx ? e.target.value : x))}
+                      className="flex-1 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    />
+                    {pollOptions.length > 2 && (
+                      <button type="button" onClick={() => setPollOptions(prev => prev.filter((_, i) => i !== idx))}
+                        className="text-slate-500 hover:text-red-400 transition-colors flex-shrink-0">
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {pollOptions.length < 10 && (
+                  <button type="button" onClick={() => setPollOptions(prev => [...prev, ''])}
+                    className="flex items-center gap-1.5 text-xs text-primary-400 hover:text-primary-300 transition-colors">
+                    <Plus size={12} />Добавить вариант
+                  </button>
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Длительность опроса</p>
+                <div className="flex gap-2 flex-wrap">
+                  {['1', '3', '7', '14', '30'].map(d => (
+                    <button key={d} type="button"
+                      onClick={() => setPollDuration(d)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${pollDuration === d ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white'}`}>
+                      {d} {d === '1' ? 'день' : (['3','4'].includes(d) ? 'дня' : 'дней')}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           )}
 
