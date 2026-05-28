@@ -189,7 +189,8 @@ router.get('/services/search', async (req, res) => {
       const dir = s.directions[0];
       if (!dir) continue;
       seen.add(s.id);
-      const firstProf = dir.professions[0];
+      // Prefer profession with same name as service (catalog match), fallback to first
+      const firstProf = dir.professions.find((p: any) => p.name === s.name) ?? dir.professions[0];
       results.push({
         serviceId: s.id, serviceName: s.name,
         professionId: firstProf?.id ?? '', professionName: firstProf?.name ?? '',
