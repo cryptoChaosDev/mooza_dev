@@ -189,13 +189,12 @@ router.get('/services/search', async (req, res) => {
       const dir = s.directions[0];
       if (!dir) continue;
       seen.add(s.id);
-      // Prefer profession with same name as service that has catalog filters, fallback to first
-      const profByName = dir.professions.find((p: any) => p.name === s.name);
-      // Also check cross-direction: find catalog profession matching service name
+      // Find catalog profession by name (one with custom filters from catalog import)
       const catalogProf = await prisma.profession.findFirst({
-        where: { name: s.name, customFilters: { some: { professionId: { not: null } } } },
+        where: { name: s.name, customFilters: { some: {} } },
         select: { id: true, name: true },
       });
+      const profByName = dir.professions.find((p: any) => p.name === s.name);
       const firstProf = catalogProf ?? profByName ?? dir.professions[0];
       results.push({
         serviceId: s.id, serviceName: s.name,
