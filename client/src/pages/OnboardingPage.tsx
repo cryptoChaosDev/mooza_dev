@@ -1,6 +1,8 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ArrowLeft, X } from 'lucide-react';
+import { userAPI } from '../lib/api';
+import { useAuthStore } from '../stores/authStore';
 
 interface Slide {
   emoji: string;
@@ -106,6 +108,7 @@ const TOUR_KEY = 'mooza_tour_done';
 
 export default function OnboardingPage() {
   const navigate = useNavigate();
+  const { user, setUser } = useAuthStore();
   const [current, setCurrent] = useState(0);
   const startX = useRef<number | null>(null);
 
@@ -114,6 +117,11 @@ export default function OnboardingPage() {
 
   const finish = () => {
     localStorage.setItem(TOUR_KEY, '1');
+    if (user && !user.onboardingCompletedAt) {
+      userAPI.completeOnboarding()
+        .then(({ data }) => setUser({ ...user, onboardingCompletedAt: data.onboardingCompletedAt }))
+        .catch(() => {});
+    }
     navigate('/');
   };
 

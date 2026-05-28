@@ -106,8 +106,9 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
         }
       }
 
-      // Show onboarding on first login
-      const tourDone = localStorage.getItem('mooza_tour_done');
+      // Show onboarding on first login — server-side flag wins, localStorage is fallback
+      const tourDone = data.user.onboardingCompletedAt || localStorage.getItem('mooza_tour_done');
+      if (tourDone) localStorage.setItem('mooza_tour_done', '1');
       navigate(tourDone ? '/' : '/onboarding');
     } catch (err: any) {
       const errData = err.response?.data;

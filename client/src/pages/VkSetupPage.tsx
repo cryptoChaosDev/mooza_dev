@@ -35,6 +35,11 @@ export default function VkSetupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Skip onboarding if user already completed it (server-side flag or local fallback)
+  const nextAfterSetup = (user?.onboardingCompletedAt || localStorage.getItem('mooza_tour_done'))
+    ? '/'
+    : '/onboarding';
+
   // Step 0: Name
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
@@ -129,7 +134,7 @@ export default function VkSetupPage() {
   };
 
   const saveProfessions = async () => {
-    if (selectedProfs.length === 0) { navigate('/onboarding'); return; }
+    if (selectedProfs.length === 0) { navigate(nextAfterSetup); return; }
     setLoading(true);
     try {
       const { data } = await userAPI.updateMe({
@@ -137,7 +142,7 @@ export default function VkSetupPage() {
       });
       setUser(data);
     } catch { /* ignore */ }
-    finally { navigate('/onboarding'); }
+    finally { navigate(nextAfterSetup); }
   };
 
   // Step 0 — Name / Nickname
@@ -284,7 +289,7 @@ export default function VkSetupPage() {
             {loading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
             Сохранить
           </button>
-          <button onClick={() => navigate('/onboarding')} className="w-full py-3 text-sm text-slate-500 hover:text-slate-300 transition-colors">
+          <button onClick={() => navigate(nextAfterSetup)} className="w-full py-3 text-sm text-slate-500 hover:text-slate-300 transition-colors">
             Пропустить
           </button>
         </div>
