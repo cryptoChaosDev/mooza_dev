@@ -11,7 +11,7 @@ interface CatalogEntry {
 }
 
 async function main() {
-  const catalogPath = path.join(__dirname, '../../../../muza_catalog.json');
+  const catalogPath = path.join(__dirname, 'muza_catalog.json');
   const catalog: CatalogEntry[] = JSON.parse(fs.readFileSync(catalogPath, 'utf-8'));
 
   // Collect unique group names
