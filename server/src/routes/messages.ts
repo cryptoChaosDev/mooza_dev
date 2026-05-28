@@ -187,8 +187,7 @@ router.get('/resolve/:id', authenticate, async (req: AuthRequest, res) => {
     });
     if (!otherUser) return res.status(404).json({ error: 'Not found' });
 
-    const { conv, forbidden } = await findOrCreateDM(userId, otherUser.id);
-    if (forbidden) return res.status(403).json({ error: 'Сначала добавьте пользователя в друзья' });
+    const { conv } = await findOrCreateDM(userId, otherUser.id);
     res.json({ conversationId: conv.id, conversation: conv });
   } catch (error) {
     console.error('Resolve error:', error);
@@ -793,8 +792,7 @@ router.get('/:userId', authenticate, async (req: AuthRequest, res) => {
     const otherUser = await prisma.user.findUnique({ where: { id: otherId }, select: { id: true } });
     if (!otherUser) return res.status(404).json({ error: 'User not found' });
 
-    const { conv, forbidden } = await findOrCreateDM(currentUserId, otherId);
-    if (forbidden) return res.status(403).json({ error: 'Сначала добавьте пользователя в друзья' });
+    const { conv } = await findOrCreateDM(currentUserId, otherId);
     res.json({ conversationId: conv.id });
   } catch (error) {
     console.error('Legacy get messages error:', error);

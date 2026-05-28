@@ -334,7 +334,7 @@ export default function SearchPage() {
   };
 
   const handleNavigateToArtist = (id: string) => {
-    navigate(`/groups/${id}`, { state: { from: location.pathname } });
+    navigate(`/artist/${id}`, { state: { from: location.pathname } });
   };
 
   // ── Breadcrumb ─────────────────────────────────────────────────────────────

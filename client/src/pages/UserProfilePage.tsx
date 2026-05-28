@@ -127,15 +127,24 @@ export default function UserProfilePage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
   });
   const cancelFriendMut = useMutation({
-    mutationFn: () => friendshipAPI.rejectRequest(user?.friendshipId!),
+    mutationFn: () => {
+      if (!user?.friendshipId) throw new Error('No friendshipId');
+      return friendshipAPI.rejectRequest(user.friendshipId);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
   });
   const acceptFriendMut = useMutation({
-    mutationFn: () => friendshipAPI.acceptRequest(user?.friendshipId!),
+    mutationFn: () => {
+      if (!user?.friendshipId) throw new Error('No friendshipId');
+      return friendshipAPI.acceptRequest(user.friendshipId);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
   });
   const removeFriendMut = useMutation({
-    mutationFn: () => friendshipAPI.removeFriend(user?.friendshipId!),
+    mutationFn: () => {
+      if (!user?.friendshipId) throw new Error('No friendshipId');
+      return friendshipAPI.removeFriend(user.friendshipId);
+    },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
   });
 

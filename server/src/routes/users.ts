@@ -352,28 +352,29 @@ router.put('/me/services', authenticate, async (req: AuthRequest, res) => {
 
     const toConnect = (ids: string[] = []) => ids.map((id) => ({ id }));
 
-    // Delete all existing user services and recreate
-    await prisma.userService.deleteMany({ where: { userId: req.userId } });
-
-    for (const us of services) {
-      await prisma.userService.create({
-        data: {
-          userId: req.userId!,
-          professionId: us.professionId,
-          serviceId: us.serviceId,
-          genres:          { connect: toConnect(us.genreIds) },
-          workFormats:     { connect: toConnect(us.workFormatIds) },
-          employmentTypes: { connect: toConnect(us.employmentTypeIds) },
-          skillLevels:     { connect: toConnect(us.skillLevelIds) },
-          availabilities:  { connect: toConnect(us.availabilityIds) },
-          geographies:                 { connect: toConnect(us.geographyIds) },
-          priceFrom:                   us.priceFrom ?? null,
-          priceTo:                     us.priceTo ?? null,
-          description:                 (us as any).description ?? null,
-          selectedCustomFilterValues:  { connect: toConnect(us.customFilterValueIds) },
-        },
-      });
-    }
+    // Delete and recreate in a transaction to prevent data loss on error
+    await prisma.$transaction(async (tx) => {
+      await tx.userService.deleteMany({ where: { userId: req.userId } });
+      for (const us of services) {
+        await tx.userService.create({
+          data: {
+            userId: req.userId!,
+            professionId: us.professionId,
+            serviceId: us.serviceId,
+            genres:          { connect: toConnect(us.genreIds) },
+            workFormats:     { connect: toConnect(us.workFormatIds) },
+            employmentTypes: { connect: toConnect(us.employmentTypeIds) },
+            skillLevels:     { connect: toConnect(us.skillLevelIds) },
+            availabilities:  { connect: toConnect(us.availabilityIds) },
+            geographies:                 { connect: toConnect(us.geographyIds) },
+            priceFrom:                   us.priceFrom ?? null,
+            priceTo:                     us.priceTo ?? null,
+            description:                 (us as any).description ?? null,
+            selectedCustomFilterValues:  { connect: toConnect(us.customFilterValueIds) },
+          },
+        });
+      }
+    });
 
     // Return updated user services
     const userServices = await prisma.userService.findMany({
