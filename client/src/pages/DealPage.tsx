@@ -3,9 +3,9 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Loader2, HandshakeIcon, CheckCheck, XCircle,
-  Clock, AlertCircle, Wrench, Send, Check, X,
+  Clock, AlertCircle, Wrench, Send, Check, X, Star,
 } from 'lucide-react';
-import { dealAPI } from '../lib/api';
+import { dealAPI, reviewAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import AvatarComponent from '../components/Avatar';
 
@@ -29,6 +29,10 @@ export default function DealPage() {
   const [showRevisionInput, setShowRevisionInput] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
   const [showCancelInput, setShowCancelInput] = useState(false);
+  const [showReview, setShowReview] = useState(false);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewSent, setReviewSent] = useState(false);
 
   const { data: deal, isLoading } = useQuery({
     queryKey: ['deal', dealId],
@@ -37,6 +41,17 @@ export default function DealPage() {
   });
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['deal', dealId] });
+
+  const reviewMut = useMutation({
+    mutationFn: () => reviewAPI.create({
+      targetId: partner?.id,
+      rating: reviewRating,
+      text: reviewText.trim() || undefined,
+      type: 'deal',
+      dealId: dealId!,
+    }),
+    onSuccess: () => { setReviewSent(true); qc.invalidateQueries({ queryKey: ['reviews', partner?.id] }); },
+  });
 
   const acceptMut  = useMutation({ mutationFn: () => dealAPI.accept(dealId!),  onSuccess: invalidate });
   const rejectMut  = useMutation({ mutationFn: (r: string) => dealAPI.reject(dealId!, r), onSuccess: invalidate });
@@ -155,6 +170,46 @@ export default function DealPage() {
             <p className="text-[11px] font-semibold text-red-400/70 uppercase tracking-wide mb-1">Причина отмены</p>
             <p className="text-sm text-slate-300">{deal.cancelReason}</p>
           </div>
+        )}
+
+        {/* Review block — shown when COMPLETED */}
+        {deal.status === 'COMPLETED' && (
+          reviewSent ? (
+            <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-4 py-3">
+              <Check size={15} />Оценка отправлена
+            </div>
+          ) : showReview ? (
+            <div className="space-y-3 border border-amber-500/20 bg-amber-500/5 rounded-2xl p-4">
+              <p className="text-sm font-semibold text-white">Оценить взаимодействие с {partner?.firstName}</p>
+              <div className="flex gap-1 flex-wrap">
+                {[1,2,3,4,5,6,7,8,9,10].map(i => (
+                  <button key={i} onClick={() => setReviewRating(i)} className="transition-transform hover:scale-110">
+                    <Star size={22} className={i <= reviewRating ? 'text-amber-400 fill-amber-400' : 'text-slate-600'} />
+                  </button>
+                ))}
+              </div>
+              {reviewRating > 0 && (
+                <p className="text-xs text-amber-400/80 font-medium">
+                  {reviewRating} — {({10:'Восхитительно',9:'Отлично',8:'Очень хорошо',7:'Хорошо',6:'Приемлемо',5:'Посредственно',4:'Ниже среднего',3:'Плохо',2:'Очень плохо',1:'Ужасно'} as Record<number,string>)[reviewRating]}
+                </p>
+              )}
+              <textarea value={reviewText} onChange={e => setReviewText(e.target.value)}
+                placeholder="Комментарий (необязательно)..." rows={3}
+                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none" />
+              <div className="flex gap-2">
+                <button onClick={() => setShowReview(false)} className="flex-1 py-2 text-sm text-slate-400 border border-slate-700 rounded-xl hover:text-white transition-colors">Отмена</button>
+                <button onClick={() => reviewMut.mutate()} disabled={reviewRating === 0 || reviewMut.isPending}
+                  className="flex-1 py-2 text-sm bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-white font-semibold rounded-xl flex items-center justify-center gap-1.5">
+                  {reviewMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Star size={13} />}Отправить
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button onClick={() => setShowReview(true)}
+              className="w-full py-3 flex items-center justify-center gap-2 text-sm font-medium bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-400 rounded-2xl transition-colors">
+              <Star size={15} />Оценить взаимодействие
+            </button>
+          )
         )}
 
         {/* Actions */}

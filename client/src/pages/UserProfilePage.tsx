@@ -114,6 +114,7 @@ export default function UserProfilePage() {
     enabled: !!userId && !!me && me.id !== userId,
   });
 
+
   const addFavMut = useMutation({
     mutationFn: () => favoriteAPI.add(userId!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['favorite-status', userId] }),
@@ -390,10 +391,10 @@ export default function UserProfilePage() {
               <span className="text-sm font-bold text-white">{userConnections.length}</span>
               <span className="text-[9px] text-slate-500">Связи</span>
             </button>
-            <button disabled className="flex flex-col items-center py-1.5 px-1 pointer-events-none opacity-40">
-              <span className="text-sm font-bold text-white">0</span>
+            <div className="flex flex-col items-center py-1.5 px-1">
+              <span className="text-sm font-bold text-white">{user.dealsCount ?? 0}</span>
               <span className="text-[9px] text-slate-500">Сделки</span>
-            </button>
+            </div>
           </div>
 
           <div className="space-y-3">

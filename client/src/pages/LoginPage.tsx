@@ -106,7 +106,9 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
         }
       }
 
-      navigate('/');
+      // Show onboarding on first login
+      const tourDone = localStorage.getItem('mooza_tour_done');
+      navigate(tourDone ? '/' : '/onboarding');
     } catch (err: any) {
       const errData = err.response?.data;
       if (errData?.error === 'EMAIL_NOT_VERIFIED' && errData?.email) {

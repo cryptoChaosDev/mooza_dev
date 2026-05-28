@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Link2, Check, Clock, CheckCheck, Loader2, XCircle, Star } from 'lucide-react';
+import { X, Link2, Check, Clock, CheckCheck, Loader2, XCircle, Star, HandshakeIcon } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { connectionAPI, reviewAPI } from '../lib/api';
 import AvatarComponent from './Avatar';
 import { useNavigate } from 'react-router-dom';
+import DealCreateModal from './DealCreateModal';
 
 interface Connection {
   id: string;
@@ -57,6 +58,7 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
   const { partner, services, profession, status, iAmRequester, myRole, partnerRole, needsDeal, breakRequestedBy, breakReasonRequester } = connection;
 
   const [showReview, setShowReview] = useState(false);
+  const [showDeal, setShowDeal] = useState(false);
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
   const [reviewSent, setReviewSent] = useState(false);
@@ -119,7 +121,16 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
   };
   const sl = statusLabel();
 
-  return createPortal(
+  return (
+    <>
+      {showDeal && (
+        <DealCreateModal
+          executorId={iAmRequester ? partner.id : partner.id}
+          executorName={`${partner.firstName} ${partner.lastName}`}
+          onClose={() => setShowDeal(false)}
+        />
+      )}
+      {createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
       <div className="relative w-full sm:max-w-sm bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
@@ -293,11 +304,14 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
             </>
           )}
 
-          {/* ACCEPTED → close + review */}
+          {/* ACCEPTED → close + deal + review */}
           {status === 'ACCEPTED' && !showReview && (
             <>
-              <button onClick={onClose} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
-                Закрыть
+              <button
+                onClick={() => setShowDeal(true)}
+                className="flex-1 py-2.5 bg-primary-600/20 hover:bg-primary-600/30 border border-primary-500/30 text-primary-300 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
+              >
+                <HandshakeIcon size={14} />Сделка
               </button>
               <button
                 onClick={() => setShowReview(true)}
@@ -325,5 +339,7 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
       </div>
     </div>,
     document.body
+      )}
+    </>
   );
 }

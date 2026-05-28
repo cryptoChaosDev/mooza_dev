@@ -704,11 +704,19 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
           ? 'pending_sent'
           : 'pending_received';
 
+    const dealsCount = await prisma.deal.count({
+      where: {
+        status: 'COMPLETED',
+        OR: [{ customerId: req.params.id }, { executorId: req.params.id }],
+      },
+    });
+
     res.json({
       ...user,
       isFriend: friendshipStatus === 'accepted',
       friendshipId: friendship?.id ?? null,
       friendshipStatus,
+      dealsCount,
     });
   } catch (error) {
     console.error('Get user by ID error:', error);

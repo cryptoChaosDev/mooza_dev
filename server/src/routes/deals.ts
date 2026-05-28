@@ -142,9 +142,32 @@ router.patch('/:id/pay', authenticate, async (req: AuthRequest, res) => {
     if (!deal || deal.customerId !== meId) return res.status(403).json({ error: 'Forbidden' });
     if (deal.status !== 'AWAITING_PAYMENT') return res.status(400).json({ error: 'Invalid status' });
     const updated = await prisma.deal.update({ where: { id: deal.id }, data: { status: 'IN_PROGRESS' }, include: DEAL_INCLUDE });
+
+    // Auto-create/find DM and set type='business' for both parties
+    try {
+      const all = await prisma.conversation.findMany({
+        where: { isGroup: false },
+        include: { members: true },
+      });
+      let conv = all.find((c: any) => {
+        const ids = c.members.map((m: any) => m.userId);
+        return ids.includes(meId) && ids.includes(deal.executorId) && ids.length === 2;
+      });
+      if (!conv) {
+        conv = await prisma.conversation.create({
+          data: { isGroup: false, members: { create: [{ userId: meId }, { userId: deal.executorId }] } },
+          include: { members: true },
+        });
+      }
+      await prisma.conversationMember.updateMany({
+        where: { conversationId: conv.id },
+        data: { type: 'business' },
+      });
+    } catch {}
+
     await notify(deal.executorId, meId, 'deal_paid',
       'Сделка оплачена!',
-      `«${deal.title}» начата. Удачи!`, `/deals/${deal.id}`
+      `«${deal.title}» начата. Чат переведён в Деловые.`, `/deals/${deal.id}`
     );
     res.json(updated);
   } catch (e: any) { res.status(500).json({ error: e.message }); }

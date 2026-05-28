@@ -31,6 +31,7 @@ type ServiceView = 'fields' | 'directions' | 'professions';
 
 const ARTIST_TYPES = [
   { value: 'ALL', label: 'Все', icon: Music2 },
+  { value: 'SOLO', label: 'Соло', icon: Music2 },
   { value: 'GROUP', label: 'Группы', icon: Users },
   { value: 'COVER_GROUP', label: 'Кавербэнды', icon: BookOpen },
 ];
