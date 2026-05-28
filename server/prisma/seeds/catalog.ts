@@ -43,17 +43,15 @@ async function main() {
     const entries = catalog.filter((x) => x.group === groupName);
 
     for (const entry of entries) {
-      // Create Profession (upsert by name + directionId)
-      const profession = await prisma.profession.upsert({
-        where: {
-          name_directionId: {
-            name: entry.profession,
-            directionId: direction.id,
-          },
-        },
-        create: { name: entry.profession, directionId: direction.id },
-        update: {},
+      // Find or create Profession (no unique constraint on name+directionId)
+      let profession = await prisma.profession.findFirst({
+        where: { name: entry.profession, directionId: direction.id },
       });
+      if (!profession) {
+        profession = await prisma.profession.create({
+          data: { name: entry.profession, directionId: direction.id },
+        });
+      }
 
       // Create CustomFilters for this profession
       for (const filter of entry.filters) {

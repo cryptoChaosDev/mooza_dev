@@ -50,7 +50,6 @@ model Profession {
 
   createdAt DateTime @default(now())
 
-  @@unique([name, directionId])
   @@index([directionId])
 }
 
