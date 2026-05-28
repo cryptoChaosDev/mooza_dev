@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
+import { tgEvent } from '../utils/telegram';
 
 const router = Router();
 
@@ -55,6 +56,10 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
       },
       include: reviewInclude,
     });
+    try {
+      const target = await prisma.user.findUnique({ where: { id: targetId }, select: { firstName: true, lastName: true } });
+      tgEvent.review(`${review.author.firstName} ${review.author.lastName}`, `${target?.firstName} ${target?.lastName}`, Number(rating));
+    } catch {}
     res.json(review);
   } catch (e: any) {
     res.status(400).json({ error: e.message });

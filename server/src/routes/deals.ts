@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser } from '../socket';
+import { tgEvent } from '../utils/telegram';
 
 const router = Router();
 
@@ -85,11 +86,13 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     });
 
     const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
+    const ex = await prisma.user.findUnique({ where: { id: executorId }, select: { firstName: true, lastName: true } });
     await notify(executorId, meId, 'deal_created',
       `${me?.firstName} ${me?.lastName} создал(а) сделку`,
       `«${title}». Ознакомьтесь с условиями и примите или отклоните.`,
       `/deals/${deal.id}`
     );
+    tgEvent.deal('создана', `${me?.firstName} ${me?.lastName}`, `${ex?.firstName} ${ex?.lastName}`, title, 'PENDING');
 
     res.status(201).json(deal);
   } catch (e: any) { res.status(500).json({ error: e.message }); }

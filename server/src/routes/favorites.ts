@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser } from '../socket';
+import { tgEvent } from '../utils/telegram';
 
 const router = Router();
 
@@ -56,6 +57,7 @@ router.post('/:targetId', authenticate, async (req: AuthRequest, res: Response) 
     if (!existing) {
       try {
         const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
+        const target = await prisma.user.findUnique({ where: { id: targetId }, select: { firstName: true, lastName: true } });
         const notification = await prisma.notification.create({
           data: {
             userId: targetId,
@@ -67,6 +69,7 @@ router.post('/:targetId', authenticate, async (req: AuthRequest, res: Response) 
           },
         });
         emitToUser(targetId, 'new_notification', notification);
+        tgEvent.favorite(`${me?.firstName} ${me?.lastName}`, `${target?.firstName} ${target?.lastName}`);
       } catch {}
     }
     return res.json({ id: fav.id });

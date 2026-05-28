@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { tgEvent } from '../utils/telegram';
 
 const router = Router();
 
@@ -78,6 +79,11 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         data: { status: 'actioned', resolution: 'Auto-block 24h (high risk score)', resolvedAt: new Date() },
       });
     }
+
+    try {
+      const reporterUser = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
+      tgEvent.complaint(`${reporterUser?.firstName} ${reporterUser?.lastName}`, targetType, category, riskScore);
+    } catch {}
 
     res.json({ ok: true, riskScore });
   } catch (e: any) {

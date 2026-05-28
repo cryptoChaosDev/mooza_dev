@@ -3,7 +3,7 @@ import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser, notifyUser } from '../socket';
 import { uploadPostMedia } from '../middleware/upload';
-import { tgLog } from '../utils/telegram';
+import { tgLog, tgEvent } from '../utils/telegram';
 
 const router = Router();
 
@@ -405,6 +405,14 @@ router.post('/:id/like', authenticate, async (req: AuthRequest, res) => {
         postId: req.params.id,
       }
     });
+
+    try {
+      const [liker, post] = await Promise.all([
+        prisma.user.findUnique({ where: { id: req.userId! }, select: { firstName: true, lastName: true } }),
+        prisma.post.findUnique({ where: { id: req.params.id }, include: { author: { select: { firstName: true, lastName: true } } } }),
+      ]);
+      tgEvent.postLike(`${liker?.firstName} ${liker?.lastName}`, `${post?.author.firstName} ${post?.author.lastName}`);
+    } catch {}
 
     res.status(201).json(like);
   } catch (error) {

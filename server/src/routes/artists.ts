@@ -4,6 +4,7 @@ import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/a
 import { uploadArtistAvatar, uploadArtistBanner } from '../middleware/upload';
 import { Prisma, ArtistType } from '@prisma/client';
 import crypto from 'crypto';
+import { tgEvent } from '../utils/telegram';
 
 const router = Router();
 
