@@ -62,7 +62,7 @@ export default function ConnectionPage() {
   // Try to get connections from location state (passed from FriendsPage for instant load)
   const stateData = (location.state as any) as { partner: any; connections: any[] } | null;
 
-  const { data: allConns = [] } = useQuery({
+  const { data: allConns = [], isLoading } = useQuery({
     queryKey: ['connections-all'],
     queryFn: async () => { const { data } = await connectionAPI.getAll(); return data as any[]; },
     enabled: !stateData, // skip if we have state data
@@ -76,6 +76,14 @@ export default function ConnectionPage() {
     ?? null;
 
   const partnerName = partner ? `${partner.firstName ?? ''} ${partner.lastName ?? ''}`.trim() : '…';
+
+  if (!stateData && isLoading) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-4 border-primary-500 border-t-transparent" />
+      </div>
+    );
+  }
   const isMe = !!(me); // we're always the viewer
 
   // Group connections by my role

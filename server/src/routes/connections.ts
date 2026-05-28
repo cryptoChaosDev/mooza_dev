@@ -57,6 +57,10 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(400).json({ error: 'Нельзя создать связь с собой' });
     }
 
+    const receiver = await prisma.user.findUnique({ where: { id: receiverId }, select: { isBlocked: true } });
+    if (!receiver) return res.status(404).json({ error: 'Пользователь не найден' });
+    if (receiver.isBlocked) return res.status(403).json({ error: 'Пользователь заблокирован' });
+
     // Block only if a PENDING connection already exists between this pair
     const existingPending = await prisma.connection.findFirst({
       where: {

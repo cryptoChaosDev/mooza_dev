@@ -277,6 +277,14 @@ function App() {
     };
     fetchCounts();
 
+    // ── Socket error → logout on auth failure ───────────────────────────────
+    socket.on('connect_error', (err: any) => {
+      const msg: string = err?.message ?? '';
+      if (msg.includes('Unauthorized') || msg.includes('401') || msg.includes('TOKEN')) {
+        useAuthStore.getState().logout();
+      }
+    });
+
     // ── Socket handlers ─────────────────────────────────────────────────────
 
     socket.on('new_notification', (notif: any) => {
@@ -384,6 +392,7 @@ function App() {
     return () => {
       const s = getSocket();
       if (s) {
+        s.off('connect_error');
         s.off('new_notification');
         s.off('new_message');
         s.off('message_edited');
