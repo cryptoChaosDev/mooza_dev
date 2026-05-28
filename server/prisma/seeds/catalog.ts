@@ -35,7 +35,7 @@ async function main() {
           fieldOfActivityId: field.id,
         },
       },
-      create: { name: groupName, fieldOfActivityId: field.id },
+      create: { name: groupName, fieldOfActivityId: field.id, allowedFilterTypes: [] },
       update: {},
     });
 
