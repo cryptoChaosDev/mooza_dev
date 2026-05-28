@@ -8,9 +8,16 @@ router.get('/fields-of-activity', async (req, res) => {
   try {
     const { excludeUserId, all } = req.query;
 
-    // When all=true, return every field without user-count filtering
+    // When all=true, return only catalog groups (fields with catalog professions)
     if (all === 'true') {
-      const fields = await prisma.fieldOfActivity.findMany({ orderBy: { name: 'asc' } });
+      const fields = await prisma.fieldOfActivity.findMany({
+        where: {
+          directions: {
+            some: { professions: { some: { customFilters: { some: {} } } } },
+          },
+        },
+        orderBy: { name: 'asc' },
+      });
       return res.json(fields.map(f => ({ id: f.id, name: f.name, createdAt: f.createdAt, userCount: 0 })));
     }
 
@@ -59,8 +66,11 @@ router.get('/directions', async (req, res) => {
     const { fieldOfActivityId, excludeUserId, all } = req.query;
     const where: any = {};
     if (fieldOfActivityId) where.fieldOfActivityId = fieldOfActivityId as string;
-    // When all=true, skip user filter (used for connection modal to show all directions)
-    if (all !== 'true') {
+    if (all === 'true') {
+      // Only catalog directions (those with catalog professions)
+      where.professions = { some: { customFilters: { some: {} } } };
+    } else {
+      // Default: only directions with actual users
       const usFilter = excludeUserId
         ? { some: { userId: { not: excludeUserId as string } } }
         : { some: {} };
@@ -124,8 +134,11 @@ router.get('/professions', async (req, res) => {
   try {
     const { directionId, search, excludeUserId, all } = req.query;
     const where: any = {};
-    if (!all) {
-      // Filter to professions that have at least one user (for catalog/search)
+    if (all === 'true') {
+      // Only catalog professions (those with custom filters from catalog import)
+      where.customFilters = { some: {} };
+    } else {
+      // Default: only professions with actual users
       where.userServices = excludeUserId
         ? { some: { userId: { not: excludeUserId as string } } }
         : { some: {} };
@@ -168,44 +181,48 @@ router.get('/services/search', async (req, res) => {
   try {
     const q = (req.query.q as string)?.trim();
     if (!q || q.length < 1) return res.json([]);
-    const services = await prisma.service.findMany({
-      where: { name: { contains: q, mode: 'insensitive' } },
+
+    // Search ONLY catalog professions (those with custom filters from muza_catalog import)
+    const professions = await prisma.profession.findMany({
+      where: {
+        name: { contains: q, mode: 'insensitive' },
+        customFilters: { some: {} },
+      },
       include: {
-        directions: {
+        direction: {
           include: {
             fieldOfActivity: { select: { id: true, name: true } },
-            professions: { select: { id: true, name: true }, orderBy: { name: 'asc' } },
-            customFilters: { select: { id: true, name: true, values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } } } },
           },
         },
       },
-      take: 40,
-      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      take: 30,
+      orderBy: { name: 'asc' },
     });
-    const results: any[] = [];
-    const seen = new Set<string>();
-    for (const s of services) {
-      if (seen.has(s.id)) continue;
-      const dir = s.directions[0];
-      if (!dir) continue;
-      seen.add(s.id);
-      // Find catalog profession by name (one with custom filters from catalog import)
-      const catalogProf = await prisma.profession.findFirst({
-        where: { name: s.name, customFilters: { some: {} } },
-        select: { id: true, name: true },
+
+    const results = await Promise.all(professions.map(async (p: any) => {
+      // Find the corresponding service (created in seed with same name)
+      const service = await prisma.service.findFirst({
+        where: {
+          name: p.name,
+          directions: { some: { id: p.directionId } },
+        },
+        select: { id: true },
       });
-      const profByName = dir.professions.find((p: any) => p.name === s.name);
-      const firstProf = catalogProf ?? profByName ?? dir.professions[0];
-      results.push({
-        serviceId: s.id, serviceName: s.name,
-        professionId: firstProf?.id ?? '', professionName: firstProf?.name ?? '',
-        directionId: dir.id, directionName: dir.name,
-        fieldOfActivityId: dir.fieldOfActivity.id, fieldOfActivityName: dir.fieldOfActivity.name,
-        allowedFilterTypes: dir.allowedFilterTypes,
-        customFilters: dir.customFilters,
-      });
-    }
-    res.json(results.slice(0, 30));
+      return {
+        serviceId: service?.id ?? '',
+        serviceName: p.name,
+        professionId: p.id,
+        professionName: p.name,
+        directionId: p.direction?.id ?? '',
+        directionName: p.direction?.name ?? '',
+        fieldOfActivityId: p.direction?.fieldOfActivity?.id ?? '',
+        fieldOfActivityName: p.direction?.fieldOfActivity?.name ?? '',
+        allowedFilterTypes: [],
+        customFilters: [],
+      };
+    }));
+
+    res.json(results);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -218,12 +235,26 @@ router.get('/services', async (req, res) => {
       const dir = await prisma.direction.findUnique({
         where: { id: directionId as string },
         include: {
-          services: { orderBy: { sortOrder: 'asc' } },
+          services: { orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] },
           customFilters: { select: { id: true, name: true, values: { select: { id: true, value: true }, orderBy: { sortOrder: 'asc' } } } },
         },
       });
       if (!dir) return res.json([]);
-      return res.json(dir.services.map(s => ({
+
+      // Get catalog profession names in this direction
+      const catalogProfs = await prisma.profession.findMany({
+        where: { directionId: directionId as string, customFilters: { some: {} } },
+        select: { name: true },
+      });
+
+      let services = dir.services;
+      if (catalogProfs.length > 0) {
+        // Filter to only catalog services (those matching catalog profession names)
+        const catalogNames = new Set(catalogProfs.map((p: any) => p.name));
+        services = services.filter((s: any) => catalogNames.has(s.name));
+      }
+
+      return res.json(services.map((s: any) => ({
         id: s.id, name: s.name, sortOrder: s.sortOrder,
         allowedFilterTypes: dir.allowedFilterTypes,
         customFilters: dir.customFilters,

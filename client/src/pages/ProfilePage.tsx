@@ -561,9 +561,24 @@ export default function ProfilePage() {
               {addFlowProfessions.map((p: any) => (
                 <button key={p.id} type="button"
                   onClick={() => {
-                    setPending(prev => ({ ...emptyEntry(), fieldOfActivityId: prev.fieldOfActivityId, fieldOfActivityName: prev.fieldOfActivityName, professionId: p.id, professionName: p.name }));
-                    referenceAPI.getServices({ professionId: p.id }).then(r => setAddFlowServices(r.data));
-                    setAddStep('service');
+                    const base = { ...emptyEntry(), fieldOfActivityId: pending.fieldOfActivityId, fieldOfActivityName: pending.fieldOfActivityName, professionId: p.id, professionName: p.name };
+                    setPending(base);
+                    referenceAPI.getServices({ professionId: p.id }).then((r: any) => {
+                      const svcs: any[] = r.data || [];
+                      setAddFlowServices(svcs);
+                      // Auto-select when only one catalog service matches the profession
+                      const matchSvc = svcs.find((s: any) => s.name === p.name) ?? (svcs.length === 1 ? svcs[0] : null);
+                      if (matchSvc) {
+                        setPending(prev => ({ ...prev, serviceId: matchSvc.id, serviceName: matchSvc.name, allowedFilterTypes: [], serviceCustomFilters: [] }));
+                        // Load catalog filters for this profession
+                        referenceAPI.getProfessionFilters(p.id).then((fr: any) => {
+                          setPending(prev => ({ ...prev, professionFilters: fr.data || [] }));
+                        }).catch(() => {});
+                        setAddStep('filters');
+                      } else {
+                        setAddStep('service');
+                      }
+                    });
                   }}
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
                 >
