@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Loader2, HandshakeIcon, CheckCheck, XCircle,
-  Clock, AlertCircle, Wrench, Send, Check, X, Star,
+  Clock, AlertCircle, Wrench, Send, Check, X, Star, Copy,
 } from 'lucide-react';
 import { dealAPI, reviewAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
@@ -85,15 +85,26 @@ export default function DealPage() {
     <div className="min-h-screen bg-slate-950 pb-32">
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
 
-        {/* Back */}
+        {/* Back + duplicate */}
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all">
             <ArrowLeft size={20} />
           </button>
-          <div className="flex items-center gap-2">
-            <HandshakeIcon size={16} className="text-primary-400" />
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <HandshakeIcon size={16} className="text-primary-400 flex-shrink-0" />
             <h1 className="text-base font-bold text-white truncate">{deal.title}</h1>
           </div>
+          {/* Дублировать — открывает форму создания с заполненными полями */}
+          <button
+            onClick={() => {
+              const otherId = isCustomer ? deal.executorId : deal.customerId;
+              navigate('/deals', { state: { duplicate: { title: deal.title, executorId: otherId, price: deal.price, revisionCount: deal.revisionCount, result: deal.result } } });
+            }}
+            className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all flex-shrink-0"
+            title="Дублировать сделку"
+          >
+            <Copy size={16} />
+          </button>
         </div>
 
         {/* Status */}

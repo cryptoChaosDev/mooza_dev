@@ -9,7 +9,7 @@ import {
   Globe, DollarSign, Calendar,
   Headphones, Edit3, Plus, ChevronLeft, ChevronRight,
   FileText, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
-  Music2, Play, Pause, HandshakeIcon,
+  Music2, Play, Pause, HandshakeIcon, Eye,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConnectionCard from '../components/ConnectionCard';
@@ -818,6 +818,15 @@ export default function ProfilePage() {
               >
                 <Edit3 size={15} />{editingHero ? 'Закрыть' : 'Редактировать'}
               </button>
+              {profile?.id && (
+                <button
+                  onClick={() => navigate(`/profile/${profile.id}`)}
+                  className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
+                  title="Превью — как видят другие"
+                >
+                  <Eye size={16} />
+                </button>
+              )}
               {autoSaved && (
                 <span className="text-xs text-emerald-400 font-medium animate-pulse">✓ Сохранено</span>
               )}
@@ -934,6 +943,7 @@ export default function ProfilePage() {
             {editingBio ? (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-2">
                 <textarea value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} maxLength={100} rows={3} placeholder="Расскажите о себе..." className={`${inputCls} resize-none`} />
+                <p className="text-right text-[11px] text-slate-600">{formData.bio.length}/100</p>
                 <div className="flex gap-2">
                   <button onClick={() => setEditingBio(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
                   <button onClick={handleSaveBio} disabled={updateMutation.isPending} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">

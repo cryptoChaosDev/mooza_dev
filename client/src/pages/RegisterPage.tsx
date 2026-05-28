@@ -97,6 +97,8 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [agreedToPD, setAgreedToPD] = useState(false);
+  const [agreeMarketing, setAgreeMarketing] = useState(false);
 
   // Step 1
   const [firstName, setFirstName] = useState('');
@@ -360,6 +362,33 @@ export default function RegisterPage() {
             }
           />
         </Field>
+
+        {/* Checkboxes */}
+        <div className="space-y-3 pt-1">
+          <label className="flex items-start gap-3 cursor-pointer group">
+            <div className={`mt-0.5 w-5 h-5 rounded-md border-2 flex-shrink-0 flex items-center justify-center transition-all ${agreedToPD ? 'bg-primary-600 border-primary-600' : 'border-slate-600 group-hover:border-slate-500'}`}
+              onClick={() => setAgreedToPD(v => !v)}>
+              {agreedToPD && <svg width="11" height="9" viewBox="0 0 11 9" fill="none"><path d="M1 4L4 7L10 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+            </div>
+            <span className="text-xs text-slate-400 leading-relaxed">
+              Я даю согласие на обработку{' '}
+              <a href="/privacy" className="text-primary-400 hover:text-primary-300 underline" onClick={e => e.stopPropagation()}>персональных данных</a>
+              {' '}и принимаю{' '}
+              <a href="/terms" className="text-primary-400 hover:text-primary-300 underline" onClick={e => e.stopPropagation()}>пользовательское соглашение</a>
+              {' '}<span className="text-red-400">*</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-3 cursor-pointer group">
+            <div className={`mt-0.5 w-5 h-5 rounded-md border-2 flex-shrink-0 flex items-center justify-center transition-all ${agreeMarketing ? 'bg-primary-600 border-primary-600' : 'border-slate-600 group-hover:border-slate-500'}`}
+              onClick={() => setAgreeMarketing(v => !v)}>
+              {agreeMarketing && <svg width="11" height="9" viewBox="0 0 11 9" fill="none"><path d="M1 4L4 7L10 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
+            </div>
+            <span className="text-xs text-slate-500 leading-relaxed">
+              Я согласен получать рекламные рассылки и новости платформы
+            </span>
+          </label>
+          <p className="text-[11px] text-slate-600">Регистрация доступна с 16 лет. Финансовые операции — с 18 лет.</p>
+        </div>
       </div>
     );
 
@@ -485,7 +514,7 @@ export default function RegisterPage() {
   };
 
   // Button logic
-  const nextDisabled = step === 1 && !step1Valid;
+  const nextDisabled = (step === 0 && !agreedToPD) || (step === 1 && !step1Valid);
 
   // ── Layout ────────────────────────────────────────────────────────────────
   return (
@@ -564,12 +593,6 @@ export default function RegisterPage() {
             </button>
           )}
 
-          {step === 0 && (
-            <p className="text-center text-xs text-slate-600">
-              Регистрируясь, вы принимаете{' '}
-              <a href="/terms" className="text-slate-500 hover:text-slate-400 underline">условия использования</a>
-            </p>
-          )}
         </div>
       </div>
     </div>

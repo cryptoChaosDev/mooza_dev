@@ -1,11 +1,13 @@
 import { createPortal } from 'react-dom';
-import { X, Mail, FileText, Shield, MessageCircle, Music2 } from 'lucide-react';
+import { X, Mail, FileText, Shield, MessageCircle, Music2, BookOpen } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface Props {
   onClose: () => void;
 }
 
 export default function InfoModal({ onClose }: Props) {
+  const navigate = useNavigate();
   return createPortal(
     <>
       <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm" onClick={onClose} />
@@ -43,6 +45,15 @@ export default function InfoModal({ onClose }: Props) {
               <span className="text-sm text-slate-300 flex-1">{label}</span>
             </a>
           ))}
+
+          {/* Onboarding */}
+          <button
+            onClick={() => { onClose(); navigate('/onboarding'); }}
+            className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3.5 hover:bg-slate-800 transition-colors text-left"
+          >
+            <BookOpen size={17} className="text-slate-400 flex-shrink-0" />
+            <span className="text-sm text-slate-300">Начать онбординг заново</span>
+          </button>
 
           {/* Support */}
           <a
