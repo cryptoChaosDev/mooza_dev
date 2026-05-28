@@ -151,8 +151,7 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/deals', dealRoutes);
 
 // ── OG tags for social bots ────────────────────────────────────────────────
-const BOT_RE = /bot|crawler|spider|facebookexternalhit|twitterbot|linkedinbot|telegrambot|whatsapp|slackbot|discordbot|vkshare/i;
-app.get('/og/profile/:userId', async (req: express.Request, res: express.Response) => {
+app.get('/api/og/profile/:userId', async (req: express.Request, res: express.Response) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.params.userId },
