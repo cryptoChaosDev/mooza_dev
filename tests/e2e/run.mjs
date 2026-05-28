@@ -257,23 +257,28 @@ async function main() {
   }
 
   // ── Services (Alice publishes catalog services) ───────────────
-  // First need a profession with customFilters available
-  const targetProf = allProfessions.find(p => p.serviceId) || allProfessions[0];
-  if (targetProf?.id && targetProf?.serviceId) {
+  // Need a profession + a service that's mapped to the same direction.
+  const targetProf = allProfessions[0];
+  let svc;
+  if (targetProf?.directionId) {
+    const sr = await api('GET', `/references/services?directionId=${targetProf.directionId}`);
+    if (sr.ok && Array.isArray(sr.data) && sr.data.length) svc = sr.data[0];
+  }
+  if (targetProf?.id && svc?.id) {
     r = await api('PUT', '/users/me/services', {
       token: alice.token,
       body: [
         {
           professionId: targetProf.id,
-          serviceId: targetProf.serviceId,
+          serviceId: svc.id,
           priceFrom: 5000,
           priceTo: 15000,
         },
       ],
     });
-    log(r.ok, 'Alice publishes catalog service', `status=${r.status}`);
+    log(r.ok, 'Alice publishes catalog service', `status=${r.status}`, r.ok ? null : r.data);
   } else {
-    log(false, 'Alice publishes catalog service', 'no suitable profession found');
+    log(false, 'Alice publishes catalog service', `prof=${!!targetProf} svc=${!!svc}`);
   }
 
   // ── Read back Alice's services ────────────────────────────────
@@ -289,11 +294,12 @@ async function main() {
   log(r.ok, 'GET /users/catalog', `status=${r.status}`);
 
   // ── Connection: Bob → Alice (request → accept) ────────────────
+  // ConnectionService.serviceId references Service.id (not UserService.id)
   r = await api('POST', '/connections', {
     token: bob.token,
     body: {
       receiverId: alice.id,
-      serviceIds: aliceUserService?.id ? [aliceUserService.id] : [],
+      serviceIds: svc?.id ? [svc.id] : [],
       needsDeal: false,
     },
   });
@@ -371,7 +377,7 @@ async function main() {
   // ── Artist creation (Alice creates band) ──────────────────────
   r = await api('POST', '/artists', {
     token: alice.token,
-    body: { name: `E2E Band ${stamp}`, type: 'BAND', city: 'Москва' },
+    body: { name: `E2E Band ${stamp}`, type: 'GROUP', city: 'Москва' },
   });
   log(r.ok, 'Alice creates artist/band', `status=${r.status}`, r.ok ? null : r.data);
   const artist = r.data;
