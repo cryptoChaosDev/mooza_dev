@@ -43,7 +43,7 @@ async function main() {
     const entries = catalog.filter((x) => x.group === groupName);
 
     for (const entry of entries) {
-      // Find or create Profession (no unique constraint on name+directionId)
+      // Find or create Profession
       let profession = await prisma.profession.findFirst({
         where: { name: entry.profession, directionId: direction.id },
       });
@@ -53,20 +53,31 @@ async function main() {
         });
       }
 
-      // Create CustomFilters for this profession
+      // Create a Service with the same name and link it to the direction
+      // so it appears in AddServiceFlow search
+      let service = await prisma.service.findFirst({
+        where: { name: entry.profession },
+      });
+      if (!service) {
+        service = await prisma.service.create({
+          data: {
+            name: entry.profession,
+            directions: { connect: { id: direction.id } },
+          },
+        });
+      } else {
+        // Link to direction if not already connected
+        await prisma.service.update({
+          where: { id: service.id },
+          data: { directions: { connect: { id: direction.id } } },
+        });
+      }
+
+      // Create CustomFilters for this profession (filterValues = plain string array)
       for (const filter of entry.filters) {
         await prisma.customFilter.upsert({
-          where: {
-            name_professionId: {
-              name: filter.name,
-              professionId: profession.id,
-            },
-          },
-          create: {
-            name: filter.name,
-            filterValues: filter.values,
-            professionId: profession.id,
-          },
+          where: { name_professionId: { name: filter.name, professionId: profession.id } },
+          create: { name: filter.name, filterValues: filter.values, professionId: profession.id },
           update: { filterValues: filter.values },
         });
       }
