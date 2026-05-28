@@ -89,7 +89,7 @@ export const userAPI = {
   getUserService: (serviceId: string) => api.get(`/users/user-service/${serviceId}`),
   patchUserService: (serviceId: string, data: { priceFrom?: number | null; priceTo?: number | null; description?: string }) =>
     api.patch(`/users/me/services/${serviceId}`, data),
-  setServiceStatus: (serviceId: string, status: 'active' | 'draft' | 'archived') =>
+  setServiceStatus: (serviceId: string, status: 'active' | 'draft' | 'archived' | 'pending_review') =>
     api.patch(`/users/me/services/${serviceId}/status`, { status }),
   deleteService: (serviceId: string) =>
     api.delete(`/users/me/services/${serviceId}`),
@@ -373,6 +373,11 @@ export const adminAPI = {
     approve: (id: string) => api.patch(`${adminBase}/artists/${id}/approve`),
     reject: (id: string, reason?: string) => api.patch(`${adminBase}/artists/${id}/reject`, { reason }),
     verify: (id: string) => api.patch(`${adminBase}/artists/${id}/verify`),
+  },
+  serviceModeration: {
+    pending: () => api.get(`${adminBase}/user-services/pending`),
+    approve: (id: string) => api.patch(`${adminBase}/user-services/${id}/approve`),
+    reject: (id: string, reason?: string) => api.patch(`${adminBase}/user-services/${id}/reject`, { reason }),
   },
   customFilters: {
     list: () => api.get(`${adminBase}/custom-filters`),

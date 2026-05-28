@@ -1655,6 +1655,93 @@ function UsersTab() {
   );
 }
 
+// ─── Service Moderation Tab ─────────────────────────────────────────────────
+
+function ServiceModerationTab() {
+  const qc = useQueryClient();
+  const [rejectId, setRejectId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+
+  const { data: pending = [], isLoading } = useQuery<any[]>({
+    queryKey: ['admin-services-pending'],
+    queryFn: () => adminAPI.serviceModeration.pending().then((r: any) => r.data),
+    refetchInterval: 30000,
+  });
+
+  const approveMut = useMutation({
+    mutationFn: (id: string) => adminAPI.serviceModeration.approve(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-services-pending'] }),
+  });
+  const rejectMut = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => adminAPI.serviceModeration.reject(id, reason),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-services-pending'] }); setRejectId(null); setRejectReason(''); },
+  });
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 mb-3">
+        <Clock size={15} className="text-amber-400" />
+        <h2 className="text-sm font-semibold text-white">Услуги на модерации</h2>
+        {pending.length > 0 && (
+          <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[11px] rounded-full font-semibold">{pending.length}</span>
+        )}
+      </div>
+      {isLoading ? (
+        <div className="text-sm text-slate-500 py-4 text-center">Загрузка...</div>
+      ) : pending.length === 0 ? (
+        <div className="text-sm text-slate-500 py-4 text-center bg-slate-900 rounded-xl border border-slate-800">Очередь пуста</div>
+      ) : pending.map((us: any) => (
+        <div key={us.id} className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+          <div className="flex items-start gap-3 mb-3">
+            <AvatarComponent src={us.user?.avatar} name={`${us.user?.firstName} ${us.user?.lastName}`} size={40} />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-white text-sm">{us.service?.name ?? '—'}</p>
+              <p className="text-xs text-slate-400">{us.profession?.name ?? ''}</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {us.user?.firstName} {us.user?.lastName}
+              </p>
+              {us.description && <p className="text-xs text-slate-400 mt-1 line-clamp-2">{us.description}</p>}
+              {(us.priceFrom != null || us.priceTo != null) && (
+                <p className="text-xs text-primary-400 mt-1">
+                  {us.priceFrom != null ? `от ${us.priceFrom} ₽` : ''}{us.priceTo != null ? ` до ${us.priceTo} ₽` : ''}
+                </p>
+              )}
+            </div>
+          </div>
+          {rejectId === us.id ? (
+            <div className="flex gap-2 mt-2">
+              <input
+                value={rejectReason}
+                onChange={e => setRejectReason(e.target.value)}
+                placeholder="Причина отказа..."
+                className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-red-500"
+              />
+              <button
+                onClick={() => rejectMut.mutate({ id: us.id, reason: rejectReason })}
+                disabled={rejectMut.isPending}
+                className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs rounded-lg transition-colors disabled:opacity-50"
+              >Отклонить</button>
+              <button onClick={() => setRejectId(null)} className="px-3 py-1.5 bg-slate-700 text-slate-300 text-xs rounded-lg">Отмена</button>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              <button
+                onClick={() => approveMut.mutate(us.id)}
+                disabled={approveMut.isPending}
+                className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+              >Одобрить</button>
+              <button
+                onClick={() => { setRejectId(us.id); setRejectReason(''); }}
+                className="flex-1 py-2 bg-slate-800 hover:bg-red-500/20 border border-slate-700 hover:border-red-500/40 text-slate-400 hover:text-red-400 text-xs font-semibold rounded-lg transition-colors"
+              >Отклонить</button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Artist Moderation Tab ──────────────────────────────────────────────────
 
 function ArtistModerationTab() {
@@ -2157,7 +2244,12 @@ export default function AdminPage() {
 
         {tab === 'users' && <UsersTab />}
 
-        {tab === 'moderation' && <ArtistModerationTab />}
+        {tab === 'moderation' && (
+          <div className="space-y-8">
+            <ServiceModerationTab />
+            <ArtistModerationTab />
+          </div>
+        )}
 
         {tab === 'settings' && <SiteSettingsTab />}
       </div>

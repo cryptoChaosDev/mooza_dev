@@ -759,6 +759,72 @@ router.delete('/users/:id', authenticate, requireAdmin, async (req, res) => {
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
+// ── User Service Moderation ───────────────────────────────────────────────────
+
+router.get('/user-services/pending', async (_req, res) => {
+  try {
+    const services = await prisma.userService.findMany({
+      where: { status: 'pending_review' },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+        service: { select: { name: true } },
+        profession: { select: { name: true } },
+      },
+      orderBy: { updatedAt: 'asc' },
+    });
+    res.json(services);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.patch('/user-services/:id/approve', async (req, res) => {
+  try {
+    const us = await prisma.userService.update({
+      where: { id: req.params.id },
+      data: { status: 'active' },
+      select: { id: true, userId: true, service: { select: { name: true } } },
+    });
+    try {
+      const notif = await prisma.notification.create({
+        data: {
+          userId: us.userId,
+          type: 'service_approved',
+          title: 'Услуга опубликована',
+          body: `Ваша услуга «${us.service.name}» прошла модерацию и теперь видна в каталоге`,
+          link: `/services/${us.id}`,
+        },
+      });
+      const { emitToUser } = await import('../socket');
+      emitToUser(us.userId, 'new_notification', notif);
+    } catch {}
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.patch('/user-services/:id/reject', async (req, res) => {
+  try {
+    const { reason } = req.body as { reason?: string };
+    const us = await prisma.userService.update({
+      where: { id: req.params.id },
+      data: { status: 'draft' },
+      select: { id: true, userId: true, service: { select: { name: true } } },
+    });
+    try {
+      const notif = await prisma.notification.create({
+        data: {
+          userId: us.userId,
+          type: 'service_rejected',
+          title: 'Услуга не прошла модерацию',
+          body: reason ? `«${us.service.name}»: ${reason}` : `Услуга «${us.service.name}» возвращена в черновики`,
+          link: `/services/${us.id}`,
+        },
+      });
+      const { emitToUser } = await import('../socket');
+      emitToUser(us.userId, 'new_notification', notif);
+    } catch {}
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Site Settings ──────────────────────────────────────────────────────────────
 import { updateSiteSettings } from './site-settings';
 

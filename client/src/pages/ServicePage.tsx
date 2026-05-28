@@ -1,9 +1,10 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Briefcase, DollarSign, MapPin, MessageCircle,
-  Archive, ArchiveRestore, Trash2, Loader2, HandshakeIcon, Send,
+  Archive, ArchiveRestore, Trash2, Loader2, HandshakeIcon, Send, Pencil, X,
 } from 'lucide-react';
 import { userAPI, messageAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
@@ -14,11 +15,13 @@ const STATUS_LABEL: Record<string, string> = {
   active: 'Действующая',
   draft: 'Черновик',
   archived: 'Архив',
+  pending_review: 'На модерации',
 };
 const STATUS_COLOR: Record<string, string> = {
   active: 'bg-emerald-500/15 text-emerald-400',
   draft: 'bg-slate-700/60 text-slate-400',
   archived: 'bg-amber-500/15 text-amber-400',
+  pending_review: 'bg-blue-500/15 text-blue-400',
 };
 
 export default function ServicePage() {
@@ -29,6 +32,10 @@ export default function ServicePage() {
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [writingMessage, setWritingMessage] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editPriceFrom, setEditPriceFrom] = useState('');
+  const [editPriceTo, setEditPriceTo] = useState('');
+  const [editDescription, setEditDescription] = useState('');
 
   const { data: us, isLoading } = useQuery({
     queryKey: ['user-service', serviceId],
@@ -36,8 +43,20 @@ export default function ServicePage() {
     enabled: !!serviceId,
   });
 
+  const editMut = useMutation({
+    mutationFn: () => userAPI.patchUserService(serviceId!, {
+      priceFrom: editPriceFrom !== '' ? Number(editPriceFrom) : null,
+      priceTo: editPriceTo !== '' ? Number(editPriceTo) : null,
+      description: editDescription || undefined,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-service', serviceId] });
+      setShowEdit(false);
+    },
+  });
+
   const statusMut = useMutation({
-    mutationFn: (status: 'active' | 'draft' | 'archived') => userAPI.setServiceStatus(serviceId!, status),
+    mutationFn: (status: 'active' | 'draft' | 'archived' | 'pending_review') => userAPI.setServiceStatus(serviceId!, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-service', serviceId] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
@@ -142,9 +161,23 @@ export default function ServicePage() {
             </button>
           )}
           {isOwner && (
-            <span className={`ml-auto text-[11px] font-semibold px-2.5 py-1 rounded-lg ${STATUS_COLOR[status]}`}>
-              {STATUS_LABEL[status]}
-            </span>
+            <div className="ml-auto flex items-center gap-2">
+              <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg ${STATUS_COLOR[status]}`}>
+                {STATUS_LABEL[status]}
+              </span>
+              <button
+                onClick={() => {
+                  setEditPriceFrom(us.priceFrom != null ? String(us.priceFrom) : '');
+                  setEditPriceTo(us.priceTo != null ? String(us.priceTo) : '');
+                  setEditDescription(us.description ?? '');
+                  setShowEdit(true);
+                }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+                title="Редактировать"
+              >
+                <Pencil size={14} />
+              </button>
+            </div>
           )}
         </div>
 
@@ -234,7 +267,7 @@ export default function ServicePage() {
             {status === 'draft' && (
               <>
                 <button
-                  onClick={() => statusMut.mutate('active')}
+                  onClick={() => statusMut.mutate('pending_review')}
                   disabled={statusMut.isPending}
                   className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-2xl transition-colors disabled:opacity-50"
                 >
@@ -251,13 +284,19 @@ export default function ServicePage() {
             )}
             {status === 'archived' && (
               <button
-                onClick={() => statusMut.mutate('active')}
+                onClick={() => statusMut.mutate('pending_review')}
                 disabled={statusMut.isPending}
                 className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-2xl transition-colors disabled:opacity-50"
               >
                 {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <ArchiveRestore size={15} />}
                 Опубликовать
               </button>
+            )}
+            {status === 'pending_review' && (
+              <div className="w-full py-3 flex items-center justify-center gap-2 text-sm text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-2xl">
+                <Loader2 size={14} className="animate-spin" />
+                Услуга на модерации — ожидайте проверки
+              </div>
             )}
           </div>
         )}
@@ -292,6 +331,66 @@ export default function ServicePage() {
         onConfirm={() => deleteMut.mutate()}
         onCancel={() => setConfirmDelete(false)}
       />
+
+      {/* Edit modal */}
+      {showEdit && createPortal(
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowEdit(false)} />
+          <div className="relative w-full sm:max-w-sm bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800">
+              <h3 className="text-base font-semibold text-white">Редактировать услугу</h3>
+              <button onClick={() => setShowEdit(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2 block">Стоимость</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    placeholder="От ₽"
+                    value={editPriceFrom}
+                    onChange={e => setEditPriceFrom(e.target.value)}
+                    className="flex-1 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                  <input
+                    type="number"
+                    placeholder="До ₽"
+                    value={editPriceTo}
+                    onChange={e => setEditPriceTo(e.target.value)}
+                    className="flex-1 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2 block">Описание</label>
+                <textarea
+                  value={editDescription}
+                  onChange={e => setEditDescription(e.target.value)}
+                  placeholder="Расскажите подробнее об услуге..."
+                  rows={4}
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
+                />
+              </div>
+            </div>
+            <div className="px-5 pb-5 flex gap-2.5">
+              <button onClick={() => setShowEdit(false)} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
+                Отмена
+              </button>
+              <button
+                onClick={() => editMut.mutate()}
+                disabled={editMut.isPending}
+                className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {editMut.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
+                Сохранить
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }

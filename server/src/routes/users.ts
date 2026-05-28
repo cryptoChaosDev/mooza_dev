@@ -415,7 +415,7 @@ router.patch('/me/services/:serviceId', authenticate, async (req: AuthRequest, r
 router.patch('/me/services/:serviceId/status', authenticate, async (req: AuthRequest, res) => {
   try {
     const { status } = req.body;
-    if (!['active', 'draft', 'archived'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    if (!['active', 'draft', 'archived', 'pending_review'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
     const us = await prisma.userService.findUnique({ where: { id: req.params.serviceId } });
     if (!us || us.userId !== req.userId) return res.status(404).json({ error: 'Not found' });
     const updated = await prisma.userService.update({
