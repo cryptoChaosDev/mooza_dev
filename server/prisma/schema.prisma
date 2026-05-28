@@ -476,9 +476,10 @@ model User {
 
   occupancyStatus  String?  // 'closed' | 'considering' | 'open'
 
-  birthDate     DateTime?
-  lastSeenAt    DateTime?
-  termsAgreedAt DateTime?
+  birthDate             DateTime?
+  lastSeenAt            DateTime?
+  termsAgreedAt         DateTime?
+  onboardingCompletedAt DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
