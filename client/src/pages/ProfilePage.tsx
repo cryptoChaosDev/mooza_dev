@@ -2,14 +2,14 @@ import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { userAPI, referenceAPI, connectionAPI, groupAPI } from '../lib/api';
+import { userAPI, referenceAPI, connectionAPI, groupAPI, dealAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
   Globe, DollarSign, Calendar,
   Headphones, Edit3, Plus, ChevronLeft, ChevronRight,
   FileText, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
-  Music2, Play, Pause,
+  Music2, Play, Pause, HandshakeIcon,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConnectionCard from '../components/ConnectionCard';
@@ -237,6 +237,14 @@ export default function ProfilePage() {
     queryKey: ['connections-all'],
     queryFn: async () => { const { data } = await connectionAPI.getAll(); return data as any[]; },
   });
+
+  const { data: myDeals = [] } = useQuery<any[]>({
+    queryKey: ['deals'],
+    queryFn: async () => { const { data } = await dealAPI.getAll(); return data as any[]; },
+  });
+  const activeDeals = myDeals.filter((d: any) => !['COMPLETED', 'CANCELLED'].includes(d.status));
+  const totalDeals = myDeals.length;
+
   // One entry per unique partner
   const myConnPartners = Array.from(
     myConnectionsRaw.reduce((map: Map<string, { partner: any; connections: any[] }>, c: any) => {
@@ -744,8 +752,8 @@ export default function ProfilePage() {
                   <span className="text-sm font-bold text-white">{myConnPartners.length}</span>
                   <span className="text-[9px] text-slate-500">Связи</span>
                 </button>
-                <button disabled className="flex flex-col items-center py-1.5 px-1 pointer-events-none opacity-40">
-                  <span className="text-sm font-bold text-white">0</span>
+                <button onClick={() => navigate('/deals')} className="flex flex-col items-center py-1.5 px-1 hover:bg-slate-800/40 transition-colors">
+                  <span className="text-sm font-bold text-white">{totalDeals}</span>
                   <span className="text-[9px] text-slate-500">Сделки</span>
                 </button>
               </div>
@@ -1013,6 +1021,53 @@ export default function ProfilePage() {
                       );
                     })}
                   </div>
+                </div>
+              )}
+            </div>
+
+            {/* ── Deals card ── */}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                <HandshakeIcon size={14} className="text-primary-400" />
+                <span className="text-sm font-semibold text-white">Мои сделки</span>
+                {totalDeals > 0 && <span className="text-xs text-slate-500">{totalDeals}</span>}
+                <button onClick={() => navigate('/deals')} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
+                  Смотреть все
+                </button>
+              </div>
+              {activeDeals.length === 0 ? (
+                <div className="px-4 py-4 text-sm text-slate-600 italic">Активных сделок нет</div>
+              ) : (
+                <div className="divide-y divide-slate-800/40">
+                  {activeDeals.slice(0, 3).map((deal: any) => {
+                    const isCustomer = deal.customerId === profile?.id;
+                    const partner = isCustomer ? deal.executor : deal.customer;
+                    const STATUS_LABEL: Record<string, string> = {
+                      PENDING: 'На согласовании', AWAITING_PAYMENT: 'Ожидает оплаты',
+                      IN_PROGRESS: 'В работе', REVIEW: 'На проверке', REVISION: 'На доработке',
+                    };
+                    return (
+                      <button
+                        key={deal.id}
+                        onClick={() => navigate(`/deals/${deal.id}`)}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/30 transition-colors text-left"
+                      >
+                        <div className="w-8 h-8 rounded-xl bg-primary-900/60 border border-primary-700/30 flex items-center justify-center flex-shrink-0">
+                          <HandshakeIcon size={14} className="text-primary-400" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-white truncate">{deal.title}</p>
+                          <p className="text-xs text-slate-500 truncate">
+                            {partner ? `${partner.firstName} ${partner.lastName}` : ''}
+                            {deal.service ? ` · ${deal.service.name}` : ''}
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-medium text-primary-400/80 flex-shrink-0">
+                          {STATUS_LABEL[deal.status] ?? deal.status}
+                        </span>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
