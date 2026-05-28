@@ -89,11 +89,13 @@ export const userAPI = {
     description?: string;
     customFilterValueIds?: string[];
     status?: string;
+    priceItems?: Array<{name: string; price: string}>;
   }>) => api.put('/users/me/services', services),
   getUserService: (serviceId: string) => api.get(`/users/user-service/${serviceId}`),
   patchUserService: (serviceId: string, data: {
     name?: string; priceFrom?: number | null; priceTo?: number | null;
     deadlineFrom?: number | null; deadlineTo?: number | null; description?: string;
+    priceItems?: Array<{name: string; price: string}> | null;
   }) => api.patch(`/users/me/services/${serviceId}`, data),
   setServiceStatus: (serviceId: string, status: 'active' | 'draft' | 'archived' | 'pending_review') =>
     api.patch(`/users/me/services/${serviceId}/status`, { status }),
@@ -432,6 +434,11 @@ export const reviewAPI = {
     api.patch(`/reviews/${id}/reply`, { reply }),
   delete: (id: string) =>
     api.delete(`/reviews/${id}`),
+};
+
+export const complaintAPI = {
+  submit: (data: { targetType: 'user' | 'post' | 'review'; targetId: string; category: string; text?: string }) =>
+    api.post('/complaints', data),
 };
 
 // Search Filters Type

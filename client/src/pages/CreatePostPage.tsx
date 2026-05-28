@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Image, Smile, Send, X, Loader2,
-  FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench, Plus,
+  FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench, Plus, Zap,
 } from 'lucide-react';
 import { postAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
@@ -12,12 +12,13 @@ import EmojiPicker from '../components/EmojiPicker';
 import ServicePicker, { PickedService } from '../components/ServicePicker';
 
 const POST_TYPES: Record<string, { label: string; icon: React.FC<any>; placeholder: string; inDev: boolean }> = {
-  blog:       { label: 'Блог',         icon: FileText,    placeholder: 'Напишите что-нибудь...', inDev: false },
-  vacancy:    { label: 'Вакансия',     icon: Briefcase,   placeholder: 'Опишите вакансию...',    inDev: true },
-  event:      { label: 'Мероприятие',  icon: Calendar,    placeholder: 'Расскажите о событии...', inDev: true },
-  task:       { label: 'Задача',       icon: CheckSquare, placeholder: 'Опишите задачу или проект...', inDev: true },
-  offer:      { label: 'Предложение',  icon: Lightbulb,   placeholder: 'Что вы предлагаете?',   inDev: true },
-  service:    { label: 'Услуга',       icon: Wrench,      placeholder: 'Опишите услугу...',      inDev: false },
+  blog:       { label: 'Блог',              icon: FileText,    placeholder: 'Напишите что-нибудь...', inDev: false },
+  vacancy:    { label: 'Вакансия',          icon: Briefcase,   placeholder: 'Опишите вакансию...',    inDev: true },
+  event:      { label: 'Мероприятие',       icon: Calendar,    placeholder: 'Расскажите о событии...', inDev: true },
+  task:       { label: 'Задача',            icon: CheckSquare, placeholder: 'Опишите задачу или проект...', inDev: true },
+  offer:      { label: 'Предложение',       icon: Lightbulb,   placeholder: 'Что вы предлагаете?',   inDev: true },
+  service:    { label: 'Услуга',            icon: Wrench,      placeholder: 'Опишите услугу...',      inDev: false },
+  employment: { label: 'Апдейт занятости', icon: Zap,         placeholder: 'Расскажите об изменении статуса...', inDev: false },
 };
 
 export default function CreatePostPage() {
@@ -36,6 +37,7 @@ export default function CreatePostPage() {
   const [uploading, setUploading] = useState(false);
   const [pickedServices, setPickedServices] = useState<PickedService[]>([]);
   const [showServicePicker, setShowServicePicker] = useState(false);
+  const [employmentStatus, setEmploymentStatus] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   // Autosave draft
@@ -99,7 +101,8 @@ export default function CreatePostPage() {
   });
 
   const isService = type === 'service';
-  const canPost = (content.trim() || imagePreview || (isService && pickedServices.length > 0)) && !uploading;
+  const isEmployment = type === 'employment';
+  const canPost = (content.trim() || imagePreview || (isService && pickedServices.length > 0) || (isEmployment && !!employmentStatus)) && !uploading;
 
   const handlePublish = () => {
     if (!canPost) return;
@@ -114,6 +117,7 @@ export default function CreatePostPage() {
       content: finalContent,
       type,
       imageUrl: imagePreview?.serverUrl,
+      ...(isEmployment && employmentStatus ? { employmentStatus } : {}),
     });
   };
 
@@ -228,6 +232,31 @@ export default function CreatePostPage() {
                   <p className="text-xs text-slate-500 mb-2">Дополнительное описание (необязательно)</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Employment status selector — only for type=employment */}
+          {isEmployment && (
+            <div className="mb-4 space-y-3">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Новый статус занятости</p>
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { value: 'open', label: '🟢 Открыт для работы' },
+                  { value: 'considering', label: '🟡 Рассматриваю' },
+                  { value: 'closed', label: '🔴 Закрыт' },
+                ].map(opt => (
+                  <button key={opt.value} type="button"
+                    onClick={() => setEmploymentStatus(opt.value)}
+                    className={`px-3 py-2 rounded-xl text-sm font-medium border transition-all ${
+                      employmentStatus === opt.value
+                        ? 'bg-primary-600/20 border-primary-500/40 text-primary-300'
+                        : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white'
+                    }`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-[10px] text-slate-600">При публикации статус в профиле обновится автоматически.</p>
             </div>
           )}
 

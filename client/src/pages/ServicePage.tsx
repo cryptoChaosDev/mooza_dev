@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Briefcase, DollarSign, MapPin, MessageCircle,
-  Archive, ArchiveRestore, Trash2, Loader2, HandshakeIcon, Send, Pencil, X,
+  Archive, ArchiveRestore, Trash2, Loader2, HandshakeIcon, Send, Pencil, X, Plus,
 } from 'lucide-react';
 import { userAPI, messageAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
@@ -41,6 +41,7 @@ export default function ServicePage() {
   const [editDeadlineFrom, setEditDeadlineFrom] = useState('');
   const [editDeadlineTo, setEditDeadlineTo] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [editPriceItems, setEditPriceItems] = useState<Array<{name: string; price: string}>>([]);
 
   const { data: us, isLoading } = useQuery({
     queryKey: ['user-service', serviceId],
@@ -56,6 +57,7 @@ export default function ServicePage() {
       deadlineFrom: editDeadlineFrom !== '' ? Number(editDeadlineFrom) : null,
       deadlineTo: editDeadlineTo !== '' ? Number(editDeadlineTo) : null,
       description: editDescription || undefined,
+      priceItems: editPriceItems.filter(x => x.name.trim()),
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-service', serviceId] });
@@ -181,6 +183,7 @@ export default function ServicePage() {
                   setEditDeadlineFrom(us.deadlineFrom != null ? String(us.deadlineFrom) : '');
                   setEditDeadlineTo(us.deadlineTo != null ? String(us.deadlineTo) : '');
                   setEditDescription(us.description ?? '');
+                  setEditPriceItems(us.priceItems ? JSON.parse(JSON.stringify(us.priceItems)) : []);
                   setShowEdit(true);
                 }}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
@@ -248,6 +251,21 @@ export default function ServicePage() {
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Описание</p>
               <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{us.description}</p>
+            </div>
+          )}
+
+          {/* Price list */}
+          {us.priceItems && Array.isArray(us.priceItems) && (us.priceItems as any[]).length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Прайс-лист</p>
+              <div className="space-y-1.5">
+                {(us.priceItems as any[]).map((item: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-slate-300 flex-1">{item.name}</span>
+                    <span className="text-sm font-medium text-primary-400 flex-shrink-0">{item.price}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -411,6 +429,39 @@ export default function ServicePage() {
                   rows={4}
                   className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
                 />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1 block">Прайс-лист (необязательно)</label>
+                <p className="text-[10px] text-slate-600 mb-2">Детализация стоимости по позициям.</p>
+                <div className="space-y-2">
+                  {editPriceItems.map((item, idx) => (
+                    <div key={idx} className="flex gap-2 items-center">
+                      <input
+                        type="text" maxLength={100}
+                        placeholder="Название позиции"
+                        value={item.name}
+                        onChange={e => setEditPriceItems(prev => prev.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))}
+                        className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Цена ₽"
+                        value={item.price}
+                        onChange={e => setEditPriceItems(prev => prev.map((x, i) => i === idx ? { ...x, price: e.target.value } : x))}
+                        className="w-24 flex-shrink-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      />
+                      <button type="button" onClick={() => setEditPriceItems(prev => prev.filter((_, i) => i !== idx))}
+                        className="text-slate-500 hover:text-red-400 transition-colors flex-shrink-0">
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                  <button type="button"
+                    onClick={() => setEditPriceItems(prev => [...prev, { name: '', price: '' }])}
+                    className="flex items-center gap-1.5 text-xs text-primary-400 hover:text-primary-300 transition-colors">
+                    <Plus size={12} />Добавить позицию
+                  </button>
+                </div>
               </div>
             </div>
             <div className="px-5 pb-5 flex gap-2.5">

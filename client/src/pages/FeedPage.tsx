@@ -337,6 +337,12 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
         ) : (
           <DoubleTapReactWrapper reactions={post.reactions ?? []} currentUserId={currentUserId} onReact={(emoji) => reactMut.mutate(emoji)} onUnreact={() => unreactMut.mutate()}>
             <>
+              {post.type === 'employment' && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700/30 mb-2">
+                  <Zap size={13} className="text-amber-400 flex-shrink-0" />
+                  <span className="text-xs font-semibold text-amber-400">Апдейт занятости</span>
+                </div>
+              )}
               {post.content && (
                 <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
                   {isLongContent && !expanded ? post.content.slice(0, 280) + '…' : post.content}
@@ -397,23 +403,25 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
 // ─── Post type meta ────────────────────────────────────────────────────────────
 
 const POST_TYPE_META: Record<string, { label: string; icon: any; accent: string; badge: string }> = {
-  blog:    { label: 'Блог',        icon: FileText,    accent: '',                                           badge: '' },
-  service: { label: 'Услуга',      icon: Wrench,      accent: 'border-l-2 border-primary-500/60',           badge: 'bg-primary-500/10 text-primary-400 border-primary-500/20' },
-  vacancy: { label: 'Вакансия',    icon: Briefcase,   accent: 'border-l-2 border-amber-500/60',             badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
-  event:   { label: 'Мероприятие', icon: Calendar,    accent: 'border-l-2 border-purple-500/60',            badge: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
-  task:    { label: 'Задача',      icon: CheckSquare, accent: 'border-l-2 border-emerald-500/60',           badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  offer:   { label: 'Предложение', icon: Lightbulb,   accent: 'border-l-2 border-orange-500/60',            badge: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
+  blog:       { label: 'Блог',              icon: FileText,    accent: '',                                           badge: '' },
+  service:    { label: 'Услуга',            icon: Wrench,      accent: 'border-l-2 border-primary-500/60',           badge: 'bg-primary-500/10 text-primary-400 border-primary-500/20' },
+  vacancy:    { label: 'Вакансия',          icon: Briefcase,   accent: 'border-l-2 border-amber-500/60',             badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  event:      { label: 'Мероприятие',       icon: Calendar,    accent: 'border-l-2 border-purple-500/60',            badge: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+  task:       { label: 'Задача',            icon: CheckSquare, accent: 'border-l-2 border-emerald-500/60',           badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+  offer:      { label: 'Предложение',       icon: Lightbulb,   accent: 'border-l-2 border-orange-500/60',            badge: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
+  employment: { label: 'Апдейт занятости', icon: Zap,         accent: 'border-l-2 border-amber-400/60',             badge: 'bg-amber-400/10 text-amber-400 border-amber-400/20' },
 };
 
 // ─── Post Type Picker ──────────────────────────────────────────────────────────
 
 const POST_TYPE_OPTIONS = [
-  { type: 'blog',    label: 'Блог',        icon: FileText,    desc: 'Свободная форма',   inDev: false },
-  { type: 'vacancy', label: 'Вакансия',    icon: Briefcase,   desc: 'В разработке',      inDev: true },
-  { type: 'event',   label: 'Мероприятие', icon: Calendar,    desc: 'В разработке',      inDev: true },
-  { type: 'task',    label: 'Задача',      icon: CheckSquare, desc: 'В разработке',      inDev: true },
-  { type: 'offer',   label: 'Предложение', icon: Lightbulb,   desc: 'В разработке',      inDev: true },
-  { type: 'service', label: 'Услуга',      icon: Wrench,      desc: 'Свободная форма',   inDev: false },
+  { type: 'blog',       label: 'Блог',              icon: FileText,    desc: 'Свободная форма',     inDev: false },
+  { type: 'vacancy',    label: 'Вакансия',           icon: Briefcase,   desc: 'В разработке',        inDev: true },
+  { type: 'event',      label: 'Мероприятие',        icon: Calendar,    desc: 'В разработке',        inDev: true },
+  { type: 'task',       label: 'Задача',             icon: CheckSquare, desc: 'В разработке',        inDev: true },
+  { type: 'offer',      label: 'Предложение',        icon: Lightbulb,   desc: 'В разработке',        inDev: true },
+  { type: 'service',    label: 'Услуга',             icon: Wrench,      desc: 'Свободная форма',     inDev: false },
+  { type: 'employment', label: 'Апдейт занятости',  icon: Zap,         desc: 'Обновить статус',     inDev: false },
 ];
 
 function PostTypePicker({ onClose }: { onClose: () => void }) {

@@ -80,6 +80,7 @@ type UserServiceEntry = {
   deadlineFrom: string;
   deadlineTo: string;
   description: string;
+  priceItems: Array<{ name: string; price: string }>;
   status?: 'draft' | 'pending_review';
   professionFilters: Array<{ id: string; name: string; values: string[] }>;
   professionFilterValues: Record<string, string[]>;
@@ -92,6 +93,7 @@ const emptyEntry = (): UserServiceEntry => ({
   genreIds: [], workFormatIds: [], employmentTypeIds: [], skillLevelIds: [],
   availabilityIds: [], geographyIds: [],
   name: '', priceFrom: '', priceTo: '', deadlineFrom: '', deadlineTo: '', description: '',
+  priceItems: [],
   status: 'pending_review',
   professionFilters: [],
   professionFilterValues: {},
@@ -114,6 +116,7 @@ export default function ProfilePage() {
     userProfessions: [] as { professionId: string; features: string[] }[],
     artistIds: [] as string[],
     birthDate: '',
+    occupancyStatus: '' as '' | 'closed' | 'considering' | 'open',
   });
 
   const [fieldsOfActivity, setFieldsOfActivity] = useState<any[]>([]);
@@ -215,6 +218,7 @@ export default function ProfilePage() {
         })) || [],
         artistIds: data.userArtists?.map((ua: any) => ua.artistId || ua.artist?.id) || [],
         birthDate: data.birthDate ? new Date(data.birthDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
+        occupancyStatus: data.occupancyStatus || '',
       });
       setMyStandaloneProfessions(
         data.userProfessions?.map((up: any) => ({
@@ -251,6 +255,7 @@ export default function ProfilePage() {
           name: us.name ?? '',
           deadlineFrom: us.deadlineFrom != null ? String(us.deadlineFrom) : '',
           deadlineTo: us.deadlineTo != null ? String(us.deadlineTo) : '',
+          priceItems: Array.isArray(us.priceItems) ? us.priceItems : [],
           status: us.status,
           professionFilters: [],
           professionFilterValues: {},
@@ -343,6 +348,7 @@ export default function ProfilePage() {
         description: us.description || undefined,
         customFilterValueIds: Object.values(us.customFilterValueIds).flat(),
         status: us.status,
+        priceItems: us.priceItems.length > 0 ? us.priceItems : undefined,
       }))
     ),
   });
@@ -669,6 +675,39 @@ export default function ProfilePage() {
                       <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="До" value={pending.deadlineTo} onChange={e => setPending(p => ({ ...p, deadlineTo: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
                     </div>
                   </div>
+                  <div>
+                    <p className="text-xs font-semibold mb-1 text-slate-400">Прайс-лист (необязательно)</p>
+                    <p className="text-[10px] text-slate-600 mb-2">Детализация стоимости по позициям. Подсказка: не забудьте учесть комиссию сервиса.</p>
+                    <div className="space-y-2">
+                      {pending.priceItems.map((item, idx) => (
+                        <div key={idx} className="flex gap-2 items-center">
+                          <input
+                            type="text" maxLength={100}
+                            placeholder="Название позиции"
+                            value={item.name}
+                            onChange={e => setPending(p => ({ ...p, priceItems: p.priceItems.map((x, i) => i === idx ? { ...x, name: e.target.value } : x) }))}
+                            className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Цена ₽"
+                            value={item.price}
+                            onChange={e => setPending(p => ({ ...p, priceItems: p.priceItems.map((x, i) => i === idx ? { ...x, price: e.target.value } : x) }))}
+                            className="w-24 flex-shrink-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                          />
+                          <button type="button" onClick={() => setPending(p => ({ ...p, priceItems: p.priceItems.filter((_, i) => i !== idx) }))}
+                            className="text-slate-500 hover:text-red-400 transition-colors flex-shrink-0">
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ))}
+                      <button type="button"
+                        onClick={() => setPending(p => ({ ...p, priceItems: [...p.priceItems, { name: '', price: '' }] }))}
+                        className="flex items-center gap-1.5 text-xs text-primary-400 hover:text-primary-300 transition-colors">
+                        <Plus size={12} />Добавить позицию
+                      </button>
+                    </div>
+                  </div>
                 </>
               )}
               {pShow('geography') && <SelectField label="Город / Регион" value={getNames(geographies, pending.geographyIds).join(', ')} placeholder="Не указан" icon={<MapPin size={13} />} onClick={() => setOpenFilterSheet('pending-geography')} badge={pending.geographyIds.length || undefined} />}
@@ -862,6 +901,30 @@ export default function ProfilePage() {
                 </div>
               </div>
               <div>
+                <label className={labelCls}>Статус занятости</label>
+                <div className="flex gap-2 flex-wrap">
+                  {[
+                    { value: 'open', label: '🟢 Открыт', color: 'text-emerald-400 border-emerald-500/30 bg-emerald-500/10' },
+                    { value: 'considering', label: '🟡 Рассматриваю', color: 'text-amber-400 border-amber-500/30 bg-amber-500/10' },
+                    { value: 'closed', label: '🔴 Закрыт', color: 'text-red-400 border-red-500/30 bg-red-500/10' },
+                  ].map(opt => (
+                    <button key={opt.value} type="button"
+                      onClick={() => setFormData({ ...formData, occupancyStatus: opt.value as any })}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                        formData.occupancyStatus === opt.value ? opt.color : 'border-slate-700/60 text-slate-500 hover:text-slate-300'
+                      }`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                  {formData.occupancyStatus && (
+                    <button type="button" onClick={() => setFormData({ ...formData, occupancyStatus: '' })}
+                      className="px-2 py-1.5 rounded-xl text-xs text-slate-600 hover:text-slate-400 transition-colors">
+                      Сбросить
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div>
                 <label className={labelCls}>Дата рождения</label>
                 <input
                   type="text"
@@ -922,6 +985,17 @@ export default function ProfilePage() {
                   </span>
                 )}
               </div>
+              {profile?.occupancyStatus && (
+                <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg border font-medium mb-2 ${
+                  profile.occupancyStatus === 'open' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
+                  profile.occupancyStatus === 'considering' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
+                  'text-red-400 border-red-500/20 bg-red-500/10'
+                }`}>
+                  {profile.occupancyStatus === 'open' ? '🟢 Открыт для работы' :
+                   profile.occupancyStatus === 'considering' ? '🟡 Рассматриваю предложения' :
+                   '🔴 Не беру заказы'}
+                </span>
+              )}
               {/* ── Stats row ── */}
               <div className="grid grid-cols-2 divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
                 <button onClick={() => navigate('/friends?tab=connections')} className="flex flex-col items-center py-1.5 px-1 hover:bg-slate-800/40 transition-colors">

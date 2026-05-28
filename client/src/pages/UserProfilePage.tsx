@@ -7,9 +7,10 @@ import {
   Crown, BadgeCheck, Ban, X, Zap,
   Headphones, FileText, Briefcase,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
-  Globe, Play, Pause, ChevronRight,
+  Globe, Play, Pause, ChevronRight, Flag,
 } from 'lucide-react';
 import { userAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
+import ComplaintModal from '../components/ComplaintModal';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { SocialIconRow } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
@@ -86,6 +87,7 @@ export default function UserProfilePage() {
 
   const [showConnModal, setShowConnModal] = useState(false);
   const [viewConn, setViewConn] = useState<any>(null);
+  const [showComplaint, setShowComplaint] = useState(false);
   const [portfolioTab, setPortfolioTab] = useState<'audio' | 'images' | 'other'>('audio');
   const [imageFullscreen, setImageFullscreen] = useState<string | null>(null);
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
@@ -231,6 +233,15 @@ export default function UserProfilePage() {
                   className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
                   iconSize={16}
                 />
+
+                <button
+                  onClick={() => setShowComplaint(true)}
+                  className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-red-400 rounded-xl transition-all"
+                  title="Пожаловаться"
+                >
+                  <Flag size={16} />
+                </button>
+                {showComplaint && <ComplaintModal targetType="user" targetId={user.id} onClose={() => setShowComplaint(false)} />}
 
                 {/* Connection button — state depends on conn status */}
                 {conn?.status === 'ACCEPTED' ? (

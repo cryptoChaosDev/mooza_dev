@@ -36,6 +36,7 @@ import referralRoutes from './routes/referrals';
 import siteSettingsRoutes from './routes/site-settings';
 import reviewRoutes from './routes/reviews';
 import dealRoutes from './routes/deals';
+import complaintRoutes from './routes/complaints';
 
 // Load environment variables
 dotenv.config();
@@ -149,6 +150,7 @@ app.use('/api/referrals', referralRoutes);
 app.use('/api/site-settings', siteSettingsRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/deals', dealRoutes);
+app.use('/api/complaints', complaintRoutes);
 
 // ── OG tags for social bots ────────────────────────────────────────────────
 app.get('/api/og/profile/:userId', async (req: express.Request, res: express.Response) => {

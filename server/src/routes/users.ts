@@ -87,6 +87,7 @@ const userSelect = {
       _count: { select: { subscriptions: true, posts: true } },
     },
   },
+  occupancyStatus: true,
   lastSeenAt: true,
   termsAgreedAt: true,
   createdAt: true,
@@ -143,6 +144,7 @@ const publicUserSelect = {
       _count: { select: { subscriptions: true, posts: true } },
     },
   },
+  occupancyStatus: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
   portfolioLinks: { select: { id: true, type: true, url: true, title: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
@@ -274,6 +276,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
       socialLinks, birthDate,
       fieldOfActivityId,
       userProfessions, artistIds,
+      occupancyStatus,
     } = req.body;
 
     // Update basic fields
@@ -289,6 +292,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     if (socialLinks !== undefined) updateData.socialLinks = socialLinks;
     if (fieldOfActivityId !== undefined) updateData.fieldOfActivityId = fieldOfActivityId || null;
     if (birthDate !== undefined) updateData.birthDate = birthDate ? new Date(birthDate) : null;
+    if (occupancyStatus !== undefined) updateData.occupancyStatus = occupancyStatus || null;
 
     // Handle userProfessions: delete old, create new
     if (userProfessions !== undefined) {
@@ -377,6 +381,7 @@ router.put('/me/services', authenticate, async (req: AuthRequest, res) => {
             deadlineFrom:                (us as any).deadlineFrom != null ? Number((us as any).deadlineFrom) : null,
             deadlineTo:                  (us as any).deadlineTo  != null ? Number((us as any).deadlineTo)  : null,
             description:                 (us as any).description ?? null,
+            priceItems:                  (us as any).priceItems ?? null,
             selectedCustomFilterValues:  { connect: toConnect(us.customFilterValueIds) },
           },
         });
@@ -401,7 +406,7 @@ router.patch('/me/services/:serviceId', authenticate, async (req: AuthRequest, r
   try {
     const us = await prisma.userService.findUnique({ where: { id: req.params.serviceId } });
     if (!us || us.userId !== req.userId) return res.status(404).json({ error: 'Not found' });
-    const { priceFrom, priceTo, description, name, deadlineFrom, deadlineTo } = req.body;
+    const { priceFrom, priceTo, description, name, deadlineFrom, deadlineTo, priceItems } = req.body;
     const updated = await prisma.userService.update({
       where: { id: req.params.serviceId },
       data: {
@@ -411,6 +416,7 @@ router.patch('/me/services/:serviceId', authenticate, async (req: AuthRequest, r
         ...(deadlineFrom !== undefined ? { deadlineFrom: deadlineFrom !== '' && deadlineFrom != null ? Number(deadlineFrom) : null } : {}),
         ...(deadlineTo   !== undefined ? { deadlineTo:   deadlineTo   !== '' && deadlineTo   != null ? Number(deadlineTo)   : null } : {}),
         ...(description  !== undefined ? { description: description || null } : {}),
+        ...(priceItems !== undefined ? { priceItems: priceItems ?? null } : {}),
       },
       include: userServiceInclude,
     });

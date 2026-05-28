@@ -83,9 +83,9 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
 // Create post
 router.post('/', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { content, imageUrl, audioUrl, audioName, type } = req.body;
+    const { content, imageUrl, audioUrl, audioName, type, employmentStatus } = req.body;
 
-    if (!content && !imageUrl && !audioUrl) {
+    if (!content && !imageUrl && !audioUrl && !(type === 'employment' && employmentStatus)) {
       return res.status(400).json({ error: 'Post cannot be empty' });
     }
 
@@ -102,6 +102,14 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true } },
       }
     });
+
+    // If employment post — auto-update user's occupancyStatus
+    if (type === 'employment' && employmentStatus && req.userId) {
+      await prisma.user.update({
+        where: { id: req.userId },
+        data: { occupancyStatus: employmentStatus },
+      });
+    }
 
     const author = post.author;
     const preview = (content || '').slice(0, 80) + ((content || '').length > 80 ? '…' : '');

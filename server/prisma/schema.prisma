@@ -178,6 +178,7 @@ model UserService {
   deadlineFrom               Int?
   deadlineTo                 Int?
   description                String?
+  priceItems                 Json?
   status                     String    @default("active")
   selectedCustomFilterValues CustomFilterValue[]
   deals                      Deal[]
@@ -465,6 +466,8 @@ model User {
 
   dealsAsCustomer Deal[] @relation("DealCustomer")
   dealsAsExecutor Deal[] @relation("DealExecutor")
+
+  occupancyStatus  String?  // 'closed' | 'considering' | 'open'
 
   birthDate     DateTime?
   lastSeenAt    DateTime?
