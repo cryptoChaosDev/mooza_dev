@@ -42,9 +42,23 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     // Если пароль менялся после выдачи токена — токен недействителен
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
-      select: { passwordChangedAt: true, isBlocked: true },
+      select: { id: true, passwordChangedAt: true, isBlocked: true, blockedUntil: true },
     });
-    if (!user || user.isBlocked) {
+    if (!user) {
+      return res.status(401).json({ error: 'Токен недействителен', code: 'TOKEN_INVALID' });
+    }
+
+    // If blockedUntil has passed — auto-unblock
+    if (user.blockedUntil && new Date(user.blockedUntil) < new Date()) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { blockedUntil: null, isBlocked: false },
+      });
+    } else if (user.blockedUntil && new Date(user.blockedUntil) >= new Date()) {
+      return res.status(403).json({ error: `Account blocked until ${user.blockedUntil}` });
+    }
+
+    if (user.isBlocked) {
       return res.status(401).json({ error: 'Токен недействителен', code: 'TOKEN_INVALID' });
     }
     if (user.passwordChangedAt && decoded.iat < Math.floor(user.passwordChangedAt.getTime() / 1000)) {

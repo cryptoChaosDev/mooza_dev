@@ -23,65 +23,135 @@ router.post('/upload', authenticate, uploadPostMedia.single('file'), async (req:
   }
 });
 
+// GET /api/posts/my-authors — list authors user can post as
+router.get('/my-authors', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const meId = req.userId!;
+    const user = await prisma.user.findUnique({
+      where: { id: meId },
+      select: { id: true, firstName: true, lastName: true, avatar: true },
+    });
+    const channel = await prisma.channel.findUnique({
+      where: { ownerId: meId },
+      select: { id: true, name: true, avatar: true },
+    });
+    const artistMemberships = await prisma.userArtist.findMany({
+      where: { userId: meId, isOwner: true, inviteStatus: 'ACCEPTED' },
+      include: { artist: { select: { id: true, name: true, avatar: true } } },
+    });
+    res.json({
+      user,
+      channel,
+      artists: artistMemberships.map((m: any) => m.artist),
+    });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// Shared post include used by /feed for both regular and pinned (team) posts.
+// Kept as a factory so each query gets its own per-user `where` for likes/savedBy.
+const buildFeedInclude = (userId: string | undefined) => ({
+  author: {
+    select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true }
+  },
+  channel: { select: { id: true, name: true, avatar: true } },
+  artist: { select: { id: true, name: true, avatar: true } },
+  likes: {
+    where: { userId },
+    select: { id: true }
+  },
+  savedBy: {
+    where: { userId },
+    select: { id: true }
+  },
+  comments: {
+    where: { parentCommentId: null } as any,
+    include: {
+      author: {
+        select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true }
+      },
+      reactions: {
+        select: { id: true, emoji: true, userId: true }
+      },
+      replies: {
+        include: {
+          author: {
+            select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true }
+          },
+          reactions: {
+            select: { id: true, emoji: true, userId: true }
+          },
+        },
+        orderBy: { createdAt: 'asc' },
+      },
+    } as any,
+    orderBy: { createdAt: 'asc' },
+  },
+  reactions: {
+    select: { id: true, emoji: true, userId: true }
+  },
+  _count: {
+    select: { likes: true, comments: true }
+  }
+});
+
+// System team account — its posts are pinned to the top of the feed for brand-new users.
+// See server/prisma/seeds/welcome-posts.ts
+const TEAM_EMAIL = 'team@moooza.ru';
+
 // Get feed (all posts from the social network)
 router.get('/feed', authenticate, async (req: AuthRequest, res) => {
   try {
     const { limit = 20, offset = 0, type, sort } = req.query;
+    const offsetNum = Number(offset);
+    const limitNum = Number(limit);
 
     const orderBy: any = sort === 'popular'
       ? [{ likes: { _count: 'desc' } }, { createdAt: 'desc' }]
       : { createdAt: 'desc' };
 
+    const include = buildFeedInclude(req.userId);
+
     const posts = await prisma.post.findMany({
       where: (type && type !== 'all' ? { type: String(type) } : undefined) as any,
-      include: {
-        author: {
-          select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true }
-        },
-        likes: {
-          where: { userId: req.userId },
-          select: { id: true }
-        },
-        savedBy: {
-          where: { userId: req.userId },
-          select: { id: true }
-        },
-        comments: {
-          where: { parentCommentId: null } as any,
-          include: {
-            author: {
-              select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true }
-            },
-            reactions: {
-              select: { id: true, emoji: true, userId: true }
-            },
-            replies: {
-              include: {
-                author: {
-                  select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true }
-                },
-                reactions: {
-                  select: { id: true, emoji: true, userId: true }
-                },
-              },
-              orderBy: { createdAt: 'asc' },
-            },
-          } as any,
-          orderBy: { createdAt: 'asc' },
-        },
-        reactions: {
-          select: { id: true, emoji: true, userId: true }
-        },
-        _count: {
-          select: { likes: true, comments: true }
-        }
-      },
+      include,
       orderBy,
-      take: Number(limit),
-      skip: Number(offset),
+      take: limitNum,
+      skip: offsetNum,
     });
 
-    res.json(posts.map(post => ({ ...post, isLiked: post.likes.length > 0, isSaved: post.savedBy.length > 0 })));
+    // Pin team posts at the top of the default feed for new users:
+    //  - only on the very first page (offset === 0)
+    //  - only when no type filter is active (or `type=all`)
+    //  - only on the default chronological sort (not `sort=popular`)
+    //  - only when the user has no posts of their own yet (brand-new account)
+    let pinnedPosts: typeof posts = [];
+    const isDefaultFeed = (!type || type === 'all') && sort !== 'popular';
+    if (isDefaultFeed && offsetNum === 0 && req.userId) {
+      const myPostsCount = await prisma.post.count({ where: { authorId: req.userId } });
+      if (myPostsCount === 0) {
+        const teamUser = await prisma.user.findUnique({
+          where: { email: TEAM_EMAIL },
+          select: { id: true },
+        });
+        if (teamUser) {
+          pinnedPosts = await prisma.post.findMany({
+            where: { authorId: teamUser.id },
+            include,
+            orderBy: { createdAt: 'asc' }, // show welcome posts in the order they were written
+            take: 7,
+          });
+        }
+      }
+    }
+
+    // Merge pinned posts in front, removing any duplicates from the main list.
+    const pinnedIds = new Set(pinnedPosts.map(p => p.id));
+    const combined = [
+      ...pinnedPosts,
+      ...posts.filter(p => !pinnedIds.has(p.id)),
+    ];
+
+    res.json(combined.map(post => ({ ...post, isLiked: post.likes.length > 0, isSaved: post.savedBy.length > 0 })));
   } catch (error) {
     console.error('Get feed error:', error);
     res.status(500).json({ error: 'Failed to get feed' });
@@ -91,7 +161,7 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
 // Create post
 router.post('/', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { content, imageUrl, audioUrl, audioName, type, employmentStatus, pollOptions, pollEndsAt } = req.body;
+    const { content, imageUrl, audioUrl, audioName, type, employmentStatus, pollOptions, pollEndsAt, channelId, artistId } = req.body;
 
     const isPoll = type === 'poll';
     if (isPoll) {
@@ -102,6 +172,28 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: 'Post cannot be empty' });
     }
 
+    // Validate author choice: channelId / artistId mutually exclusive, and user must own them
+    if (channelId && artistId) {
+      return res.status(400).json({ error: 'Cannot post as both channel and artist' });
+    }
+    if (channelId) {
+      const channel = await prisma.channel.findUnique({ where: { id: String(channelId) }, select: { ownerId: true } });
+      if (!channel || channel.ownerId !== req.userId) {
+        return res.status(403).json({ error: 'Not allowed to post as this channel' });
+      }
+    }
+    if (artistId) {
+      const membership = await prisma.userArtist.findFirst({
+        where: { userId: req.userId!, artistId: String(artistId), isOwner: true, inviteStatus: 'ACCEPTED' },
+      });
+      if (!membership) {
+        return res.status(403).json({ error: 'Not allowed to post as this artist' });
+      }
+    }
+    // Employment posts are only from the user (not channel/artist)
+    const effectiveChannelId = type === 'employment' ? null : (channelId || null);
+    const effectiveArtistId = type === 'employment' ? null : (artistId || null);
+
     const post = await prisma.post.create({
       data: {
         content: content || '',
@@ -110,6 +202,8 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         audioUrl: audioUrl || null,
         audioName: audioName || null,
         authorId: req.userId!,
+        channelId: effectiveChannelId,
+        artistId: effectiveArtistId,
         ...(isPoll ? {
           pollOptions: (pollOptions as string[]).filter(o => o?.trim()).map(text => ({ text, votes: 0 })),
           pollEndsAt: pollEndsAt ? new Date(pollEndsAt) : null,
@@ -117,6 +211,8 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
       } as any,
       include: {
         author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true } },
+        channel: { select: { id: true, name: true, avatar: true } },
+        artist: { select: { id: true, name: true, avatar: true } },
       }
     });
 

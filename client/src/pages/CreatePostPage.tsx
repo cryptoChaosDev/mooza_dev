@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Image, Smile, Send, X, Loader2,
   FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench, Plus, Zap, BarChart3,
@@ -41,6 +41,11 @@ export default function CreatePostPage() {
   const [employmentStatus, setEmploymentStatus] = useState('');
   const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
   const [pollDuration, setPollDuration] = useState('7');
+  const [authorChoice, setAuthorChoice] = useState<{ type: 'user' | 'channel' | 'artist'; id: string; name: string; avatar?: string } | null>(null);
+  const { data: authorsData } = useQuery({
+    queryKey: ['my-authors'],
+    queryFn: async () => { const { data } = await postAPI.getMyAuthors(); return data; },
+  });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   // Autosave draft
@@ -128,6 +133,8 @@ export default function CreatePostPage() {
       content: finalContent,
       type,
       imageUrl: imagePreview?.serverUrl,
+      channelId: authorChoice?.type === 'channel' ? authorChoice.id : null,
+      artistId: authorChoice?.type === 'artist' ? authorChoice.id : null,
       ...(isEmployment && employmentStatus ? { employmentStatus } : {}),
       ...(isPoll ? {
         pollOptions: validPollOptions,
@@ -205,6 +212,39 @@ export default function CreatePostPage() {
               </div>
             </div>
           )}
+
+          {/* Author selector — pick who publishes (user / channel / artist) */}
+          {authorsData && (() => {
+            const opts: Array<{type:'user'|'channel'|'artist'; id:string; name:string; avatar?:string}> = [
+              { type: 'user', id: authorsData.user.id, name: `${authorsData.user.firstName} ${authorsData.user.lastName}`, avatar: authorsData.user.avatar },
+              ...(authorsData.channel ? [{ type: 'channel' as const, id: authorsData.channel.id, name: authorsData.channel.name, avatar: authorsData.channel.avatar }] : []),
+              ...(authorsData.artists ?? []).map((a: any) => ({ type: 'artist' as const, id: a.id, name: a.name, avatar: a.avatar })),
+            ];
+            const current = authorChoice ?? opts[0];
+
+            // Employment can only be from user
+            const employmentOnly = type === 'employment';
+            const visibleOpts = employmentOnly ? opts.filter(o => o.type === 'user') : opts;
+
+            if (visibleOpts.length <= 1) return null;
+            return (
+              <div className="mb-3">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">От имени</p>
+                <div className="flex gap-2 flex-wrap">
+                  {visibleOpts.map(opt => (
+                    <button key={`${opt.type}-${opt.id}`} type="button"
+                      onClick={() => setAuthorChoice(opt)}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${current.id === opt.id ? 'bg-primary-600/20 border-primary-500/40 text-primary-300' : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white'}`}>
+                      <span className="text-[10px] uppercase tracking-wide opacity-60">
+                        {opt.type === 'user' ? '👤' : opt.type === 'channel' ? '📢' : '🎵'}
+                      </span>
+                      <span>{opt.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Service selector — only for type=service */}
           {isService && (

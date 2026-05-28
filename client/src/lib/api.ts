@@ -172,7 +172,8 @@ export const referenceAPI = {
 export const postAPI = {
   getFeed: (params?: { limit?: number; offset?: number; type?: string; sort?: 'new' | 'popular' }) =>
     api.get('/posts/feed', { params }),
-  createPost: (data: { content: string; type?: string; imageUrl?: string; audioUrl?: string; audioName?: string; channelId?: string | null; employmentStatus?: string; pollOptions?: string[]; pollEndsAt?: string }) =>
+  getMyAuthors: () => api.get('/posts/my-authors'),
+  createPost: (data: { content: string; type?: string; imageUrl?: string; audioUrl?: string; audioName?: string; channelId?: string | null; artistId?: string | null; employmentStatus?: string; pollOptions?: string[]; pollEndsAt?: string }) =>
     api.post('/posts', data),
   votePoll: (postId: string, optionIndex: number) =>
     api.post(`/posts/${postId}/vote`, { optionIndex }),
@@ -451,6 +452,9 @@ export const reviewAPI = {
 export const complaintAPI = {
   submit: (data: { targetType: 'user' | 'post' | 'review'; targetId: string; category: string; text?: string }) =>
     api.post('/complaints', data),
+  list: (status?: string) => api.get('/complaints', { params: status ? { status } : undefined }),
+  resolve: (id: string, data: { status: string; resolution?: string; blockDays?: number | 'forever' }) =>
+    api.patch(`/complaints/${id}`, data),
 };
 
 // Search Filters Type

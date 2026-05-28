@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
-import { adminAPI, api, siteSettingsAPI } from '../lib/api';
+import { adminAPI, api, siteSettingsAPI, complaintAPI } from '../lib/api';
 import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2, ShieldCheck, Clock, Zap, Download } from 'lucide-react';
 import AvatarComponent from '../components/Avatar';
 import * as XLSX from 'xlsx';
@@ -2158,6 +2158,210 @@ function SiteSettingsTab() {
   );
 }
 
+// ─── Complaints Tab ─────────────────────────────────────────────────────────
+
+function ComplaintsTab() {
+  const qc = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState<string>('pending');
+  const [actionId, setActionId] = useState<string | null>(null);
+  const [actionResolution, setActionResolution] = useState('');
+  const [actionBlockDays, setActionBlockDays] = useState<string>('');
+
+  const { data: complaints = [], isLoading } = useQuery<any[]>({
+    queryKey: ['admin-complaints', statusFilter],
+    queryFn: () => complaintAPI.list(statusFilter || undefined).then((r: any) => r.data),
+    refetchInterval: 30000,
+  });
+
+  const resolveMut = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: { status: string; resolution?: string; blockDays?: number | 'forever' } }) =>
+      complaintAPI.resolve(id, data),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-complaints'] });
+      setActionId(null);
+      setActionResolution('');
+      setActionBlockDays('');
+    },
+  });
+
+  const scoreColor = (s: number) => {
+    if (s >= 70) return 'bg-red-500/20 text-red-400 border border-red-500/40';
+    if (s >= 40) return 'bg-amber-500/20 text-amber-400 border border-amber-500/40';
+    return 'bg-slate-700/40 text-slate-400 border border-slate-600/40';
+  };
+
+  const statusLabel: Record<string, string> = {
+    pending: 'Ожидает',
+    reviewed: 'Рассмотрено',
+    actioned: 'Действие принято',
+    rejected: 'Отклонено',
+  };
+
+  const targetLabel = (t: string) =>
+    t === 'user' ? 'Пользователь' : t === 'post' ? 'Публикация' : t === 'review' ? 'Отзыв' : t;
+
+  const STATUS_TABS = [
+    { id: '', label: 'Все' },
+    { id: 'pending', label: 'Ожидают' },
+    { id: 'reviewed', label: 'Рассмотрены' },
+    { id: 'actioned', label: 'С действием' },
+    { id: 'rejected', label: 'Отклонены' },
+  ];
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 mb-3">
+        <Ban size={15} className="text-rose-400" />
+        <h2 className="text-sm font-semibold text-white">Жалобы</h2>
+        {complaints.length > 0 && (
+          <span className="px-1.5 py-0.5 bg-rose-500/20 text-rose-400 text-[11px] rounded-full font-semibold">{complaints.length}</span>
+        )}
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {STATUS_TABS.map(s => (
+          <button
+            key={s.id}
+            onClick={() => setStatusFilter(s.id)}
+            className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
+              statusFilter === s.id
+                ? 'bg-primary-600 text-white'
+                : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+            }`}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="text-sm text-slate-500 py-4 text-center">Загрузка...</div>
+      ) : complaints.length === 0 ? (
+        <div className="text-sm text-slate-500 py-4 text-center bg-slate-900 rounded-xl border border-slate-800">Жалоб нет</div>
+      ) : complaints.map((c: any) => (
+        <div key={c.id} className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+          <div className="flex items-start gap-3 mb-3">
+            <AvatarComponent src={c.reporter?.avatar} name={`${c.reporter?.firstName} ${c.reporter?.lastName}`} size={40} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center flex-wrap gap-2">
+                <p className="font-semibold text-white text-sm">
+                  {c.reporter?.firstName} {c.reporter?.lastName}
+                </p>
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${scoreColor(c.riskScore)}`}>
+                  Риск: {c.riskScore}/100
+                </span>
+                <span className="px-1.5 py-0.5 bg-slate-700/50 text-slate-300 text-[10px] rounded font-medium">
+                  {statusLabel[c.status] ?? c.status}
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 mt-1">
+                {targetLabel(c.targetType)}:{' '}
+                {c.targetType === 'user' ? (
+                  <a href={`/profile/${c.targetId}`} className="text-primary-400 hover:underline" target="_blank" rel="noreferrer">
+                    {c.targetId.slice(0, 8)}…
+                  </a>
+                ) : (
+                  <span className="font-mono">{c.targetId.slice(0, 8)}…</span>
+                )}
+              </p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                <span className="font-semibold text-slate-400">Категория:</span> {c.category}
+              </p>
+              {c.text && <p className="text-xs text-slate-400 mt-1">{c.text}</p>}
+              {c.resolution && (
+                <p className="text-xs text-amber-300 mt-1">
+                  <span className="font-semibold">Резолюция:</span> {c.resolution}
+                </p>
+              )}
+              <p className="text-[10px] text-slate-600 mt-1">
+                {new Date(c.createdAt).toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          {c.status === 'pending' && (
+            actionId === c.id ? (
+              <div className="space-y-2 mt-2 pt-2 border-t border-slate-800">
+                <input
+                  value={actionResolution}
+                  onChange={e => setActionResolution(e.target.value)}
+                  placeholder="Резолюция (необязательно)..."
+                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
+                />
+                {c.targetType === 'user' && (
+                  <div className="flex flex-wrap gap-1.5">
+                    <span className="text-[11px] text-slate-500 self-center">Блок:</span>
+                    {['', '1', '7', '30', 'forever'].map(d => (
+                      <button
+                        key={d || 'none'}
+                        onClick={() => setActionBlockDays(d)}
+                        className={`px-2 py-1 rounded text-[11px] transition-colors ${
+                          actionBlockDays === d
+                            ? 'bg-rose-600 text-white'
+                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                        }`}
+                      >
+                        {d === '' ? 'не блокировать' : d === 'forever' ? 'навсегда' : `${d}д`}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <button
+                    disabled={resolveMut.isPending}
+                    onClick={() =>
+                      resolveMut.mutate({
+                        id: c.id,
+                        data: {
+                          status: actionBlockDays ? 'actioned' : 'reviewed',
+                          resolution: actionResolution || undefined,
+                          blockDays: actionBlockDays
+                            ? (actionBlockDays === 'forever' ? 'forever' : Number(actionBlockDays))
+                            : undefined,
+                        },
+                      })
+                    }
+                    className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Применить
+                  </button>
+                  <button
+                    disabled={resolveMut.isPending}
+                    onClick={() =>
+                      resolveMut.mutate({
+                        id: c.id,
+                        data: { status: 'rejected', resolution: actionResolution || 'Жалоба отклонена' },
+                      })
+                    }
+                    className="flex-1 py-2 bg-slate-800 hover:bg-red-500/20 border border-slate-700 hover:border-red-500/40 text-slate-400 hover:text-red-400 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+                  >
+                    Отклонить жалобу
+                  </button>
+                  <button
+                    onClick={() => { setActionId(null); setActionResolution(''); setActionBlockDays(''); }}
+                    className="px-3 py-2 bg-slate-800 text-slate-400 text-xs rounded-lg"
+                  >
+                    Отмена
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setActionId(c.id); setActionResolution(''); setActionBlockDays(''); }}
+                  className="flex-1 py-2 bg-primary-600 hover:bg-primary-500 text-white text-xs font-semibold rounded-lg transition-colors"
+                >
+                  Рассмотреть
+                </button>
+              </div>
+            )
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const TABS = [
   { id: 'structure',   label: 'Структура' },
   { id: 'spheres',     label: 'Сферы' },
@@ -2259,6 +2463,7 @@ export default function AdminPage() {
 
         {tab === 'moderation' && (
           <div className="space-y-8">
+            <ComplaintsTab />
             <ServiceModerationTab />
             <ArtistModerationTab />
           </div>

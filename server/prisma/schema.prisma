@@ -301,6 +301,7 @@ model Artist {
   genres      ArtistGenre[]
   userArtists UserArtist[]
   followers   ArtistFollower[]
+  posts       Post[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -386,6 +387,7 @@ model User {
   role      String?
   isAdmin   Boolean  @default(false)
   isBlocked  Boolean  @default(false)
+  blockedUntil DateTime?
   isPremium  Boolean  @default(false)
   isPro      Boolean  @default(false)
   isVerified Boolean  @default(false)
@@ -466,6 +468,8 @@ model User {
   reviewsGiven    Review[] @relation("ReviewAuthor")
   reviewsReceived Review[] @relation("ReviewTarget")
 
+  complaintsFiled Complaint[] @relation("ComplaintReporter")
+
   dealsAsCustomer Deal[] @relation("DealCustomer")
   dealsAsExecutor Deal[] @relation("DealExecutor")
   dealEditRequests DealEditRequest[] @relation("DealEditRequester")
@@ -510,6 +514,27 @@ model Review {
   @@index([targetId])
   @@index([authorId])
   @@index([dealId])
+}
+
+model Complaint {
+  id          String   @id @default(uuid())
+  reporterId  String
+  targetType  String   // 'user' | 'post' | 'review'
+  targetId    String
+  category    String
+  text        String?
+  riskScore   Int      @default(0)
+  status      String   @default("pending")  // pending | reviewed | actioned | rejected
+  resolution  String?
+  resolvedAt  DateTime?
+
+  reporter User @relation("ComplaintReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([targetType, targetId])
+  @@index([status])
 }
 
 model Deal {
@@ -667,6 +692,9 @@ model Post {
   channelId String?
   channel   Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
 
+  artistId String?
+  artist   Artist? @relation(fields: [artistId], references: [id], onDelete: SetNull)
+
   likes     Like[]
   comments  Comment[]
   reactions PostReaction[]
@@ -680,6 +708,7 @@ model Post {
   @@index([createdAt])
   @@index([authorId, createdAt])
   @@index([channelId])
+  @@index([artistId])
 }
 
 model PollVote {

@@ -284,6 +284,11 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                 </span>
               )}
             </div>
+            {post.channel ? (
+              <p className="text-xs text-slate-500 truncate">📢 {post.channel.name}</p>
+            ) : post.artist ? (
+              <p className="text-xs text-slate-500 truncate">🎵 {post.artist.name}</p>
+            ) : null}
             <p className="text-xs text-slate-500 truncate">
               {timeAgo(post.createdAt)}{post.author.role ? ` · ${post.author.role}` : ''}
               {new Date(post.updatedAt).getTime() - new Date(post.createdAt).getTime() > 5000 && <span className="text-slate-600"> · изменён {timeAgo(post.updatedAt)}</span>}

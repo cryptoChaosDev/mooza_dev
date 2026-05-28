@@ -7,6 +7,7 @@ import dotenv from 'dotenv';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { initSocket } from './socket';
+import { startScheduler } from './scheduler';
 
 // Import rate limiters
 import { apiLimiter } from './middleware/rateLimiter';
@@ -222,6 +223,8 @@ httpServer.listen(PORT, () => {
   logger.info(`🚀 Server running on http://localhost:${PORT}`);
   logger.info(`📊 Health check: http://localhost:${PORT}/health`);
   logger.info('🔌 Socket.io enabled');
+  // Start background scheduler (deal timeouts + user unblock)
+  startScheduler();
 });
 
 // Graceful shutdown
