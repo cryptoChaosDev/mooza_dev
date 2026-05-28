@@ -116,6 +116,19 @@ async function main() {
   }
   console.log(`  ↪ Resolved IDs: alice=${alice.id} bob=${bob.id}`);
 
+  // ── Onboarding flag flow ──────────────────────────────────────
+  // 1. Fresh user → onboardingCompletedAt is null
+  r = await api('GET', '/users/me', { token: alice.token });
+  log(r.ok && r.data.onboardingCompletedAt === null, 'Alice has null onboardingCompletedAt (fresh)', `value=${r.data.onboardingCompletedAt}`);
+
+  // 2. Complete onboarding → returns timestamp
+  r = await api('PATCH', '/users/me/complete-onboarding', { token: alice.token });
+  log(r.ok && !!r.data.onboardingCompletedAt, 'Alice completes onboarding', `value=${r.data.onboardingCompletedAt}`);
+
+  // 3. /users/me now returns set timestamp
+  r = await api('GET', '/users/me', { token: alice.token });
+  log(r.ok && !!r.data.onboardingCompletedAt, 'Alice onboardingCompletedAt persisted', `value=${r.data.onboardingCompletedAt}`);
+
   // ── Forgot/reset password flow ────────────────────────────────
   r = await api('POST', '/auth/forgot-password', { body: { email: aliceEmail } });
   log(r.ok, 'Forgot-password Alice', `status=${r.status}`);
