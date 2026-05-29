@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { adminAPI, api, siteSettingsAPI, complaintAPI } from '../lib/api';
-import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2, ShieldCheck, Clock, Zap, Download } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2, ShieldCheck, Clock, Zap, Download, ExternalLink, RefreshCw, BarChart2, AlertTriangle } from 'lucide-react';
 import AvatarComponent from '../components/Avatar';
 import * as XLSX from 'xlsx';
 
@@ -2166,6 +2166,14 @@ function ComplaintsTab() {
   const [actionId, setActionId] = useState<string | null>(null);
   const [actionResolution, setActionResolution] = useState('');
   const [actionBlockDays, setActionBlockDays] = useState<string>('');
+  const [deleteContent, setDeleteContent] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(true);
+
+  const { data: stats } = useQuery({
+    queryKey: ['complaints-stats'],
+    queryFn: () => complaintAPI.stats().then((r: any) => r.data),
+    refetchInterval: 60000,
+  });
 
   const { data: complaints = [], isLoading } = useQuery<any[]>({
     queryKey: ['admin-complaints', statusFilter],
@@ -2174,15 +2182,31 @@ function ComplaintsTab() {
   });
 
   const resolveMut = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: { status: string; resolution?: string; blockDays?: number | 'forever' } }) =>
+    mutationFn: ({ id, data }: { id: string; data: { status: string; resolution?: string; blockDays?: number | 'forever'; deleteContent?: boolean } }) =>
       complaintAPI.resolve(id, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-complaints'] });
+      qc.invalidateQueries({ queryKey: ['complaints-stats'] });
       setActionId(null);
       setActionResolution('');
       setActionBlockDays('');
+      setDeleteContent(false);
     },
   });
+
+  const openAction = (id: string) => {
+    setActionId(id);
+    setActionResolution('');
+    setActionBlockDays('');
+    setDeleteContent(false);
+  };
+
+  const closeAction = () => {
+    setActionId(null);
+    setActionResolution('');
+    setActionBlockDays('');
+    setDeleteContent(false);
+  };
 
   const scoreColor = (s: number) => {
     if (s >= 70) return 'bg-red-500/20 text-red-400 border border-red-500/40';
@@ -2197,6 +2221,13 @@ function ComplaintsTab() {
     rejected: 'Отклонено',
   };
 
+  const statusBadgeClass: Record<string, string> = {
+    pending: 'bg-amber-500/20 text-amber-400',
+    reviewed: 'bg-blue-500/20 text-blue-400',
+    actioned: 'bg-emerald-500/20 text-emerald-400',
+    rejected: 'bg-slate-700/50 text-slate-400',
+  };
+
   const targetLabel = (t: string) =>
     t === 'user' ? 'Пользователь' : t === 'post' ? 'Публикация' : t === 'review' ? 'Отзыв' : t;
 
@@ -2208,6 +2239,17 @@ function ComplaintsTab() {
     { id: 'rejected', label: 'Отклонены' },
   ];
 
+  // Stats derived values
+  const pendingCount = stats?.byStatus?.find((s: any) => s.status === 'pending')?._count ?? 0;
+  const actionedTodayCount = (() => {
+    if (!stats?.byStatus) return 0;
+    // We show total actioned+reviewed as a rough proxy (stats don't filter by date)
+    const actioned = stats.byStatus.find((s: any) => s.status === 'actioned')?._count ?? 0;
+    const reviewed = stats.byStatus.find((s: any) => s.status === 'reviewed')?._count ?? 0;
+    return actioned + reviewed;
+  })();
+  const topCategories: { category: string; _count: number }[] = stats?.byCategory?.slice(0, 3) ?? [];
+
   return (
     <div className="space-y-3">
       <div className="flex items-center gap-2 mb-3">
@@ -2216,8 +2258,50 @@ function ComplaintsTab() {
         {complaints.length > 0 && (
           <span className="px-1.5 py-0.5 bg-rose-500/20 text-rose-400 text-[11px] rounded-full font-semibold">{complaints.length}</span>
         )}
+        <button
+          onClick={() => setStatsOpen(v => !v)}
+          className="ml-auto flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 text-slate-400 hover:text-white text-xs transition-colors"
+        >
+          <BarChart2 size={12} />
+          {statsOpen ? 'Скрыть статистику' : 'Статистика'}
+        </button>
       </div>
 
+      {/* Stats panel */}
+      {statsOpen && stats && (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 mb-1">
+          <div className="grid grid-cols-3 gap-2 mb-3">
+            <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2 text-center">
+              <p className="text-lg font-bold text-red-400">{pendingCount}</p>
+              <p className="text-[10px] text-slate-400">Ожидают</p>
+            </div>
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-2 text-center">
+              <p className="text-lg font-bold text-amber-400">{stats.highRisk}</p>
+              <p className="text-[10px] text-slate-400">Высокий риск</p>
+            </div>
+            <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2 text-center">
+              <p className="text-lg font-bold text-emerald-400">{actionedTodayCount}</p>
+              <p className="text-[10px] text-slate-400">Обработано</p>
+            </div>
+          </div>
+          {topCategories.length > 0 && (
+            <div>
+              <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1.5">Топ категории</p>
+              <div className="flex flex-wrap gap-1.5">
+                {topCategories.map((cat) => (
+                  <span key={cat.category} className="flex items-center gap-1 px-2 py-0.5 bg-slate-800 rounded text-[10px] text-slate-300">
+                    <AlertTriangle size={9} className="text-amber-400" />
+                    {cat.category}
+                    <span className="text-slate-500">({cat._count})</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Status filter tabs */}
       <div className="flex flex-wrap gap-1.5">
         {STATUS_TABS.map(s => (
           <button
@@ -2240,6 +2324,7 @@ function ComplaintsTab() {
         <div className="text-sm text-slate-500 py-4 text-center bg-slate-900 rounded-xl border border-slate-800">Жалоб нет</div>
       ) : complaints.map((c: any) => (
         <div key={c.id} className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+          {/* Header: reporter + risk + status */}
           <div className="flex items-start gap-3 mb-3">
             <AvatarComponent src={c.reporter?.avatar} name={`${c.reporter?.firstName} ${c.reporter?.lastName}`} size={40} />
             <div className="flex-1 min-w-0">
@@ -2250,20 +2335,10 @@ function ComplaintsTab() {
                 <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${scoreColor(c.riskScore)}`}>
                   Риск: {c.riskScore}/100
                 </span>
-                <span className="px-1.5 py-0.5 bg-slate-700/50 text-slate-300 text-[10px] rounded font-medium">
+                <span className={`px-1.5 py-0.5 text-[10px] rounded font-medium ${statusBadgeClass[c.status] ?? 'bg-slate-700/50 text-slate-400'}`}>
                   {statusLabel[c.status] ?? c.status}
                 </span>
               </div>
-              <p className="text-xs text-slate-400 mt-1">
-                {targetLabel(c.targetType)}:{' '}
-                {c.targetType === 'user' ? (
-                  <a href={`/profile/${c.targetId}`} className="text-primary-400 hover:underline" target="_blank" rel="noreferrer">
-                    {c.targetId.slice(0, 8)}…
-                  </a>
-                ) : (
-                  <span className="font-mono">{c.targetId.slice(0, 8)}…</span>
-                )}
-              </p>
               <p className="text-xs text-slate-500 mt-0.5">
                 <span className="font-semibold text-slate-400">Категория:</span> {c.category}
               </p>
@@ -2273,88 +2348,169 @@ function ComplaintsTab() {
                   <span className="font-semibold">Резолюция:</span> {c.resolution}
                 </p>
               )}
-              <p className="text-[10px] text-slate-600 mt-1">
-                {new Date(c.createdAt).toLocaleString()}
-              </p>
+              <div className="flex gap-3 mt-1">
+                <p className="text-[10px] text-slate-600">{new Date(c.createdAt).toLocaleString()}</p>
+                {c.resolvedAt && (
+                  <p className="text-[10px] text-slate-600">→ {new Date(c.resolvedAt).toLocaleString()}</p>
+                )}
+              </div>
             </div>
           </div>
 
-          {c.status === 'pending' && (
-            actionId === c.id ? (
-              <div className="space-y-2 mt-2 pt-2 border-t border-slate-800">
-                <input
-                  value={actionResolution}
-                  onChange={e => setActionResolution(e.target.value)}
-                  placeholder="Резолюция (необязательно)..."
-                  className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
-                />
-                {c.targetType === 'user' && (
-                  <div className="flex flex-wrap gap-1.5">
-                    <span className="text-[11px] text-slate-500 self-center">Блок:</span>
-                    {['', '1', '7', '30', 'forever'].map(d => (
-                      <button
-                        key={d || 'none'}
-                        onClick={() => setActionBlockDays(d)}
-                        className={`px-2 py-1 rounded text-[11px] transition-colors ${
-                          actionBlockDays === d
-                            ? 'bg-rose-600 text-white'
-                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                        }`}
-                      >
-                        {d === '' ? 'не блокировать' : d === 'forever' ? 'навсегда' : `${d}д`}
-                      </button>
-                    ))}
-                  </div>
+          {/* Target preview */}
+          <div className="mb-3">
+            <p className="text-[10px] text-slate-500 uppercase tracking-wider mb-1">{targetLabel(c.targetType)}</p>
+            {c.targetType === 'user' && c.targetData ? (
+              <div className="flex items-center gap-2 p-2 bg-slate-800/60 rounded-xl">
+                <span className="text-xs text-slate-400">Пользователь:</span>
+                <a
+                  href={`/profile/${c.targetData.id}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-sm font-medium text-primary-400 hover:underline flex items-center gap-1"
+                >
+                  {c.targetData.firstName} {c.targetData.lastName}
+                  <ExternalLink size={11} />
+                </a>
+                {c.targetData.isBlocked && (
+                  <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded">заблокирован</span>
                 )}
-                <div className="flex gap-2">
-                  <button
-                    disabled={resolveMut.isPending}
-                    onClick={() =>
-                      resolveMut.mutate({
-                        id: c.id,
-                        data: {
-                          status: actionBlockDays ? 'actioned' : 'reviewed',
-                          resolution: actionResolution || undefined,
-                          blockDays: actionBlockDays
-                            ? (actionBlockDays === 'forever' ? 'forever' : Number(actionBlockDays))
-                            : undefined,
-                        },
-                      })
-                    }
-                    className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    Применить
-                  </button>
-                  <button
-                    disabled={resolveMut.isPending}
-                    onClick={() =>
-                      resolveMut.mutate({
-                        id: c.id,
-                        data: { status: 'rejected', resolution: actionResolution || 'Жалоба отклонена' },
-                      })
-                    }
-                    className="flex-1 py-2 bg-slate-800 hover:bg-red-500/20 border border-slate-700 hover:border-red-500/40 text-slate-400 hover:text-red-400 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    Отклонить жалобу
-                  </button>
-                  <button
-                    onClick={() => { setActionId(null); setActionResolution(''); setActionBlockDays(''); }}
-                    className="px-3 py-2 bg-slate-800 text-slate-400 text-xs rounded-lg"
-                  >
-                    Отмена
-                  </button>
-                </div>
               </div>
-            ) : (
+            ) : c.targetType === 'user' ? (
+              <div className="p-2 bg-slate-800/60 rounded-xl">
+                <a href={`/profile/${c.targetId}`} target="_blank" rel="noreferrer" className="text-xs text-primary-400 hover:underline font-mono">
+                  {c.targetId.slice(0, 8)}… <ExternalLink size={10} className="inline" />
+                </a>
+              </div>
+            ) : c.targetType === 'post' && c.targetData ? (
+              <div className="p-2 bg-slate-800/60 rounded-xl">
+                <span className="text-xs text-slate-400">Публикация:</span>
+                <p className="text-xs text-slate-300 mt-1 line-clamp-2">{c.targetData.content?.slice(0, 150)}</p>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  Автор: {c.targetData.author?.firstName} {c.targetData.author?.lastName}
+                </p>
+              </div>
+            ) : c.targetType === 'post' ? (
+              <div className="p-2 bg-slate-800/60 rounded-xl">
+                <span className="text-xs text-slate-500 font-mono">{c.targetId.slice(0, 8)}… (удалено или не найдено)</span>
+              </div>
+            ) : c.targetType === 'review' && c.targetData ? (
+              <div className="p-2 bg-slate-800/60 rounded-xl">
+                <span className="text-xs text-slate-400">Отзыв {c.targetData.rating}/10:</span>
+                <p className="text-xs text-slate-300 mt-1 line-clamp-2">{c.targetData.text?.slice(0, 150)}</p>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  {c.targetData.author?.firstName} → {c.targetData.target?.firstName}
+                </p>
+              </div>
+            ) : c.targetType === 'review' ? (
+              <div className="p-2 bg-slate-800/60 rounded-xl">
+                <span className="text-xs text-slate-500 font-mono">{c.targetId.slice(0, 8)}… (удалено или не найдено)</span>
+              </div>
+            ) : null}
+          </div>
+
+          {/* Action panel */}
+          {actionId === c.id ? (
+            <div className="space-y-2 mt-2 pt-2 border-t border-slate-800">
+              <input
+                value={actionResolution}
+                onChange={e => setActionResolution(e.target.value)}
+                placeholder="Резолюция (необязательно)..."
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
+              />
+              {c.targetType === 'user' && (
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="text-[11px] text-slate-500 self-center">Блок:</span>
+                  {['', '1', '7', '30', 'forever'].map(d => (
+                    <button
+                      key={d || 'none'}
+                      onClick={() => setActionBlockDays(d)}
+                      className={`px-2 py-1 rounded text-[11px] transition-colors ${
+                        actionBlockDays === d
+                          ? 'bg-rose-600 text-white'
+                          : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                      }`}
+                    >
+                      {d === '' ? 'не блокировать' : d === 'forever' ? 'навсегда' : `${d}д`}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {(c.targetType === 'post' || c.targetType === 'review') && (
+                <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={deleteContent}
+                    onChange={e => setDeleteContent(e.target.checked)}
+                    className="accent-red-500"
+                  />
+                  <Trash2 size={12} className="text-red-400" />
+                  Удалить {c.targetType === 'post' ? 'публикацию' : 'отзыв'}
+                </label>
+              )}
               <div className="flex gap-2">
                 <button
-                  onClick={() => { setActionId(c.id); setActionResolution(''); setActionBlockDays(''); }}
+                  disabled={resolveMut.isPending}
+                  onClick={() =>
+                    resolveMut.mutate({
+                      id: c.id,
+                      data: {
+                        status: actionBlockDays ? 'actioned' : 'reviewed',
+                        resolution: actionResolution || undefined,
+                        blockDays: actionBlockDays
+                          ? (actionBlockDays === 'forever' ? 'forever' : Number(actionBlockDays))
+                          : undefined,
+                        deleteContent: deleteContent || undefined,
+                      },
+                    })
+                  }
+                  className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Применить
+                </button>
+                <button
+                  disabled={resolveMut.isPending}
+                  onClick={() =>
+                    resolveMut.mutate({
+                      id: c.id,
+                      data: {
+                        status: 'rejected',
+                        resolution: actionResolution || 'Жалоба отклонена',
+                        deleteContent: deleteContent || undefined,
+                      },
+                    })
+                  }
+                  className="flex-1 py-2 bg-slate-800 hover:bg-red-500/20 border border-slate-700 hover:border-red-500/40 text-slate-400 hover:text-red-400 text-xs font-semibold rounded-lg transition-colors disabled:opacity-50"
+                >
+                  Отклонить жалобу
+                </button>
+                <button
+                  onClick={closeAction}
+                  className="px-3 py-2 bg-slate-800 text-slate-400 text-xs rounded-lg"
+                >
+                  Отмена
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-2">
+              {c.status === 'pending' ? (
+                <button
+                  onClick={() => openAction(c.id)}
                   className="flex-1 py-2 bg-primary-600 hover:bg-primary-500 text-white text-xs font-semibold rounded-lg transition-colors"
                 >
                   Рассмотреть
                 </button>
-              </div>
-            )
+              ) : (
+                <button
+                  onClick={() => openAction(c.id)}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 hover:text-white text-xs font-semibold rounded-lg transition-colors"
+                >
+                  <RefreshCw size={12} />
+                  Переработать
+                </button>
+              )}
+            </div>
           )}
         </div>
       ))}
