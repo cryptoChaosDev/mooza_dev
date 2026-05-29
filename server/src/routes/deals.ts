@@ -60,6 +60,24 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     if (!executorId || !title) return res.status(400).json({ error: 'executorId and title required' });
     if (executorId === meId) return res.status(400).json({ error: 'Cannot create deal with yourself' });
 
+    // Financial operations require 18+
+    const meUser = await prisma.user.findUnique({
+      where: { id: meId },
+      select: { birthDate: true },
+    });
+    if (meUser?.birthDate) {
+      const birth = meUser.birthDate;
+      const now = new Date();
+      const age = now.getFullYear() - birth.getFullYear()
+        - (now < new Date(now.getFullYear(), birth.getMonth(), birth.getDate()) ? 1 : 0);
+      if (age < 18) {
+        return res.status(403).json({
+          error: 'AGE_RESTRICTED',
+          message: 'Для участия в сделках необходимо быть старше 18 лет',
+        });
+      }
+    }
+
     const dt = dealType === 'event' ? 'event' : 'process';
     if (dt === 'event' && !eventDate) return res.status(400).json({ error: 'eventDate required for event deal' });
 

@@ -104,6 +104,7 @@ export default function RegisterPage() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [nickname, setNickname] = useState('');
+  const [birthDate, setBirthDate] = useState('');
   const [nicknameChecking, setNicknameChecking] = useState(false);
   const [nicknameTaken, setNicknameTaken] = useState(false);
   const nicknameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -204,7 +205,7 @@ export default function RegisterPage() {
   };
 
   // ── Validation ────────────────────────────────────────────────────────────
-  const step1Valid = firstName.trim().length > 0 && lastName.trim().length > 0 && !nicknameTaken;
+  const step1Valid = firstName.trim().length > 0 && lastName.trim().length > 0 && !!birthDate && !nicknameTaken;
 
   const validate = (): boolean => {
     setError('');
@@ -215,6 +216,11 @@ export default function RegisterPage() {
     if (step === 1) {
       if (!firstName.trim()) { setError('Укажите имя'); return false; }
       if (!lastName.trim()) { setError('Укажите фамилию'); return false; }
+      if (!birthDate) { setError('Укажите дату рождения'); return false; }
+      const birth = new Date(birthDate);
+      const age = (Date.now() - birth.getTime()) / (365.25 * 24 * 3600 * 1000);
+      if (age < 16) { setError('Для регистрации необходимо быть старше 16 лет'); return false; }
+      if (age > 120) { setError('Проверьте дату рождения'); return false; }
       if (nicknameTaken) { setError('Никнейм занят, введите другой'); return false; }
     }
     return true;
@@ -234,6 +240,7 @@ export default function RegisterPage() {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
       };
+      if (birthDate) payload.birthDate = new Date(birthDate).toISOString();
       if (nickname.trim()) payload.nickname = nickname.trim();
       if (city.trim()) payload.city = city.trim();
       if (country.trim()) payload.country = country.trim();
@@ -421,6 +428,15 @@ export default function RegisterPage() {
             </div>
           </div>
           {nicknameTaken && <p className="text-xs text-red-400 mt-1">Никнейм занят, введите другой</p>}
+        </Field>
+        <Field label="Дата рождения" required hint="Необходима для подтверждения возраста (от 16 лет)">
+          <input
+            type="date"
+            value={birthDate}
+            onChange={e => setBirthDate(e.target.value)}
+            max={new Date(Date.now() - 16 * 365.25 * 24 * 3600 * 1000).toISOString().split('T')[0]}
+            className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-2xl text-white focus:outline-none focus:border-primary-500 [color-scheme:dark]"
+          />
         </Field>
       </div>
     );

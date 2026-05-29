@@ -57,6 +57,8 @@ const registerSchema = z.object({
   password: z.string().min(8),
   // Referral
   referrerId: z.string().optional(),
+  // Age verification
+  birthDate: z.string().optional(),
 });
 
 const loginSchema = z.object({
@@ -102,6 +104,17 @@ router.post('/register', registerLimiter, async (req, res) => {
       }
     }
 
+    // Age validation: must be at least 16
+    if (data.birthDate) {
+      const birth = new Date(data.birthDate);
+      const now = new Date();
+      const age = now.getFullYear() - birth.getFullYear()
+        - (now < new Date(now.getFullYear(), birth.getMonth(), birth.getDate()) ? 1 : 0);
+      if (age < 16) {
+        return res.status(400).json({ error: 'AGE_TOO_YOUNG', message: 'Для использования платформы необходимо быть старше 16 лет' });
+      }
+    }
+
     // Hash password
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
@@ -116,6 +129,7 @@ router.post('/register', registerLimiter, async (req, res) => {
         phone: data.phone,
         country: data.country,
         city: data.city,
+        birthDate: data.birthDate ? new Date(data.birthDate) : undefined,
         fieldOfActivityId: data.fieldOfActivityId || undefined,
         referrerId: data.referrerId || undefined,
         // Create user professions
