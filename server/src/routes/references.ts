@@ -392,11 +392,11 @@ router.get('/geographies', async (_req, res) => {
 // Get price ranges
 router.get('/price-ranges', async (_req, res) => {
   try {
-    const priceRanges = await prisma.priceRange.findMany({
+    const priceRanges = await (prisma.priceRange.findMany as any)({
       orderBy: { sortOrder: 'asc' },
       include: { _count: { select: { userServices: true } } },
-    });
-    res.json(priceRanges.map(p => ({
+    }) as any[];
+    res.json(priceRanges.map((p: any) => ({
       id: p.id, name: p.name, nameEn: p.nameEn,
       minValue: p.minValue, maxValue: p.maxValue,
       sortOrder: p.sortOrder, userCount: p._count.userServices,

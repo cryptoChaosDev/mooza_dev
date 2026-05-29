@@ -109,7 +109,7 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
       ? [{ likes: { _count: 'desc' } }, { createdAt: 'desc' }]
       : { createdAt: 'desc' };
 
-    const include = buildFeedInclude(req.userId);
+    const include = buildFeedInclude(req.userId) as any;
 
     const posts = await prisma.post.findMany({
       where: (type && type !== 'all' ? { type: String(type) } : undefined) as any,
@@ -151,7 +151,7 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
       ...posts.filter(p => !pinnedIds.has(p.id)),
     ];
 
-    res.json(combined.map(post => ({ ...post, isLiked: post.likes.length > 0, isSaved: post.savedBy.length > 0 })));
+    res.json(combined.map((post: any) => ({ ...post, isLiked: post.likes.length > 0, isSaved: post.savedBy.length > 0 })));
   } catch (error) {
     console.error('Get feed error:', error);
     res.status(500).json({ error: 'Failed to get feed' });

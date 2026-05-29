@@ -749,8 +749,8 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
         const deltas: number[] = [];
         const byConv = new Map<string, typeof msgs>();
         for (const m of msgs) {
-          if (!byConv.has(m.conversationId)) byConv.set(m.conversationId, []);
-          byConv.get(m.conversationId)!.push(m);
+          if (!byConv.has(m.conversationId ?? '')) byConv.set(m.conversationId ?? '', []);
+          byConv.get(m.conversationId ?? '')!.push(m);
         }
         for (const list of byConv.values()) {
           for (let i = 1; i < list.length; i++) {
