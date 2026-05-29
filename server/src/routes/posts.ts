@@ -264,13 +264,16 @@ router.get('/saved/list', authenticate, async (req: AuthRequest, res) => {
       orderBy: { createdAt: 'desc' },
       include: {
         post: {
-          include: {
-            author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, isPremium: true, isVerified: true } },
-          },
+          include: buildFeedInclude(meId) as any,
         },
       },
     });
-    res.json(saved.map(s => ({ ...s.post, savedAt: s.createdAt })));
+    res.json(saved.map(s => ({
+      ...s.post,
+      savedAt: s.createdAt,
+      isLiked: (s.post as any).likes?.length > 0,
+      isSaved: true,
+    })));
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
