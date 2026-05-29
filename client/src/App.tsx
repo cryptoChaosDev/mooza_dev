@@ -6,6 +6,7 @@ import { useBadgeStore } from './stores/badgeStore';
 import { usePresenceStore } from './stores/presenceStore';
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket';
 import Layout from './components/Layout';
+import ErrorBoundary from './components/ErrorBoundary';
 import { IS_TMA, initTelegramApp, twa } from './lib/telegram';
 import { authAPI } from './lib/api';
 
@@ -423,21 +424,27 @@ function App() {
 
   if (!token) {
     return (
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
-          <Route path="/"         element={<LandingPage />} />
-          <Route path="/login"    element={<LoginPage />} />
-          <Route path="/register"        element={<RegisterPage />} />
-          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-          <Route path="/privacy"  element={<PrivacyPolicyPage />} />
-          <Route path="/terms"    element={<TermsPage />} />
-          <Route path="*"         element={<Navigate to="/" replace />} />
-        </Routes>
-      </Suspense>
+      <ErrorBoundary>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/"         element={<LandingPage />} />
+            <Route path="/login"    element={<LoginPage />} />
+            <Route path="/register"        element={<RegisterPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/privacy"  element={<PrivacyPolicyPage />} />
+            <Route path="/terms"    element={<TermsPage />} />
+            <Route path="*"         element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
+      </ErrorBoundary>
     );
   }
 
-  return <AppRoutes />;
+  return (
+    <ErrorBoundary>
+      <AppRoutes />
+    </ErrorBoundary>
+  );
 }
 
 export default App;
