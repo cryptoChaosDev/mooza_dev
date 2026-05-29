@@ -6,16 +6,24 @@ import { useNavigate } from 'react-router-dom';
 import { dealAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 
+interface DuplicateValues {
+  title?: string;
+  price?: number | null;
+  revisionCount?: number | null;
+  result?: string | null;
+}
+
 interface Props {
   executorId: string;
   executorName: string;
   serviceId?: string;
   userServiceId?: string;
   serviceName?: string;
+  initialValues?: DuplicateValues;
   onClose: () => void;
 }
 
-export default function DealCreateModal({ executorId, executorName, serviceId, userServiceId, serviceName, onClose }: Props) {
+export default function DealCreateModal({ executorId, executorName, serviceId, userServiceId, serviceName, initialValues, onClose }: Props) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { user } = useAuthStore();
@@ -25,13 +33,13 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
     : null;
   const canCreateDeal = userAge === null || userAge >= 18;
 
-  const [title, setTitle] = useState(serviceName ? `Сделка: ${serviceName}` : '');
+  const [title, setTitle] = useState(initialValues?.title ?? (serviceName ? `Сделка: ${serviceName}` : ''));
   const [dealType, setDealType] = useState<'process' | 'event'>('process');
-  const [price, setPrice] = useState('');
+  const [price, setPrice] = useState(initialValues?.price != null ? String(initialValues.price) : '');
   const [deadline, setDeadline] = useState('');
   const [acceptDeadline, setAcceptDeadline] = useState('');
-  const [revisionCount, setRevisionCount] = useState('3');
-  const [result, setResult] = useState('');
+  const [revisionCount, setRevisionCount] = useState(initialValues?.revisionCount != null ? String(initialValues.revisionCount) : '3');
+  const [result, setResult] = useState(initialValues?.result ?? '');
   const [eventDate, setEventDate] = useState('');
   const [deposit, setDeposit] = useState('');
 

@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, HandshakeIcon } from 'lucide-react';
 import { dealAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { useAuthStore } from '../stores/authStore';
+import DealCreateModal from '../components/DealCreateModal';
 
 const STATUS_BADGE: Record<string, { label: string; color: string }> = {
   PENDING:          { label: 'На согласовании',  color: 'bg-amber-500/15 text-amber-400' },
@@ -21,8 +22,33 @@ const ARCHIVE_STATUSES = ['COMPLETED', 'CANCELLED'];
 
 export default function DealsPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const me = useAuthStore(s => s.user);
   const [tab, setTab] = useState<'active' | 'archive'>('active');
+  const [duplicateModal, setDuplicateModal] = useState<{
+    executorId: string;
+    executorName: string;
+    initialValues: { title?: string; price?: number | null; revisionCount?: number | null; result?: string | null };
+  } | null>(null);
+
+  // Open duplicate modal when navigated here with state.duplicate
+  useEffect(() => {
+    const dup = (location.state as any)?.duplicate;
+    if (dup?.executorId) {
+      setDuplicateModal({
+        executorId: dup.executorId,
+        executorName: dup.executorName || 'Исполнитель',
+        initialValues: {
+          title: dup.title,
+          price: dup.price,
+          revisionCount: dup.revisionCount,
+          result: dup.result,
+        },
+      });
+      // Clear state so back-navigation doesn't re-open modal
+      window.history.replaceState({}, '', location.pathname);
+    }
+  }, [location.state, location.pathname]);
 
   const { data: deals = [], isLoading } = useQuery<any[]>({
     queryKey: ['deals'],
@@ -89,6 +115,15 @@ export default function DealsPage() {
           );
         })}
       </div>
+
+      {duplicateModal && (
+        <DealCreateModal
+          executorId={duplicateModal.executorId}
+          executorName={duplicateModal.executorName}
+          initialValues={duplicateModal.initialValues}
+          onClose={() => setDuplicateModal(null)}
+        />
+      )}
     </div>
   );
 }

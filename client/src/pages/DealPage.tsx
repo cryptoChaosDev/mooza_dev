@@ -121,8 +121,10 @@ export default function DealPage() {
           {/* Дублировать — открывает форму создания с заполненными полями */}
           <button
             onClick={() => {
+              const other = isCustomer ? deal.executor : deal.customer;
               const otherId = isCustomer ? deal.executorId : deal.customerId;
-              navigate('/deals', { state: { duplicate: { title: deal.title, executorId: otherId, price: deal.price, revisionCount: deal.revisionCount, result: deal.result } } });
+              const otherName = other ? `${other.firstName} ${other.lastName}` : '';
+              navigate('/deals', { state: { duplicate: { title: deal.title, executorId: otherId, executorName: otherName, price: deal.price, revisionCount: deal.revisionCount, result: deal.result } } });
             }}
             className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all flex-shrink-0"
             title="Дублировать сделку"
