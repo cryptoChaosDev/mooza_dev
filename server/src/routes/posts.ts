@@ -709,6 +709,11 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
+    // Remove stale notifications referencing this post before deleting it
+    await prisma.notification.deleteMany({
+      where: { link: { contains: post.id } },
+    });
+
     await prisma.post.delete({
       where: { id: req.params.id }
     });
