@@ -24,7 +24,7 @@ router.get('/fields-of-activity', async (_req, res) => {
 router.post('/fields-of-activity', async (req, res) => {
   try {
     const item = await prisma.fieldOfActivity.create({ data: { name: req.body.name } });
-    res.json(item);
+    res.status(201).json(item);
   } catch (e: any) {
     res.status(400).json({ error: e.message });
   }
@@ -76,7 +76,7 @@ router.post('/professions', async (req, res) => {
   try {
     if (!req.body.name) return res.status(400).json({ error: 'Name required' });
     const item = await prisma.profession.create({ data: { name: req.body.name } });
-    res.json(item);
+    res.status(201).json(item);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 router.put('/professions/:id', async (req, res) => {
@@ -154,7 +154,7 @@ router.get('/genres', async (_req, res) => {
   res.json(await prisma.genre.findMany({ orderBy: { sortOrder: 'asc' } }));
 });
 router.post('/genres', async (req, res) => {
-  try { res.json(await prisma.genre.create({ data: { name: req.body.name, sortOrder: req.body.sortOrder ?? 0 } })); }
+  try { res.status(201).json(await prisma.genre.create({ data: { name: req.body.name, sortOrder: req.body.sortOrder ?? 0 } })); }
   catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 router.put('/genres/:id', async (req, res) => {
@@ -175,7 +175,7 @@ router.get('/work-formats', async (_req, res) => {
   res.json(await prisma.workFormat.findMany({ orderBy: { sortOrder: 'asc' } }));
 });
 router.post('/work-formats', async (req, res) => {
-  try { res.json(await prisma.workFormat.create({ data: { name: req.body.name, sortOrder: req.body.sortOrder ?? 0 } })); }
+  try { res.status(201).json(await prisma.workFormat.create({ data: { name: req.body.name, sortOrder: req.body.sortOrder ?? 0 } })); }
   catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 router.put('/work-formats/:id', async (req, res) => {
@@ -196,7 +196,7 @@ router.get('/profession-features', async (_req, res) => {
   res.json(await prisma.professionFeature.findMany({ orderBy: { name: 'asc' } }));
 });
 router.post('/profession-features', async (req, res) => {
-  try { res.json(await prisma.professionFeature.create({ data: { name: req.body.name } })); }
+  try { res.status(201).json(await prisma.professionFeature.create({ data: { name: req.body.name } })); }
   catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 router.put('/profession-features/:id', async (req, res) => {
@@ -213,7 +213,7 @@ router.get('/employment-types', async (_req, res) => {
   res.json(await prisma.employmentType.findMany({ orderBy: { sortOrder: 'asc' } }));
 });
 router.post('/employment-types', async (req, res) => {
-  try { res.json(await prisma.employmentType.create({ data: { name: req.body.name, sortOrder: req.body.sortOrder ?? 0 } })); }
+  try { res.status(201).json(await prisma.employmentType.create({ data: { name: req.body.name, sortOrder: req.body.sortOrder ?? 0 } })); }
   catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 router.put('/employment-types/:id', async (req, res) => {
@@ -234,7 +234,7 @@ router.get('/skill-levels', async (_req, res) => {
   res.json(await prisma.skillLevel.findMany({ orderBy: { sortOrder: 'asc' } }));
 });
 router.post('/skill-levels', async (req, res) => {
-  try { res.json(await prisma.skillLevel.create({ data: { name: req.body.name, sortOrder: req.body.sortOrder ?? 0 } })); }
+  try { res.status(201).json(await prisma.skillLevel.create({ data: { name: req.body.name, sortOrder: req.body.sortOrder ?? 0 } })); }
   catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 router.put('/skill-levels/:id', async (req, res) => {
@@ -255,7 +255,7 @@ router.get('/availabilities', async (_req, res) => {
   res.json(await prisma.availability.findMany({ orderBy: { sortOrder: 'asc' } }));
 });
 router.post('/availabilities', async (req, res) => {
-  try { res.json(await prisma.availability.create({ data: { name: req.body.name, sortOrder: req.body.sortOrder ?? 0 } })); }
+  try { res.status(201).json(await prisma.availability.create({ data: { name: req.body.name, sortOrder: req.body.sortOrder ?? 0 } })); }
   catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 router.put('/availabilities/:id', async (req, res) => {
@@ -276,7 +276,7 @@ router.get('/geographies', async (_req, res) => {
   res.json(await prisma.geography.findMany({ orderBy: { sortOrder: 'asc' } }));
 });
 router.post('/geographies', async (req, res) => {
-  try { res.json(await prisma.geography.create({ data: { name: req.body.name, sortOrder: req.body.sortOrder ?? 0 } })); }
+  try { res.status(201).json(await prisma.geography.create({ data: { name: req.body.name, sortOrder: req.body.sortOrder ?? 0 } })); }
   catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 router.put('/geographies/:id', async (req, res) => {
@@ -298,7 +298,7 @@ router.get('/price-ranges', async (_req, res) => {
 });
 router.post('/price-ranges', async (req, res) => {
   try {
-    res.json(await prisma.priceRange.create({
+    res.status(201).json(await prisma.priceRange.create({
       data: { name: req.body.name, sortOrder: req.body.sortOrder ?? 0, minValue: req.body.minValue, maxValue: req.body.maxValue },
     }));
   } catch (e: any) { res.status(400).json({ error: e.message }); }
@@ -334,7 +334,7 @@ router.post('/directions', async (req, res) => {
   try {
     if (!req.body.name) return res.status(400).json({ error: 'Name required' });
     const item = await prisma.direction.create({ data: { name: req.body.name, allowedFilterTypes: [] } });
-    res.json(item);
+    res.status(201).json(item);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 router.put('/directions/:id', async (req, res) => {
@@ -456,7 +456,7 @@ router.get('/artists', async (_req, res) => {
   res.json(await prisma.artist.findMany({ orderBy: { name: 'asc' } }));
 });
 router.post('/artists', async (req, res) => {
-  try { res.json(await prisma.artist.create({ data: { name: req.body.name } })); }
+  try { res.status(201).json(await prisma.artist.create({ data: { name: req.body.name } })); }
   catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 router.put('/artists/:id', async (req, res) => {

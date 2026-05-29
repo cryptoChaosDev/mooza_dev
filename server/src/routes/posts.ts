@@ -368,8 +368,17 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
           } as any,
           orderBy: { createdAt: 'asc' }
         },
+        savedBy: {
+          where: { userId: req.userId },
+          select: { id: true }
+        },
+        reactions: {
+          select: { id: true, emoji: true, userId: true }
+        },
+        channel: { select: { id: true, name: true, avatar: true } },
+        artist: { select: { id: true, name: true, avatar: true } },
         _count: {
-          select: { likes: true }
+          select: { likes: true, comments: true }
         }
       }
     });
@@ -378,10 +387,11 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'Post not found' });
     }
 
-    // Add isLiked property
+    // Add isLiked / isSaved properties
     const postWithLikeStatus = {
       ...post,
-      isLiked: post.likes.length > 0
+      isLiked: post.likes.length > 0,
+      isSaved: post.savedBy.length > 0,
     };
 
     res.json(postWithLikeStatus);

@@ -149,7 +149,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
           ? { create: genreIds.map((gId) => ({ genreId: gId })) }
           : undefined,
         userArtists: {
-          create: { userId },
+          create: { userId, isOwner: true },
         },
       },
       include: {
