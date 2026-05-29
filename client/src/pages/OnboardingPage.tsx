@@ -10,6 +10,7 @@ interface Slide {
   description: string;
   features?: { icon: string; text: string }[];
   accent: string;
+  requireTerms?: boolean;
 }
 
 const SLIDES: Slide[] = [
@@ -96,6 +97,7 @@ const SLIDES: Slide[] = [
     title: 'Первые шаги',
     description: 'Вы готовы! Вот с чего лучше начать, чтобы вас быстрее заметили:',
     accent: 'from-primary-600/25 to-purple-600/25',
+    requireTerms: true,
     features: [
       { icon: '1️⃣', text: 'Заполните профиль и добавьте фото' },
       { icon: '2️⃣', text: 'Укажите профессии и услуги' },
@@ -110,6 +112,7 @@ export default function OnboardingPage() {
   const navigate = useNavigate();
   const { user, setUser } = useAuthStore();
   const [current, setCurrent] = useState(0);
+  const [termsChecked, setTermsChecked] = useState(false);
   const startX = useRef<number | null>(null);
 
   const isLast = current === SLIDES.length - 1;
@@ -120,6 +123,11 @@ export default function OnboardingPage() {
     if (user && !user.onboardingCompletedAt) {
       userAPI.completeOnboarding()
         .then(({ data }) => setUser({ ...user, onboardingCompletedAt: data.onboardingCompletedAt }))
+        .catch(() => {});
+    }
+    if (termsChecked && user && !user.termsAgreedAt) {
+      userAPI.agreeToTerms()
+        .then(({ data }) => setUser({ ...user, termsAgreedAt: data.termsAgreedAt }))
         .catch(() => {});
     }
     navigate('/');
@@ -213,28 +221,51 @@ export default function OnboardingPage() {
       </div>
 
       {/* Navigation */}
-      <div className="px-6 pb-10 flex-shrink-0 flex items-center gap-3">
-        {current > 0 ? (
-          <button
-            onClick={prev}
-            className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors flex-shrink-0"
-          >
-            <ArrowLeft size={20} />
-          </button>
-        ) : (
-          <div className="w-12" />
+      <div className="px-6 pb-10 flex-shrink-0">
+        {isLast && slide.requireTerms && (
+          <label className="flex items-start gap-3 bg-slate-800/50 border border-slate-700/40 rounded-2xl px-4 py-3 cursor-pointer mb-4">
+            <input
+              type="checkbox"
+              checked={termsChecked}
+              onChange={e => setTermsChecked(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-primary-500 flex-shrink-0"
+            />
+            <span className="text-sm text-slate-300">
+              Я согласен(а) с{' '}
+              <a href="/terms" target="_blank" className="text-primary-400 hover:underline">
+                условиями использования
+              </a>{' '}
+              и{' '}
+              <a href="/privacy" target="_blank" className="text-primary-400 hover:underline">
+                политикой конфиденциальности
+              </a>
+            </span>
+          </label>
         )}
-
-        <button
-          onClick={next}
-          className="flex-1 py-3.5 rounded-2xl bg-primary-600 hover:bg-primary-500 active:scale-95 text-white font-semibold flex items-center justify-center gap-2 transition-all"
-        >
-          {isLast ? (
-            <>Начать работу 🚀</>
+        <div className="flex items-center gap-3">
+          {current > 0 ? (
+            <button
+              onClick={prev}
+              className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors flex-shrink-0"
+            >
+              <ArrowLeft size={20} />
+            </button>
           ) : (
-            <>Далее <ArrowRight size={18} /></>
+            <div className="w-12" />
           )}
-        </button>
+
+          <button
+            onClick={next}
+            disabled={isLast && slide.requireTerms === true && !termsChecked}
+            className={`flex-1 py-3.5 rounded-2xl bg-primary-600 hover:bg-primary-500 active:scale-95 text-white font-semibold flex items-center justify-center gap-2 transition-all ${isLast && slide.requireTerms === true && !termsChecked ? 'opacity-40 cursor-not-allowed' : ''}`}
+          >
+            {isLast ? (
+              <>Начать работу 🚀</>
+            ) : (
+              <>Далее <ArrowRight size={18} /></>
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );
