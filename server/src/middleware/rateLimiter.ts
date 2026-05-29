@@ -19,6 +19,7 @@ const isE2ETestEmail = (req: any): boolean => {
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 минут
   max: 100, // максимум 100 попыток с одного IP
+  skip: isE2ETestEmail, // @moooza.test addresses bypass — RFC-2606 reserved, used by E2E suite
   message: {
     error: 'Слишком много попыток входа. Пожалуйста, попробуйте позже.',
     retryAfter: '15 минут'
@@ -89,6 +90,7 @@ export const codeLimiter = rateLimit({
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
+  skip: isE2ETestEmail, // @moooza.test addresses bypass — RFC-2606 reserved, used by E2E suite
   handler: (_req, res) => {
     res.status(429).json({ error: 'Слишком много попыток. Подождите 15 минут.' });
   },

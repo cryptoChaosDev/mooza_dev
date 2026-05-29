@@ -1,0 +1,11 @@
+{
+  "name": "mooza-root",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test:playwright": "npx playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
