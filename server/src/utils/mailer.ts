@@ -38,63 +38,45 @@ const wrapper = (body: string) => `
   </div>`;
 
 export async function sendWelcomeEmail(to: string, firstName: string, lastName: string) {
-  const fullName = `${firstName} ${lastName}`.trim();
+  const name = firstName || 'музыкант';
+
+  const html = wrapper(`
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#fff">${name}, аккаунт активирован!</h2>
+
+    <p style="margin:0 0 12px;font-size:15px;color:#cbd5e1;line-height:1.6">
+      Рады видеть вас на Moooza — первой профессиональной платформе для музыкантов и всех, кто создаёт музыку.
+    </p>
+
+    <p style="margin:0 0 20px;font-size:15px;color:#cbd5e1;line-height:1.6">
+      Ваш email для входа: <strong style="color:#818cf8">${to}</strong>
+    </p>
+
+    <p style="margin:0 0 8px;font-size:14px;color:#94a3b8">Три шага для старта:</p>
+    <ul style="margin:0 0 24px;padding-left:20px;color:#94a3b8;font-size:14px;line-height:1.8">
+      <li>Заполните профиль и добавьте фото</li>
+      <li>Укажите профессию — вас найдут в каталоге</li>
+      <li>Найдите коллег и установите связи</li>
+    </ul>
+
+    <a href="https://moooza.ru"
+      style="display:inline-block;padding:12px 28px;background:#6366f1;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600">
+      Открыть Moooza
+    </a>
+
+    <p style="margin:24px 0 0;font-size:13px;color:#475569">
+      Если возникнут вопросы — пишите на <a href="mailto:support@moooza.ru" style="color:#6366f1;text-decoration:none">support@moooza.ru</a>
+    </p>
+  `);
+
+  const text = `${name}, аккаунт на Moooza активирован!\n\nВаш email для входа: ${to}\n\nОткрыть платформу: https://moooza.ru\n\nПоддержка: support@moooza.ru`;
+
   await registerTransport.sendMail({
     from: '"Moooza" <register@moooza.ru>',
     to,
-    subject: `Добро пожаловать в Moooza, ${firstName}!`,
-    html: wrapper(`
-      <!-- Hero -->
-      <div style="text-align:center;padding:8px 0 28px">
-        <div style="font-size:48px;margin-bottom:12px">🎵</div>
-        <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#fff;line-height:1.3">
-          Добро пожаловать,<br>${fullName}!
-        </h1>
-        <p style="margin:0;color:#94a3b8;font-size:15px;line-height:1.5">
-          Ваш аккаунт активирован. Вы стали частью<br>первой профессиональной сети для музыкантов.
-        </p>
-      </div>
-
-      <!-- Login info -->
-      <div style="background:#1e293b;border-radius:12px;padding:16px 20px;margin-bottom:24px">
-        <p style="margin:0 0 4px;font-size:11px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:1px">Ваш логин</p>
-        <p style="margin:0;font-size:15px;color:#818cf8;font-weight:600">${to}</p>
-      </div>
-
-      <!-- CTA Button -->
-      <div style="text-align:center;margin-bottom:28px">
-        <a href="https://moooza.ru/login"
-          style="display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;text-decoration:none;border-radius:12px;font-size:15px;font-weight:600;letter-spacing:0.3px">
-          Войти в профиль →
-        </a>
-      </div>
-
-      <!-- Feature cards -->
-      <p style="margin:0 0 12px;font-size:13px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:1px">С чего начать</p>
-      <div style="space-y:0">
-        ${[
-          ['🔍', 'Заполните профиль', 'Добавьте фото, профессию и услуги — вас начнут находить в каталоге'],
-          ['🤝', 'Найдите коллег', 'Каталог позволяет искать музыкантов по профессии, жанру и городу'],
-          ['💼', 'Оформляйте сделки', 'Структурированный процесс совместной работы с защищёнными этапами'],
-        ].map(([icon, title, desc]) => `
-          <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid #1e293b">
-            <span style="font-size:20px;flex-shrink:0;margin-top:1px">${icon}</span>
-            <div>
-              <p style="margin:0 0 2px;font-size:14px;font-weight:600;color:#e2e8f0">${title}</p>
-              <p style="margin:0;font-size:13px;color:#64748b;line-height:1.4">${desc}</p>
-            </div>
-          </div>
-        `).join('')}
-      </div>
-
-      <!-- Support -->
-      <div style="margin-top:20px;text-align:center">
-        <p style="margin:0;font-size:13px;color:#475569">
-          Вопросы? Пишите на&nbsp;
-          <a href="mailto:support@moooza.ru" style="color:#6366f1;text-decoration:none">support@moooza.ru</a>
-        </p>
-      </div>
-    `),
+    subject: `${name}, аккаунт на Moooza активирован`,
+    encoding: 'utf-8',
+    html,
+    text,
   });
 }
 
