@@ -70,8 +70,7 @@ const userSelect = {
   userProfessions: {
     include: {
       profession: {
-        select: { id: true, name: true, directionId: true },
-        include: { direction: { select: { id: true, name: true } } },
+        select: { id: true, name: true, directionId: true, direction: { select: { id: true, name: true } } },
       },
       selectedCustomFilterValues: {
         include: { filter: { select: { id: true, name: true } } },
@@ -131,8 +130,7 @@ const publicUserSelect = {
   userProfessions: {
     include: {
       profession: {
-        select: { id: true, name: true, directionId: true },
-        include: { direction: { select: { id: true, name: true } } },
+        select: { id: true, name: true, directionId: true, direction: { select: { id: true, name: true } } },
       },
       selectedCustomFilterValues: {
         include: { filter: { select: { id: true, name: true } } },
@@ -308,7 +306,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
       await prisma.userProfession.deleteMany({ where: { userId: req.userId } });
       if (userProfessions.length > 0) {
         for (const up of userProfessions as Array<{ professionId: string; features?: string[]; selectedCustomFilterValueIds?: string[] }>) {
-          await prisma.userProfession.create({
+          await (prisma.userProfession as any).create({
             data: {
               userId: req.userId!,
               professionId: up.professionId,
