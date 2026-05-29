@@ -174,6 +174,9 @@ export default function ProfilePage() {
   const [profFlowDirections, setProfFlowDirections] = useState<any[]>([]);
   const [profFlowProfessions, setProfFlowProfessions] = useState<any[]>([]);
   const [savingProfessions, setSavingProfessions] = useState(false);
+  const [expandedProfFilters, setExpandedProfFilters] = useState<string | null>(null);
+  const [profFiltersData, setProfFiltersData] = useState<Record<string, any[]>>({});
+  const [profFilterSelections, setProfFilterSelections] = useState<Record<string, string[]>>({});
 
 
   useEffect(() => {
@@ -226,6 +229,13 @@ export default function ProfilePage() {
           professionName: up.profession?.name || '',
         })) || []
       );
+      if (data.userProfessions) {
+        const selections: Record<string, string[]> = {};
+        data.userProfessions.forEach((up: any) => {
+          selections[up.professionId] = up.selectedCustomFilterValues?.map((cfv: any) => cfv.id) || [];
+        });
+        setProfFilterSelections(selections);
+      }
       setPortfolioFiles(data.portfolioFiles ?? []);
       setPortfolioLinks(data.portfolioLinks ?? []);
       setUserServices(
@@ -378,10 +388,32 @@ export default function ProfilePage() {
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingServices(false); setAddStep(null); }
   };
 
+  const loadProfFilters = async (profId: string) => {
+    if (profFiltersData[profId]) { setExpandedProfFilters(profId); return; }
+    try {
+      const { data } = await referenceAPI.getProfessionFilters(profId);
+      setProfFiltersData(prev => ({ ...prev, [profId]: data }));
+      setExpandedProfFilters(profId);
+    } catch {}
+  };
+
+  const toggleProfFilterValue = (profId: string, valueId: string) => {
+    setProfFilterSelections(prev => {
+      const cur = prev[profId] || [];
+      const next = cur.includes(valueId) ? cur.filter(v => v !== valueId) : [...cur, valueId];
+      return { ...prev, [profId]: next };
+    });
+  };
+
   const handleSaveProfessions = async (list: { professionId: string; professionName: string }[]) => {
     setSavingProfessions(true);
     try {
-      await updateMutation.mutateAsync({ userProfessions: list.map(p => ({ professionId: p.professionId })) });
+      await updateMutation.mutateAsync({
+        userProfessions: list.map(p => ({
+          professionId: p.professionId,
+          selectedCustomFilterValueIds: profFilterSelections[p.professionId] || [],
+        })),
+      });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       setEditingProfessions(false);
       setProfAddStep(null);
@@ -1097,13 +1129,52 @@ export default function ProfilePage() {
                 <div className="p-3 space-y-3">
                   {/* Existing professions */}
                   {myStandaloneProfessions.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
+                    <div className="space-y-2">
                       {myStandaloneProfessions.map((p, i) => (
-                        <div key={p.professionId} className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-500/10 border border-primary-500/25 rounded-xl">
-                          <span className="text-xs text-primary-300 font-medium">{p.professionName}</span>
-                          <button onClick={() => setMyStandaloneProfessions(prev => prev.filter((_, idx) => idx !== i))} className="text-primary-400/60 hover:text-red-400 transition-colors">
-                            <X size={12} />
-                          </button>
+                        <div key={p.professionId} className="bg-primary-500/5 border border-primary-500/20 rounded-xl p-2">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-xs text-primary-300 font-medium flex-1">{p.professionName}</span>
+                            <button
+                              type="button"
+                              onClick={() => loadProfFilters(p.professionId)}
+                              className={`text-[10px] px-2 py-0.5 rounded-lg border transition-colors ${
+                                expandedProfFilters === p.professionId
+                                  ? 'bg-primary-600/30 border-primary-500/50 text-primary-300'
+                                  : 'border-slate-600/50 text-slate-500 hover:text-slate-300 hover:border-slate-500'
+                              }`}
+                            >
+                              Атрибуты
+                            </button>
+                            <button onClick={() => { setMyStandaloneProfessions(prev => prev.filter((_, idx) => idx !== i)); if (expandedProfFilters === p.professionId) setExpandedProfFilters(null); }} className="text-primary-400/60 hover:text-red-400 transition-colors">
+                              <X size={12} />
+                            </button>
+                          </div>
+                          {expandedProfFilters === p.professionId && profFiltersData[p.professionId]?.length > 0 && (
+                            <div className="mt-2 space-y-2">
+                              {profFiltersData[p.professionId].map((filter: any) => (
+                                <div key={filter.id}>
+                                  <p className="text-xs text-slate-500 mb-1">{filter.name}</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {filter.values.map((v: any) => {
+                                      const isSelected = profFilterSelections[p.professionId]?.includes(v.id);
+                                      return (
+                                        <button key={v.id} type="button"
+                                          onClick={() => toggleProfFilterValue(p.professionId, v.id)}
+                                          className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
+                                            isSelected ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                          }`}>
+                                          {v.value}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {expandedProfFilters === p.professionId && profFiltersData[p.professionId]?.length === 0 && (
+                            <p className="text-[10px] text-slate-600 mt-1.5">Нет атрибутов для этой профессии</p>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -1192,20 +1263,30 @@ export default function ProfilePage() {
                   </div>
                 </div>
               ) : myStandaloneProfessions.length > 0 ? (
-                <div className="px-4 pt-3 pb-2">
-                  <p className="text-sm leading-relaxed">
-                    {myStandaloneProfessions.map((p, i) => (
-                      <span key={p.professionId}>
+                <div className="px-4 pt-3 pb-2 space-y-2">
+                  {myStandaloneProfessions.map((p) => {
+                    const profData = profile?.userProfessions?.find((up: any) => up.professionId === p.professionId);
+                    const cfvs: any[] = profData?.selectedCustomFilterValues || [];
+                    return (
+                      <div key={p.professionId}>
                         <button
                           onClick={() => setSelectedProfession(p)}
-                          className="text-primary-400 hover:text-primary-300 font-medium underline underline-offset-2 decoration-primary-500/40 hover:decoration-primary-400 transition-colors"
+                          className="text-primary-400 hover:text-primary-300 font-medium underline underline-offset-2 decoration-primary-500/40 hover:decoration-primary-400 transition-colors text-sm"
                         >
                           {p.professionName}
                         </button>
-                        {i < myStandaloneProfessions.length - 1 && <span className="text-slate-500">, </span>}
-                      </span>
-                    ))}
-                  </p>
+                        {cfvs.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {cfvs.map((cfv: any) => (
+                              <span key={cfv.id} className="text-[10px] bg-slate-700/50 text-slate-400 px-2 py-0.5 rounded-full">
+                                {cfv.value}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="p-4 text-center">
