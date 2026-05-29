@@ -412,8 +412,7 @@ test.describe('User profile page (/profile/:id)', () => {
     await page.waitForTimeout(2000);
 
     // Find a button with Star icon (amber color hints: bg-amber-500 or text-amber-400 or text-slate-400 hover:text-amber-400)
-    const starBtnAmber = page.locator('button').filter({ has: page.locator('svg') })
-      .filter({ hasClass: /amber/i });
+    const starBtnAmber = page.locator('button[class*="amber"], button[title*="избранн"], button[title*="Избранн"]').first();
 
     // Fallback: look for any interactive button that wraps a star-like SVG in the action area
     // The TapButton wrapper adds a tooltip via group — look for buttons near the avatar area
