@@ -324,7 +324,6 @@ router.get('/directions', async (_req, res) => {
     include: {
       fieldOfActivity: { select: { id: true, name: true } },
       customFilters: { select: { id: true, name: true } },
-      services: { select: { id: true, name: true, sortOrder: true }, orderBy: { sortOrder: 'asc' } },
     },
     orderBy: { createdAt: 'asc' },
   });
@@ -352,19 +351,14 @@ router.put('/directions/:id', async (req, res) => {
     res.status(400).json({ error: e.message });
   }
 });
-// Attach services to a direction (M2M set)
+// Attach services to a direction (M2M removed — endpoint is now a no-op stub)
 router.put('/directions/:id/services', async (req, res) => {
   try {
-    const { serviceIds = [] } = req.body;
-    const item = await prisma.direction.update({
+    const item = await prisma.direction.findUnique({
       where: { id: req.params.id },
-      data: { services: { set: (serviceIds as string[]).map(id => ({ id })) } },
-      include: {
-        fieldOfActivity: { select: { id: true, name: true } },
-        services: { select: { id: true, name: true, sortOrder: true }, orderBy: { sortOrder: 'asc' } },
-      },
+      include: { fieldOfActivity: { select: { id: true, name: true } } },
     });
-    res.json(item);
+    res.json(item ?? {});
   } catch (e: any) {
     res.status(400).json({ error: e.message });
   }

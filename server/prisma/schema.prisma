@@ -28,7 +28,6 @@ model Direction {
   professions        Profession[]
   allowedFilterTypes String[]
   customFilters      CustomFilter[] @relation("DirectionCustomFilters")
-  services           Service[]      @relation("DirectionServices")
 
   createdAt DateTime @default(now())
 
@@ -55,12 +54,11 @@ model Profession {
 
 // ============ SEARCH FILTER MODELS ============
 
-// Service — standalone reference item, attached to directions via M2M
+// Service — standalone reference item (no longer attached to directions via M2M)
 model Service {
   id        String      @id @default(uuid())
   name      String
   sortOrder Int         @default(0)
-  directions Direction[] @relation("DirectionServices")
 
   userServices       UserService[]
   connectionServices ConnectionService[]
@@ -607,6 +605,8 @@ model UserProfession {
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   profession Profession @relation(fields: [professionId], references: [id])
 
+  selectedCustomFilterValues CustomFilterValue[]
+
   createdAt DateTime @default(now())
 
   @@unique([userId, professionId])
@@ -909,7 +909,8 @@ model CustomFilterValue {
   filter    CustomFilter @relation(fields: [filterId], references: [id], onDelete: Cascade)
   createdAt DateTime     @default(now())
 
-  userServices UserService[]
+  userServices    UserService[]
+  userProfessions UserProfession[]
 
   @@index([filterId])
 }

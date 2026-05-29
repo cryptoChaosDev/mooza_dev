@@ -20,56 +20,28 @@ async function main() {
   console.log(`Importing ${catalog.length} professions across ${groups.length} groups...`);
 
   for (const groupName of groups) {
-    // Create FieldOfActivity (upsert by unique name)
-    const field = await prisma.fieldOfActivity.upsert({
-      where: { name: groupName },
-      create: { name: groupName },
-      update: {},
+    // Create Direction (Раздел) for each unique group — findFirst + create pattern
+    // (upsert with null in composite unique key is not supported by Prisma)
+    let direction = await prisma.direction.findFirst({
+      where: { name: groupName, fieldOfActivityId: null },
     });
-
-    // Create Direction with the same name (upsert by name + fieldOfActivityId)
-    const direction = await prisma.direction.upsert({
-      where: {
-        name_fieldOfActivityId: {
-          name: groupName,
-          fieldOfActivityId: field.id,
-        },
-      },
-      create: { name: groupName, fieldOfActivityId: field.id, allowedFilterTypes: [] },
-      update: {},
-    });
+    if (!direction) {
+      direction = await prisma.direction.create({
+        data: { name: groupName, fieldOfActivityId: null, allowedFilterTypes: [] },
+      });
+    }
 
     // All professions in this group
     const entries = catalog.filter((x) => x.group === groupName);
 
     for (const entry of entries) {
-      // Find or create Profession
+      // Find or create Profession linked to this Direction
       let profession = await prisma.profession.findFirst({
         where: { name: entry.profession, directionId: direction.id },
       });
       if (!profession) {
         profession = await prisma.profession.create({
           data: { name: entry.profession, directionId: direction.id },
-        });
-      }
-
-      // Create a Service with the same name and link it to the direction
-      // so it appears in AddServiceFlow search
-      let service = await prisma.service.findFirst({
-        where: { name: entry.profession },
-      });
-      if (!service) {
-        service = await prisma.service.create({
-          data: {
-            name: entry.profession,
-            directions: { connect: { id: direction.id } },
-          },
-        });
-      } else {
-        // Link to direction if not already connected
-        await prisma.service.update({
-          where: { id: service.id },
-          data: { directions: { connect: { id: direction.id } } },
         });
       }
 
