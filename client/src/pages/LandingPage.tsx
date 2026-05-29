@@ -177,11 +177,6 @@ export default function LandingPage() {
             <img src="/logo.png" alt="Moooza" className="h-32 sm:h-40 md:h-48 w-auto drop-shadow-[0_0_40px_rgba(99,102,241,0.3)]" />
           </motion.div>
 
-          <motion.div {...fadeUp(0.1)} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary-500/10 border border-primary-500/20 text-primary-400 text-xs font-semibold uppercase tracking-wider mb-6">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary-400 animate-pulse" />
-            Открытый бета-запуск
-          </motion.div>
-
           <motion.h1 {...fadeUp(0.15)} className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight tracking-tight mb-5">
             Платформа для
             <br />
