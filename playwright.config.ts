@@ -22,13 +22,26 @@ export default defineConfig({
     navigationTimeout: 30_000,
   },
   projects: [
+    // ── Android (Chrome / Pixel 5) ────────────────────────────────────────────
     {
-      name: 'mobile-chrome',
+      name: 'android-chrome',
       use: {
         ...devices['Pixel 5'],
         viewport: { width: 390, height: 844 },
       },
     },
+    // ── iOS (Safari / WebKit — iPhone 15 Pro) ─────────────────────────────────
+    // WebKit emulates iOS Safari behaviour: safe-area-inset, rubber-band scroll,
+    // no beforeinstallprompt, standalone navigator.standalone, webkit-overflow-scrolling.
+    {
+      name: 'ios-safari',
+      use: {
+        ...devices['iPhone 15 Pro'],
+        // viewport-fit=cover is the key iOS PWA setting — WebKit respects it
+        viewport: { width: 393, height: 852 },
+      },
+    },
+    // ── Desktop Chrome (optional, for admin/wide-layout checks) ───────────────
     {
       name: 'desktop-chrome',
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } },
