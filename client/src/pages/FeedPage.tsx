@@ -12,6 +12,7 @@ import { createPortal } from 'react-dom';
 import ShareButton from '../components/ShareButton';
 import { postAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import OnboardingPrompt from '../components/OnboardingPrompt';
 import AvatarComponent from '../components/Avatar';
 import AudioPlayer from '../components/AudioPlayer';
 import { ReactionBar, DoubleTapReactWrapper } from '../components/ReactionBar';
@@ -638,6 +639,9 @@ export default function FeedPage() {
             </button>
           </div>
         </div>
+
+        {/* Onboarding prompt for new users */}
+        <OnboardingPrompt />
 
         {/* Posts */}
         <div className="pb-28">
