@@ -38,6 +38,12 @@ export default function Layout({ children }: LayoutProps) {
 
   const isActive = (path: string) => location.pathname === path;
 
+  // Full-screen pages bypass all Layout chrome
+  const FULLSCREEN_PATHS = ['/onboarding'];
+  if (FULLSCREEN_PATHS.includes(location.pathname)) {
+    return <>{children}</>;
+  }
+
   return (
     <div className="min-h-screen bg-slate-950">
       {/* Mobile Header (sticky — stays in document flow so content flows naturally below it) */}

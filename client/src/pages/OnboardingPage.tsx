@@ -158,15 +158,13 @@ export default function OnboardingPage() {
 
   return (
     <div
-      className="bg-slate-950 flex flex-col select-none overflow-hidden"
-      style={{ height: '100dvh' }}
+      className="fixed inset-0 bg-slate-950 flex flex-col select-none"
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
-      {/* Header: dots + skip — fixed height */}
-      <div className="flex items-center justify-between px-5 flex-shrink-0"
-        style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top, 1.25rem))' }}>
-        <div className="flex gap-1.5 py-4">
+      {/* Dots + Skip */}
+      <div className="flex items-center justify-between px-5 pt-5 pb-2 flex-shrink-0">
+        <div className="flex gap-1.5">
           {SLIDES.map((_, i) => (
             <button
               key={i}
@@ -186,34 +184,26 @@ export default function OnboardingPage() {
         </button>
       </div>
 
-      {/* Slide content — flex-1 min-h-0 so it never overflows */}
+      {/* Slide content */}
       <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6 overflow-hidden">
-        {/* Glow bg */}
         <div className={`absolute inset-0 bg-gradient-to-br ${slide.accent} opacity-30 pointer-events-none blur-3xl`} />
 
-        <div className="relative w-full max-w-sm flex flex-col gap-3">
-          {/* Icon — scales down on small screens */}
-          <div className="text-5xl sm:text-7xl text-center leading-none">{slide.emoji}</div>
+        <div className="relative w-full max-w-sm flex flex-col gap-4">
+          <div className="text-6xl text-center leading-none">{slide.emoji}</div>
 
-          {/* Title */}
-          <h1 className="text-xl sm:text-2xl font-bold text-white text-center leading-tight whitespace-pre-line">
+          <h1 className="text-2xl font-bold text-white text-center leading-tight whitespace-pre-line">
             {slide.title}
           </h1>
 
-          {/* Description */}
           <p className="text-sm text-slate-400 text-center leading-relaxed">
             {slide.description}
           </p>
 
-          {/* Features */}
           {slide.features && (
             <div className="flex flex-col gap-2">
               {slide.features.map((f, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 bg-slate-800/50 border border-slate-700/40 rounded-2xl px-4 py-2.5"
-                >
-                  <span className="text-lg flex-shrink-0">{f.icon}</span>
+                <div key={i} className="flex items-center gap-3 bg-slate-800/50 border border-slate-700/40 rounded-2xl px-4 py-3">
+                  <span className="text-xl flex-shrink-0">{f.icon}</span>
                   <span className="text-sm text-slate-300">{f.text}</span>
                 </div>
               ))}
@@ -223,9 +213,9 @@ export default function OnboardingPage() {
       </div>
 
       {/* Navigation */}
-      <div className="px-6 flex-shrink-0" style={{ paddingBottom: 'max(2.5rem, env(safe-area-inset-bottom, 2.5rem))' }}>
+      <div className="px-5 pb-10 pt-3 flex-shrink-0">
         {isLast && slide.requireTerms && (
-          <label className="flex items-start gap-3 bg-slate-800/50 border border-slate-700/40 rounded-2xl px-4 py-3 cursor-pointer mb-4">
+          <label className="flex items-start gap-3 bg-slate-800/50 border border-slate-700/40 rounded-2xl px-4 py-3 cursor-pointer mb-3">
             <input
               type="checkbox"
               checked={termsChecked}
@@ -234,13 +224,9 @@ export default function OnboardingPage() {
             />
             <span className="text-sm text-slate-300">
               Я согласен(а) с{' '}
-              <a href="/terms" target="_blank" className="text-primary-400 hover:underline">
-                условиями использования
-              </a>{' '}
+              <a href="/terms" target="_blank" className="text-primary-400 hover:underline">условиями использования</a>{' '}
               и{' '}
-              <a href="/privacy" target="_blank" className="text-primary-400 hover:underline">
-                политикой конфиденциальности
-              </a>
+              <a href="/privacy" target="_blank" className="text-primary-400 hover:underline">политикой конфиденциальности</a>
             </span>
           </label>
         )}
@@ -253,19 +239,14 @@ export default function OnboardingPage() {
               <ArrowLeft size={20} />
             </button>
           ) : (
-            <div className="w-12" />
+            <div className="w-12 flex-shrink-0" />
           )}
-
           <button
             onClick={next}
             disabled={isLast && slide.requireTerms === true && !termsChecked}
             className={`flex-1 py-3.5 rounded-2xl bg-primary-600 hover:bg-primary-500 active:scale-95 text-white font-semibold flex items-center justify-center gap-2 transition-all ${isLast && slide.requireTerms === true && !termsChecked ? 'opacity-40 cursor-not-allowed' : ''}`}
           >
-            {isLast ? (
-              <>Начать работу 🚀</>
-            ) : (
-              <>Далее <ArrowRight size={18} /></>
-            )}
+            {isLast ? <>Начать работу 🚀</> : <>Далее <ArrowRight size={18} /></>}
           </button>
         </div>
       </div>
