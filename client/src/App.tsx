@@ -7,6 +7,7 @@ import { usePresenceStore } from './stores/presenceStore';
 import { connectSocket, disconnectSocket, getSocket } from './lib/socket';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
+import CookieConsent from './components/CookieConsent';
 import { IS_TMA, initTelegramApp, twa } from './lib/telegram';
 import { authAPI } from './lib/api';
 
@@ -436,6 +437,7 @@ function App() {
             <Route path="*"         element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
+        <CookieConsent />
       </ErrorBoundary>
     );
   }
@@ -443,6 +445,7 @@ function App() {
   return (
     <ErrorBoundary>
       <AppRoutes />
+      <CookieConsent />
     </ErrorBoundary>
   );
 }
