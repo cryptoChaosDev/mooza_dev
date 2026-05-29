@@ -123,7 +123,10 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
       const { data } = await authAPI.verifyEmail(pendingEmail, verifyCode.trim());
       setAuth(data.user, data.token);
       localStorage.setItem('termsAgreed', '1');
-      navigate('/');
+      // First-time user: show onboarding (same logic as normal login)
+      const tourDone = data.user?.onboardingCompletedAt || localStorage.getItem('mooza_tour_done');
+      if (tourDone) localStorage.setItem('mooza_tour_done', '1');
+      navigate(tourDone ? '/' : '/onboarding');
     } catch (err: any) {
       setVerifyError(err.response?.data?.error || 'Неверный код');
     } finally {
