@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Eye, EyeOff, AlertCircle, Loader2,
-  Check, Globe, ArrowRight, ArrowLeft, X, Search,
+  Check, Globe, ArrowRight, ArrowLeft, X, Search, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { authAPI, referenceAPI } from '../lib/api';
 import CityPicker from '../components/CityPicker';
@@ -74,6 +74,103 @@ interface ProfessionResult {
   direction?: { name: string };
 }
 
+// ── ProfessionFilterPicker ────────────────────────────────────────────────────
+
+interface FilterValue { id: string; value: string; sortOrder: number; }
+interface ProfessionFilter { id: string; name: string; values: FilterValue[]; }
+
+function ProfessionFilterPicker({ professionId, onChange }: {
+  professionId: string;
+  onChange: (valueIds: string[]) => void;
+}) {
+  const [filters, setFilters] = useState<ProfessionFilter[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    referenceAPI.getProfessionFilters(professionId)
+      .then(r => setFilters(r.data as ProfessionFilter[]))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [professionId]);
+
+  const toggle = (valueId: string) => {
+    const next = selected.includes(valueId)
+      ? selected.filter(id => id !== valueId)
+      : [...selected, valueId];
+    setSelected(next);
+    onChange(next);
+  };
+
+  if (loading) return (
+    <div className="mt-2 pl-2 border-l-2 border-primary-500/30">
+      <Loader2 size={13} className="animate-spin text-slate-500" />
+    </div>
+  );
+
+  if (!filters.length) return null;
+
+  // Show only first 3 filters when collapsed; all when expanded
+  const visibleFilters = expanded ? filters : filters.slice(0, 3);
+  const selectedCount = selected.length;
+
+  return (
+    <div className="mt-2 pl-2 border-l-2 border-primary-500/30">
+      {!expanded && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="flex items-center gap-1.5 text-xs text-primary-400 hover:text-primary-300 transition-colors mb-2"
+        >
+          <ChevronDown size={13} />
+          Настроить атрибуты
+          {selectedCount > 0 && (
+            <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+              {selectedCount}
+            </span>
+          )}
+        </button>
+      )}
+      {expanded && (
+        <div className="space-y-3">
+          {visibleFilters.map(filter => (
+            <div key={filter.id}>
+              <p className="text-xs font-medium text-slate-400 mb-1.5">{filter.name}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {filter.values.map(v => (
+                  <button
+                    key={v.id}
+                    type="button"
+                    onClick={() => toggle(v.id)}
+                    className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
+                      selected.includes(v.id)
+                        ? 'bg-primary-600 text-white'
+                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                    }`}
+                  >
+                    {v.value}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+          <div className="flex items-center gap-3 pt-1">
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+            >
+              <ChevronUp size={12} /> Свернуть
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Steps ─────────────────────────────────────────────────────────────────────
 
 const STEPS = [
@@ -115,6 +212,7 @@ export default function RegisterPage() {
   const [profLoading, setProfLoading] = useState(false);
   const [showProfDropdown, setShowProfDropdown] = useState(false);
   const [selectedProfs, setSelectedProfs] = useState<SelectedProfession[]>([]);
+  const [profFilterValues, setProfFilterValues] = useState<Record<string, string[]>>({});
   const profTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const profInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -250,6 +348,7 @@ export default function RegisterPage() {
       if (!skipProfs && selectedProfs.length > 0) {
         payload.userProfessions = selectedProfs.map(p => ({
           professionId: p.professionId,
+          selectedCustomFilterValueIds: profFilterValues[p.professionId] || [],
         }));
       }
 
@@ -492,14 +591,20 @@ export default function RegisterPage() {
 
         {/* Selected professions */}
         {selectedProfs.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="space-y-3">
             {selectedProfs.map(prof => (
-              <div key={prof.professionId} className="flex items-center gap-1.5 bg-slate-800/70 border border-slate-700/50 rounded-xl px-3 py-1.5">
-                <span className="text-sm text-white">{prof.professionName}</span>
-                {prof.directionName && <span className="text-xs text-slate-500">· {prof.directionName}</span>}
-                <button onClick={() => removeProfession(prof.professionId)} className="text-slate-500 hover:text-red-400 transition-colors ml-0.5">
-                  <X size={13} />
-                </button>
+              <div key={prof.professionId} className="bg-slate-800/40 border border-slate-700/40 rounded-xl px-3 py-2.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-white font-medium">{prof.professionName}</span>
+                  {prof.directionName && <span className="text-xs text-slate-500">· {prof.directionName}</span>}
+                  <button onClick={() => removeProfession(prof.professionId)} className="text-slate-500 hover:text-red-400 transition-colors ml-auto">
+                    <X size={13} />
+                  </button>
+                </div>
+                <ProfessionFilterPicker
+                  professionId={prof.professionId}
+                  onChange={valueIds => setProfFilterValues(prev => ({ ...prev, [prof.professionId]: valueIds }))}
+                />
               </div>
             ))}
           </div>
