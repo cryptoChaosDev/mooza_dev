@@ -105,31 +105,37 @@ export async function createTestUser(prefix: string): Promise<TestUser> {
   return { id: userId, email, password, token, firstName, lastName };
 }
 
-export async function loginUI(page: Page, user: TestUser): Promise<void> {
+// Accept either a TestUser object or (email, password) strings for backwards compat
+export async function loginUI(page: Page, userOrEmail: TestUser | string, _password?: string): Promise<void> {
+  let user: TestUser;
+  if (typeof userOrEmail === 'string') {
+    const r = await apiCall('POST', '/auth/login', { email: userOrEmail, password: _password });
+    user = {
+      id: r.data?.user?.id || '',
+      email: userOrEmail,
+      password: _password!,
+      token: r.data?.token || '',
+      firstName: r.data?.user?.firstName || '',
+      lastName: r.data?.user?.lastName || '',
+    };
+  } else {
+    user = userOrEmail;
+  }
   // Set token directly in localStorage to bypass login form
   await page.goto('/');
-  await page.evaluate(({ token, user: u }) => {
+  await page.evaluate(({ token, u }) => {
     localStorage.setItem('token', token);
     localStorage.setItem('termsAgreed', '1');
     localStorage.setItem('mooza_tour_done', '1');
-    // Persist Zustand auth-storage
-    const authState = {
-      state: { user: u, token },
-      version: 0,
-    };
-    localStorage.setItem('auth-storage', JSON.stringify(authState));
-  }, { token: user.token, user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName } });
+    localStorage.setItem('mooza_cookie_consent', 'necessary');
+    localStorage.setItem('auth-storage', JSON.stringify({ state: { user: u, token }, version: 0 }));
+  }, { token: user.token, u: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName } });
   await page.reload();
-  // Wait for the mobile bottom nav (fixed bottom) to appear — authenticated state.
-  // The desktop sidebar also has a <nav>, so use the fixed-bottom one specifically.
-  // Try nav.fixed first (mobile bottom nav), fall back to any nav for resilience.
   try {
     await page.waitForSelector('nav.fixed', { timeout: 20_000 });
   } catch {
-    // On slower connections or if viewport triggers desktop mode, just wait for any nav
     await page.waitForSelector('nav', { timeout: 10_000 });
   }
-  // Dismiss cookie/consent dialogs if present so they don't block clicks.
   try {
     const consent = page.locator('button:has-text("Принять"), button:has-text("OK")');
     if (await consent.count() > 0) await consent.first().click();

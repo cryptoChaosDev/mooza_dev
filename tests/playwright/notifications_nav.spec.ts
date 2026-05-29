@@ -97,7 +97,7 @@ test.describe('Notifications', () => {
 
     // Reload to pick up new notification state
     await page.reload();
-    await page.waitForSelector('nav');
+    await page.waitForLoadState('networkidle');
 
     // Find the bell button in the header
     const bellBtn = page.locator('header button').filter({ has: page.locator('svg') }).first();
