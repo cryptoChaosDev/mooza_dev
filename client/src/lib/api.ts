@@ -454,8 +454,9 @@ export const complaintAPI = {
   submit: (data: { targetType: 'user' | 'post' | 'review'; targetId: string; category: string; text?: string }) =>
     api.post('/complaints', data),
   list: (status?: string) => api.get('/complaints', { params: status ? { status } : undefined }),
-  resolve: (id: string, data: { status: string; resolution?: string; blockDays?: number | 'forever' }) =>
+  resolve: (id: string, data: { status: string; resolution?: string; blockDays?: number | 'forever'; deleteContent?: boolean }) =>
     api.patch(`/complaints/${id}`, data),
+  stats: () => api.get('/complaints/stats'),
 };
 
 // Search Filters Type

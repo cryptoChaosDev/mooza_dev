@@ -91,6 +91,22 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
+// GET /api/complaints/stats — admin stats
+router.get('/stats', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const me = await prisma.user.findUnique({ where: { id: req.userId }, select: { isAdmin: true } });
+    if (!me?.isAdmin) return res.status(403).json({ error: 'Forbidden' });
+
+    const [byStatus, byCategory, highRisk] = await Promise.all([
+      prisma.complaint.groupBy({ by: ['status'], _count: true }),
+      prisma.complaint.groupBy({ by: ['category'], _count: true, orderBy: { _count: { category: 'desc' } }, take: 10 }),
+      prisma.complaint.count({ where: { riskScore: { gte: 70 }, status: 'pending' } }),
+    ]);
+
+    res.json({ byStatus, byCategory, highRisk });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/complaints — admin list of complaints
 router.get('/', authenticate, async (req: AuthRequest, res) => {
   try {
@@ -105,7 +121,41 @@ router.get('/', authenticate, async (req: AuthRequest, res) => {
       },
       take: 100,
     });
-    res.json(complaints);
+
+    // Enrich each complaint with target data
+    const enriched = await Promise.all(complaints.map(async (c) => {
+      let target: any = null;
+      try {
+        if (c.targetType === 'user') {
+          target = await prisma.user.findUnique({
+            where: { id: c.targetId },
+            select: { id: true, firstName: true, lastName: true, avatar: true, isBlocked: true },
+          });
+        } else if (c.targetType === 'post') {
+          const post = await prisma.post.findUnique({
+            where: { id: c.targetId },
+            select: {
+              id: true, content: true, type: true, authorId: true,
+              author: { select: { id: true, firstName: true, lastName: true } },
+            },
+          });
+          target = post;
+        } else if (c.targetType === 'review') {
+          const review = await prisma.review.findUnique({
+            where: { id: c.targetId },
+            select: {
+              id: true, text: true, rating: true, targetId: true,
+              author: { select: { id: true, firstName: true, lastName: true } },
+              target: { select: { id: true, firstName: true, lastName: true } },
+            },
+          });
+          target = review;
+        }
+      } catch {}
+      return { ...c, targetData: target };
+    }));
+
+    res.json(enriched);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
@@ -116,7 +166,7 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res) => {
   try {
     const me = await prisma.user.findUnique({ where: { id: req.userId }, select: { isAdmin: true } });
     if (!me?.isAdmin) return res.status(403).json({ error: 'Forbidden' });
-    const { status, resolution, blockDays } = req.body;
+    const { status, resolution, blockDays, deleteContent } = req.body;
 
     const complaint = await prisma.complaint.findUnique({ where: { id: req.params.id } });
     if (!complaint) return res.status(404).json({ error: 'Not found' });
@@ -135,6 +185,17 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res) => {
         where: { id: complaint.targetId },
         data: { blockedUntil, isBlocked: true },
       });
+    }
+
+    // Delete reported content if requested
+    if (deleteContent) {
+      try {
+        if (complaint.targetType === 'post') {
+          await prisma.post.delete({ where: { id: complaint.targetId } });
+        } else if (complaint.targetType === 'review') {
+          await prisma.review.delete({ where: { id: complaint.targetId } });
+        }
+      } catch {} // content may already be deleted
     }
 
     res.json({ ok: true });
