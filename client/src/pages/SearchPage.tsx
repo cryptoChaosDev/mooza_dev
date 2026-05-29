@@ -27,7 +27,7 @@ const TILE_GRADIENTS = [
 ];
 
 type CatalogTab = 'services' | 'artists' | 'people';
-type ServiceView = 'fields' | 'directions' | 'professions';
+type ServiceView = 'sections' | 'professions';
 
 const ARTIST_TYPES = [
   { value: 'ALL', label: 'Все', icon: Music2 },
@@ -151,11 +151,13 @@ export default function SearchPage() {
   // ── Services tab state ─────────────────────────────────────────────────────
   const [serviceQuery, setServiceQuery] = useState('');
   const [debouncedServiceQuery, setDebouncedServiceQuery] = useState('');
-  const [serviceView, setServiceView] = useState<ServiceView>('fields');
-  const [selectedField, setSelectedField] = useState<{ id: string; name: string } | null>(null);
+  const [serviceView, setServiceView] = useState<ServiceView>('sections');
   const [selectedDirection, setSelectedDirection] = useState<{ id: string; name: string } | null>(null);
   const [selectedProfession, setSelectedProfession] = useState<{ id: string; name: string } | null>(null);
   const [hideEmpty, setHideEmpty] = useState(false);
+
+  // ── Profession attribute filters ───────────────────────────────────────────
+  const [profFilterValues, setProfFilterValues] = useState<string[]>([]);
 
   // ── Artists tab state ──────────────────────────────────────────────────────
   const [artistQuery, setArtistQuery] = useState('');
@@ -164,7 +166,6 @@ export default function SearchPage() {
   // ── People tab state ───────────────────────────────────────────────────────
   const [peopleQuery, setPeopleQuery] = useState('');
   const [debouncedPeopleQuery, setDebouncedPeopleQuery] = useState('');
-  const [selectedPeopleFieldId, setSelectedPeopleFieldId] = useState<string | null>(null);
   const [artistTypeFilter, setArtistTypeFilter] = useState<string[]>([]);
   const [artistGenreFilter, setArtistGenreFilter] = useState<string[]>([]);
 
@@ -201,29 +202,21 @@ export default function SearchPage() {
   }, [peopleQuery]);
 
   // ── Reference data ─────────────────────────────────────────────────────────
-  const { data: fields, isLoading: fieldsLoading } = useQuery({
-    queryKey: ['fields', hideEmpty, currentUser?.id],
-    queryFn: async () => {
-      const { data } = await referenceAPI.getFieldsOfActivity(
-        hideEmpty ? { excludeUserId: currentUser?.id } : { all: true }
-      );
-      return data as any[];
-    },
-  });
 
-  const { data: directions, isLoading: directionsLoading } = useQuery({
-    queryKey: ['directions', selectedField?.id, hideEmpty, currentUser?.id],
+  // Sections (Directions with label='Раздел')
+  const { data: sections, isLoading: sectionsLoading } = useQuery({
+    queryKey: ['directions-all', hideEmpty, currentUser?.id],
     queryFn: async () => {
       const { data } = await referenceAPI.getDirections(
         hideEmpty
-          ? { fieldOfActivityId: selectedField?.id, excludeUserId: currentUser?.id }
-          : { fieldOfActivityId: selectedField?.id, all: true }
+          ? { excludeUserId: currentUser?.id }
+          : { all: true }
       );
       return data as any[];
     },
-    enabled: !!selectedField,
   });
 
+  // Professions of selected direction
   const { data: professions, isLoading: professionsLoading } = useQuery({
     queryKey: ['professions', selectedDirection?.id, hideEmpty, currentUser?.id],
     queryFn: async () => {
@@ -237,18 +230,29 @@ export default function SearchPage() {
     enabled: !!selectedDirection,
   });
 
+  // Profession attribute filters
+  const { data: profFilters } = useQuery({
+    queryKey: ['prof-filters', selectedProfession?.id],
+    queryFn: async () => {
+      if (!selectedProfession) return [];
+      const { data } = await referenceAPI.getProfessionFilters(selectedProfession.id);
+      return data as any[];
+    },
+    enabled: !!selectedProfession,
+  });
+
   // ── Catalog users ──────────────────────────────────────────────────────────
   const catalogParams = {
     query: debouncedServiceQuery || undefined,
-    fieldOfActivityId: selectedField?.id,
     directionId: selectedDirection?.id,
     professionId: selectedProfession?.id,
+    customFilterValueIds: profFilterValues.length ? profFilterValues.join(',') : undefined,
   };
 
   const { data: catalogUsers, isLoading: catalogLoading } = useQuery({
     queryKey: ['catalog-users', catalogParams],
     queryFn: async () => {
-      const { data } = await userAPI.catalog(catalogParams);
+      const { data } = await userAPI.catalog(catalogParams as any);
       return (data as any[]).filter((u: any) => u.id !== currentUser?.id);
     },
   });
@@ -277,11 +281,10 @@ export default function SearchPage() {
 
   // ── People ────────────────────────────────────────────────────────────────
   const { data: peopleUsers, isLoading: peopleLoading } = useQuery({
-    queryKey: ['catalog-people', debouncedPeopleQuery, selectedPeopleFieldId],
+    queryKey: ['catalog-people', debouncedPeopleQuery],
     queryFn: async () => {
       const { data } = await userAPI.catalog({
         query: debouncedPeopleQuery || undefined,
-        fieldOfActivityId: selectedPeopleFieldId || undefined,
       });
       return (data as any[]).filter((u: any) => u.id !== currentUser?.id);
     },
@@ -299,39 +302,32 @@ export default function SearchPage() {
   });
 
   // ── Navigation helpers ─────────────────────────────────────────────────────
-  const handleFieldClick = (field: any) => {
-    setSelectedField(field);
-    setSelectedDirection(null);
-    setSelectedProfession(null);
-    setServiceView('directions');
-  };
-
-  const handleDirectionClick = (dir: any) => {
+  const handleSectionClick = (dir: any) => {
     setSelectedDirection(dir);
     setSelectedProfession(null);
+    setProfFilterValues([]);
     setServiceView('professions');
   };
 
   const handleProfessionClick = (prof: any) => {
     setSelectedProfession(prof);
+    setProfFilterValues([]);
   };
 
   const goBack = () => {
-    if (serviceView === 'directions') {
-      setSelectedField(null);
-      setServiceView('fields');
-    } else if (serviceView === 'professions') {
+    if (serviceView === 'professions') {
       setSelectedDirection(null);
       setSelectedProfession(null);
-      setServiceView('directions');
+      setProfFilterValues([]);
+      setServiceView('sections');
     }
   };
 
   const resetAll = () => {
-    setSelectedField(null);
     setSelectedDirection(null);
     setSelectedProfession(null);
-    setServiceView('fields');
+    setProfFilterValues([]);
+    setServiceView('sections');
   };
 
   const handleNavigateToProfile = (id: string) => {
@@ -342,23 +338,31 @@ export default function SearchPage() {
     navigate(`/artist/${id}`, { state: { from: location.pathname } });
   };
 
-  // ── Breadcrumb ─────────────────────────────────────────────────────────────
-  const breadcrumbs = [];
-  if (selectedField) breadcrumbs.push({ label: selectedField.name, onClick: () => { setSelectedDirection(null); setSelectedProfession(null); setServiceView('directions'); } });
-  if (selectedDirection) breadcrumbs.push({ label: selectedDirection.name, onClick: () => { setSelectedProfession(null); setServiceView('professions'); } });
-  if (selectedProfession) breadcrumbs.push({ label: selectedProfession.name, onClick: () => {} });
+  // ── Breadcrumbs ────────────────────────────────────────────────────────────
+  const breadcrumbs = [
+    ...(selectedDirection
+      ? [{
+          label: selectedDirection.name,
+          onClick: () => { setSelectedProfession(null); setProfFilterValues([]); setServiceView('professions'); },
+        }]
+      : []),
+    ...(selectedProfession
+      ? [{ label: selectedProfession.name, onClick: () => {} }]
+      : []),
+  ];
 
-  const hasTileDrilldown = serviceView !== 'fields' && !debouncedServiceQuery;
+  const hasTileDrilldown = serviceView !== 'sections' && !debouncedServiceQuery;
 
   // Current tiles to show
-  const currentTiles = serviceView === 'fields' ? (fields ?? [])
-    : serviceView === 'directions' ? (directions ?? [])
-    : serviceView === 'professions' ? (professions ?? [])
-    : [];
+  const currentTiles = serviceView === 'sections' ? (sections ?? []) : (professions ?? []);
+  const tilesLoading = serviceView === 'sections' ? sectionsLoading : professionsLoading;
 
-  const tilesLoading = serviceView === 'fields' ? fieldsLoading
-    : serviceView === 'directions' ? directionsLoading
-    : professionsLoading;
+  // ── Toggle profession attribute filter value ───────────────────────────────
+  function toggleProfFilterValue(valueId: string) {
+    setProfFilterValues(prev =>
+      prev.includes(valueId) ? prev.filter(v => v !== valueId) : [...prev, valueId]
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950">
@@ -436,10 +440,10 @@ export default function SearchPage() {
             )}
           </div>
 
-          {/* Breadcrumb (services tab) */}
-          {hasTileDrilldown && activeTab === 'services' && breadcrumbs.length > 0 && (
+          {/* Breadcrumbs (services tab) */}
+          {hasTileDrilldown && activeTab === 'services' && (
             <div className="flex items-center gap-1 text-xs overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-              <button onClick={resetAll} className="text-slate-500 hover:text-slate-300 flex-shrink-0">Все сферы</button>
+              <button onClick={resetAll} className="text-slate-500 hover:text-slate-300 flex-shrink-0">Все разделы</button>
               {breadcrumbs.map((crumb, i) => (
                 <span key={i} className="flex items-center gap-1 flex-shrink-0">
                   <ChevronRight size={12} className="text-slate-600" />
@@ -450,6 +454,35 @@ export default function SearchPage() {
                     {crumb.label}
                   </button>
                 </span>
+              ))}
+            </div>
+          )}
+
+          {/* Profession attribute filters (horizontal scroll chips) */}
+          {activeTab === 'services' && selectedProfession && profFilters && profFilters.length > 0 && (
+            <div className="space-y-2">
+              {profFilters.map((group: any) => (
+                <div key={group.id}>
+                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">{group.name}</p>
+                  <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                    {group.values?.map((val: any) => {
+                      const isActive = profFilterValues.includes(String(val.id));
+                      return (
+                        <button
+                          key={val.id}
+                          onClick={() => toggleProfFilterValue(String(val.id))}
+                          className={`flex-shrink-0 px-3 py-1 rounded-xl text-xs font-medium border transition-all ${
+                            isActive
+                              ? 'bg-primary-600 border-primary-500 text-white'
+                              : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-600'
+                          }`}
+                        >
+                          {val.value}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -473,8 +506,8 @@ export default function SearchPage() {
                   </div>
                 ) : currentTiles.length > 0 ? (
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                    {/* "Все" button when drilled in */}
-                    {serviceView !== 'fields' && (
+                    {/* "Все" button when drilled into professions */}
+                    {serviceView === 'professions' && (
                       <button
                         onClick={() => setSelectedProfession(null)}
                         className={`relative overflow-hidden rounded-2xl p-4 text-left bg-slate-800 border transition-all hover:scale-[1.02] active:scale-[0.98] ${
@@ -491,8 +524,7 @@ export default function SearchPage() {
                         <button
                           key={tile.id}
                           onClick={() => {
-                            if (serviceView === 'fields') handleFieldClick(tile);
-                            else if (serviceView === 'directions') handleDirectionClick(tile);
+                            if (serviceView === 'sections') handleSectionClick(tile);
                             else handleProfessionClick(tile);
                           }}
                           className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md group ${
@@ -503,7 +535,7 @@ export default function SearchPage() {
                         >
                           <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
                           <div className="relative">
-                            <p className={`text-white font-semibold text-xs leading-snug line-clamp-2 ${serviceView === 'fields' ? 'uppercase tracking-wide' : ''}`}>{tile.name}</p>
+                            <p className={`text-white font-semibold text-xs leading-snug line-clamp-2 ${serviceView === 'sections' ? 'uppercase tracking-wide' : ''}`}>{tile.name}</p>
                           </div>
                           {serviceView !== 'professions' && (
                             <ChevronRight size={14} className="absolute right-2 bottom-2 text-white/50 group-hover:text-white/80 transition-colors" />
@@ -513,7 +545,7 @@ export default function SearchPage() {
                     })}
                   </div>
                 ) : (
-                  serviceView !== 'fields' && (
+                  serviceView !== 'sections' && (
                     <p className="text-slate-500 text-sm">Ничего не найдено</p>
                   )
                 )}
@@ -528,8 +560,6 @@ export default function SearchPage() {
                     ? selectedProfession.name
                     : selectedDirection
                     ? selectedDirection.name
-                    : selectedField
-                    ? selectedField.name
                     : 'Все специалисты'} · от А до Я
                 </p>
                 {catalogLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
@@ -723,37 +753,10 @@ export default function SearchPage() {
             </div>
           </>
         )}
+
         {/* ══ PEOPLE TAB ══ */}
         {activeTab === 'people' && (
           <div className="mt-4">
-            {/* Field chips */}
-            {fields && fields.length > 0 && (
-              <div className="flex gap-2 overflow-x-auto pb-2 mb-3 scrollbar-none">
-                <button
-                  onClick={() => setSelectedPeopleFieldId(null)}
-                  className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
-                    !selectedPeopleFieldId
-                      ? 'bg-primary-600 border-primary-500 text-white'
-                      : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:text-white'
-                  }`}
-                >
-                  Все
-                </button>
-                {fields.map((f: any) => (
-                  <button
-                    key={f.id}
-                    onClick={() => setSelectedPeopleFieldId(prev => prev === f.id ? null : f.id)}
-                    className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
-                      selectedPeopleFieldId === f.id
-                        ? 'bg-primary-600 border-primary-500 text-white'
-                        : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:text-white'
-                    }`}
-                  >
-                    {f.name}
-                  </button>
-                ))}
-              </div>
-            )}
             <div className="flex items-center gap-2 mb-3">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                 {debouncedPeopleQuery ? `Результаты: «${debouncedPeopleQuery}»` : 'Все участники · от А до Я'}
