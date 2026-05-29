@@ -5,7 +5,7 @@ import { prisma } from '../index';
 import { z } from 'zod';
 import { authLimiter, registerLimiter, codeLimiter } from '../middleware/rateLimiter';
 import { generateToken } from '../utils/jwt';
-import { sendVerificationEmail, sendPasswordResetEmail } from '../utils/mailer';
+import { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail } from '../utils/mailer';
 import { tgLog, tgEvent } from '../utils/telegram';
 
 // ─── Telegram bot-based auth (deep link + polling) ───────────────────────────
@@ -244,6 +244,12 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
 
     const token = generateToken({ userId: user.id });
     const { password: _, emailVerificationCode: __, emailVerificationExpires: ___, ...safe } = user as any;
+
+    // Send welcome email (non-blocking, after successful activation)
+    sendWelcomeEmail(user.email!, user.firstName, user.lastName).catch(err =>
+      console.error('[verify-email] welcome email failed:', err)
+    );
+
     return res.json({ user: safe, token });
   } catch (err) {
     console.error('[verify-email]', err);
