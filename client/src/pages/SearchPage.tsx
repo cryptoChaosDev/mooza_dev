@@ -141,6 +141,65 @@ function ExpandableUserRow({ user, onNavigate }: { user: any; onNavigate: (id: s
 }
 
 // ─── CatalogPage ──────────────────────────────────────────────────────────────
+// ─── ProfFiltersPanel ────────────────────────────────────────────────────────
+function ProfFiltersPanel({ filters, selected, onToggle }: {
+  filters: any[];
+  selected: string[];
+  onToggle: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const activeCount = selected.length;
+
+  return (
+    <div>
+      {/* Toggle button */}
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-white transition-colors"
+      >
+        {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        Фильтры по атрибутам
+        {activeCount > 0 && (
+          <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+            {activeCount}
+          </span>
+        )}
+      </button>
+
+      {/* Expanded filters */}
+      {open && (
+        <div className="mt-2 space-y-2">
+          {filters.map((group: any) => (
+            <div key={group.id}>
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">{group.name}</p>
+              <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
+                {group.values?.map((val: any) => {
+                  const isActive = selected.includes(String(val.id));
+                  return (
+                    <button
+                      key={val.id}
+                      onClick={() => onToggle(String(val.id))}
+                      className={`flex-shrink-0 px-3 py-1 rounded-xl text-xs font-medium border transition-all ${
+                        isActive
+                          ? 'bg-primary-600 border-primary-500 text-white'
+                          : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-600'
+                      }`}
+                    >
+                      {val.value}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── SearchPage ───────────────────────────────────────────────────────────────
 export default function SearchPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -529,33 +588,13 @@ export default function SearchPage() {
             </div>
           )}
 
-          {/* Profession attribute filters (horizontal scroll chips) */}
-          {activeTab === 'services' && selectedProfession && profFilters && profFilters.length > 0 && (
-            <div className="space-y-2">
-              {profFilters.map((group: any) => (
-                <div key={group.id}>
-                  <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">{group.name}</p>
-                  <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                    {group.values?.map((val: any) => {
-                      const isActive = profFilterValues.includes(String(val.id));
-                      return (
-                        <button
-                          key={val.id}
-                          onClick={() => toggleProfFilterValue(String(val.id))}
-                          className={`flex-shrink-0 px-3 py-1 rounded-xl text-xs font-medium border transition-all ${
-                            isActive
-                              ? 'bg-primary-600 border-primary-500 text-white'
-                              : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-600'
-                          }`}
-                        >
-                          {val.value}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
+          {/* Profession attribute filters — collapsed by default */}
+          {activeTab === 'services' && serviceSubTab === 'professions' && selectedProfession && profFilters && profFilters.length > 0 && (
+            <ProfFiltersPanel
+              filters={profFilters}
+              selected={profFilterValues}
+              onToggle={toggleProfFilterValue}
+            />
           )}
         </div>
       </div>
