@@ -4,6 +4,7 @@ import { X, Loader2, HandshakeIcon } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { dealAPI } from '../lib/api';
+import { useAuthStore } from '../stores/authStore';
 
 interface Props {
   executorId: string;
@@ -17,6 +18,12 @@ interface Props {
 export default function DealCreateModal({ executorId, executorName, serviceId, userServiceId, serviceName, onClose }: Props) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const { user } = useAuthStore();
+
+  const userAge = user?.birthDate
+    ? Math.floor((Date.now() - new Date(user.birthDate).getTime()) / (365.25 * 24 * 3600 * 1000))
+    : null;
+  const canCreateDeal = userAge === null || userAge >= 18;
 
   const [title, setTitle] = useState(serviceName ? `Сделка: ${serviceName}` : '');
   const [dealType, setDealType] = useState<'process' | 'event'>('process');
@@ -203,18 +210,25 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
         </div>
 
         {/* Footer */}
-        <div className="px-5 pb-5 flex gap-2.5 border-t border-slate-800 pt-4 flex-shrink-0">
-          <button onClick={onClose} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
-            Отмена
-          </button>
-          <button
-            onClick={() => createMut.mutate()}
-            disabled={!canSubmit || createMut.isPending}
-            className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-primary-500/20"
-          >
-            {createMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <HandshakeIcon size={15} />}
-            Оформить
-          </button>
+        <div className="px-5 pb-5 border-t border-slate-800 pt-4 flex-shrink-0 space-y-3">
+          {!canCreateDeal && (
+            <div className="text-sm text-amber-400 bg-amber-400/10 border border-amber-400/20 rounded-2xl px-4 py-3">
+              🔞 Сделки доступны пользователям от 18 лет
+            </div>
+          )}
+          <div className="flex gap-2.5">
+            <button onClick={onClose} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
+              Отмена
+            </button>
+            <button
+              onClick={() => createMut.mutate()}
+              disabled={!canSubmit || !canCreateDeal || createMut.isPending}
+              className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg shadow-primary-500/20"
+            >
+              {createMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <HandshakeIcon size={15} />}
+              Оформить
+            </button>
+          </div>
         </div>
       </div>
     </div>,
