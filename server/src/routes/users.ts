@@ -500,7 +500,7 @@ router.delete('/me/services/:serviceId', authenticate, async (req: AuthRequest, 
 // ─── GET /catalog — all users with filters, for catalog page ─────────────────
 router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { query, fieldOfActivityId, directionId, professionId, customFilterValueIds: customFilterValueIdsRaw } = req.query;
+    const { query, fieldOfActivityId, directionId, professionId, serviceId, customFilterValueIds: customFilterValueIdsRaw } = req.query;
     const customFilterValueIds = customFilterValueIdsRaw
       ? (customFilterValueIdsRaw as string).split(',').map(s => s.trim()).filter(Boolean)
       : [];
@@ -542,14 +542,17 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
       andClauses.push({ AND: wordClauses });
     }
 
-    // Apply only the most specific filter available (most→least specific: profession > direction > field)
-    // Users store their profession via UserService (not UserProfession which is empty).
+    // Filter by Service (independent catalog)
+    if (serviceId) {
+      andClauses.push({ userServices: { some: { serviceId: serviceId as string } } });
+    }
+
+    // Filter by profession/direction (most→least specific)
     if (professionId) {
       andClauses.push({ userServices: { some: { professionId: professionId as string } } });
-    } else if (directionId) {
+    } else if (directionId && !serviceId) {
       andClauses.push({ userServices: { some: { profession: { directionId: directionId as string } } } });
     } else if (fieldOfActivityId) {
-      // Match via UserService → profession → direction → fieldOfActivity
       andClauses.push({
         userServices: { some: { profession: { direction: { fieldOfActivityId: fieldOfActivityId as string } } } },
       });

@@ -156,6 +156,12 @@ export default function SearchPage() {
   const [selectedProfession, setSelectedProfession] = useState<{ id: string; name: string } | null>(null);
   const [hideEmpty, setHideEmpty] = useState(false);
 
+  // ── Services sub-tab: 'professions' | 'services' ──────────────────────────
+  const [serviceSubTab, setServiceSubTab] = useState<'professions' | 'services'>('professions');
+  const [selectedService, setSelectedService] = useState<{ id: string; name: string } | null>(null);
+  const [serviceSearchQuery, setServiceSearchQuery] = useState('');
+  const [debouncedServiceSearchQuery, setDebouncedServiceSearchQuery] = useState('');
+
   // ── Profession attribute filters ───────────────────────────────────────────
   const [profFilterValues, setProfFilterValues] = useState<string[]>([]);
 
@@ -190,6 +196,11 @@ export default function SearchPage() {
     const t = setTimeout(() => setDebouncedServiceQuery(serviceQuery), 300);
     return () => clearTimeout(t);
   }, [serviceQuery]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedServiceSearchQuery(serviceSearchQuery), 300);
+    return () => clearTimeout(t);
+  }, [serviceSearchQuery]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedArtistQuery(artistQuery), 300);
@@ -241,16 +252,36 @@ export default function SearchPage() {
     enabled: !!selectedProfession,
   });
 
+  // Services search (independent Service catalog)
+  const { data: servicesList, isLoading: servicesListLoading } = useQuery({
+    queryKey: ['services-search', debouncedServiceSearchQuery],
+    queryFn: async () => {
+      if (!debouncedServiceSearchQuery) {
+        // Load all services
+        const { data } = await referenceAPI.getServices();
+        return data as any[];
+      }
+      const { data } = await referenceAPI.searchServices(debouncedServiceSearchQuery);
+      return data as any[];
+    },
+    enabled: activeTab === 'services' && serviceSubTab === 'services',
+  });
+
   // ── Catalog users ──────────────────────────────────────────────────────────
-  const catalogParams = {
-    query: debouncedServiceQuery || undefined,
-    directionId: selectedDirection?.id,
-    professionId: selectedProfession?.id,
-    customFilterValueIds: profFilterValues.length ? profFilterValues.join(',') : undefined,
-  };
+  const catalogParams = serviceSubTab === 'services'
+    ? {
+        query: debouncedServiceSearchQuery || undefined,
+        serviceId: selectedService?.id,
+      }
+    : {
+        query: debouncedServiceQuery || undefined,
+        directionId: selectedDirection?.id,
+        professionId: selectedProfession?.id,
+        customFilterValueIds: profFilterValues.length ? profFilterValues.join(',') : undefined,
+      };
 
   const { data: catalogUsers, isLoading: catalogLoading } = useQuery({
-    queryKey: ['catalog-users', catalogParams],
+    queryKey: ['catalog-users', serviceSubTab, catalogParams],
     queryFn: async () => {
       const { data } = await userAPI.catalog(catalogParams as any);
       return (data as any[]).filter((u: any) => u.id !== currentUser?.id);
@@ -396,7 +427,7 @@ export default function SearchPage() {
           {/* Tabs */}
           <div className="flex gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
             {[
-              { id: 'services' as const, label: 'Услуги' },
+              { id: 'services' as const, label: 'Каталог' },
               { id: 'artists' as const, label: 'Артисты' },
               { id: 'people' as const, label: 'Люди' },
             ].map(tab => (
@@ -412,25 +443,65 @@ export default function SearchPage() {
             ))}
           </div>
 
+          {/* Sub-tabs inside "Каталог" */}
+          {activeTab === 'services' && (
+            <div className="flex gap-2">
+              {([
+                { id: 'professions' as const, label: 'По профессиям' },
+                { id: 'services' as const, label: 'По услугам' },
+              ] as const).map(sub => (
+                <button
+                  key={sub.id}
+                  onClick={() => {
+                    setServiceSubTab(sub.id);
+                    setSelectedService(null);
+                    setServiceSearchQuery('');
+                  }}
+                  className={`px-3 py-1 rounded-xl text-xs font-medium transition-all border ${
+                    serviceSubTab === sub.id
+                      ? 'bg-slate-700 border-slate-600 text-white'
+                      : 'border-slate-800 text-slate-500 hover:text-slate-300'
+                  }`}
+                >
+                  {sub.label}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Search bar */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
             <input
               type="text"
-              value={activeTab === 'services' ? serviceQuery : activeTab === 'artists' ? artistQuery : peopleQuery}
+              value={
+                activeTab === 'services'
+                  ? (serviceSubTab === 'services' ? serviceSearchQuery : serviceQuery)
+                  : activeTab === 'artists' ? artistQuery : peopleQuery
+              }
               onChange={e => {
-                if (activeTab === 'services') setServiceQuery(e.target.value);
-                else if (activeTab === 'artists') setArtistQuery(e.target.value);
+                if (activeTab === 'services') {
+                  if (serviceSubTab === 'services') setServiceSearchQuery(e.target.value);
+                  else setServiceQuery(e.target.value);
+                } else if (activeTab === 'artists') setArtistQuery(e.target.value);
                 else setPeopleQuery(e.target.value);
               }}
-              placeholder={activeTab === 'services' ? 'Поиск специалистов...' : activeTab === 'artists' ? 'Поиск артистов...' : 'Поиск людей...'}
+              placeholder={
+                activeTab === 'services'
+                  ? (serviceSubTab === 'services' ? 'Поиск услуг...' : 'Поиск специалистов...')
+                  : activeTab === 'artists' ? 'Поиск артистов...' : 'Поиск людей...'
+              }
               className="w-full pl-8 pr-9 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
             />
-            {(activeTab === 'services' ? serviceQuery : activeTab === 'artists' ? artistQuery : peopleQuery) && (
+            {(activeTab === 'services'
+              ? (serviceSubTab === 'services' ? serviceSearchQuery : serviceQuery)
+              : activeTab === 'artists' ? artistQuery : peopleQuery) && (
               <button
                 onClick={() => {
-                  if (activeTab === 'services') setServiceQuery('');
-                  else if (activeTab === 'artists') setArtistQuery('');
+                  if (activeTab === 'services') {
+                    if (serviceSubTab === 'services') setServiceSearchQuery('');
+                    else setServiceQuery('');
+                  } else if (activeTab === 'artists') setArtistQuery('');
                   else setPeopleQuery('');
                 }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
@@ -493,7 +564,51 @@ export default function SearchPage() {
       <div className="max-w-4xl mx-auto px-4 pb-28">
 
         {/* ══ SERVICES TAB ══ */}
-        {activeTab === 'services' && (
+        {activeTab === 'services' && serviceSubTab === 'services' && (
+          <div className="mt-4">
+            {/* Services list */}
+            {servicesListLoading ? (
+              <div className="space-y-2">
+                {[1,2,3,4,5].map(i => <div key={i} className="h-12 bg-slate-800/50 rounded-2xl animate-pulse" />)}
+              </div>
+            ) : (servicesList ?? []).length === 0 ? (
+              <p className="text-slate-500 text-sm text-center py-8">Услуги не найдены</p>
+            ) : (
+              <div className="space-y-1.5 mb-5">
+                {(servicesList ?? []).map((svc: any) => (
+                  <button
+                    key={svc.id}
+                    onClick={() => setSelectedService(selectedService?.id === svc.id ? null : { id: svc.id, name: svc.name })}
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-all ${
+                      selectedService?.id === svc.id
+                        ? 'bg-primary-600/10 border-primary-500/40 text-white'
+                        : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white'
+                    }`}
+                  >
+                    <span className="flex-1 text-sm font-medium">{svc.name}</span>
+                    {selectedService?.id === svc.id && <X size={14} className="text-primary-400 flex-shrink-0" />}
+                  </button>
+                ))}
+              </div>
+            )}
+            {/* Users with this service */}
+            {catalogLoading ? (
+              <div className="space-y-2 mt-4">
+                {[1,2,3].map(i => <div key={i} className="h-16 bg-slate-800/50 rounded-2xl animate-pulse" />)}
+              </div>
+            ) : selectedService && (catalogUsers ?? []).length === 0 ? (
+              <p className="text-slate-500 text-sm text-center py-4">Специалистов с этой услугой не найдено</p>
+            ) : selectedService ? (
+              <div className="divide-y divide-slate-800/50 bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">
+                {(catalogUsers ?? []).map((u: any) => (
+                  <ExpandableUserRow key={u.id} user={u} onNavigate={id => navigate(`/profile/${id}`)} />
+                ))}
+              </div>
+            ) : null}
+          </div>
+        )}
+
+        {activeTab === 'services' && serviceSubTab === 'professions' && (
           <>
             {/* Tiles (hide during text search) */}
             {!debouncedServiceQuery && (
@@ -603,6 +718,7 @@ export default function SearchPage() {
         )}
 
         {/* ══ ARTISTS TAB ══ */}
+
         {activeTab === 'artists' && (
           <>
             {/* Artist type filter */}
