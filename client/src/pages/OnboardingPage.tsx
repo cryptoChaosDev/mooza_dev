@@ -231,15 +231,13 @@ export default function OnboardingPage() {
           </label>
         )}
         <div className="flex items-center gap-3">
-          {current > 0 ? (
+          {current > 0 && (
             <button
               onClick={prev}
               className="w-12 h-12 rounded-2xl bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-colors flex-shrink-0"
             >
               <ArrowLeft size={20} />
             </button>
-          ) : (
-            <div className="w-12 flex-shrink-0" />
           )}
           <button
             onClick={next}
