@@ -158,13 +158,15 @@ export default function OnboardingPage() {
 
   return (
     <div
-      className="min-h-screen bg-slate-950 flex flex-col select-none"
+      className="bg-slate-950 flex flex-col select-none overflow-hidden"
+      style={{ height: '100dvh' }}
       onTouchStart={onTouchStart}
       onTouchEnd={onTouchEnd}
     >
-      {/* Skip */}
-      <div className="flex items-center justify-between px-5 pt-5 flex-shrink-0">
-        <div className="flex gap-1.5">
+      {/* Header: dots + skip — fixed height */}
+      <div className="flex items-center justify-between px-5 flex-shrink-0"
+        style={{ paddingTop: 'max(1.25rem, env(safe-area-inset-top, 1.25rem))' }}>
+        <div className="flex gap-1.5 py-4">
           {SLIDES.map((_, i) => (
             <button
               key={i}
@@ -184,34 +186,34 @@ export default function OnboardingPage() {
         </button>
       </div>
 
-      {/* Slide content */}
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
+      {/* Slide content — flex-1 min-h-0 so it never overflows */}
+      <div className="flex-1 min-h-0 flex flex-col items-center justify-center px-6 overflow-hidden">
         {/* Glow bg */}
         <div className={`absolute inset-0 bg-gradient-to-br ${slide.accent} opacity-30 pointer-events-none blur-3xl`} />
 
-        <div className="relative w-full max-w-sm">
-          {/* Icon */}
-          <div className="text-7xl text-center mb-6 leading-none">{slide.emoji}</div>
+        <div className="relative w-full max-w-sm flex flex-col gap-3">
+          {/* Icon — scales down on small screens */}
+          <div className="text-5xl sm:text-7xl text-center leading-none">{slide.emoji}</div>
 
           {/* Title */}
-          <h1 className="text-2xl font-bold text-white text-center leading-tight whitespace-pre-line mb-4">
+          <h1 className="text-xl sm:text-2xl font-bold text-white text-center leading-tight whitespace-pre-line">
             {slide.title}
           </h1>
 
           {/* Description */}
-          <p className="text-sm text-slate-400 text-center leading-relaxed mb-8">
+          <p className="text-sm text-slate-400 text-center leading-relaxed">
             {slide.description}
           </p>
 
           {/* Features */}
           {slide.features && (
-            <div className="space-y-3">
+            <div className="flex flex-col gap-2">
               {slide.features.map((f, i) => (
                 <div
                   key={i}
-                  className="flex items-center gap-3 bg-slate-800/50 border border-slate-700/40 rounded-2xl px-4 py-3"
+                  className="flex items-center gap-3 bg-slate-800/50 border border-slate-700/40 rounded-2xl px-4 py-2.5"
                 >
-                  <span className="text-xl flex-shrink-0">{f.icon}</span>
+                  <span className="text-lg flex-shrink-0">{f.icon}</span>
                   <span className="text-sm text-slate-300">{f.text}</span>
                 </div>
               ))}
