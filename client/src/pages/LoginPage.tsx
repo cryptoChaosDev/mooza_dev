@@ -125,11 +125,12 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
       localStorage.setItem('termsAgreed', '1');
       // Fresh email verification → trust ONLY the server flag.
       // localStorage may hold stale 'mooza_tour_done' from a previous account on the same device.
+      // Hard navigation to bypass React Router concurrent-mode race condition
       if (data.user?.onboardingCompletedAt) {
         localStorage.setItem('mooza_tour_done', '1');
-        navigate('/');
+        window.location.href = '/';
       } else {
-        navigate('/onboarding');
+        window.location.href = '/onboarding';
       }
     } catch (err: any) {
       setVerifyError(err.response?.data?.error || 'Неверный код');

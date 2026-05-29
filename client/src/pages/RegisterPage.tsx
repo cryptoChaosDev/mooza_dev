@@ -276,7 +276,9 @@ export default function RegisterPage() {
     try {
       const { data } = await authAPI.verifyEmail(pendingEmail, verifyCode.trim());
       setAuth(data.user, data.token);
-      navigate('/onboarding');
+      // Hard navigation: bypasses React Router concurrent-mode race condition where
+      // the router resolves the URL during Zustand state transition and ends up at '/'.
+      window.location.href = '/onboarding';
     } catch (err: any) {
       setVerifyError(err.response?.data?.error || 'Неверный код');
     } finally { setLoading(false); }
