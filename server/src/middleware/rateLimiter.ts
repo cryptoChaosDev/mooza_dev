@@ -46,7 +46,7 @@ export const authLimiter = rateLimit({
  */
 export const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 минут
-  max: 2000, // максимум 2000 запросов с одного IP
+  max: 5000, // 5000 запросов/15 минут — достаточно для нескольких активных юзеров за NAT
   message: {
     error: 'Слишком много запросов. Пожалуйста, попробуйте позже.',
     retryAfter: '15 минут'
@@ -68,7 +68,7 @@ export const apiLimiter = rateLimit({
  */
 export const registerLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1 час
-  max: 5, // максимум 5 регистраций с одного IP в час
+  max: 20, // 20 регистраций/час с одного IP — запас для групповых запусков (офис, вечеринка)
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: false,
@@ -77,7 +77,7 @@ export const registerLimiter = rateLimit({
     logSecurity(`Register rate limit exceeded for IP ${req.ip}`, { ip: req.ip });
     res.status(429).json({
       error: 'Превышен лимит регистраций',
-      message: 'Вы можете зарегистрировать не более 5 аккаунтов в час с одного IP',
+      message: 'Вы можете зарегистрировать не более 20 аккаунтов в час с одного IP',
       retryAfter: '1 hour'
     });
   },
@@ -96,9 +96,10 @@ export const codeLimiter = rateLimit({
 
 export const messageLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 минута
-  max: 60, // 60 сообщений в минуту
+  max: 120, // 120 сообщений в минуту с одного IP (несколько активных чатов за NAT)
   standardHeaders: true,
   legacyHeaders: false,
+  keyGenerator: (req: any) => req.userId || req.ip, // per-user, не per-IP
   handler: (_req, res) => {
     res.status(429).json({
       error: 'Слишком много сообщений',
