@@ -68,10 +68,14 @@ const userSelect = {
   fieldOfActivity: { select: { id: true, name: true } },
   userServices: { include: userServiceInclude },
   userProfessions: {
-    select: {
-      id: true,
-      professionId: true,
-      profession: { select: { id: true, name: true } },
+    include: {
+      profession: {
+        select: { id: true, name: true, directionId: true },
+        include: { direction: { select: { id: true, name: true } } },
+      },
+      selectedCustomFilterValues: {
+        include: { filter: { select: { id: true, name: true } } },
+      },
     },
   },
   userArtists: {
@@ -125,10 +129,14 @@ const publicUserSelect = {
   fieldOfActivity: { select: { id: true, name: true } },
   userServices: { include: userServiceInclude },
   userProfessions: {
-    select: {
-      id: true,
-      professionId: true,
-      profession: { select: { id: true, name: true } },
+    include: {
+      profession: {
+        select: { id: true, name: true, directionId: true },
+        include: { direction: { select: { id: true, name: true } } },
+      },
+      selectedCustomFilterValues: {
+        include: { filter: { select: { id: true, name: true } } },
+      },
     },
   },
   userArtists: {
@@ -299,12 +307,18 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     if (userProfessions !== undefined) {
       await prisma.userProfession.deleteMany({ where: { userId: req.userId } });
       if (userProfessions.length > 0) {
-        updateData.userProfessions = {
-          create: userProfessions.map((up: { professionId: string; features?: string[] }) => ({
-            professionId: up.professionId,
-            features: up.features || [],
-          })),
-        };
+        for (const up of userProfessions as Array<{ professionId: string; features?: string[]; selectedCustomFilterValueIds?: string[] }>) {
+          await prisma.userProfession.create({
+            data: {
+              userId: req.userId!,
+              professionId: up.professionId,
+              features: up.features || [],
+              selectedCustomFilterValues: up.selectedCustomFilterValueIds?.length
+                ? { connect: up.selectedCustomFilterValueIds.map((id: string) => ({ id })) }
+                : undefined,
+            },
+          });
+        }
       }
     }
 
@@ -488,7 +502,10 @@ router.delete('/me/services/:serviceId', authenticate, async (req: AuthRequest, 
 // ─── GET /catalog — all users with filters, for catalog page ─────────────────
 router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { query, fieldOfActivityId, directionId, professionId } = req.query;
+    const { query, fieldOfActivityId, directionId, professionId, customFilterValueIds: customFilterValueIdsRaw } = req.query;
+    const customFilterValueIds = customFilterValueIdsRaw
+      ? (customFilterValueIdsRaw as string).split(',').map(s => s.trim()).filter(Boolean)
+      : [];
     const where: any = { id: { not: req.userId } };
 
     const andClauses: any[] = [];
@@ -537,6 +554,18 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
       // Match via UserService → profession → direction → fieldOfActivity
       andClauses.push({
         userServices: { some: { profession: { direction: { fieldOfActivityId: fieldOfActivityId as string } } } },
+      });
+    }
+
+    if (customFilterValueIds.length > 0) {
+      andClauses.push({
+        userProfessions: {
+          some: {
+            selectedCustomFilterValues: {
+              some: { id: { in: customFilterValueIds } },
+            },
+          },
+        },
       });
     }
 
