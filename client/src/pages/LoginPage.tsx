@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronDown, ShieldAlert, CheckCircle2, Check } from 'lucide-react';
-import { authAPI, userAPI } from '../lib/api';
+import { authAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import VkLoginButton from '../components/VkLoginButton';
 
@@ -96,15 +96,6 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
       const { data } = await authAPI.login(email, password);
       setAuth(data.user, data.token);
       localStorage.setItem('termsAgreed', '1');
-
-      if (!data.user.termsAgreedAt) {
-        try {
-          const { data: updatedUser } = await userAPI.agreeToTerms();
-          setUser(updatedUser);
-        } catch {
-          // Non-critical
-        }
-      }
 
       // Show onboarding on first login — server-side flag wins, localStorage is fallback
       const tourDone = data.user.onboardingCompletedAt || localStorage.getItem('mooza_tour_done');
