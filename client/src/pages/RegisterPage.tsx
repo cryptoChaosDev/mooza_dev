@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Eye, EyeOff, AlertCircle, Loader2,
-  Check, Globe, ArrowRight, ArrowLeft, X, Search, ChevronDown, ChevronUp,
+  Check, Globe, ArrowRight, ArrowLeft, X, Search, ChevronDown,
 } from 'lucide-react';
 import { authAPI, referenceAPI } from '../lib/api';
 import CityPicker from '../components/CityPicker';
@@ -85,13 +85,14 @@ function ProfessionFilterPicker({ professionId, onChange }: {
 }) {
   const [filters, setFilters] = useState<ProfessionFilter[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [expanded, setExpanded] = useState(false);
+  const [step, setStep] = useState(0);          // current filter index
+  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     referenceAPI.getProfessionFilters(professionId)
-      .then(r => setFilters(r.data as ProfessionFilter[]))
+      .then(r => { setFilters(r.data as ProfessionFilter[]); setStep(0); })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [professionId]);
@@ -105,68 +106,101 @@ function ProfessionFilterPicker({ professionId, onChange }: {
   };
 
   if (loading) return (
-    <div className="mt-2 pl-2 border-l-2 border-primary-500/30">
-      <Loader2 size={13} className="animate-spin text-slate-500" />
+    <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+      <Loader2 size={12} className="animate-spin" /> Загрузка атрибутов…
     </div>
   );
-
   if (!filters.length) return null;
 
-  // Show only first 3 filters when collapsed; all when expanded
-  const visibleFilters = expanded ? filters : filters.slice(0, 3);
+  const currentFilter = filters[step];
   const selectedCount = selected.length;
 
+  // Collapsed state — just a trigger button
+  if (!open) return (
+    <button
+      type="button"
+      onClick={() => setOpen(true)}
+      className="mt-2 flex items-center gap-1.5 text-xs text-primary-400 hover:text-primary-300 transition-colors"
+    >
+      <ChevronDown size={13} />
+      Уточнить атрибуты
+      {selectedCount > 0 && (
+        <span className="ml-1 bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none">
+          {selectedCount}
+        </span>
+      )}
+    </button>
+  );
+
+  // Expanded: one filter at a time
   return (
-    <div className="mt-2 pl-2 border-l-2 border-primary-500/30">
-      {!expanded && (
+    <div className="mt-2 rounded-2xl border border-slate-700/50 bg-slate-900/60 p-3">
+      {/* Header: progress + close */}
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[11px] text-slate-500 font-medium">
+          {step + 1} / {filters.length}
+        </span>
+        <button type="button" onClick={() => setOpen(false)}
+          className="text-slate-500 hover:text-slate-300 transition-colors">
+          <X size={14} />
+        </button>
+      </div>
+
+      {/* Progress bar */}
+      <div className="h-0.5 bg-slate-800 rounded-full mb-3 overflow-hidden">
+        <div
+          className="h-full bg-primary-500 rounded-full transition-all duration-300"
+          style={{ width: `${((step + 1) / filters.length) * 100}%` }}
+        />
+      </div>
+
+      {/* Current filter */}
+      <p className="text-sm font-semibold text-white mb-2">{currentFilter.name}</p>
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        {currentFilter.values.map(v => (
+          <button
+            key={v.id}
+            type="button"
+            onClick={() => toggle(v.id)}
+            className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all ${
+              selected.includes(v.id)
+                ? 'bg-primary-600 text-white shadow-sm'
+                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+            }`}
+          >
+            {v.value}
+          </button>
+        ))}
+      </div>
+
+      {/* Navigation */}
+      <div className="flex items-center justify-between gap-2">
         <button
           type="button"
-          onClick={() => setExpanded(true)}
-          className="flex items-center gap-1.5 text-xs text-primary-400 hover:text-primary-300 transition-colors mb-2"
+          onClick={() => setStep(s => Math.max(0, s - 1))}
+          disabled={step === 0}
+          className="flex items-center gap-1 text-xs text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
         >
-          <ChevronDown size={13} />
-          Настроить атрибуты
-          {selectedCount > 0 && (
-            <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-medium">
-              {selectedCount}
-            </span>
-          )}
+          <ArrowLeft size={13} /> Назад
         </button>
-      )}
-      {expanded && (
-        <div className="space-y-3">
-          {visibleFilters.map(filter => (
-            <div key={filter.id}>
-              <p className="text-xs font-medium text-slate-400 mb-1.5">{filter.name}</p>
-              <div className="flex flex-wrap gap-1.5">
-                {filter.values.map(v => (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={() => toggle(v.id)}
-                    className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
-                      selected.includes(v.id)
-                        ? 'bg-primary-600 text-white'
-                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
-                    }`}
-                  >
-                    {v.value}
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-          <div className="flex items-center gap-3 pt-1">
-            <button
-              type="button"
-              onClick={() => setExpanded(false)}
-              className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-300 transition-colors"
-            >
-              <ChevronUp size={12} /> Свернуть
-            </button>
-          </div>
-        </div>
-      )}
+        {step < filters.length - 1 ? (
+          <button
+            type="button"
+            onClick={() => setStep(s => s + 1)}
+            className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-xl transition-colors"
+          >
+            Далее <ArrowRight size={13} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl transition-colors"
+          >
+            Готово ✓
+          </button>
+        )}
+      </div>
     </div>
   );
 }

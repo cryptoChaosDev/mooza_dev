@@ -594,11 +594,15 @@ router.get('/professions/:id/filters', async (req, res) => {
   try {
     const filters = await prisma.customFilter.findMany({
       where: { professionId: req.params.id },
-      select: { id: true, name: true, filterValues: true },
+      include: {
+        values: {
+          select: { id: true, value: true, sortOrder: true },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
       orderBy: { name: 'asc' },
     });
-    // Expose filterValues as "values" for a consistent client API
-    res.json(filters.map((f: any) => ({ id: f.id, name: f.name, values: f.filterValues })));
+    res.json(filters);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }
