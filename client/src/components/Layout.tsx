@@ -145,10 +145,12 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       </main>
 
-      {/* Mobile Bottom Navigation */}
-      <div className="lg:hidden">
-        <BottomNav />
-      </div>
+      {/* Mobile Bottom Navigation — hidden on full-screen pages like onboarding */}
+      {location.pathname !== '/onboarding' && (
+        <div className="lg:hidden">
+          <BottomNav />
+        </div>
+      )}
     </div>
   );
 }

@@ -221,7 +221,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Navigation */}
-      <div className="px-6 pb-10 flex-shrink-0">
+      <div className="px-6 flex-shrink-0" style={{ paddingBottom: 'max(2.5rem, env(safe-area-inset-bottom, 2.5rem))' }}>
         {isLast && slide.requireTerms && (
           <label className="flex items-start gap-3 bg-slate-800/50 border border-slate-700/40 rounded-2xl px-4 py-3 cursor-pointer mb-4">
             <input
