@@ -284,7 +284,13 @@ export default function RegisterPage() {
 
   const handleResend = async () => {
     if (!pendingEmail || resendCooldown > 0) return;
-    try { await authAPI.resendVerification(pendingEmail); startCooldown(); } catch {}
+    try {
+      await authAPI.resendVerification(pendingEmail);
+      startCooldown();
+    } catch (err: any) {
+      const msg = err.response?.data?.error;
+      setVerifyError(msg || 'Не удалось отправить код. Проверьте почту или попробуйте позже.');
+    }
   };
 
   const detectLocation = useCallback(() => {

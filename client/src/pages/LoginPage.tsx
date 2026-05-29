@@ -123,10 +123,14 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
       const { data } = await authAPI.verifyEmail(pendingEmail, verifyCode.trim());
       setAuth(data.user, data.token);
       localStorage.setItem('termsAgreed', '1');
-      // First-time user: show onboarding (same logic as normal login)
-      const tourDone = data.user?.onboardingCompletedAt || localStorage.getItem('mooza_tour_done');
-      if (tourDone) localStorage.setItem('mooza_tour_done', '1');
-      navigate(tourDone ? '/' : '/onboarding');
+      // Fresh email verification → trust ONLY the server flag.
+      // localStorage may hold stale 'mooza_tour_done' from a previous account on the same device.
+      if (data.user?.onboardingCompletedAt) {
+        localStorage.setItem('mooza_tour_done', '1');
+        navigate('/');
+      } else {
+        navigate('/onboarding');
+      }
     } catch (err: any) {
       setVerifyError(err.response?.data?.error || 'Неверный код');
     } finally {
@@ -140,7 +144,10 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
       await authAPI.resendVerification(pendingEmail);
       setResendCooldown(60);
       const interval = setInterval(() => setResendCooldown(c => { if (c <= 1) { clearInterval(interval); return 0; } return c - 1; }), 1000);
-    } catch {}
+    } catch (err: any) {
+      const msg = err.response?.data?.error;
+      setError(msg || 'Не удалось отправить код. Попробуйте позже.');
+    }
   };
 
   if (pendingEmail) {
