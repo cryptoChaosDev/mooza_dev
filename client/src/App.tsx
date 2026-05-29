@@ -434,6 +434,10 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/privacy"  element={<PrivacyPolicyPage />} />
             <Route path="/terms"    element={<TermsPage />} />
+            {/* /onboarding must be available in the unauthenticated tree too:
+                RegisterPage calls setAuth() + navigate('/onboarding') synchronously,
+                and the router resolves the route before React re-renders with the new token. */}
+            <Route path="/onboarding" element={<OnboardingPage />} />
             <Route path="*"         element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
