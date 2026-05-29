@@ -37,14 +37,19 @@ const wrapper = (body: string) => `
     </div>
   </div>`;
 
-export async function sendWelcomeEmail(to: string, firstName: string, lastName: string) {
-  const name = firstName || 'музыкант';
+export async function sendWelcomeEmail(to: string, firstName: string, _lastName: string) {
+  // Subject uses only the ASCII email to avoid encoding issues with non-ASCII names.
+  // The name is used only inside the HTML body where charset is declared explicitly.
+  const name = firstName || '';
+  const greeting = name ? `${name}, ` : '';
 
   const html = wrapper(`
-    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#fff">${name}, аккаунт активирован!</h2>
+    <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#fff">
+      ${greeting}аккаунт активирован!
+    </h2>
 
     <p style="margin:0 0 12px;font-size:15px;color:#cbd5e1;line-height:1.6">
-      Рады видеть вас на Moooza — первой профессиональной платформе для музыкантов и всех, кто создаёт музыку.
+      Рады видеть вас на Moooza — профессиональной сети для музыкантов.
     </p>
 
     <p style="margin:0 0 20px;font-size:15px;color:#cbd5e1;line-height:1.6">
@@ -64,19 +69,27 @@ export async function sendWelcomeEmail(to: string, firstName: string, lastName: 
     </a>
 
     <p style="margin:24px 0 0;font-size:13px;color:#475569">
-      Если возникнут вопросы — пишите на <a href="mailto:support@moooza.ru" style="color:#6366f1;text-decoration:none">support@moooza.ru</a>
+      Если возникнут вопросы — пишите на
+      <a href="mailto:support@moooza.ru" style="color:#6366f1;text-decoration:none">support@moooza.ru</a>
     </p>
   `);
 
-  const text = `${name}, аккаунт на Moooza активирован!\n\nВаш email для входа: ${to}\n\nОткрыть платформу: https://moooza.ru\n\nПоддержка: support@moooza.ru`;
+  const textLines = [
+    name ? `${name}, aккаунт на Moooza активирован!` : 'Ваш аккаунт на Moooza активирован!',
+    '',
+    `Ваш email для входа: ${to}`,
+    '',
+    'Открыть платформу: https://moooza.ru',
+    'Поддержка: support@moooza.ru',
+  ];
 
   await registerTransport.sendMail({
     from: '"Moooza" <register@moooza.ru>',
     to,
-    subject: `${name}, аккаунт на Moooza активирован`,
-    encoding: 'utf-8',
+    // Subject in ASCII only — avoids encoding issues across all mail clients
+    subject: 'Ваш аккаунт на Moooza активирован',
     html,
-    text,
+    text: textLines.join('\n'),
   });
 }
 
