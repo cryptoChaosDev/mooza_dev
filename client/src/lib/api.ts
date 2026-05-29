@@ -112,7 +112,7 @@ export const userAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   search: (params: any) => api.get('/users/search', { params }),
-  catalog: (params?: { query?: string; fieldOfActivityId?: string; directionId?: string; professionId?: string }) =>
+  catalog: (params?: { query?: string; fieldOfActivityId?: string; directionId?: string; professionId?: string; customFilterValueIds?: string }) =>
     api.get('/users/catalog', { params }),
   getUser: (id: string) => api.get(`/users/${id}`),
   getUserServices: (id: string) => api.get(`/users/${id}/services`),
