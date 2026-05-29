@@ -1,93 +1,152 @@
-import { Page, expect } from '@playwright/test';
-import { execSync } from 'child_process';
+import { Page } from '@playwright/test';
+import { execSync } from 'node:child_process';
 
-export const BASE = process.env.PW_BASE_URL || 'https://moooza.ru';
-export const API = `${BASE}/api`;
+const API = 'https://moooza.ru/api';
+const PLINK_PW = process.env.PLINK_PW || 'x-wGeH5uVZs-Y@';
+const VPS = 'root@147.45.166.246';
+const DBNAME = 'mooza_db';
+const DBUSER = 'mooza';
 
-// ── SQL helper (verify emails, set flags) ────────────────────────────────────
-export function runSql(sql: string): string {
-  try {
-    const b64 = Buffer.from(sql).toString('base64');
-    const cmd = `plink -batch -pw "x-wGeH5uVZs-Y@" root@147.45.166.246 "echo ${b64} | base64 -d | docker exec -i mooza-postgres psql -U mooza -d mooza_db -t -A"`;
-    return execSync(cmd, { encoding: 'utf8', timeout: 15000 }).trim();
-  } catch {
-    return '';
-  }
-}
+export type TestUser = {
+  id: string;
+  email: string;
+  password: string;
+  token: string;
+  firstName: string;
+  lastName: string;
+};
 
-// ── API shortcut (for setup, not assertions) ──────────────────────────────────
-export async function apiCall(method: string, path: string, body?: object, token?: string) {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+export async function apiCall(
+  method: string,
+  path: string,
+  body?: Record<string, unknown>,
+  token?: string,
+): Promise<{ status: number; data: any; ok: boolean }> {
+  const headers: Record<string, string> = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  if (body) headers['Content-Type'] = 'application/json';
+
   const res = await fetch(`${API}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
   });
-  return { status: res.status, data: await res.json().catch(() => null) };
+  let data: any;
+  try {
+    data = await res.json();
+  } catch {
+    data = null;
+  }
+  return { status: res.status, data, ok: res.ok };
 }
 
-// ── Create + verify a fresh test user via API ────────────────────────────────
-export async function createTestUser(suffix: string): Promise<{ email: string; password: string; id?: string; token?: string }> {
-  const stamp = Date.now().toString(36);
-  const email = `pw_${suffix}_${stamp}@moooza.test`;
-  const password = 'PW_Test_2026!';
+export function runSql(sql: string): string {
+  try {
+    const b64 = Buffer.from(sql).toString('base64');
+    const remote = `echo ${b64} | base64 -d | docker exec -i mooza-postgres psql -U ${DBUSER} -d ${DBNAME}`;
+    const cmd = `plink -batch -pw "${PLINK_PW}" ${VPS} "${remote}"`;
+    return execSync(cmd, { encoding: 'utf8', stdio: 'pipe' });
+  } catch (e: any) {
+    console.warn('runSql failed:', e.message);
+    return '';
+  }
+}
 
-  await apiCall('POST', '/auth/register', {
-    firstName: 'PW' + suffix,
-    lastName: stamp,
+export async function createTestUser(prefix: string): Promise<TestUser> {
+  const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const email = `pw_${prefix}_${stamp}@moooza.test`;
+  const password = 'Test_PW_2026!';
+  const firstName = `PW${prefix.toUpperCase()}`;
+  const lastName = stamp;
+
+  // Register
+  const reg = await apiCall('POST', '/auth/register', {
+    firstName,
+    lastName,
     email,
     password,
     role: 'musician',
     city: 'Moscow',
   });
+  if (!reg.ok) {
+    throw new Error(`createTestUser register failed: ${JSON.stringify(reg.data)}`);
+  }
 
-  // Verify email via SQL
-  runSql(`UPDATE "User" SET "emailVerified" = true WHERE email = '${email}';`);
+  // Auto-verify email via SSH: set emailVerified=true AND plant a known code so we can
+  // call /auth/verify-email to receive a token without hitting the login rate limiter.
+  const KNOWN_CODE = '123456';
+  const future = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hr from now
+  const sql = `UPDATE "User" SET "emailVerified" = false, "emailVerificationCode" = '${KNOWN_CODE}', "emailVerificationExpires" = '${future}' WHERE email = '${email}';`;
+  runSql(sql);
 
-  // Login
-  const login = await apiCall('POST', '/auth/login', { email, password });
-  const token = login.data?.token;
-  const id = login.data?.user?.id || (token ? (await apiCall('GET', '/users/me', undefined, token)).data?.id : undefined);
+  // Call verify-email to get a token — avoids the login rate limiter entirely.
+  const verify = await apiCall('POST', '/auth/verify-email', { email, code: KNOWN_CODE });
 
-  return { email, password, id, token };
+  let token: string = '';
+  let userId: string = '';
+
+  if (verify.ok) {
+    token = verify.data.token;
+    userId = verify.data.user?.id || '';
+  } else {
+    // Fallback: set emailVerified directly and use login
+    runSql(`UPDATE "User" SET "emailVerified" = true WHERE email = '${email}';`);
+    const login = await apiCall('POST', '/auth/login', { email, password });
+    if (!login.ok) {
+      throw new Error(`createTestUser login failed: ${JSON.stringify(login.data)}`);
+    }
+    token = login.data.token;
+    userId = login.data.user?.id || login.data.id || '';
+  }
+
+  // Skip onboarding
+  await apiCall('PATCH', '/users/me/complete-onboarding', undefined, token);
+
+  return { id: userId, email, password, token, firstName, lastName };
 }
 
-// ── Login via UI ──────────────────────────────────────────────────────────────
-export async function loginUI(page: Page, email: string, password: string) {
-  // Pre-set localStorage flags so the terms block and cookie consent banner are hidden
-  await page.goto('/login');
-  await page.evaluate(() => {
+export async function loginUI(page: Page, user: TestUser): Promise<void> {
+  // Set token directly in localStorage to bypass login form
+  await page.goto('/');
+  await page.evaluate(({ token, user: u }) => {
+    localStorage.setItem('token', token);
     localStorage.setItem('termsAgreed', '1');
-    localStorage.setItem('mooza_cookie_consent', 'necessary');
-  });
-  // Reload so React reads the flags at mount
+    localStorage.setItem('mooza_tour_done', '1');
+    // Persist Zustand auth-storage
+    const authState = {
+      state: { user: u, token },
+      version: 0,
+    };
+    localStorage.setItem('auth-storage', JSON.stringify(authState));
+  }, { token: user.token, user: { id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName } });
   await page.reload();
-  await page.getByPlaceholder(/email/i).fill(email);
-  // Password field has placeholder "••••••••" — match by type
-  await page.locator('input[type="password"]').fill(password);
-  // Accept terms if the custom agree button is still visible (not a checkbox)
-  const agreeBtn = page.locator('button').filter({ hasText: /Ознакомился|принимаю условия/i }).first();
-  if (await agreeBtn.isVisible({ timeout: 1500 }).catch(() => false)) {
-    await agreeBtn.click();
+  // Wait for the mobile bottom nav (fixed bottom) to appear — authenticated state.
+  // The desktop sidebar also has a <nav>, so use the fixed-bottom one specifically.
+  // Try nav.fixed first (mobile bottom nav), fall back to any nav for resilience.
+  try {
+    await page.waitForSelector('nav.fixed', { timeout: 20_000 });
+  } catch {
+    // On slower connections or if viewport triggers desktop mode, just wait for any nav
+    await page.waitForSelector('nav', { timeout: 10_000 });
   }
-  // Submit via Enter on the password field to avoid mobile bottom-bar intercepting clicks
-  await page.locator('input[type="password"]').press('Enter');
-  // Wait for redirect away from /login
-  await page.waitForURL(url => !url.pathname.includes('/login'), { timeout: 12000 });
+  // Dismiss cookie/consent dialogs if present so they don't block clicks.
+  try {
+    const consent = page.locator('button:has-text("Принять"), button:has-text("OK")');
+    if (await consent.count() > 0) await consent.first().click();
+  } catch { /* ignore */ }
 }
 
-// ── Skip onboarding if shown ──────────────────────────────────────────────────
-export async function skipOnboarding(page: Page) {
-  const skip = page.getByRole('button', { name: /пропустить/i });
-  if (await skip.isVisible({ timeout: 2000 }).catch(() => false)) {
-    await skip.click();
-    await page.waitForURL('/', { timeout: 5000 }).catch(() => {});
+export async function skipOnboarding(page: Page): Promise<void> {
+  // If onboarding is shown, skip it
+  const url = page.url();
+  if (url.includes('/onboarding')) {
+    // Try to find a skip/continue button
+    const skipBtn = page.locator('button:has-text("Пропустить"), button:has-text("Далее"), button:has-text("Начать")');
+    const count = await skipBtn.count();
+    if (count > 0) {
+      await skipBtn.first().click();
+    } else {
+      await page.goto('/');
+    }
   }
-}
-
-// ── Assert toast / success indicator ─────────────────────────────────────────
-export async function expectSuccess(page: Page) {
-  // Generic: no error toast visible
-  await expect(page.locator('[class*="red-"],[class*="rose-"]').filter({ hasText: /ошибка|error/i })).toHaveCount(0, { timeout: 3000 }).catch(() => {});
 }
