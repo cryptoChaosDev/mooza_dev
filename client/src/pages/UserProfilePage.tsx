@@ -436,20 +436,6 @@ export default function UserProfilePage() {
             </div>
           )}
 
-          {/* ── Stats ── */}
-          <div className="grid grid-cols-2 divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-            <button
-              onClick={() => navigate(`/profile/${userId}/connections`)}
-              className="flex flex-col items-center py-1.5 px-1 hover:bg-slate-800/40 transition-colors"
-            >
-              <span className="text-sm font-bold text-white">{userConnections.length}</span>
-              <span className="text-[9px] text-slate-500">Связи</span>
-            </button>
-            <div className="flex flex-col items-center py-1.5 px-1">
-              <span className="text-sm font-bold text-white">{user.dealsCount ?? 0}</span>
-              <span className="text-[9px] text-slate-500">Сделки</span>
-            </div>
-          </div>
 
           <div className="space-y-3">
 
