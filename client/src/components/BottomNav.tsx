@@ -34,22 +34,20 @@ export default function BottomNav() {
             <Link
               key={path}
               to={path}
-              className={`relative flex flex-col items-center justify-center flex-1 py-1 gap-0.5 rounded-xl transition-all duration-200 touch-manipulation ${
+              aria-label={label}
+              className={`relative flex items-center justify-center flex-1 h-full rounded-xl transition-all duration-200 touch-manipulation ${
                 active ? 'text-primary-400' : 'text-slate-500 hover:text-slate-300'
               }`}
             >
-              {active && <span className="absolute inset-0 rounded-xl bg-primary-500/10" />}
+              {active && <span className="absolute inset-x-2 inset-y-2 rounded-xl bg-primary-500/10" />}
               <div className="relative">
                 <Icon
-                  size={20}
+                  size={28}
                   className={`transition-transform duration-200 ${active ? 'scale-110' : 'scale-100'}`}
                   strokeWidth={active ? 2.5 : 2}
                 />
                 <Badge count={badge} />
               </div>
-              <span className={`text-[10px] font-medium leading-none ${active ? 'text-primary-400' : 'text-slate-500'}`}>
-                {label}
-              </span>
             </Link>
           );
         })}
