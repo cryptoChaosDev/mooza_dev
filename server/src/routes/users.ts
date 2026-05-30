@@ -91,6 +91,7 @@ const userSelect = {
     },
   },
   occupancyStatus: true,
+  birthDate: true,
   lastSeenAt: true,
   termsAgreedAt: true,
   onboardingCompletedAt: true,
