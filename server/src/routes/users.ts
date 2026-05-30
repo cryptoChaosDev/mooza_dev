@@ -281,10 +281,31 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     const {
       firstName, lastName, nickname, bio, country, city, role, genres,
       socialLinks, birthDate,
+      _birthDateISO,
       fieldOfActivityId,
       userProfessions, artistIds,
       occupancyStatus,
     } = req.body;
+
+    // Parse birthDate: prefer the ISO field, fall back to dd.mm.yyyy, reject invalid dates
+    const parseBirthDate = (): Date | null | undefined => {
+      // Prefer an explicit ISO string from the client (yyyy-mm-dd)
+      if (_birthDateISO) {
+        const d = new Date(_birthDateISO);
+        return isNaN(d.getTime()) ? undefined : d;
+      }
+      if (birthDate === undefined) return undefined;      // field not sent — don't touch
+      if (!birthDate) return null;                        // empty — clear it
+      // Accept dd.mm.yyyy
+      const m = String(birthDate).match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+      if (m) {
+        const d = new Date(`${m[3]}-${m[2]}-${m[1]}`);
+        return isNaN(d.getTime()) ? undefined : d;
+      }
+      // Fall back to native parsing (ISO etc.)
+      const d = new Date(birthDate);
+      return isNaN(d.getTime()) ? undefined : d;
+    };
 
     // Update basic fields
     const updateData: any = {};
@@ -298,7 +319,8 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     if (genres !== undefined) updateData.genres = genres;
     if (socialLinks !== undefined) updateData.socialLinks = socialLinks;
     if (fieldOfActivityId !== undefined) updateData.fieldOfActivityId = fieldOfActivityId || null;
-    if (birthDate !== undefined) updateData.birthDate = birthDate ? new Date(birthDate) : null;
+    const parsedBirthDate = parseBirthDate();
+    if (parsedBirthDate !== undefined) updateData.birthDate = parsedBirthDate;
     if (occupancyStatus !== undefined) updateData.occupancyStatus = occupancyStatus || null;
 
     // Handle userProfessions: delete old, create new
