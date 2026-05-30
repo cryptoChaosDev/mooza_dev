@@ -7,7 +7,7 @@ import {
   Crown, BadgeCheck, Ban, X, Zap,
   Headphones, FileText, Briefcase,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
-  Globe, Play, Pause, ChevronRight, Flag, Phone,
+  Globe, Play, Pause, ChevronRight, Flag, Phone, Calendar,
 } from 'lucide-react';
 import { userAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
 import ComplaintModal from '../components/ComplaintModal';
@@ -386,6 +386,15 @@ export default function UserProfilePage() {
                 {[user.city, user.country].filter(Boolean).join(', ')}
               </span>
             )}
+            {user.birthDate && (() => {
+              const age = Math.floor((Date.now() - new Date(user.birthDate).getTime()) / (365.25 * 24 * 3600 * 1000));
+              return (
+                <span className="flex items-center gap-1">
+                  <Calendar size={12} className="flex-shrink-0" />
+                  {age} {age % 10 === 1 && age % 100 !== 11 ? 'год' : (age % 10 >= 2 && age % 10 <= 4 && (age % 100 < 10 || age % 100 >= 20) ? 'года' : 'лет')}
+                </span>
+              );
+            })()}
             {!isMe && (
               onlineUsers.has(user.id)
                 ? <span className="flex items-center gap-1 text-emerald-400 text-xs"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />В сети</span>

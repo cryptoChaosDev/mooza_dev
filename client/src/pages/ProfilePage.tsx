@@ -116,6 +116,7 @@ export default function ProfilePage() {
     userProfessions: [] as { professionId: string; features: string[] }[],
     artistIds: [] as string[],
     birthDate: '',
+    birthDateVisible: false,
     occupancyStatus: '' as '' | 'closed' | 'considering' | 'open',
   });
 
@@ -222,6 +223,7 @@ export default function ProfilePage() {
         })) || [],
         artistIds: data.userArtists?.map((ua: any) => ua.artistId || ua.artist?.id) || [],
         birthDate: data.birthDate ? new Date(data.birthDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
+        birthDateVisible: !!data.birthDateVisible,
         occupancyStatus: data.occupancyStatus || '',
       });
       setMyStandaloneProfessions(
@@ -997,6 +999,19 @@ export default function ProfilePage() {
                   }}
                   className={inputCls}
                 />
+                {/* Birth date visibility toggle */}
+                <label className="flex items-center gap-2.5 mt-2 cursor-pointer select-none">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, birthDateVisible: !formData.birthDateVisible })}
+                    className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${formData.birthDateVisible ? 'bg-primary-600' : 'bg-slate-700'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${formData.birthDateVisible ? 'translate-x-4' : ''}`} />
+                  </button>
+                  <span className="text-xs text-slate-400">
+                    {formData.birthDateVisible ? 'Дата рождения видна другим' : 'Дата рождения скрыта'}
+                  </span>
+                </label>
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setEditingHero(false)} className="flex-1 py-2.5 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>

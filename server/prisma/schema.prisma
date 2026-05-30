@@ -480,6 +480,7 @@ model User {
   occupancyStatus  String?  // 'closed' | 'considering' | 'open'
 
   birthDate             DateTime?
+  birthDateVisible      Boolean   @default(false)
   lastSeenAt            DateTime?
   termsAgreedAt         DateTime?
   onboardingCompletedAt DateTime?

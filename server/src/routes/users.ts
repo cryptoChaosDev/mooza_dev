@@ -92,6 +92,7 @@ const userSelect = {
   },
   occupancyStatus: true,
   birthDate: true,
+  birthDateVisible: true,
   lastSeenAt: true,
   termsAgreedAt: true,
   onboardingCompletedAt: true,
@@ -153,6 +154,8 @@ const publicUserSelect = {
     },
   },
   occupancyStatus: true,
+  birthDate: true,
+  birthDateVisible: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
   portfolioLinks: { select: { id: true, type: true, url: true, title: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
@@ -283,6 +286,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
       firstName, lastName, nickname, bio, country, city, role, genres,
       socialLinks, birthDate,
       _birthDateISO,
+      birthDateVisible,
       fieldOfActivityId,
       userProfessions, artistIds,
       occupancyStatus,
@@ -322,6 +326,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     if (fieldOfActivityId !== undefined) updateData.fieldOfActivityId = fieldOfActivityId || null;
     const parsedBirthDate = parseBirthDate();
     if (parsedBirthDate !== undefined) updateData.birthDate = parsedBirthDate;
+    if (birthDateVisible !== undefined) updateData.birthDateVisible = !!birthDateVisible;
     if (occupancyStatus !== undefined) updateData.occupancyStatus = occupancyStatus || null;
 
     // Handle userProfessions: delete old, create new
@@ -821,8 +826,13 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
       }
     } catch {}
 
+    // Hide birthDate from other users unless the owner opted to show it.
+    // (The owner views their own profile through /users/me, which is unaffected.)
+    const { birthDateVisible, ...publicUser } = user as any;
+    if (!birthDateVisible) publicUser.birthDate = null;
+
     res.json({
-      ...user,
+      ...publicUser,
       isFriend: friendshipStatus === 'accepted',
       friendshipId: friendship?.id ?? null,
       friendshipStatus,
