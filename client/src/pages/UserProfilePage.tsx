@@ -236,13 +236,6 @@ export default function UserProfilePage() {
                   iconSize={16}
                 />
 
-                <button
-                  onClick={() => setShowComplaint(true)}
-                  className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-red-400 rounded-xl transition-all"
-                  title="Пожаловаться"
-                >
-                  <Flag size={16} />
-                </button>
                 {showComplaint && <ComplaintModal targetType="user" targetId={user.id} onClose={() => setShowComplaint(false)} />}
 
                 {/* Connection button — state depends on conn status */}
@@ -691,6 +684,13 @@ export default function UserProfilePage() {
                   <SocialIconRow only={SOCIAL_KEYS} links={(user.socialLinks as Record<string, string>) || {}} />
                 </div>
               </div>
+            )}
+
+            {/* ── Report user ── */}
+            {!isMe && (
+              <button onClick={() => setShowComplaint(true)} className="w-full flex items-center justify-center gap-2 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/8 border border-red-500/20 hover:border-red-500/40 rounded-xl text-sm font-medium transition-all">
+                <Flag size={16} />Пожаловаться
+              </button>
             )}
 
           </div>
