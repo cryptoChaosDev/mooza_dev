@@ -412,6 +412,19 @@ export default function UserProfilePage() {
             )}
           </div>
 
+          {/* ── Occupancy status ── */}
+          {user.occupancyStatus && (
+            <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg border font-medium mb-3 ${
+              user.occupancyStatus === 'open' ? 'text-emerald-400 border-emerald-500/20 bg-emerald-500/10' :
+              user.occupancyStatus === 'considering' ? 'text-amber-400 border-amber-500/20 bg-amber-500/10' :
+              'text-red-400 border-red-500/20 bg-red-500/10'
+            }`}>
+              {user.occupancyStatus === 'open' ? '🟢 Открыт для работы' :
+               user.occupancyStatus === 'considering' ? '🟡 Рассматриваю предложения' :
+               '🔴 Не беру заказы'}
+            </span>
+          )}
+
           {/* ── Stats ── */}
           <div className="grid grid-cols-2 divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
             <button
