@@ -4,7 +4,7 @@ import {
   Eye, EyeOff, AlertCircle, Loader2,
   Check, Globe, ArrowRight, ArrowLeft, X, Search, ChevronDown,
 } from 'lucide-react';
-import { authAPI, referenceAPI } from '../lib/api';
+import { authAPI, referenceAPI, referralAPI } from '../lib/api';
 import CityPicker from '../components/CityPicker';
 import { useAuthStore } from '../stores/authStore';
 
@@ -220,7 +220,16 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const { setAuth } = useAuthStore();
   const [searchParams] = useSearchParams();
-  const referrerId = searchParams.get('ref') || undefined;
+  const refCode = searchParams.get('ref') || undefined;
+
+  // Resolve the ref code (named link code OR legacy userId) → owner id.
+  const [referrerId, setReferrerId] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    if (!refCode) return;
+    referralAPI.resolve(refCode)
+      .then(({ data }) => { if (data?.ownerId) setReferrerId(data.ownerId); })
+      .catch(() => {});
+  }, [refCode]);
 
   const [step, setStep] = useState(0);
 
@@ -379,6 +388,7 @@ export default function RegisterPage() {
       const digits = unformatPhone(phone);
       if (digits.length >= 11) payload.phone = '+' + digits;
       if (referrerId) payload.referrerId = referrerId;
+      if (refCode) payload.referralCode = refCode;
       if (!skipProfs && selectedProfs.length > 0) {
         payload.userProfessions = selectedProfs.map(p => ({
           professionId: p.professionId,

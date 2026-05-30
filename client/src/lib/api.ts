@@ -432,6 +432,11 @@ export const dealAPI = {
 
 export const referralAPI = {
   getStats: () => api.get('/referrals/stats'),
+  getLinks: () => api.get('/referrals/links'),
+  createLink: (label: string) => api.post('/referrals/links', { label }),
+  renameLink: (id: string, label: string) => api.patch(`/referrals/links/${id}`, { label }),
+  deleteLink: (id: string) => api.delete(`/referrals/links/${id}`),
+  resolve: (code: string) => api.post('/referrals/resolve', { code }),
 };
 
 export const siteSettingsAPI = {

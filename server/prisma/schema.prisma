@@ -463,6 +463,10 @@ model User {
   referrer   User?  @relation("UserReferrals", fields: [referrerId], references: [id], onDelete: SetNull)
   referrals  User[] @relation("UserReferrals")
 
+  // Named referral links the user generates
+  referralLinks ReferralLink[]
+  referralLinkUsed   String?       // code of the ReferralLink this user signed up through
+
   reviewsGiven    Review[] @relation("ReviewAuthor")
   reviewsReceived Review[] @relation("ReviewTarget")
 
@@ -592,6 +596,21 @@ model SiteSetting {
   key       String   @id
   value     String
   updatedAt DateTime @updatedAt
+}
+
+// User-generated named referral links (e.g. "Instagram", "Telegram")
+model ReferralLink {
+  id        String   @id @default(uuid())
+  code      String   @unique          // short slug used in /register?ref=<code>
+  label     String                    // human label set by the owner
+  ownerId   String
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  clicks    Int      @default(0)      // optional click tracking
+  signups   Int      @default(0)      // registrations attributed to this link
+  createdAt DateTime @default(now())
+
+  @@index([ownerId])
+  @@index([code])
 }
 
 // ============ JOIN TABLES ============

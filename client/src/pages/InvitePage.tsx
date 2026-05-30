@@ -1,16 +1,29 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Copy, Check, Share2, Users, Star, Music2 } from 'lucide-react';
-import { useAuthStore } from '../stores/authStore';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  ArrowLeft, Copy, Check, Share2, Users, Star, Music2,
+  Plus, Trash2, Link2, Loader2, X,
+} from 'lucide-react';
 import { referralAPI } from '../lib/api';
 
 const APP_URL = 'https://moooza.ru';
 
+interface RefLink {
+  id: string;
+  code: string;
+  label: string;
+  clicks: number;
+  signups: number;
+  createdAt: string;
+}
+
 export default function InvitePage() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
-  const [copied, setCopied] = useState(false);
+  const qc = useQueryClient();
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [newLabel, setNewLabel] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
 
   const { data: stats } = useQuery({
     queryKey: ['referral-stats'],
@@ -19,37 +32,55 @@ export default function InvitePage() {
   const referralCount = stats?.count ?? 0;
   const GOAL = 100;
 
-  const refLink = `${APP_URL}/register?ref=${user?.id ?? ''}`;
+  const { data: links = [], isLoading: linksLoading } = useQuery({
+    queryKey: ['referral-links'],
+    queryFn: async () => { const { data } = await referralAPI.getLinks(); return data as RefLink[]; },
+  });
 
-  const handleCopy = async () => {
+  const createMut = useMutation({
+    mutationFn: (label: string) => referralAPI.createLink(label),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['referral-links'] });
+      setNewLabel('');
+      setShowCreate(false);
+    },
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => referralAPI.deleteLink(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['referral-links'] }),
+  });
+
+  const linkUrl = (code: string) => `${APP_URL}/register?ref=${code}`;
+
+  const copyLink = async (id: string, code: string) => {
+    const url = linkUrl(code);
     try {
-      await navigator.clipboard.writeText(refLink);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      await navigator.clipboard.writeText(url);
     } catch {
-      // fallback
       const el = document.createElement('textarea');
-      el.value = refLink;
+      el.value = url;
       document.body.appendChild(el);
       el.select();
       document.execCommand('copy');
       document.body.removeChild(el);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
     }
+    setCopiedId(id);
+    setTimeout(() => setCopiedId(null), 2000);
   };
 
-  const handleShare = async () => {
+  const shareLink = async (code: string) => {
+    const url = linkUrl(code);
     if (navigator.share) {
       try {
         await navigator.share({
           title: 'Moooza — соцсеть для музыкантов',
           text: 'Присоединяйся к Moooza — платформе для музыкантов, где находят коллег, клиентов и проекты!',
-          url: refLink,
+          url,
         });
       } catch { /* cancelled */ }
     } else {
-      handleCopy();
+      copyLink(code, code);
     }
   };
 
@@ -76,7 +107,7 @@ export default function InvitePage() {
               Собери всю индустрию<br />в одном месте
             </h1>
             <p className="text-slate-400 text-sm leading-relaxed max-w-xs mx-auto">
-              Приглашай музыкантов, продюсеров, промоутеров и всех участников индустрии — вместе мы создаём самое крутое сообщество.
+              Создавай отдельные ссылки для разных каналов и отслеживай, откуда приходят музыканты.
             </p>
           </div>
 
@@ -95,35 +126,110 @@ export default function InvitePage() {
             </div>
           </div>
 
-          {/* Ref link */}
-          <div className="mb-4">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Ваша реферальная ссылка</p>
-            <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700 rounded-2xl px-4 py-3">
-              <p className="text-sm text-slate-300 truncate flex-1">{refLink}</p>
-              <button
-                onClick={handleCopy}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${
-                  copied ? 'bg-green-600/20 text-green-400' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                }`}
-              >
-                {copied ? <Check size={13} /> : <Copy size={13} />}
-                {copied ? 'Скопировано!' : 'Копировать'}
-              </button>
-            </div>
+          {/* Links section header */}
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Ваши реферальные ссылки</p>
+            <button
+              onClick={() => setShowCreate(v => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-primary-600 hover:bg-primary-500 text-white transition-colors"
+            >
+              <Plus size={13} /> Создать
+            </button>
           </div>
 
-          {/* Share button */}
-          <button
-            onClick={handleShare}
-            className="w-full flex items-center justify-center gap-2.5 py-3.5 bg-primary-600 hover:bg-primary-500 text-white font-semibold rounded-2xl transition-colors shadow-lg shadow-primary-900/40 mb-6"
-          >
-            <Share2 size={18} />
-            Поделиться ссылкой
-          </button>
+          {/* Create form */}
+          {showCreate && (
+            <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 mb-4">
+              <div className="flex items-center gap-2">
+                <input
+                  value={newLabel}
+                  onChange={e => setNewLabel(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && newLabel.trim()) createMut.mutate(newLabel.trim()); }}
+                  placeholder="Название (напр. Instagram, Друзья)"
+                  maxLength={60}
+                  autoFocus
+                  className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
+                />
+                <button
+                  onClick={() => newLabel.trim() && createMut.mutate(newLabel.trim())}
+                  disabled={!newLabel.trim() || createMut.isPending}
+                  className="px-3 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 disabled:opacity-40 text-white text-sm font-medium transition-colors flex items-center gap-1.5"
+                >
+                  {createMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                </button>
+                <button onClick={() => { setShowCreate(false); setNewLabel(''); }} className="p-2 text-slate-500 hover:text-white">
+                  <X size={16} />
+                </button>
+              </div>
+              {createMut.isError && (
+                <p className="text-xs text-rose-400 mt-2">
+                  {(createMut.error as any)?.response?.data?.error ?? 'Не удалось создать ссылку'}
+                </p>
+              )}
+            </div>
+          )}
 
-          {/* Stats */}
+          {/* Links list */}
+          {linksLoading ? (
+            <div className="flex justify-center py-8">
+              <Loader2 size={20} className="animate-spin text-slate-600" />
+            </div>
+          ) : links.length === 0 ? (
+            <div className="text-center py-8 bg-slate-900/40 border border-slate-800 border-dashed rounded-2xl mb-6">
+              <Link2 size={28} className="text-slate-700 mx-auto mb-2" />
+              <p className="text-sm text-slate-500">Создайте первую ссылку, чтобы начать приглашать</p>
+            </div>
+          ) : (
+            <div className="space-y-3 mb-6">
+              {links.map((link) => (
+                <div key={link.id} className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Link2 size={15} className="text-primary-400 flex-shrink-0" />
+                      <p className="text-sm font-semibold text-white truncate">{link.label}</p>
+                    </div>
+                    <button
+                      onClick={() => deleteMut.mutate(link.id)}
+                      disabled={deleteMut.isPending}
+                      className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors flex-shrink-0"
+                      title="Удалить"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+
+                  {/* Link row */}
+                  <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/60 rounded-xl px-3 py-2 mb-2.5">
+                    <p className="text-xs text-slate-400 truncate flex-1">{linkUrl(link.code)}</p>
+                    <button
+                      onClick={() => copyLink(link.id, link.code)}
+                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex-shrink-0 ${
+                        copiedId === link.id ? 'bg-green-600/20 text-green-400' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                      }`}
+                    >
+                      {copiedId === link.id ? <Check size={12} /> : <Copy size={12} />}
+                    </button>
+                    <button
+                      onClick={() => shareLink(link.code)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary-600 hover:bg-primary-500 text-white transition-colors flex-shrink-0"
+                    >
+                      <Share2 size={12} />
+                    </button>
+                  </div>
+
+                  {/* Per-link stats */}
+                  <div className="flex items-center gap-4 text-xs text-slate-500">
+                    <span className="flex items-center gap-1"><Users size={12} /> {link.signups} регистраций</span>
+                    <span className="flex items-center gap-1"><Link2 size={12} /> {link.clicks} переходов</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Total progress */}
           <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Ваш прогресс</p>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Общий прогресс</p>
             <div className="flex items-center gap-4">
               <div className="text-center flex-1">
                 <p className="text-2xl font-bold text-white">{referralCount}</p>
@@ -150,9 +256,9 @@ export default function InvitePage() {
           <div className="mt-6 space-y-3">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Как это работает</p>
             {[
-              { icon: Share2, text: 'Поделитесь ссылкой с коллегами, друзьями, в соцсетях' },
-              { icon: Users, text: 'Друг регистрируется по вашей ссылке' },
-              { icon: Star, text: 'Копи 100 регистраций → получи статус Амбасадор' },
+              { icon: Plus, text: 'Создайте ссылку для каждого канала — Instagram, Telegram, друзья' },
+              { icon: Share2, text: 'Делитесь нужной ссылкой в нужном месте' },
+              { icon: Star, text: 'Смотрите, откуда приходят люди, и копите 100 регистраций → статус Амбасадор' },
             ].map(({ icon: Icon, text }, i) => (
               <div key={i} className="flex items-start gap-3">
                 <div className="w-7 h-7 rounded-xl bg-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">

@@ -57,6 +57,7 @@ const registerSchema = z.object({
   password: z.string().min(8),
   // Referral
   referrerId: z.string().optional(),
+  referralCode: z.string().optional(),   // ReferralLink.code, if signed up via a named link
   // Age verification
   birthDate: z.string().optional(),
 });
@@ -132,6 +133,7 @@ router.post('/register', registerLimiter, async (req, res) => {
         birthDate: data.birthDate ? new Date(data.birthDate) : undefined,
         fieldOfActivityId: data.fieldOfActivityId || undefined,
         referrerId: data.referrerId || undefined,
+        referralLinkUsed: data.referralCode || undefined,
         // Create user professions
         userProfessions: data.userProfessions && data.userProfessions.length > 0
           ? {
@@ -195,6 +197,14 @@ router.post('/register', registerLimiter, async (req, res) => {
       await sendVerificationEmail(normalizedEmail, verificationCode);
     } catch (mailErr) {
       console.error('[register] Failed to send verification email:', mailErr);
+    }
+
+    // Attribute the signup to a named referral link, if one was used
+    if (data.referralCode) {
+      prisma.referralLink.updateMany({
+        where: { code: data.referralCode },
+        data: { signups: { increment: 1 } },
+      }).catch(() => {});
     }
 
     tgLog(`🆕 <b>Новый пользователь</b>\n👤 ${user.firstName} ${user.lastName}\n📧 ${normalizedEmail}\n🌍 ${user.city || '—'}`);
