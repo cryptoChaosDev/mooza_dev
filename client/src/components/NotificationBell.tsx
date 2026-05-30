@@ -291,11 +291,12 @@ export default function NotificationBell() {
     <>
       <button
         onClick={() => setOpen(v => !v)}
-        className="relative p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
+        aria-label="Уведомления"
+        className={`relative transition-colors ${open ? 'text-primary-400' : 'text-slate-500 hover:text-slate-300'}`}
       >
-        <Bell size={22} strokeWidth={open ? 2.5 : 2} className={open ? 'text-primary-400' : ''} />
+        <Bell size={28} strokeWidth={open ? 2.5 : 2} />
         {unreadNotifications > 0 && (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none shadow-lg shadow-red-500/30">
+          <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center px-1 leading-none shadow-lg shadow-red-500/30">
             {unreadNotifications > 99 ? '99+' : unreadNotifications}
           </span>
         )}

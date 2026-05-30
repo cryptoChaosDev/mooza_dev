@@ -69,21 +69,21 @@ export default function Layout({ children }: LayoutProps) {
           <Link to="/" className="flex items-center">
             <img src="/logo.png" alt="Moooza" className="h-8 w-auto" />
           </Link>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-3">
             <NotificationBell />
             <button
               onClick={() => setShowInfo(true)}
-              className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
-              title="Информация"
+              className="text-slate-500 hover:text-slate-300 transition-colors"
+              aria-label="Информация"
             >
-              <Info size={22} className="text-slate-300" />
+              <Info size={28} strokeWidth={2} />
             </button>
             <button
               onClick={() => navigate('/invite')}
-              className="p-2 rounded-lg hover:bg-slate-800 transition-colors"
-              title="Реферальная программа"
+              className="text-slate-500 hover:text-slate-300 transition-colors"
+              aria-label="Реферальная программа"
             >
-              <Gift size={22} className="text-slate-300" />
+              <Gift size={28} strokeWidth={2} />
             </button>
           </div>
           {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
