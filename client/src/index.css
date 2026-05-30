@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Declare the app as dark-only so Yandex Browser / Chrome auto dark-mode
+   engines treat our colors as already-correct and don't re-tint SVG icons. */
+:root {
+  color-scheme: dark;
+}
+
 * {
   -webkit-tap-highlight-color: transparent;
   -webkit-touch-callout: none;
@@ -11,6 +17,14 @@ html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  color-scheme: dark;
+}
+
+/* Yandex Browser's "smart"/auto dark theme inverts SVG fill & stroke on inline
+   icons, turning lucide-react icons (which use stroke="currentColor") white.
+   forced-color-adjust:none opts icons out of any forced re-coloring. */
+svg {
+  forced-color-adjust: none;
 }
 
 body {
