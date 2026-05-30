@@ -68,14 +68,22 @@ export default function ComplaintModal({ targetType, targetId, onClose }: Props)
                 </div>
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Описание (необязательно)</p>
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Описание</p>
+                  <span className={`text-[11px] ${text.trim().length >= 30 ? 'text-emerald-400' : 'text-slate-500'}`}>
+                    {text.trim().length}/30
+                  </span>
+                </div>
                 <textarea value={text} onChange={e => setText(e.target.value)} rows={3}
-                  placeholder="Опишите суть жалобы..."
+                  placeholder="Опишите суть жалобы подробно (минимум 30 символов)..."
                   className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-red-500 resize-none" />
+                {text.trim().length > 0 && text.trim().length < 30 && (
+                  <p className="text-[11px] text-amber-400 mt-1">Опишите подробнее — нужно ещё {30 - text.trim().length} симв.</p>
+                )}
               </div>
               <div className="flex gap-2.5">
                 <button onClick={onClose} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">Отмена</button>
-                <button onClick={() => mut.mutate()} disabled={!category || mut.isPending}
+                <button onClick={() => mut.mutate()} disabled={!category || text.trim().length < 30 || mut.isPending}
                   className="flex-1 py-2.5 bg-red-600/80 hover:bg-red-600 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-1.5">
                   {mut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Flag size={14} />}
                   Отправить

@@ -30,6 +30,9 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     if (!targetType || !targetId || !category) {
       return res.status(400).json({ error: 'targetType, targetId, category required' });
     }
+    if (!text || String(text).trim().length < 30) {
+      return res.status(400).json({ error: 'Описание обязательно (минимум 30 символов)' });
+    }
 
     // Count previous reports on same target
     const prevReports = await prisma.complaint.count({
