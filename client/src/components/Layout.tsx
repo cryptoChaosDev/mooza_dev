@@ -76,14 +76,14 @@ export default function Layout({ children }: LayoutProps) {
               className="text-slate-500 hover:text-slate-300 transition-colors"
               aria-label="Информация"
             >
-              <Info size={28} strokeWidth={2} />
+              <Info size={20} strokeWidth={2} />
             </button>
             <button
               onClick={() => navigate('/invite')}
               className="text-slate-500 hover:text-slate-300 transition-colors"
               aria-label="Реферальная программа"
             >
-              <Gift size={28} strokeWidth={2} />
+              <Gift size={20} strokeWidth={2} />
             </button>
           </div>
           {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}

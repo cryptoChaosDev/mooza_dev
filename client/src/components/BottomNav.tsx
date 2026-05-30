@@ -42,7 +42,7 @@ export default function BottomNav() {
               {active && <span className="absolute inset-x-2 inset-y-2 rounded-xl bg-primary-500/10" />}
               <div className="relative">
                 <Icon
-                  size={28}
+                  size={20}
                   className={`transition-transform duration-200 ${active ? 'scale-110' : 'scale-100'}`}
                   strokeWidth={active ? 2.5 : 2}
                 />
