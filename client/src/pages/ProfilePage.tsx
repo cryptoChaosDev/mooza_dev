@@ -998,10 +998,6 @@ export default function ProfilePage() {
                   className={inputCls}
                 />
               </div>
-              <div>
-                <label className={labelCls}>Социальные сети и сервисы</label>
-                <SocialLinksEditor value={formData.socialLinks} onChange={v => setFormData({ ...formData, socialLinks: v })} />
-              </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setEditingHero(false)} className="flex-1 py-2.5 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
                 <button onClick={handleSaveHero} disabled={updateMutation.isPending} className="flex-1 py-2.5 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
