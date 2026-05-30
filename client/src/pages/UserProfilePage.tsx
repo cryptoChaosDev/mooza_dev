@@ -287,60 +287,66 @@ export default function UserProfilePage() {
               {/* Primary: Message */}
               <button
                 onClick={() => navigate(`/messages/${user.id}`)}
-                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary-600 hover:bg-primary-500 text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-primary-500/20"
+                className="flex items-center justify-center px-3.5 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all shadow-lg shadow-primary-500/20"
+                title="Написать сообщение"
               >
-                <MessageCircle size={16} />
-                Написать
+                <MessageCircle size={18} />
               </button>
 
-              {/* Connection — label/style depends on status */}
+              {/* Connection — style depends on status */}
               {conn?.status === 'ACCEPTED' ? (
                 <button
                   onClick={() => navigate(`/connection/${user.id}`, { state: { partner: user, connections: [conn] } })}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-violet-500/15 border border-violet-500/30 text-violet-400 text-sm font-medium rounded-xl transition-all"
+                  className="flex items-center justify-center px-3.5 py-2.5 bg-violet-500/15 border border-violet-500/30 text-violet-400 rounded-xl transition-all"
+                  title="Связь установлена"
                 >
-                  <Link2 size={16} /> Связь
+                  <Link2 size={18} />
                 </button>
               ) : conn?.status === 'PENDING' && conn.iAmRequester ? (
                 <button
                   onClick={() => setViewConn(conn)}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-800/80 border border-slate-700/60 text-slate-500 text-sm font-medium rounded-xl transition-all"
+                  className="flex items-center justify-center px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/60 text-slate-500 rounded-xl transition-all"
+                  title="Запрос отправлен"
                 >
-                  <Clock size={16} /> Запрос
+                  <Clock size={18} />
                 </button>
               ) : conn?.status === 'PENDING' && !conn.iAmRequester ? (
                 <button
                   onClick={() => setViewConn(conn)}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-xl transition-all"
+                  className="flex items-center justify-center px-3.5 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all"
+                  title="Входящий запрос на связь"
                 >
-                  <Link2 size={16} /> Принять
+                  <Link2 size={18} />
                 </button>
               ) : (
                 <button
                   onClick={() => setShowConnModal(true)}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-primary-400 text-sm font-medium rounded-xl transition-all"
+                  className="flex items-center justify-center px-3.5 py-2.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-primary-400 rounded-xl transition-all"
+                  title="Установить связь"
                 >
-                  <Link2 size={16} /> Связь
+                  <Link2 size={18} />
                 </button>
               )}
 
-              {/* Friend — label/style depends on status */}
+              {/* Friend — style depends on status */}
               {user.friendshipStatus === 'none' && (
                 <button
                   onClick={() => sendFriendMut.mutate()}
                   disabled={sendFriendMut.isPending}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-primary-400 text-sm font-medium rounded-xl transition-all disabled:opacity-50"
+                  className="flex items-center justify-center px-3.5 py-2.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-primary-400 rounded-xl transition-all disabled:opacity-50"
+                  title="Добавить в друзья"
                 >
-                  <UserPlus size={16} /> В друзья
+                  <UserPlus size={18} />
                 </button>
               )}
               {user.friendshipStatus === 'pending_sent' && (
                 <button
                   onClick={() => cancelFriendMut.mutate()}
                   disabled={cancelFriendMut.isPending}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-800/80 border border-slate-700/60 text-slate-500 text-sm font-medium rounded-xl transition-all disabled:opacity-50"
+                  className="flex items-center justify-center px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/60 text-slate-500 rounded-xl transition-all disabled:opacity-50"
+                  title="Отменить заявку"
                 >
-                  <Clock size={16} /> Заявка
+                  <Clock size={18} />
                 </button>
               )}
               {user.friendshipStatus === 'pending_received' && (
@@ -348,18 +354,18 @@ export default function UserProfilePage() {
                   <button
                     onClick={() => acceptFriendMut.mutate()}
                     disabled={acceptFriendMut.isPending}
-                    className="flex items-center justify-center px-3 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all disabled:opacity-50"
+                    className="flex items-center justify-center px-3.5 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all disabled:opacity-50"
                     title="Принять заявку"
                   >
-                    <UserCheck size={16} />
+                    <UserCheck size={18} />
                   </button>
                   <button
                     onClick={() => cancelFriendMut.mutate()}
                     disabled={cancelFriendMut.isPending}
-                    className="flex items-center justify-center px-3 py-2.5 bg-slate-800/80 border border-slate-700/60 text-slate-400 hover:text-red-400 rounded-xl transition-all disabled:opacity-50"
+                    className="flex items-center justify-center px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/60 text-slate-400 hover:text-red-400 rounded-xl transition-all disabled:opacity-50"
                     title="Отклонить заявку"
                   >
-                    <UserX size={16} />
+                    <UserX size={18} />
                   </button>
                 </>
               )}
@@ -367,10 +373,10 @@ export default function UserProfilePage() {
                 <button
                   onClick={() => removeFriendMut.mutate()}
                   disabled={removeFriendMut.isPending}
-                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-green-500/10 border border-green-500/30 text-green-400 text-sm font-medium rounded-xl transition-all disabled:opacity-50"
-                  title="Удалить из друзей"
+                  className="flex items-center justify-center px-3.5 py-2.5 bg-green-500/10 border border-green-500/30 text-green-400 rounded-xl transition-all disabled:opacity-50"
+                  title="В друзьях — нажмите, чтобы удалить"
                 >
-                  <UserCheck size={16} /> Друзья
+                  <UserCheck size={18} />
                 </button>
               )}
 
