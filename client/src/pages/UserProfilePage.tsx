@@ -7,12 +7,12 @@ import {
   Crown, BadgeCheck, Ban, X, Zap,
   Headphones, FileText, Briefcase,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
-  Globe, Play, Pause, ChevronRight, Flag,
+  Globe, Play, Pause, ChevronRight, Flag, Phone,
 } from 'lucide-react';
 import { userAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
 import ComplaintModal from '../components/ComplaintModal';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
-import { SocialIconRow } from '../components/SocialLinks';
+import { SocialIconRow, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
 import ShareButton from '../components/ShareButton';
 import BadgeTooltip from '../components/BadgeTooltip';
@@ -180,7 +180,9 @@ export default function UserProfilePage() {
   const otherFiles = portfolioFiles.filter((f: any) => !f.mimeType?.startsWith('audio/') && !f.mimeType?.startsWith('image/'));
   const allAudio = [...audioFiles, ...audioLinks];
   const hasPortfolio = allAudio.length > 0 || imageFiles.length > 0 || otherFiles.length > 0;
-  const hasSocialLinks = Object.values((user.socialLinks as Record<string, string>) || {}).some(Boolean);
+  const socialLinksMap = (user.socialLinks as Record<string, string>) || {};
+  const hasContactLinks = CONTACT_KEYS.some(k => socialLinksMap[k]);
+  const hasSocialNetworkLinks = SOCIAL_KEYS.some(k => socialLinksMap[k]);
   const bUrl = user.bannerImage ? getAvatarUrl(user.bannerImage) : null;
   const isMe = me?.id === user.id;
 
@@ -638,10 +640,10 @@ export default function UserProfilePage() {
             )}
 
             {/* ── Contacts — visible only to users with a filled profile ── */}
-            {hasSocialLinks && (
+            {hasContactLinks && (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                  <Globe size={14} className="text-primary-400" />
+                  <Phone size={14} className="text-primary-400" />
                   <span className="text-sm font-semibold text-white">Контакты</span>
                 </div>
                 <div className="p-4">
@@ -650,8 +652,21 @@ export default function UserProfilePage() {
                   ) : !(me.firstName && me.lastName && me.avatar) ? (
                     <p className="text-xs text-slate-500 italic">Заполните свой профиль (имя, фото), чтобы видеть контакты</p>
                   ) : (
-                    <SocialIconRow links={(user.socialLinks as Record<string, string>) || {}} />
+                    <SocialIconRow only={CONTACT_KEYS} links={(user.socialLinks as Record<string, string>) || {}} />
                   )}
+                </div>
+              </div>
+            )}
+
+            {/* ── Social networks ── */}
+            {hasSocialNetworkLinks && (
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                  <Globe size={14} className="text-primary-400" />
+                  <span className="text-sm font-semibold text-white">Соц.сети</span>
+                </div>
+                <div className="p-4">
+                  <SocialIconRow only={SOCIAL_KEYS} links={(user.socialLinks as Record<string, string>) || {}} />
                 </div>
               </div>
             )}

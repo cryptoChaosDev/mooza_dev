@@ -3,6 +3,8 @@ import React from 'react';
 // ─── Service definitions ──────────────────────────────────────────────────────
 
 export type SocialKey =
+  | 'phone'
+  | 'email'
   | 'tg_profile'
   | 'tg_channel'
   | 'vk_profile'
@@ -14,6 +16,10 @@ export type SocialKey =
   | 'spotify'
   | 'lastfm'
   | 'twitter';
+
+// Contact keys vs social keys — used to split the profile "Contacts" card
+export const CONTACT_KEYS: SocialKey[] = ['phone', 'email', 'tg_profile'];
+export const SOCIAL_KEYS: SocialKey[] = ['vk_profile', 'youtube', 'tg_channel'];
 
 export interface SocialService {
   key: SocialKey;
@@ -82,7 +88,38 @@ const LinkIcon = () => (
   </svg>
 );
 
+const PhoneIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/>
+  </svg>
+);
+
+const EmailIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
+    <rect x="2" y="4" width="20" height="16" rx="2"/>
+    <path d="m22 7-10 6L2 7"/>
+  </svg>
+);
+
 export const SOCIAL_SERVICES: SocialService[] = [
+  {
+    key: 'phone',
+    label: 'Телефон',
+    baseUrl: 'tel:',
+    placeholder: '+7 900 000-00-00',
+    color: 'emerald',
+    iconBg: '#10B981',
+    icon: <PhoneIcon />,
+  },
+  {
+    key: 'email',
+    label: 'E-mail',
+    baseUrl: 'mailto:',
+    placeholder: 'you@example.com',
+    color: 'amber',
+    iconBg: '#F59E0B',
+    icon: <EmailIcon />,
+  },
   {
     key: 'tg_profile',
     label: 'Telegram профиль',
@@ -207,8 +244,9 @@ export function extractSlug(service: SocialService, fullUrl: string): string {
 
 // ─── View: clickable icon row ─────────────────────────────────────────────────
 
-export function SocialIconRow({ links, labeled = false }: { links: Record<string, string>; labeled?: boolean }) {
-  const entries = SOCIAL_SERVICES.filter(s => links[s.key]);
+export function SocialIconRow({ links, labeled = false, only }: { links: Record<string, string>; labeled?: boolean; only?: SocialKey[] }) {
+  const pool = only ? SOCIAL_SERVICES.filter(s => only.includes(s.key)) : SOCIAL_SERVICES;
+  const entries = pool.filter(s => links[s.key]);
   if (entries.length === 0) return null;
 
   if (labeled) {
@@ -264,13 +302,16 @@ export function SocialIconRow({ links, labeled = false }: { links: Record<string
 export function SocialLinksEditor({
   value,
   onChange,
+  only,
 }: {
   value: Record<string, string>;
   onChange: (v: Record<string, string>) => void;
+  only?: SocialKey[];
 }) {
+  const services = only ? SOCIAL_SERVICES.filter(s => only.includes(s.key)) : SOCIAL_SERVICES;
   return (
     <div className="space-y-2">
-      {SOCIAL_SERVICES.map(service => {
+      {services.map(service => {
         const slug = extractSlug(service, value[service.key] || '');
         return (
           <div key={service.key} className="flex items-center gap-2">

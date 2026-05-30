@@ -9,7 +9,7 @@ import {
   Globe, DollarSign, Calendar,
   Headphones, Edit3, Plus, ChevronLeft, ChevronRight,
   FileText, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
-  Music2, Play, Pause, HandshakeIcon, Eye,
+  Music2, Play, Pause, HandshakeIcon, Eye, Phone,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConnectionCard from '../components/ConnectionCard';
@@ -18,7 +18,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import BadgeTooltip from '../components/BadgeTooltip';
 import SelectField from '../components/SelectField';
 import SelectSheet from '../components/SelectSheet';
-import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
+import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import ShareButton from '../components/ShareButton';
 import JoinArtistModal from '../components/JoinArtistModal';
@@ -149,10 +149,11 @@ export default function ProfilePage() {
   const [editingBio, setEditingBio] = useState(false);
   const [editingServices, setEditingServices] = useState(false);
   const [editingContacts, setEditingContacts] = useState(false);
+  const [editingSocials, setEditingSocials] = useState(false);
 
   // Autosave when formData changes while any section is open
   useEffect(() => {
-    if (!editingHero && !editingBio && !editingContacts) return;
+    if (!editingHero && !editingBio && !editingContacts && !editingSocials) return;
     triggerAutoSave(formData);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData]);
@@ -381,6 +382,11 @@ export default function ProfilePage() {
   const handleSaveContacts = async () => {
     try { await updateMutation.mutateAsync(formData); }
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingContacts(false); }
+  };
+
+  const handleSaveSocials = async () => {
+    try { await updateMutation.mutateAsync(formData); }
+    finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingSocials(false); }
   };
 
   const handleSaveServices = async () => {
@@ -809,7 +815,9 @@ export default function ProfilePage() {
 
   const aUrl = getAvatarUrl(profile?.avatar);
   const bUrl = profile?.bannerImage ? `${API_URL}${profile.bannerImage}` : null;
-  const hasSocialLinks = Object.values((profile?.socialLinks as Record<string, string>) || {}).some(Boolean);
+  const socialLinksMap = (profile?.socialLinks as Record<string, string>) || {};
+  const hasContactLinks = CONTACT_KEYS.some(k => socialLinksMap[k]);
+  const hasSocialNetworkLinks = SOCIAL_KEYS.some(k => socialLinksMap[k]);
 
 
   const servicesFlat = (Object.values(servicesByField) as { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }[]).flatMap(({ fieldName, byProfession }) =>
@@ -1535,7 +1543,7 @@ export default function ProfilePage() {
             {/* ── Contacts card ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                <Globe size={14} className="text-primary-400" />
+                <Phone size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Контакты</span>
                 <button onClick={() => setEditingContacts(v => !v)} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
                   {editingContacts ? 'Готово' : 'Изменить'}
@@ -1544,15 +1552,40 @@ export default function ProfilePage() {
               <div className="p-4">
                 {editingContacts ? (
                   <div className="space-y-3">
-                    <SocialLinksEditor value={formData.socialLinks} onChange={v => setFormData({ ...formData, socialLinks: v })} />
+                    <SocialLinksEditor only={CONTACT_KEYS} value={formData.socialLinks} onChange={v => setFormData({ ...formData, socialLinks: v })} />
                     <button onClick={handleSaveContacts} disabled={updateMutation.isPending} className="w-full py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
                       {updateMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
                     </button>
                   </div>
-                ) : hasSocialLinks ? (
-                  <SocialIconRow links={(profile?.socialLinks as Record<string, string>) || {}} />
+                ) : hasContactLinks ? (
+                  <SocialIconRow only={CONTACT_KEYS} links={(profile?.socialLinks as Record<string, string>) || {}} />
                 ) : (
                   <button onClick={() => setEditingContacts(true)} className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic">+ Добавить контакты</button>
+                )}
+              </div>
+            </div>
+
+            {/* ── Social networks card ── */}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                <Globe size={14} className="text-primary-400" />
+                <span className="text-sm font-semibold text-white">Соц.сети</span>
+                <button onClick={() => setEditingSocials(v => !v)} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
+                  {editingSocials ? 'Готово' : 'Изменить'}
+                </button>
+              </div>
+              <div className="p-4">
+                {editingSocials ? (
+                  <div className="space-y-3">
+                    <SocialLinksEditor only={SOCIAL_KEYS} value={formData.socialLinks} onChange={v => setFormData({ ...formData, socialLinks: v })} />
+                    <button onClick={handleSaveSocials} disabled={updateMutation.isPending} className="w-full py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                      {updateMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
+                    </button>
+                  </div>
+                ) : hasSocialNetworkLinks ? (
+                  <SocialIconRow only={SOCIAL_KEYS} links={(profile?.socialLinks as Record<string, string>) || {}} />
+                ) : (
+                  <button onClick={() => setEditingSocials(true)} className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic">+ Добавить соц.сети</button>
                 )}
               </div>
             </div>
