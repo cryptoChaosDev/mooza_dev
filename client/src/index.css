@@ -20,10 +20,13 @@ html {
   color-scheme: dark;
 }
 
-/* Yandex Browser's "smart"/auto dark theme inverts SVG fill & stroke on inline
-   icons, turning lucide-react icons (which use stroke="currentColor") white.
-   forced-color-adjust:none opts icons out of any forced re-coloring. */
-svg {
+/* Yandex Browser's "smart"/auto dark theme re-tints elements it thinks are
+   light: it whitens semi-transparent button backgrounds (bg-slate-800/60) and
+   inverts SVG icon strokes. forced-color-adjust:none on every element opts the
+   whole app out of any forced re-coloring, keeping our own dark palette intact. */
+*,
+*::before,
+*::after {
   forced-color-adjust: none;
 }
 
