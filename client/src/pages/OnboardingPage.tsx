@@ -17,92 +17,45 @@ const SLIDES: Slide[] = [
   {
     emoji: '🎵',
     title: 'Добро пожаловать\nв Moooza',
-    description: 'Первая профессиональная платформа для музыкантов и всех, кто создаёт музыку. Здесь вы найдёте коллег, проекты и возможности для роста.',
+    description: 'Moooza — это площадка для музыкальной тусовки. Здесь специалисты находят заказы, а артисты — людей, с которыми получается результат. Ты можешь предлагать свои услуги, искать исполнителей для проекта и строить профессиональные связи — всё в одном месте.',
     accent: 'from-primary-600/20 to-purple-600/20',
-    features: [
-      { icon: '🔍', text: 'Найди нужного специалиста' },
-      { icon: '🤝', text: 'Установи профессиональные связи' },
-      { icon: '💬', text: 'Общайся и создавай проекты' },
-    ],
   },
   {
     emoji: '👤',
-    title: 'Профиль',
-    description: 'Ваш профессиональный профиль — лицо в музыкальном сообществе. Расскажите о себе, своих услугах и творческих проектах.',
+    title: 'Твой профиль —\nтвоя витрина',
+    description: 'Профиль — это первое, что видит человек, который хочет с тобой работать. Здесь твои услуги, примеры работ, специализация. Чем полнее профиль — тем выше доверие и вероятность, что напишут именно тебе, а не пройдут мимо.',
     accent: 'from-sky-600/20 to-blue-600/20',
-    features: [
-      { icon: '🎼', text: 'Профессии и услуги из каталога' },
-      { icon: '📺', text: 'Личный канал с публикациями' },
-      { icon: '🎤', text: 'Артисты и группы, в которых вы участвуете' },
-      { icon: '⭐', text: 'Отзывы 1-10 после совместной работы' },
-    ],
-  },
-  {
-    emoji: '🔍',
-    title: 'Каталог',
-    description: 'Умный поиск по всем участникам платформы. Находите нужных специалистов с точностью до профессии, жанра, города и бюджета.',
-    accent: 'from-emerald-600/20 to-teal-600/20',
-    features: [
-      { icon: '🎼', text: 'Фильтры по жанру и профессии' },
-      { icon: '📍', text: 'Поиск по городу и региону' },
-      { icon: '💰', text: 'Фильтр по бюджету' },
-    ],
   },
   {
     emoji: '🔗',
-    title: 'Связи',
-    description: 'Устанавливайте профессиональные связи с коллегами. Все совместные проекты, сделки и отзывы — в одном месте.',
+    title: 'Связи — это твоя\nпрофессиональная история',
+    description: 'Связи показывают, с кем ты работал. Это не просто контакты — это подтверждение твоего опыта и репутации на платформе. Когда коллега принимает связь, это видно в профиле у вас обоих.',
     accent: 'from-violet-600/20 to-purple-600/20',
-    features: [
-      { icon: '🤝', text: 'Запрос → принятие → история проектов' },
-      { icon: '💼', text: 'Сделки с этапами оплаты и сдачи' },
-      { icon: '✅', text: 'Подтверждение обеими сторонами' },
-    ],
   },
   {
-    emoji: '💼',
-    title: 'Сделки',
-    description: 'Структурированный процесс совместной работы: от заказа до сдачи результата. Защищённые этапы оплаты и приёмки.',
-    accent: 'from-cyan-600/20 to-blue-600/20',
-    features: [
-      { icon: '📝', text: 'Заказ → согласование → оплата' },
-      { icon: '🎯', text: 'Сдача работы и приёмка' },
-      { icon: '⭐', text: 'Отзыв 1-10 после завершения' },
-    ],
+    emoji: '🫂',
+    title: 'Друзья — это твой круг',
+    description: 'Друзья — люди, с которыми ты на связи лично. Их посты и активность будут заметнее в Потоке. Связи — про работу. Друзья — про людей. Можно совмещать.',
+    accent: 'from-emerald-600/20 to-teal-600/20',
   },
   {
     emoji: '💬',
-    title: 'Чат',
-    description: 'Общайтесь напрямую с участниками сообщества. Создавайте групповые чаты для совместных проектов и держите всё в одном месте.',
+    title: 'Три вида чата —\nдля разных задач',
+    description: 'Личный чат — общение с любым пользователем платформы. Групповой — когда нужно собрать несколько человек в одном разговоре. Деловой чат создаётся автоматически при оформлении сделки — там обсуждается всё по конкретному заказу.',
     accent: 'from-amber-600/20 to-orange-600/20',
-    features: [
-      { icon: '📎', text: 'Вложения: фото, документы' },
-      { icon: '👥', text: 'Групповые чаты для проектов' },
-      { icon: '⚡️', text: 'Сообщения в реальном времени' },
-    ],
   },
   {
     emoji: '⚡️',
-    title: 'Поток',
-    description: 'Лента публикаций от музыкантов, с которыми вы связаны. Делитесь новостями, находками и достижениями.',
+    title: 'Поток — это жизнь\nплатформы',
+    description: 'Поток — лента активности. Здесь ты можешь показывать, что делаешь, следить за коллегами и оставаться в тусовке. Публикуй релизы, делись мыслями, реагируй на чужое — или просто смотри, что происходит.',
     accent: 'from-pink-600/20 to-rose-600/20',
-    features: [
-      { icon: '📝', text: 'Посты: блог, услуги и анонсы' },
-      { icon: '❤️', text: 'Реакции и комментарии' },
-      { icon: '🔔', text: 'Уведомления о важных событиях' },
-    ],
   },
   {
     emoji: '🚀',
-    title: 'Первые шаги',
-    description: 'Вы готовы! Вот с чего лучше начать, чтобы вас быстрее заметили:',
+    title: 'С чего начать',
+    description: 'Заполни профиль — расскажи о себе, добавь артистов, с которыми работаешь, услуги и примеры работ.\n\nХочешь, чтобы коллеги подтвердили связь или вошли в карточку артиста? Пришли им реферальную ссылку — так их опыт становится частью твоей репутации на платформе.',
     accent: 'from-primary-600/25 to-purple-600/25',
     requireTerms: true,
-    features: [
-      { icon: '1️⃣', text: 'Заполните профиль и добавьте фото' },
-      { icon: '2️⃣', text: 'Укажите профессии и услуги' },
-      { icon: '3️⃣', text: 'Найдите коллег в Каталоге и установите Связи' },
-    ],
   },
 ];
 
@@ -118,7 +71,7 @@ export default function OnboardingPage() {
   const isLast = current === SLIDES.length - 1;
   const slide = SLIDES[current];
 
-  const finish = () => {
+  const finish = (toProfile = false) => {
     localStorage.setItem(TOUR_KEY, '1');
     if (user && !user.onboardingCompletedAt) {
       userAPI.completeOnboarding()
@@ -130,11 +83,11 @@ export default function OnboardingPage() {
         .then(({ data }) => setUser({ ...user, termsAgreedAt: data.termsAgreedAt }))
         .catch(() => {});
     }
-    navigate('/');
+    navigate(toProfile ? '/profile' : '/');
   };
 
   const next = () => {
-    if (isLast) finish();
+    if (isLast) finish(true);
     else setCurrent(c => c + 1);
   };
 
@@ -177,7 +130,7 @@ export default function OnboardingPage() {
           ))}
         </div>
         <button
-          onClick={finish}
+          onClick={() => finish(false)}
           className="flex items-center gap-1 text-sm text-slate-500 hover:text-slate-300 transition-colors"
         >
           Пропустить <X size={14} />
@@ -195,7 +148,7 @@ export default function OnboardingPage() {
             {slide.title}
           </h1>
 
-          <p className="text-sm text-slate-400 text-center leading-relaxed">
+          <p className="text-sm text-slate-400 text-center leading-relaxed whitespace-pre-line">
             {slide.description}
           </p>
 
@@ -244,7 +197,7 @@ export default function OnboardingPage() {
             disabled={isLast && slide.requireTerms === true && !termsChecked}
             className={`flex-1 py-3.5 rounded-2xl bg-primary-600 hover:bg-primary-500 active:scale-95 text-white font-semibold flex items-center justify-center gap-2 transition-all ${isLast && slide.requireTerms === true && !termsChecked ? 'opacity-40 cursor-not-allowed' : ''}`}
           >
-            {isLast ? <>Начать работу 🚀</> : <>Далее <ArrowRight size={18} /></>}
+            {isLast ? <>Перейти в профиль <ArrowRight size={18} /></> : <>Далее <ArrowRight size={18} /></>}
           </button>
         </div>
       </div>
