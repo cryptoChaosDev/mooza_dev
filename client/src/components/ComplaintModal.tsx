@@ -68,12 +68,7 @@ export default function ComplaintModal({ targetType, targetId, onClose }: Props)
                 </div>
               </div>
               <div>
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Описание</p>
-                  <span className={`text-[11px] ${text.trim().length >= 30 ? 'text-emerald-400' : 'text-slate-500'}`}>
-                    {text.trim().length}/30
-                  </span>
-                </div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Описание</p>
                 <textarea value={text} onChange={e => setText(e.target.value)} rows={3}
                   placeholder="Опишите суть жалобы подробно (минимум 30 символов)..."
                   className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-red-500 resize-none" />
