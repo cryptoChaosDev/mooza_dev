@@ -65,7 +65,6 @@ export default function OnboardingPage() {
   const navigate = useNavigate();
   const { user, setUser } = useAuthStore();
   const [current, setCurrent] = useState(0);
-  const [termsChecked, setTermsChecked] = useState(false);
   const startX = useRef<number | null>(null);
 
   const isLast = current === SLIDES.length - 1;
@@ -76,11 +75,6 @@ export default function OnboardingPage() {
     if (user && !user.onboardingCompletedAt) {
       userAPI.completeOnboarding()
         .then(({ data }) => setUser({ ...user, onboardingCompletedAt: data.onboardingCompletedAt }))
-        .catch(() => {});
-    }
-    if (termsChecked && user && !user.termsAgreedAt) {
-      userAPI.agreeToTerms()
-        .then(({ data }) => setUser({ ...user, termsAgreedAt: data.termsAgreedAt }))
         .catch(() => {});
     }
     navigate(toProfile ? '/profile' : '/');
@@ -167,22 +161,6 @@ export default function OnboardingPage() {
 
       {/* Navigation */}
       <div className="px-5 pb-10 pt-3 flex-shrink-0">
-        {isLast && slide.requireTerms && (
-          <label className="flex items-start gap-3 bg-slate-800/50 border border-slate-700/40 rounded-2xl px-4 py-3 cursor-pointer mb-3">
-            <input
-              type="checkbox"
-              checked={termsChecked}
-              onChange={e => setTermsChecked(e.target.checked)}
-              className="mt-0.5 w-4 h-4 accent-primary-500 flex-shrink-0"
-            />
-            <span className="text-sm text-slate-300">
-              Я согласен(а) с{' '}
-              <a href="/terms" target="_blank" className="text-primary-400 hover:underline">условиями использования</a>{' '}
-              и{' '}
-              <a href="/privacy" target="_blank" className="text-primary-400 hover:underline">политикой конфиденциальности</a>
-            </span>
-          </label>
-        )}
         <div className="flex items-center gap-3">
           {current > 0 && (
             <button
@@ -194,8 +172,7 @@ export default function OnboardingPage() {
           )}
           <button
             onClick={next}
-            disabled={isLast && slide.requireTerms === true && !termsChecked}
-            className={`flex-1 py-3.5 rounded-2xl bg-primary-600 hover:bg-primary-500 active:scale-95 text-white font-semibold flex items-center justify-center gap-2 transition-all ${isLast && slide.requireTerms === true && !termsChecked ? 'opacity-40 cursor-not-allowed' : ''}`}
+            className="flex-1 py-3.5 rounded-2xl bg-primary-600 hover:bg-primary-500 active:scale-95 text-white font-semibold flex items-center justify-center gap-2 transition-all"
           >
             {isLast ? <>Перейти в профиль <ArrowRight size={18} /></> : <>Далее <ArrowRight size={18} /></>}
           </button>
