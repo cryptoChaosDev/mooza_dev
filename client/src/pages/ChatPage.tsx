@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, BadgeCheck, Ban, Search, Link2 } from 'lucide-react';
+import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, BadgeCheck, Ban, Search } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import { plural } from '../lib/plural';
 import { formatLastSeen } from '../lib/lastSeen';
@@ -9,7 +9,6 @@ import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
 import { groupReactions } from '../components/ReactionBar';
-import ConnectionRequestModal from '../components/ConnectionRequestModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -114,7 +113,6 @@ export default function ChatPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   // Connection modal
-  const [showConnModal, setShowConnModal] = useState(false);
 
   // Attachments panel
   const [showAttachments, setShowAttachments] = useState(false);
@@ -771,17 +769,6 @@ export default function ChatPage() {
             >
               <Paperclip size={18} />
             </button>
-
-            {/* Connection button for direct chats */}
-            {!conversation.isGroup && otherMember && (
-              <button
-                onClick={() => setShowConnModal(true)}
-                className="p-2 rounded-xl transition-all border flex-shrink-0 bg-slate-800/80 hover:bg-slate-700/80 border-slate-700/50 text-slate-300 hover:text-white"
-                title="Установить связь"
-              >
-                <Link2 size={18} />
-              </button>
-            )}
 
             {/* Settings button for group chats */}
             {conversation.isGroup && (
@@ -1460,14 +1447,6 @@ export default function ChatPage() {
           </button>
         </form>
       </div>
-
-      {/* Connection request modal */}
-      {showConnModal && otherMember && (
-        <ConnectionRequestModal
-          targetUser={{ id: otherMember.id, firstName: (otherMember as any).firstName ?? '', lastName: (otherMember as any).lastName ?? '', avatar: (otherMember as any).avatar }}
-          onClose={() => setShowConnModal(false)}
-        />
-      )}
 
       <ConfirmDialog
         open={!!confirmDeleteMsgId}
