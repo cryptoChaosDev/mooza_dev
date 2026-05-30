@@ -1,4 +1,4 @@
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { logSecurity } from '../utils/logger';
 
 /**
@@ -101,7 +101,8 @@ export const messageLimiter = rateLimit({
   max: 120, // 120 сообщений в минуту с одного IP (несколько активных чатов за NAT)
   standardHeaders: true,
   legacyHeaders: false,
-  keyGenerator: (req: any) => req.userId || req.ip, // per-user, не per-IP
+  // per-user when authenticated; fall back to IPv6-safe IP key otherwise
+  keyGenerator: (req: any) => req.userId || ipKeyGenerator(req.ip),
   handler: (_req, res) => {
     res.status(429).json({
       error: 'Слишком много сообщений',
