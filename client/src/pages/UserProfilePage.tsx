@@ -8,13 +8,13 @@ import {
   Headphones, FileText, Briefcase,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
   Globe, Play, Pause, ChevronRight, Flag, Phone, Calendar,
+  MoreHorizontal, Share2, Check,
 } from 'lucide-react';
 import { userAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
 import ComplaintModal from '../components/ComplaintModal';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { SocialIconRow, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
-import ShareButton from '../components/ShareButton';
 import BadgeTooltip from '../components/BadgeTooltip';
 import ConnectionRequestModal from '../components/ConnectionRequestModal';
 import ConnectionViewModal from '../components/ConnectionViewModal';
@@ -54,30 +54,6 @@ function AudioTile({ url, title }: { url: string; title?: string }) {
   );
 }
 
-function TapButton({ onClick, tooltip, disabled, className, children }: {
-  onClick: () => void;
-  tooltip: string;
-  disabled?: boolean;
-  className: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="relative group">
-      <button
-        onClick={e => { e.stopPropagation(); if (!disabled) onClick(); }}
-        disabled={disabled}
-        className={className}
-      >
-        {children}
-      </button>
-      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2.5 py-1.5 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white whitespace-nowrap z-20 shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150">
-        {tooltip}
-        <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-4 border-transparent border-t-slate-700" />
-      </div>
-    </div>
-  );
-}
-
 export default function UserProfilePage() {
   const { userId } = useParams<{ userId: string }>();
   const navigate = useNavigate();
@@ -88,6 +64,8 @@ export default function UserProfilePage() {
   const [showConnModal, setShowConnModal] = useState(false);
   const [viewConn, setViewConn] = useState<any>(null);
   const [showComplaint, setShowComplaint] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [shareCopied, setShareCopied] = useState(false);
   const [portfolioTab, setPortfolioTab] = useState<'audio' | 'images' | 'other'>('audio');
   const [imageFullscreen, setImageFullscreen] = useState<string | null>(null);
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
@@ -150,6 +128,21 @@ export default function UserProfilePage() {
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
   });
+
+  const handleShareProfile = async () => {
+    const fullUrl = `${window.location.origin}/profile/${userId}`;
+    const title = user ? `${user.firstName} ${user.lastName} — Moooza` : 'Профиль — Moooza';
+    if (navigator.share) {
+      try { await navigator.share({ title, text: user?.bio?.slice(0, 100), url: fullUrl }); } catch { /* cancelled */ }
+    } else {
+      try {
+        await navigator.clipboard.writeText(fullUrl);
+        setShareCopied(true);
+        setTimeout(() => setShareCopied(false), 2000);
+      } catch { /* ignore */ }
+    }
+    setShowMenu(false);
+  };
 
   if (isLoading) {
     return (
@@ -226,138 +219,8 @@ export default function UserProfilePage() {
               </div>
             </div>
 
-            {me && !isMe && (
-              <div className="flex items-center gap-2 mb-1 flex-wrap justify-end">
-                <ShareButton
-                  url={`/profile/${user.id}`}
-                  title={`${user.firstName} ${user.lastName} — Moooza`}
-                  text={user.bio?.slice(0, 100)}
-                  className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
-                  iconSize={16}
-                />
-
-                {showComplaint && <ComplaintModal targetType="user" targetId={user.id} onClose={() => setShowComplaint(false)} />}
-
-                {/* Connection button — state depends on conn status */}
-                {conn?.status === 'ACCEPTED' ? (
-                  // Violet = connected
-                  <button
-                    onClick={() => navigate(`/connection/${user.id}`, { state: { partner: user, connections: [conn] } })}
-                    className="p-2 bg-violet-500/15 border border-violet-500/30 text-violet-400 rounded-xl transition-all"
-                    title="Связь установлена"
-                  >
-                    <Link2 size={16} />
-                  </button>
-                ) : conn?.status === 'PENDING' && conn.iAmRequester ? (
-                  // Grey = pending sent by me
-                  <button
-                    onClick={() => setViewConn(conn)}
-                    className="p-2 bg-slate-800/80 border border-slate-700/60 text-slate-500 rounded-xl transition-all"
-                    title="Запрос отправлен — ожидает ответа"
-                  >
-                    <Link2 size={16} />
-                  </button>
-                ) : conn?.status === 'PENDING' && !conn.iAmRequester ? (
-                  // Blue = incoming request from them
-                  <button
-                    onClick={() => setViewConn(conn)}
-                    className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all"
-                    title="Входящий запрос на связь"
-                  >
-                    <Link2 size={16} />
-                  </button>
-                ) : (
-                  // Default = no connection
-                  <TapButton
-                    onClick={() => setShowConnModal(true)}
-                    tooltip="Установить связь"
-                    className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-primary-400 rounded-xl transition-all"
-                  >
-                    <Link2 size={16} />
-                  </TapButton>
-                )}
-
-                {/* Favorite */}
-                {favStatus !== undefined && (
-                  favStatus.isFavorite ? (
-                    <TapButton
-                      onClick={() => removeFavMut.mutate()}
-                      tooltip="Убрать из избранного"
-                      disabled={removeFavMut.isPending}
-                      className="p-2 bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 rounded-xl transition-all disabled:opacity-50"
-                    >
-                      <Star size={16} fill="currentColor" />
-                    </TapButton>
-                  ) : (
-                    <TapButton
-                      onClick={() => addFavMut.mutate()}
-                      tooltip="Добавить в избранное"
-                      disabled={addFavMut.isPending}
-                      className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-amber-400 rounded-xl transition-all disabled:opacity-50"
-                    >
-                      <Star size={16} />
-                    </TapButton>
-                  )
-                )}
-
-                {/* Friend */}
-                {user.friendshipStatus === 'none' && (
-                  <TapButton
-                    onClick={() => sendFriendMut.mutate()}
-                    tooltip="Добавить в друзья"
-                    disabled={sendFriendMut.isPending}
-                    className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-primary-400 rounded-xl transition-all disabled:opacity-50"
-                  >
-                    <UserPlus size={16} />
-                  </TapButton>
-                )}
-                {user.friendshipStatus === 'pending_sent' && (
-                  <TapButton
-                    onClick={() => cancelFriendMut.mutate()}
-                    tooltip="Отменить заявку"
-                    disabled={cancelFriendMut.isPending}
-                    className="p-2 bg-slate-800/80 border border-slate-700/60 text-slate-500 rounded-xl transition-all disabled:opacity-50"
-                  >
-                    <Clock size={16} />
-                  </TapButton>
-                )}
-                {user.friendshipStatus === 'pending_received' && (
-                  <>
-                    <button
-                      onClick={() => acceptFriendMut.mutate()}
-                      disabled={acceptFriendMut.isPending}
-                      className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all disabled:opacity-50"
-                    >
-                      <UserCheck size={16} />
-                    </button>
-                    <button
-                      onClick={() => cancelFriendMut.mutate()}
-                      disabled={cancelFriendMut.isPending}
-                      className="p-2 bg-slate-800/80 border border-slate-700/60 text-slate-400 hover:text-red-400 rounded-xl transition-all disabled:opacity-50"
-                    >
-                      <UserX size={16} />
-                    </button>
-                  </>
-                )}
-                {user.friendshipStatus === 'accepted' && (
-                  <TapButton
-                    onClick={() => removeFriendMut.mutate()}
-                    tooltip="Удалить из друзей"
-                    disabled={removeFriendMut.isPending}
-                    className="p-2 bg-green-500/10 hover:bg-red-500/10 border border-green-500/30 hover:border-red-500/30 text-green-400 hover:text-red-400 rounded-xl transition-all disabled:opacity-50"
-                  >
-                    <UserCheck size={16} />
-                  </TapButton>
-                )}
-
-                {/* Message */}
-                <button
-                  onClick={() => navigate(`/messages/${user.id}`)}
-                  className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all shadow-lg shadow-primary-500/20"
-                >
-                  <MessageCircle size={16} />
-                </button>
-              </div>
+            {me && !isMe && showComplaint && (
+              <ComplaintModal targetType="user" targetId={user.id} onClose={() => setShowComplaint(false)} />
             )}
           </div>
 
@@ -416,6 +279,155 @@ export default function UserProfilePage() {
                user.occupancyStatus === 'considering' ? '🟡 Рассматриваю предложения' :
                '🔴 Не беру заказы'}
             </span>
+          )}
+
+          {/* ── Action buttons ── */}
+          {me && !isMe && (
+            <div className="flex items-stretch gap-2 mb-5">
+              {/* Primary: Message */}
+              <button
+                onClick={() => navigate(`/messages/${user.id}`)}
+                className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-primary-600 hover:bg-primary-500 text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-primary-500/20"
+              >
+                <MessageCircle size={16} />
+                Написать
+              </button>
+
+              {/* Connection — label/style depends on status */}
+              {conn?.status === 'ACCEPTED' ? (
+                <button
+                  onClick={() => navigate(`/connection/${user.id}`, { state: { partner: user, connections: [conn] } })}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-violet-500/15 border border-violet-500/30 text-violet-400 text-sm font-medium rounded-xl transition-all"
+                >
+                  <Link2 size={16} /> Связь
+                </button>
+              ) : conn?.status === 'PENDING' && conn.iAmRequester ? (
+                <button
+                  onClick={() => setViewConn(conn)}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-800/80 border border-slate-700/60 text-slate-500 text-sm font-medium rounded-xl transition-all"
+                >
+                  <Clock size={16} /> Запрос
+                </button>
+              ) : conn?.status === 'PENDING' && !conn.iAmRequester ? (
+                <button
+                  onClick={() => setViewConn(conn)}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-xl transition-all"
+                >
+                  <Link2 size={16} /> Принять
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowConnModal(true)}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-primary-400 text-sm font-medium rounded-xl transition-all"
+                >
+                  <Link2 size={16} /> Связь
+                </button>
+              )}
+
+              {/* Friend — label/style depends on status */}
+              {user.friendshipStatus === 'none' && (
+                <button
+                  onClick={() => sendFriendMut.mutate()}
+                  disabled={sendFriendMut.isPending}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-primary-400 text-sm font-medium rounded-xl transition-all disabled:opacity-50"
+                >
+                  <UserPlus size={16} /> В друзья
+                </button>
+              )}
+              {user.friendshipStatus === 'pending_sent' && (
+                <button
+                  onClick={() => cancelFriendMut.mutate()}
+                  disabled={cancelFriendMut.isPending}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-slate-800/80 border border-slate-700/60 text-slate-500 text-sm font-medium rounded-xl transition-all disabled:opacity-50"
+                >
+                  <Clock size={16} /> Заявка
+                </button>
+              )}
+              {user.friendshipStatus === 'pending_received' && (
+                <>
+                  <button
+                    onClick={() => acceptFriendMut.mutate()}
+                    disabled={acceptFriendMut.isPending}
+                    className="flex items-center justify-center px-3 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all disabled:opacity-50"
+                    title="Принять заявку"
+                  >
+                    <UserCheck size={16} />
+                  </button>
+                  <button
+                    onClick={() => cancelFriendMut.mutate()}
+                    disabled={cancelFriendMut.isPending}
+                    className="flex items-center justify-center px-3 py-2.5 bg-slate-800/80 border border-slate-700/60 text-slate-400 hover:text-red-400 rounded-xl transition-all disabled:opacity-50"
+                    title="Отклонить заявку"
+                  >
+                    <UserX size={16} />
+                  </button>
+                </>
+              )}
+              {user.friendshipStatus === 'accepted' && (
+                <button
+                  onClick={() => removeFriendMut.mutate()}
+                  disabled={removeFriendMut.isPending}
+                  className="flex items-center justify-center gap-1.5 px-3 py-2.5 bg-green-500/10 border border-green-500/30 text-green-400 text-sm font-medium rounded-xl transition-all disabled:opacity-50"
+                  title="Удалить из друзей"
+                >
+                  <UserCheck size={16} /> Друзья
+                </button>
+              )}
+
+              {/* Overflow menu: favorite, share, report */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowMenu(v => !v)}
+                  className="flex items-center justify-center h-full px-3 py-2.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
+                  title="Ещё"
+                >
+                  <MoreHorizontal size={18} />
+                </button>
+                {showMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                    <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden z-50 py-1">
+                      {/* Favorite */}
+                      {favStatus !== undefined && (
+                        favStatus.isFavorite ? (
+                          <button
+                            onClick={() => { removeFavMut.mutate(); setShowMenu(false); }}
+                            disabled={removeFavMut.isPending}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-amber-400 hover:bg-slate-800 transition-colors"
+                          >
+                            <Star size={16} fill="currentColor" /> Убрать из избранного
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => { addFavMut.mutate(); setShowMenu(false); }}
+                            disabled={addFavMut.isPending}
+                            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-amber-400 transition-colors"
+                          >
+                            <Star size={16} /> В избранное
+                          </button>
+                        )
+                      )}
+                      {/* Share */}
+                      <button
+                        onClick={handleShareProfile}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+                      >
+                        {shareCopied ? <Check size={16} className="text-emerald-400" /> : <Share2 size={16} />}
+                        {shareCopied ? 'Ссылка скопирована' : 'Поделиться'}
+                      </button>
+                      {/* Report */}
+                      <div className="my-1 border-t border-slate-800" />
+                      <button
+                        onClick={() => { setShowComplaint(true); setShowMenu(false); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/8 transition-colors"
+                      >
+                        <Flag size={16} /> Пожаловаться
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
           )}
 
           {/* ── Stats ── */}
@@ -684,13 +696,6 @@ export default function UserProfilePage() {
                   <SocialIconRow only={SOCIAL_KEYS} links={(user.socialLinks as Record<string, string>) || {}} />
                 </div>
               </div>
-            )}
-
-            {/* ── Report user ── */}
-            {!isMe && (
-              <button onClick={() => setShowComplaint(true)} className="w-full flex items-center justify-center gap-2 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/8 border border-red-500/20 hover:border-red-500/40 rounded-xl text-sm font-medium transition-all">
-                <Flag size={16} />Пожаловаться
-              </button>
             )}
 
           </div>
