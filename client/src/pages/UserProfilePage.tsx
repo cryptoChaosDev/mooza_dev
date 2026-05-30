@@ -211,11 +211,26 @@ export default function UserProfilePage() {
         </div>
 
         <div className="px-4">
-          {/* ── Avatar + action buttons ── */}
+          {/* ── Avatar + stats ── */}
           <div className="flex items-end justify-between -mt-14 mb-4">
             <div className="relative z-10 flex-shrink-0">
               <div className="rounded-full ring-4 ring-slate-950 shadow-2xl">
                 <AvatarComponent src={user.avatar} name={`${user.firstName} ${user.lastName}`} size={112} />
+              </div>
+            </div>
+
+            {/* Stats — sit below the banner, right of the avatar */}
+            <div className="flex items-center gap-2 mb-1">
+              <button
+                onClick={() => navigate(`/profile/${userId}/connections`)}
+                className="flex flex-col items-center px-4 py-1.5 bg-slate-900/60 border border-slate-800/60 rounded-2xl hover:bg-slate-800/50 transition-colors"
+              >
+                <span className="text-base font-bold text-white leading-tight">{userConnections.length}</span>
+                <span className="text-[10px] text-slate-500">Связи</span>
+              </button>
+              <div className="flex flex-col items-center px-4 py-1.5 bg-slate-900/60 border border-slate-800/60 rounded-2xl">
+                <span className="text-base font-bold text-white leading-tight">{user.dealsCount ?? 0}</span>
+                <span className="text-[10px] text-slate-500">Сделки</span>
               </div>
             </div>
 
