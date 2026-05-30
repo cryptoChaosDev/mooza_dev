@@ -379,6 +379,20 @@ export default function ProfilePage() {
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingBio(false); }
   };
 
+  // Open the contacts editor, pre-filling phone/email from the registration data
+  // (user.phone / user.email) when those contact links are not set yet.
+  const openContactsEditor = () => {
+    setFormData(prev => {
+      const links = { ...prev.socialLinks };
+      const regPhone = (profile as any)?.phone;
+      const regEmail = (profile as any)?.email;
+      if (!links.phone && regPhone) links.phone = `tel:${regPhone}`;
+      if (!links.email && regEmail) links.email = `mailto:${regEmail}`;
+      return { ...prev, socialLinks: links };
+    });
+    setEditingContacts(true);
+  };
+
   const handleSaveContacts = async () => {
     try { await updateMutation.mutateAsync(formData); }
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingContacts(false); }
@@ -1545,7 +1559,7 @@ export default function ProfilePage() {
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <Phone size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Контакты</span>
-                <button onClick={() => setEditingContacts(v => !v)} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
+                <button onClick={() => editingContacts ? setEditingContacts(false) : openContactsEditor()} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
                   {editingContacts ? 'Готово' : 'Изменить'}
                 </button>
               </div>
@@ -1560,7 +1574,7 @@ export default function ProfilePage() {
                 ) : hasContactLinks ? (
                   <SocialIconRow only={CONTACT_KEYS} links={(profile?.socialLinks as Record<string, string>) || {}} />
                 ) : (
-                  <button onClick={() => setEditingContacts(true)} className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic">+ Добавить контакты</button>
+                  <button onClick={openContactsEditor} className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic">+ Добавить контакты</button>
                 )}
               </div>
             </div>
