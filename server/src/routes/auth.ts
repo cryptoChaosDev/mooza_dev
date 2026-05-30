@@ -116,6 +116,20 @@ router.post('/register', registerLimiter, async (req, res) => {
       }
     }
 
+    // Validate single-use referral link (must exist and be unused) before creating the user
+    let refLink: { id: string; ownerId: string } | null = null;
+    if (data.referralCode) {
+      const link = await prisma.referralLink.findUnique({
+        where: { code: data.referralCode },
+        select: { id: true, ownerId: true, usedById: true },
+      });
+      if (link && !link.usedById) {
+        refLink = { id: link.id, ownerId: link.ownerId };
+      }
+      // If the link is missing or already burned, we silently ignore it
+      // (registration still proceeds, just without referral attribution).
+    }
+
     // Hash password
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
@@ -132,8 +146,9 @@ router.post('/register', registerLimiter, async (req, res) => {
         city: data.city,
         birthDate: data.birthDate ? new Date(data.birthDate) : undefined,
         fieldOfActivityId: data.fieldOfActivityId || undefined,
-        referrerId: data.referrerId || undefined,
-        referralLinkUsed: data.referralCode || undefined,
+        // Referrer is taken from the validated link owner; legacy links fall back to client referrerId
+        referrerId: refLink?.ownerId || data.referrerId || undefined,
+        referralLinkUsed: refLink ? data.referralCode : undefined,
         // Create user professions
         userProfessions: data.userProfessions && data.userProfessions.length > 0
           ? {
@@ -199,12 +214,20 @@ router.post('/register', registerLimiter, async (req, res) => {
       console.error('[register] Failed to send verification email:', mailErr);
     }
 
-    // Attribute the signup to a named referral link, if one was used
-    if (data.referralCode) {
-      prisma.referralLink.updateMany({
-        where: { code: data.referralCode },
-        data: { signups: { increment: 1 } },
-      }).catch(() => {});
+    // Burn the single-use referral link — atomic guard against double-use:
+    // updateMany only matches when usedById is still null.
+    if (refLink) {
+      const burned = await prisma.referralLink.updateMany({
+        where: { id: refLink.id, usedById: null },
+        data: { usedById: user.id, usedAt: new Date() },
+      }).catch(() => ({ count: 0 }));
+      // If a race consumed it first, detach the attribution we set above
+      if (burned.count === 0) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { referrerId: data.referrerId || null, referralLinkUsed: null },
+        }).catch(() => {});
+      }
     }
 
     tgLog(`🆕 <b>Новый пользователь</b>\n👤 ${user.firstName} ${user.lastName}\n📧 ${normalizedEmail}\n🌍 ${user.city || '—'}`);

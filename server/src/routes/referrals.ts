@@ -105,30 +105,35 @@ router.delete('/links/:id', authenticate, async (req: AuthRequest, res) => {
 });
 
 // POST /api/referrals/resolve — resolve a ref code to an owner (used on /register).
-// The code can be a ReferralLink.code OR a bare userId (legacy links). Public.
+// The code can be a single-use ReferralLink.code OR a bare userId (legacy links). Public.
+// Returns `used: true` if the single-use link has already been consumed.
 router.post('/resolve', async (req, res) => {
   try {
     const code = String(req.body?.code ?? '').trim();
-    if (!code) return res.json({ ownerId: null, code: null });
+    if (!code) return res.json({ ownerId: null, code: null, used: false });
 
     const link = await prisma.referralLink.findUnique({
       where: { code },
-      select: { id: true, ownerId: true },
+      select: { id: true, ownerId: true, usedById: true },
     });
     if (link) {
+      if (link.usedById) {
+        // Link already burned — no longer valid for registration
+        return res.json({ ownerId: null, code, used: true });
+      }
       await prisma.referralLink.update({
         where: { id: link.id },
         data: { clicks: { increment: 1 } },
       }).catch(() => {});
-      return res.json({ ownerId: link.ownerId, code });
+      return res.json({ ownerId: link.ownerId, code, used: false });
     }
 
-    // Legacy: code is a raw userId
+    // Legacy: code is a raw userId (multi-use, kept for backward compatibility)
     const user = await prisma.user.findUnique({ where: { id: code }, select: { id: true } });
-    return res.json({ ownerId: user?.id ?? null, code: null });
+    return res.json({ ownerId: user?.id ?? null, code: null, used: false });
   } catch (error) {
     console.error('Resolve referral error:', error);
-    res.json({ ownerId: null, code: null });
+    res.json({ ownerId: null, code: null, used: false });
   }
 });
 

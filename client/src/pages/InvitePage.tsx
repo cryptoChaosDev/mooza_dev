@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, Copy, Check, Share2, Users, Star, Music2,
+  ArrowLeft, Copy, Check, Share2, Star, Music2,
   Plus, Trash2, Link2, Loader2, X,
 } from 'lucide-react';
 import { referralAPI } from '../lib/api';
@@ -14,7 +14,8 @@ interface RefLink {
   code: string;
   label: string;
   clicks: number;
-  signups: number;
+  usedById: string | null;
+  usedAt: string | null;
   createdAt: string;
 }
 
@@ -107,7 +108,7 @@ export default function InvitePage() {
               Собери всю индустрию<br />в одном месте
             </h1>
             <p className="text-slate-400 text-sm leading-relaxed max-w-xs mx-auto">
-              Создавай отдельные ссылки для разных каналов и отслеживай, откуда приходят музыканты.
+              Каждая ссылка — одноразовая: по ней может зарегистрироваться только один человек. Создавай столько, сколько нужно.
             </p>
           </div>
 
@@ -181,49 +182,60 @@ export default function InvitePage() {
             </div>
           ) : (
             <div className="space-y-3 mb-6">
-              {links.map((link) => (
-                <div key={link.id} className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4">
-                  <div className="flex items-center justify-between mb-2.5">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <Link2 size={15} className="text-primary-400 flex-shrink-0" />
-                      <p className="text-sm font-semibold text-white truncate">{link.label}</p>
+              {links.map((link) => {
+                const used = !!link.usedById;
+                return (
+                  <div key={link.id} className={`rounded-2xl p-4 border ${used ? 'bg-slate-900/30 border-slate-800/60' : 'bg-slate-900/60 border-slate-800'}`}>
+                    <div className="flex items-center justify-between mb-2.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Link2 size={15} className={used ? 'text-slate-600 flex-shrink-0' : 'text-primary-400 flex-shrink-0'} />
+                        <p className={`text-sm font-semibold truncate ${used ? 'text-slate-500' : 'text-white'}`}>{link.label}</p>
+                        {used ? (
+                          <span className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 text-[10px] font-semibold flex-shrink-0">
+                            <Check size={10} /> Использована
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full bg-primary-500/15 text-primary-400 text-[10px] font-semibold flex-shrink-0">
+                            Доступна
+                          </span>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => deleteMut.mutate(link.id)}
+                        disabled={deleteMut.isPending}
+                        className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors flex-shrink-0"
+                        title="Удалить"
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => deleteMut.mutate(link.id)}
-                      disabled={deleteMut.isPending}
-                      className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors flex-shrink-0"
-                      title="Удалить"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
 
-                  {/* Link row */}
-                  <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/60 rounded-xl px-3 py-2 mb-2.5">
-                    <p className="text-xs text-slate-400 truncate flex-1">{linkUrl(link.code)}</p>
-                    <button
-                      onClick={() => copyLink(link.id, link.code)}
-                      className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex-shrink-0 ${
-                        copiedId === link.id ? 'bg-green-600/20 text-green-400' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                      }`}
-                    >
-                      {copiedId === link.id ? <Check size={12} /> : <Copy size={12} />}
-                    </button>
-                    <button
-                      onClick={() => shareLink(link.code)}
-                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary-600 hover:bg-primary-500 text-white transition-colors flex-shrink-0"
-                    >
-                      <Share2 size={12} />
-                    </button>
+                    {used ? (
+                      <p className="text-xs text-slate-500">
+                        Зарегистрировался 1 человек{link.usedAt ? ` · ${new Date(link.usedAt).toLocaleDateString('ru-RU')}` : ''}
+                      </p>
+                    ) : (
+                      <div className="flex items-center gap-2 bg-slate-800/60 border border-slate-700/60 rounded-xl px-3 py-2">
+                        <p className="text-xs text-slate-400 truncate flex-1">{linkUrl(link.code)}</p>
+                        <button
+                          onClick={() => copyLink(link.id, link.code)}
+                          className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all flex-shrink-0 ${
+                            copiedId === link.id ? 'bg-green-600/20 text-green-400' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                          }`}
+                        >
+                          {copiedId === link.id ? <Check size={12} /> : <Copy size={12} />}
+                        </button>
+                        <button
+                          onClick={() => shareLink(link.code)}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary-600 hover:bg-primary-500 text-white transition-colors flex-shrink-0"
+                        >
+                          <Share2 size={12} />
+                        </button>
+                      </div>
+                    )}
                   </div>
-
-                  {/* Per-link stats */}
-                  <div className="flex items-center gap-4 text-xs text-slate-500">
-                    <span className="flex items-center gap-1"><Users size={12} /> {link.signups} регистраций</span>
-                    <span className="flex items-center gap-1"><Link2 size={12} /> {link.clicks} переходов</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -256,9 +268,9 @@ export default function InvitePage() {
           <div className="mt-6 space-y-3">
             <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Как это работает</p>
             {[
-              { icon: Plus, text: 'Создайте ссылку для каждого канала — Instagram, Telegram, друзья' },
-              { icon: Share2, text: 'Делитесь нужной ссылкой в нужном месте' },
-              { icon: Star, text: 'Смотрите, откуда приходят люди, и копите 100 регистраций → статус Амбасадор' },
+              { icon: Plus, text: 'Создайте отдельную ссылку для каждого приглашения' },
+              { icon: Share2, text: 'Отправьте ссылку конкретному человеку — она сработает только для него' },
+              { icon: Star, text: 'После регистрации ссылка «сгорает». Копите 100 приглашений → статус Амбасадор' },
             ].map(({ icon: Icon, text }, i) => (
               <div key={i} className="flex items-start gap-3">
                 <div className="w-7 h-7 rounded-xl bg-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">

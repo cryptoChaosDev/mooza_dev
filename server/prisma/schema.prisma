@@ -463,9 +463,10 @@ model User {
   referrer   User?  @relation("UserReferrals", fields: [referrerId], references: [id], onDelete: SetNull)
   referrals  User[] @relation("UserReferrals")
 
-  // Named referral links the user generates
-  referralLinks ReferralLink[]
-  referralLinkUsed   String?       // code of the ReferralLink this user signed up through
+  // Single-use referral links the user generates
+  referralLinks    ReferralLink[] @relation("ReferralLinkOwner")
+  usedReferralLink ReferralLink?  @relation("ReferralLinkConsumer")
+  referralLinkUsed String?        // code of the ReferralLink this user signed up through
 
   reviewsGiven    Review[] @relation("ReviewAuthor")
   reviewsReceived Review[] @relation("ReviewTarget")
@@ -598,15 +599,20 @@ model SiteSetting {
   updatedAt DateTime @updatedAt
 }
 
-// User-generated named referral links (e.g. "Instagram", "Telegram")
+// Single-use referral links the user generates. Each link admits exactly one signup.
 model ReferralLink {
   id        String   @id @default(uuid())
   code      String   @unique          // short slug used in /register?ref=<code>
   label     String                    // human label set by the owner
   ownerId   String
-  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  owner     User     @relation("ReferralLinkOwner", fields: [ownerId], references: [id], onDelete: Cascade)
   clicks    Int      @default(0)      // optional click tracking
-  signups   Int      @default(0)      // registrations attributed to this link
+
+  // Consumption — a link is "burned" after the first registration
+  usedById  String?  @unique          // the user who registered through this link
+  usedBy    User?    @relation("ReferralLinkConsumer", fields: [usedById], references: [id], onDelete: SetNull)
+  usedAt    DateTime?
+
   createdAt DateTime @default(now())
 
   @@index([ownerId])

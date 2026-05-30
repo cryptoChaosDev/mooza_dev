@@ -222,12 +222,16 @@ export default function RegisterPage() {
   const [searchParams] = useSearchParams();
   const refCode = searchParams.get('ref') || undefined;
 
-  // Resolve the ref code (named link code OR legacy userId) → owner id.
+  // Resolve the ref code (single-use link code OR legacy userId) → owner id.
   const [referrerId, setReferrerId] = useState<string | undefined>(undefined);
+  const [refUsed, setRefUsed] = useState(false);
   useEffect(() => {
     if (!refCode) return;
     referralAPI.resolve(refCode)
-      .then(({ data }) => { if (data?.ownerId) setReferrerId(data.ownerId); })
+      .then(({ data }) => {
+        if (data?.used) setRefUsed(true);
+        else if (data?.ownerId) setReferrerId(data.ownerId);
+      })
       .catch(() => {});
   }, [refCode]);
 
@@ -505,6 +509,12 @@ export default function RegisterPage() {
     // Step 0 — Email & Password
     if (step === 0) return (
       <div className="space-y-4">
+        {refUsed && (
+          <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs leading-relaxed">
+            <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+            <span>Эта пригласительная ссылка уже использована. Вы можете зарегистрироваться, но она не будет засчитана пригласившему.</span>
+          </div>
+        )}
         <Field label="Email" hint="Используется для входа и восстановления пароля">
           <Input type="email" value={email} onChange={setEmail} placeholder="you@example.com" autoFocus />
         </Field>
