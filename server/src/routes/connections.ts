@@ -61,18 +61,23 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     if (!receiver) return res.status(404).json({ error: 'Пользователь не найден' });
     if (receiver.isBlocked) return res.status(403).json({ error: 'Пользователь заблокирован' });
 
-    // Block only if a PENDING connection already exists between this pair
-    const existingPending = await prisma.connection.findFirst({
-      where: {
-        status: 'PENDING',
-        OR: [
-          { requesterId: meId, receiverId },
-          { requesterId: receiverId, receiverId: meId },
-        ],
-      },
+    // Multiple pending connection requests to the same person are allowed (they
+    // are aggregated per-user in the UI). Block only an EXACT duplicate from me —
+    // same roles AND the same set of services — to avoid accidental double-submits.
+    const myPending = await prisma.connection.findMany({
+      where: { status: 'PENDING', requesterId: meId, receiverId },
+      include: { services: { select: { serviceId: true } } },
     });
-    if (existingPending) {
-      return res.status(409).json({ error: 'Запрос уже отправлен', connectionId: existingPending.id });
+    const newServiceSet = new Set((serviceIds ?? []).map(String));
+    const exactDup = myPending.find(c => {
+      const existSet = new Set(c.services.map(s => s.serviceId));
+      const sameServices = existSet.size === newServiceSet.size && [...newServiceSet].every(id => existSet.has(id));
+      return sameServices
+        && (c.requesterRole ?? null) === (requesterRole ?? null)
+        && (c.receiverRole ?? null) === (receiverRole ?? null);
+    });
+    if (exactDup) {
+      return res.status(409).json({ error: 'Такой запрос уже отправлен', connectionId: exactDup.id });
     }
 
     const conn = await prisma.connection.create({

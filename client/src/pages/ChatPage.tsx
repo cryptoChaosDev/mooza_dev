@@ -1,9 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, BadgeCheck, Ban, Search } from 'lucide-react';
-import { messageAPI, friendshipAPI } from '../lib/api';
+import { messageAPI, friendshipAPI, userAPI } from '../lib/api';
 import { plural } from '../lib/plural';
 import { formatLastSeen } from '../lib/lastSeen';
+
+// Average reply-time indicator (minutes → human label)
+function formatResponseTime(min: number): string {
+  if (min < 60) return `~${Math.max(1, Math.round(min))} мин`;
+  const h = Math.round(min / 60);
+  if (h < 24) return `~${h} ${plural(h, 'час', 'часа', 'часов')}`;
+  const d = Math.round(h / 24);
+  return `~${d} ${plural(d, 'день', 'дня', 'дней')}`;
+}
 import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
@@ -74,6 +83,7 @@ export default function ChatPage() {
 
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [conversation, setConversation] = useState<Conversation | null>(null);
+  const [avgResponseMin, setAvgResponseMin] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [newMessage, setNewMessage] = useState((location.state as any)?.prefillMessage ?? '');
@@ -672,6 +682,17 @@ export default function ChatPage() {
     : null;
   const otherOnline = otherMember ? onlineUsers.has(otherMember.id) : false;
 
+  // Fetch the partner's average reply time (1-on-1 chats only)
+  const otherMemberId = otherMember?.id;
+  useEffect(() => {
+    if (!otherMemberId) { setAvgResponseMin(null); return; }
+    let cancelled = false;
+    userAPI.getUser(otherMemberId)
+      .then(({ data }) => { if (!cancelled) setAvgResponseMin((data as any)?.avgResponseMinutes ?? null); })
+      .catch(() => { if (!cancelled) setAvgResponseMin(null); });
+    return () => { cancelled = true; };
+  }, [otherMemberId]);
+
   const chatName = conversation?.isGroup
     ? (conversation.name ?? 'Группа')
     : otherMember
@@ -745,10 +766,15 @@ export default function ChatPage() {
                 {conversation.isGroup ? (
                   <p className="text-xs text-slate-400">{conversation.members.length} {plural(conversation.members.length, 'участник', 'участника', 'участников')}</p>
                 ) : (
-                  <p className={`text-xs flex items-center gap-1 ${otherOnline ? 'text-emerald-400' : 'text-slate-500'}`}>
-                    <span className={`inline-block w-1.5 h-1.5 rounded-full ${otherOnline ? 'bg-emerald-400' : 'bg-slate-500'}`} />
-                    {otherOnline ? 'В сети' : (formatLastSeen((otherMember as any)?.lastSeenAt) || 'Не в сети')}
-                  </p>
+                  <>
+                    <p className={`text-xs flex items-center gap-1 ${otherOnline ? 'text-emerald-400' : 'text-slate-500'}`}>
+                      <span className={`inline-block w-1.5 h-1.5 rounded-full ${otherOnline ? 'bg-emerald-400' : 'bg-slate-500'}`} />
+                      {otherOnline ? 'В сети' : (formatLastSeen((otherMember as any)?.lastSeenAt) || 'Не в сети')}
+                    </p>
+                    {avgResponseMin != null && (
+                      <p className="text-[11px] text-slate-500 truncate">Обычно отвечает за {formatResponseTime(avgResponseMin)}</p>
+                    )}
+                  </>
                 )}
               </div>
             </div>

@@ -5,6 +5,20 @@ import { ChevronLeft, Clock, X, Loader2 } from 'lucide-react';
 import { connectionAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import ConnectionViewModal from '../components/ConnectionViewModal';
+import { plural } from '../lib/plural';
+
+// Aggregate connection requests per partner — one card per person, listing all
+// their pending requests beneath (multiple pending connections are allowed).
+function groupByPartner(list: any[]): { partner: any; items: any[] }[] {
+  const map = new Map<string, { partner: any; items: any[] }>();
+  for (const c of list) {
+    const pid = c.partner?.id;
+    if (!pid) continue;
+    if (!map.has(pid)) map.set(pid, { partner: c.partner, items: [] });
+    map.get(pid)!.items.push(c);
+  }
+  return [...map.values()];
+}
 
 export default function ConnectionRequestsPage() {
   const navigate = useNavigate();
@@ -73,53 +87,59 @@ export default function ConnectionRequestsPage() {
           </div>
         ) : (
           <div className="divide-y divide-slate-800/60">
-            {tab === 'received' && received.map((c: any) => (
-              <div
-                key={c.id}
-                onClick={() => setViewConn(c)}
-                className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
-              >
-                <AvatarComponent src={c.partner.avatar} name={`${c.partner.firstName} ${c.partner.lastName}`} size={44} />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</p>
-                  {c.services?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {c.services.slice(0, 3).map((s: any) => (
-                        <span key={s.id} className="text-[11px] bg-primary-500/10 text-primary-300 border border-primary-500/20 rounded-md px-1.5 py-0.5">{s.name}</span>
-                      ))}
-                      {c.services.length > 3 && <span className="text-[11px] text-slate-500">+{c.services.length - 3}</span>}
-                    </div>
-                  )}
+            {groupByPartner(list).map(group => (
+              <div key={group.partner.id} className="px-4 py-3">
+                {/* Partner header — one per person */}
+                <div className="flex items-center gap-3 mb-2">
+                  <button onClick={() => navigate(`/profile/${group.partner.id}`)} className="flex-shrink-0">
+                    <AvatarComponent src={group.partner.avatar} name={`${group.partner.firstName} ${group.partner.lastName}`} size={44} />
+                  </button>
+                  <button onClick={() => navigate(`/profile/${group.partner.id}`)} className="flex-1 min-w-0 text-left">
+                    <p className="text-sm font-semibold text-white truncate">{group.partner.firstName} {group.partner.lastName}</p>
+                    {group.items.length > 1 && (
+                      <p className="text-xs text-slate-500">{group.items.length} {plural(group.items.length, 'запрос', 'запроса', 'запросов')}</p>
+                    )}
+                  </button>
                 </div>
-                <span className="text-xs text-primary-400 flex-shrink-0">Просмотреть</span>
-              </div>
-            ))}
-            {tab === 'sent' && sent.map((c: any) => (
-              <div key={c.id} className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors">
-                <button onClick={() => navigate(`/profile/${c.partner.id}`)} className="flex-shrink-0">
-                  <AvatarComponent src={c.partner.avatar} name={`${c.partner.firstName} ${c.partner.lastName}`} size={44} />
-                </button>
-                <button onClick={() => navigate(`/profile/${c.partner.id}`)} className="flex-1 min-w-0 text-left">
-                  <p className="text-sm font-semibold text-white truncate">{c.partner.firstName} {c.partner.lastName}</p>
-                  {c.services?.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {c.services.slice(0, 3).map((s: any) => (
-                        <span key={s.id} className="text-[11px] bg-slate-700/60 text-slate-400 rounded-md px-1.5 py-0.5">{s.name}</span>
-                      ))}
+
+                {/* Each pending request for this partner */}
+                <div className="space-y-1.5 pl-[56px]">
+                  {group.items.map((c: any) => (
+                    <div key={c.id} className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        {c.services?.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {c.services.slice(0, 4).map((s: any) => (
+                              <span key={s.id} className={`text-[11px] rounded-md px-1.5 py-0.5 ${tab === 'received' ? 'bg-primary-500/10 text-primary-300 border border-primary-500/20' : 'bg-slate-700/60 text-slate-400'}`}>{s.name}</span>
+                            ))}
+                            {c.services.length > 4 && <span className="text-[11px] text-slate-500">+{c.services.length - 4}</span>}
+                          </div>
+                        ) : (
+                          <span className="text-[11px] text-slate-500">Без указания услуг</span>
+                        )}
+                        {tab === 'sent' && (
+                          <div className="flex items-center gap-1 mt-0.5">
+                            <Clock size={10} className="text-slate-600" />
+                            <span className="text-[11px] text-slate-500">Ожидает ответа</span>
+                          </div>
+                        )}
+                      </div>
+                      {tab === 'received' ? (
+                        <button onClick={() => setViewConn(c)} className="text-xs text-primary-400 hover:text-primary-300 flex-shrink-0 px-2 py-1">
+                          Просмотреть
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => cancelMut.mutate(c.id)}
+                          disabled={cancelMut.isPending}
+                          className="flex items-center gap-1 px-2.5 py-1.5 bg-slate-800 hover:bg-red-500/10 text-slate-400 hover:text-red-400 rounded-xl text-xs font-medium border border-slate-700 hover:border-red-500/30 transition-all disabled:opacity-50 flex-shrink-0"
+                        >
+                          <X size={11} /> Отменить
+                        </button>
+                      )}
                     </div>
-                  )}
-                  <div className="flex items-center gap-1 mt-0.5">
-                    <Clock size={11} className="text-slate-600" />
-                    <span className="text-xs text-slate-500">Ожидает ответа</span>
-                  </div>
-                </button>
-                <button
-                  onClick={() => cancelMut.mutate(c.id)}
-                  disabled={cancelMut.isPending}
-                  className="flex items-center gap-1 px-3 py-1.5 bg-slate-800 hover:bg-red-500/10 text-slate-400 hover:text-red-400 rounded-xl text-xs font-medium border border-slate-700 hover:border-red-500/30 transition-all disabled:opacity-50 flex-shrink-0"
-                >
-                  <X size={12} /> Отменить
-                </button>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
