@@ -27,10 +27,6 @@ const TILE_GRADIENTS = [
 ];
 
 type CatalogTab = 'services' | 'artists' | 'people';
-// Browse mode inside the "Каталог" tab.
-//  - 'sections'    → Sections → Services → service filters
-//  - 'professions' → flat profession list → profession filters
-type ServiceView = 'sections' | 'professions';
 
 const ARTIST_TYPES = [
   { value: 'ALL', label: 'Все', icon: Music2 },
@@ -211,6 +207,85 @@ function ProfFiltersPanel({ filters, selected, onToggle }: {
   );
 }
 
+// ─── ServiceCardItem ─────────────────────────────────────────────────────────
+// Renders a single service offering (UserService) — a "service card", not a person.
+function ServiceCardItem({ card, onNavigate }: { card: any; onNavigate: (card: any) => void }) {
+  const user = card.user ?? {};
+  const sectionName = card.service?.section?.name;
+  const filterValues: string[] = (card.selectedCustomFilterValues ?? [])
+    .map((v: any) => v?.value)
+    .filter(Boolean);
+
+  // Price label
+  let priceLabel = 'Цена договорная';
+  if (card.priceFrom != null && card.priceTo != null) {
+    priceLabel = `${card.priceFrom.toLocaleString('ru-RU')} – ${card.priceTo.toLocaleString('ru-RU')} ₽`;
+  } else if (card.priceFrom != null) {
+    priceLabel = `От ${card.priceFrom.toLocaleString('ru-RU')} ₽`;
+  } else if (card.priceTo != null) {
+    priceLabel = `До ${card.priceTo.toLocaleString('ru-RU')} ₽`;
+  }
+
+  return (
+    <button
+      onClick={() => onNavigate(card)}
+      className="w-full text-left bg-slate-900 border border-slate-800 rounded-2xl p-4 hover:border-primary-600/60 hover:bg-slate-900/80 transition-all"
+    >
+      {/* Header: service name + section badge */}
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-white leading-snug">{card.service?.name ?? 'Услуга'}</p>
+          {card.name && (
+            <p className="text-xs text-slate-400 mt-0.5 truncate">{card.name}</p>
+          )}
+        </div>
+        {sectionName && (
+          <span className="flex-shrink-0 text-[10px] px-2 py-0.5 bg-primary-500/15 text-primary-300 rounded-md uppercase tracking-wide">
+            {sectionName}
+          </span>
+        )}
+      </div>
+
+      {/* Description */}
+      {card.description && (
+        <p className="text-xs text-slate-500 mt-2 line-clamp-2">{card.description}</p>
+      )}
+
+      {/* Filter value chips */}
+      {filterValues.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 mt-2.5">
+          {filterValues.slice(0, 6).map((v: string, i: number) => (
+            <span key={i} className="text-[11px] px-2 py-0.5 bg-slate-800/80 border border-slate-700/60 text-slate-300 rounded-lg">
+              {v}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Provider + price */}
+      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-800/60">
+        <AvatarComponent
+          src={user.avatar}
+          name={`${user.firstName ?? ''} ${user.lastName ?? ''}`}
+          size={32}
+          className="rounded-lg flex-shrink-0"
+        />
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1 flex-wrap">
+            <span className="text-xs font-medium text-white truncate">
+              {user.firstName} {user.lastName}
+            </span>
+            {user.isPremium && <span title="Premium"><Crown size={11} className="text-amber-400 flex-shrink-0" /></span>}
+            {user.isVerified && <span title="Верифицирован"><BadgeCheck size={11} className="text-sky-400 flex-shrink-0" /></span>}
+          </div>
+          {user.city && <p className="text-[11px] text-slate-600 truncate">{user.city}</p>}
+        </div>
+        <span className="flex-shrink-0 text-xs font-semibold text-primary-300">{priceLabel}</span>
+      </div>
+    </button>
+  );
+}
+
 // ─── SearchPage ───────────────────────────────────────────────────────────────
 export default function SearchPage() {
   const navigate = useNavigate();
@@ -219,24 +294,18 @@ export default function SearchPage() {
 
   const [activeTab, setActiveTab] = useState<CatalogTab>('services');
 
-  // ── Каталог tab state ──────────────────────────────────────────────────────
-  // Browse mode: 'sections' (Sections → Services) | 'professions' (flat list).
-  const [serviceView, setServiceView] = useState<ServiceView>('sections');
-  // Free-text query for the catalog (specialists) search.
+  // ── Услуги tab state ───────────────────────────────────────────────────────
+  // Browse: Sections → Services → service filters. Results are service cards.
+  // Free-text query for the service-card search.
   const [serviceQuery, setServiceQuery] = useState('');
   const [debouncedServiceQuery, setDebouncedServiceQuery] = useState('');
 
-  // Section drilldown (sections mode): which section's services are shown.
+  // Section drilldown: which section's services are shown.
   const [selectedSection, setSelectedSection] = useState<{ id: string; name: string } | null>(null);
-  // The chosen service (sections mode) or profession (professions mode).
+  // The chosen service (loads its attribute filters).
   const [selectedService, setSelectedService] = useState<{ id: string; name: string } | null>(null);
-  const [selectedProfession, setSelectedProfession] = useState<{ id: string; name: string } | null>(null);
 
-  // Free-text query for the flat profession list (professions mode).
-  const [professionQuery, setProfessionQuery] = useState('');
-  const [debouncedProfessionQuery, setDebouncedProfessionQuery] = useState('');
-
-  // ── Attribute filter values (profession OR service filters) ─────────────────
+  // ── Service attribute filter values ─────────────────────────────────────────
   const [profFilterValues, setProfFilterValues] = useState<string[]>([]);
 
   // ── Artists tab state ──────────────────────────────────────────────────────
@@ -272,11 +341,6 @@ export default function SearchPage() {
   }, [serviceQuery]);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedProfessionQuery(professionQuery), 300);
-    return () => clearTimeout(t);
-  }, [professionQuery]);
-
-  useEffect(() => {
     const t = setTimeout(() => setDebouncedArtistQuery(artistQuery), 300);
     return () => clearTimeout(t);
   }, [artistQuery]);
@@ -288,41 +352,17 @@ export default function SearchPage() {
 
   // ── Reference data ─────────────────────────────────────────────────────────
 
-  // Sections (each with its nested services) — for "Услуги" browse mode.
+  // Sections (each with its nested services) — for the "Услуги" browse.
   const { data: sections, isLoading: sectionsLoading } = useQuery({
     queryKey: ['sections'],
     queryFn: async () => {
       const { data } = await referenceAPI.getSections();
       return data as any[];
     },
-    enabled: activeTab === 'services' && serviceView === 'sections',
+    enabled: activeTab === 'services',
   });
 
-  // Flat profession list — for "Профессии" browse mode.
-  const { data: professions, isLoading: professionsLoading } = useQuery({
-    queryKey: ['professions-flat', debouncedProfessionQuery],
-    queryFn: async () => {
-      const { data } = await referenceAPI.getProfessions({
-        search: debouncedProfessionQuery || undefined,
-        all: true,
-      });
-      return data as any[];
-    },
-    enabled: activeTab === 'services' && serviceView === 'professions',
-  });
-
-  // Profession attribute filters (professions mode).
-  const { data: profFilters } = useQuery({
-    queryKey: ['prof-filters', selectedProfession?.id],
-    queryFn: async () => {
-      if (!selectedProfession) return [];
-      const { data } = await referenceAPI.getProfessionFilters(selectedProfession.id);
-      return data as any[];
-    },
-    enabled: !!selectedProfession,
-  });
-
-  // Service attribute filters (sections mode).
+  // Service attribute filters for the chosen service.
   const { data: serviceFilters } = useQuery({
     queryKey: ['service-filters', selectedService?.id],
     queryFn: async () => {
@@ -333,24 +373,23 @@ export default function SearchPage() {
     enabled: !!selectedService,
   });
 
-  // The active attribute filters depend on the current browse mode.
-  const activeFilters = serviceView === 'professions' ? profFilters : serviceFilters;
-  const hasSelection = serviceView === 'professions' ? !!selectedProfession : !!selectedService;
+  const activeFilters = serviceFilters;
+  const hasSelection = !!selectedService;
 
-  // ── Catalog results (searchMusicians) ───────────────────────────────────────
-  const searchParams = {
-    professionId: serviceView === 'professions' ? selectedProfession?.id : undefined,
-    serviceId: serviceView === 'sections' ? selectedService?.id : undefined,
+  // ── Service-card results (searchServiceCards) ───────────────────────────────
+  const serviceSearchParams = {
+    serviceId: selectedService?.id,
+    sectionId: selectedSection?.id && !selectedService ? selectedSection.id : undefined,
     customFilterValueIds: profFilterValues.length ? profFilterValues.join(',') : undefined,
     query: debouncedServiceQuery || undefined,
   };
 
-  const { data: catalogResults, isLoading: catalogLoading } = useQuery({
-    queryKey: ['catalog-search', serviceView, searchParams],
+  const { data: serviceCards, isLoading: catalogLoading } = useQuery({
+    queryKey: ['service-card-search', serviceSearchParams],
     queryFn: async () => {
-      const { data } = await referenceAPI.searchMusicians(searchParams);
+      const { data } = await referenceAPI.searchServiceCards(serviceSearchParams);
       const results = ((data as any)?.results ?? []) as any[];
-      return results.filter((r: any) => (r.user?.id ?? r.id) !== currentUser?.id);
+      return results.filter((r: any) => r.user?.id !== currentUser?.id);
     },
     enabled: activeTab === 'services',
   });
@@ -400,37 +439,22 @@ export default function SearchPage() {
   });
 
   // ── Navigation helpers ─────────────────────────────────────────────────────
-  // Switch browse mode and reset all selections/filters.
-  const switchView = (view: ServiceView) => {
-    setServiceView(view);
-    setSelectedSection(null);
-    setSelectedService(null);
-    setSelectedProfession(null);
-    setProfFilterValues([]);
-  };
-
-  // sections mode: open a section to reveal its services.
+  // Open a section to reveal its services.
   const handleSectionClick = (section: any) => {
     setSelectedSection({ id: section.id, name: section.name });
     setSelectedService(null);
     setProfFilterValues([]);
   };
 
-  // sections mode: pick / unpick a service (loads its filters).
+  // Pick / unpick a service (loads its filters).
   const handleServiceClick = (svc: any) => {
     setSelectedService(prev => (prev?.id === svc.id ? null : { id: svc.id, name: svc.name }));
     setProfFilterValues([]);
   };
 
-  // professions mode: pick / unpick a profession (loads its filters).
-  const handleProfessionClick = (prof: any) => {
-    setSelectedProfession(prev => (prev?.id === prof.id ? null : { id: prof.id, name: prof.name }));
-    setProfFilterValues([]);
-  };
-
   // Back from service list to sections grid.
   const goBack = () => {
-    if (serviceView === 'sections' && selectedSection) {
+    if (selectedSection) {
       setSelectedSection(null);
       setSelectedService(null);
       setProfFilterValues([]);
@@ -445,8 +469,17 @@ export default function SearchPage() {
     navigate(`/artist/${id}`, { state: { from: location.pathname } });
   };
 
+  // Tapping a service card → its service page (falls back to provider profile).
+  const handleNavigateToServiceCard = (card: any) => {
+    if (card?.id) {
+      navigate(`/services/${card.id}`, { state: { from: location.pathname } });
+    } else if (card?.user?.id) {
+      navigate(`/profile/${card.user.id}`, { state: { from: location.pathname } });
+    }
+  };
+
   // Show the "back" control only when drilled into a section.
-  const canGoBack = serviceView === 'sections' && !!selectedSection;
+  const canGoBack = !!selectedSection;
 
   // Services of the currently opened section (sections mode).
   const sectionServices: any[] = selectedSection
@@ -498,48 +531,22 @@ export default function SearchPage() {
             ))}
           </div>
 
-          {/* Browse-mode switch inside "Каталог" */}
-          {activeTab === 'services' && (
-            <div className="flex gap-2">
-              {([
-                { id: 'sections' as const, label: 'Услуги' },
-                { id: 'professions' as const, label: 'Профессии' },
-              ] as const).map(sub => (
-                <button
-                  key={sub.id}
-                  onClick={() => switchView(sub.id)}
-                  className={`px-3 py-1 rounded-xl text-xs font-medium transition-all border ${
-                    serviceView === sub.id
-                      ? 'bg-slate-700 border-slate-600 text-white'
-                      : 'border-slate-800 text-slate-500 hover:text-slate-300'
-                  }`}
-                >
-                  {sub.label}
-                </button>
-              ))}
-            </div>
-          )}
-
           {/* Search bar.
-              services + professions mode → filters the flat profession list.
-              services + sections mode   → free-text specialist search.
-              artists / people           → their own query. */}
+              services → free-text service-card search.
+              artists / people → their own query. */}
           {(() => {
-            const isProfList = activeTab === 'services' && serviceView === 'professions';
             const value =
               activeTab === 'services'
-                ? (isProfList ? professionQuery : serviceQuery)
+                ? serviceQuery
                 : activeTab === 'artists' ? artistQuery : peopleQuery;
             const setValue = (v: string) => {
-              if (activeTab === 'services') {
-                if (isProfList) setProfessionQuery(v);
-                else setServiceQuery(v);
-              } else if (activeTab === 'artists') setArtistQuery(v);
+              if (activeTab === 'services') setServiceQuery(v);
+              else if (activeTab === 'artists') setArtistQuery(v);
               else setPeopleQuery(v);
             };
             const placeholder =
               activeTab === 'services'
-                ? (isProfList ? 'Поиск профессий...' : 'Поиск специалистов...')
+                ? 'Поиск услуг...'
                 : activeTab === 'artists' ? 'Поиск артистов...' : 'Поиск людей...';
             return (
               <div className="relative">
@@ -577,14 +584,13 @@ export default function SearchPage() {
       {/* ── Content ── */}
       <div className="max-w-4xl mx-auto px-4 pb-28">
 
-        {/* ══ КАТАЛОГ TAB ══ */}
+        {/* ══ УСЛУГИ TAB ══ */}
         {activeTab === 'services' && (
           <>
-            {/* ── Browse: SECTIONS mode ── */}
-            {serviceView === 'sections' && (
-              <div className="mt-4 mb-6">
-                {/* Section grid (no section opened yet) */}
-                {!selectedSection && (
+            {/* ── Browse: Sections → Services ── */}
+            <div className="mt-4 mb-6">
+              {/* Section grid (no section opened yet) */}
+              {!selectedSection && (
                   sectionsLoading ? (
                     <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                       {Array.from({ length: 8 }).map((_, i) => (
@@ -636,88 +642,51 @@ export default function SearchPage() {
                     )}
                   </div>
                 )}
-              </div>
-            )}
+            </div>
 
-            {/* ── Browse: PROFESSIONS mode ── */}
-            {serviceView === 'professions' && (
-              <div className="mt-4 mb-6">
-                {professionsLoading ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                    {Array.from({ length: 8 }).map((_, i) => (
-                      <div key={i} className="h-20 bg-slate-800/50 rounded-2xl animate-pulse" />
-                    ))}
-                  </div>
-                ) : (professions ?? []).length > 0 ? (
-                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                    {(professions ?? []).map((prof: any, i: number) => {
-                      const isSelected = selectedProfession?.id === prof.id;
-                      return (
-                        <button
-                          key={prof.id}
-                          onClick={() => handleProfessionClick(prof)}
-                          className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md group ${
-                            isSelected ? 'ring-2 ring-white/50' : ''
-                          } bg-gradient-to-br ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]}`}
-                        >
-                          <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
-                          <div className="relative">
-                            <p className="text-white font-semibold text-xs leading-snug line-clamp-2">{prof.name}</p>
-                          </div>
-                          {isSelected && <X size={14} className="absolute right-2 bottom-2 text-white/80" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-slate-500 text-sm">Профессии не найдены</p>
-                )}
-              </div>
-            )}
-
-            {/* ── Results (searchMusicians) ── */}
+            {/* ── Results: service cards ── */}
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  {serviceView === 'professions'
-                    ? (selectedProfession ? selectedProfession.name : 'Все специалисты')
-                    : (selectedService ? selectedService.name : 'Все специалисты')} · от А до Я
+                  {selectedService ? selectedService.name
+                    : selectedSection ? selectedSection.name
+                    : 'Все услуги'}
                 </p>
                 {catalogLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
-                {!catalogLoading && catalogResults && (
-                  <span className="text-xs text-slate-600">{catalogResults.length}</span>
+                {!catalogLoading && serviceCards && (
+                  <span className="text-xs text-slate-600">{serviceCards.length}</span>
                 )}
               </div>
 
               {catalogLoading ? (
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-slate-800/50 animate-pulse last:border-0">
-                      <div className="w-11 h-11 rounded-xl bg-slate-800 flex-shrink-0" />
-                      <div className="flex-1 space-y-2">
-                        <div className="h-3.5 bg-slate-800 rounded w-2/5" />
-                        <div className="h-3 bg-slate-800 rounded w-1/3" />
+                <div className="space-y-2">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 animate-pulse">
+                      <div className="h-4 bg-slate-800 rounded w-2/5 mb-2" />
+                      <div className="h-3 bg-slate-800 rounded w-1/3 mb-4" />
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-lg bg-slate-800" />
+                        <div className="h-3 bg-slate-800 rounded w-1/4" />
                       </div>
                     </div>
                   ))}
                 </div>
-              ) : catalogResults && catalogResults.length > 0 ? (
-                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                  {catalogResults.map((res: any) => (
-                    <ExpandableUserRow
-                      key={res.id ?? res.user?.id}
-                      user={res.user ?? res}
-                      searchProfile={res.searchProfile}
-                      onNavigate={handleNavigateToProfile}
+              ) : serviceCards && serviceCards.length > 0 ? (
+                <div className="space-y-2">
+                  {serviceCards.map((card: any) => (
+                    <ServiceCardItem
+                      key={card.id}
+                      card={card}
+                      onNavigate={handleNavigateToServiceCard}
                     />
                   ))}
                 </div>
               ) : (
                 <div className="flex flex-col items-center py-14 text-center">
                   <div className="p-4 bg-slate-800/50 rounded-2xl mb-3">
-                    <Users size={28} className="text-slate-600" />
+                    <Music2 size={28} className="text-slate-600" />
                   </div>
-                  <p className="text-slate-400 text-sm">Специалистов не найдено</p>
+                  <p className="text-slate-400 text-sm">Услуги не найдены</p>
                 </div>
               )}
             </div>

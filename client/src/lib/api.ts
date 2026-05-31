@@ -152,6 +152,9 @@ export const referenceAPI = {
   getProfessionFilters: (professionId: string) => api.get(`/references/professions/${professionId}/filters`),
   // New catalog (sections → services → service filters)
   getSections: () => api.get('/references/sections'),
+  // Service-card search — finds service offerings (UserService), not people.
+  searchServiceCards: (params: { serviceId?: string; sectionId?: string; customFilterValueIds?: string; query?: string; page?: number; limit?: number }) =>
+    api.get('/references/service-search', { params }),
   getServiceDetail: (serviceId: string) => api.get(`/references/services/${serviceId}`),
   getServiceFilters: (serviceId: string) => api.get(`/references/services/${serviceId}/filters`),
   searchMusicians: (params: {

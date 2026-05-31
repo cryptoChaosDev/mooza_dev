@@ -558,6 +558,66 @@ router.get('/search', async (req, res) => {
   }
 });
 
+// ─── Service-card search ──────────────────────────────────────────────────────
+// Finds individual SERVICE OFFERINGS (UserService), not people. The main "Услуги"
+// search returns one card per user's service offering.
+//   serviceId        — exact service
+//   sectionId        — any service in that catalog section
+//   customFilterValueIds — comma-separated CustomFilterValue ids (offering must have them)
+//   query            — matches the provider's name/city or the service name
+router.get('/service-search', async (req, res) => {
+  try {
+    const { serviceId, sectionId, customFilterValueIds, query, page = '1', limit = '20' } = req.query;
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = parseInt(limit as string, 10);
+    const skip = (pageNum - 1) * limitNum;
+    const cfvIds = String(customFilterValueIds || '').split(',').map(s => s.trim()).filter(Boolean);
+
+    const where: any = { status: 'active' };
+    if (serviceId) where.serviceId = String(serviceId);
+    if (sectionId) where.service = { sectionId: String(sectionId) };
+    if (cfvIds.length) where.selectedCustomFilterValues = { some: { id: { in: cfvIds } } };
+    if (query) {
+      where.OR = [
+        { user: { firstName: { contains: String(query), mode: 'insensitive' } } },
+        { user: { lastName: { contains: String(query), mode: 'insensitive' } } },
+        { user: { city: { contains: String(query), mode: 'insensitive' } } },
+        { service: { name: { contains: String(query), mode: 'insensitive' } } },
+        { name: { contains: String(query), mode: 'insensitive' } },
+      ];
+    }
+
+    const [items, totalCount] = await Promise.all([
+      prisma.userService.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          priceFrom: true,
+          priceTo: true,
+          description: true,
+          user: { select: { id: true, firstName: true, lastName: true, avatar: true, city: true, isPremium: true, isVerified: true } },
+          service: { select: { id: true, name: true, section: { select: { id: true, name: true } } } },
+          profession: { select: { id: true, name: true } },
+          selectedCustomFilterValues: { select: { id: true, value: true, filter: { select: { id: true, name: true } } } },
+        },
+      }),
+      prisma.userService.count({ where }),
+    ]);
+
+    res.json({
+      results: items,
+      pagination: { page: pageNum, limit: limitNum, totalCount, totalPages: Math.ceil(totalCount / limitNum) },
+    });
+  } catch (error) {
+    console.error('Service search error:', error);
+    res.status(500).json({ error: 'Service search failed' });
+  }
+});
+
 // Get all reference data in one call
 router.get('/all', async (_req, res) => {
   try {
