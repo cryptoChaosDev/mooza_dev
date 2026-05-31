@@ -862,6 +862,18 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
     const { birthDateVisible, ...publicUser } = user as any;
     if (!birthDateVisible) publicUser.birthDate = null;
 
+    // Authoritative flag (from the VIEWER's DB record) for whether the viewer has
+    // completed their own profile. Used by the client instead of a stale cached
+    // auth object to decide whether to show the "fill your profile" prompt.
+    let viewerProfileComplete = false;
+    if (req.userId) {
+      const v = await prisma.user.findUnique({
+        where: { id: req.userId },
+        select: { firstName: true, lastName: true, avatar: true },
+      });
+      viewerProfileComplete = !!(v?.firstName && v?.lastName && v?.avatar);
+    }
+
     res.json({
       ...publicUser,
       isFriend: friendshipStatus === 'accepted',
@@ -869,6 +881,7 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
       friendshipStatus,
       dealsCount,
       avgResponseMinutes,
+      viewerProfileComplete,
     });
   } catch (error) {
     console.error('Get user by ID error:', error);

@@ -62,6 +62,11 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
       where: { id: req.userId! },
       select: { id: true, firstName: true, lastName: true, avatar: true },
     });
+    // Defensive dedup: remove any stale friend-request notification for the same
+    // pair before creating a fresh one, so a resend never stacks duplicates.
+    await prisma.notification.deleteMany({
+      where: { type: 'friend_request', actorId: req.userId!, userId: receiverId },
+    });
     // Save notification to DB
     const notification = await prisma.notification.create({
       data: {
@@ -223,6 +228,16 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res) => {
     if (friendship.receiverId !== req.userId && friendship.requesterId !== req.userId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
+
+    // Remove the related friend-request notification(s) so a withdraw + resend
+    // does not leave a stale duplicate notification on the receiver.
+    await prisma.notification.deleteMany({
+      where: {
+        type: 'friend_request',
+        actorId: friendship.requesterId,
+        userId: friendship.receiverId,
+      },
+    });
 
     await prisma.friendship.delete({
       where: { id: req.params.id }

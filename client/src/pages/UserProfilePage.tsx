@@ -18,6 +18,7 @@ import AvatarComponent from '../components/Avatar';
 import BadgeTooltip from '../components/BadgeTooltip';
 import ConnectionRequestModal from '../components/ConnectionRequestModal';
 import ConnectionViewModal from '../components/ConnectionViewModal';
+import ConfirmDialog from '../components/ConfirmDialog';
 import ReviewsBlock from '../components/ReviewsBlock';
 import { useAuthStore } from '../stores/authStore';
 import { formatLastSeen } from '../lib/lastSeen';
@@ -70,6 +71,7 @@ export default function UserProfilePage() {
   const [imageFullscreen, setImageFullscreen] = useState<string | null>(null);
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
   const [selectedProfession, setSelectedProfession] = useState<any>(null);
+  const [confirmRemoveFriend, setConfirmRemoveFriend] = useState(false);
   const { data: user, isLoading } = useQuery({
     queryKey: ['user', userId],
     queryFn: async () => { const { data } = await userAPI.getUser(userId!); return data; },
@@ -371,7 +373,7 @@ export default function UserProfilePage() {
               )}
               {user.friendshipStatus === 'accepted' && (
                 <button
-                  onClick={() => removeFriendMut.mutate()}
+                  onClick={() => setConfirmRemoveFriend(true)}
                   disabled={removeFriendMut.isPending}
                   className="flex items-center justify-center px-3.5 py-2.5 bg-green-500/10 border border-green-500/30 text-green-400 rounded-xl transition-all disabled:opacity-50"
                   title="В друзьях — нажмите, чтобы удалить"
@@ -682,7 +684,7 @@ export default function UserProfilePage() {
                 <div className="p-4">
                   {!me ? (
                     <p className="text-xs text-slate-500 italic">Войдите, чтобы видеть контакты</p>
-                  ) : !(me.firstName && me.lastName && me.avatar) ? (
+                  ) : !user.viewerProfileComplete ? (
                     <p className="text-xs text-slate-500 italic">Заполните свой профиль (имя, фото), чтобы видеть контакты</p>
                   ) : (
                     <SocialIconRow only={CONTACT_KEYS} links={(user.socialLinks as Record<string, string>) || {}} />
@@ -782,6 +784,14 @@ export default function UserProfilePage() {
       </>,
       document.body
     )}
+
+    <ConfirmDialog
+      open={confirmRemoveFriend}
+      message="Удалить из друзей? Это действие нельзя отменить."
+      confirmLabel="Удалить"
+      onConfirm={() => { removeFriendMut.mutate(); setConfirmRemoveFriend(false); }}
+      onCancel={() => setConfirmRemoveFriend(false)}
+    />
     </>
   );
 }
