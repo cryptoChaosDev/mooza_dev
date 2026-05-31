@@ -434,10 +434,12 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />
             <Route path="/privacy"  element={<PrivacyPolicyPage />} />
             <Route path="/terms"    element={<TermsPage />} />
-            {/* /onboarding must be available in the unauthenticated tree too:
-                RegisterPage calls setAuth() + navigate('/onboarding') synchronously,
-                and the router resolves the route before React re-renders with the new token. */}
+            {/* /onboarding and /vk-setup must be available in the unauthenticated tree too:
+                Register/Login call setAuth() + navigate() synchronously, and the router
+                resolves the route before React re-renders with the new token. Without these
+                entries the navigation falls through to the catch-all and lands on the feed. */}
             <Route path="/onboarding" element={<OnboardingPage />} />
+            <Route path="/vk-setup"   element={<VkSetupPage />} />
             <Route path="*"         element={<Navigate to="/" replace />} />
           </Routes>
         </Suspense>
