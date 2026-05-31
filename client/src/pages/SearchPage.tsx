@@ -621,23 +621,21 @@ export default function SearchPage() {
               {/* Section grid (no section opened yet) */}
               {!selectedSection && (
                   sectionsLoading ? (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                      {Array.from({ length: 8 }).map((_, i) => (
-                        <div key={i} className="h-20 bg-slate-800/50 rounded-2xl animate-pulse" />
+                    <div className="columns-2 sm:columns-3 gap-2">
+                      {Array.from({ length: 7 }).map((_, i) => (
+                        <div key={i} className="break-inside-avoid mb-2 h-16 bg-slate-800/50 rounded-2xl animate-pulse" />
                       ))}
                     </div>
                   ) : (sections ?? []).length > 0 ? (
-                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                    <div className="columns-2 sm:columns-3 gap-2">
                       {(sections ?? []).map((section: any, i: number) => (
                         <button
                           key={section.id}
                           onClick={() => handleSectionClick(section)}
-                          className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md group bg-gradient-to-br ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]}`}
+                          className={`block w-full break-inside-avoid mb-2 relative overflow-hidden rounded-2xl p-4 pr-7 text-left transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md group bg-gradient-to-br ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]}`}
                         >
                           <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
-                          <div className="relative">
-                            <p className="text-white font-semibold text-xs leading-snug line-clamp-2 uppercase tracking-wide">{section.name}</p>
-                          </div>
+                          <p className="relative text-white font-semibold text-xs leading-snug uppercase tracking-wide">{section.name}</p>
                           <ChevronRight size={14} className="absolute right-2 bottom-2 text-white/50 group-hover:text-white/80 transition-colors" />
                         </button>
                       ))}
@@ -647,29 +645,30 @@ export default function SearchPage() {
                   )
                 )}
 
-                {/* Services of the opened section (chips) */}
+                {/* Services of the opened section — tiles (fixed width, dynamic height) */}
                 {selectedSection && (
-                  <div className="flex flex-wrap gap-2">
-                    {sectionServices.length > 0 ? sectionServices.map((svc: any) => {
-                      const isActive = selectedService?.id === svc.id;
-                      return (
-                        <button
-                          key={svc.id}
-                          onClick={() => handleServiceClick(svc)}
-                          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
-                            isActive
-                              ? 'bg-primary-600 border-primary-500 text-white'
-                              : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600'
-                          }`}
-                        >
-                          {svc.name}
-                          {isActive && <X size={12} className="flex-shrink-0" />}
-                        </button>
-                      );
-                    }) : (
-                      <p className="text-slate-500 text-sm">В этом разделе нет услуг</p>
-                    )}
-                  </div>
+                  sectionServices.length > 0 ? (
+                    <div className="columns-2 sm:columns-3 gap-2">
+                      {sectionServices.map((svc: any, i: number) => {
+                        const isActive = selectedService?.id === svc.id;
+                        return (
+                          <button
+                            key={svc.id}
+                            onClick={() => handleServiceClick(svc)}
+                            className={`block w-full break-inside-avoid mb-2 relative overflow-hidden rounded-2xl p-3.5 pr-7 text-left transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md group bg-gradient-to-br ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]} ${isActive ? 'ring-2 ring-white/80' : ''}`}
+                          >
+                            <div className={`absolute inset-0 transition-colors ${isActive ? 'bg-black/0' : 'bg-black/25 group-hover:bg-black/10'}`} />
+                            <p className="relative text-white font-semibold text-xs leading-snug">{svc.name}</p>
+                            {isActive
+                              ? <X size={14} className="absolute right-2 bottom-2 text-white" />
+                              : <ChevronRight size={14} className="absolute right-2 bottom-2 text-white/50 group-hover:text-white/80 transition-colors" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-slate-500 text-sm">В этом разделе нет услуг</p>
+                  )
                 )}
             </div>
 
