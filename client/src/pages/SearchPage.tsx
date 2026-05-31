@@ -3,13 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   Crown, BadgeCheck, Ban, Users, Music2, Loader2, X,
-  BookOpen, Link2, ShieldCheck,
+  BookOpen, Link2, ShieldCheck, Star, MessageCircle, HandshakeIcon,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
 import { referenceAPI, userAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
+import DealCreateModal from '../components/DealCreateModal';
 import { plural } from '../lib/plural';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -209,80 +210,107 @@ function ProfFiltersPanel({ filters, selected, onToggle }: {
 
 // ─── ServiceCardItem ─────────────────────────────────────────────────────────
 // Renders a single service offering (UserService) — a "service card", not a person.
-function ServiceCardItem({ card, onNavigate }: { card: any; onNavigate: (card: any) => void }) {
+function ServiceCardItem({ card, currentUserId, onNavigate, onMessage, onDeal }: {
+  card: any;
+  currentUserId?: string;
+  onNavigate: (card: any) => void;
+  onMessage: (userId: string) => void;
+  onDeal: (card: any) => void;
+}) {
   const user = card.user ?? {};
-  const sectionName = card.service?.section?.name;
-  const filterValues: string[] = (card.selectedCustomFilterValues ?? [])
-    .map((v: any) => v?.value)
-    .filter(Boolean);
+  const isOwn = !!currentUserId && user.id === currentUserId;
+  const title = (card.name && String(card.name).trim()) || card.service?.name || 'Услуга';
+  const rating = user.rating && user.rating.count > 0 ? user.rating : null;
+  const priceItems: Array<{ name: string; price: string }> = Array.isArray(card.priceItems) ? card.priceItems : [];
 
-  // Price label
+  // Price range label
   let priceLabel = 'Цена договорная';
   if (card.priceFrom != null && card.priceTo != null) {
-    priceLabel = `${card.priceFrom.toLocaleString('ru-RU')} – ${card.priceTo.toLocaleString('ru-RU')} ₽`;
+    priceLabel = `${Number(card.priceFrom).toLocaleString('ru-RU')} – ${Number(card.priceTo).toLocaleString('ru-RU')} ₽`;
   } else if (card.priceFrom != null) {
-    priceLabel = `От ${card.priceFrom.toLocaleString('ru-RU')} ₽`;
+    priceLabel = `От ${Number(card.priceFrom).toLocaleString('ru-RU')} ₽`;
   } else if (card.priceTo != null) {
-    priceLabel = `До ${card.priceTo.toLocaleString('ru-RU')} ₽`;
+    priceLabel = `До ${Number(card.priceTo).toLocaleString('ru-RU')} ₽`;
   }
 
   return (
-    <button
-      onClick={() => onNavigate(card)}
-      className="w-full text-left bg-slate-900 border border-slate-800 rounded-2xl p-4 hover:border-primary-600/60 hover:bg-slate-900/80 transition-all"
-    >
-      {/* Header: service name + section badge */}
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-white leading-snug">{card.service?.name ?? 'Услуга'}</p>
-          {card.name && (
-            <p className="text-xs text-slate-400 mt-0.5 truncate">{card.name}</p>
-          )}
-        </div>
-        {sectionName && (
-          <span className="flex-shrink-0 text-[10px] px-2 py-0.5 bg-primary-500/15 text-primary-300 rounded-md uppercase tracking-wide">
-            {sectionName}
-          </span>
-        )}
-      </div>
-
-      {/* Description */}
-      {card.description && (
-        <p className="text-xs text-slate-500 mt-2 line-clamp-2">{card.description}</p>
-      )}
-
-      {/* Filter value chips */}
-      {filterValues.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mt-2.5">
-          {filterValues.slice(0, 6).map((v: string, i: number) => (
-            <span key={i} className="text-[11px] px-2 py-0.5 bg-slate-800/80 border border-slate-700/60 text-slate-300 rounded-lg">
-              {v}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Provider + price */}
-      <div className="flex items-center gap-2 mt-3 pt-3 border-t border-slate-800/60">
+    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 hover:border-primary-600/60 transition-all">
+      {/* Provider: avatar + name + rating */}
+      <button onClick={() => onNavigate(card)} className="w-full flex items-center gap-2.5 text-left">
         <AvatarComponent
           src={user.avatar}
           name={`${user.firstName ?? ''} ${user.lastName ?? ''}`}
-          size={32}
-          className="rounded-lg flex-shrink-0"
+          size={40}
+          className="rounded-xl flex-shrink-0"
         />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-xs font-medium text-white truncate">
-              {user.firstName} {user.lastName}
-            </span>
-            {user.isPremium && <span title="Premium"><Crown size={11} className="text-amber-400 flex-shrink-0" /></span>}
-            {user.isVerified && <span title="Верифицирован"><BadgeCheck size={11} className="text-sky-400 flex-shrink-0" /></span>}
+            <span className="text-sm font-semibold text-white truncate">{user.firstName} {user.lastName}</span>
+            {user.isPremium && <span title="Premium"><Crown size={12} className="text-amber-400 flex-shrink-0" /></span>}
+            {user.isVerified && <span title="Верифицирован"><BadgeCheck size={12} className="text-sky-400 flex-shrink-0" /></span>}
           </div>
-          {user.city && <p className="text-[11px] text-slate-600 truncate">{user.city}</p>}
+          <div className="flex items-center gap-2 mt-0.5">
+            {rating && (
+              <span className="flex items-center gap-0.5 text-[11px] text-amber-400 font-medium">
+                <Star size={11} fill="currentColor" />
+                {Number(rating.avg).toFixed(1)}
+                <span className="text-slate-600">({rating.count})</span>
+              </span>
+            )}
+            {user.city && <span className="text-[11px] text-slate-600 truncate">{user.city}</span>}
+          </div>
         </div>
-        <span className="flex-shrink-0 text-xs font-semibold text-primary-300">{priceLabel}</span>
+        {card.service?.section?.name && (
+          <span className="flex-shrink-0 self-start text-[10px] px-2 py-0.5 bg-primary-500/15 text-primary-300 rounded-md uppercase tracking-wide">
+            {card.service.section.name}
+          </span>
+        )}
+      </button>
+
+      {/* Service title (free-form name) */}
+      <button onClick={() => onNavigate(card)} className="block w-full text-left mt-3">
+        <p className="text-sm font-semibold text-white leading-snug">{title}</p>
+        {card.service?.name && title !== card.service.name && (
+          <p className="text-[11px] text-slate-500 mt-0.5">{card.service.name}</p>
+        )}
+      </button>
+
+      {/* Price range + first 2-3 price-list positions */}
+      <div className="mt-2.5">
+        <p className="text-sm font-semibold text-primary-300">{priceLabel}</p>
+        {priceItems.length > 0 && (
+          <div className="mt-1.5 space-y-1">
+            {priceItems.slice(0, 3).map((it, i) => (
+              <div key={i} className="flex items-center justify-between gap-3 text-xs">
+                <span className="text-slate-400 truncate">{it.name}</span>
+                <span className="text-slate-300 flex-shrink-0">{it.price ? `${it.price} ₽` : '—'}</span>
+              </div>
+            ))}
+            {priceItems.length > 3 && (
+              <p className="text-[11px] text-slate-600">ещё {priceItems.length - 3} поз.</p>
+            )}
+          </div>
+        )}
       </div>
-    </button>
+
+      {/* Actions */}
+      {!isOwn && (
+        <div className="flex gap-2 mt-3.5">
+          <button
+            onClick={() => onMessage(user.id)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-primary-600 hover:bg-primary-500 text-white text-xs font-medium rounded-xl transition-colors"
+          >
+            <MessageCircle size={14} /> Написать
+          </button>
+          <button
+            onClick={() => onDeal(card)}
+            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-colors"
+          >
+            <HandshakeIcon size={14} /> Оформить сделку
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -293,6 +321,7 @@ export default function SearchPage() {
   const { user: currentUser } = useAuthStore();
 
   const [activeTab, setActiveTab] = useState<CatalogTab>('services');
+  const [dealCard, setDealCard] = useState<any>(null);
 
   // ── Услуги tab state ───────────────────────────────────────────────────────
   // Browse: Sections → Services → service filters. Results are service cards.
@@ -677,7 +706,10 @@ export default function SearchPage() {
                     <ServiceCardItem
                       key={card.id}
                       card={card}
+                      currentUserId={currentUser?.id}
                       onNavigate={handleNavigateToServiceCard}
+                      onMessage={(uid) => navigate(`/messages/${uid}`)}
+                      onDeal={(c) => setDealCard(c)}
                     />
                   ))}
                 </div>
@@ -895,6 +927,17 @@ export default function SearchPage() {
         )}
 
       </div>
+
+      {dealCard && dealCard.user && (
+        <DealCreateModal
+          executorId={dealCard.user.id}
+          executorName={`${dealCard.user.firstName ?? ''} ${dealCard.user.lastName ?? ''}`.trim()}
+          serviceId={dealCard.service?.id}
+          userServiceId={dealCard.id}
+          serviceName={(dealCard.name && String(dealCard.name).trim()) || dealCard.service?.name}
+          onClose={() => setDealCard(null)}
+        />
+      )}
     </div>
   );
 }

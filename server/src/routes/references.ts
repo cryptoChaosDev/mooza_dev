@@ -599,6 +599,7 @@ router.get('/service-search', async (req, res) => {
           name: true,
           priceFrom: true,
           priceTo: true,
+          priceItems: true,
           description: true,
           user: { select: { id: true, firstName: true, lastName: true, avatar: true, city: true, isPremium: true, isVerified: true } },
           service: { select: { id: true, name: true, section: { select: { id: true, name: true } } } },
@@ -609,8 +610,25 @@ router.get('/service-search', async (req, res) => {
       prisma.userService.count({ where }),
     ]);
 
+    // Average rating per provider (only meaningful when count > 0).
+    const userIds = [...new Set(items.map(i => i.user?.id).filter(Boolean) as string[])];
+    const ratings = userIds.length
+      ? await prisma.review.groupBy({
+          by: ['targetId'],
+          where: { targetId: { in: userIds } },
+          _avg: { rating: true },
+          _count: { _all: true },
+        })
+      : [];
+    const ratingByUser = new Map(ratings.map(r => [r.targetId, { avg: r._avg.rating, count: r._count._all }]));
+
+    const results = items.map(i => ({
+      ...i,
+      user: i.user ? { ...i.user, rating: ratingByUser.get(i.user.id) ?? null } : i.user,
+    }));
+
     res.json({
-      results: items,
+      results,
       pagination: { page: pageNum, limit: limitNum, totalCount, totalPages: Math.ceil(totalCount / limitNum) },
     });
   } catch (error) {
