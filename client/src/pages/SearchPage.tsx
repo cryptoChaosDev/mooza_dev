@@ -634,7 +634,7 @@ export default function SearchPage() {
                           onClick={() => handleSectionClick(section)}
                           className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 shadow-md transition-all hover:scale-[1.03] active:scale-[0.97] bg-gradient-to-br ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]}`}
                         >
-                          <span className="text-white font-semibold text-xs uppercase tracking-wide whitespace-nowrap">{section.name}</span>
+                          <span className="text-white font-semibold text-xs whitespace-nowrap">{section.name}</span>
                           <ChevronRight size={13} className="text-white/70 flex-shrink-0" />
                         </button>
                       ))}
