@@ -51,6 +51,34 @@ router.get('/suggest', authenticate, async (req: AuthRequest, res: Response) => 
   }
 });
 
+// ── GET /api/artists/following ──────────────────────────────────────────────
+router.get('/following', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+
+    const follows = await prisma.artistFollower.findMany({
+      where: { userId },
+      orderBy: { createdAt: 'desc' },
+      include: { artist: { include: { _count: { select: { followers: true } } } } },
+    });
+
+    const artists = follows.map((f) => ({
+      id: f.artist.id,
+      name: f.artist.name,
+      avatar: f.artist.avatar,
+      city: f.artist.city,
+      type: f.artist.type,
+      listeners: Number(f.artist.listeners),
+      followersCount: f.artist._count.followers,
+      followedAt: f.createdAt,
+    }));
+
+    return res.json(artists);
+  } catch (e) {
+    return res.status(500).json({ error: 'Failed to fetch followed artists' });
+  }
+});
+
 // ── GET /api/artists/:id ─────────────────────────────────────────────────────
 router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response) => {
   try {

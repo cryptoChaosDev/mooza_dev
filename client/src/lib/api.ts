@@ -280,6 +280,7 @@ export const artistAPI = {
   updateArtist: (id: string, data: any) => api.put(`/artists/${id}`, data),
   follow: (id: string) => api.post(`/artists/${id}/follow`),
   unfollow: (id: string) => api.delete(`/artists/${id}/follow`),
+  getFollowing: () => api.get('/artists/following'),
   submitForModeration: (id: string) => api.patch(`/artists/${id}/submit`),
   submitProof: (id: string, proofUrl: string) => api.patch(`/artists/${id}/submit-proof`, { proofUrl }),
   uploadAvatar: (id: string, file: File) => {

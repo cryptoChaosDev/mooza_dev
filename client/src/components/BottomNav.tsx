@@ -21,7 +21,7 @@ export default function BottomNav() {
     { path: '/',         icon: Home,          label: 'Главная',  badge: 0 },
     { path: '/search',   icon: Search,        label: 'Каталог',  badge: 0 },
     { path: '/messages', icon: MessageCircle, label: 'Чат',      badge: unreadMessages },
-    { path: '/friends',  icon: Users,         label: 'Друзья',   badge: pendingFriendRequests },
+    { path: '/friends',  icon: Users,         label: 'Отношения', badge: pendingFriendRequests },
     { path: '/profile',  icon: User,          label: 'Профиль',  badge: 0 },
   ];
 

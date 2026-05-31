@@ -2,11 +2,11 @@ import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Users, MessageCircle, UserX, Check, X, Clock,
-  Search, Wifi, Link2, Heart, Crown, BadgeCheck, Music2,
+  Users, MessageCircle, UserX, Clock,
+  Search, Wifi, Link2, Star, Crown, BadgeCheck,
   ChevronRight,
 } from 'lucide-react';
-import { friendshipAPI, connectionAPI, favoriteAPI, groupAPI } from '../lib/api';
+import { friendshipAPI, connectionAPI, favoriteAPI, artistAPI, postAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { usePresenceStore } from '../stores/presenceStore';
 import { formatLastSeen } from '../lib/lastSeen';
@@ -14,7 +14,7 @@ import ConnectionViewModal from '../components/ConnectionViewModal';
 
 import ConfirmDialog from '../components/ConfirmDialog';
 
-type Tab = 'friends' | 'connections' | 'favorites' | 'groups';
+type Tab = 'friends' | 'connections' | 'favorites';
 
 
 function SectionHeader({ label, count, danger }: { label: string; count?: number; danger?: boolean }) {
@@ -37,10 +37,11 @@ export default function FriendsPage() {
 
   const [confirmRemoveFriend, setConfirmRemoveFriend] = useState<string | null>(null);
   const [confirmRemoveFav, setConfirmRemoveFav] = useState<string | null>(null);
+  const [favSubTab, setFavSubTab] = useState<'people' | 'artists' | 'posts'>('people');
 
   useEffect(() => {
     const tab = searchParams.get('tab') as Tab | null;
-    if (tab && ['friends', 'connections', 'favorites', 'groups'].includes(tab)) {
+    if (tab && ['friends', 'connections', 'favorites'].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -99,31 +100,22 @@ const { data: myBreakRequests = [] } = useQuery({
     queryFn: async () => { const { data } = await connectionAPI.getHistory(); return data; },
   });
 
-  // ── Favorites ──
+  // ── Favorites (people) ──
   const { data: favorites = [] } = useQuery({
     queryKey: ['favorites'],
     queryFn: async () => { const { data } = await favoriteAPI.list(); return data; },
   });
 
-  // ── Group invites ──
-  const { data: groupInvites = [] } = useQuery({
-    queryKey: ['group-invites'],
-    queryFn: async () => { const { data } = await groupAPI.getInvites(); return data as any[]; },
+  // ── Followed artists ──
+  const { data: followedArtists = [] } = useQuery({
+    queryKey: ['followed-artists'],
+    queryFn: async () => { const { data } = await artistAPI.getFollowing(); return data as any[]; },
   });
 
-  // ── My groups ──
-  const { data: myGroups = [] } = useQuery({
-    queryKey: ['my-groups'],
-    queryFn: async () => { const { data } = await groupAPI.getMyGroups(); return data as any[]; },
-  });
-
-  const acceptGroupInviteMut = useMutation({
-    mutationFn: (membershipId: string) => groupAPI.acceptInvite(membershipId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['group-invites'] }),
-  });
-  const declineGroupInviteMut = useMutation({
-    mutationFn: (membershipId: string) => groupAPI.declineInvite(membershipId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['group-invites'] }),
+  // ── Saved posts ──
+  const { data: savedPosts = [] } = useQuery({
+    queryKey: ['saved-posts'],
+    queryFn: async () => { const { data } = await postAPI.getSavedPosts(); return data as any[]; },
   });
 
   // ── Mutations (friends) ──
@@ -161,12 +153,10 @@ const { data: myBreakRequests = [] } = useQuery({
 
   const friendsBadge = requests.length;
   const connBadge = connRequests.length;
-  const groupsBadge = groupInvites.length;
 
   const TABS: { id: Tab; label: string; badge: number }[] = [
     { id: 'friends',     label: 'Друзья',   badge: friendsBadge },
     { id: 'connections', label: 'Связи',    badge: connBadge },
-    { id: 'groups',      label: 'Группы',   badge: groupsBadge },
     { id: 'favorites',   label: 'Избранное', badge: 0 },
   ];
 
@@ -190,15 +180,7 @@ const { data: myBreakRequests = [] } = useQuery({
           <div className="px-4 pt-4 pb-3">
             <div className="flex items-center gap-2 mb-3">
               <Users size={20} className="text-primary-400" />
-              <h2 className="text-lg font-bold text-white flex-1">Друзья и связи</h2>
-              {activeTab === 'groups' && (
-                <button
-                  onClick={() => navigate('/groups/create')}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-xs font-medium transition-colors"
-                >
-                  <Music2 size={13} /> + Группа
-                </button>
-              )}
+              <h2 className="text-lg font-bold text-white flex-1">Отношения</h2>
             </div>
 
             {/* Tabs */}
@@ -467,161 +449,160 @@ const { data: myBreakRequests = [] } = useQuery({
             </div>
           )}
 
-          {/* ══ GROUPS TAB ══ */}
-          {activeTab === 'groups' && (
-            <div className="pb-4">
+          {/* ══ FAVORITES TAB ══ */}
+          {activeTab === 'favorites' && (
+            <div>
+              {/* Sub-tabs */}
+              <div className="px-4 pt-3 pb-2">
+                <div className="flex gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
+                  {([
+                    { id: 'people',  label: 'Люди' },
+                    { id: 'artists', label: 'Артисты' },
+                    { id: 'posts',   label: 'Публикации' },
+                  ] as const).map(sub => (
+                    <button
+                      key={sub.id}
+                      onClick={() => setFavSubTab(sub.id)}
+                      className={`flex-1 flex items-center justify-center py-1.5 rounded-lg text-xs font-medium transition-all ${
+                        favSubTab === sub.id ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {sub.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-              {/* Invites */}
-              {groupInvites.length > 0 && (
-                <div>
-                  <SectionHeader label="Приглашения" count={groupInvites.length} />
+              {/* ── People ── */}
+              {favSubTab === 'people' && (
+                favorites.length > 0 ? (
                   <div className="divide-y divide-slate-800/60">
-                    {groupInvites.map((inv: any) => (
-                      <div key={inv.id} className="flex items-center gap-3 px-4 py-3">
-                        <button onClick={() => navigate(`/groups/${inv.group.id}`)} className="flex-shrink-0">
-                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center overflow-hidden">
-                            {inv.group.avatar
-                              ? <img src={inv.group.avatar} alt={inv.group.name} className="w-full h-full object-cover" />
-                              : <span className="text-white font-bold text-sm">{inv.group.name?.[0]?.toUpperCase()}</span>}
+                    {favorites.map((fav: any) => (
+                      <div
+                        key={fav.id}
+                        onClick={() => navigate(`/profile/${fav.user.id}`)}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
+                      >
+                        <div className="flex-shrink-0"><UserAvatar user={fav.user} /></div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-semibold text-white truncate">{fav.user.firstName} {fav.user.lastName}</span>
+                            {fav.user.isPremium && <Crown size={13} className="text-amber-400 flex-shrink-0" />}
+                            {fav.user.isVerified && <BadgeCheck size={13} className="text-sky-400 flex-shrink-0" />}
                           </div>
-                        </button>
-                        <button onClick={() => navigate(`/groups/${inv.group.id}`)} className="flex-1 min-w-0 text-left">
-                          <p className="text-sm font-semibold text-white truncate">{inv.group.name}</p>
-                          <p className="text-xs text-primary-400 truncate">
-                            {inv.profession ? `Роль: ${inv.profession.name}` : 'Приглашение в группу'}
-                          </p>
-                          {inv.invitedBy && (
-                            <p className="text-xs text-slate-600 truncate">от {inv.invitedBy.firstName} {inv.invitedBy.lastName}</p>
+                          {(fav.user.role || fav.user.city) && (
+                            <p className="text-xs text-slate-500 truncate mt-0.5">{[fav.user.role, fav.user.city].filter(Boolean).join(' · ')}</p>
                           )}
-                        </button>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
                           <button
-                            onClick={() => acceptGroupInviteMut.mutate(inv.id)}
-                            disabled={acceptGroupInviteMut.isPending || declineGroupInviteMut.isPending}
-                            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-400 rounded-xl text-xs font-medium transition-all disabled:opacity-50"
+                            onClick={() => navigate(`/messages/${fav.user.id}`)}
+                            className="p-2 text-slate-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg transition-all"
+                            title="Написать"
                           >
-                            <Check size={13} /> Вступить
+                            <MessageCircle size={16} />
                           </button>
                           <button
-                            onClick={() => declineGroupInviteMut.mutate(inv.id)}
-                            disabled={declineGroupInviteMut.isPending || acceptGroupInviteMut.isPending}
-                            className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-all disabled:opacity-50"
-                            title="Отклонить"
+                            onClick={() => setConfirmRemoveFav(fav.user.id)}
+                            disabled={removeFavMutation.isPending}
+                            className="p-2 text-amber-400 hover:text-slate-400 hover:bg-slate-700/50 rounded-lg transition-all disabled:opacity-50"
+                            title="Убрать из избранного"
                           >
-                            <X size={15} />
+                            <Star size={15} fill="currentColor" />
                           </button>
                         </div>
                       </div>
                     ))}
                   </div>
-                </div>
+                ) : (
+                  <div className="flex flex-col items-center py-16 px-6 text-center">
+                    <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Star size={32} className="text-slate-600" /></div>
+                    <p className="text-white font-semibold mb-1">Нет избранных</p>
+                    <p className="text-slate-500 text-sm">Нажмите ★ на профиле пользователя, чтобы добавить в избранное</p>
+                  </div>
+                )
               )}
 
-              {/* My groups (owner or accepted member) */}
-              {myGroups.length > 0 && (
-                <div>
-                  <SectionHeader label="Мои группы" count={myGroups.length} />
+              {/* ── Artists ── */}
+              {favSubTab === 'artists' && (
+                followedArtists.length > 0 ? (
                   <div className="divide-y divide-slate-800/60">
-                    {myGroups.map((g: any) => {
-                      return (
-                        <button
-                          key={g.id}
-                          onClick={() => navigate(`/groups/${g.id}`)}
-                          className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors text-left"
-                        >
-                          <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-600 to-purple-700 flex items-center justify-center overflow-hidden flex-shrink-0">
-                            {g.avatar
-                              ? <img src={g.avatar} alt={g.name} className="w-full h-full object-cover" />
-                              : <span className="text-white font-bold text-sm">{g.name?.[0]?.toUpperCase()}</span>}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-white truncate">{g.name}</p>
-                            <p className="text-xs text-slate-500 truncate">
-                              {g.type === 'COVER_GROUP' ? 'Кавер-группа' : 'Группа'}
-                              {g.city ? ` · ${g.city}` : ''}
-                              {' · '}{(g.userArtists ?? []).filter((ua: any) => ua.inviteStatus === 'ACCEPTED').length} уч.
+                    {followedArtists.map((artist: any) => (
+                      <div
+                        key={artist.id}
+                        onClick={() => navigate(`/artists/${artist.id}`)}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
+                      >
+                        <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center overflow-hidden flex-shrink-0">
+                          {artist.avatar
+                            ? <img src={artist.avatar} alt={artist.name} className="w-full h-full object-cover" />
+                            : <span className="text-white font-bold text-sm">{artist.name?.[0]?.toUpperCase()}</span>}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{artist.name}</p>
+                          {(artist.city || artist.followersCount) && (
+                            <p className="text-xs text-slate-500 truncate mt-0.5">
+                              {[artist.city, artist.followersCount ? artist.followersCount + ' подписчиков' : null].filter(Boolean).join(' · ')}
                             </p>
+                          )}
+                        </div>
+                        <ChevronRight size={14} className="text-slate-500 flex-shrink-0" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center py-16 px-6 text-center">
+                    <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Star size={32} className="text-slate-600" /></div>
+                    <p className="text-white font-semibold mb-1">Вы не подписаны на артистов</p>
+                  </div>
+                )
+              )}
+
+              {/* ── Saved posts ── */}
+              {favSubTab === 'posts' && (
+                savedPosts.length > 0 ? (
+                  <div className="divide-y divide-slate-800/60">
+                    {savedPosts.map((post: any) => {
+                      const thumb = post.images?.[0] ?? post.media?.[0]?.url;
+                      return (
+                        <div
+                          key={post.id}
+                          onClick={() => post.author && navigate(`/profile/${post.author.id}`)}
+                          className="flex items-start gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
+                        >
+                          {post.author && <div className="flex-shrink-0"><UserAvatar user={post.author} /></div>}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5">
+                              {post.author && (
+                                <span className="text-sm font-semibold text-white truncate">{post.author.firstName} {post.author.lastName}</span>
+                              )}
+                              {(post.savedAt || post.createdAt) && (
+                                <span className="text-[11px] text-slate-600 flex-shrink-0">
+                                  {new Date(post.savedAt ?? post.createdAt).toLocaleDateString('ru', { day: 'numeric', month: 'short' })}
+                                </span>
+                              )}
+                            </div>
+                            {post.content && (
+                              <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{post.content.slice(0, 140)}</p>
+                            )}
                           </div>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-md flex-shrink-0 ${
-                            g.status === 'VERIFIED' ? 'bg-green-500/15 text-green-400' :
-                            g.status === 'PENDING' ? 'bg-amber-500/15 text-amber-400' :
-                            g.status === 'DRAFT' ? 'bg-slate-700 text-slate-400' :
-                            'bg-slate-700 text-slate-400'
-                          }`}>
-                            {g.status === 'VERIFIED' ? 'Верифицирована' :
-                             g.status === 'PENDING' ? 'Модерация' :
-                             g.status === 'APPROVED' ? 'Одобрена' :
-                             g.status === 'DRAFT' ? 'Черновик' : g.status}
-                          </span>
-                        </button>
+                          {thumb && (
+                            <div className="w-12 h-12 rounded-lg overflow-hidden bg-slate-800 flex-shrink-0">
+                              <img src={thumb} alt="" className="w-full h-full object-cover" />
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
-                </div>
-              )}
-
-              {/* Empty state */}
-              {groupInvites.length === 0 && myGroups.length === 0 && (
-                <div className="flex flex-col items-center py-16 px-6 text-center">
-                  <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Music2 size={32} className="text-slate-600" /></div>
-                  <p className="text-white font-semibold mb-1">Нет групп</p>
-                  <p className="text-slate-500 text-sm mb-5">Создайте свою группу или ждите приглашения</p>
-                  <button onClick={() => navigate('/groups/create')} className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-medium transition-colors">
-                    Создать группу
-                  </button>
-                </div>
+                ) : (
+                  <div className="flex flex-col items-center py-16 px-6 text-center">
+                    <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Star size={32} className="text-slate-600" /></div>
+                    <p className="text-white font-semibold mb-1">Нет сохранённых публикаций</p>
+                  </div>
+                )
               )}
             </div>
-          )}
-
-          {/* ══ FAVORITES TAB ══ */}
-          {activeTab === 'favorites' && (
-            favorites.length > 0 ? (
-              <div className="divide-y divide-slate-800/60">
-                {favorites.map((fav: any) => (
-                  <div
-                    key={fav.id}
-                    onClick={() => navigate(`/profile/${fav.user.id}`)}
-                    className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
-                  >
-                    <div className="flex-shrink-0"><UserAvatar user={fav.user} /></div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-sm font-semibold text-white truncate">{fav.user.firstName} {fav.user.lastName}</span>
-                        {fav.user.isPremium && <Crown size={13} className="text-amber-400 flex-shrink-0" />}
-                        {fav.user.isVerified && <BadgeCheck size={13} className="text-sky-400 flex-shrink-0" />}
-                      </div>
-                      {(fav.user.role || fav.user.city) && (
-                        <p className="text-xs text-slate-500 truncate mt-0.5">{[fav.user.role, fav.user.city].filter(Boolean).join(' · ')}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                      <button
-                        onClick={() => navigate(`/messages/${fav.user.id}`)}
-                        className="p-2 text-slate-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg transition-all"
-                        title="Написать"
-                      >
-                        <MessageCircle size={16} />
-                      </button>
-                      <button
-                        onClick={() => setConfirmRemoveFav(fav.user.id)}
-                        disabled={removeFavMutation.isPending}
-                        className="p-2 text-rose-400 hover:text-slate-400 hover:bg-slate-700/50 rounded-lg transition-all disabled:opacity-50"
-                        title="Убрать из избранного"
-                      >
-                        <Heart size={15} fill="currentColor" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center py-16 px-6 text-center">
-                <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Heart size={32} className="text-slate-600" /></div>
-                <p className="text-white font-semibold mb-1">Нет избранных</p>
-                <p className="text-slate-500 text-sm">Нажмите ♥ на профиле пользователя, чтобы добавить в избранное</p>
-              </div>
-            )
           )}
         </div>
       </div>

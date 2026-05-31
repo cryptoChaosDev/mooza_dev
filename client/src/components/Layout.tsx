@@ -32,7 +32,7 @@ export default function Layout({ children }: LayoutProps) {
     { path: '/', icon: Home, label: 'Главная' },
     { path: '/search', icon: Search, label: 'Каталог' },
     { path: '/messages', icon: MessageCircle, label: 'Сообщения' },
-    { path: '/friends', icon: Users, label: 'Друзья' },
+    { path: '/friends', icon: Users, label: 'Отношения' },
     { path: '/profile', icon: User, label: 'Профиль' },
   ];
 
