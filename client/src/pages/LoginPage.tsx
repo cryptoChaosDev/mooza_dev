@@ -5,6 +5,9 @@ import { authAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import VkLoginButton from '../components/VkLoginButton';
 
+// Temporarily hide VK login/registration. Set back to true to restore.
+const SHOW_VK = false;
+
 function DocSection({ title, children }: { title: string; children: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   return (
@@ -226,16 +229,20 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
             </div>
           )}
 
-          {/* Social login — VK */}
-          <div className="mb-5">
-            <VkLoginButton onAuth={handleVkAuth} onError={handleSocialError} disabled={loading || !agreed} />
-          </div>
+          {/* Social login — VK (temporarily disabled; flip SHOW_VK to restore) */}
+          {SHOW_VK && (
+            <>
+              <div className="mb-5">
+                <VkLoginButton onAuth={handleVkAuth} onError={handleSocialError} disabled={loading || !agreed} />
+              </div>
 
-          <div className="flex items-center gap-3 mb-5">
-            <div className="flex-1 h-px bg-slate-700" />
-            <span className="text-xs text-slate-500 uppercase tracking-wide">или войти по email</span>
-            <div className="flex-1 h-px bg-slate-700" />
-          </div>
+              <div className="flex items-center gap-3 mb-5">
+                <div className="flex-1 h-px bg-slate-700" />
+                <span className="text-xs text-slate-500 uppercase tracking-wide">или войти по email</span>
+                <div className="flex-1 h-px bg-slate-700" />
+              </div>
+            </>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email */}

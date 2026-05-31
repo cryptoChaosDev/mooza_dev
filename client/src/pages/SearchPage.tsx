@@ -3,8 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   Crown, BadgeCheck, Ban, Users, Music2, Loader2, X,
-  BookOpen, Link2, ShieldCheck, Star, MessageCircle, HandshakeIcon,
+  BookOpen, Link2, ShieldCheck, Star, MessageCircle, HandshakeIcon, SlidersHorizontal,
 } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
@@ -149,64 +150,6 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
   );
 }
 
-// ─── CatalogPage ──────────────────────────────────────────────────────────────
-// ─── ProfFiltersPanel ────────────────────────────────────────────────────────
-function ProfFiltersPanel({ filters, selected, onToggle }: {
-  filters: any[];
-  selected: string[];
-  onToggle: (id: string) => void;
-}) {
-  const [open, setOpen] = useState(true);
-  const activeCount = selected.length;
-
-  return (
-    <div>
-      {/* Toggle button */}
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-2 text-xs font-medium text-slate-400 hover:text-white transition-colors"
-      >
-        {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-        Фильтры по атрибутам
-        {activeCount > 0 && (
-          <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
-            {activeCount}
-          </span>
-        )}
-      </button>
-
-      {/* Expanded filters */}
-      {open && (
-        <div className="mt-2 space-y-2">
-          {filters.map((group: any) => (
-            <div key={group.id}>
-              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1">{group.name}</p>
-              <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                {group.values?.map((val: any) => {
-                  const isActive = selected.includes(String(val.id));
-                  return (
-                    <button
-                      key={val.id}
-                      onClick={() => onToggle(String(val.id))}
-                      className={`flex-shrink-0 px-3 py-1 rounded-xl text-xs font-medium border transition-all ${
-                        isActive
-                          ? 'bg-primary-600 border-primary-500 text-white'
-                          : 'bg-slate-800/60 border-slate-700/60 text-slate-400 hover:text-white hover:border-slate-600'
-                      }`}
-                    >
-                      {val.value}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ─── ServiceCardItem ─────────────────────────────────────────────────────────
 // Renders a single service offering (UserService) — a "service card", not a person.
@@ -336,6 +279,8 @@ export default function SearchPage() {
 
   // ── Service attribute filter values ─────────────────────────────────────────
   const [profFilterValues, setProfFilterValues] = useState<string[]>([]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [tempFilters, setTempFilters] = useState<string[]>([]);
 
   // ── Artists tab state ──────────────────────────────────────────────────────
   const [artistQuery, setArtistQuery] = useState('');
@@ -515,13 +460,6 @@ export default function SearchPage() {
     ? ((sections ?? []).find((s: any) => s.id === selectedSection.id)?.services ?? [])
     : [];
 
-  // ── Toggle attribute filter value ──────────────────────────────────────────
-  function toggleProfFilterValue(valueId: string) {
-    setProfFilterValues(prev =>
-      prev.includes(valueId) ? prev.filter(v => v !== valueId) : [...prev, valueId]
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-950">
 
@@ -599,13 +537,21 @@ export default function SearchPage() {
             );
           })()}
 
-          {/* Attribute filters for the selected profession / service — expanded */}
+          {/* Attribute filters — hidden behind a button that opens a modal */}
           {activeTab === 'services' && hasSelection && activeFilters && activeFilters.length > 0 && (
-            <ProfFiltersPanel
-              filters={activeFilters}
-              selected={profFilterValues}
-              onToggle={toggleProfFilterValue}
-            />
+            <button
+              type="button"
+              onClick={() => { setTempFilters(profFilterValues); setFiltersOpen(true); }}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+            >
+              <SlidersHorizontal size={14} />
+              Фильтры
+              {profFilterValues.length > 0 && (
+                <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                  {profFilterValues.length}
+                </span>
+              )}
+            </button>
           )}
         </div>
       </div>
@@ -934,6 +880,66 @@ export default function SearchPage() {
           serviceName={(dealCard.name && String(dealCard.name).trim()) || dealCard.service?.name}
           onClose={() => setDealCard(null)}
         />
+      )}
+
+      {/* Attribute filters modal */}
+      {filtersOpen && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setFiltersOpen(false)} />
+          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal size={16} className="text-primary-400" />
+                <h3 className="text-base font-semibold text-white">Фильтры</h3>
+                {tempFilters.length > 0 && (
+                  <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{tempFilters.length}</span>
+                )}
+              </div>
+              <button onClick={() => setFiltersOpen(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
+            </div>
+
+            <div className="px-5 py-4 space-y-4 overflow-y-auto">
+              {(activeFilters ?? []).map((group: any) => (
+                <div key={group.id}>
+                  <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">{group.name}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {group.values?.map((val: any) => {
+                      const isActive = tempFilters.includes(String(val.id));
+                      return (
+                        <button
+                          key={val.id}
+                          type="button"
+                          onClick={() => setTempFilters(prev => prev.includes(String(val.id)) ? prev.filter(x => x !== String(val.id)) : [...prev, String(val.id)])}
+                          className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                            isActive ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600'
+                          }`}
+                        >
+                          {val.value}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="px-5 pb-5 pt-4 border-t border-slate-800 flex gap-2.5 flex-shrink-0">
+              <button
+                onClick={() => { setTempFilters([]); setProfFilterValues([]); setFiltersOpen(false); }}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors"
+              >
+                Сбросить
+              </button>
+              <button
+                onClick={() => { setProfFilterValues(tempFilters); setFiltersOpen(false); }}
+                className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors"
+              >
+                Применить
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

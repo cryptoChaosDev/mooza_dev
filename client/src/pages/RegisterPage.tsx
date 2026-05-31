@@ -7,6 +7,9 @@ import {
 import { authAPI, referenceAPI, referralAPI } from '../lib/api';
 import CityPicker from '../components/CityPicker';
 import VkLoginButton from '../components/VkLoginButton';
+
+// Temporarily hide VK login/registration. Set back to true to restore.
+const SHOW_VK = false;
 import { useAuthStore } from '../stores/authStore';
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -453,13 +456,17 @@ export default function RegisterPage() {
     // Step 0 — Email & Password
     if (step === 0) return (
       <div className="space-y-4">
-        {/* VK registration — same as login */}
-        <VkLoginButton onAuth={handleVkAuth} onError={handleVkError} disabled={loading} />
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-slate-700" />
-          <span className="text-xs text-slate-500 uppercase tracking-wide">или по email</span>
-          <div className="flex-1 h-px bg-slate-700" />
-        </div>
+        {/* VK registration (temporarily disabled; flip SHOW_VK to restore) */}
+        {SHOW_VK && (
+          <>
+            <VkLoginButton onAuth={handleVkAuth} onError={handleVkError} disabled={loading} />
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-slate-700" />
+              <span className="text-xs text-slate-500 uppercase tracking-wide">или по email</span>
+              <div className="flex-1 h-px bg-slate-700" />
+            </div>
+          </>
+        )}
         {refUsed && (
           <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs leading-relaxed">
             <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />

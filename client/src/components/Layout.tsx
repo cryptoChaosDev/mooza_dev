@@ -66,8 +66,9 @@ export default function Layout({ children }: LayoutProps) {
           </div>
         )}
         <header className="flex items-center justify-between px-4 h-11">
-          <Link to="/" className="flex items-center">
+          <Link to="/" className="flex items-center gap-1.5">
             <img src="/logo.png" alt="Moooza" className="h-8 w-auto" />
+            <span className="text-[9px] font-bold tracking-wider text-primary-400 bg-primary-500/15 border border-primary-500/30 rounded px-1 py-0.5 leading-none">BETA</span>
           </Link>
           <div className="flex items-center gap-3">
             <NotificationBell />
@@ -94,8 +95,9 @@ export default function Layout({ children }: LayoutProps) {
       <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-64 flex-col bg-slate-950 border-r border-slate-800/50 z-40">
         <div className="p-6 border-b border-slate-800/50">
           <div className="flex items-center justify-between">
-            <Link to="/" className="flex items-center">
+            <Link to="/" className="flex items-center gap-1.5">
               <img src="/logo.png" alt="Moooza" className="h-14 w-auto" />
+              <span className="text-[10px] font-bold tracking-wider text-primary-400 bg-primary-500/15 border border-primary-500/30 rounded px-1.5 py-0.5 leading-none">BETA</span>
             </Link>
             <div className="flex items-center gap-1">
               <NotificationBell />
