@@ -32,6 +32,68 @@ function unformatPhone(formatted: string): string {
   return formatted.replace(/\D/g, '');
 }
 
+// ── ProfessionFilterPicker (expanded multi-select chips) ────────────────────────
+interface FilterValue { id: string; value: string; sortOrder: number; }
+interface ProfessionFilter { id: string; name: string; values: FilterValue[]; }
+
+function ProfessionFilterPicker({ professionId, onChange }: {
+  professionId: string;
+  onChange: (valueIds: string[]) => void;
+}) {
+  const [filters, setFilters] = useState<ProfessionFilter[]>([]);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    setLoading(true);
+    referenceAPI.getProfessionFilters(professionId)
+      .then(r => setFilters(r.data as ProfessionFilter[]))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [professionId]);
+
+  const toggle = (valueId: string) => {
+    const next = selected.includes(valueId)
+      ? selected.filter(id => id !== valueId)
+      : [...selected, valueId];
+    setSelected(next);
+    onChange(next);
+  };
+
+  if (loading) return (
+    <div className="mt-2 flex items-center gap-2 text-xs text-slate-500">
+      <Loader2 size={12} className="animate-spin" /> Загрузка атрибутов…
+    </div>
+  );
+  if (!filters.length) return null;
+
+  return (
+    <div className="mt-2 rounded-2xl border border-slate-700/50 bg-slate-900/60 p-3 space-y-3 max-h-72 overflow-y-auto">
+      {filters.map(filter => (
+        <div key={filter.id}>
+          <p className="text-[11px] font-medium text-slate-400 mb-1.5">{filter.name}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {filter.values.map(v => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => toggle(v.id)}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                  selected.includes(v.id)
+                    ? 'bg-primary-600 text-white shadow-sm'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                {v.value}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
@@ -72,6 +134,7 @@ export default function VkSetupPage() {
   const [profLoading, setProfLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedProfs, setSelectedProfs] = useState<SelectedProfession[]>([]);
+  const [profFilterValues, setProfFilterValues] = useState<Record<string, string[]>>({});
   const profTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const profInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -137,7 +200,7 @@ export default function VkSetupPage() {
 
   const addProfession = (p: ProfessionResult) => {
     if (selectedProfs.length >= 10) return;
-    setSelectedProfs(prev => [...prev, { professionId: p.id, professionName: p.name, directionName: p.direction?.name }]);
+    setSelectedProfs(prev => [...prev, { professionId: p.id, professionName: p.name }]);
     setProfSearch('');
     setProfResults([]);
     setShowDropdown(false);
@@ -190,7 +253,10 @@ export default function VkSetupPage() {
     setError('');
     try {
       const { data } = await userAPI.updateMe({
-        userProfessions: selectedProfs.map(p => ({ professionId: p.professionId })),
+        userProfessions: selectedProfs.map(p => ({
+          professionId: p.professionId,
+          selectedCustomFilterValueIds: profFilterValues[p.professionId] || [],
+        })),
       });
       setUser(data);
       setStep(2);
@@ -342,7 +408,6 @@ export default function VkSetupPage() {
                 <button key={p.id} onMouseDown={e => { e.preventDefault(); addProfession(p); }}
                   className="w-full flex items-center gap-2 px-4 py-2.5 hover:bg-slate-700/50 transition-colors text-left">
                   <span className="text-sm text-white font-medium">{p.name}</span>
-                  {p.direction && <span className="text-xs text-slate-500 ml-auto flex-shrink-0">{p.direction.name}</span>}
                 </button>
               ))}
             </div>
@@ -355,14 +420,22 @@ export default function VkSetupPage() {
         </div>
 
         {selectedProfs.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="space-y-3">
             {selectedProfs.map(prof => (
-              <div key={prof.professionId} className="flex items-center gap-1.5 bg-slate-800/70 border border-slate-700/50 rounded-xl px-3 py-1.5">
-                <span className="text-sm text-white">{prof.professionName}</span>
-                {prof.directionName && <span className="text-xs text-slate-500">· {prof.directionName}</span>}
-                <button onClick={() => setSelectedProfs(p => p.filter(x => x.professionId !== prof.professionId))} className="text-slate-500 hover:text-red-400 transition-colors ml-0.5">
-                  <X size={13} />
-                </button>
+              <div key={prof.professionId} className="bg-slate-800/40 border border-slate-700/40 rounded-xl px-3 py-2.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-white font-medium">{prof.professionName}</span>
+                  <button
+                    onClick={() => setSelectedProfs(p => p.filter(x => x.professionId !== prof.professionId))}
+                    className="text-slate-500 hover:text-red-400 transition-colors ml-auto"
+                  >
+                    <X size={13} />
+                  </button>
+                </div>
+                <ProfessionFilterPicker
+                  professionId={prof.professionId}
+                  onChange={valueIds => setProfFilterValues(prev => ({ ...prev, [prof.professionId]: valueIds }))}
+                />
               </div>
             ))}
           </div>

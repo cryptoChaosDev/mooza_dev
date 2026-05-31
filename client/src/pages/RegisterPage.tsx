@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Eye, EyeOff, AlertCircle, Loader2,
-  Check, Globe, ArrowRight, ArrowLeft, X, Search, ChevronDown,
+  Check, Globe, ArrowRight, ArrowLeft, X, Search,
 } from 'lucide-react';
 import { authAPI, referenceAPI, referralAPI } from '../lib/api';
 import CityPicker from '../components/CityPicker';
@@ -86,14 +86,12 @@ function ProfessionFilterPicker({ professionId, onChange }: {
 }) {
   const [filters, setFilters] = useState<ProfessionFilter[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [step, setStep] = useState(0);          // current filter index
-  const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     referenceAPI.getProfessionFilters(professionId)
-      .then(r => { setFilters(r.data as ProfessionFilter[]); setStep(0); })
+      .then(r => setFilters(r.data as ProfessionFilter[]))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [professionId]);
@@ -113,95 +111,30 @@ function ProfessionFilterPicker({ professionId, onChange }: {
   );
   if (!filters.length) return null;
 
-  const currentFilter = filters[step];
-  const selectedCount = selected.length;
-
-  // Collapsed state — just a trigger button
-  if (!open) return (
-    <button
-      type="button"
-      onClick={() => setOpen(true)}
-      className="mt-2 flex items-center gap-1.5 text-xs text-primary-400 hover:text-primary-300 transition-colors"
-    >
-      <ChevronDown size={13} />
-      Уточнить атрибуты
-      {selectedCount > 0 && (
-        <span className="ml-1 bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none">
-          {selectedCount}
-        </span>
-      )}
-    </button>
-  );
-
-  // Expanded: one filter at a time
+  // All filters expanded at once — each is a label + a wrap of multi-select chips.
   return (
-    <div className="mt-2 rounded-2xl border border-slate-700/50 bg-slate-900/60 p-3">
-      {/* Header: progress + close */}
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[11px] text-slate-500 font-medium">
-          {step + 1} / {filters.length}
-        </span>
-        <button type="button" onClick={() => setOpen(false)}
-          className="text-slate-500 hover:text-slate-300 transition-colors">
-          <X size={14} />
-        </button>
-      </div>
-
-      {/* Progress bar */}
-      <div className="h-0.5 bg-slate-800 rounded-full mb-3 overflow-hidden">
-        <div
-          className="h-full bg-primary-500 rounded-full transition-all duration-300"
-          style={{ width: `${((step + 1) / filters.length) * 100}%` }}
-        />
-      </div>
-
-      {/* Current filter */}
-      <p className="text-sm font-semibold text-white mb-2">{currentFilter.name}</p>
-      <div className="flex flex-wrap gap-1.5 mb-3">
-        {currentFilter.values.map(v => (
-          <button
-            key={v.id}
-            type="button"
-            onClick={() => toggle(v.id)}
-            className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all ${
-              selected.includes(v.id)
-                ? 'bg-primary-600 text-white shadow-sm'
-                : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-            }`}
-          >
-            {v.value}
-          </button>
-        ))}
-      </div>
-
-      {/* Navigation */}
-      <div className="flex items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => setStep(s => Math.max(0, s - 1))}
-          disabled={step === 0}
-          className="flex items-center gap-1 text-xs text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
-        >
-          <ArrowLeft size={13} /> Назад
-        </button>
-        {step < filters.length - 1 ? (
-          <button
-            type="button"
-            onClick={() => setStep(s => s + 1)}
-            className="flex items-center gap-1 text-xs bg-primary-600 hover:bg-primary-500 text-white px-3 py-1.5 rounded-xl transition-colors"
-          >
-            Далее <ArrowRight size={13} />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            className="flex items-center gap-1 text-xs bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-xl transition-colors"
-          >
-            Готово ✓
-          </button>
-        )}
-      </div>
+    <div className="mt-2 rounded-2xl border border-slate-700/50 bg-slate-900/60 p-3 space-y-3 max-h-72 overflow-y-auto">
+      {filters.map(filter => (
+        <div key={filter.id}>
+          <p className="text-[11px] font-medium text-slate-400 mb-1.5">{filter.name}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {filter.values.map(v => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => toggle(v.id)}
+                className={`px-2.5 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                  selected.includes(v.id)
+                    ? 'bg-primary-600 text-white shadow-sm'
+                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                {v.value}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -338,7 +271,6 @@ export default function RegisterPage() {
     setSelectedProfs(prev => [...prev, {
       professionId: p.id,
       professionName: p.name,
-      directionName: p.direction?.name,
     }]);
     setProfSearch('');
     setProfResults([]);
@@ -650,7 +582,6 @@ export default function RegisterPage() {
                   className="w-full flex items-start gap-2 px-4 py-2.5 hover:bg-slate-700/50 transition-colors text-left"
                 >
                   <span className="text-sm text-white font-medium">{p.name}</span>
-                  {p.direction && <span className="text-xs text-slate-500 mt-0.5 ml-auto flex-shrink-0">{p.direction.name}</span>}
                 </button>
               ))}
             </div>
@@ -669,7 +600,6 @@ export default function RegisterPage() {
               <div key={prof.professionId} className="bg-slate-800/40 border border-slate-700/40 rounded-xl px-3 py-2.5">
                 <div className="flex items-center gap-1.5">
                   <span className="text-sm text-white font-medium">{prof.professionName}</span>
-                  {prof.directionName && <span className="text-xs text-slate-500">· {prof.directionName}</span>}
                   <button onClick={() => removeProfession(prof.professionId)} className="text-slate-500 hover:text-red-400 transition-colors ml-auto">
                     <X size={13} />
                   </button>

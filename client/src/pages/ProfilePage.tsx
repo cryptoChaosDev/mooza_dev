@@ -5,8 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userAPI, referenceAPI, connectionAPI, groupAPI, dealAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import {
-  Camera, Save, X, MapPin, Briefcase, Music, Star, LogOut,
-  Globe, DollarSign, Calendar,
+  Camera, Save, X, MapPin, Briefcase, Star, LogOut,
+  Globe, Calendar,
   Headphones, Edit3, Plus, ChevronLeft, ChevronRight,
   FileText, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
   Music2, Play, Pause, HandshakeIcon, Eye, Phone, Shield,
@@ -16,8 +16,6 @@ import ConnectionCard from '../components/ConnectionCard';
 
 import ConfirmDialog from '../components/ConfirmDialog';
 import BadgeTooltip from '../components/BadgeTooltip';
-import SelectField from '../components/SelectField';
-import SelectSheet from '../components/SelectSheet';
 import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import ShareButton from '../components/ShareButton';
@@ -122,16 +120,7 @@ export default function ProfilePage() {
   });
   const [showPrivacy, setShowPrivacy] = useState(false);
 
-  const [fieldsOfActivity, setFieldsOfActivity] = useState<any[]>([]);
-  const [genres, setGenres] = useState<any[]>([]);
-  const [workFormats, setWorkFormats] = useState<any[]>([]);
-  const [employmentTypes, setEmploymentTypes] = useState<any[]>([]);
-  const [skillLevels, setSkillLevels] = useState<any[]>([]);
-  const [availabilities, setAvailabilities] = useState<any[]>([]);
-  const [geographies, setGeographies] = useState<any[]>([]);
-
   const [userServices, setUserServices] = useState<UserServiceEntry[]>([]);
-  const [openFilterSheet, setOpenFilterSheet] = useState<string | null>(null);
 
   const [portfolioFiles, setPortfolioFiles] = useState<any[]>([]);
   const [portfolioLinks, setPortfolioLinks] = useState<any[]>([]);
@@ -139,14 +128,13 @@ export default function ProfilePage() {
   const [imageFullscreen, setImageFullscreen] = useState<string | null>(null);
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
   const [portfolioTab, setPortfolioTab] = useState<'audio' | 'images' | 'other'>('audio');
-  const [addStep, setAddStep] = useState<'search' | 'field' | 'direction' | 'profession' | 'service' | 'filters' | null>(null);
+  const [addStep, setAddStep] = useState<'section' | 'service' | 'filters' | null>(null);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
-  const [addFlowDirections, setAddFlowDirections] = useState<any[]>([]);
-  const [addFlowProfessions, setAddFlowProfessions] = useState<any[]>([]);
-  const [addFlowServices, setAddFlowServices] = useState<any[]>([]);
-  const [serviceQuery, setServiceQuery] = useState('');
-  const [serviceSearchResults, setServiceSearchResults] = useState<any[]>([]);
-  const [serviceSearching, setServiceSearching] = useState(false);
+  const [sections, setSections] = useState<any[]>([]);
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  const [pendingServiceFilters, setPendingServiceFilters] = useState<ServiceCustomFilter[]>([]);
+  const [pendingServiceFilterSel, setPendingServiceFilterSel] = useState<Record<string, string[]>>({});
+  const [loadingServiceDetail, setLoadingServiceDetail] = useState(false);
 
   const [editingHero, setEditingHero] = useState(false);
   const [editingBio, setEditingBio] = useState(false);
@@ -174,39 +162,40 @@ export default function ProfilePage() {
   const [selectedProfession, setSelectedProfession] = useState<{ professionId: string; professionName: string } | null>(null);
   const [showJoinArtist, setShowJoinArtist] = useState(false);
   const [showProModal, setShowProModal] = useState(false);
-  const [profAddStep, setProfAddStep] = useState<'field' | 'direction' | 'profession' | null>(null);
-  const [profFlowDirections, setProfFlowDirections] = useState<any[]>([]);
-  const [profFlowProfessions, setProfFlowProfessions] = useState<any[]>([]);
+  const [profAddOpen, setProfAddOpen] = useState(false);
+  const [profSearch, setProfSearch] = useState('');
+  const [profSearchResults, setProfSearchResults] = useState<any[]>([]);
+  const [profSearching, setProfSearching] = useState(false);
   const [savingProfessions, setSavingProfessions] = useState(false);
-  const [expandedProfFilters, setExpandedProfFilters] = useState<string | null>(null);
   const [profFiltersData, setProfFiltersData] = useState<Record<string, any[]>>({});
   const [profFilterSelections, setProfFilterSelections] = useState<Record<string, string[]>>({});
 
 
+  // Flat profession search (Task 1)
   useEffect(() => {
-    if (!serviceQuery.trim()) { setServiceSearchResults([]); return; }
+    if (!profSearch.trim()) { setProfSearchResults([]); return; }
     const t = setTimeout(() => {
-      setServiceSearching(true);
-      referenceAPI.searchServices(serviceQuery.trim())
-        .then(r => setServiceSearchResults(r.data))
-        .finally(() => setServiceSearching(false));
+      setProfSearching(true);
+      referenceAPI.getProfessions({ search: profSearch.trim(), all: true })
+        .then(r => setProfSearchResults(r.data))
+        .finally(() => setProfSearching(false));
     }, 250);
     return () => clearTimeout(t);
-  }, [serviceQuery]);
+  }, [profSearch]);
 
+  // Load the sections catalog when the services editor opens (Task 2)
   useEffect(() => {
-    if (editingProfessions || editingServices) {
-      referenceAPI.getFieldsOfActivity({ all: true }).then(r => setFieldsOfActivity(r.data));
-      if (editingServices) {
-        referenceAPI.getWorkFormats().then(r => setWorkFormats(r.data));
-        referenceAPI.getEmploymentTypes().then(r => setEmploymentTypes(r.data));
-        referenceAPI.getSkillLevels().then(r => setSkillLevels(r.data));
-        referenceAPI.getAvailabilities().then(r => setAvailabilities(r.data));
-        referenceAPI.getGenres().then(r => setGenres(r.data));
-        referenceAPI.getGeographies().then(r => setGeographies(r.data));
-      }
+    if (editingServices) {
+      referenceAPI.getSections().then(r => setSections(r.data)).catch(() => {});
     }
-  }, [editingProfessions, editingServices]);
+  }, [editingServices]);
+
+  // Preload + expand filters for every already-added profession while editing (Task 1)
+  useEffect(() => {
+    if (!editingProfessions) return;
+    myStandaloneProfessions.forEach(p => { loadProfFilters(p.professionId); });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingProfessions, myStandaloneProfessions]);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],
@@ -410,15 +399,14 @@ export default function ProfilePage() {
 
   const handleSaveServices = async () => {
     try { await updateServicesMutation.mutateAsync(userServices); }
-    finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingServices(false); setAddStep(null); }
+    finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingServices(false); setAddStep(null); setActiveSectionId(null); }
   };
 
   const loadProfFilters = async (profId: string) => {
-    if (profFiltersData[profId]) { setExpandedProfFilters(profId); return; }
+    if (profFiltersData[profId]) return;
     try {
       const { data } = await referenceAPI.getProfessionFilters(profId);
       setProfFiltersData(prev => ({ ...prev, [profId]: data }));
-      setExpandedProfFilters(profId);
     } catch {}
   };
 
@@ -441,10 +429,65 @@ export default function ProfilePage() {
       });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       setEditingProfessions(false);
-      setProfAddStep(null);
+      setProfAddOpen(false);
+      setProfSearch('');
     } finally {
       setSavingProfessions(false);
     }
+  };
+
+  // When a service is picked, load its own filters + linked professions (Task 2)
+  const selectService = async (svc: { id: string; name: string }, sectionId: string, sectionName: string) => {
+    setLoadingServiceDetail(true);
+    setPendingServiceFilters([]);
+    setPendingServiceFilterSel({});
+    try {
+      const { data } = await referenceAPI.getServiceDetail(svc.id);
+      const linked: { id: string; name: string }[] = data.professions || [];
+      // Prefer a profession the user already has, else the first linked one
+      const owned = linked.find(lp => myStandaloneProfessions.some(mp => mp.professionId === lp.id));
+      const professionId = owned?.id || linked[0]?.id || '';
+      const professionName = owned?.name || linked[0]?.name || '';
+      setPending({
+        ...emptyEntry(),
+        fieldOfActivityId: sectionId,
+        fieldOfActivityName: sectionName,
+        professionId,
+        professionName,
+        serviceId: svc.id,
+        serviceName: data.name || svc.name,
+      });
+      setPendingServiceFilters(data.filters || []);
+      setAddStep('filters');
+    } catch {
+      // Fallback: still allow adding without filters
+      setPending({ ...emptyEntry(), fieldOfActivityId: sectionId, fieldOfActivityName: sectionName, serviceId: svc.id, serviceName: svc.name });
+      setAddStep('filters');
+    } finally {
+      setLoadingServiceDetail(false);
+    }
+  };
+
+  const togglePendingServiceFilter = (filterId: string, valueId: string) => {
+    setPendingServiceFilterSel(prev => {
+      const cur = prev[filterId] || [];
+      const next = cur.includes(valueId) ? cur.filter(v => v !== valueId) : [...cur, valueId];
+      return { ...prev, [filterId]: next };
+    });
+  };
+
+  const commitPendingService = () => {
+    const entry: UserServiceEntry = {
+      ...pending,
+      customFilterValueIds: pendingServiceFilterSel,
+      status: 'pending_review',
+    };
+    setUserServices(prev => [...prev, entry]);
+    setPending(emptyEntry());
+    setPendingServiceFilters([]);
+    setPendingServiceFilterSel({});
+    setAddStep(null);
+    setActiveSectionId(null);
   };
 
   const handleDeleteService = async (idx: number) => {
@@ -468,19 +511,18 @@ export default function ProfilePage() {
   const inputCls = "w-full px-3.5 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white placeholder-slate-500";
   const labelCls = "block text-xs font-semibold mb-1 text-slate-400";
 
-  const servicesByField = profile?.userServices?.reduce((acc: Record<string, { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }>, us: any) => {
-    const fId = us.profession?.direction?.fieldOfActivity?.id || 'unknown';
-    const fName = us.profession?.direction?.fieldOfActivity?.name || '';
-    const pId = us.professionId;
-    const pName = us.profession?.name || '';
-    if (!acc[fId]) acc[fId] = { fieldName: fName, byProfession: {} };
-    if (!acc[fId].byProfession[pId]) acc[fId].byProfession[pId] = { profName: pName, services: [] };
-    acc[fId].byProfession[pId].services.push(us);
-    return acc;
-  }, {}) ?? {};
-
-  const getName = (list: any[], id: string) => list.find(x => x.id === id)?.name ?? id;
-  const getNames = (list: any[], ids: string[]) => ids.map(id => getName(list, id)).filter(Boolean);
+  // My services regrouped by SECTION (sections now own the catalog; services no
+  // longer carry a field/direction). Falls back to a single "Услуги" bucket.
+  const servicesBySection = (profile?.userServices ?? []).reduce(
+    (acc: Record<string, { sectionName: string; services: any[] }>, us: any) => {
+      const sId = us.service?.section?.id || 'unknown';
+      const sName = us.service?.section?.name || 'Услуги';
+      if (!acc[sId]) acc[sId] = { sectionName: sName, services: [] };
+      acc[sId].services.push(us);
+      return acc;
+    },
+    {} as Record<string, { sectionName: string; services: any[] }>
+  );
 
 
   const handlePortfolioUpload = async (files: FileList | null) => {
@@ -508,296 +550,86 @@ export default function ProfilePage() {
 
 
   const AddServiceFlow = () => {
-    if (addStep === 'search') return (
-      <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3 space-y-2">
-        <div className="relative">
-          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-          <input
-            autoFocus
-            type="text"
-            value={serviceQuery}
-            onChange={e => setServiceQuery(e.target.value)}
-            placeholder="Поиск услуги..."
-            className="w-full pl-8 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-          />
-          {serviceSearching && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
-        </div>
-
-        {serviceQuery.trim() && serviceSearchResults.length === 0 && !serviceSearching && (
-          <p className="text-xs text-slate-500 text-center py-1">Ничего не найдено</p>
-        )}
-
-        {serviceSearchResults.length > 0 && (
-          <div className="max-h-52 overflow-y-auto space-y-1">
-            {serviceSearchResults.map((r: any, i: number) => (
-              <button
-                key={i}
-                type="button"
-                onClick={() => {
-                  setPending({
-                    ...emptyEntry(),
-                    fieldOfActivityId: r.fieldOfActivityId, fieldOfActivityName: r.fieldOfActivityName,
-                    professionId: r.professionId, professionName: r.professionName,
-                    serviceId: r.serviceId, serviceName: r.serviceName,
-                    allowedFilterTypes: r.allowedFilterTypes,
-                    serviceCustomFilters: r.customFilters,
-                  });
-                  setAddStep('filters');
-                  // Загружаем фильтры выбранной профессии
-                  if (r.professionId) {
-                    referenceAPI.getProfessionFilters(r.professionId).then((resp: any) => {
-                      setPending(prev => ({ ...prev, professionFilters: resp.data || [] }));
-                    }).catch(() => {});
-                  }
-                }}
-                className="w-full text-left px-3 py-2 rounded-lg bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700/40 hover:border-primary-500/40 transition-all"
-              >
-                <p className="text-sm font-medium text-white">{r.serviceName}</p>
-                <p className="text-[10px] text-slate-500 mt-0.5 truncate">
-                  {r.fieldOfActivityName} · {r.directionName}
-                </p>
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="flex items-center gap-2 pt-1">
-          <button onClick={() => setAddStep(null)} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
-          <span className="text-slate-700 text-xs">·</span>
-          <button
-            onClick={() => { referenceAPI.getFieldsOfActivity({ all: true }).then(r => setFieldsOfActivity(r.data)); setAddStep('field'); }}
-            className="text-xs text-slate-500 hover:text-primary-400 transition-colors"
-          >Выбрать вручную</button>
-        </div>
-      </div>
-    );
-    if (addStep === 'field') return (
-      <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
-        <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите сферу деятельности:</p>
-        <div className="flex flex-wrap gap-1.5">
-          {fieldsOfActivity.map((f: any) => (
-            <button key={f.id} type="button"
-              onClick={() => {
-                setPending(prev => ({ ...prev, fieldOfActivityId: f.id, fieldOfActivityName: f.name }));
-                referenceAPI.getDirections({ fieldOfActivityId: f.id, all: true }).then(r => setAddFlowDirections(r.data));
-                setAddStep('direction');
-              }}
-              className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
-            >
-              <ChevronRight size={11} />{f.name}
-            </button>
-          ))}
-        </div>
-        <button onClick={() => setAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
-      </div>
-    );
-    if (addStep === 'direction') return (
-      <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
-        <button onClick={() => setAddStep('field')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors"><ChevronLeft size={11} />Назад</button>
-        <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите направление:</p>
-        {addFlowDirections.length === 0
-          ? <p className="text-slate-500 text-xs">Нет направлений в этой сфере</p>
-          : <div className="flex flex-wrap gap-1.5">
-              {addFlowDirections.map((d: any) => (
-                <button key={d.id} type="button"
-                  onClick={() => {
-                    referenceAPI.getProfessions({ directionId: d.id, all: true }).then(r => setAddFlowProfessions(r.data));
-                    setAddStep('profession');
-                  }}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
-                >
-                  <ChevronRight size={11} />{d.name}
-                </button>
-              ))}
-            </div>
-        }
-        <button onClick={() => setAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
-      </div>
-    );
-    if (addStep === 'profession') return (
-      <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
-        <button onClick={() => setAddStep('direction')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors"><ChevronLeft size={11} />Назад</button>
-        <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите профессию:</p>
-        {addFlowProfessions.length === 0
-          ? <p className="text-slate-500 text-xs">Нет профессий в этом направлении</p>
-          : <div className="flex flex-wrap gap-1.5">
-              {addFlowProfessions.map((p: any) => (
-                <button key={p.id} type="button"
-                  onClick={() => {
-                    const base = { ...emptyEntry(), fieldOfActivityId: pending.fieldOfActivityId, fieldOfActivityName: pending.fieldOfActivityName, professionId: p.id, professionName: p.name };
-                    setPending(base);
-                    referenceAPI.getServices({ professionId: p.id }).then((r: any) => {
-                      const svcs: any[] = r.data || [];
-                      setAddFlowServices(svcs);
-                      // Auto-select when only one catalog service matches the profession
-                      const matchSvc = svcs.find((s: any) => s.name === p.name) ?? (svcs.length === 1 ? svcs[0] : null);
-                      if (matchSvc) {
-                        setPending(prev => ({ ...prev, serviceId: matchSvc.id, serviceName: matchSvc.name, allowedFilterTypes: [], serviceCustomFilters: [] }));
-                        // Load catalog filters for this profession
-                        referenceAPI.getProfessionFilters(p.id).then((fr: any) => {
-                          setPending(prev => ({ ...prev, professionFilters: fr.data || [] }));
-                        }).catch(() => {});
-                        setAddStep('filters');
-                      } else {
-                        setAddStep('service');
-                      }
-                    });
-                  }}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
-                >
-                  <ChevronRight size={11} />{p.name}
-                </button>
-              ))}
-            </div>
-        }
-        <button onClick={() => setAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
-      </div>
-    );
-    if (addStep === 'service') return (
-      <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
-        <button onClick={() => setAddStep('profession')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors"><ChevronLeft size={11} />{pending.professionName}</button>
-        <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите услугу:</p>
-        {addFlowServices.length === 0
-          ? <p className="text-slate-500 text-xs">Нет доступных услуг</p>
-          : <div className="flex flex-wrap gap-1.5">
-              {addFlowServices
-                .filter((s: any) => !userServices.some(us => us.serviceId === s.id))
-                .map((s: any) => (
-                  <button key={s.id} type="button"
-                    onClick={() => {
-                      setPending(prev => ({ ...prev, serviceId: s.id, serviceName: s.name, allowedFilterTypes: s.allowedFilterTypes || [], serviceCustomFilters: s.customFilters || [] }));
-                      setAddStep('filters');
-                      // Загружаем фильтры выбранной профессии
-                      if (pending.professionId) {
-                        referenceAPI.getProfessionFilters(pending.professionId).then((resp: any) => {
-                          setPending(prev => ({ ...prev, professionFilters: resp.data || [] }));
-                        }).catch(() => {});
-                      }
-                    }}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
+    // Step 1 — pick a Section (each is a card). Tapping shows its services.
+    if (addStep === 'section') {
+      const activeSection = sections.find(s => s.id === activeSectionId);
+      return (
+        <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3 space-y-3">
+          {!activeSection ? (
+            <>
+              <p className="text-xs font-semibold text-slate-400 flex items-center gap-1"><Briefcase size={11} /> Выберите раздел:</p>
+              <div className="grid grid-cols-2 gap-2">
+                {sections.map((sec: any) => (
+                  <button key={sec.id} type="button"
+                    onClick={() => setActiveSectionId(sec.id)}
+                    className="flex flex-col items-start gap-1 px-3 py-2.5 rounded-xl border bg-slate-800/50 border-slate-700/50 text-left hover:bg-primary-500/10 hover:border-primary-500/40 transition-all"
                   >
-                    <ChevronRight size={11} />{s.name}
+                    <span className="text-sm font-medium text-white">{sec.name}</span>
+                    <span className="text-[10px] text-slate-500">{(sec.services?.length ?? 0)} услуг</span>
                   </button>
-                ))
+                ))}
+              </div>
+              {sections.length === 0 && <p className="text-xs text-slate-500">Загрузка разделов...</p>}
+              <button onClick={() => { setAddStep(null); setActiveSectionId(null); }} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
+            </>
+          ) : (
+            <>
+              <button onClick={() => setActiveSectionId(null)} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"><ChevronLeft size={11} />Разделы</button>
+              <p className="text-sm font-semibold text-white">{activeSection.name}</p>
+              <p className="text-xs font-semibold text-slate-400 flex items-center gap-1"><Briefcase size={11} /> Выберите услугу:</p>
+              {(activeSection.services?.length ?? 0) === 0
+                ? <p className="text-slate-500 text-xs">Нет услуг в этом разделе</p>
+                : <div className="flex flex-wrap gap-1.5">
+                    {[...activeSection.services]
+                      .sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+                      .filter((s: any) => !userServices.some(us => us.serviceId === s.id))
+                      .map((s: any) => (
+                        <button key={s.id} type="button" disabled={loadingServiceDetail}
+                          onClick={() => selectService(s, activeSection.id, activeSection.name)}
+                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium disabled:opacity-50"
+                        >
+                          <ChevronRight size={11} />{s.name}
+                        </button>
+                      ))}
+                  </div>
               }
-            </div>
-        }
-        <button onClick={() => setAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
-      </div>
-    );
+              <button onClick={() => { setAddStep(null); setActiveSectionId(null); }} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
+            </>
+          )}
+        </div>
+      );
+    }
+
+    // Step 3 — the SERVICE's own filters, expanded, multi-select chips.
     if (addStep === 'filters') return (
       <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
         <div className="flex items-center justify-between mb-2">
           <div>
-            <button onClick={() => setAddStep(serviceQuery ? 'search' : 'service')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"><ChevronLeft size={11} />{serviceQuery ? 'Поиск' : pending.professionName}</button>
+            <button onClick={() => { setAddStep('section'); }} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"><ChevronLeft size={11} />{pending.fieldOfActivityName || 'Разделы'}</button>
             <p className="text-sm font-semibold text-white mt-0.5">{pending.serviceName}</p>
           </div>
         </div>
-        <p className="text-xs text-slate-400 mb-2">Настройте фильтры (необязательно):</p>
-        {(() => {
-          const pAllowed = pending.allowedFilterTypes;
-          const pShow = (k: string) => pAllowed.includes(k);
-          const pHasAny = pShow('genre') || pShow('workFormat') || pShow('employmentType') || pShow('skillLevel') || pShow('availability') || pShow('priceRange') || pShow('geography') || pending.serviceCustomFilters.length > 0 || pending.professionFilters.length > 0;
-          if (!pHasAny) return <p className="text-xs text-slate-500">Фильтры не настроены для этой услуги</p>;
-          return (
-            <div className="space-y-2">
-              {pShow('genre') && <SelectField label="Жанры" value={getNames(genres, pending.genreIds).join(', ')} placeholder="Выберите жанры" icon={<Music size={13} />} onClick={() => setOpenFilterSheet('pending-genre')} badge={pending.genreIds.length || undefined} />}
-              {pShow('workFormat') && <SelectField label="Формат работы" value={getNames(workFormats, pending.workFormatIds).join(', ')} placeholder="Не указан" icon={<Globe size={13} />} onClick={() => setOpenFilterSheet('pending-workFormat')} badge={pending.workFormatIds.length || undefined} />}
-              {pShow('employmentType') && <SelectField label="Тип занятости" value={getNames(employmentTypes, pending.employmentTypeIds).join(', ')} placeholder="Не указан" icon={<Briefcase size={13} />} onClick={() => setOpenFilterSheet('pending-employmentType')} badge={pending.employmentTypeIds.length || undefined} />}
-              {pShow('skillLevel') && <SelectField label="Уровень" value={getNames(skillLevels, pending.skillLevelIds).join(', ')} placeholder="Не указан" icon={<Star size={13} />} onClick={() => setOpenFilterSheet('pending-skillLevel')} badge={pending.skillLevelIds.length || undefined} />}
-              {pShow('availability') && <SelectField label="Доступность" value={getNames(availabilities, pending.availabilityIds).join(', ')} placeholder="Не указана" icon={<Calendar size={13} />} onClick={() => setOpenFilterSheet('pending-availability')} badge={pending.availabilityIds.length || undefined} />}
-              {pShow('priceRange') && (
-                <>
-                  <div>
-                    <p className="text-xs font-semibold mb-1 text-slate-400">Название (своё — необязательно, макс. 50 символов)</p>
-                    <input
-                      type="text" maxLength={50}
-                      placeholder={`${pending.serviceName || 'Название услуги'}...`}
-                      value={pending.name}
-                      onChange={e => setPending(p => ({ ...p, name: e.target.value }))}
-                      className="w-full px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                    />
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold mb-1 text-slate-400 flex items-center gap-1"><DollarSign size={13} />Бюджет (₽)</p>
-                    <div className="flex gap-2">
-                      <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="От" value={pending.priceFrom} onChange={e => setPending(p => ({ ...p, priceFrom: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-                      <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="До" value={pending.priceTo} onChange={e => setPending(p => ({ ...p, priceTo: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold mb-1 text-slate-400">Срок исполнения (дней)</p>
-                    <div className="flex gap-2">
-                      <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="От" value={pending.deadlineFrom} onChange={e => setPending(p => ({ ...p, deadlineFrom: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-                      <input type="text" inputMode="numeric" pattern="[0-9]*" placeholder="До" value={pending.deadlineTo} onChange={e => setPending(p => ({ ...p, deadlineTo: e.target.value.replace(/\D/g, '') }))} className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold mb-1 text-slate-400">Прайс-лист (необязательно)</p>
-                    <p className="text-[10px] text-slate-600 mb-2">Детализация стоимости по позициям. Подсказка: не забудьте учесть комиссию сервиса.</p>
-                    <div className="space-y-2">
-                      {pending.priceItems.map((item, idx) => (
-                        <div key={idx} className="flex gap-2 items-center">
-                          <input
-                            type="text" maxLength={100}
-                            placeholder="Название позиции"
-                            value={item.name}
-                            onChange={e => setPending(p => ({ ...p, priceItems: p.priceItems.map((x, i) => i === idx ? { ...x, name: e.target.value } : x) }))}
-                            className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                          />
-                          <input
-                            type="text"
-                            placeholder="Цена ₽"
-                            value={item.price}
-                            onChange={e => setPending(p => ({ ...p, priceItems: p.priceItems.map((x, i) => i === idx ? { ...x, price: e.target.value } : x) }))}
-                            className="w-24 flex-shrink-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                          />
-                          <button type="button" onClick={() => setPending(p => ({ ...p, priceItems: p.priceItems.filter((_, i) => i !== idx) }))}
-                            className="text-slate-500 hover:text-red-400 transition-colors flex-shrink-0">
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ))}
-                      <button type="button"
-                        onClick={() => setPending(p => ({ ...p, priceItems: [...p.priceItems, { name: '', price: '' }] }))}
-                        className="flex items-center gap-1.5 text-xs text-primary-400 hover:text-primary-300 transition-colors">
-                        <Plus size={12} />Добавить позицию
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )}
-              {pShow('geography') && <SelectField label="Город / Регион" value={getNames(geographies, pending.geographyIds).join(', ')} placeholder="Не указан" icon={<MapPin size={13} />} onClick={() => setOpenFilterSheet('pending-geography')} badge={pending.geographyIds.length || undefined} />}
-              {pending.serviceCustomFilters.map(cf => (
-                <SelectField key={cf.id} label={cf.name} value={(pending.customFilterValueIds[cf.id] || []).map(vid => cf.values.find(v => v.id === vid)?.value || vid).join(', ')} placeholder="Выберите значение" icon={<Star size={13} />} onClick={() => setOpenFilterSheet(`pending-cf-${cf.id}`)} badge={(pending.customFilterValueIds[cf.id] || []).length || undefined} />
-              ))}
-              {/* Фильтры профессии из каталога */}
-              {pending.professionFilters.map(pf => (
-                <div key={pf.id}>
-                  <p className="text-xs font-semibold mb-1 text-slate-400">{pf.name}</p>
+        <p className="text-xs text-slate-400 mb-2">Выберите параметры (необязательно):</p>
+        {pendingServiceFilters.length === 0
+          ? <p className="text-xs text-slate-500">Параметры не настроены для этой услуги</p>
+          : (
+            <div className="space-y-3">
+              {pendingServiceFilters.map(filter => (
+                <div key={filter.id}>
+                  <p className="text-xs font-semibold mb-1.5 text-slate-400">{filter.name}</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {pf.values.map(val => {
-                      const isSelected = (pending.professionFilterValues[pf.id] || []).includes(val);
+                    {filter.values.map(v => {
+                      const isSelected = (pendingServiceFilterSel[filter.id] || []).includes(v.id);
                       return (
-                        <button
-                          key={val}
-                          type="button"
-                          onClick={() => {
-                            setPending(prev => {
-                              const cur = prev.professionFilterValues[pf.id] || [];
-                              const next = isSelected
-                                ? cur.filter(v => v !== val)
-                                : [...cur, val];
-                              return { ...prev, professionFilterValues: { ...prev.professionFilterValues, [pf.id]: next } };
-                            });
-                          }}
+                        <button key={v.id} type="button"
+                          onClick={() => togglePendingServiceFilter(filter.id, v.id)}
                           className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
                             isSelected
                               ? 'bg-primary-600 border-primary-500 text-white'
                               : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:border-primary-500/40'
                           }`}
                         >
-                          {val}
+                          {v.value}
                         </button>
                       );
                     })}
@@ -805,32 +637,20 @@ export default function ProfilePage() {
                 </div>
               ))}
             </div>
-          );
-        })()}
+          )
+        }
         <div className="flex gap-2 mt-3">
-          <button onClick={() => setAddStep(null)} className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors flex-shrink-0">Отмена</button>
+          <button onClick={() => { setAddStep('section'); }} className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors flex-shrink-0">Назад</button>
           <button
-            onClick={() => { setUserServices(prev => [...prev, { ...pending, status: 'draft' }]); setPending(emptyEntry()); setAddStep(null); }}
-            className="flex-1 py-2 rounded-lg border border-slate-600/50 text-slate-300 hover:bg-slate-700/40 text-sm transition-colors"
-          >В черновик</button>
-          <button
-            onClick={() => { setUserServices(prev => [...prev, { ...pending, status: 'pending_review' }]); setPending(emptyEntry()); setAddStep(null); }}
+            onClick={commitPendingService}
             className="flex-1 py-2 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold transition-colors"
-          >Опубликовать</button>
+          >Добавить услугу</button>
         </div>
-        <SelectSheet isOpen={openFilterSheet === 'pending-genre'} onClose={() => setOpenFilterSheet(null)} title="Жанры" options={genres.map(g => ({ id: g.id, name: g.name }))} selectedIds={pending.genreIds} onSelect={ids => setPending(p => ({ ...p, genreIds: ids as string[] }))} mode="multiple" showConfirm searchable />
-        <SelectSheet isOpen={openFilterSheet === 'pending-workFormat'} onClose={() => setOpenFilterSheet(null)} title="Формат работы" options={workFormats.map(w => ({ id: w.id, name: w.name }))} selectedIds={pending.workFormatIds} onSelect={ids => setPending(p => ({ ...p, workFormatIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} />
-        <SelectSheet isOpen={openFilterSheet === 'pending-employmentType'} onClose={() => setOpenFilterSheet(null)} title="Тип занятости" options={employmentTypes.map(e => ({ id: e.id, name: e.name }))} selectedIds={pending.employmentTypeIds} onSelect={ids => setPending(p => ({ ...p, employmentTypeIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} />
-        <SelectSheet isOpen={openFilterSheet === 'pending-skillLevel'} onClose={() => setOpenFilterSheet(null)} title="Уровень" options={skillLevels.map(s => ({ id: s.id, name: s.name }))} selectedIds={pending.skillLevelIds} onSelect={ids => setPending(p => ({ ...p, skillLevelIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} />
-        <SelectSheet isOpen={openFilterSheet === 'pending-availability'} onClose={() => setOpenFilterSheet(null)} title="Доступность" options={availabilities.map(a => ({ id: a.id, name: a.name }))} selectedIds={pending.availabilityIds} onSelect={ids => setPending(p => ({ ...p, availabilityIds: ids as string[] }))} mode="multiple" showConfirm searchable={false} />
-        <SelectSheet isOpen={openFilterSheet === 'pending-geography'} onClose={() => setOpenFilterSheet(null)} title="Город / Регион" options={geographies.map(g => ({ id: g.id, name: g.name }))} selectedIds={pending.geographyIds} onSelect={ids => setPending(p => ({ ...p, geographyIds: ids as string[] }))} mode="multiple" showConfirm searchable />
-        {pending.serviceCustomFilters.map(cf => (
-          <SelectSheet key={cf.id} isOpen={openFilterSheet === `pending-cf-${cf.id}`} onClose={() => setOpenFilterSheet(null)} title={cf.name} options={cf.values.map(v => ({ id: v.id, name: v.value }))} selectedIds={pending.customFilterValueIds[cf.id] || []} onSelect={ids => setPending(p => ({ ...p, customFilterValueIds: { ...p.customFilterValueIds, [cf.id]: ids as string[] } }))} mode="multiple" showConfirm searchable={false} />
-        ))}
       </div>
     );
     return null;
   };
+
 
   const aUrl = getAvatarUrl(profile?.avatar);
   const bUrl = profile?.bannerImage ? `${API_URL}${profile.bannerImage}` : null;
@@ -839,23 +659,15 @@ export default function ProfilePage() {
   const hasSocialNetworkLinks = SOCIAL_KEYS.some(k => socialLinksMap[k]);
 
 
-  const servicesFlat = (Object.values(servicesByField) as { fieldName: string; byProfession: Record<string, { profName: string; services: any[] }> }[]).flatMap(({ fieldName, byProfession }) =>
-    Object.values(byProfession).flatMap(({ profName, services }) =>
-      services.map((us: any) => ({ ...us, _profName: profName, _fieldName: fieldName }))
-    )
-  );
+  const servicesFlat = (Object.values(servicesBySection) as { sectionName: string; services: any[] }[])
+    .flatMap(({ sectionName, services }) =>
+      services.map((us: any) => ({ ...us, _sectionName: sectionName }))
+    );
 
   const audioLinks = portfolioLinks.filter((l: any) => l.type === 'audio');
   const audioFiles = portfolioFiles.filter((f: any) => f.mimeType?.startsWith('audio/'));
   const imageFiles = portfolioFiles.filter((f: any) => f.mimeType?.startsWith('image/'));
   const otherFiles = portfolioFiles.filter((f: any) => !f.mimeType?.startsWith('audio/') && !f.mimeType?.startsWith('image/'));
-
-  const servicesByFieldEdit: Record<string, { fieldName: string; entries: { us: UserServiceEntry; idx: number }[] }> = {};
-  userServices.forEach((us, idx) => {
-    const fId = us.fieldOfActivityId || 'unknown';
-    if (!servicesByFieldEdit[fId]) servicesByFieldEdit[fId] = { fieldName: us.fieldOfActivityName, entries: [] };
-    servicesByFieldEdit[fId].entries.push({ us, idx });
-  });
 
   return (
     <>
@@ -1151,7 +963,7 @@ export default function ProfilePage() {
                 <span className="text-sm font-semibold text-white">Профессии</span>
                 {myStandaloneProfessions.length > 0 && <span className="text-xs text-slate-500">{myStandaloneProfessions.length}</span>}
                 <button
-                  onClick={() => { setEditingProfessions(v => !v); setProfAddStep(null); }}
+                  onClick={() => { setEditingProfessions(v => !v); setProfAddOpen(false); setProfSearch(''); }}
                   className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
                 >
                   {editingProfessions ? 'Готово' : 'Изменить'}
@@ -1167,22 +979,15 @@ export default function ProfilePage() {
                         <div key={p.professionId} className="bg-primary-500/5 border border-primary-500/20 rounded-xl p-2">
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs text-primary-300 font-medium flex-1">{p.professionName}</span>
-                            <button
-                              type="button"
-                              onClick={() => loadProfFilters(p.professionId)}
-                              className={`text-[10px] px-2 py-0.5 rounded-lg border transition-colors ${
-                                expandedProfFilters === p.professionId
-                                  ? 'bg-primary-600/30 border-primary-500/50 text-primary-300'
-                                  : 'border-slate-600/50 text-slate-500 hover:text-slate-300 hover:border-slate-500'
-                              }`}
-                            >
-                              Атрибуты
-                            </button>
-                            <button onClick={() => { setMyStandaloneProfessions(prev => prev.filter((_, idx) => idx !== i)); if (expandedProfFilters === p.professionId) setExpandedProfFilters(null); }} className="text-primary-400/60 hover:text-red-400 transition-colors">
+                            <button onClick={() => { setMyStandaloneProfessions(prev => prev.filter((_, idx) => idx !== i)); }} className="text-primary-400/60 hover:text-red-400 transition-colors">
                               <X size={12} />
                             </button>
                           </div>
-                          {expandedProfFilters === p.professionId && profFiltersData[p.professionId]?.length > 0 && (
+                          {/* Filters always expanded for easy multi-select */}
+                          {!profFiltersData[p.professionId] && (
+                            <p className="text-[10px] text-slate-600 mt-1.5">Загрузка параметров...</p>
+                          )}
+                          {profFiltersData[p.professionId]?.length > 0 && (
                             <div className="mt-2 space-y-2">
                               {profFiltersData[p.professionId].map((filter: any) => (
                                 <div key={filter.id}>
@@ -1205,91 +1010,65 @@ export default function ProfilePage() {
                               ))}
                             </div>
                           )}
-                          {expandedProfFilters === p.professionId && profFiltersData[p.professionId]?.length === 0 && (
-                            <p className="text-[10px] text-slate-600 mt-1.5">Нет атрибутов для этой профессии</p>
+                          {profFiltersData[p.professionId]?.length === 0 && (
+                            <p className="text-[10px] text-slate-600 mt-1.5">Нет параметров для этой профессии</p>
                           )}
                         </div>
                       ))}
                     </div>
                   )}
 
-                  {/* Add flow */}
-                  {profAddStep === null && (
-                    <button onClick={() => setProfAddStep('field')} className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm">
+                  {/* Add flow — flat profession search */}
+                  {!profAddOpen && (
+                    <button onClick={() => { setProfAddOpen(true); setProfSearch(''); setProfSearchResults([]); }} className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm">
                       <Plus size={14} />Добавить профессию
                     </button>
                   )}
-                  {profAddStep === 'field' && (
-                    <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
-                      <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите сферу деятельности:</p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {fieldsOfActivity.map((f: any) => (
-                          <button key={f.id} type="button"
-                            onClick={() => {
-                              referenceAPI.getDirections({ fieldOfActivityId: f.id, all: true }).then(r => setProfFlowDirections(r.data));
-                              setProfAddStep('direction');
-                            }}
-                            className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
-                          >
-                            <ChevronRight size={11} />{f.name}
-                          </button>
-                        ))}
+                  {profAddOpen && (
+                    <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3 space-y-2">
+                      <div className="relative">
+                        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                        <input
+                          autoFocus
+                          type="text"
+                          value={profSearch}
+                          onChange={e => setProfSearch(e.target.value)}
+                          placeholder="Поиск профессии..."
+                          className="w-full pl-8 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                        />
+                        {profSearching && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
                       </div>
-                      <button onClick={() => setProfAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
-                    </div>
-                  )}
-                  {profAddStep === 'direction' && (
-                    <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
-                      <button onClick={() => setProfAddStep('field')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors"><ChevronLeft size={11} />Назад</button>
-                      <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите направление:</p>
-                      {profFlowDirections.length === 0
-                        ? <p className="text-slate-500 text-xs">Нет направлений в этой сфере</p>
-                        : <div className="flex flex-wrap gap-1.5">
-                            {profFlowDirections.map((d: any) => (
-                              <button key={d.id} type="button"
+                      {profSearch.trim() && profSearchResults.length === 0 && !profSearching && (
+                        <p className="text-xs text-slate-500 text-center py-1">Ничего не найдено</p>
+                      )}
+                      {profSearchResults.length > 0 && (
+                        <div className="max-h-52 overflow-y-auto flex flex-wrap gap-1.5">
+                          {profSearchResults.map((p: any) => {
+                            const alreadyAdded = myStandaloneProfessions.some(x => x.professionId === p.id);
+                            return (
+                              <button key={p.id} type="button" disabled={alreadyAdded}
                                 onClick={() => {
-                                  referenceAPI.getProfessions({ directionId: d.id, all: true }).then(r => setProfFlowProfessions(r.data));
-                                  setProfAddStep('profession');
+                                  setMyStandaloneProfessions(prev => [...prev, { professionId: p.id, professionName: p.name }]);
+                                  // Immediately load + expand this profession's filters
+                                  loadProfFilters(p.id);
+                                  setProfAddOpen(false);
+                                  setProfSearch('');
+                                  setProfSearchResults([]);
                                 }}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium"
+                                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium ${alreadyAdded ? 'bg-slate-800/20 border-slate-700/30 text-slate-600 cursor-default' : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300'}`}
                               >
-                                <ChevronRight size={11} />{d.name}
+                                {alreadyAdded ? <span className="text-emerald-500">✓</span> : <Plus size={11} />}{p.name}
                               </button>
-                            ))}
-                          </div>
-                      }
-                      <button onClick={() => setProfAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
-                    </div>
-                  )}
-                  {profAddStep === 'profession' && (
-                    <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
-                      <button onClick={() => setProfAddStep('direction')} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 mb-2 transition-colors"><ChevronLeft size={11} />Назад</button>
-                      <p className="text-xs font-semibold text-slate-400 mb-2 flex items-center gap-1"><Briefcase size={11} /> Выберите профессию:</p>
-                      {profFlowProfessions.length === 0
-                        ? <p className="text-slate-500 text-xs">Нет профессий в этом направлении</p>
-                        : <div className="flex flex-wrap gap-1.5">
-                            {profFlowProfessions.map((p: any) => {
-                              const alreadyAdded = myStandaloneProfessions.some(x => x.professionId === p.id);
-                              return (
-                                <button key={p.id} type="button" disabled={alreadyAdded}
-                                  onClick={() => {
-                                    setMyStandaloneProfessions(prev => [...prev, { professionId: p.id, professionName: p.name }]);
-                                    setProfAddStep(null);
-                                  }}
-                                  className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium ${alreadyAdded ? 'bg-slate-800/20 border-slate-700/30 text-slate-600 cursor-default' : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300'}`}
-                                >
-                                  {alreadyAdded ? <span className="text-emerald-500">✓</span> : <Plus size={11} />}{p.name}
-                                </button>
-                              );
-                            })}
-                          </div>
-                      }
-                      <button onClick={() => setProfAddStep(null)} className="mt-2 text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
+                            );
+                          })}
+                        </div>
+                      )}
+                      <button onClick={() => { setProfAddOpen(false); setProfSearch(''); setProfSearchResults([]); }} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
                     </div>
                   )}
 
                   <div className="flex gap-2 pt-1">
-                    <button onClick={() => { setEditingProfessions(false); setProfAddStep(null); setMyStandaloneProfessions(profile?.userProfessions?.map((up: any) => ({ professionId: up.professionId, professionName: up.profession?.name || '' })) || []); }} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
+                    <button onClick={() => { setEditingProfessions(false); setProfAddOpen(false); setProfSearch(''); setMyStandaloneProfessions(profile?.userProfessions?.map((up: any) => ({ professionId: up.professionId, professionName: up.profession?.name || '' })) || []); }} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
                     <button onClick={() => handleSaveProfessions(myStandaloneProfessions)} disabled={savingProfessions} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
                       {savingProfessions ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
                     </button>
@@ -1343,7 +1122,7 @@ export default function ProfilePage() {
                 <div className="p-3 space-y-3">
                   {AddServiceFlow()}
                   <div className="flex gap-2 pt-1">
-                    <button onClick={() => { setEditingServices(false); setAddStep(null); }} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
+                    <button onClick={() => { setEditingServices(false); setAddStep(null); setActiveSectionId(null); }} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
                     <button onClick={handleSaveServices} disabled={updateServicesMutation.isPending} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
                       {updateServicesMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
                     </button>
@@ -1354,7 +1133,7 @@ export default function ProfilePage() {
                   <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
                     {/* Add tile — always first */}
                     <button
-                      onClick={() => { setEditingServices(true); setAddStep('search'); setServiceQuery(''); setServiceSearchResults([]); }}
+                      onClick={() => { setEditingServices(true); setAddStep('section'); setActiveSectionId(null); }}
                       className="flex flex-col gap-2 flex-shrink-0 group"
                       style={{ width: 'calc((100% - 24px) / 3.5)' }}
                     >

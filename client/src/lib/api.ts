@@ -150,6 +150,10 @@ export const referenceAPI = {
   getPriceRanges: () => api.get('/references/price-ranges'),
   getAllReferences: () => api.get('/references/all'),
   getProfessionFilters: (professionId: string) => api.get(`/references/professions/${professionId}/filters`),
+  // New catalog (sections → services → service filters)
+  getSections: () => api.get('/references/sections'),
+  getServiceDetail: (serviceId: string) => api.get(`/references/services/${serviceId}`),
+  getServiceFilters: (serviceId: string) => api.get(`/references/services/${serviceId}/filters`),
   searchMusicians: (params: {
     fieldId?: string;
     directionId?: string;
