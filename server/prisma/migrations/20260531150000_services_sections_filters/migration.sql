@@ -7,7 +7,7 @@ CREATE TABLE "Section" (
 );
 CREATE UNIQUE INDEX "Section_name_key" ON "Section"("name");
 
-ALTER TABLE "Service" ADD COLUMN "sortOrder" INTEGER NOT NULL DEFAULT 0;
+-- NOTE: "Service"."sortOrder" already exists from an earlier migration — not re-added.
 ALTER TABLE "Service" ADD COLUMN "sectionId" TEXT;
 CREATE INDEX "Service_sectionId_idx" ON "Service"("sectionId");
 ALTER TABLE "Service" ADD CONSTRAINT "Service_sectionId_fkey" FOREIGN KEY ("sectionId") REFERENCES "Section"("id") ON DELETE SET NULL ON UPDATE CASCADE;
