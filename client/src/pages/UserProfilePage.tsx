@@ -295,36 +295,27 @@ export default function UserProfilePage() {
                 <MessageCircle size={18} />
               </button>
 
-              {/* Connection — style depends on status */}
-              {conn?.status === 'ACCEPTED' ? (
-                <button
-                  onClick={() => navigate(`/connection/${user.id}`, { state: { partner: user, connections: [conn] } })}
-                  className="flex items-center justify-center px-3.5 py-2.5 bg-violet-500/15 border border-violet-500/30 text-violet-400 rounded-xl transition-all"
-                  title="Связь установлена"
-                >
-                  <Link2 size={18} />
-                </button>
-              ) : conn?.status === 'PENDING' && conn.iAmRequester ? (
-                <button
-                  onClick={() => setViewConn(conn)}
-                  className="flex items-center justify-center px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/60 text-slate-500 rounded-xl transition-all"
-                  title="Запрос отправлен"
-                >
-                  <Clock size={18} />
-                </button>
-              ) : conn?.status === 'PENDING' && !conn.iAmRequester ? (
+              {/* Connection — creating a new connection is always available from the
+                  profile card (multiple connections per person are allowed). Only an
+                  incoming pending request swaps the action to "respond". Existing
+                  connections remain accessible via the «Связи» counter below. */}
+              {conn?.status === 'PENDING' && !conn.iAmRequester ? (
                 <button
                   onClick={() => setViewConn(conn)}
                   className="flex items-center justify-center px-3.5 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl transition-all"
-                  title="Входящий запрос на связь"
+                  title="Входящий запрос на связь — ответить"
                 >
                   <Link2 size={18} />
                 </button>
               ) : (
                 <button
                   onClick={() => setShowConnModal(true)}
-                  className="flex items-center justify-center px-3.5 py-2.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-primary-400 rounded-xl transition-all"
-                  title="Установить связь"
+                  className={`flex items-center justify-center px-3.5 py-2.5 rounded-xl transition-all border ${
+                    conn?.status === 'ACCEPTED'
+                      ? 'bg-violet-500/15 border-violet-500/30 text-violet-400 hover:bg-violet-500/25'
+                      : 'bg-slate-800/80 hover:bg-slate-700 border-slate-700/60 text-slate-300 hover:text-primary-400'
+                  }`}
+                  title={conn?.status === 'ACCEPTED' ? 'Создать ещё одну связь' : 'Создать связь'}
                 >
                   <Link2 size={18} />
                 </button>
