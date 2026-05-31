@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Link2, ArrowLeft, Check, Loader2, ChevronRight, Clock } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -11,7 +11,14 @@ interface Props {
 }
 
 type RelType = 'customer_executor' | 'executor_customer' | 'colleague';
-type CatalogLevel = 'fields' | 'directions' | 'services';
+type CatalogLevel = 'sections' | 'services';
+
+interface Section {
+  id: string;
+  name: string;
+  sortOrder?: number;
+  services: { id: string; name: string; sortOrder?: number }[];
+}
 
 const REL_OPTIONS: { type: RelType; myRole: string; partnerRole: string; needsDeal: boolean }[] = [
   { type: 'customer_executor', myRole: 'CUSTOMER', partnerRole: 'EXECUTOR', needsDeal: true },
@@ -49,28 +56,26 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   // Catalog navigation
-  const [catalogLevel, setCatalogLevel] = useState<CatalogLevel>('fields');
-  const [fieldId, setFieldId] = useState<string | null>(null);
-  const [fieldName, setFieldName] = useState('');
-  const [directionId, setDirectionId] = useState<string | null>(null);
-  const [directionName, setDirectionName] = useState('');
+  const [catalogLevel, setCatalogLevel] = useState<CatalogLevel>('sections');
+  const [sectionId, setSectionId] = useState<string | null>(null);
+  const [sectionName, setSectionName] = useState('');
 
   // Catalog queries
-  const { data: fields = [] } = useQuery({
-    queryKey: ['ref-fields'],
-    queryFn: async () => { const { data } = await referenceAPI.getFieldsOfActivity({ all: true }); return data as any[]; },
+  const { data: sections = [] } = useQuery({
+    queryKey: ['ref-sections'],
+    queryFn: async () => { const { data } = await referenceAPI.getSections(); return data as Section[]; },
     enabled: step === 'catalog',
   });
-  const { data: directions = [] } = useQuery({
-    queryKey: ['ref-directions', fieldId],
-    queryFn: async () => { const { data } = await referenceAPI.getDirections({ fieldOfActivityId: fieldId! }); return data as any[]; },
-    enabled: step === 'catalog' && catalogLevel !== 'fields' && !!fieldId,
-  });
-  const { data: services = [] } = useQuery({
-    queryKey: ['ref-services', directionId],
-    queryFn: async () => { const { data } = await referenceAPI.getServices({ directionId: directionId! }); return data as any[]; },
-    enabled: step === 'catalog' && catalogLevel === 'services' && !!directionId,
-  });
+
+  const activeSection = sections.find(s => s.id === sectionId) ?? null;
+  const services = activeSection?.services ?? [];
+
+  // Names of all services across all sections, for rendering selected chips
+  const serviceNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    sections.forEach(s => (s.services || []).forEach(sv => map.set(sv.id, sv.name)));
+    return map;
+  }, [sections]);
 
   const rel = REL_OPTIONS.find(r => r.type === relType);
 
@@ -92,15 +97,12 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
 
   const goBack = () => {
     if (step === 'catalog') {
-      if (catalogLevel === 'services') { setCatalogLevel('directions'); setDirectionId(null); }
-      else if (catalogLevel === 'directions') { setCatalogLevel('fields'); setFieldId(null); }
+      if (catalogLevel === 'services') { setCatalogLevel('sections'); setSectionId(null); setSectionName(''); }
       else { setStep('relation'); }
     }
   };
 
-  const catalogTitle = catalogLevel === 'fields' ? 'Выберите сферу'
-    : catalogLevel === 'directions' ? fieldName
-    : directionName;
+  const catalogTitle = catalogLevel === 'sections' ? 'Выберите раздел' : sectionName;
 
   // Loading state
   if (checkingExisting) return createPortal(
@@ -253,26 +255,13 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
           </div>
 
           <div className="flex-1 overflow-y-auto">
-            {/* Fields level */}
-            {catalogLevel === 'fields' && (
+            {/* Sections level */}
+            {catalogLevel === 'sections' && (
               <div className="divide-y divide-slate-800/40">
-                {fields.map((f: any) => (
-                  <button key={f.id} onClick={() => { setFieldId(f.id); setFieldName(f.name); setCatalogLevel('directions'); }}
+                {sections.map((s) => (
+                  <button key={s.id} onClick={() => { setSectionId(s.id); setSectionName(s.name); setCatalogLevel('services'); }}
                     className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-800/40 transition-colors text-left">
-                    <span className="text-sm text-white">{f.name}</span>
-                    <ChevronRight size={15} className="text-slate-600" />
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Directions level */}
-            {catalogLevel === 'directions' && (
-              <div className="divide-y divide-slate-800/40">
-                {directions.map((d: any) => (
-                  <button key={d.id} onClick={() => { setDirectionId(d.id); setDirectionName(d.name); setCatalogLevel('services'); }}
-                    className="w-full flex items-center justify-between px-5 py-3.5 hover:bg-slate-800/40 transition-colors text-left">
-                    <span className="text-sm text-white">{d.name}</span>
+                    <span className="text-sm text-white">{s.name}</span>
                     <ChevronRight size={15} className="text-slate-600" />
                   </button>
                 ))}
@@ -304,7 +293,7 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
               <p className="text-[11px] text-slate-500 mb-1.5">Выбрано ({selected.size}):</p>
               <div className="flex flex-wrap gap-1.5">
                 {[...selected].map(id => {
-                  const name = services.find((s: any) => s.id === id)?.name ?? id;
+                  const name = serviceNameById.get(id) ?? id;
                   return (
                     <span key={id} className="flex items-center gap-1 pl-2 pr-1 py-0.5 bg-primary-500/15 border border-primary-500/30 text-primary-300 rounded-lg text-xs">
                       {name}

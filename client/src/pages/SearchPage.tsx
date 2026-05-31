@@ -27,6 +27,9 @@ const TILE_GRADIENTS = [
 ];
 
 type CatalogTab = 'services' | 'artists' | 'people';
+// Browse mode inside the "Каталог" tab.
+//  - 'sections'    → Sections → Services → service filters
+//  - 'professions' → flat profession list → profession filters
 type ServiceView = 'sections' | 'professions';
 
 const ARTIST_TYPES = [
@@ -37,12 +40,18 @@ const ARTIST_TYPES = [
 ];
 
 // ─── ExpandableUserRow ───────────────────────────────────────────────────────
-function ExpandableUserRow({ user, onNavigate }: { user: any; onNavigate: (id: string) => void }) {
+// `user` is a flat user object (People tab / userAPI.catalog).
+// `searchProfile` is the optional searchMusicians payload that carries
+// professions/services for the "Каталог" tab result cards.
+function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; searchProfile?: any; onNavigate: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const isOnline = usePresenceStore((s) => s.onlineUsers.has(user.id));
   const connCount = (user._count?.sentConnections ?? 0) + (user._count?.receivedConnections ?? 0);
-  // Professions come from userServices (UserProfession is unused, UserService has the data)
-  const professions = user.userServices?.map((us: any) => us.profession?.name).filter(Boolean) ?? [];
+  // Professions: prefer searchMusicians.searchProfile, fall back to userServices.
+  const professions: string[] = (searchProfile?.professions?.map((p: any) => p?.name).filter(Boolean))
+    ?? user.userServices?.map((us: any) => us.profession?.name).filter(Boolean)
+    ?? [];
+  const services: string[] = searchProfile?.services?.map((s: any) => s?.name).filter(Boolean) ?? [];
   const portfolio = user.portfolioFiles ?? [];
 
   return (
@@ -74,6 +83,9 @@ function ExpandableUserRow({ user, onNavigate }: { user: any; onNavigate: (id: s
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             {professions.length > 0 && (
               <span className="text-xs text-slate-400 truncate">{professions.slice(0, 2).join(', ')}</span>
+            )}
+            {services.length > 0 && (
+              <span className="text-xs text-primary-400/80 truncate">{services.slice(0, 2).join(', ')}</span>
             )}
             {connCount > 0 && (
               <span className="flex items-center gap-0.5 text-xs text-slate-500">
@@ -147,7 +159,7 @@ function ProfFiltersPanel({ filters, selected, onToggle }: {
   selected: string[];
   onToggle: (id: string) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const activeCount = selected.length;
 
   return (
@@ -207,21 +219,24 @@ export default function SearchPage() {
 
   const [activeTab, setActiveTab] = useState<CatalogTab>('services');
 
-  // ── Services tab state ─────────────────────────────────────────────────────
+  // ── Каталог tab state ──────────────────────────────────────────────────────
+  // Browse mode: 'sections' (Sections → Services) | 'professions' (flat list).
+  const [serviceView, setServiceView] = useState<ServiceView>('sections');
+  // Free-text query for the catalog (specialists) search.
   const [serviceQuery, setServiceQuery] = useState('');
   const [debouncedServiceQuery, setDebouncedServiceQuery] = useState('');
-  const [serviceView, setServiceView] = useState<ServiceView>('sections');
-  const [selectedDirection, setSelectedDirection] = useState<{ id: string; name: string } | null>(null);
-  const [selectedProfession, setSelectedProfession] = useState<{ id: string; name: string } | null>(null);
-  const [hideEmpty, setHideEmpty] = useState(false);
 
-  // ── Services sub-tab: 'professions' | 'services' ──────────────────────────
-  const [serviceSubTab, setServiceSubTab] = useState<'professions' | 'services'>('professions');
+  // Section drilldown (sections mode): which section's services are shown.
+  const [selectedSection, setSelectedSection] = useState<{ id: string; name: string } | null>(null);
+  // The chosen service (sections mode) or profession (professions mode).
   const [selectedService, setSelectedService] = useState<{ id: string; name: string } | null>(null);
-  const [serviceSearchQuery, setServiceSearchQuery] = useState('');
-  const [debouncedServiceSearchQuery, setDebouncedServiceSearchQuery] = useState('');
+  const [selectedProfession, setSelectedProfession] = useState<{ id: string; name: string } | null>(null);
 
-  // ── Profession attribute filters ───────────────────────────────────────────
+  // Free-text query for the flat profession list (professions mode).
+  const [professionQuery, setProfessionQuery] = useState('');
+  const [debouncedProfessionQuery, setDebouncedProfessionQuery] = useState('');
+
+  // ── Attribute filter values (profession OR service filters) ─────────────────
   const [profFilterValues, setProfFilterValues] = useState<string[]>([]);
 
   // ── Artists tab state ──────────────────────────────────────────────────────
@@ -257,9 +272,9 @@ export default function SearchPage() {
   }, [serviceQuery]);
 
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedServiceSearchQuery(serviceSearchQuery), 300);
+    const t = setTimeout(() => setDebouncedProfessionQuery(professionQuery), 300);
     return () => clearTimeout(t);
-  }, [serviceSearchQuery]);
+  }, [professionQuery]);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedArtistQuery(artistQuery), 300);
@@ -273,34 +288,30 @@ export default function SearchPage() {
 
   // ── Reference data ─────────────────────────────────────────────────────────
 
-  // Sections (Directions with label='Раздел')
+  // Sections (each with its nested services) — for "Услуги" browse mode.
   const { data: sections, isLoading: sectionsLoading } = useQuery({
-    queryKey: ['directions-all', hideEmpty, currentUser?.id],
+    queryKey: ['sections'],
     queryFn: async () => {
-      const { data } = await referenceAPI.getDirections(
-        hideEmpty
-          ? { excludeUserId: currentUser?.id }
-          : { all: true }
-      );
+      const { data } = await referenceAPI.getSections();
       return data as any[];
     },
+    enabled: activeTab === 'services' && serviceView === 'sections',
   });
 
-  // Professions of selected direction
+  // Flat profession list — for "Профессии" browse mode.
   const { data: professions, isLoading: professionsLoading } = useQuery({
-    queryKey: ['professions', selectedDirection?.id, hideEmpty, currentUser?.id],
+    queryKey: ['professions-flat', debouncedProfessionQuery],
     queryFn: async () => {
-      const { data } = await referenceAPI.getProfessions(
-        hideEmpty
-          ? { directionId: selectedDirection?.id, excludeUserId: currentUser?.id }
-          : { directionId: selectedDirection?.id, all: true }
-      );
+      const { data } = await referenceAPI.getProfessions({
+        search: debouncedProfessionQuery || undefined,
+        all: true,
+      });
       return data as any[];
     },
-    enabled: !!selectedDirection,
+    enabled: activeTab === 'services' && serviceView === 'professions',
   });
 
-  // Profession attribute filters
+  // Profession attribute filters (professions mode).
   const { data: profFilters } = useQuery({
     queryKey: ['prof-filters', selectedProfession?.id],
     queryFn: async () => {
@@ -311,40 +322,37 @@ export default function SearchPage() {
     enabled: !!selectedProfession,
   });
 
-  // Services search (independent Service catalog)
-  const { data: servicesList, isLoading: servicesListLoading } = useQuery({
-    queryKey: ['services-search', debouncedServiceSearchQuery],
+  // Service attribute filters (sections mode).
+  const { data: serviceFilters } = useQuery({
+    queryKey: ['service-filters', selectedService?.id],
     queryFn: async () => {
-      if (!debouncedServiceSearchQuery) {
-        // Load all services
-        const { data } = await referenceAPI.getServices();
-        return data as any[];
-      }
-      const { data } = await referenceAPI.searchServices(debouncedServiceSearchQuery);
+      if (!selectedService) return [];
+      const { data } = await referenceAPI.getServiceFilters(selectedService.id);
       return data as any[];
     },
-    enabled: activeTab === 'services' && serviceSubTab === 'services',
+    enabled: !!selectedService,
   });
 
-  // ── Catalog users ──────────────────────────────────────────────────────────
-  const catalogParams = serviceSubTab === 'services'
-    ? {
-        query: debouncedServiceSearchQuery || undefined,
-        serviceId: selectedService?.id,
-      }
-    : {
-        query: debouncedServiceQuery || undefined,
-        directionId: selectedDirection?.id,
-        professionId: selectedProfession?.id,
-        customFilterValueIds: profFilterValues.length ? profFilterValues.join(',') : undefined,
-      };
+  // The active attribute filters depend on the current browse mode.
+  const activeFilters = serviceView === 'professions' ? profFilters : serviceFilters;
+  const hasSelection = serviceView === 'professions' ? !!selectedProfession : !!selectedService;
 
-  const { data: catalogUsers, isLoading: catalogLoading } = useQuery({
-    queryKey: ['catalog-users', serviceSubTab, catalogParams],
+  // ── Catalog results (searchMusicians) ───────────────────────────────────────
+  const searchParams = {
+    professionId: serviceView === 'professions' ? selectedProfession?.id : undefined,
+    serviceId: serviceView === 'sections' ? selectedService?.id : undefined,
+    customFilterValueIds: profFilterValues.length ? profFilterValues.join(',') : undefined,
+    query: debouncedServiceQuery || undefined,
+  };
+
+  const { data: catalogResults, isLoading: catalogLoading } = useQuery({
+    queryKey: ['catalog-search', serviceView, searchParams],
     queryFn: async () => {
-      const { data } = await userAPI.catalog(catalogParams as any);
-      return (data as any[]).filter((u: any) => u.id !== currentUser?.id);
+      const { data } = await referenceAPI.searchMusicians(searchParams);
+      const results = ((data as any)?.results ?? []) as any[];
+      return results.filter((r: any) => (r.user?.id ?? r.id) !== currentUser?.id);
     },
+    enabled: activeTab === 'services',
   });
 
   // ── Artists ────────────────────────────────────────────────────────────────
@@ -392,32 +400,41 @@ export default function SearchPage() {
   });
 
   // ── Navigation helpers ─────────────────────────────────────────────────────
-  const handleSectionClick = (dir: any) => {
-    setSelectedDirection(dir);
+  // Switch browse mode and reset all selections/filters.
+  const switchView = (view: ServiceView) => {
+    setServiceView(view);
+    setSelectedSection(null);
+    setSelectedService(null);
     setSelectedProfession(null);
     setProfFilterValues([]);
-    setServiceView('professions');
   };
 
+  // sections mode: open a section to reveal its services.
+  const handleSectionClick = (section: any) => {
+    setSelectedSection({ id: section.id, name: section.name });
+    setSelectedService(null);
+    setProfFilterValues([]);
+  };
+
+  // sections mode: pick / unpick a service (loads its filters).
+  const handleServiceClick = (svc: any) => {
+    setSelectedService(prev => (prev?.id === svc.id ? null : { id: svc.id, name: svc.name }));
+    setProfFilterValues([]);
+  };
+
+  // professions mode: pick / unpick a profession (loads its filters).
   const handleProfessionClick = (prof: any) => {
-    setSelectedProfession(prof);
+    setSelectedProfession(prev => (prev?.id === prof.id ? null : { id: prof.id, name: prof.name }));
     setProfFilterValues([]);
   };
 
+  // Back from service list to sections grid.
   const goBack = () => {
-    if (serviceView === 'professions') {
-      setSelectedDirection(null);
-      setSelectedProfession(null);
+    if (serviceView === 'sections' && selectedSection) {
+      setSelectedSection(null);
+      setSelectedService(null);
       setProfFilterValues([]);
-      setServiceView('sections');
     }
-  };
-
-  const resetAll = () => {
-    setSelectedDirection(null);
-    setSelectedProfession(null);
-    setProfFilterValues([]);
-    setServiceView('sections');
   };
 
   const handleNavigateToProfile = (id: string) => {
@@ -428,26 +445,15 @@ export default function SearchPage() {
     navigate(`/artist/${id}`, { state: { from: location.pathname } });
   };
 
-  // ── Breadcrumbs ────────────────────────────────────────────────────────────
-  const breadcrumbs = [
-    ...(selectedDirection
-      ? [{
-          label: selectedDirection.name,
-          onClick: () => { setSelectedProfession(null); setProfFilterValues([]); setServiceView('professions'); },
-        }]
-      : []),
-    ...(selectedProfession
-      ? [{ label: selectedProfession.name, onClick: () => {} }]
-      : []),
-  ];
+  // Show the "back" control only when drilled into a section.
+  const canGoBack = serviceView === 'sections' && !!selectedSection;
 
-  const hasTileDrilldown = serviceView !== 'sections' && !debouncedServiceQuery;
+  // Services of the currently opened section (sections mode).
+  const sectionServices: any[] = selectedSection
+    ? ((sections ?? []).find((s: any) => s.id === selectedSection.id)?.services ?? [])
+    : [];
 
-  // Current tiles to show
-  const currentTiles = serviceView === 'sections' ? (sections ?? []) : (professions ?? []);
-  const tilesLoading = serviceView === 'sections' ? sectionsLoading : professionsLoading;
-
-  // ── Toggle profession attribute filter value ───────────────────────────────
+  // ── Toggle attribute filter value ──────────────────────────────────────────
   function toggleProfFilterValue(valueId: string) {
     setProfFilterValues(prev =>
       prev.includes(valueId) ? prev.filter(v => v !== valueId) : [...prev, valueId]
@@ -461,26 +467,16 @@ export default function SearchPage() {
       <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
         <div className="max-w-4xl mx-auto px-4 pt-4 pb-3 space-y-3">
 
-          {/* Title + breadcrumb back */}
+          {/* Title + back into section */}
           <div className="flex items-center gap-2">
-            {hasTileDrilldown && activeTab === 'services' && (
+            {canGoBack && activeTab === 'services' && (
               <button onClick={goBack} className="p-1.5 -ml-1.5 text-slate-400 hover:text-white transition-colors">
                 <ChevronLeft size={20} />
               </button>
             )}
-            <h2 className="text-lg font-bold text-white">Каталог</h2>
-            {activeTab === 'services' && !debouncedServiceQuery && (
-              <button
-                onClick={() => setHideEmpty(v => !v)}
-                className={`ml-auto flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-medium transition-all border ${
-                  hideEmpty
-                    ? 'bg-primary-600/20 border-primary-500/40 text-primary-300'
-                    : 'bg-slate-800/80 border-slate-700/50 text-slate-500 hover:text-slate-300 hover:border-slate-600'
-                }`}
-              >
-                Скрыть пустые
-              </button>
-            )}
+            <h2 className="text-lg font-bold text-white">
+              {canGoBack && activeTab === 'services' ? selectedSection!.name : 'Каталог'}
+            </h2>
           </div>
 
           {/* Tabs */}
@@ -502,22 +498,18 @@ export default function SearchPage() {
             ))}
           </div>
 
-          {/* Sub-tabs inside "Каталог" */}
+          {/* Browse-mode switch inside "Каталог" */}
           {activeTab === 'services' && (
             <div className="flex gap-2">
               {([
-                { id: 'professions' as const, label: 'По профессиям' },
-                { id: 'services' as const, label: 'По услугам' },
+                { id: 'sections' as const, label: 'Услуги' },
+                { id: 'professions' as const, label: 'Профессии' },
               ] as const).map(sub => (
                 <button
                   key={sub.id}
-                  onClick={() => {
-                    setServiceSubTab(sub.id);
-                    setSelectedService(null);
-                    setServiceSearchQuery('');
-                  }}
+                  onClick={() => switchView(sub.id)}
                   className={`px-3 py-1 rounded-xl text-xs font-medium transition-all border ${
-                    serviceSubTab === sub.id
+                    serviceView === sub.id
                       ? 'bg-slate-700 border-slate-600 text-white'
                       : 'border-slate-800 text-slate-500 hover:text-slate-300'
                   }`}
@@ -528,70 +520,53 @@ export default function SearchPage() {
             </div>
           )}
 
-          {/* Search bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
-            <input
-              type="text"
-              value={
-                activeTab === 'services'
-                  ? (serviceSubTab === 'services' ? serviceSearchQuery : serviceQuery)
-                  : activeTab === 'artists' ? artistQuery : peopleQuery
-              }
-              onChange={e => {
-                if (activeTab === 'services') {
-                  if (serviceSubTab === 'services') setServiceSearchQuery(e.target.value);
-                  else setServiceQuery(e.target.value);
-                } else if (activeTab === 'artists') setArtistQuery(e.target.value);
-                else setPeopleQuery(e.target.value);
-              }}
-              placeholder={
-                activeTab === 'services'
-                  ? (serviceSubTab === 'services' ? 'Поиск услуг...' : 'Поиск специалистов...')
-                  : activeTab === 'artists' ? 'Поиск артистов...' : 'Поиск людей...'
-              }
-              className="w-full pl-8 pr-9 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
-            />
-            {(activeTab === 'services'
-              ? (serviceSubTab === 'services' ? serviceSearchQuery : serviceQuery)
-              : activeTab === 'artists' ? artistQuery : peopleQuery) && (
-              <button
-                onClick={() => {
-                  if (activeTab === 'services') {
-                    if (serviceSubTab === 'services') setServiceSearchQuery('');
-                    else setServiceQuery('');
-                  } else if (activeTab === 'artists') setArtistQuery('');
-                  else setPeopleQuery('');
-                }}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
-              >
-                <X size={16} />
-              </button>
-            )}
-          </div>
-
-          {/* Breadcrumbs (services tab) */}
-          {hasTileDrilldown && activeTab === 'services' && (
-            <div className="flex items-center gap-1 text-xs overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-              <button onClick={resetAll} className="text-slate-500 hover:text-slate-300 flex-shrink-0">Все разделы</button>
-              {breadcrumbs.map((crumb, i) => (
-                <span key={i} className="flex items-center gap-1 flex-shrink-0">
-                  <ChevronRight size={12} className="text-slate-600" />
+          {/* Search bar.
+              services + professions mode → filters the flat profession list.
+              services + sections mode   → free-text specialist search.
+              artists / people           → their own query. */}
+          {(() => {
+            const isProfList = activeTab === 'services' && serviceView === 'professions';
+            const value =
+              activeTab === 'services'
+                ? (isProfList ? professionQuery : serviceQuery)
+                : activeTab === 'artists' ? artistQuery : peopleQuery;
+            const setValue = (v: string) => {
+              if (activeTab === 'services') {
+                if (isProfList) setProfessionQuery(v);
+                else setServiceQuery(v);
+              } else if (activeTab === 'artists') setArtistQuery(v);
+              else setPeopleQuery(v);
+            };
+            const placeholder =
+              activeTab === 'services'
+                ? (isProfList ? 'Поиск профессий...' : 'Поиск специалистов...')
+                : activeTab === 'artists' ? 'Поиск артистов...' : 'Поиск людей...';
+            return (
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                <input
+                  type="text"
+                  value={value}
+                  onChange={e => setValue(e.target.value)}
+                  placeholder={placeholder}
+                  className="w-full pl-8 pr-9 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
+                />
+                {value && (
                   <button
-                    onClick={crumb.onClick}
-                    className={i === breadcrumbs.length - 1 ? 'text-white font-medium' : 'text-slate-400 hover:text-slate-200'}
+                    onClick={() => setValue('')}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
                   >
-                    {crumb.label}
+                    <X size={16} />
                   </button>
-                </span>
-              ))}
-            </div>
-          )}
+                )}
+              </div>
+            );
+          })()}
 
-          {/* Profession attribute filters — collapsed by default */}
-          {activeTab === 'services' && serviceSubTab === 'professions' && selectedProfession && profFilters && profFilters.length > 0 && (
+          {/* Attribute filters for the selected profession / service — expanded */}
+          {activeTab === 'services' && hasSelection && activeFilters && activeFilters.length > 0 && (
             <ProfFiltersPanel
-              filters={profFilters}
+              filters={activeFilters}
               selected={profFilterValues}
               onToggle={toggleProfFilterValue}
             />
@@ -602,123 +577,115 @@ export default function SearchPage() {
       {/* ── Content ── */}
       <div className="max-w-4xl mx-auto px-4 pb-28">
 
-        {/* ══ SERVICES TAB ══ */}
-        {activeTab === 'services' && serviceSubTab === 'services' && (
-          <div className="mt-4">
-            {/* Services list */}
-            {servicesListLoading ? (
-              <div className="space-y-2">
-                {[1,2,3,4,5].map(i => <div key={i} className="h-12 bg-slate-800/50 rounded-2xl animate-pulse" />)}
-              </div>
-            ) : (servicesList ?? []).length === 0 ? (
-              <p className="text-slate-500 text-sm text-center py-8">Услуги не найдены</p>
-            ) : (
-              <div className="space-y-1.5 mb-5">
-                {(servicesList ?? []).map((svc: any) => (
-                  <button
-                    key={svc.id}
-                    onClick={() => setSelectedService(selectedService?.id === svc.id ? null : { id: svc.id, name: svc.name })}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl border text-left transition-all ${
-                      selectedService?.id === svc.id
-                        ? 'bg-primary-600/10 border-primary-500/40 text-white'
-                        : 'bg-slate-900/60 border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white'
-                    }`}
-                  >
-                    <span className="flex-1 text-sm font-medium">{svc.name}</span>
-                    {selectedService?.id === svc.id && <X size={14} className="text-primary-400 flex-shrink-0" />}
-                  </button>
-                ))}
+        {/* ══ КАТАЛОГ TAB ══ */}
+        {activeTab === 'services' && (
+          <>
+            {/* ── Browse: SECTIONS mode ── */}
+            {serviceView === 'sections' && (
+              <div className="mt-4 mb-6">
+                {/* Section grid (no section opened yet) */}
+                {!selectedSection && (
+                  sectionsLoading ? (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {Array.from({ length: 8 }).map((_, i) => (
+                        <div key={i} className="h-20 bg-slate-800/50 rounded-2xl animate-pulse" />
+                      ))}
+                    </div>
+                  ) : (sections ?? []).length > 0 ? (
+                    <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                      {(sections ?? []).map((section: any, i: number) => (
+                        <button
+                          key={section.id}
+                          onClick={() => handleSectionClick(section)}
+                          className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md group bg-gradient-to-br ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]}`}
+                        >
+                          <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
+                          <div className="relative">
+                            <p className="text-white font-semibold text-xs leading-snug line-clamp-2 uppercase tracking-wide">{section.name}</p>
+                          </div>
+                          <ChevronRight size={14} className="absolute right-2 bottom-2 text-white/50 group-hover:text-white/80 transition-colors" />
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-slate-500 text-sm">Разделы не найдены</p>
+                  )
+                )}
+
+                {/* Services of the opened section (chips) */}
+                {selectedSection && (
+                  <div className="flex flex-wrap gap-2">
+                    {sectionServices.length > 0 ? sectionServices.map((svc: any) => {
+                      const isActive = selectedService?.id === svc.id;
+                      return (
+                        <button
+                          key={svc.id}
+                          onClick={() => handleServiceClick(svc)}
+                          className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium border transition-all ${
+                            isActive
+                              ? 'bg-primary-600 border-primary-500 text-white'
+                              : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600'
+                          }`}
+                        >
+                          {svc.name}
+                          {isActive && <X size={12} className="flex-shrink-0" />}
+                        </button>
+                      );
+                    }) : (
+                      <p className="text-slate-500 text-sm">В этом разделе нет услуг</p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
-            {/* Users with this service */}
-            {catalogLoading ? (
-              <div className="space-y-2 mt-4">
-                {[1,2,3].map(i => <div key={i} className="h-16 bg-slate-800/50 rounded-2xl animate-pulse" />)}
-              </div>
-            ) : selectedService && (catalogUsers ?? []).length === 0 ? (
-              <p className="text-slate-500 text-sm text-center py-4">Специалистов с этой услугой не найдено</p>
-            ) : selectedService ? (
-              <div className="divide-y divide-slate-800/50 bg-slate-900/60 rounded-2xl border border-slate-800 overflow-hidden">
-                {(catalogUsers ?? []).map((u: any) => (
-                  <ExpandableUserRow key={u.id} user={u} onNavigate={id => navigate(`/profile/${id}`)} />
-                ))}
-              </div>
-            ) : null}
-          </div>
-        )}
 
-        {activeTab === 'services' && serviceSubTab === 'professions' && (
-          <>
-            {/* Tiles (hide during text search) */}
-            {!debouncedServiceQuery && (
+            {/* ── Browse: PROFESSIONS mode ── */}
+            {serviceView === 'professions' && (
               <div className="mt-4 mb-6">
-                {tilesLoading ? (
+                {professionsLoading ? (
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {Array.from({ length: 8 }).map((_, i) => (
                       <div key={i} className="h-20 bg-slate-800/50 rounded-2xl animate-pulse" />
                     ))}
                   </div>
-                ) : currentTiles.length > 0 ? (
+                ) : (professions ?? []).length > 0 ? (
                   <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                    {/* "Все" button when drilled into professions */}
-                    {serviceView === 'professions' && (
-                      <button
-                        onClick={() => setSelectedProfession(null)}
-                        className={`relative overflow-hidden rounded-2xl p-4 text-left bg-slate-800 border transition-all hover:scale-[1.02] active:scale-[0.98] ${
-                          !selectedProfession ? 'border-primary-500/60 ring-1 ring-primary-500/30' : 'border-slate-700/50 hover:border-slate-600'
-                        }`}
-                      >
-                        <p className="text-white font-semibold text-xs leading-snug">Все</p>
-                      </button>
-                    )}
-                    {currentTiles.map((tile: any, i: number) => {
-                      const isSelected = selectedProfession?.id === tile.id;
-                      const canSelect = serviceView === 'professions';
+                    {(professions ?? []).map((prof: any, i: number) => {
+                      const isSelected = selectedProfession?.id === prof.id;
                       return (
                         <button
-                          key={tile.id}
-                          onClick={() => {
-                            if (serviceView === 'sections') handleSectionClick(tile);
-                            else handleProfessionClick(tile);
-                          }}
+                          key={prof.id}
+                          onClick={() => handleProfessionClick(prof)}
                           className={`relative overflow-hidden rounded-2xl p-4 text-left transition-all hover:scale-[1.02] active:scale-[0.98] shadow-md group ${
-                            canSelect && isSelected
-                              ? 'ring-2 ring-white/50'
-                              : ''
+                            isSelected ? 'ring-2 ring-white/50' : ''
                           } bg-gradient-to-br ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]}`}
                         >
                           <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
                           <div className="relative">
-                            <p className={`text-white font-semibold text-xs leading-snug line-clamp-2 ${serviceView === 'sections' ? 'uppercase tracking-wide' : ''}`}>{tile.name}</p>
+                            <p className="text-white font-semibold text-xs leading-snug line-clamp-2">{prof.name}</p>
                           </div>
-                          {serviceView !== 'professions' && (
-                            <ChevronRight size={14} className="absolute right-2 bottom-2 text-white/50 group-hover:text-white/80 transition-colors" />
-                          )}
+                          {isSelected && <X size={14} className="absolute right-2 bottom-2 text-white/80" />}
                         </button>
                       );
                     })}
                   </div>
                 ) : (
-                  serviceView !== 'sections' && (
-                    <p className="text-slate-500 text-sm">Ничего не найдено</p>
-                  )
+                  <p className="text-slate-500 text-sm">Профессии не найдены</p>
                 )}
               </div>
             )}
 
-            {/* User list */}
+            {/* ── Results (searchMusicians) ── */}
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  {selectedProfession
-                    ? selectedProfession.name
-                    : selectedDirection
-                    ? selectedDirection.name
-                    : 'Все специалисты'} · от А до Я
+                  {serviceView === 'professions'
+                    ? (selectedProfession ? selectedProfession.name : 'Все специалисты')
+                    : (selectedService ? selectedService.name : 'Все специалисты')} · от А до Я
                 </p>
                 {catalogLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
-                {!catalogLoading && catalogUsers && (
-                  <span className="text-xs text-slate-600">{catalogUsers.length}</span>
+                {!catalogLoading && catalogResults && (
+                  <span className="text-xs text-slate-600">{catalogResults.length}</span>
                 )}
               </div>
 
@@ -734,12 +701,13 @@ export default function SearchPage() {
                     </div>
                   ))}
                 </div>
-              ) : catalogUsers && catalogUsers.length > 0 ? (
+              ) : catalogResults && catalogResults.length > 0 ? (
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                  {catalogUsers.map((user: any) => (
+                  {catalogResults.map((res: any) => (
                     <ExpandableUserRow
-                      key={user.id}
-                      user={user}
+                      key={res.id ?? res.user?.id}
+                      user={res.user ?? res}
+                      searchProfile={res.searchProfile}
                       onNavigate={handleNavigateToProfile}
                     />
                   ))}

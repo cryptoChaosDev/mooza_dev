@@ -417,8 +417,6 @@ router.get('/price-ranges', async (_req, res) => {
 router.get('/search', async (req, res) => {
   try {
     const {
-      fieldId,
-      directionId,
       professionId,
       serviceId,
       genreId,
@@ -438,18 +436,14 @@ router.get('/search', async (req, res) => {
     const limitNum = parseInt(limit as string, 10);
     const skip = (pageNum - 1) * limitNum;
 
-    // Build UserService filter — profession/direction/field resolved through the relation chain
+    // Custom filter value ids (comma-separated)
+    const cfvIds = String(req.query.customFilterValueIds || '')
+      .split(',')
+      .map(s => s.trim())
+      .filter(Boolean);
+
+    // Build UserService filter (service-level constraints + legacy independent filters)
     const userServiceWhere: any = {};
-
-    // Most specific filter wins (profession > direction > field)
-    if (professionId) {
-      userServiceWhere.professionId = professionId;
-    } else if (directionId) {
-      userServiceWhere.profession = { directionId: directionId as string };
-    } else if (fieldId) {
-      userServiceWhere.profession = { direction: { fieldOfActivityId: fieldId as string } };
-    }
-
     if (serviceId) userServiceWhere.serviceId = serviceId;
     if (genreId) userServiceWhere.genres = { some: { id: genreId } };
     if (workFormatId) userServiceWhere.workFormats = { some: { id: workFormatId } };
@@ -461,16 +455,49 @@ router.get('/search', async (req, res) => {
     if (priceMax) userServiceWhere.priceTo = { lte: parseInt(priceMax as string, 10) };
 
     const userWhere: any = {};
+    const andClauses: any[] = [];
+
+    // Profession is first-class: match via userProfessions.
+    // When cfvIds are given with a professionId, require a matching UserProfession row
+    // that also carries at least one of those selected filter values.
+    if (professionId) {
+      userWhere.userProfessions = {
+        some: {
+          professionId,
+          ...(cfvIds.length ? { selectedCustomFilterValues: { some: { id: { in: cfvIds } } } } : {}),
+        },
+      };
+    } else if (cfvIds.length && serviceId) {
+      // cfvIds apply to the service when a serviceId is present (and no professionId).
+      userServiceWhere.selectedCustomFilterValues = { some: { id: { in: cfvIds } } };
+    } else if (cfvIds.length) {
+      // Only cfvIds given (no professionId/serviceId): match users having EITHER a
+      // UserProfession OR a UserService carrying one of those selected filter values.
+      andClauses.push({
+        OR: [
+          { userProfessions: { some: { selectedCustomFilterValues: { some: { id: { in: cfvIds } } } } } },
+          { userServices: { some: { selectedCustomFilterValues: { some: { id: { in: cfvIds } } } } } },
+        ],
+      });
+    }
+
     if (Object.keys(userServiceWhere).length > 0) {
       userWhere.userServices = { some: userServiceWhere };
     }
+
     if (query) {
-      userWhere.OR = [
-        { firstName: { contains: query as string, mode: 'insensitive' } },
-        { lastName: { contains: query as string, mode: 'insensitive' } },
-        { nickname: { contains: query as string, mode: 'insensitive' } },
-        { city: { contains: query as string, mode: 'insensitive' } },
-      ];
+      andClauses.push({
+        OR: [
+          { firstName: { contains: query as string, mode: 'insensitive' } },
+          { lastName: { contains: query as string, mode: 'insensitive' } },
+          { nickname: { contains: query as string, mode: 'insensitive' } },
+          { city: { contains: query as string, mode: 'insensitive' } },
+        ],
+      });
+    }
+
+    if (andClauses.length > 0) {
+      userWhere.AND = andClauses;
     }
 
     const userSelect = {
@@ -504,11 +531,12 @@ router.get('/search', async (req, res) => {
       [...new Map(arr.map(x => [x.id, x])).values()];
 
     const results = users.map(user => {
-      const { userServices, ...userData } = user;
+      const { userServices, userProfessions, ...userData } = user;
       return {
         id: user.id,
         user: userData,
         searchProfile: {
+          professions: dedup(userProfessions.map(up => up.profession)),
           services: dedup(userServices.map(us => us.service)),
           genres: dedup(userServices.flatMap(us => us.genres)),
           workFormats: dedup(userServices.flatMap(us => us.workFormats)),

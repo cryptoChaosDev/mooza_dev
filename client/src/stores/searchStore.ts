@@ -430,7 +430,13 @@ export function useSearchResults(filters: SearchFilters) {
   return useQuery({
     queryKey: ['searchResults', filters],
     queryFn: async () => {
-      const { data } = await referenceAPI.searchMusicians(filters);
+      const { customFilterValueIds, ...rest } = filters as any;
+      const { data } = await referenceAPI.searchMusicians({
+        ...rest,
+        customFilterValueIds: Array.isArray(customFilterValueIds)
+          ? (customFilterValueIds.length ? customFilterValueIds.join(',') : undefined)
+          : customFilterValueIds,
+      });
       return data as SearchResponse;
     },
     // Always enabled — show results even when no filters are selected

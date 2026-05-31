@@ -159,6 +159,7 @@ export const referenceAPI = {
     directionId?: string;
     professionId?: string;
     serviceId?: string;
+    customFilterValueIds?: string;
     genreId?: string;
     workFormatId?: string;
     employmentTypeId?: string;

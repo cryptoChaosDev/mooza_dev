@@ -262,7 +262,7 @@ export default function CreatePostPage() {
     let finalContent = content;
     if (isService && pickedServices.length > 0) {
       const serviceLines = pickedServices.map(s =>
-        `🎸 ${s.serviceName} · ${s.professionName} · ${s.directionName}`
+        `🎸 ${s.serviceName} · ${s.sectionName}`
       ).join('\n');
       finalContent = serviceLines + (content.trim() ? '\n\n' + content : '');
     }
@@ -437,7 +437,7 @@ export default function CreatePostPage() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-semibold text-white">{s.serviceName}</p>
                         <p className="text-xs text-slate-400 mt-0.5">
-                          {s.professionName} · {s.directionName} · {s.fieldName}
+                          {s.sectionName}
                         </p>
                       </div>
                       <button

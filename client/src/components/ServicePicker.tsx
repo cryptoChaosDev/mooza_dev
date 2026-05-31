@@ -5,14 +5,17 @@ import { X, Search, ChevronRight, ArrowLeft, Loader2, Check } from 'lucide-react
 import { referenceAPI } from '../lib/api';
 
 export interface PickedService {
-  fieldId: string;
-  fieldName: string;
-  directionId: string;
-  directionName: string;
-  professionId: string;
-  professionName: string;
+  sectionId: string;
+  sectionName: string;
   serviceId: string;
   serviceName: string;
+}
+
+interface Section {
+  id: string;
+  name: string;
+  sortOrder?: number;
+  services: { id: string; name: string; sortOrder?: number }[];
 }
 
 interface Props {
@@ -21,94 +24,54 @@ interface Props {
   excludeServiceIds?: string[];
 }
 
-type Level = 'field' | 'direction' | 'profession' | 'service';
+type Level = 'section' | 'service';
 
 export default function ServicePicker({ onSelect, onClose, excludeServiceIds = [] }: Props) {
-  const [level, setLevel] = useState<Level>('field');
+  const [level, setLevel] = useState<Level>('section');
   const [search, setSearch] = useState('');
-  const [field, setField]       = useState<{ id: string; name: string } | null>(null);
-  const [direction, setDirection] = useState<{ id: string; name: string } | null>(null);
-  const [profession, setProfession] = useState<{ id: string; name: string } | null>(null);
+  const [section, setSection] = useState<Section | null>(null);
 
-  const { data: fields = [], isLoading: loadingFields } = useQuery({
-    queryKey: ['ref-fields-all'],
-    queryFn: async () => { const { data } = await referenceAPI.getFieldsOfActivity({ all: true }); return data; },
+  const { data: sections = [], isLoading } = useQuery({
+    queryKey: ['ref-sections'],
+    queryFn: async () => { const { data } = await referenceAPI.getSections(); return data as Section[]; },
     staleTime: 300_000,
   });
-
-  const { data: directions = [], isLoading: loadingDirs } = useQuery({
-    queryKey: ['ref-dirs', field?.id],
-    queryFn: async () => { const { data } = await referenceAPI.getDirections({ fieldOfActivityId: field!.id, all: true }); return data; },
-    enabled: !!field,
-    staleTime: 300_000,
-  });
-
-  const { data: professions = [], isLoading: loadingProfs } = useQuery({
-    queryKey: ['ref-profs', direction?.id],
-    queryFn: async () => { const { data } = await referenceAPI.getProfessions({ directionId: direction!.id, all: true }); return data; },
-    enabled: !!direction,
-    staleTime: 300_000,
-  });
-
-  const { data: services = [], isLoading: loadingServices } = useQuery({
-    queryKey: ['ref-services', profession?.id],
-    queryFn: async () => { const { data } = await referenceAPI.getServices({ professionId: profession!.id }); return data; },
-    enabled: !!profession,
-    staleTime: 300_000,
-  });
-
-  const loading = loadingFields || loadingDirs || loadingProfs || loadingServices;
 
   const currentItems: { id: string; name: string }[] = useMemo(() => {
     let items: { id: string; name: string }[] = [];
-    if (level === 'field') items = fields;
-    if (level === 'direction') items = directions;
-    if (level === 'profession') items = professions;
-    if (level === 'service') items = (services as any[]).filter(s => !excludeServiceIds.includes(s.id));
+    if (level === 'section') {
+      items = sections;
+    } else if (section) {
+      items = (section.services || []).filter(s => !excludeServiceIds.includes(s.id));
+    }
     if (!search) return items;
     return items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
-  }, [level, fields, directions, professions, services, search, excludeServiceIds]);
-
-  const breadcrumb = [
-    field && { label: field.name, onClick: () => { setDirection(null); setProfession(null); setLevel('field'); setSearch(''); } },
-    direction && { label: direction.name, onClick: () => { setProfession(null); setLevel('direction'); setSearch(''); } },
-    profession && { label: profession.name, onClick: () => setLevel('profession') },
-  ].filter(Boolean) as { label: string; onClick: () => void }[];
+  }, [level, sections, section, search, excludeServiceIds]);
 
   const levelLabel: Record<Level, string> = {
-    field: 'Выберите сферу',
-    direction: 'Выберите направление',
-    profession: 'Выберите профессию',
+    section: 'Выберите раздел',
     service: 'Выберите услугу',
   };
 
   const handleBack = () => {
     setSearch('');
-    if (level === 'service') { setLevel('profession'); }
-    else if (level === 'profession') { setProfession(null); setLevel('direction'); }
-    else if (level === 'direction') { setDirection(null); setLevel('field'); }
-    else { onClose(); }
+    if (level === 'service') {
+      setSection(null);
+      setLevel('section');
+    } else {
+      onClose();
+    }
   };
 
   const handleSelect = (item: { id: string; name: string }) => {
     setSearch('');
-    if (level === 'field') {
-      setField(item);
-      setLevel('direction');
-    } else if (level === 'direction') {
-      setDirection(item);
-      setLevel('profession');
-    } else if (level === 'profession') {
-      setProfession(item);
+    if (level === 'section') {
+      setSection(item as Section);
       setLevel('service');
-    } else {
+    } else if (section) {
       onSelect({
-        fieldId: field!.id,
-        fieldName: field!.name,
-        directionId: direction!.id,
-        directionName: direction!.name,
-        professionId: profession!.id,
-        professionName: profession!.name,
+        sectionId: section.id,
+        sectionName: section.name,
         serviceId: item.id,
         serviceName: item.name,
       });
@@ -130,16 +93,14 @@ export default function ServicePicker({ onSelect, onClose, excludeServiceIds = [
         </button>
         <div className="flex-1 min-w-0">
           <p className="text-base font-bold text-white">{levelLabel[level]}</p>
-          {breadcrumb.length > 0 && (
+          {level === 'service' && section && (
             <div className="flex items-center gap-1 flex-wrap mt-0.5">
-              {breadcrumb.map((b, i) => (
-                <span key={i} className="flex items-center gap-1">
-                  {i > 0 && <ChevronRight size={10} className="text-slate-600" />}
-                  <button onClick={b.onClick} className="text-[11px] text-primary-400 hover:text-primary-300 transition-colors truncate max-w-[100px]">
-                    {b.label}
-                  </button>
-                </span>
-              ))}
+              <button
+                onClick={() => { setSection(null); setLevel('section'); setSearch(''); }}
+                className="text-[11px] text-primary-400 hover:text-primary-300 transition-colors truncate max-w-[160px]"
+              >
+                {section.name}
+              </button>
             </div>
           )}
         </div>
@@ -165,7 +126,7 @@ export default function ServicePicker({ onSelect, onClose, excludeServiceIds = [
 
       {/* List */}
       <div className="flex-1 overflow-y-auto px-2 py-2" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
-        {loading ? (
+        {isLoading ? (
           <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-primary-400" /></div>
         ) : currentItems.length === 0 ? (
           <div className="text-center py-12 text-slate-500 text-sm">
