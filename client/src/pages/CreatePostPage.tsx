@@ -4,12 +4,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Image, Smile, Send, X, Loader2,
   FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench, Plus, Zap, BarChart3,
+  HelpCircle, ChevronDown, Hash, Music, Link2, MapPin, Search,
 } from 'lucide-react';
-import { postAPI } from '../lib/api';
+import { postAPI, referenceAPI, userAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import AvatarComponent from '../components/Avatar';
 import EmojiPicker from '../components/EmojiPicker';
 import ServicePicker, { PickedService } from '../components/ServicePicker';
+import CityPicker from '../components/CityPicker';
 
 const POST_TYPES: Record<string, { label: string; icon: React.FC<any>; placeholder: string; inDev: boolean }> = {
   blog:       { label: 'Блог',              icon: FileText,    placeholder: 'Напишите что-нибудь...', inDev: false },
@@ -20,7 +22,23 @@ const POST_TYPES: Record<string, { label: string; icon: React.FC<any>; placehold
   service:    { label: 'Услуга',            icon: Wrench,      placeholder: 'Опишите услугу...',      inDev: false },
   employment: { label: 'Апдейт занятости', icon: Zap,         placeholder: 'Расскажите об изменении статуса...', inDev: false },
   poll:       { label: 'Опрос',             icon: BarChart3,   placeholder: 'Контекст опроса (необязательно)...', inDev: false },
+  question:   { label: 'Вопрос',            icon: HelpCircle,  placeholder: 'Опишите ваш вопрос подробнее...', inDev: false },
 };
+
+const FALLBACK_GENRES = [
+  'Поп', 'Рок', 'Метал', 'Панк', 'Хип-Хоп', 'R&B', 'Соул', 'Фанк', 'Электронная музыка',
+  'Джаз', 'Классическая музыка', 'Фолк', 'Этно', 'Шансон', 'Латино', 'Регги', 'Блюз',
+  'Кантри', 'K-pop', 'J-pop', 'Инди', 'Open format', 'Любой жанр',
+];
+
+const QUESTION_CATEGORIES = [
+  'Общее', 'Сотрудничество', 'Инструменты и софт', 'Юридическое', 'Карьера', 'Финансы', 'Другое',
+];
+
+const MAX_IMAGES = 10;
+
+interface MentionEntry { id: string; type: string; name: string }
+interface UserSuggestion { id: string; firstName: string; lastName: string; nickname?: string; avatar?: string }
 
 export default function CreatePostPage() {
   const navigate = useNavigate();
@@ -33,7 +51,7 @@ export default function CreatePostPage() {
   const DRAFT_KEY = `mooza_draft_${type}`;
 
   const [content, setContent] = useState(() => localStorage.getItem(DRAFT_KEY) || '');
-  const [imagePreview, setImagePreview] = useState<{ url: string; serverUrl: string } | null>(null);
+  const [images, setImages] = useState<{ url: string; serverUrl: string }[]>([]);
   const [showEmoji, setShowEmoji] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [pickedServices, setPickedServices] = useState<PickedService[]>([]);
@@ -42,10 +60,40 @@ export default function CreatePostPage() {
   const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
   const [pollDuration, setPollDuration] = useState('7');
   const [authorChoice, setAuthorChoice] = useState<{ type: 'user' | 'channel' | 'artist'; id: string; name: string; avatar?: string } | null>(null);
+
+  // Question fields
+  const [questionTitle, setQuestionTitle] = useState('');
+  const [questionCategory, setQuestionCategory] = useState(QUESTION_CATEGORIES[0]);
+
+  // Additional (optional) fields
+  const [showExtra, setShowExtra] = useState(false);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  const [genres, setGenres] = useState<string[]>([]);
+  const [genreSearch, setGenreSearch] = useState('');
+  const [extraCity, setExtraCity] = useState('');
+  const [linksInput, setLinksInput] = useState('');
+
+  // @-mentions
+  const [mentions, setMentions] = useState<MentionEntry[]>([]);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionResults, setMentionResults] = useState<UserSuggestion[]>([]);
+  const mentionAnchor = useRef<number>(0); // index of '@' in content
+  const mentionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const { data: authorsData } = useQuery({
     queryKey: ['my-authors'],
     queryFn: async () => { const { data } = await postAPI.getMyAuthors(); return data; },
   });
+  const { data: genresData } = useQuery({
+    queryKey: ['ref-genres'],
+    queryFn: async () => { const { data } = await referenceAPI.getGenres(); return data; },
+  });
+  // Catalog of genre names (server names if available, otherwise the static fallback)
+  const genreCatalog: string[] = Array.isArray(genresData) && genresData.length > 0
+    ? genresData.map((g: any) => (typeof g === 'string' ? g : g.name)).filter(Boolean)
+    : FALLBACK_GENRES;
+
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   // Autosave draft
@@ -85,18 +133,101 @@ export default function CreatePostPage() {
     }, 0);
   }, []);
 
-  const uploadFile = async (file: File) => {
+  const uploadFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+    const room = MAX_IMAGES - images.length;
+    const toUpload = files.slice(0, Math.max(0, room));
+    if (toUpload.length === 0) return;
     setUploading(true);
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const { data } = await postAPI.uploadMedia(fd);
-      setImagePreview({ url: URL.createObjectURL(file), serverUrl: data.url });
+      for (const file of toUpload) {
+        const fd = new FormData();
+        fd.append('file', file);
+        const { data } = await postAPI.uploadMedia(fd);
+        setImages(prev => prev.length >= MAX_IMAGES ? prev : [...prev, { url: URL.createObjectURL(file), serverUrl: data.url }]);
+      }
     } catch {
       alert('Не удалось загрузить файл. Проверьте формат и размер (до 20 МБ).');
     } finally {
       setUploading(false);
     }
+  };
+
+  // ── Tags ──────────────────────────────────────────────────────────────────
+  const addTag = (raw: string) => {
+    const t = raw.replace(/^#+/, '').trim();
+    if (!t) return;
+    setTags(prev => prev.includes(t) ? prev : [...prev, t]);
+  };
+  const commitTagInput = () => {
+    tagInput.split(/[\s,]+/).forEach(addTag);
+    setTagInput('');
+  };
+
+  // ── Genres ────────────────────────────────────────────────────────────────
+  const filteredGenres = genreCatalog.filter(g =>
+    !genres.includes(g) && g.toLowerCase().includes(genreSearch.trim().toLowerCase())
+  );
+  const toggleGenre = (g: string) => {
+    setGenres(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
+    setGenreSearch('');
+  };
+
+  // ── Mentions (@) — search users while typing @word in the textarea ─────────
+  const handleContentChange = (value: string, caret: number) => {
+    setContent(value);
+    autoResize();
+    // Find an @token ending at the caret
+    const upto = value.slice(0, caret);
+    const m = upto.match(/(^|\s)@([\p{L}\p{N}_]*)$/u);
+    if (m) {
+      mentionAnchor.current = caret - m[2].length - 1; // position of '@'
+      setMentionQuery(m[2]);
+    } else {
+      setMentionQuery(null);
+      setMentionResults([]);
+    }
+  };
+
+  useEffect(() => {
+    if (mentionQuery === null) return;
+    const q = mentionQuery.trim();
+    if (mentionTimer.current) clearTimeout(mentionTimer.current);
+    if (q.length < 1) { setMentionResults([]); return; }
+    mentionTimer.current = setTimeout(async () => {
+      try {
+        const { data } = await userAPI.search({ query: q, limit: 6 });
+        const list: UserSuggestion[] = Array.isArray(data) ? data : (data?.results || data?.users || []);
+        setMentionResults(list.map((u: any) => ({
+          id: u.id ?? u.user?.id,
+          firstName: u.firstName ?? u.user?.firstName ?? '',
+          lastName: u.lastName ?? u.user?.lastName ?? '',
+          nickname: u.nickname ?? u.user?.nickname,
+          avatar: u.avatar ?? u.user?.avatar,
+        })).filter(u => u.id));
+      } catch { setMentionResults([]); }
+    }, 300);
+    return () => { if (mentionTimer.current) clearTimeout(mentionTimer.current); };
+  }, [mentionQuery]);
+
+  const pickMention = (u: UserSuggestion) => {
+    const name = `${u.firstName} ${u.lastName}`.trim() || u.nickname || 'user';
+    const el = textareaRef.current;
+    const start = mentionAnchor.current;
+    const end = el ? el.selectionStart : start + (mentionQuery?.length ?? 0) + 1;
+    const before = content.slice(0, start);
+    const after = content.slice(end);
+    const inserted = `@${name} `;
+    const next = before + inserted + after;
+    setContent(next);
+    setMentions(prev => prev.some(m => m.id === u.id) ? prev : [...prev, { id: u.id, type: 'user', name }]);
+    setMentionQuery(null);
+    setMentionResults([]);
+    setTimeout(() => {
+      const pos = start + inserted.length;
+      if (el) { el.focus(); el.selectionStart = el.selectionEnd = pos; }
+      autoResize();
+    }, 0);
   };
 
   const createMut = useMutation({
@@ -111,13 +242,19 @@ export default function CreatePostPage() {
   const isService = type === 'service';
   const isEmployment = type === 'employment';
   const isPoll = type === 'poll';
+  const isQuestion = type === 'question';
   const validPollOptions = pollOptions.filter(o => o.trim());
+  const links = linksInput.split(/[\s\n]+/).map(s => s.trim()).filter(Boolean);
   const canPost = (
-    content.trim() ||
-    imagePreview ||
-    (isService && pickedServices.length > 0) ||
-    (isEmployment && !!employmentStatus) ||
-    (isPoll && validPollOptions.length >= 2)
+    isQuestion
+      ? (questionTitle.trim() && content.trim())
+      : (
+          content.trim() ||
+          images.length > 0 ||
+          (isService && pickedServices.length > 0) ||
+          (isEmployment && !!employmentStatus) ||
+          (isPoll && validPollOptions.length >= 2)
+        )
   ) && !uploading;
 
   const handlePublish = () => {
@@ -129,12 +266,21 @@ export default function CreatePostPage() {
       ).join('\n');
       finalContent = serviceLines + (content.trim() ? '\n\n' + content : '');
     }
+    const serverUrls = images.map(i => i.serverUrl);
     createMut.mutate({
       content: finalContent,
       type,
-      imageUrl: imagePreview?.serverUrl,
+      // Backward-compat single image + new multi-image array
+      imageUrl: serverUrls[0] ?? undefined,
+      images: serverUrls,
       channelId: authorChoice?.type === 'channel' ? authorChoice.id : null,
       artistId: authorChoice?.type === 'artist' ? authorChoice.id : null,
+      ...(tags.length > 0 ? { tags } : {}),
+      ...(genres.length > 0 ? { genres } : {}),
+      ...(links.length > 0 ? { links } : {}),
+      ...(extraCity ? { city: extraCity } : {}),
+      ...(mentions.length > 0 ? { mentions } : {}),
+      ...(isQuestion ? { title: questionTitle.trim(), category: questionCategory } : {}),
       ...(isEmployment && employmentStatus ? { employmentStatus } : {}),
       ...(isPoll ? {
         pollOptions: validPollOptions,
@@ -167,13 +313,13 @@ export default function CreatePostPage() {
           </div>
 
           {/* Attachment buttons — always visible, not affected by keyboard */}
-          <input ref={imageInputRef} type="file" accept="image/*,.gif" className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = ''; }} />
+          <input ref={imageInputRef} type="file" accept="image/*,.gif" multiple className="hidden"
+            onChange={e => { const fs = Array.from(e.target.files || []); if (fs.length) uploadFiles(fs); e.target.value = ''; }} />
           <button
             type="button"
             onClick={() => imageInputRef.current?.click()}
-            disabled={uploading || !!imagePreview}
-            title="Фото / GIF"
+            disabled={uploading || images.length >= MAX_IMAGES}
+            title={images.length >= MAX_IMAGES ? 'Максимум 10 фото' : 'Фото / GIF'}
             className="p-2 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-40 flex-shrink-0"
           >
             {uploading ? <Loader2 size={18} className="animate-spin" /> : <Image size={18} />}
@@ -245,6 +391,40 @@ export default function CreatePostPage() {
               </div>
             );
           })()}
+
+          {/* Question — title + category (type=question) */}
+          {isQuestion && (
+            <div className="mb-4 space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+                  Заголовок вопроса <span className="text-red-400">*</span>
+                </label>
+                <input
+                  type="text" maxLength={140}
+                  value={questionTitle}
+                  onChange={e => setQuestionTitle(e.target.value)}
+                  placeholder="Коротко сформулируйте вопрос"
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                />
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Категория</p>
+                <div className="flex gap-2 flex-wrap">
+                  {QUESTION_CATEGORIES.map(cat => (
+                    <button key={cat} type="button"
+                      onClick={() => setQuestionCategory(cat)}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                        questionCategory === cat
+                          ? 'bg-primary-600/20 border-primary-500/40 text-primary-300'
+                          : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white'
+                      }`}>
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Service selector — only for type=service */}
           {isService && (
@@ -358,28 +538,175 @@ export default function CreatePostPage() {
             </div>
           )}
 
-          <textarea
-            ref={textareaRef}
-            value={content}
-            onChange={e => { setContent(e.target.value); autoResize(); }}
-            placeholder={isService && pickedServices.length > 0 ? 'Опишите подробнее — цены, условия, опыт...' : meta.placeholder}
-            className="w-full bg-transparent text-base text-white placeholder-slate-500 focus:outline-none resize-none min-h-[100px] leading-relaxed"
-            rows={isService && pickedServices.length > 0 ? 3 : 6}
-          />
+          <div className="relative">
+            <textarea
+              ref={textareaRef}
+              value={content}
+              onChange={e => handleContentChange(e.target.value, e.target.selectionStart)}
+              onKeyUp={e => handleContentChange((e.target as HTMLTextAreaElement).value, (e.target as HTMLTextAreaElement).selectionStart)}
+              placeholder={
+                isQuestion ? 'Опишите ваш вопрос подробнее...'
+                : isService && pickedServices.length > 0 ? 'Опишите подробнее — цены, условия, опыт...'
+                : meta.placeholder
+              }
+              className="w-full bg-transparent text-base text-white placeholder-slate-500 focus:outline-none resize-none min-h-[100px] leading-relaxed"
+              rows={isService && pickedServices.length > 0 ? 3 : 6}
+            />
 
-          {/* Image preview */}
-          {imagePreview && (
-            <div className="relative mt-3 inline-block">
-              <img src={imagePreview.url} alt="preview" className="max-h-72 rounded-2xl object-cover border border-slate-700" />
-              <button
-                type="button"
-                onClick={() => setImagePreview(null)}
-                className="absolute top-2 right-2 p-1.5 bg-slate-900/80 hover:bg-slate-900 rounded-full text-white transition-colors"
-              >
-                <X size={14} />
-              </button>
+            {/* Mention dropdown */}
+            {mentionQuery !== null && mentionResults.length > 0 && (
+              <div className="absolute left-0 right-0 z-50 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl max-h-56 overflow-y-auto">
+                {mentionResults.map(u => (
+                  <button key={u.id} type="button"
+                    onMouseDown={e => { e.preventDefault(); pickMention(u); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-700/50 transition-colors text-left">
+                    <AvatarComponent src={u.avatar} name={`${u.firstName} ${u.lastName}`} size={28} />
+                    <div className="min-w-0">
+                      <p className="text-sm text-white truncate">{u.firstName} {u.lastName}</p>
+                      {u.nickname && <p className="text-xs text-slate-500 truncate">@{u.nickname}</p>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Image thumbnails (multi, up to 10) */}
+          {images.length > 0 && (
+            <div className="flex gap-2 mt-3 overflow-x-auto pb-1">
+              {images.map((img, i) => (
+                <div key={i} className="relative flex-shrink-0">
+                  <img src={img.url} alt={`photo ${i + 1}`} className="h-24 w-24 rounded-xl object-cover border border-slate-700" />
+                  <button
+                    type="button"
+                    onClick={() => setImages(prev => prev.filter((_, idx) => idx !== i))}
+                    className="absolute top-1 right-1 p-1 bg-slate-900/80 hover:bg-slate-900 rounded-full text-white transition-colors"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
             </div>
           )}
+          {images.length > 0 && (
+            <p className="text-[11px] text-slate-600 mt-1">{images.length} / {MAX_IMAGES} фото</p>
+          )}
+
+          {/* ── Дополнительно (optional secondary fields) ────────────────── */}
+          <div className="mt-5 border-t border-slate-800 pt-3">
+            <button
+              type="button"
+              onClick={() => setShowExtra(v => !v)}
+              className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-white transition-colors"
+            >
+              <ChevronDown size={14} className={`transition-transform ${showExtra ? 'rotate-180' : ''}`} />
+              Дополнительно
+              {(tags.length + genres.length + links.length + (extraCity ? 1 : 0)) > 0 && (
+                <span className="ml-1 bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none">
+                  {tags.length + genres.length + links.length + (extraCity ? 1 : 0)}
+                </span>
+              )}
+            </button>
+
+            {showExtra && (
+              <div className="mt-4 space-y-5">
+                {/* Tags */}
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+                    <Hash size={13} /> Теги
+                  </label>
+                  {tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {tags.map(t => (
+                        <span key={t} className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary-600/15 border border-primary-500/30 text-primary-300 rounded-lg text-xs">
+                          #{t}
+                          <button type="button" onClick={() => setTags(prev => prev.filter(x => x !== t))} className="hover:text-white">
+                            <X size={11} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <input
+                    type="text"
+                    value={tagInput}
+                    onChange={e => setTagInput(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); commitTagInput(); } }}
+                    onBlur={commitTagInput}
+                    placeholder="Введите тег и нажмите Enter"
+                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  />
+                </div>
+
+                {/* Genres */}
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+                    <Music size={13} /> Жанры
+                  </label>
+                  {genres.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {genres.map(g => (
+                        <span key={g} className="inline-flex items-center gap-1 px-2.5 py-1 bg-primary-600/15 border border-primary-500/30 text-primary-300 rounded-lg text-xs">
+                          {g}
+                          <button type="button" onClick={() => toggleGenre(g)} className="hover:text-white">
+                            <X size={11} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="relative">
+                    <div className="flex items-center gap-2 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 focus-within:ring-1 focus-within:ring-primary-500">
+                      <Search size={14} className="text-slate-500 flex-shrink-0" />
+                      <input
+                        type="text"
+                        value={genreSearch}
+                        onChange={e => setGenreSearch(e.target.value)}
+                        placeholder="Поиск жанра..."
+                        className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+                      />
+                    </div>
+                    {genreSearch.trim() && filteredGenres.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full mt-1.5 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-40 max-h-52 overflow-y-auto">
+                        {filteredGenres.map(g => (
+                          <button key={g} type="button"
+                            onMouseDown={e => { e.preventDefault(); toggleGenre(g); }}
+                            className="w-full text-left px-3 py-2 text-sm text-white hover:bg-slate-700/50 transition-colors">
+                            {g}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* City */}
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+                    <MapPin size={13} /> Город
+                  </label>
+                  <CityPicker city={extraCity} country="" onChange={(c) => setExtraCity(c)} />
+                </div>
+
+                {/* Links */}
+                <div>
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+                    <Link2 size={13} /> Ссылки
+                  </label>
+                  <textarea
+                    value={linksInput}
+                    onChange={e => setLinksInput(e.target.value)}
+                    placeholder="Каждая ссылка с новой строки или через пробел"
+                    rows={3}
+                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
+                  />
+                  {links.length > 0 && (
+                    <p className="text-[11px] text-slate-600 mt-1">{links.length} ссыл.</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
         </div>
 

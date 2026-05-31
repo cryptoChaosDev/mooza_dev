@@ -171,11 +171,13 @@ export const referenceAPI = {
 
 // Post API
 export const postAPI = {
-  getFeed: (params?: { limit?: number; offset?: number; type?: string; authorKind?: string }) =>
+  getFeed: (params?: { limit?: number; offset?: number; type?: string; authorKind?: string; period?: string; city?: string }) =>
     api.get('/posts/feed', { params }),
   getMyAuthors: () => api.get('/posts/my-authors'),
-  createPost: (data: { content: string; type?: string; imageUrl?: string; audioUrl?: string; audioName?: string; channelId?: string | null; artistId?: string | null; employmentStatus?: string; pollOptions?: string[]; pollEndsAt?: string }) =>
+  createPost: (data: { content: string; type?: string; imageUrl?: string; audioUrl?: string; audioName?: string; channelId?: string | null; artistId?: string | null; employmentStatus?: string; pollOptions?: string[]; pollEndsAt?: string; images?: string[]; tags?: string[]; genres?: string[]; links?: string[]; city?: string | null; mentions?: Array<{ id: string; type: string; name: string }>; title?: string; category?: string }) =>
     api.post('/posts', data),
+  repostPost: (postId: string, comment?: string) =>
+    api.post(`/posts/${postId}/repost`, { comment }),
   votePoll: (postId: string, optionIndex: number) =>
     api.post(`/posts/${postId}/vote`, { optionIndex }),
   toggleSave: (postId: string) => api.post(`/posts/${postId}/save`),

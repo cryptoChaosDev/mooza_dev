@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../index';
-import { authenticate, AuthRequest } from '../middleware/auth';
+import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser, notifyUser } from '../socket';
 import { uploadPostMedia } from '../middleware/upload';
 import { tgLog, tgEvent } from '../utils/telegram';
@@ -49,18 +49,28 @@ router.get('/my-authors', authenticate, async (req: AuthRequest, res) => {
 
 // Shared post include used by /feed for both regular and pinned (team) posts.
 // Kept as a factory so each query gets its own per-user `where` for likes/savedBy.
-const buildFeedInclude = (userId: string | undefined) => ({
+const buildFeedInclude = (userId: string | undefined) => {
+  // Guest safety: Prisma treats `{ userId: undefined }` as NO filter, which would
+  // return ALL likes/savedBy rows and make isLiked/isSaved wrongly true for guests.
+  // Fall back to a non-matching UUID so the relations come back empty.
+  const meId = userId ?? '00000000-0000-0000-0000-000000000000';
+  return {
   author: {
     select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true }
   },
   channel: { select: { id: true, name: true, avatar: true } },
   artist: { select: { id: true, name: true, avatar: true } },
+  repostOf: {
+    include: {
+      author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, isPremium: true, isVerified: true } }
+    }
+  },
   likes: {
-    where: { userId },
+    where: { userId: meId },
     select: { id: true }
   },
   savedBy: {
-    where: { userId },
+    where: { userId: meId },
     select: { id: true }
   },
   comments: {
@@ -92,7 +102,8 @@ const buildFeedInclude = (userId: string | undefined) => ({
   _count: {
     select: { likes: true, comments: true }
   }
-});
+  };
+};
 
 // System team account — its posts are pinned to the top of the feed for brand-new users.
 // See server/prisma/seeds/welcome-posts.ts
@@ -103,9 +114,9 @@ const TEAM_EMAIL = 'team@moooza.ru';
 //   type       — post type (blog | question | poll | service | employment | …)
 //   authorKind — all | resident (profile) | channel | artist | mine
 //   limit/offset — pagination for infinite scroll
-router.get('/feed', authenticate, async (req: AuthRequest, res) => {
+router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
   try {
-    const { limit = 20, offset = 0, type, authorKind } = req.query;
+    const { limit = 20, offset = 0, type, authorKind, period, city } = req.query;
     const offsetNum = Number(offset);
     const limitNum = Number(limit);
     const kind = authorKind ? String(authorKind) : 'all';
@@ -128,6 +139,40 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
     else if (kind === 'artist') where.artistId = { not: null };
     else if (kind === 'mine') where.authorId = req.userId;
     else if (teamUserId) where.authorId = { not: teamUserId }; // exclude team from default/other views
+
+    // period — date lower bound on createdAt (server-computed)
+    const periodStr = period ? String(period) : 'all';
+    if (periodStr && periodStr !== 'all') {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      if (periodStr === 'today') {
+        where.createdAt = { gte: startOfToday };
+      } else if (periodStr === 'yesterday') {
+        const startOfYesterday = new Date(startOfToday);
+        startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+        where.createdAt = { gte: startOfYesterday, lt: startOfToday };
+      } else {
+        const since = new Date(now);
+        switch (periodStr) {
+          case '3days': since.setDate(since.getDate() - 3); break;
+          case 'week': since.setDate(since.getDate() - 7); break;
+          case 'month': since.setMonth(since.getMonth() - 1); break;
+          case '3months': since.setMonth(since.getMonth() - 3); break;
+          case 'year': since.setFullYear(since.getFullYear() - 1); break;
+          default: break;
+        }
+        where.createdAt = { gte: since };
+      }
+    }
+
+    // city — comma-separated list, exact match on stored names
+    if (city) {
+      const cityNames = String(city)
+        .split(',')
+        .map(c => c.trim())
+        .filter(Boolean);
+      if (cityNames.length > 0) where.city = { in: cityNames };
+    }
 
     const posts = await prisma.post.findMany({
       where,
@@ -169,15 +214,41 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
 // Create post
 router.post('/', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { content, imageUrl, audioUrl, audioName, type, employmentStatus, pollOptions, pollEndsAt, channelId, artistId } = req.body;
+    const {
+      content, imageUrl, audioUrl, audioName, type, employmentStatus, pollOptions, pollEndsAt, channelId, artistId,
+      images, tags, genres, links, city, mentions, title, category,
+    } = req.body;
+
+    // Normalize new optional fields
+    const imagesArr: string[] = Array.isArray(images) ? images.slice(0, 10) : [];
+    const tagsArr: string[] = Array.isArray(tags) ? tags : [];
+    const genresArr: string[] = Array.isArray(genres) ? genres : [];
+    const linksArr: string[] = Array.isArray(links) ? links : [];
 
     const isPoll = type === 'poll';
     if (isPoll) {
       if (!Array.isArray(pollOptions) || pollOptions.filter((o: string) => o?.trim()).length < 2) {
         return res.status(400).json({ error: 'Poll requires at least 2 non-empty options' });
       }
-    } else if (!content && !imageUrl && !audioUrl && !(type === 'employment' && employmentStatus)) {
+    } else if (type === 'question') {
+      if (!title?.trim() || !content?.trim()) {
+        return res.status(400).json({ error: 'Вопрос требует заголовок и текст' });
+      }
+    } else if (!content && !imageUrl && !audioUrl && imagesArr.length === 0 && !(type === 'employment' && employmentStatus)) {
       return res.status(400).json({ error: 'Post cannot be empty' });
+    }
+
+    // E8 — service update rate limit (per-user, lite): max 1 service post / 24h.
+    // TODO: per-service once serviceId is modeled
+    if (type === 'service') {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const recent = await prisma.post.findFirst({
+        where: { authorId: req.userId!, type: 'service', createdAt: { gte: since } },
+        select: { id: true },
+      });
+      if (recent) {
+        return res.status(429).json({ error: 'Апдейт услуги можно публиковать не чаще 1 раза в 24 часа' });
+      }
     }
 
     // Validate author choice: channelId / artistId mutually exclusive, and user must own them
@@ -212,6 +283,14 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         authorId: req.userId!,
         channelId: effectiveChannelId,
         artistId: effectiveArtistId,
+        images: imagesArr,
+        tags: tagsArr,
+        genres: genresArr,
+        links: linksArr,
+        city: city ?? null,
+        mentions: mentions ?? null,
+        title: title ?? null,
+        category: category ?? null,
         ...(isPoll ? {
           pollOptions: (pollOptions as string[]).filter(o => o?.trim()).map(text => ({ text, votes: 0 })),
           pollEndsAt: pollEndsAt ? new Date(pollEndsAt) : null,
@@ -240,6 +319,40 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('Create post error:', error);
     res.status(500).json({ error: 'Failed to create post' });
+  }
+});
+
+// POST /api/posts/:id/repost — repost an existing post to the feed
+router.post('/:id/repost', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { comment } = req.body;
+
+    // Verify the original exists (don't allow reposting a deleted/nonexistent post)
+    const original = await prisma.post.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!original) return res.status(404).json({ error: 'Post not found' });
+
+    const post = await prisma.post.create({
+      data: {
+        authorId: req.userId!,
+        type: 'blog',
+        content: '',
+        repostOfId: req.params.id,
+        repostComment: (comment?.trim() || null),
+      } as any,
+      include: {
+        author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true } },
+        repostOf: {
+          include: {
+            author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, isPremium: true, isVerified: true } }
+          }
+        },
+      },
+    });
+
+    res.status(201).json(post);
+  } catch (error) {
+    console.error('Repost error:', error);
+    res.status(500).json({ error: 'Failed to repost' });
   }
 });
 
@@ -719,6 +832,13 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res) => {
     if (post.authorId !== req.userId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
+
+    // E5 — mark reposts of this post so the frontend can render a "Пост удалён"
+    // placeholder. onDelete SetNull will null their repostOfId on delete below.
+    await prisma.post.updateMany({
+      where: { repostOfId: req.params.id },
+      data: { repostDeleted: true },
+    });
 
     // Remove stale notifications referencing this post before deleting it
     await prisma.notification.deleteMany({

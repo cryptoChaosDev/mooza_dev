@@ -725,6 +725,7 @@ model Post {
 
   // Репост в ленту: ссылка на оригинальный пост + опциональный комментарий
   repostComment String?
+  repostDeleted Boolean @default(false)
   repostOfId    String?
   repostOf      Post?   @relation("PostReposts", fields: [repostOfId], references: [id], onDelete: SetNull)
   reposts       Post[]  @relation("PostReposts")

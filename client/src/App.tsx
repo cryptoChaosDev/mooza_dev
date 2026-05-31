@@ -429,6 +429,7 @@ function App() {
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/"         element={<LandingPage />} />
+            <Route path="/feed"     element={<FeedPage />} />
             <Route path="/login"    element={<LoginPage />} />
             <Route path="/register"        element={<RegisterPage />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage />} />

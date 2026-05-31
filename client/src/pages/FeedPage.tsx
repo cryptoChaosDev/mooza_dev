@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
@@ -6,7 +6,7 @@ import {
   MoreHorizontal, Image, Pencil, Check,
   Crown, BadgeCheck, Ban, SlidersHorizontal,
   Plus, FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench,
-  Zap, BarChart3, Star, WifiOff, RefreshCw, HelpCircle,
+  Zap, BarChart3, Star, WifiOff, RefreshCw, HelpCircle, Repeat2,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import ShareButton from '../components/ShareButton';
@@ -206,12 +206,21 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
 
 function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = false }: { post: any; currentUserId: string; feedQueryKey?: string[]; highlight?: boolean }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [showMenu, setShowMenu] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showRepost, setShowRepost] = useState(false);
+  const [repostComment, setRepostComment] = useState('');
+
+  // Guests (no current user) cannot react — bounce them to login instead.
+  const requireAuth = (action: () => void) => {
+    if (!currentUserId) { navigate('/login'); return; }
+    action();
+  };
   const [editContent, setEditContent] = useState(post.content);
   const [editImagePreview, setEditImagePreview] = useState<{ url: string; serverUrl: string } | null>(
     post.imageUrl ? { url: `${API_URL}${post.imageUrl}`, serverUrl: post.imageUrl } : null
@@ -248,6 +257,10 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const unreactMut = useMutation({ mutationFn: () => postAPI.unreactPost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
   const voteMut = useMutation({ mutationFn: (optionIndex: number) => postAPI.votePoll(post.id, optionIndex), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
   const saveMut = useMutation({ mutationFn: () => postAPI.toggleSave(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
+  const repostMut = useMutation({
+    mutationFn: (comment: string) => postAPI.repostPost(post.id, comment.trim() || undefined),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['feed'] }); setShowRepost(false); setRepostComment(''); },
+  });
 
   const uploadEditFile = async (file: File) => {
     setEditUploading(true);
@@ -265,8 +278,17 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const TypeIcon = typeMeta.icon;
   const showTypeBadge = post.type && post.type !== 'blog';
 
+  const isRepost = !!post.repostOfId || !!post.repostOf || !!post.repostDeleted;
+  const original = post.repostOf;
+
   return (
     <div id={`post-${post.id}`} className={`px-4 py-4 hover:bg-slate-900/30 transition-colors ${typeMeta.accent} ${highlight ? 'ring-2 ring-primary-500/40 ring-inset bg-primary-500/5' : ''}`}>
+      {isRepost && (
+        <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-2 ml-1">
+          <Repeat2 size={13} className="flex-shrink-0" />
+          <span className="truncate">«{post.author.firstName} {post.author.lastName} поделился(ась)»</span>
+        </div>
+      )}
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-3 min-w-0">
           <Link to={`/profile/${post.author.id}`} className="flex-shrink-0"><Avatar user={post.author} size={10} /></Link>
@@ -292,7 +314,9 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
             ) : null}
             <p className="text-xs text-slate-500 truncate">
               {timeAgo(post.createdAt)}{post.author.role ? ` · ${post.author.role}` : ''}
-              {new Date(post.updatedAt).getTime() - new Date(post.createdAt).getTime() > 5000 && <span className="text-slate-600"> · изменён {timeAgo(post.updatedAt)}</span>}
+              {new Date(post.updatedAt).getTime() - new Date(post.createdAt).getTime() > 5000 && (
+                <span className="text-slate-600"> · Изменена {new Date(post.updatedAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+              )}
             </p>
           </div>
         </div>
@@ -343,8 +367,45 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
             </div>
           </div>
         ) : (
-          <DoubleTapReactWrapper reactions={post.reactions ?? []} currentUserId={currentUserId} onReact={(emoji) => reactMut.mutate(emoji)} onUnreact={() => unreactMut.mutate()}>
+          <DoubleTapReactWrapper reactions={post.reactions ?? []} currentUserId={currentUserId} onReact={(emoji) => requireAuth(() => reactMut.mutate(emoji))} onUnreact={() => requireAuth(() => unreactMut.mutate())}>
             <>
+              {isRepost && (
+                <>
+                  {(post.repostComment || (post.content && original)) && (
+                    <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words mb-2">
+                      {post.repostComment || post.content}
+                    </p>
+                  )}
+                  {post.repostDeleted ? (
+                    <div className="rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-5 text-center">
+                      <p className="text-sm text-slate-500">Пост удалён</p>
+                    </div>
+                  ) : original ? (
+                    <button
+                      type="button"
+                      onClick={() => original.author?.id && navigate(`/profile/${original.author.id}`)}
+                      className="w-full text-left rounded-xl border border-slate-800 bg-slate-900/40 hover:bg-slate-900/70 transition-colors p-3"
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        {original.author && <Avatar user={original.author} size={7} />}
+                        <span className="text-sm font-semibold text-white truncate">
+                          {original.author ? `${original.author.firstName} ${original.author.lastName}` : 'Автор'}
+                        </span>
+                        <span className="text-xs text-slate-500 flex-shrink-0">{original.createdAt ? timeAgo(original.createdAt) : ''}</span>
+                      </div>
+                      {original.content && (
+                        <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words line-clamp-6">{original.content}</p>
+                      )}
+                      {(() => {
+                        const firstImg = (Array.isArray(original.images) && original.images[0]) || original.imageUrl;
+                        return firstImg ? (
+                          <img src={`${API_URL}${firstImg}`} alt="Вложение" className="mt-2 max-h-72 w-full object-cover rounded-lg border border-slate-800" loading="lazy" />
+                        ) : null;
+                      })()}
+                    </button>
+                  ) : null}
+                </>
+              )}
               {post.type === 'employment' && (
                 <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-800/50 border border-slate-700/30 mb-2">
                   <Zap size={13} className="text-amber-400 flex-shrink-0" />
@@ -364,7 +425,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                       return (
                         <button key={idx} type="button"
                           disabled={ended || voteMut.isPending}
-                          onClick={() => voteMut.mutate(idx)}
+                          onClick={() => requireAuth(() => voteMut.mutate(idx))}
                           className="w-full relative overflow-hidden bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/50 rounded-xl px-3 py-2 text-left transition-all disabled:cursor-default disabled:opacity-80">
                           <div className="absolute inset-0 bg-cyan-500/15" style={{ width: `${pct}%` }} />
                           <div className="relative flex items-center justify-between gap-3">
@@ -384,32 +445,52 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                   </div>
                 );
               })()}
-              {post.content && (
+              {!isRepost && post.content && (
                 <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
                   {isLongContent && !expanded ? post.content.slice(0, 280) + '…' : post.content}
                 </p>
               )}
-              {isLongContent && <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>}
-              {post.imageUrl && <div className="mt-2"><img src={`${API_URL}${post.imageUrl}`} alt="Вложение" className="max-h-[32rem] w-full object-contain rounded-xl border border-slate-800 bg-slate-900/40" loading="lazy" /></div>}
+              {!isRepost && isLongContent && <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>}
+              {!isRepost && (Array.isArray(post.images) && post.images.length > 1 ? (
+                <div className="mt-2 flex gap-2 overflow-x-auto scrollbar-none snap-x">
+                  {post.images.map((url: string, i: number) => (
+                    <img key={i} src={`${API_URL}${url}`} alt={`Вложение ${i + 1}`} className="h-48 w-auto flex-shrink-0 object-cover rounded-xl border border-slate-800 bg-slate-900/40 snap-start" loading="lazy" />
+                  ))}
+                </div>
+              ) : (Array.isArray(post.images) && post.images.length === 1) ? (
+                <div className="mt-2"><img src={`${API_URL}${post.images[0]}`} alt="Вложение" className="max-h-[32rem] w-full object-contain rounded-xl border border-slate-800 bg-slate-900/40" loading="lazy" /></div>
+              ) : post.imageUrl ? (
+                <div className="mt-2"><img src={`${API_URL}${post.imageUrl}`} alt="Вложение" className="max-h-[32rem] w-full object-contain rounded-xl border border-slate-800 bg-slate-900/40" loading="lazy" /></div>
+              ) : null)}
+              {Array.isArray(post.tags) && post.tags.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {post.tags.map((tag: string, i: number) => (
+                    <span key={i} className="text-xs text-primary-400 bg-primary-500/10 px-2 py-0.5 rounded-full">#{tag}</span>
+                  ))}
+                </div>
+              )}
               {post.audioUrl && <AudioPlayer src={`${API_URL}${post.audioUrl}`} name={post.audioName || post.audioUrl.split('/').pop()} />}
             </>
           </DoubleTapReactWrapper>
         )}
-        {!editing && <ReactionBar reactions={post.reactions ?? []} currentUserId={currentUserId} onReact={(emoji) => reactMut.mutate(emoji)} onUnreact={() => unreactMut.mutate()} />}
+        {!editing && <ReactionBar reactions={post.reactions ?? []} currentUserId={currentUserId} onReact={(emoji) => requireAuth(() => reactMut.mutate(emoji))} onUnreact={() => requireAuth(() => unreactMut.mutate())} />}
       </div>
 
       <div className="flex items-center gap-1 ml-[52px]">
-        <button onClick={() => !isOwner && likeMut.mutate()} disabled={likeMut.isPending || isOwner} title={isOwner ? 'Нельзя лайкать свой пост' : undefined}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${isOwner ? 'cursor-default text-slate-600' : post.isLiked ? 'text-red-400 hover:bg-red-400/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}>
+        <button onClick={() => requireAuth(() => { if (!isOwner) likeMut.mutate(); })} disabled={likeMut.isPending || (!!currentUserId && isOwner)} title={currentUserId && isOwner ? 'Нельзя лайкать свой пост' : undefined}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${currentUserId && isOwner ? 'cursor-default text-slate-600' : post.isLiked ? 'text-red-400 hover:bg-red-400/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}>
           <Heart size={15} className={post.isLiked ? 'fill-red-400 text-red-400' : ''} />
           <span className="font-medium tabular-nums">{post._count.likes}</span>
         </button>
-        <button onClick={() => { setShowComments(true); setTimeout(() => commentInputRef.current?.focus(), 50); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all">
+        <button onClick={() => requireAuth(() => { setShowComments(true); setTimeout(() => commentInputRef.current?.focus(), 50); })} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all">
           <MessageCircle size={15} />
           <span className="font-medium tabular-nums">{post._count.comments}</span>
         </button>
+        <button onClick={() => requireAuth(() => setShowRepost(true))} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all" title="Поделиться в ленте">
+          <Repeat2 size={15} />
+        </button>
         <ShareButton url={`/post/${post.id}`} title={`Пост от ${post.author.firstName} ${post.author.lastName}`} text={post.content?.slice(0, 100)} iconSize={15} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all" />
-        <button onClick={() => saveMut.mutate()} disabled={saveMut.isPending}
+        <button onClick={() => requireAuth(() => saveMut.mutate())} disabled={saveMut.isPending}
           className={`ml-auto flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-all ${post.isSaved ? 'text-amber-400 hover:bg-amber-400/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
           title={post.isSaved ? 'Убрать из сохранённого' : 'Сохранить'}>
           <Star size={15} fill={post.isSaved ? 'currentColor' : 'none'} />
@@ -425,7 +506,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
               ))}
             </div>
           )}
-          <form onSubmit={e => { e.preventDefault(); if (commentText.trim()) commentMut.mutate(commentText.trim()); }} className="flex gap-2 items-center">
+          <form onSubmit={e => { e.preventDefault(); if (commentText.trim()) requireAuth(() => commentMut.mutate(commentText.trim())); }} className="flex gap-2 items-center">
             <input ref={commentInputRef} type="text" value={commentText} onChange={e => setCommentText(e.target.value)} placeholder="Написать комментарий..."
               className="flex-1 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors" />
             <button type="submit" disabled={!commentText.trim() || commentMut.isPending} className="p-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl transition-colors flex-shrink-0">
@@ -442,6 +523,42 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
         onConfirm={() => deleteMut.mutate()}
         onCancel={() => setConfirmDelete(false)}
       />
+
+      {showRepost && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setShowRepost(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-lg bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-5 pb-8 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+            <div className="flex items-center gap-2 mb-3">
+              <Repeat2 size={18} className="text-primary-400" />
+              <p className="text-base font-bold text-white">Поделиться в ленте</p>
+            </div>
+            <textarea
+              value={repostComment}
+              onChange={e => setRepostComment(e.target.value)}
+              placeholder="Добавьте комментарий (необязательно)..."
+              rows={3}
+              className="w-full bg-slate-800/60 border border-slate-700 focus:border-primary-500 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none resize-none transition-colors"
+            />
+            <div className="flex gap-2 justify-end mt-4">
+              <button type="button" onClick={() => setShowRepost(false)} className="px-4 py-2 text-sm text-slate-400 hover:text-white transition-colors">Отмена</button>
+              <button
+                type="button"
+                onClick={() => repostMut.mutate(repostComment)}
+                disabled={repostMut.isPending}
+                className="flex items-center gap-1.5 px-4 py-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white text-sm font-semibold rounded-xl transition-colors"
+              >
+                {repostMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Repeat2 size={14} />}
+                Поделиться в ленте
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 }
@@ -464,6 +581,7 @@ const POST_TYPE_META: Record<string, { label: string; icon: any; accent: string;
 
 const POST_TYPE_OPTIONS = [
   { type: 'blog',       label: 'Блог',              icon: FileText,    desc: 'Свободная форма',     inDev: false },
+  { type: 'question',   label: 'Вопрос',            icon: HelpCircle,  desc: 'Вопрос и обсуждение', inDev: false },
   { type: 'vacancy',    label: 'Вакансия',           icon: Briefcase,   desc: 'В разработке',        inDev: true },
   { type: 'event',      label: 'Мероприятие',        icon: Calendar,    desc: 'В разработке',        inDev: true },
   { type: 'task',       label: 'Задача',             icon: CheckSquare, desc: 'В разработке',        inDev: true },
@@ -543,18 +661,12 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
 
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-function applyPeriodFilter(posts: any[], period: string): any[] {
-  if (period === 'all') return posts;
-  const ms: Record<string, number> = { day: 86400000, week: 604800000, month: 2592000000, year: 31536000000 };
-  const cutoff = Date.now() - (ms[period] || 0);
-  return posts.filter(p => new Date(p.createdAt).getTime() >= cutoff);
-}
-
 function countActiveFilters(f: FlowFilters): number {
   return [
     f.postType !== 'all',
     f.authorKind !== 'all',
     f.period !== 'all',
+    f.cities.length > 0,
   ].filter(Boolean).length;
 }
 
@@ -609,12 +721,14 @@ export default function FeedPage() {
 
   const typeFilter = filters.postType !== 'all' ? filters.postType : undefined;
   const authorKindFilter = filters.authorKind !== 'all' ? filters.authorKind : undefined;
+  const periodFilter = filters.period !== 'all' ? filters.period : undefined;
+  const cityFilter = filters.cities.length > 0 ? filters.cities.join(',') : undefined;
 
   // ── Main feed — infinite scroll (chronological only) ──────────────────────
   const feed = useInfiniteQuery({
-    queryKey: ['feed', typeFilter, authorKindFilter],
+    queryKey: ['feed', typeFilter, authorKindFilter, periodFilter, cityFilter],
     queryFn: async ({ pageParam = 0 }) => {
-      const { data } = await postAPI.getFeed({ type: typeFilter, authorKind: authorKindFilter, offset: pageParam, limit: PAGE_SIZE });
+      const { data } = await postAPI.getFeed({ type: typeFilter, authorKind: authorKindFilter, period: periodFilter, city: cityFilter, offset: pageParam, limit: PAGE_SIZE });
       return data as any[];
     },
     initialPageParam: 0,
@@ -631,8 +745,7 @@ export default function FeedPage() {
     enabled: showSavedOnly,
   });
 
-  const rawPosts = showSavedOnly ? (saved.data ?? []) : (feed.data?.pages.flat() ?? []);
-  const posts = useMemo(() => applyPeriodFilter(rawPosts, filters.period), [rawPosts, filters.period]);
+  const posts = showSavedOnly ? (saved.data ?? []) : (feed.data?.pages.flat() ?? []);
 
   const isLoading = showSavedOnly ? saved.isLoading : feed.isLoading;
   const isError = showSavedOnly ? saved.isError : feed.isError;
