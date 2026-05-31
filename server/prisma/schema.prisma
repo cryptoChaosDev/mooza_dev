@@ -481,6 +481,7 @@ model User {
 
   birthDate             DateTime?
   birthDateVisible      Boolean   @default(false)
+  contactsVisible       Boolean   @default(true)
   lastSeenAt            DateTime?
   termsAgreedAt         DateTime?
   onboardingCompletedAt DateTime?

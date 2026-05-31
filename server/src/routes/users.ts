@@ -93,6 +93,7 @@ const userSelect = {
   occupancyStatus: true,
   birthDate: true,
   birthDateVisible: true,
+  contactsVisible: true,
   lastSeenAt: true,
   termsAgreedAt: true,
   onboardingCompletedAt: true,
@@ -156,6 +157,7 @@ const publicUserSelect = {
   occupancyStatus: true,
   birthDate: true,
   birthDateVisible: true,
+  contactsVisible: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
   portfolioLinks: { select: { id: true, type: true, url: true, title: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
@@ -186,7 +188,17 @@ router.get('/handle/:handle', optionalAuthenticate, async (req: AuthRequest, res
     });
 
     if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
-    res.json(user);
+
+    // Respect the same privacy gates as GET /:id.
+    const { birthDateVisible, contactsVisible, ...publicUser } = user as any;
+    if (!birthDateVisible) publicUser.birthDate = null;
+    if (!contactsVisible && publicUser.socialLinks && typeof publicUser.socialLinks === 'object') {
+      const CONTACT_KEYS = ['phone', 'email', 'tg_profile'];
+      const links = { ...(publicUser.socialLinks as Record<string, any>) };
+      for (const k of CONTACT_KEYS) delete links[k];
+      publicUser.socialLinks = links;
+    }
+    res.json(publicUser);
   } catch (error) {
     console.error('Get by handle error:', error);
     res.status(500).json({ error: 'Failed to get user' });
@@ -291,6 +303,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
       userProfessions, artistIds,
       occupancyStatus,
       email, phone,
+      contactsVisible,
     } = req.body;
 
     // Parse birthDate: prefer the ISO field, fall back to dd.mm.yyyy, reject invalid dates
@@ -328,6 +341,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     const parsedBirthDate = parseBirthDate();
     if (parsedBirthDate !== undefined) updateData.birthDate = parsedBirthDate;
     if (birthDateVisible !== undefined) updateData.birthDateVisible = !!birthDateVisible;
+    if (contactsVisible !== undefined) updateData.contactsVisible = !!contactsVisible;
     if (occupancyStatus !== undefined) updateData.occupancyStatus = occupancyStatus || null;
 
     // Email — optional set with format + uniqueness check (both fields are @unique)
@@ -859,8 +873,17 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
 
     // Hide birthDate from other users unless the owner opted to show it.
     // (The owner views their own profile through /users/me, which is unaffected.)
-    const { birthDateVisible, ...publicUser } = user as any;
+    const { birthDateVisible, contactsVisible, ...publicUser } = user as any;
     if (!birthDateVisible) publicUser.birthDate = null;
+
+    // Hide contact links (phone / email / telegram) unless the owner shows them.
+    // Contacts are otherwise visible to everyone (no viewer-completeness gate).
+    if (!contactsVisible && publicUser.socialLinks && typeof publicUser.socialLinks === 'object') {
+      const CONTACT_KEYS = ['phone', 'email', 'tg_profile'];
+      const links = { ...(publicUser.socialLinks as Record<string, any>) };
+      for (const k of CONTACT_KEYS) delete links[k];
+      publicUser.socialLinks = links;
+    }
 
     // Authoritative flag (from the VIEWER's DB record) for whether the viewer has
     // completed their own profile. Used by the client instead of a stale cached

@@ -673,13 +673,9 @@ export default function UserProfilePage() {
                   <span className="text-sm font-semibold text-white">Контакты</span>
                 </div>
                 <div className="p-4">
-                  {!me ? (
-                    <p className="text-xs text-slate-500 italic">Войдите, чтобы видеть контакты</p>
-                  ) : !user.viewerProfileComplete ? (
-                    <p className="text-xs text-slate-500 italic">Заполните свой профиль (имя, фото), чтобы видеть контакты</p>
-                  ) : (
-                    <SocialIconRow only={CONTACT_KEYS} links={(user.socialLinks as Record<string, string>) || {}} />
-                  )}
+                  {/* Contacts are visible to everyone; the owner controls visibility
+                      via the privacy setting (server strips them when hidden). */}
+                  <SocialIconRow only={CONTACT_KEYS} links={(user.socialLinks as Record<string, string>) || {}} />
                 </div>
               </div>
             )}

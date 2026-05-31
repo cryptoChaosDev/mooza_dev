@@ -9,7 +9,7 @@ import {
   Globe, DollarSign, Calendar,
   Headphones, Edit3, Plus, ChevronLeft, ChevronRight,
   FileText, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
-  Music2, Play, Pause, HandshakeIcon, Eye, Phone,
+  Music2, Play, Pause, HandshakeIcon, Eye, Phone, Shield,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConnectionCard from '../components/ConnectionCard';
@@ -117,8 +117,10 @@ export default function ProfilePage() {
     artistIds: [] as string[],
     birthDate: '',
     birthDateVisible: false,
+    contactsVisible: true,
     occupancyStatus: '' as '' | 'closed' | 'considering' | 'open',
   });
+  const [showPrivacy, setShowPrivacy] = useState(false);
 
   const [fieldsOfActivity, setFieldsOfActivity] = useState<any[]>([]);
   const [genres, setGenres] = useState<any[]>([]);
@@ -224,6 +226,7 @@ export default function ProfilePage() {
         artistIds: data.userArtists?.map((ua: any) => ua.artistId || ua.artist?.id) || [],
         birthDate: data.birthDate ? new Date(data.birthDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
         birthDateVisible: !!data.birthDateVisible,
+        contactsVisible: data.contactsVisible !== false,
         occupancyStatus: data.occupancyStatus || '',
       });
       setMyStandaloneProfessions(
@@ -922,6 +925,13 @@ export default function ProfilePage() {
                   <Eye size={16} />
                 </button>
               )}
+              <button
+                onClick={() => setShowPrivacy(true)}
+                className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
+                title="Приватность"
+              >
+                <Shield size={16} />
+              </button>
               {autoSaved && (
                 <span className="text-xs text-emerald-400 font-medium animate-pulse">✓ Сохранено</span>
               )}
@@ -999,19 +1009,9 @@ export default function ProfilePage() {
                   }}
                   className={inputCls}
                 />
-                {/* Birth date visibility toggle */}
-                <label className="flex items-center gap-2.5 mt-2 cursor-pointer select-none">
-                  <button
-                    type="button"
-                    onClick={() => setFormData({ ...formData, birthDateVisible: !formData.birthDateVisible })}
-                    className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${formData.birthDateVisible ? 'bg-primary-600' : 'bg-slate-700'}`}
-                  >
-                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform ${formData.birthDateVisible ? 'translate-x-4' : ''}`} />
-                  </button>
-                  <span className="text-xs text-slate-400">
-                    {formData.birthDateVisible ? 'Дата рождения видна другим' : 'Дата рождения скрыта'}
-                  </span>
-                </label>
+                <p className="text-[11px] text-slate-500 mt-1.5 flex items-center gap-1">
+                  <Shield size={11} /> Видимость даты рождения — в настройках приватности
+                </p>
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setEditingHero(false)} className="flex-1 py-2.5 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
@@ -1645,6 +1645,49 @@ export default function ProfilePage() {
     )}
 
     {viewConn && <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />}
+
+    {/* Privacy settings */}
+    {showPrivacy && createPortal(
+      <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowPrivacy(false)} />
+        <div className="relative w-full sm:max-w-sm bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
+          <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <Shield size={16} className="text-primary-400" />
+              <h3 className="text-base font-semibold text-white">Приватность</h3>
+            </div>
+            <button onClick={() => setShowPrivacy(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
+          </div>
+          <div className="px-5 py-3">
+            {([
+              { key: 'contactsVisible' as const, label: 'Показывать контакты', desc: 'Телефон, email и Telegram видны другим' },
+              { key: 'birthDateVisible' as const, label: 'Показывать дату рождения', desc: 'Дата рождения видна в вашем профиле' },
+            ]).map(row => (
+              <div key={row.key} className="flex items-center gap-3 py-3 border-b border-slate-800/60 last:border-0">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white">{row.label}</p>
+                  <p className="text-xs text-slate-500">{row.desc}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = { ...formData, [row.key]: !formData[row.key] };
+                    setFormData(next);
+                    updateMutation.mutate({ [row.key]: next[row.key] } as any, {
+                      onSettled: () => queryClient.invalidateQueries({ queryKey: ['profile'] }),
+                    });
+                  }}
+                  className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 ${formData[row.key] ? 'bg-primary-600' : 'bg-slate-700'}`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${formData[row.key] ? 'translate-x-4' : ''}`} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
 
     {/* Profession detail popup */}
     {selectedProfession && createPortal(
