@@ -14,10 +14,12 @@ const OCC = ['open', 'considering', 'closed'];
 
 async function main() {
   // Generate for every real user except the team account and admins.
-  const users = await prisma.user.findMany({
-    where: { isAdmin: false, NOT: { email: 'team@moooza.ru' } },
-    select: { id: true, firstName: true, lastName: true, occupancyStatus: true, city: true },
+  // (Filter team in code so NULL-email users are not dropped by a `NOT email=` clause.)
+  const allUsers = await prisma.user.findMany({
+    where: { isAdmin: false },
+    select: { id: true, email: true, firstName: true, lastName: true, occupancyStatus: true, city: true },
   });
+  const users = allUsers.filter((u) => u.email !== 'team@moooza.ru');
   const professions = await prisma.profession.findMany({
     include: { customFilters: { include: { values: true } } },
   });
