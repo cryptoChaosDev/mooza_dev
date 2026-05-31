@@ -290,6 +290,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
       fieldOfActivityId,
       userProfessions, artistIds,
       occupancyStatus,
+      email, phone,
     } = req.body;
 
     // Parse birthDate: prefer the ISO field, fall back to dd.mm.yyyy, reject invalid dates
@@ -328,6 +329,36 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     if (parsedBirthDate !== undefined) updateData.birthDate = parsedBirthDate;
     if (birthDateVisible !== undefined) updateData.birthDateVisible = !!birthDateVisible;
     if (occupancyStatus !== undefined) updateData.occupancyStatus = occupancyStatus || null;
+
+    // Email — optional set with format + uniqueness check (both fields are @unique)
+    if (email !== undefined && email !== null && String(email).trim() !== '') {
+      const normEmail = String(email).trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normEmail)) {
+        return res.status(400).json({ error: 'Некорректный email' });
+      }
+      const clash = await prisma.user.findFirst({
+        where: { email: normEmail, NOT: { id: req.userId } },
+        select: { id: true },
+      });
+      if (clash) return res.status(409).json({ error: 'Этот email уже используется другим аккаунтом' });
+      updateData.email = normEmail;
+    }
+
+    // Phone — optional; empty string clears it, otherwise normalize + uniqueness check
+    if (phone !== undefined) {
+      const rawPhone = String(phone ?? '').trim();
+      if (rawPhone === '') {
+        updateData.phone = null;
+      } else {
+        const normPhone = '+' + rawPhone.replace(/\D/g, '');
+        const clash = await prisma.user.findFirst({
+          where: { phone: normPhone, NOT: { id: req.userId } },
+          select: { id: true },
+        });
+        if (clash) return res.status(409).json({ error: 'Этот номер телефона уже используется' });
+        updateData.phone = normPhone;
+      }
+    }
 
     // Handle userProfessions: delete old, create new
     if (userProfessions !== undefined) {
