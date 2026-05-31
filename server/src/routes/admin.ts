@@ -111,13 +111,7 @@ router.get('/services', async (_req, res) => {
   const items = await prisma.service.findMany({
     orderBy: { createdAt: 'asc' },
     include: {
-      directions: {
-        select: {
-          id: true,
-          name: true,
-          fieldOfActivity: { select: { id: true, name: true } },
-        },
-      },
+      section: { select: { id: true, name: true } },
     },
   });
   res.json(items);

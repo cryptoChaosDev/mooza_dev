@@ -46,10 +46,20 @@ model Profession {
   groupMembers    UserArtist[]
   connections     Connection[]
   customFilters   CustomFilter[] @relation("ProfessionCustomFilters")
+  serviceProfessions ServiceProfession[]
 
   createdAt DateTime @default(now())
 
   @@index([directionId])
+}
+
+// Section — top-level grouping for services (catalog cards)
+model Section {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  sortOrder Int      @default(0)
+  services  Service[]
+  createdAt DateTime @default(now())
 }
 
 // ============ SEARCH FILTER MODELS ============
@@ -60,12 +70,30 @@ model Service {
   name      String
   sortOrder Int         @default(0)
 
+  sectionId String?
+  section   Section?    @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+
+  serviceProfessions ServiceProfession[]
+  customFilters      CustomFilter[] @relation("ServiceCustomFilters")
+
   userServices       UserService[]
   connectionServices ConnectionService[]
   reviews            Review[]
   deals              Deal[]
 
   createdAt DateTime @default(now())
+
+  @@index([sectionId])
+}
+
+// Explicit M2M join: services ↔ professions
+model ServiceProfession {
+  serviceId    String
+  professionId String
+  service      Service    @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  profession   Profession @relation(fields: [professionId], references: [id], onDelete: Cascade)
+  @@id([serviceId, professionId])
+  @@index([professionId])
 }
 
 // Independent filter: music genres
@@ -942,10 +970,14 @@ model CustomFilter {
   directions   Direction[]         @relation("DirectionCustomFilters")
   professionId String?
   profession   Profession?         @relation("ProfessionCustomFilters", fields: [professionId], references: [id], onDelete: Cascade)
+  serviceId    String?
+  service      Service?            @relation("ServiceCustomFilters", fields: [serviceId], references: [id], onDelete: Cascade)
   createdAt    DateTime            @default(now())
 
   @@unique([name, professionId])
+  @@unique([name, serviceId])
   @@index([professionId])
+  @@index([serviceId])
 }
 
 model CustomFilterValue {

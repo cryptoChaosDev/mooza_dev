@@ -590,11 +590,102 @@ router.get('/artists', async (req, res) => {
 
 
 // GET /api/references/professions/:id/filters — custom filters for a profession
+// → [{ id, name, values: [{ id, value, sortOrder }] }]
 router.get('/professions/:id/filters', async (req, res) => {
   try {
     const filters = await prisma.customFilter.findMany({
       where: { professionId: req.params.id },
-      include: {
+      select: {
+        id: true,
+        name: true,
+        values: {
+          select: { id: true, value: true, sortOrder: true },
+          orderBy: { sortOrder: 'asc' },
+        },
+      },
+      orderBy: { name: 'asc' },
+    });
+    res.json(filters);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/references/sections — all sections with their services (catalog cards)
+// → [{ id, name, sortOrder, services: [{ id, name, sortOrder }] }]
+router.get('/sections', async (_req, res) => {
+  try {
+    const sections = await prisma.section.findMany({
+      orderBy: { sortOrder: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        sortOrder: true,
+        services: {
+          select: { id: true, name: true, sortOrder: true },
+          orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+        },
+      },
+    });
+    res.json(sections);
+  } catch (e: any) {
+    console.error('Get sections error:', e);
+    res.status(500).json({ error: 'Failed to get sections' });
+  }
+});
+
+// GET /api/references/services/:id — service detail (section, professions, own filters)
+// → { id, name, sectionId, sectionName, professions: [{ id, name }],
+//     filters: [{ id, name, values: [{ id, value, sortOrder }] }] }
+router.get('/services/:id', async (req, res) => {
+  try {
+    const service = await prisma.service.findUnique({
+      where: { id: req.params.id },
+      select: {
+        id: true,
+        name: true,
+        sectionId: true,
+        section: { select: { name: true } },
+        serviceProfessions: {
+          select: { profession: { select: { id: true, name: true } } },
+        },
+        customFilters: {
+          select: {
+            id: true,
+            name: true,
+            values: {
+              select: { id: true, value: true, sortOrder: true },
+              orderBy: { sortOrder: 'asc' },
+            },
+          },
+          orderBy: { name: 'asc' },
+        },
+      },
+    });
+    if (!service) return res.status(404).json({ error: 'Service not found' });
+    res.json({
+      id: service.id,
+      name: service.name,
+      sectionId: service.sectionId,
+      sectionName: service.section?.name ?? null,
+      professions: service.serviceProfessions.map((sp) => sp.profession),
+      filters: service.customFilters,
+    });
+  } catch (e: any) {
+    console.error('Get service detail error:', e);
+    res.status(500).json({ error: 'Failed to get service' });
+  }
+});
+
+// GET /api/references/services/:id/filters — a service's own custom filters
+// → [{ id, name, values: [{ id, value, sortOrder }] }]
+router.get('/services/:id/filters', async (req, res) => {
+  try {
+    const filters = await prisma.customFilter.findMany({
+      where: { serviceId: req.params.id },
+      select: {
+        id: true,
+        name: true,
         values: {
           select: { id: true, value: true, sortOrder: true },
           orderBy: { sortOrder: 'asc' },
