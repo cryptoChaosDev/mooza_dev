@@ -25,8 +25,8 @@ FROM nginx:alpine
 # Copy built files
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy nginx config for SPA routing + OG bot proxy
-RUN echo 'server { listen 3000; location / { root /usr/share/nginx/html; index index.html; try_files $uri $uri/ /index.html; } }' > /etc/nginx/conf.d/default.conf
+# Copy nginx config for SPA routing + cache headers (no-cache for index.html & sw.js)
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 EXPOSE 3000
 
