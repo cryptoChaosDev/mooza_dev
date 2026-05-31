@@ -379,7 +379,10 @@ export default function RegisterPage() {
   const handleVkAuth = useCallback((vkUser: any, token: string, isNew?: boolean) => {
     setAuth(vkUser, token);
     localStorage.setItem('termsAgreed', '1');
-    navigate(isNew ? '/vk-setup' : '/');
+    // Show the VK setup wizard for brand-new users AND for any VK account that
+    // hasn't finished onboarding yet (e.g. created earlier but never completed).
+    const needsSetup = isNew || !vkUser?.onboardingCompletedAt;
+    navigate(needsSetup ? '/vk-setup' : '/');
   }, [setAuth, navigate]);
   const handleVkError = (msg: string) => { if (msg) setError(msg); };
 

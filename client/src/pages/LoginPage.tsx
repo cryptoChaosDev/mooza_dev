@@ -57,7 +57,7 @@ export default function LoginPage() {
           setAuth(u, vkToken);
           setUser(u);
           localStorage.setItem('termsAgreed', '1');
-          navigate(isNew ? '/vk-setup' : '/');
+          navigate((isNew || !u?.onboardingCompletedAt) ? '/vk-setup' : '/');
         })
         .catch(() => setError('Ошибка авторизации через ВКонтакте'));
     } else if (vkError) {
@@ -76,7 +76,7 @@ export default function LoginPage() {
 const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolean) => {
     setAuth(user, token);
     localStorage.setItem('termsAgreed', '1');
-    navigate(isNew ? '/vk-setup' : '/');
+    navigate((isNew || !user?.onboardingCompletedAt) ? '/vk-setup' : '/');
   }, [setAuth, navigate]);
 
   const handleSocialError = (msg: string) => {
