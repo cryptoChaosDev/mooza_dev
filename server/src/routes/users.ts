@@ -443,12 +443,13 @@ router.put('/me/services', authenticate, async (req: AuthRequest, res) => {
 
     const toConnect = (ids: string[] = []) => ids.map((id) => ({ id }));
 
-    // Delete and recreate in a transaction to prevent data loss on error
-    const VALID_STATUS = new Set(['draft', 'active', 'archived', 'pending_review']);
+    // Delete and recreate in a transaction to prevent data loss on error.
+    // No admin moderation — services go live (active) by default.
+    const VALID_STATUS = new Set(['draft', 'active', 'archived']);
     await prisma.$transaction(async (tx) => {
       await tx.userService.deleteMany({ where: { userId: req.userId } });
       for (const us of services) {
-        const status = VALID_STATUS.has((us as any).status) ? (us as any).status : 'draft';
+        const status = VALID_STATUS.has((us as any).status) ? (us as any).status : 'active';
         await tx.userService.create({
           data: {
             userId: req.userId!,
@@ -517,7 +518,7 @@ router.patch('/me/services/:serviceId', authenticate, async (req: AuthRequest, r
 router.patch('/me/services/:serviceId/status', authenticate, async (req: AuthRequest, res) => {
   try {
     const { status } = req.body;
-    if (!['active', 'draft', 'archived', 'pending_review'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    if (!['active', 'draft', 'archived'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
     const us = await prisma.userService.findUnique({ where: { id: req.params.serviceId } });
     if (!us || us.userId !== req.userId) return res.status(404).json({ error: 'Not found' });
     const updated = await prisma.userService.update({

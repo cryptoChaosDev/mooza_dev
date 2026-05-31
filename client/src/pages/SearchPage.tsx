@@ -388,8 +388,8 @@ export default function SearchPage() {
     queryKey: ['service-card-search', serviceSearchParams],
     queryFn: async () => {
       const { data } = await referenceAPI.searchServiceCards(serviceSearchParams);
-      const results = ((data as any)?.results ?? []) as any[];
-      return results.filter((r: any) => r.user?.id !== currentUser?.id);
+      // Catalog of services — show all created offerings, including the user's own.
+      return ((data as any)?.results ?? []) as any[];
     },
     enabled: activeTab === 'services',
   });

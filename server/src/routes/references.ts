@@ -573,7 +573,8 @@ router.get('/service-search', async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
     const cfvIds = String(customFilterValueIds || '').split(',').map(s => s.trim()).filter(Boolean);
 
-    const where: any = { status: 'active' };
+    // Show every created/submitted offering — only hide unfinished drafts and archived ones.
+    const where: any = { status: { notIn: ['draft', 'archived'] } };
     if (serviceId) where.serviceId = String(serviceId);
     if (sectionId) where.service = { sectionId: String(sectionId) };
     if (cfvIds.length) where.selectedCustomFilterValues = { some: { id: { in: cfvIds } } };

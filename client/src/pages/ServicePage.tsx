@@ -295,7 +295,7 @@ export default function ServicePage() {
             {status === 'draft' && (
               <>
                 <button
-                  onClick={() => statusMut.mutate('pending_review')}
+                  onClick={() => statusMut.mutate('active')}
                   disabled={statusMut.isPending}
                   className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-2xl transition-colors disabled:opacity-50"
                 >
@@ -319,12 +319,6 @@ export default function ServicePage() {
                 {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <ArchiveRestore size={15} />}
                 Опубликовать
               </button>
-            )}
-            {status === 'pending_review' && (
-              <div className="w-full py-3 flex items-center justify-center gap-2 text-sm text-blue-400 bg-blue-500/10 border border-blue-500/20 rounded-2xl">
-                <Loader2 size={14} className="animate-spin" />
-                Услуга на модерации — ожидайте проверки
-              </div>
             )}
           </div>
         )}
