@@ -283,23 +283,14 @@ export default function ServicePage() {
         {isOwner && (
           <div className="space-y-2">
             {status === 'active' && (
-              <>
-                <button
-                  onClick={() => statusMut.mutate('archived')}
-                  disabled={statusMut.isPending}
-                  className="w-full py-3 flex items-center justify-center gap-2 text-sm font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 rounded-2xl transition-colors disabled:opacity-50"
-                >
-                  {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Archive size={15} />}
-                  Убрать в архив
-                </button>
-                <button
-                  onClick={() => setShowDeal(true)}
-                  className="w-full py-3 flex items-center justify-center gap-2 text-sm font-medium bg-primary-600/20 border border-primary-500/40 text-primary-300 hover:bg-primary-600/30 rounded-2xl transition-colors"
-                >
-                  <HandshakeIcon size={15} />
-                  Оформить сделку
-                </button>
-              </>
+              <button
+                onClick={() => statusMut.mutate('archived')}
+                disabled={statusMut.isPending}
+                className="w-full py-3 flex items-center justify-center gap-2 text-sm font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 rounded-2xl transition-colors disabled:opacity-50"
+              >
+                {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Archive size={15} />}
+                Убрать в архив
+              </button>
             )}
             {status === 'draft' && (
               <>
@@ -360,10 +351,10 @@ export default function ServicePage() {
         )}
       </div>
 
-      {showDeal && us.user && (
+      {showDeal && !isOwner && us.user && (
         <DealCreateModal
-          executorId={isOwner ? '' : us.user.id}
-          executorName={isOwner ? '' : (authorName ?? '')}
+          executorId={us.user.id}
+          executorName={authorName ?? ''}
           serviceId={us.service?.id}
           userServiceId={us.id}
           serviceName={us.service?.name}
