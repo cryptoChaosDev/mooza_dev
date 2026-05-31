@@ -341,6 +341,9 @@ export default function ChatPage() {
     const onNew = (msg: Message) => {
       if (msg.conversationId === conversationId) {
         setMessages(prev => [...prev, msg]);
+        // We're reading this chat right now — mark it read so the incoming
+        // message doesn't linger as an unread notification in the bell.
+        messageAPI.markRead(conversationId).catch(() => {});
       }
     };
 

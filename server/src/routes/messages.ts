@@ -309,11 +309,13 @@ router.get('/conversations/:id', authenticate, async (req: AuthRequest, res) => 
       data: { lastReadAt: now },
     });
 
-    // Mark message notifications for this conversation as read in the bell
-    await db.notification.updateMany({
+    // Mark message notifications for this conversation as read in the bell,
+    // and tell the client to refresh its notification badge/list.
+    const cleared = await db.notification.updateMany({
       where: { userId, type: 'message', link: `/messages/${id}`, read: false },
       data: { read: true },
     });
+    if (cleared.count > 0) emitToUser(userId, 'notifications_read', { link: `/messages/${id}` });
 
     res.json({ conversation: conv, messages });
   } catch (error) {
@@ -506,6 +508,13 @@ router.patch('/conversations/:id/read', authenticate, async (req: AuthRequest, r
       where: { conversationId: req.params.id, userId: req.userId },
       data: { lastReadAt: new Date() },
     });
+    // Also clear the bell: a message read inside the chat must not keep piling
+    // up as an unread notification.
+    const cleared = await db.notification.updateMany({
+      where: { userId: req.userId!, type: 'message', link: `/messages/${req.params.id}`, read: false },
+      data: { read: true },
+    });
+    if (cleared.count > 0) emitToUser(req.userId!, 'notifications_read', { link: `/messages/${req.params.id}` });
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: 'Failed to mark as read' });

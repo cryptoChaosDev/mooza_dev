@@ -9,7 +9,7 @@ import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
 import CookieConsent from './components/CookieConsent';
 import { IS_TMA, initTelegramApp, twa } from './lib/telegram';
-import { authAPI } from './lib/api';
+import { authAPI, messageAPI } from './lib/api';
 
 
 const LandingPage        = lazy(() => import('./pages/LandingPage'));
@@ -294,11 +294,29 @@ function App() {
     // ── Socket handlers ─────────────────────────────────────────────────────
 
     socket.on('new_notification', (notif: any) => {
+      // If this is a message notification for the chat we're already viewing,
+      // we're reading it live — mark it read and don't badge or list it.
+      if (notif?.type === 'message' && typeof notif.link === 'string') {
+        const path = window.location.pathname;
+        const chatPath = notif.link.replace('/messages/', '/chat/');
+        if (path === notif.link || path === chatPath) {
+          const convId = notif.link.split('/').pop();
+          if (convId) messageAPI.markRead(convId).catch(() => {});
+          return;
+        }
+      }
       // Instant prepend to cached list — no waiting for server round-trip
       queryClient.setQueryData<any[]>(['notifications'], (prev) =>
         prev ? [notif, ...prev] : [notif]
       );
       bs().incrementNotifications();
+    });
+
+    // When notifications were marked read elsewhere (e.g. reading a chat),
+    // refresh the badge count and the cached list so they stop showing on top.
+    socket.on('notifications_read', () => {
+      fetchCounts();
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     });
 
     socket.on('new_message', (message: any) => {
@@ -400,6 +418,7 @@ function App() {
       if (s) {
         s.off('connect_error');
         s.off('new_notification');
+        s.off('notifications_read');
         s.off('new_message');
         s.off('message_edited');
         s.off('message_deleted');
