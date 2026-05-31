@@ -4,6 +4,7 @@ import { ArrowLeft, SlidersHorizontal } from 'lucide-react';
 
 export interface FlowFilters {
   postType: string;
+  authorKind: string;
   period: string;
 }
 
@@ -11,6 +12,7 @@ export const FLOW_FILTERS_KEY = 'mooza_flow_filters';
 
 export const DEFAULT_FILTERS: FlowFilters = {
   postType: 'all',
+  authorKind: 'all',
   period: 'all',
 };
 

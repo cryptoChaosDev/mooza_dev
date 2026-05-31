@@ -1,12 +1,12 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Send, Heart, MessageCircle, Trash2, Loader2, X,
   MoreHorizontal, Image, Pencil, Check,
   Crown, BadgeCheck, Ban, SlidersHorizontal,
   Plus, FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench,
-  Zap, BarChart3, Star,
+  Zap, BarChart3, Star, WifiOff, RefreshCw, HelpCircle,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import ShareButton from '../components/ShareButton';
@@ -16,7 +16,7 @@ import OnboardingPrompt from '../components/OnboardingPrompt';
 import AvatarComponent from '../components/Avatar';
 import AudioPlayer from '../components/AudioPlayer';
 import { ReactionBar, DoubleTapReactWrapper } from '../components/ReactionBar';
-import { loadFilters, DEFAULT_FILTERS, FlowFilters } from './FlowSettingsPage';
+import { loadFilters, DEFAULT_FILTERS, FlowFilters, FLOW_FILTERS_KEY } from './FlowSettingsPage';
 import ConfirmDialog from '../components/ConfirmDialog';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -450,6 +450,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
 
 const POST_TYPE_META: Record<string, { label: string; icon: any; accent: string; badge: string }> = {
   blog:       { label: 'Блог',              icon: FileText,    accent: '',                                           badge: '' },
+  question:   { label: 'Вопрос',            icon: HelpCircle,  accent: 'border-l-2 border-blue-500/60',              badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
   service:    { label: 'Услуга',            icon: Wrench,      accent: 'border-l-2 border-primary-500/60',           badge: 'bg-primary-500/10 text-primary-400 border-primary-500/20' },
   vacancy:    { label: 'Вакансия',          icon: Briefcase,   accent: 'border-l-2 border-amber-500/60',             badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
   event:      { label: 'Мероприятие',       icon: Calendar,    accent: 'border-l-2 border-purple-500/60',            badge: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
@@ -508,23 +509,51 @@ function PostTypePicker({ onClose }: { onClose: () => void }) {
   );
 }
 
+// ─── Filter chips ──────────────────────────────────────────────────────────────
+
+const TYPE_CHIPS = [
+  { id: 'all',        label: 'Все' },
+  { id: 'blog',       label: 'Свободный блог' },
+  { id: 'question',   label: 'Вопрос' },
+  { id: 'poll',       label: 'Опрос' },
+  { id: 'service',    label: 'Апдейт услуги' },
+  { id: 'employment', label: 'Апдейт занятости' },
+];
+
+const AUTHOR_CHIPS = [
+  { id: 'all',      label: 'Все' },
+  { id: 'resident', label: 'Резидент' },
+  { id: 'channel',  label: 'Канал' },
+  { id: 'artist',   label: 'Артист' },
+  { id: 'mine',     label: 'Мои' },
+];
+
+function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+        active ? 'bg-primary-600 border-primary-500 text-white shadow-sm' : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
-function applyFilters(posts: any[], filters: FlowFilters): any[] {
-  let result = [...posts];
-
-  if (filters.period !== 'all') {
-    const ms: Record<string, number> = { day: 86400000, week: 604800000, month: 2592000000, year: 31536000000 };
-    const cutoff = Date.now() - (ms[filters.period] || 0);
-    result = result.filter(p => new Date(p.createdAt).getTime() >= cutoff);
-  }
-
-  return result;
+function applyPeriodFilter(posts: any[], period: string): any[] {
+  if (period === 'all') return posts;
+  const ms: Record<string, number> = { day: 86400000, week: 604800000, month: 2592000000, year: 31536000000 };
+  const cutoff = Date.now() - (ms[period] || 0);
+  return posts.filter(p => new Date(p.createdAt).getTime() >= cutoff);
 }
 
 function countActiveFilters(f: FlowFilters): number {
   return [
     f.postType !== 'all',
+    f.authorKind !== 'all',
     f.period !== 'all',
   ].filter(Boolean).length;
 }
@@ -551,6 +580,8 @@ function PostSkeleton() {
 
 // ─── Feed Page ─────────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 20;
+
 export default function FeedPage() {
   const { user: currentUser } = useAuthStore();
   const navigate = useNavigate();
@@ -558,10 +589,18 @@ export default function FeedPage() {
   const targetPostId = searchParams.get('post');
   const [showPostTypePicker, setShowPostTypePicker] = useState(false);
   const [filters, setFilters] = useState<FlowFilters>(loadFilters);
-  const [sortBy, setSortBy] = useState<'new' | 'popular'>('new');
   const [showSavedOnly, setShowSavedOnly] = useState(false);
 
-  // Reload filters when returning from settings
+  // Persist filters between sessions (localStorage).
+  const updateFilters = useCallback((patch: Partial<FlowFilters>) => {
+    setFilters(prev => {
+      const next = { ...prev, ...patch };
+      localStorage.setItem(FLOW_FILTERS_KEY, JSON.stringify(next));
+      return next;
+    });
+  }, []);
+
+  // Reload filters when returning from the settings page (period etc.)
   useEffect(() => {
     const onFocus = () => setFilters(loadFilters());
     window.addEventListener('focus', onFocus);
@@ -569,24 +608,53 @@ export default function FeedPage() {
   }, []);
 
   const typeFilter = filters.postType !== 'all' ? filters.postType : undefined;
+  const authorKindFilter = filters.authorKind !== 'all' ? filters.authorKind : undefined;
 
-  const { data: posts, isLoading } = useQuery({
-    queryKey: ['feed', typeFilter, sortBy, showSavedOnly],
-    queryFn: async () => {
-      if (showSavedOnly) {
-        const { data } = await postAPI.getSavedPosts();
-        return data;
-      }
-      const { data } = await postAPI.getFeed({ type: typeFilter, sort: sortBy });
-      return data;
+  // ── Main feed — infinite scroll (chronological only) ──────────────────────
+  const feed = useInfiniteQuery({
+    queryKey: ['feed', typeFilter, authorKindFilter],
+    queryFn: async ({ pageParam = 0 }) => {
+      const { data } = await postAPI.getFeed({ type: typeFilter, authorKind: authorKindFilter, offset: pageParam, limit: PAGE_SIZE });
+      return data as any[];
     },
-    refetchInterval: 30000,
+    initialPageParam: 0,
+    // A page may include up to 7 pinned team posts for brand-new users, so use >=.
+    getNextPageParam: (lastPage, allPages) => lastPage.length >= PAGE_SIZE ? allPages.length * PAGE_SIZE : undefined,
+    enabled: !showSavedOnly,
+    refetchInterval: showSavedOnly ? false : 60000,
   });
 
-  const filteredPosts = useMemo(() => applyFilters(posts ?? [], filters), [posts, filters]);
+  // ── Saved posts (separate view) ───────────────────────────────────────────
+  const saved = useQuery({
+    queryKey: ['feed-saved'],
+    queryFn: async () => { const { data } = await postAPI.getSavedPosts(); return data as any[]; },
+    enabled: showSavedOnly,
+  });
+
+  const rawPosts = showSavedOnly ? (saved.data ?? []) : (feed.data?.pages.flat() ?? []);
+  const posts = useMemo(() => applyPeriodFilter(rawPosts, filters.period), [rawPosts, filters.period]);
+
+  const isLoading = showSavedOnly ? saved.isLoading : feed.isLoading;
+  const isError = showSavedOnly ? saved.isError : feed.isError;
+  const retry = () => { if (showSavedOnly) saved.refetch(); else feed.refetch(); };
+
+  // ── Infinite-scroll sentinel ──────────────────────────────────────────────
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (showSavedOnly) return;
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting && feed.hasNextPage && !feed.isFetchingNextPage) {
+        feed.fetchNextPage();
+      }
+    }, { rootMargin: '600px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [showSavedOnly, feed.hasNextPage, feed.isFetchingNextPage, feed.fetchNextPage]);
 
   useEffect(() => {
-    if (!targetPostId || !posts) return;
+    if (!targetPostId || posts.length === 0) return;
     const el = document.getElementById(`post-${targetPostId}`);
     if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [targetPostId, posts]);
@@ -604,64 +672,89 @@ export default function FeedPage() {
               <Zap size={20} className="text-primary-400" />
               <h2 className="text-lg font-bold text-white">Поток</h2>
             </div>
-            <button
-              onClick={() => navigate('/flow-settings')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors relative"
-            >
-              <SlidersHorizontal size={16} />
-              <span>Настроить</span>
-              {activeFilterCount > 0 && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-                  {activeFilterCount}
-                </span>
-              )}
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setShowSavedOnly(s => !s)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm transition-colors ${showSavedOnly ? 'text-amber-300 bg-amber-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                title="Сохранённые"
+              >
+                <Star size={16} fill={showSavedOnly ? 'currentColor' : 'none'} />
+              </button>
+              <button
+                onClick={() => navigate('/flow-settings')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors relative"
+              >
+                <SlidersHorizontal size={16} />
+                <span>Настроить</span>
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
-          {/* Sort + Saved chips */}
-          <div className="px-4 pb-2 flex gap-2 overflow-x-auto scrollbar-none">
-            <button
-              onClick={() => { setSortBy('new'); setShowSavedOnly(false); }}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${!showSavedOnly && sortBy === 'new' ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white'}`}
-            >
-              По новизне
-            </button>
-            <button
-              onClick={() => { setSortBy('popular'); setShowSavedOnly(false); }}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${!showSavedOnly && sortBy === 'popular' ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white'}`}
-            >
-              Популярное
-            </button>
-            <button
-              onClick={() => setShowSavedOnly(s => !s)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-xl text-xs font-medium border transition-all flex items-center gap-1 ${showSavedOnly ? 'bg-amber-500/20 border-amber-500/40 text-amber-300' : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white'}`}
-            >
-              <Star size={12} fill={showSavedOnly ? 'currentColor' : 'none'} />Сохранённые
-            </button>
-          </div>
+
+          {/* Chip rows — hidden in saved view */}
+          {!showSavedOnly && (
+            <div className="pb-2 space-y-1.5">
+              {/* Row 1 — post type */}
+              <div className="px-4 flex gap-2 overflow-x-auto scrollbar-none">
+                {TYPE_CHIPS.map(c => (
+                  <FilterChip key={c.id} label={c.label} active={filters.postType === c.id} onClick={() => updateFilters({ postType: c.id })} />
+                ))}
+              </div>
+              {/* Row 2 — author kind */}
+              <div className="px-4 flex gap-2 overflow-x-auto scrollbar-none">
+                {AUTHOR_CHIPS.map(c => (
+                  <FilterChip key={c.id} label={c.label} active={filters.authorKind === c.id} onClick={() => updateFilters({ authorKind: c.id })} />
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Onboarding prompt for new users */}
-        <OnboardingPrompt />
+        {!showSavedOnly && <OnboardingPrompt />}
 
         {/* Posts */}
         <div className="pb-28">
-          {isLoading ? (
+          {isError && posts.length === 0 ? (
+            <div className="flex flex-col items-center py-16 px-6 text-center">
+              <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><WifiOff size={32} className="text-slate-600" /></div>
+              <p className="text-white font-semibold mb-1">Не удалось загрузить ленту</p>
+              <p className="text-slate-500 text-sm mb-4">Проверьте подключение к сети</p>
+              <button onClick={retry} className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-medium transition-colors">
+                <RefreshCw size={15} /> Повторить
+              </button>
+            </div>
+          ) : isLoading ? (
             <div className="divide-y divide-slate-800/60">
               {[1, 2, 3].map(i => <PostSkeleton key={i} />)}
             </div>
-          ) : filteredPosts.length > 0 ? (
-            <div className="divide-y divide-slate-800/60">
-              {filteredPosts.map((post: any) => (
-                <PostCard key={post.id} post={post} currentUserId={currentUser?.id ?? ''} highlight={post.id === targetPostId} />
-              ))}
-            </div>
+          ) : posts.length > 0 ? (
+            <>
+              <div className="divide-y divide-slate-800/60">
+                {posts.map((post: any) => (
+                  <PostCard key={post.id} post={post} currentUserId={currentUser?.id ?? ''} highlight={post.id === targetPostId} />
+                ))}
+              </div>
+              {/* Infinite-scroll sentinel + loader */}
+              {!showSavedOnly && (
+                <div ref={sentinelRef} className="py-6 flex justify-center">
+                  {feed.isFetchingNextPage && <Loader2 size={22} className="animate-spin text-slate-500" />}
+                </div>
+              )}
+            </>
           ) : (
             <div className="flex flex-col items-center py-16 px-6 text-center">
-              <div className="p-4 bg-slate-800/50 rounded-2xl mb-4"><Zap size={32} className="text-slate-600" /></div>
-              <p className="text-white font-semibold mb-1">Поток пуст</p>
-              <p className="text-slate-500 text-sm">Добавьте друзей или сбросьте фильтры</p>
-              {activeFilterCount > 0 && (
-                <button onClick={() => { setFilters(DEFAULT_FILTERS); localStorage.removeItem('mooza_flow_filters'); }} className="mt-3 text-sm text-primary-400 hover:text-primary-300 transition-colors">
+              <div className="p-4 bg-slate-800/50 rounded-2xl mb-4">
+                {showSavedOnly ? <Star size={32} className="text-slate-600" /> : <Zap size={32} className="text-slate-600" />}
+              </div>
+              <p className="text-white font-semibold mb-1">{showSavedOnly ? 'Нет сохранённых' : 'Поток пуст'}</p>
+              <p className="text-slate-500 text-sm">{showSavedOnly ? 'Нажмите ★ на посте, чтобы сохранить' : 'Сбросьте фильтры или создайте первый пост'}</p>
+              {!showSavedOnly && activeFilterCount > 0 && (
+                <button onClick={() => { setFilters(DEFAULT_FILTERS); localStorage.removeItem(FLOW_FILTERS_KEY); }} className="mt-3 text-sm text-primary-400 hover:text-primary-300 transition-colors">
                   Сбросить фильтры
                 </button>
               )}

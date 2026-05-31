@@ -171,7 +171,7 @@ export const referenceAPI = {
 
 // Post API
 export const postAPI = {
-  getFeed: (params?: { limit?: number; offset?: number; type?: string; sort?: 'new' | 'popular' }) =>
+  getFeed: (params?: { limit?: number; offset?: number; type?: string; authorKind?: string }) =>
     api.get('/posts/feed', { params }),
   getMyAuthors: () => api.get('/posts/my-authors'),
   createPost: (data: { content: string; type?: string; imageUrl?: string; audioUrl?: string; audioName?: string; channelId?: string | null; artistId?: string | null; employmentStatus?: string; pollOptions?: string[]; pollEndsAt?: string }) =>

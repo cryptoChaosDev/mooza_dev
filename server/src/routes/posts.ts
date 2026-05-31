@@ -99,52 +99,60 @@ const buildFeedInclude = (userId: string | undefined) => ({
 const TEAM_EMAIL = 'team@moooza.ru';
 
 // Get feed (all posts from the social network)
+// Chronological only (newest first). Supports:
+//   type       — post type (blog | question | poll | service | employment | …)
+//   authorKind — all | resident (profile) | channel | artist | mine
+//   limit/offset — pagination for infinite scroll
 router.get('/feed', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { limit = 20, offset = 0, type, sort } = req.query;
+    const { limit = 20, offset = 0, type, authorKind } = req.query;
     const offsetNum = Number(offset);
     const limitNum = Number(limit);
-
-    const orderBy: any = sort === 'popular'
-      ? [{ likes: { _count: 'desc' } }, { createdAt: 'desc' }]
-      : { createdAt: 'desc' };
+    const kind = authorKind ? String(authorKind) : 'all';
 
     const include = buildFeedInclude(req.userId) as any;
 
+    // Team welcome account — its posts are pinned for brand-new users and kept
+    // out of the normal chronological stream (avoids duplicates across pages).
+    const teamUser = await prisma.user.findUnique({
+      where: { email: TEAM_EMAIL },
+      select: { id: true },
+    });
+    const teamUserId = teamUser?.id ?? null;
+
+    // Build the where clause from filters.
+    const where: any = {};
+    if (type && type !== 'all') where.type = String(type);
+    if (kind === 'resident') { where.channelId = null; where.artistId = null; }
+    else if (kind === 'channel') where.channelId = { not: null };
+    else if (kind === 'artist') where.artistId = { not: null };
+    else if (kind === 'mine') where.authorId = req.userId;
+    else if (teamUserId) where.authorId = { not: teamUserId }; // exclude team from default/other views
+
     const posts = await prisma.post.findMany({
-      where: (type && type !== 'all' ? { type: String(type) } : undefined) as any,
+      where,
       include,
-      orderBy,
+      orderBy: { createdAt: 'desc' },
       take: limitNum,
       skip: offsetNum,
     });
 
-    // Pin team posts at the top of the default feed for new users:
-    //  - only on the very first page (offset === 0)
-    //  - only when no type filter is active (or `type=all`)
-    //  - only on the default chronological sort (not `sort=popular`)
-    //  - only when the user has no posts of their own yet (brand-new account)
+    // Pin team welcome posts at the top — only on the first page of the default
+    // feed (no type/author filter) and only for users with no posts of their own.
     let pinnedPosts: typeof posts = [];
-    const isDefaultFeed = (!type || type === 'all') && sort !== 'popular';
-    if (isDefaultFeed && offsetNum === 0 && req.userId) {
+    const isDefaultFeed = (!type || type === 'all') && kind === 'all';
+    if (isDefaultFeed && offsetNum === 0 && req.userId && teamUserId) {
       const myPostsCount = await prisma.post.count({ where: { authorId: req.userId } });
       if (myPostsCount === 0) {
-        const teamUser = await prisma.user.findUnique({
-          where: { email: TEAM_EMAIL },
-          select: { id: true },
+        pinnedPosts = await prisma.post.findMany({
+          where: { authorId: teamUserId },
+          include,
+          orderBy: { createdAt: 'asc' },
+          take: 7,
         });
-        if (teamUser) {
-          pinnedPosts = await prisma.post.findMany({
-            where: { authorId: teamUser.id },
-            include,
-            orderBy: { createdAt: 'asc' }, // show welcome posts in the order they were written
-            take: 7,
-          });
-        }
       }
     }
 
-    // Merge pinned posts in front, removing any duplicates from the main list.
     const pinnedIds = new Set(pinnedPosts.map(p => p.id));
     const combined = [
       ...pinnedPosts,
