@@ -116,7 +116,7 @@ const TEAM_EMAIL = 'team@moooza.ru';
 //   limit/offset — pagination for infinite scroll
 router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
   try {
-    const { limit = 20, offset = 0, type, authorKind, period, city } = req.query;
+    const { limit = 20, offset = 0, type, authorKind, period, city, employment, artistType, genre } = req.query;
     const offsetNum = Number(offset);
     const limitNum = Number(limit);
     const kind = authorKind ? String(authorKind) : 'all';
@@ -172,6 +172,21 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
         .map(c => c.trim())
         .filter(Boolean);
       if (cityNames.length > 0) where.city = { in: cityNames };
+    }
+
+    // ── Contextual filters (E4) ──────────────────────────────────────────────
+    // Employment status — filter by the post author's occupancy status
+    // (shown in UI for «Резидент» author or «Апдейт занятости» type).
+    if (employment && employment !== 'all') {
+      where.author = { ...(where.author || {}), occupancyStatus: String(employment) };
+    }
+    // Artist type — only artist posts have an artist relation (shown for «Артист»).
+    if (artistType && artistType !== 'all') {
+      where.artist = { ...(where.artist || {}), type: String(artistType) };
+    }
+    // Genre — artist posts whose artist is tagged with the given genre.
+    if (genre && genre !== 'all') {
+      where.artist = { ...(where.artist || {}), genres: { some: { genre: { name: String(genre) } } } };
     }
 
     const posts = await prisma.post.findMany({

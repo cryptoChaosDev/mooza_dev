@@ -7,6 +7,10 @@ export interface FlowFilters {
   authorKind: string;
   period: string;
   cities: string[];
+  // Contextual filters (E4)
+  employment: string;  // all | open | considering | closed
+  artistType: string;  // all | SOLO | GROUP | COVER_GROUP
+  genre: string;       // all | <genre name>
 }
 
 export const FLOW_FILTERS_KEY = 'mooza_flow_filters';
@@ -16,6 +20,9 @@ export const DEFAULT_FILTERS: FlowFilters = {
   authorKind: 'all',
   period: 'all',
   cities: [],
+  employment: 'all',
+  artistType: 'all',
+  genre: 'all',
 };
 
 export function loadFilters(): FlowFilters {
@@ -67,6 +74,29 @@ const PERIODS = [
   { id: '3months', label: 'За 3 месяца' },
   { id: 'year', label: 'За год' },
   { id: 'all', label: 'За всё время' },
+];
+
+// ── Contextual filter values (E4) ───────────────────────────────────────────
+const EMPLOYMENT_STATUSES = [
+  { id: 'all', label: 'Все' },
+  { id: 'open', label: 'Открыт' },
+  { id: 'considering', label: 'Рассматриваю' },
+  { id: 'closed', label: 'Закрыт' },
+];
+
+const ARTIST_TYPES = [
+  { id: 'all', label: 'Все' },
+  { id: 'SOLO', label: 'Соло-артист' },
+  { id: 'GROUP', label: 'Группа' },
+  { id: 'COVER_GROUP', label: 'Кавер-группа' },
+];
+
+const GENRES = [
+  'Поп', 'Рок', 'Метал', 'Панк', 'Хип-Хоп', 'R&B', 'Соул', 'Фанк',
+  'Электронная музыка', 'Джаз', 'Классическая музыка', 'Фолк', 'Этно',
+  'Шансон', 'Латино', 'Регги', 'Блюз', 'Кантри', 'K-pop', 'J-pop',
+  'Аниме-музыка', 'Инди', 'Детская музыка', 'Религиозная', 'Госпел',
+  'Опера', 'Мюзикл', 'Экспериментальная музыка', 'Open format', 'Любой жанр',
 ];
 
 // ─── City multiselect ───────────────────────────────────────────────────────
@@ -205,7 +235,7 @@ export default function FlowSettingsPage() {
   const navigate = useNavigate();
   const [filters, setFilters] = useState<FlowFilters>(loadFilters);
 
-  const set = (key: 'postType' | 'authorKind' | 'period', value: string) => {
+  const set = (key: 'postType' | 'authorKind' | 'period' | 'employment' | 'artistType' | 'genre', value: string) => {
     setFilters(prev => {
       const next = { ...prev, [key]: value };
       localStorage.setItem(FLOW_FILTERS_KEY, JSON.stringify(next));
@@ -270,6 +300,43 @@ export default function FlowSettingsPage() {
               onRemove={city => setCities(filters.cities.filter(c => c !== city))}
             />
           </Section>
+
+          {/* ── Contextual filters (E4) ── */}
+          {(filters.authorKind === 'resident' || filters.postType === 'employment') && (
+            <Section title="Статус занятости">
+              {EMPLOYMENT_STATUSES.map(s => (
+                <Chip key={s.id} label={s.label} active={filters.employment === s.id} onClick={() => set('employment', s.id)} />
+              ))}
+            </Section>
+          )}
+
+          {filters.authorKind === 'artist' && (
+            <>
+              <Section title="Тип артиста">
+                {ARTIST_TYPES.map(t => (
+                  <Chip key={t.id} label={t.label} active={filters.artistType === t.id} onClick={() => set('artistType', t.id)} />
+                ))}
+              </Section>
+              <Section title="Жанр">
+                <Chip label="Все" active={filters.genre === 'all'} onClick={() => set('genre', 'all')} />
+                {GENRES.map(g => (
+                  <Chip key={g} label={g} active={filters.genre === g} onClick={() => set('genre', g)} />
+                ))}
+              </Section>
+            </>
+          )}
+
+          {/* Deferred contextual filters — require additional data model work */}
+          {filters.authorKind === 'resident' && (
+            <div className="px-4 py-3 border-b border-slate-800/60">
+              <p className="text-[11px] text-slate-600">Фильтры «Сфера» и «Уровень автора» — скоро</p>
+            </div>
+          )}
+          {filters.postType === 'service' && (
+            <div className="px-4 py-3 border-b border-slate-800/60">
+              <p className="text-[11px] text-slate-600">Фильтр «Тип услуги» — скоро</p>
+            </div>
+          )}
 
         </div>
 

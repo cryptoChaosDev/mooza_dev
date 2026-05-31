@@ -667,6 +667,9 @@ function countActiveFilters(f: FlowFilters): number {
     f.authorKind !== 'all',
     f.period !== 'all',
     f.cities.length > 0,
+    f.employment !== 'all',
+    f.artistType !== 'all',
+    f.genre !== 'all',
   ].filter(Boolean).length;
 }
 
@@ -723,12 +726,15 @@ export default function FeedPage() {
   const authorKindFilter = filters.authorKind !== 'all' ? filters.authorKind : undefined;
   const periodFilter = filters.period !== 'all' ? filters.period : undefined;
   const cityFilter = filters.cities.length > 0 ? filters.cities.join(',') : undefined;
+  const employmentFilter = filters.employment !== 'all' ? filters.employment : undefined;
+  const artistTypeFilter = filters.artistType !== 'all' ? filters.artistType : undefined;
+  const genreFilter = filters.genre !== 'all' ? filters.genre : undefined;
 
   // ── Main feed — infinite scroll (chronological only) ──────────────────────
   const feed = useInfiniteQuery({
-    queryKey: ['feed', typeFilter, authorKindFilter, periodFilter, cityFilter],
+    queryKey: ['feed', typeFilter, authorKindFilter, periodFilter, cityFilter, employmentFilter, artistTypeFilter, genreFilter],
     queryFn: async ({ pageParam = 0 }) => {
-      const { data } = await postAPI.getFeed({ type: typeFilter, authorKind: authorKindFilter, period: periodFilter, city: cityFilter, offset: pageParam, limit: PAGE_SIZE });
+      const { data } = await postAPI.getFeed({ type: typeFilter, authorKind: authorKindFilter, period: periodFilter, city: cityFilter, employment: employmentFilter, artistType: artistTypeFilter, genre: genreFilter, offset: pageParam, limit: PAGE_SIZE });
       return data as any[];
     },
     initialPageParam: 0,
