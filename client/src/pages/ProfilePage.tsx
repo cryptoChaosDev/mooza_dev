@@ -7,7 +7,7 @@ import { useAuthStore } from '../stores/authStore';
 import {
   Camera, Save, X, MapPin, Briefcase, Star, LogOut,
   Globe, Calendar,
-  Headphones, Edit3, Plus, ChevronLeft, ChevronRight,
+  Headphones, Edit3, Plus,
   FileText, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
   Music2, Play, Pause, HandshakeIcon, Eye, Phone, Shield,
 } from 'lucide-react';
@@ -128,10 +128,13 @@ export default function ProfilePage() {
   const [imageFullscreen, setImageFullscreen] = useState<string | null>(null);
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
   const [portfolioTab, setPortfolioTab] = useState<'audio' | 'images' | 'other'>('audio');
-  const [addStep, setAddStep] = useState<'section' | 'service' | 'filters' | null>(null);
+  // Service add/edit form (single comprehensive form).
+  // serviceFormOpen: 'add' to create a new entry, or the index of an existing
+  // entry being edited. null = closed.
+  const [serviceFormOpen, setServiceFormOpen] = useState<'add' | number | null>(null);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
   const [sections, setSections] = useState<any[]>([]);
-  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+  const [catalogSearch, setCatalogSearch] = useState('');
   const [pendingServiceFilters, setPendingServiceFilters] = useState<ServiceCustomFilter[]>([]);
   const [pendingServiceFilterSel, setPendingServiceFilterSel] = useState<Record<string, string[]>>({});
   const [loadingServiceDetail, setLoadingServiceDetail] = useState(false);
@@ -183,12 +186,12 @@ export default function ProfilePage() {
     return () => clearTimeout(t);
   }, [profSearch]);
 
-  // Load the sections catalog when the services editor opens (Task 2)
+  // Load the sections catalog when the service form opens (for the autocomplete)
   useEffect(() => {
-    if (editingServices) {
+    if (serviceFormOpen !== null && sections.length === 0) {
       referenceAPI.getSections().then(r => setSections(r.data)).catch(() => {});
     }
-  }, [editingServices]);
+  }, [serviceFormOpen, sections.length]);
 
   // Preload + expand filters for every already-added profession while editing (Task 1)
   useEffect(() => {
@@ -397,9 +400,12 @@ export default function ProfilePage() {
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingSocials(false); }
   };
 
-  const handleSaveServices = async () => {
-    try { await updateServicesMutation.mutateAsync(userServices); }
-    finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingServices(false); setAddStep(null); setActiveSectionId(null); }
+  const closeServiceForm = () => {
+    setServiceFormOpen(null);
+    setPending(emptyEntry());
+    setPendingServiceFilters([]);
+    setPendingServiceFilterSel({});
+    setCatalogSearch('');
   };
 
   const loadProfFilters = async (profId: string) => {
@@ -436,11 +442,29 @@ export default function ProfilePage() {
     }
   };
 
-  // When a service is picked, load its own filters + linked professions (Task 2)
-  const selectService = async (svc: { id: string; name: string }, sectionId: string, sectionName: string) => {
+  // Value TEXTS the user already selected across their professions — used to
+  // partially auto-fill matching service filter values when a service is picked.
+  const ownedFilterValueTexts: string[] = (profile?.userProfessions ?? [])
+    .flatMap((up: any) => (up.selectedCustomFilterValues ?? []).map((cfv: any) => cfv.value))
+    .filter(Boolean);
+
+  // Flattened catalog: every service across all sections (for the autocomplete).
+  const catalogServices: { id: string; name: string; sectionId: string; sectionName: string }[] =
+    sections.flatMap((sec: any) =>
+      (sec.services ?? []).map((s: any) => ({ id: s.id, name: s.name, sectionId: sec.id, sectionName: sec.name }))
+    );
+
+  // Is the «Уровень» filter — rendered as single-select.
+  const isLevelFilter = (f: { name: string }) => f.name.trim().toLowerCase() === 'уровень';
+
+  // When a catalog service is picked, load its filters + linked professions and
+  // partially auto-fill any filter value whose text matches the user's profession
+  // selections.
+  const selectCatalogService = async (svc: { id: string; name: string; sectionId: string; sectionName: string }) => {
     setLoadingServiceDetail(true);
     setPendingServiceFilters([]);
     setPendingServiceFilterSel({});
+    setCatalogSearch('');
     try {
       const { data } = await referenceAPI.getServiceDetail(svc.id);
       const linked: { id: string; name: string }[] = data.professions || [];
@@ -448,26 +472,36 @@ export default function ProfilePage() {
       const owned = linked.find(lp => myStandaloneProfessions.some(mp => mp.professionId === lp.id));
       const professionId = owned?.id || linked[0]?.id || '';
       const professionName = owned?.name || linked[0]?.name || '';
-      setPending({
-        ...emptyEntry(),
-        fieldOfActivityId: sectionId,
-        fieldOfActivityName: sectionName,
+      const filters: ServiceCustomFilter[] = data.filters || [];
+      setPending(prev => ({
+        ...prev,
+        fieldOfActivityId: svc.sectionId,
+        fieldOfActivityName: svc.sectionName,
         professionId,
         professionName,
         serviceId: svc.id,
         serviceName: data.name || svc.name,
+      }));
+      setPendingServiceFilters(filters);
+      // Partial auto-fill: pre-select matching values (skip the single-select «Уровень»).
+      const prefill: Record<string, string[]> = {};
+      filters.forEach(f => {
+        if (isLevelFilter(f)) return;
+        const matched = f.values.filter(v => ownedFilterValueTexts.includes(v.value)).map(v => v.id);
+        if (matched.length) prefill[f.id] = matched;
       });
-      setPendingServiceFilters(data.filters || []);
-      setAddStep('filters');
+      setPendingServiceFilterSel(prefill);
     } catch {
       // Fallback: still allow adding without filters
-      setPending({ ...emptyEntry(), fieldOfActivityId: sectionId, fieldOfActivityName: sectionName, serviceId: svc.id, serviceName: svc.name });
-      setAddStep('filters');
+      setPending(prev => ({ ...prev, fieldOfActivityId: svc.sectionId, fieldOfActivityName: svc.sectionName, serviceId: svc.id, serviceName: svc.name }));
+      setPendingServiceFilters([]);
+      setPendingServiceFilterSel({});
     } finally {
       setLoadingServiceDetail(false);
     }
   };
 
+  // Multi-select toggle for non-«Уровень» filters.
   const togglePendingServiceFilter = (filterId: string, valueId: string) => {
     setPendingServiceFilterSel(prev => {
       const cur = prev[filterId] || [];
@@ -476,18 +510,76 @@ export default function ProfilePage() {
     });
   };
 
-  const commitPendingService = () => {
-    const entry: UserServiceEntry = {
-      ...pending,
-      customFilterValueIds: pendingServiceFilterSel,
-      status: 'pending_review',
-    };
-    setUserServices(prev => [...prev, entry]);
+  // Single-select for the «Уровень» filter: picking replaces; clicking the
+  // selected value clears it.
+  const setLevelFilterValue = (filterId: string, valueId: string) => {
+    setPendingServiceFilterSel(prev => {
+      const isSame = (prev[filterId] || [])[0] === valueId;
+      return { ...prev, [filterId]: isSame ? [] : [valueId] };
+    });
+  };
+
+  // Price-list row helpers (composite name + price rows).
+  const addPriceItem = () => setPending(prev => ({ ...prev, priceItems: [...prev.priceItems, { name: '', price: '' }] }));
+  const updatePriceItem = (i: number, patch: Partial<{ name: string; price: string }>) =>
+    setPending(prev => ({ ...prev, priceItems: prev.priceItems.map((it, idx) => idx === i ? { ...it, ...patch } : it) }));
+  const removePriceItem = (i: number) =>
+    setPending(prev => ({ ...prev, priceItems: prev.priceItems.filter((_, idx) => idx !== i) }));
+
+  // Open the form to ADD a brand-new service.
+  const openAddServiceForm = () => {
     setPending(emptyEntry());
     setPendingServiceFilters([]);
     setPendingServiceFilterSel({});
-    setAddStep(null);
-    setActiveSectionId(null);
+    setCatalogSearch('');
+    setServiceFormOpen('add');
+  };
+
+  // Open the form to EDIT an existing service entry: hydrate pending + load its
+  // filters, mapping already-selected value ids back into the selection map.
+  const openEditServiceForm = async (idx: number) => {
+    const entry = userServices[idx];
+    setPending({ ...entry });
+    setPendingServiceFilters([]);
+    setCatalogSearch('');
+    setServiceFormOpen(idx);
+    if (!entry.serviceId) { setPendingServiceFilterSel({}); return; }
+    setLoadingServiceDetail(true);
+    try {
+      const { data } = await referenceAPI.getServiceDetail(entry.serviceId);
+      const filters: ServiceCustomFilter[] = data.filters || [];
+      setPendingServiceFilters(filters);
+      // Map the entry's flat/grouped selected value ids onto these filters.
+      const selectedIds = new Set(Object.values(entry.customFilterValueIds).flat());
+      const sel: Record<string, string[]> = {};
+      filters.forEach(f => {
+        const picked = f.values.filter(v => selectedIds.has(v.id)).map(v => v.id);
+        if (picked.length) sel[f.id] = picked;
+      });
+      setPendingServiceFilterSel(sel);
+    } catch {
+      setPendingServiceFilters([]);
+      setPendingServiceFilterSel({});
+    } finally {
+      setLoadingServiceDetail(false);
+    }
+  };
+
+  // Commit the comprehensive form: build the full entry and append (add) or
+  // replace (edit). Persists immediately via the existing services mutation.
+  const commitServiceForm = async () => {
+    const entry: UserServiceEntry = {
+      ...pending,
+      customFilterValueIds: pendingServiceFilterSel,
+      status: pending.status ?? 'pending_review',
+    };
+    const next = serviceFormOpen === 'add'
+      ? [...userServices, entry]
+      : userServices.map((us, i) => (i === serviceFormOpen ? entry : us));
+    setUserServices(next);
+    closeServiceForm();
+    try { await updateServicesMutation.mutateAsync(next); }
+    finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); }
   };
 
   const handleDeleteService = async (idx: number) => {
@@ -549,106 +641,228 @@ export default function ProfilePage() {
   };
 
 
-  const AddServiceFlow = () => {
-    // Step 1 — pick a Section (each is a card). Tapping shows its services.
-    if (addStep === 'section') {
-      const activeSection = sections.find(s => s.id === activeSectionId);
-      return (
-        <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3 space-y-3">
-          {!activeSection ? (
-            <>
-              <p className="text-xs font-semibold text-slate-400 flex items-center gap-1"><Briefcase size={11} /> Выберите раздел:</p>
-              <div className="grid grid-cols-2 gap-2">
-                {sections.map((sec: any) => (
-                  <button key={sec.id} type="button"
-                    onClick={() => setActiveSectionId(sec.id)}
-                    className="flex flex-col items-start gap-1 px-3 py-2.5 rounded-xl border bg-slate-800/50 border-slate-700/50 text-left hover:bg-primary-500/10 hover:border-primary-500/40 transition-all"
-                  >
-                    <span className="text-sm font-medium text-white">{sec.name}</span>
-                    <span className="text-[10px] text-slate-500">{(sec.services?.length ?? 0)} услуг</span>
-                  </button>
-                ))}
+  // ── Comprehensive service ADD/EDIT form ─────────────────────────────────────
+  const ServiceForm = () => {
+    if (serviceFormOpen === null) return null;
+    const isEdit = serviceFormOpen !== 'add';
+    const nameOk = pending.name.trim().length > 0 && pending.name.length <= 50;
+    const serviceOk = !!pending.serviceId;
+    const canSave = nameOk && serviceOk;
+
+    const query = catalogSearch.trim().toLowerCase();
+    const matches = query
+      ? catalogServices
+          .filter(s => s.name.toLowerCase().includes(query))
+          .filter(s => !userServices.some((us, i) => us.serviceId === s.id && i !== serviceFormOpen))
+          .slice(0, 12)
+      : [];
+
+    const levelFilter = pendingServiceFilters.find(isLevelFilter);
+    const otherFilters = pendingServiceFilters.filter(f => !isLevelFilter(f));
+
+    return (
+      <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3 space-y-3">
+        <p className="text-sm font-semibold text-white">{isEdit ? 'Редактировать услугу' : 'Новая услуга'}</p>
+
+        {/* 1 — Название услуги */}
+        <div>
+          <label className={labelCls}>Название услуги <span className="text-red-400">*</span></label>
+          <input
+            type="text"
+            value={pending.name}
+            maxLength={50}
+            onChange={e => setPending(prev => ({ ...prev, name: e.target.value }))}
+            placeholder="Например: Сведение трека"
+            className={inputCls}
+          />
+          <p className="text-right text-[11px] text-slate-600 mt-1">{pending.name.length}/50</p>
+        </div>
+
+        {/* 2 — Раздел каталога (autocomplete) */}
+        <div>
+          <label className={labelCls}>Раздел каталога <span className="text-red-400">*</span></label>
+          {pending.serviceId ? (
+            <div className="flex items-center gap-2 px-3.5 py-2.5 bg-slate-800/60 border border-primary-500/40 rounded-xl">
+              <Briefcase size={13} className="text-primary-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-white truncate">{pending.serviceName}</p>
+                {pending.fieldOfActivityName && <p className="text-[10px] text-slate-500 truncate">{pending.fieldOfActivityName}</p>}
               </div>
-              {sections.length === 0 && <p className="text-xs text-slate-500">Загрузка разделов...</p>}
-              <button onClick={() => { setAddStep(null); setActiveSectionId(null); }} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
-            </>
+              {loadingServiceDetail && <Loader2 size={13} className="text-slate-400 animate-spin flex-shrink-0" />}
+              <button
+                type="button"
+                onClick={() => {
+                  setPending(prev => ({ ...prev, serviceId: '', serviceName: '', fieldOfActivityId: '', fieldOfActivityName: '', professionId: '', professionName: '' }));
+                  setPendingServiceFilters([]);
+                  setPendingServiceFilterSel({});
+                }}
+                className="text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"
+              >
+                <X size={14} />
+              </button>
+            </div>
           ) : (
-            <>
-              <button onClick={() => setActiveSectionId(null)} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"><ChevronLeft size={11} />Разделы</button>
-              <p className="text-sm font-semibold text-white">{activeSection.name}</p>
-              <p className="text-xs font-semibold text-slate-400 flex items-center gap-1"><Briefcase size={11} /> Выберите услугу:</p>
-              {(activeSection.services?.length ?? 0) === 0
-                ? <p className="text-slate-500 text-xs">Нет услуг в этом разделе</p>
-                : <div className="flex flex-wrap gap-1.5">
-                    {[...activeSection.services]
-                      .sort((a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
-                      .filter((s: any) => !userServices.some(us => us.serviceId === s.id))
-                      .map((s: any) => (
-                        <button key={s.id} type="button" disabled={loadingServiceDetail}
-                          onClick={() => selectService(s, activeSection.id, activeSection.name)}
-                          className="flex items-center gap-1 px-3 py-1.5 rounded-lg border bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300 transition-all text-xs font-medium disabled:opacity-50"
-                        >
-                          <ChevronRight size={11} />{s.name}
-                        </button>
-                      ))}
-                  </div>
-              }
-              <button onClick={() => { setAddStep(null); setActiveSectionId(null); }} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
-            </>
+            <div className="relative">
+              <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                value={catalogSearch}
+                onChange={e => setCatalogSearch(e.target.value)}
+                placeholder="Поиск услуги в каталоге..."
+                className="w-full pl-8 pr-3 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 transition"
+              />
+              {query && matches.length === 0 && (
+                <p className="text-xs text-slate-500 mt-1.5">Ничего не найдено</p>
+              )}
+              {matches.length > 0 && (
+                <div className="mt-1.5 max-h-52 overflow-y-auto rounded-xl border border-slate-700/50 bg-slate-900/90 divide-y divide-slate-800/60">
+                  {matches.map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      disabled={loadingServiceDetail}
+                      onClick={() => selectCatalogService(s)}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 text-left hover:bg-primary-500/10 transition-colors disabled:opacity-50"
+                    >
+                      <span className="text-sm text-white truncate">{s.name}</span>
+                      <span className="text-[10px] text-slate-500 flex-shrink-0">{s.sectionName}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
         </div>
-      );
-    }
 
-    // Step 3 — the SERVICE's own filters, expanded, multi-select chips.
-    if (addStep === 'filters') return (
-      <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3">
-        <div className="flex items-center justify-between mb-2">
+        {/* 3 — Фильтр «Уровень» (single-select) */}
+        {levelFilter && (
           <div>
-            <button onClick={() => { setAddStep('section'); }} className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors"><ChevronLeft size={11} />{pending.fieldOfActivityName || 'Разделы'}</button>
-            <p className="text-sm font-semibold text-white mt-0.5">{pending.serviceName}</p>
+            <label className={labelCls}>{levelFilter.name}</label>
+            <div className="flex flex-wrap gap-1.5">
+              {levelFilter.values.map(v => {
+                const isSelected = (pendingServiceFilterSel[levelFilter.id] || [])[0] === v.id;
+                return (
+                  <button key={v.id} type="button"
+                    onClick={() => setLevelFilterValue(levelFilter.id, v.id)}
+                    className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
+                      isSelected
+                        ? 'bg-primary-600 border-primary-500 text-white'
+                        : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:border-primary-500/40'
+                    }`}
+                  >
+                    {v.value}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 4 — Остальные фильтры (multi-select) */}
+        {otherFilters.map(filter => (
+          <div key={filter.id}>
+            <label className={labelCls}>{filter.name}</label>
+            <div className="flex flex-wrap gap-1.5">
+              {filter.values.map(v => {
+                const isSelected = (pendingServiceFilterSel[filter.id] || []).includes(v.id);
+                return (
+                  <button key={v.id} type="button"
+                    onClick={() => togglePendingServiceFilter(filter.id, v.id)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
+                      isSelected
+                        ? 'bg-primary-600 border-primary-500 text-white'
+                        : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:border-primary-500/40'
+                    }`}
+                  >
+                    {v.value}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+
+        {/* 5 — Стоимость */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Стоимость «от», ₽</label>
+            <input type="number" inputMode="numeric" value={pending.priceFrom}
+              onChange={e => setPending(prev => ({ ...prev, priceFrom: e.target.value }))}
+              placeholder="0" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Стоимость «до», ₽</label>
+            <input type="number" inputMode="numeric" value={pending.priceTo}
+              onChange={e => setPending(prev => ({ ...prev, priceTo: e.target.value }))}
+              placeholder="0" className={inputCls} />
           </div>
         </div>
-        <p className="text-xs text-slate-400 mb-2">Выберите параметры (необязательно):</p>
-        {pendingServiceFilters.length === 0
-          ? <p className="text-xs text-slate-500">Параметры не настроены для этой услуги</p>
-          : (
-            <div className="space-y-3">
-              {pendingServiceFilters.map(filter => (
-                <div key={filter.id}>
-                  <p className="text-xs font-semibold mb-1.5 text-slate-400">{filter.name}</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {filter.values.map(v => {
-                      const isSelected = (pendingServiceFilterSel[filter.id] || []).includes(v.id);
-                      return (
-                        <button key={v.id} type="button"
-                          onClick={() => togglePendingServiceFilter(filter.id, v.id)}
-                          className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
-                            isSelected
-                              ? 'bg-primary-600 border-primary-500 text-white'
-                              : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:border-primary-500/40'
-                          }`}
-                        >
-                          {v.value}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )
-        }
-        <div className="flex gap-2 mt-3">
-          <button onClick={() => { setAddStep('section'); }} className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors flex-shrink-0">Назад</button>
+
+        {/* 6 — Прайс-лист */}
+        <div>
+          <label className={labelCls}>Прайс-лист</label>
+          <div className="space-y-2">
+            {pending.priceItems.map((item, i) => (
+              <div key={i} className="flex gap-2">
+                <input type="text" value={item.name}
+                  onChange={e => updatePriceItem(i, { name: e.target.value })}
+                  placeholder="Позиция" className={`${inputCls} flex-1`} />
+                <input type="number" inputMode="numeric" value={item.price}
+                  onChange={e => updatePriceItem(i, { price: e.target.value })}
+                  placeholder="₽" className={`${inputCls} w-24`} />
+                <button type="button" onClick={() => removePriceItem(i)}
+                  className="px-2.5 rounded-xl border border-slate-700/50 text-slate-500 hover:text-red-400 hover:border-red-500/40 transition-colors flex-shrink-0">
+                  <X size={14} />
+                </button>
+              </div>
+            ))}
+            <button type="button" onClick={addPriceItem}
+              className="w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-xs">
+              <Plus size={13} />Добавить позицию
+            </button>
+          </div>
+        </div>
+
+        {/* 7 — Срок исполнения */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelCls}>Срок «от», дней</label>
+            <input type="number" inputMode="numeric" value={pending.deadlineFrom}
+              onChange={e => setPending(prev => ({ ...prev, deadlineFrom: e.target.value }))}
+              placeholder="0" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Срок «до», дней</label>
+            <input type="number" inputMode="numeric" value={pending.deadlineTo}
+              onChange={e => setPending(prev => ({ ...prev, deadlineTo: e.target.value }))}
+              placeholder="0" className={inputCls} />
+          </div>
+        </div>
+
+        {/* 8 — Описание */}
+        <div>
+          <label className={labelCls}>Описание</label>
+          <textarea value={pending.description} rows={4}
+            onChange={e => setPending(prev => ({ ...prev, description: e.target.value }))}
+            placeholder="Опишите услугу..." className={`${inputCls} resize-none`} />
+        </div>
+
+        <div className="flex gap-2 pt-1">
+          <button onClick={closeServiceForm}
+            className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors flex-shrink-0">
+            Отмена
+          </button>
           <button
-            onClick={commitPendingService}
-            className="flex-1 py-2 rounded-lg bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold transition-colors"
-          >Добавить услугу</button>
+            onClick={commitServiceForm}
+            disabled={!canSave || updateServicesMutation.isPending}
+            className="flex-1 py-2 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
+          >
+            {updateServicesMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            {isEdit ? 'Сохранить изменения' : 'Добавить услугу'}
+          </button>
         </div>
       </div>
     );
-    return null;
   };
 
 
@@ -1114,59 +1328,63 @@ export default function ProfilePage() {
                 <span className="text-sm font-semibold text-white">Услуги</span>
                 {servicesFlat.length > 0 && <span className="text-xs text-slate-500">{servicesFlat.length}</span>}
                 {servicesFlat.length > 0 && (
-                  <button onClick={() => navigate(`/profile/${profile?.id}/services`)} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">Смотреть все</button>
+                  <button
+                    onClick={() => { setEditingServices(v => !v); closeServiceForm(); }}
+                    className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                  >
+                    {editingServices ? 'Готово' : 'Изменить'}
+                  </button>
                 )}
               </div>
 
-              {editingServices ? (
-                <div className="p-3 space-y-3">
-                  {AddServiceFlow()}
-                  <div className="flex gap-2 pt-1">
-                    <button onClick={() => { setEditingServices(false); setAddStep(null); setActiveSectionId(null); }} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
-                    <button onClick={handleSaveServices} disabled={updateServicesMutation.isPending} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
-                      {updateServicesMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-3">
-                  <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-                    {/* Add tile — always first */}
-                    <button
-                      onClick={() => { setEditingServices(true); setAddStep('section'); setActiveSectionId(null); }}
-                      className="flex flex-col gap-2 flex-shrink-0 group"
-                      style={{ width: 'calc((100% - 24px) / 3.5)' }}
-                    >
-                      <div className="w-full aspect-square rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
-                        <Plus size={16} className="text-slate-500 group-hover:text-primary-400 transition-colors" />
-                      </div>
-                      <span className="text-[10px] text-slate-500 group-hover:text-slate-400 transition-colors text-center leading-tight">Добавить</span>
-                    </button>
+              <div className="p-3 space-y-3">
+                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                  {/* Add tile — always first */}
+                  <button
+                    onClick={openAddServiceForm}
+                    className="flex flex-col gap-2 flex-shrink-0 group"
+                    style={{ width: 'calc((100% - 24px) / 3.5)' }}
+                  >
+                    <div className="w-full aspect-square rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
+                      <Plus size={16} className="text-slate-500 group-hover:text-primary-400 transition-colors" />
+                    </div>
+                    <span className="text-[10px] text-slate-500 group-hover:text-slate-400 transition-colors text-center leading-tight">Добавить</span>
+                  </button>
 
-                    {servicesFlat.map((us: any) => {
-                      const price = us.priceFrom != null || us.priceTo != null
-                        ? [us.priceFrom != null ? `от ${us.priceFrom}₽` : null, us.priceTo != null ? `до ${us.priceTo}₽` : null].filter(Boolean).join(' ')
-                        : null;
-                      return (
+                  {servicesFlat.map((us: any) => {
+                    const price = us.priceFrom != null || us.priceTo != null
+                      ? [us.priceFrom != null ? `от ${us.priceFrom}₽` : null, us.priceTo != null ? `до ${us.priceTo}₽` : null].filter(Boolean).join(' ')
+                      : null;
+                    const stateIdx = userServices.findIndex(s => s.serviceId === us.serviceId);
+                    return (
+                      <div key={us.id} className="flex flex-col gap-0 flex-shrink-0 relative group" style={{ width: 'calc((100% - 24px) / 3.5)' }}>
                         <button
-                          key={us.id}
-                          onClick={() => navigate(`/services/${us.id}`)}
-                          className="flex flex-col gap-0 flex-shrink-0 text-left group"
-                          style={{ width: 'calc((100% - 24px) / 3.5)' }}
+                          onClick={() => editingServices && stateIdx >= 0 ? openEditServiceForm(stateIdx) : navigate(`/services/${us.id}`)}
+                          className="flex flex-col gap-0 text-left w-full"
                         >
                           <div className="w-full aspect-square rounded-xl bg-gradient-to-br from-primary-900/80 to-slate-800/80 border border-primary-700/30 flex items-center justify-center p-2 group-hover:border-primary-500/50 transition-colors overflow-hidden">
-                            <Briefcase size={16} className="text-primary-400 flex-shrink-0" />
+                            {editingServices ? <Edit3 size={16} className="text-primary-400 flex-shrink-0" /> : <Briefcase size={16} className="text-primary-400 flex-shrink-0" />}
                           </div>
                           <div className="w-full mt-1.5">
-                            <p className="text-[10px] font-semibold text-white leading-tight line-clamp-2">{us.service?.name}</p>
+                            <p className="text-[10px] font-semibold text-white leading-tight line-clamp-2">{us.name || us.service?.name}</p>
                             {price && <p className="text-[9px] text-primary-400 leading-tight mt-0.5">{price}</p>}
                           </div>
                         </button>
-                      );
-                    })}
-                  </div>
+                        {editingServices && stateIdx >= 0 && (
+                          <button
+                            onClick={() => setConfirmDeleteServiceIdx(stateIdx)}
+                            className="absolute -top-1 -right-1 p-0.5 rounded-md bg-slate-900 border border-slate-700 text-slate-400 hover:text-red-400 transition-colors z-10"
+                          >
+                            <X size={10} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
+
+                {ServiceForm()}
+              </div>
             </div>
 
             {/* ── Deals card ── */}
