@@ -713,6 +713,22 @@ model Post {
   pollOptions Json?
   pollEndsAt  DateTime?
 
+  // ─── E10: MVP feed foundation ───────────────────────────────────────────────
+  title    String?   // "Вопрос/обсуждение": заголовок
+  category String?   // "Вопрос/обсуждение": категория
+  city     String?   // опциональный город поста (из каталога)
+  images   String[] @default([])   // мультифото (до 10)
+  tags     String[] @default([])   // свободные #теги
+  genres   String[] @default([])   // жанры (мультиселект, опц.)
+  links    String[] @default([])   // свободные ссылки
+  mentions Json?                    // [{ id, type, name }]
+
+  // Репост в ленту: ссылка на оригинальный пост + опциональный комментарий
+  repostComment String?
+  repostOfId    String?
+  repostOf      Post?   @relation("PostReposts", fields: [repostOfId], references: [id], onDelete: SetNull)
+  reposts       Post[]  @relation("PostReposts")
+
   author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId String
 
@@ -736,6 +752,9 @@ model Post {
   @@index([authorId, createdAt])
   @@index([channelId])
   @@index([artistId])
+  @@index([repostOfId])
+  @@index([type])
+  @@index([city])
 }
 
 model PollVote {
