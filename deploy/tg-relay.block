@@ -1,0 +1,12 @@
+    # Telegram Bot API relay for the RU PROD server (api.telegram.org is blocked
+    # there over IPv4; this NL server can reach it). Restricted to the PROD IP.
+    # The bot token transits in the path, so access logging is disabled here.
+    location /tg-relay/ {
+        allow 81.31.246.105;
+        deny all;
+        access_log off;
+        proxy_pass https://api.telegram.org/;
+        proxy_ssl_server_name on;
+        proxy_set_header Host api.telegram.org;
+    }
+

@@ -1,6 +1,10 @@
 const TOKEN = process.env.TELEGRAM_LOG_TOKEN;
 const CHAT_ID = process.env.TELEGRAM_LOG_CHAT_ID;
-const BASE = `https://api.telegram.org/bot${TOKEN}/sendMessage`;
+// Bot API endpoint is configurable so a server whose network blocks
+// api.telegram.org (e.g. RU ISPs block the IPv4 route) can route through a
+// relay that can reach Telegram. Defaults to talking to Telegram directly.
+const API_BASE = (process.env.TELEGRAM_API_BASE || 'https://api.telegram.org').replace(/\/+$/, '');
+const BASE = `${API_BASE}/bot${TOKEN}/sendMessage`;
 
 export async function tgLog(text: string): Promise<void> {
   if (!TOKEN || !CHAT_ID) return;
