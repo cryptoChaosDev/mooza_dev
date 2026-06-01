@@ -69,7 +69,7 @@ export default function InfoModal({ onClose }: Props) {
 
           {/* Feedback */}
           <a
-            href="https://t.me/moooza_support"
+            href="https://t.me/mooozahelpbot"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3.5 hover:bg-slate-800 transition-colors"

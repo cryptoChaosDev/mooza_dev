@@ -52,8 +52,13 @@ export default {
         'scale-in': 'scaleIn 0.2s ease-out',
         'shimmer': 'shimmer 2s infinite',
         'marquee': 'marquee 32s linear infinite',
+        'help-blink': 'helpBlink 1.4s ease-in-out infinite',
       },
       keyframes: {
+        helpBlink: {
+          '0%, 100%': { opacity: '1', boxShadow: '0 0 0 0 rgba(168, 85, 247, 0.55)' },
+          '50%': { opacity: '0.55', boxShadow: '0 0 0 6px rgba(168, 85, 247, 0)' },
+        },
         marquee: {
           '0%': { transform: 'translateX(0)' },
           '100%': { transform: 'translateX(-50%)' },

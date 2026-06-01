@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, Gift, X, Info } from 'lucide-react';
+import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, Gift, X, Info, LifeBuoy } from 'lucide-react';
 import BottomNav from './BottomNav';
 import NotificationBell from './NotificationBell';
 import InfoModal from './InfoModal';
@@ -65,11 +65,22 @@ export default function Layout({ children }: LayoutProps) {
             </div>
           </div>
         )}
-        <header className="flex items-center justify-between px-4 h-11">
+        <header className="relative flex items-center justify-between px-4 h-11">
           <Link to="/" className="flex items-center gap-1.5">
             <img src="/logo.png" alt="Moooza" className="h-8 w-auto" />
             <span className="text-[9px] font-bold tracking-wider text-primary-400 bg-primary-500/15 border border-primary-500/30 rounded px-1 py-0.5 leading-none">BETA</span>
           </Link>
+          {/* Centered blinking help link — visible on every page */}
+          <a
+            href="https://t.me/mooozahelpbot"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Помощь"
+            className="absolute left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-primary-600 text-white rounded-full pl-2 pr-3 py-1 animate-help-blink"
+          >
+            <LifeBuoy size={15} strokeWidth={2.5} />
+            <span className="text-xs font-semibold leading-none">Помощь</span>
+          </a>
           <div className="flex items-center gap-3">
             <NotificationBell />
             <button
@@ -103,6 +114,17 @@ export default function Layout({ children }: LayoutProps) {
               <NotificationBell />
             </div>
           </div>
+          {/* Blinking help link — visible on every page */}
+          <a
+            href="https://t.me/mooozahelpbot"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Помощь"
+            className="mt-4 flex items-center justify-center gap-2 bg-primary-600 text-white rounded-full px-4 py-2 animate-help-blink"
+          >
+            <LifeBuoy size={17} strokeWidth={2.5} />
+            <span className="text-sm font-semibold leading-none">Помощь</span>
+          </a>
         </div>
         
         <nav className="flex-1 p-4 space-y-2">
