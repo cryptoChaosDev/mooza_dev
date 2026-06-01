@@ -14,7 +14,6 @@
 
         ym(109562743, 'init', {ssr:true, webvisor:true, clickmap:true, ecommerce:"dataLayer", referrer: document.referrer, url: location.href, accurateTrackBounce:true, trackLinks:true});
     </script>
-    <noscript><div><img src="https://mc.yandex.ru/watch/109562743" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
     <!-- /Yandex.Metrika counter -->
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -53,6 +52,8 @@
     <meta name="twitter:image"       content="https://moooza.ru/pwa-512x512.png" />
   </head>
   <body>
+    <!-- Yandex.Metrika noscript fallback -->
+    <noscript><div><img src="https://mc.yandex.ru/watch/109562743" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
