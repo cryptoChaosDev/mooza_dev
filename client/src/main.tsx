@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { BrowserRouter, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import './index.css';
@@ -48,11 +48,28 @@ class ErrorBoundary extends React.Component<
   }
 }
 
+// Yandex.Metrika SPA pageview tracking: `init` (in index.html) counts the first
+// view; each subsequent route change fires a `hit` so navigations are counted too.
+const YM_ID = 109562743;
+function MetrikaTracker() {
+  const location = useLocation();
+  const firstRun = useRef(true);
+  useEffect(() => {
+    if (firstRun.current) { firstRun.current = false; return; }
+    const ym = (window as any).ym;
+    if (typeof ym === 'function') {
+      ym(YM_ID, 'hit', window.location.href, { referer: document.referrer });
+    }
+  }, [location.pathname, location.search]);
+  return null;
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ErrorBoundary>
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
+          <MetrikaTracker />
           <App />
         </BrowserRouter>
       </QueryClientProvider>
