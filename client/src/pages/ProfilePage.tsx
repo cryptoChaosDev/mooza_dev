@@ -647,7 +647,10 @@ export default function ProfilePage() {
     const isEdit = serviceFormOpen !== 'add';
     const nameOk = pending.name.trim().length > 0 && pending.name.length <= 50;
     const serviceOk = !!pending.serviceId;
-    const canSave = nameOk && serviceOk;
+    // «от» не может превышать «до» (и наоборот) — для стоимости и для срока.
+    const priceInvalid = pending.priceFrom !== '' && pending.priceTo !== '' && Number(pending.priceFrom) > Number(pending.priceTo);
+    const deadlineInvalid = pending.deadlineFrom !== '' && pending.deadlineTo !== '' && Number(pending.deadlineFrom) > Number(pending.deadlineTo);
+    const canSave = nameOk && serviceOk && !priceInvalid && !deadlineInvalid;
 
     const query = catalogSearch.trim().toLowerCase();
     const matches = query
@@ -783,19 +786,22 @@ export default function ProfilePage() {
         ))}
 
         {/* 5 — Стоимость */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>Стоимость «от», ₽</label>
-            <input type="number" inputMode="numeric" value={pending.priceFrom}
-              onChange={e => setPending(prev => ({ ...prev, priceFrom: e.target.value }))}
-              placeholder="0" className={inputCls} />
+        <div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Стоимость «от», ₽</label>
+              <input type="number" inputMode="numeric" min={0} max={pending.priceTo || undefined} value={pending.priceFrom}
+                onChange={e => setPending(prev => ({ ...prev, priceFrom: e.target.value }))}
+                placeholder="0" className={`${inputCls} ${priceInvalid ? '!border-red-500/60' : ''}`} />
+            </div>
+            <div>
+              <label className={labelCls}>Стоимость «до», ₽</label>
+              <input type="number" inputMode="numeric" min={pending.priceFrom || 0} value={pending.priceTo}
+                onChange={e => setPending(prev => ({ ...prev, priceTo: e.target.value }))}
+                placeholder="0" className={`${inputCls} ${priceInvalid ? '!border-red-500/60' : ''}`} />
+            </div>
           </div>
-          <div>
-            <label className={labelCls}>Стоимость «до», ₽</label>
-            <input type="number" inputMode="numeric" value={pending.priceTo}
-              onChange={e => setPending(prev => ({ ...prev, priceTo: e.target.value }))}
-              placeholder="0" className={inputCls} />
-          </div>
+          {priceInvalid && <p className="text-[11px] text-red-400 mt-1">«Стоимость от» не может быть больше «Стоимость до»</p>}
         </div>
 
         {/* 6 — Прайс-лист */}
@@ -803,15 +809,15 @@ export default function ProfilePage() {
           <label className={labelCls}>Прайс-лист</label>
           <div className="space-y-2">
             {pending.priceItems.map((item, i) => (
-              <div key={i} className="flex gap-2">
+              <div key={i} className="grid grid-cols-[1fr_6.5rem_auto] gap-2 items-center">
                 <input type="text" value={item.name}
                   onChange={e => updatePriceItem(i, { name: e.target.value })}
-                  placeholder="Позиция" className={`${inputCls} flex-1`} />
+                  placeholder="Название позиции" className={`${inputCls} min-w-0`} />
                 <input type="number" inputMode="numeric" value={item.price}
                   onChange={e => updatePriceItem(i, { price: e.target.value })}
-                  placeholder="₽" className={`${inputCls} w-24`} />
+                  placeholder="Цена ₽" className={`${inputCls} min-w-0 text-center`} />
                 <button type="button" onClick={() => removePriceItem(i)}
-                  className="px-2.5 rounded-xl border border-slate-700/50 text-slate-500 hover:text-red-400 hover:border-red-500/40 transition-colors flex-shrink-0">
+                  className="p-2.5 rounded-xl border border-slate-700/50 text-slate-500 hover:text-red-400 hover:border-red-500/40 transition-colors">
                   <X size={14} />
                 </button>
               </div>
@@ -824,19 +830,22 @@ export default function ProfilePage() {
         </div>
 
         {/* 7 — Срок исполнения */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className={labelCls}>Срок «от», дней</label>
-            <input type="number" inputMode="numeric" value={pending.deadlineFrom}
-              onChange={e => setPending(prev => ({ ...prev, deadlineFrom: e.target.value }))}
-              placeholder="0" className={inputCls} />
+        <div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Срок «от», дней</label>
+              <input type="number" inputMode="numeric" min={0} max={pending.deadlineTo || undefined} value={pending.deadlineFrom}
+                onChange={e => setPending(prev => ({ ...prev, deadlineFrom: e.target.value }))}
+                placeholder="0" className={`${inputCls} ${deadlineInvalid ? '!border-red-500/60' : ''}`} />
+            </div>
+            <div>
+              <label className={labelCls}>Срок «до», дней</label>
+              <input type="number" inputMode="numeric" min={pending.deadlineFrom || 0} value={pending.deadlineTo}
+                onChange={e => setPending(prev => ({ ...prev, deadlineTo: e.target.value }))}
+                placeholder="0" className={`${inputCls} ${deadlineInvalid ? '!border-red-500/60' : ''}`} />
+            </div>
           </div>
-          <div>
-            <label className={labelCls}>Срок «до», дней</label>
-            <input type="number" inputMode="numeric" value={pending.deadlineTo}
-              onChange={e => setPending(prev => ({ ...prev, deadlineTo: e.target.value }))}
-              placeholder="0" className={inputCls} />
-          </div>
+          {deadlineInvalid && <p className="text-[11px] text-red-400 mt-1">«Срок от» не может быть больше «Срок до»</p>}
         </div>
 
         {/* 8 — Описание */}
