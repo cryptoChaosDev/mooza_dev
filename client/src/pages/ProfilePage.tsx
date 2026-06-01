@@ -652,6 +652,10 @@ export default function ProfilePage() {
     const deadlineInvalid = pending.deadlineFrom !== '' && pending.deadlineTo !== '' && Number(pending.deadlineFrom) > Number(pending.deadlineTo);
     const canSave = nameOk && serviceOk && !priceInvalid && !deadlineInvalid;
 
+    // Стоимость и сроки — только неотрицательные целые: оставляем лишь цифры
+    // (убирает минус, точку, «e» и прочее, что допускает type=number).
+    const onlyDigits = (v: string) => v.replace(/[^\d]/g, '');
+
     const query = catalogSearch.trim().toLowerCase();
     const matches = query
       ? catalogServices
@@ -791,13 +795,13 @@ export default function ProfilePage() {
             <div>
               <label className={labelCls}>Стоимость «от», ₽</label>
               <input type="number" inputMode="numeric" min={0} max={pending.priceTo || undefined} value={pending.priceFrom}
-                onChange={e => setPending(prev => ({ ...prev, priceFrom: e.target.value }))}
+                onChange={e => setPending(prev => ({ ...prev, priceFrom: onlyDigits(e.target.value) }))}
                 placeholder="0" className={`${inputCls} ${priceInvalid ? '!border-red-500/60' : ''}`} />
             </div>
             <div>
               <label className={labelCls}>Стоимость «до», ₽</label>
               <input type="number" inputMode="numeric" min={pending.priceFrom || 0} value={pending.priceTo}
-                onChange={e => setPending(prev => ({ ...prev, priceTo: e.target.value }))}
+                onChange={e => setPending(prev => ({ ...prev, priceTo: onlyDigits(e.target.value) }))}
                 placeholder="0" className={`${inputCls} ${priceInvalid ? '!border-red-500/60' : ''}`} />
             </div>
           </div>
@@ -813,8 +817,8 @@ export default function ProfilePage() {
                 <input type="text" value={item.name}
                   onChange={e => updatePriceItem(i, { name: e.target.value })}
                   placeholder="Название позиции" className={`${inputCls} min-w-0`} />
-                <input type="number" inputMode="numeric" value={item.price}
-                  onChange={e => updatePriceItem(i, { price: e.target.value })}
+                <input type="number" inputMode="numeric" min={0} value={item.price}
+                  onChange={e => updatePriceItem(i, { price: onlyDigits(e.target.value) })}
                   placeholder="Цена ₽" className={`${inputCls} min-w-0 text-center`} />
                 <button type="button" onClick={() => removePriceItem(i)}
                   className="p-2.5 rounded-xl border border-slate-700/50 text-slate-500 hover:text-red-400 hover:border-red-500/40 transition-colors">
@@ -835,13 +839,13 @@ export default function ProfilePage() {
             <div>
               <label className={labelCls}>Срок «от», дней</label>
               <input type="number" inputMode="numeric" min={0} max={pending.deadlineTo || undefined} value={pending.deadlineFrom}
-                onChange={e => setPending(prev => ({ ...prev, deadlineFrom: e.target.value }))}
+                onChange={e => setPending(prev => ({ ...prev, deadlineFrom: onlyDigits(e.target.value) }))}
                 placeholder="0" className={`${inputCls} ${deadlineInvalid ? '!border-red-500/60' : ''}`} />
             </div>
             <div>
               <label className={labelCls}>Срок «до», дней</label>
               <input type="number" inputMode="numeric" min={pending.deadlineFrom || 0} value={pending.deadlineTo}
-                onChange={e => setPending(prev => ({ ...prev, deadlineTo: e.target.value }))}
+                onChange={e => setPending(prev => ({ ...prev, deadlineTo: onlyDigits(e.target.value) }))}
                 placeholder="0" className={`${inputCls} ${deadlineInvalid ? '!border-red-500/60' : ''}`} />
             </div>
           </div>
