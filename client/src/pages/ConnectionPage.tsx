@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Link2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Link2, Star } from 'lucide-react';
 import { connectionAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import AvatarComponent from '../components/Avatar';
+import RateConnectionModal from '../components/RateConnectionModal';
 
 const ROLE_LABEL: Record<string, string> = {
   CUSTOMER: 'Заказчик',
@@ -58,6 +60,7 @@ export default function ConnectionPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const me = useAuthStore(s => s.user);
+  const [showRate, setShowRate] = useState(false);
 
   // Try to get connections from location state (passed from FriendsPage for instant load)
   const stateData = (location.state as any) as { partner: any; connections: any[] } | null;
@@ -137,6 +140,16 @@ export default function ConnectionPage() {
           </button>
         )}
 
+        {/* Rate the interaction with this partner */}
+        {partner?.id && partner.id !== me?.id && (
+          <button
+            onClick={() => setShowRate(true)}
+            className="w-full flex items-center justify-center gap-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-400 rounded-2xl py-3 text-sm font-medium transition-colors"
+          >
+            <Star size={16} /> Оценить взаимодействие
+          </button>
+        )}
+
         {connections.length === 0 && (
           <div className="flex flex-col items-center py-16 text-center">
             <Link2 size={36} className="text-slate-700 mb-3" />
@@ -195,6 +208,15 @@ export default function ConnectionPage() {
           </div>
         )}
       </div>
+
+      {showRate && partner?.id && (
+        <RateConnectionModal
+          targetId={partner.id}
+          targetName={partnerName}
+          serviceId={connections[0]?.services?.[0]?.id}
+          onClose={() => setShowRate(false)}
+        />
+      )}
     </div>
   );
 }
