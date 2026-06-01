@@ -147,7 +147,7 @@ function ProfessionFilterPicker({ professionId, onChange }: {
 const STEPS = [
   { emoji: '👋', title: 'Добро пожаловать\nв Moooza', why: 'Email и пароль нужны, чтобы войти с любого устройства и защитить ваш аккаунт.', optional: false },
   { emoji: '🎵', title: 'Как вас зовут?', why: 'Ваше имя видят другие участники, когда ищут коллег или смотрят ваш профиль.', optional: false },
-  { emoji: '🎸', title: 'Ваша профессия', why: 'Укажите профессию, чтобы вас находили нужные люди. Необязательно — можно пропустить и добавить позже.', optional: true },
+  { emoji: '🎸', title: 'Ваша профессия', why: 'Укажите хотя бы одну профессию — без этого не продолжить. Так вас найдут нужные люди.', optional: false },
   { emoji: '📍', title: 'Где вы\nнаходитесь?', why: 'Город помогает найти музыкантов поблизости. Можно заполнить позже.', optional: true },
 ];
 
@@ -750,17 +750,13 @@ export default function RegisterPage() {
             <>
               <button
                 onClick={() => { setStep(s => s + 1); }}
-                className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base"
+                disabled={selectedProfs.length === 0}
+                className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base"
               >
-                {selectedProfs.length > 0 ? <><Check size={18} /> Сохранить</> : <>Далее <ArrowRight size={18} /></>}
+                <Check size={18} /> Сохранить
               </button>
-              {selectedProfs.length > 0 && (
-                <button
-                  onClick={() => { setSelectedProfs([]); setStep(s => s + 1); }}
-                  className="w-full py-3 text-sm text-slate-500 hover:text-slate-300 transition-colors"
-                >
-                  Пропустить без выбора
-                </button>
+              {selectedProfs.length === 0 && (
+                <p className="text-center text-xs text-slate-500">Выберите хотя бы одну профессию, чтобы продолжить</p>
               )}
             </>
           ) : isLast ? (
