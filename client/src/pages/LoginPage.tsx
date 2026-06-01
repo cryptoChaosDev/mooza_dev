@@ -201,6 +201,12 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
           >
             {resendCooldown > 0 ? `Повторный код через ${resendCooldown}с` : 'Отправить код повторно'}
           </button>
+          <p className="mt-4 text-center text-xs text-slate-600 leading-relaxed">
+            Код не приходит?{' '}
+            <a href="https://t.me/mooozahelpbot" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">Поддержка в Telegram</a>
+            {' · '}
+            <a href="mailto:support@moooza.ru" className="text-primary-400 hover:text-primary-300">support@moooza.ru</a>
+          </p>
         </div>
       </div>
     );

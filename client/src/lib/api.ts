@@ -41,6 +41,8 @@ export const authAPI = {
     api.post('/auth/telegram/miniapp', { initData }),
   checkNickname: (nickname: string) =>
     api.get('/auth/check-nickname', { params: { nickname } }),
+  checkEmail: (email: string) =>
+    api.get('/auth/check-email', { params: { email } }),
   telegramToken: () => api.post('/auth/telegram/token'),
   telegramPoll: (token: string) => api.get(`/auth/telegram/poll/${token}`),
   vkToken: (accessToken: string) =>

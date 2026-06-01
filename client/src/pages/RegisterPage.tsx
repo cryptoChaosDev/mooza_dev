@@ -147,7 +147,7 @@ function ProfessionFilterPicker({ professionId, onChange }: {
 const STEPS = [
   { emoji: '👋', title: 'Добро пожаловать\nв Moooza', why: 'Email и пароль нужны, чтобы войти с любого устройства и защитить ваш аккаунт.', optional: false },
   { emoji: '🎵', title: 'Как вас зовут?', why: 'Ваше имя видят другие участники, когда ищут коллег или смотрят ваш профиль.', optional: false },
-  { emoji: '🎸', title: 'Ваша профессия', why: 'Укажите хотя бы одну профессию — так вас найдут нужные люди.', optional: false },
+  { emoji: '🎸', title: 'Ваша профессия', why: 'Укажите профессию, чтобы вас находили нужные люди. Необязательно — можно пропустить и добавить позже.', optional: true },
   { emoji: '📍', title: 'Где вы\nнаходитесь?', why: 'Город помогает найти музыкантов поблизости. Можно заполнить позже.', optional: true },
 ];
 
@@ -180,6 +180,9 @@ export default function RegisterPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [agreedToPD, setAgreedToPD] = useState(false);
   const [agreeMarketing, setAgreeMarketing] = useState(false);
+  const [emailChecking, setEmailChecking] = useState(false);
+  const [emailTaken, setEmailTaken] = useState(false);
+  const emailTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Step 1
   const [firstName, setFirstName] = useState('');
@@ -237,6 +240,29 @@ export default function RegisterPage() {
     return () => { if (nicknameTimer.current) clearTimeout(nicknameTimer.current); };
   }, [nickname]);
 
+  // ── Email availability ────────────────────────────────────────────────────
+  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  useEffect(() => {
+    const e = email.trim().toLowerCase();
+    if (!emailValid) { setEmailTaken(false); setEmailChecking(false); return; }
+    setEmailChecking(true);
+    if (emailTimer.current) clearTimeout(emailTimer.current);
+    emailTimer.current = setTimeout(async () => {
+      try {
+        const { data } = await authAPI.checkEmail(e);
+        setEmailTaken(data.valid && !data.available);
+      } catch { setEmailTaken(false); }
+      finally { setEmailChecking(false); }
+    }, 500);
+    return () => { if (emailTimer.current) clearTimeout(emailTimer.current); };
+  }, [email, emailValid]);
+
+  // ── Password strength: min 8 + at least one digit + one special char ───────
+  const pwLongEnough = password.length >= 8;
+  const pwHasDigit = /\d/.test(password);
+  const pwHasSpecial = /[^A-Za-z0-9]/.test(password);
+  const pwStrong = pwLongEnough && pwHasDigit && pwHasSpecial;
+
   // ── Profession search ─────────────────────────────────────────────────────
   useEffect(() => {
     const q = profSearch.trim();
@@ -291,8 +317,11 @@ export default function RegisterPage() {
   const validate = (): boolean => {
     setError('');
     if (step === 0) {
-      if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setError('Укажите корректный email'); return false; }
-      if (password.length < 8) { setError('Пароль — минимум 8 символов'); return false; }
+      if (!emailValid) { setError('Укажите корректный email'); return false; }
+      if (emailTaken) { setError('Этот email уже занят'); return false; }
+      if (!pwLongEnough) { setError('Пароль — минимум 8 символов'); return false; }
+      if (!pwHasDigit) { setError('Пароль должен содержать хотя бы одну цифру'); return false; }
+      if (!pwHasSpecial) { setError('Пароль должен содержать спецсимвол (например ! @ # $)'); return false; }
     }
     if (step === 1) {
       if (!firstName.trim()) { setError('Укажите имя'); return false; }
@@ -442,6 +471,12 @@ export default function RegisterPage() {
             className="w-full py-2.5 text-sm text-slate-500 hover:text-slate-300 disabled:opacity-50 transition-colors">
             {resendCooldown > 0 ? `Повторный код через ${resendCooldown} с` : 'Отправить код повторно'}
           </button>
+          <p className="mt-4 text-center text-xs text-slate-600 leading-relaxed">
+            Код не приходит?{' '}
+            <a href="https://t.me/mooozahelpbot" target="_blank" rel="noopener noreferrer" className="text-primary-400 hover:text-primary-300">Поддержка в Telegram</a>
+            {' · '}
+            <a href="mailto:support@moooza.ru" className="text-primary-400 hover:text-primary-300">support@moooza.ru</a>
+          </p>
         </div>
       </div>
     );
@@ -474,9 +509,14 @@ export default function RegisterPage() {
           </div>
         )}
         <Field label="Email" hint="Используется для входа и восстановления пароля">
-          <Input type="email" value={email} onChange={setEmail} placeholder="you@example.com" autoFocus />
+          <Input type="email" value={email} onChange={setEmail} placeholder="you@example.com" autoFocus
+            right={emailChecking
+              ? <Loader2 size={15} className="animate-spin text-slate-500" />
+              : (emailValid && !emailTaken ? <Check size={15} className="text-green-400" /> : undefined)} />
+          {email.trim() && !emailValid && <p className="text-xs text-amber-400 mt-1">Некорректный email</p>}
+          {emailTaken && <p className="text-xs text-red-400 mt-1">Этот email уже занят — войдите или используйте другой</p>}
         </Field>
-        <Field label="Пароль" hint="Минимум 8 символов">
+        <Field label="Пароль">
           <Input
             type={showPassword ? 'text' : 'password'}
             value={password} onChange={setPassword}
@@ -487,6 +527,13 @@ export default function RegisterPage() {
               </button>
             }
           />
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
+            {([['8+ символов', pwLongEnough], ['цифра', pwHasDigit], ['спецсимвол', pwHasSpecial]] as [string, boolean][]).map(([lbl, ok]) => (
+              <span key={lbl} className={`text-[11px] flex items-center gap-1 ${ok ? 'text-green-400' : 'text-slate-500'}`}>
+                {ok ? <Check size={11} /> : <span className="w-[10px] h-[10px] rounded-full border border-slate-600 inline-block" />}{lbl}
+              </span>
+            ))}
+          </div>
         </Field>
 
         {/* Checkboxes */}
@@ -653,7 +700,9 @@ export default function RegisterPage() {
   };
 
   // Button logic
-  const nextDisabled = (step === 0 && !agreedToPD) || (step === 1 && !step1Valid);
+  const nextDisabled =
+    (step === 0 && (!agreedToPD || !emailValid || emailTaken || emailChecking || !pwStrong)) ||
+    (step === 1 && !step1Valid);
 
   // ── Layout ────────────────────────────────────────────────────────────────
   return (
@@ -701,17 +750,18 @@ export default function RegisterPage() {
             <>
               <button
                 onClick={() => { setStep(s => s + 1); }}
-                disabled={selectedProfs.length === 0}
-                className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base"
+                className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base"
               >
-                <Check size={18} /> Сохранить
+                {selectedProfs.length > 0 ? <><Check size={18} /> Сохранить</> : <>Далее <ArrowRight size={18} /></>}
               </button>
-              <button
-                onClick={() => { setSelectedProfs([]); setStep(s => s + 1); }}
-                className="w-full py-3 text-sm text-slate-500 hover:text-slate-300 transition-colors"
-              >
-                Пропустить
-              </button>
+              {selectedProfs.length > 0 && (
+                <button
+                  onClick={() => { setSelectedProfs([]); setStep(s => s + 1); }}
+                  className="w-full py-3 text-sm text-slate-500 hover:text-slate-300 transition-colors"
+                >
+                  Пропустить без выбора
+                </button>
+              )}
             </>
           ) : isLast ? (
             <>

@@ -60,8 +60,11 @@ const registerSchema = z.object({
   })).optional(),
   // Step 6: Artist/Group + Employer
   artistIds: z.array(z.string()).optional(),
-  // Step 7: Password
-  password: z.string().min(8),
+  // Step 7: Password — min 8 chars and must contain a digit and a special char
+  password: z.string()
+    .min(8, 'Пароль — минимум 8 символов')
+    .regex(/\d/, 'Пароль должен содержать цифру')
+    .regex(/[^A-Za-z0-9]/, 'Пароль должен содержать спецсимвол'),
   // Referral
   referrerId: z.string().optional(),
   referralCode: z.string().optional(),   // ReferralLink.code, if signed up via a named link
@@ -83,6 +86,21 @@ router.get('/check-nickname', async (req, res) => {
     select: { id: true },
   });
   res.json({ available: !existing });
+});
+
+// Check email availability (so the «уже занят» hint appears on the email step,
+// not only at the end of registration). A pending, unverified registration also
+// counts as taken so two people can't race the same address.
+router.get('/check-email', async (req, res) => {
+  const email = (req.query.email as string | undefined)?.trim().toLowerCase() || '';
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.json({ available: false, valid: false });
+  }
+  const [user, pending] = await Promise.all([
+    prisma.user.findUnique({ where: { email }, select: { id: true } }),
+    prisma.pendingRegistration.findUnique({ where: { email }, select: { id: true } }),
+  ]);
+  res.json({ available: !user && !pending, valid: true });
 });
 
 // Register
@@ -360,9 +378,10 @@ router.post('/login', authLimiter, async (req, res) => {
   try {
     const data = loginSchema.parse(req.body);
 
-    // Find user
+    // Find user — email is stored lowercase, so normalize the input or an
+    // uppercase letter would make a valid account look non-existent.
     const user = await prisma.user.findUnique({
-      where: { email: data.email },
+      where: { email: data.email.trim().toLowerCase() },
       include: {
         fieldOfActivity: { select: { id: true, name: true } },
         userProfessions: {
@@ -380,7 +399,7 @@ router.post('/login', authLimiter, async (req, res) => {
     });
 
     if (!user) {
-      return res.status(401).json({ error: 'Неверные учетные данные' });
+      return res.status(401).json({ error: 'Пользователь с таким email не найден' });
     }
 
     // Check if blocked
@@ -399,7 +418,7 @@ router.post('/login', authLimiter, async (req, res) => {
     }
     const validPassword = await bcrypt.compare(data.password, user.password);
     if (!validPassword) {
-      return res.status(401).json({ error: 'Неверные учетные данные' });
+      return res.status(401).json({ error: 'Неверный пароль' });
     }
 
     // Generate token
