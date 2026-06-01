@@ -28,6 +28,13 @@ setInterval(() => {
   }
 }, 60_000);
 
+// Drop expired pending registrations (never-completed signups) every 5 minutes.
+setInterval(() => {
+  prisma.pendingRegistration
+    .deleteMany({ where: { expiresAt: { lt: new Date() } } })
+    .catch(() => {});
+}, 5 * 60 * 1000);
+
 // ─── Webhook-based bot (Telegram pushes updates to us) ───────────────────────
 // No outbound connection to Telegram needed — Telegram calls our endpoint.
 
@@ -116,95 +123,34 @@ router.post('/register', registerLimiter, async (req, res) => {
       }
     }
 
-    // Validate single-use referral link (must exist and be unused) before creating the user
-    let refLink: { id: string; ownerId: string } | null = null;
-    if (data.referralCode) {
-      const link = await prisma.referralLink.findUnique({
-        where: { code: data.referralCode },
-        select: { id: true, ownerId: true, usedById: true },
-      });
-      if (link && !link.usedById) {
-        refLink = { id: link.id, ownerId: link.ownerId };
-      }
-      // If the link is missing or already burned, we silently ignore it
-      // (registration still proceeds, just without referral attribution).
-    }
-
     // Hash password
     const hashedPassword = await bcrypt.hash(data.password, 10);
-
-    // Create user with all fields
-    const user = await prisma.user.create({
-      data: {
-        email: normalizedEmail,
-        password: hashedPassword,
-        firstName: data.firstName,
-        lastName: data.lastName,
-        nickname: data.nickname,
-        phone: data.phone,
-        country: data.country,
-        city: data.city,
-        birthDate: data.birthDate ? new Date(data.birthDate) : undefined,
-        fieldOfActivityId: data.fieldOfActivityId || undefined,
-        // Referrer is taken from the validated link owner; legacy links fall back to client referrerId
-        referrerId: refLink?.ownerId || data.referrerId || undefined,
-        referralLinkUsed: refLink ? data.referralCode : undefined,
-        // Create user professions
-        userProfessions: data.userProfessions && data.userProfessions.length > 0
-          ? {
-              create: data.userProfessions.map(up => ({
-                professionId: up.professionId,
-                features: up.features || [],
-              })),
-            }
-          : undefined,
-        // Create user artists
-        userArtists: data.artistIds && data.artistIds.length > 0
-          ? {
-              create: data.artistIds.map(artistId => ({
-                artistId,
-              })),
-            }
-          : undefined,
-      },
-      select: {
-        id: true,
-        email: true,
-        phone: true,
-        firstName: true,
-        lastName: true,
-        nickname: true,
-        avatar: true,
-        bio: true,
-        country: true,
-        city: true,
-        role: true,
-        genres: true,
-        fieldOfActivityId: true,
-        fieldOfActivity: { select: { id: true, name: true } },
-        userProfessions: {
-          include: {
-            profession: {
-              include: { direction: { select: { id: true, name: true } } },
-            },
-          },
-        },
-        userArtists: {
-          include: { artist: { select: { id: true, name: true } } },
-        },
-        createdAt: true,
-      }
-    });
 
     // Generate 6-digit verification code (cryptographically secure)
     const verificationCode = String(crypto.randomInt(100000, 1000000));
     const expires = new Date(Date.now() + 15 * 60 * 1000);
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        emailVerificationCode: verificationCode,
-        emailVerificationExpires: expires,
+    // IMPORTANT: do NOT create a User (or any related record) here. The account
+    // is created only after the emailed code is verified (see /verify-email).
+    // We stash the signup payload in PendingRegistration until then. Re-registering
+    // the same email overwrites the previous pending entry and issues a fresh code.
+    // Referral-link resolution/burning is also deferred to verification time.
+    const { password: _password, ...payload } = data;
+    await prisma.pendingRegistration.upsert({
+      where: { email: normalizedEmail },
+      update: {
+        passwordHash: hashedPassword,
+        payload: payload as any,
+        code: verificationCode,
+        expiresAt: expires,
+        lastSentAt: new Date(),
+      },
+      create: {
+        email: normalizedEmail,
+        passwordHash: hashedPassword,
+        payload: payload as any,
+        code: verificationCode,
+        expiresAt: expires,
       },
     });
 
@@ -214,23 +160,6 @@ router.post('/register', registerLimiter, async (req, res) => {
       console.error('[register] Failed to send verification email:', mailErr);
     }
 
-    // Burn the single-use referral link — atomic guard against double-use:
-    // updateMany only matches when usedById is still null.
-    if (refLink) {
-      const burned = await prisma.referralLink.updateMany({
-        where: { id: refLink.id, usedById: null },
-        data: { usedById: user.id, usedAt: new Date() },
-      }).catch(() => ({ count: 0 }));
-      // If a race consumed it first, detach the attribution we set above
-      if (burned.count === 0) {
-        await prisma.user.update({
-          where: { id: user.id },
-          data: { referrerId: data.referrerId || null, referralLinkUsed: null },
-        }).catch(() => {});
-      }
-    }
-
-    tgLog(`🆕 <b>Новый пользователь</b>\n👤 ${user.firstName} ${user.lastName}\n📧 ${normalizedEmail}\n🌍 ${user.city || '—'}`);
     res.status(201).json({ pendingVerification: true, email: data.email });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -246,20 +175,110 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
   try {
     const { email, code } = req.body as { email: string; code: string };
     if (!email || !code) return res.status(400).json({ error: 'email и code обязательны' });
+    const normalizedEmail = email.toLowerCase();
 
-    const user = await prisma.user.findUnique({
-      where: { email: email.toLowerCase() },
-      include: {
-        fieldOfActivity: { select: { id: true, name: true } },
-        userProfessions: {
-          include: { profession: { include: { direction: { select: { id: true, name: true } } } } },
-        },
-        userArtists: { include: { artist: { select: { id: true, name: true } } } },
-        employer: { select: { id: true, name: true, inn: true, ogrn: true } },
+    const userInclude = {
+      fieldOfActivity: { select: { id: true, name: true } },
+      userProfessions: {
+        include: { profession: { include: { direction: { select: { id: true, name: true } } } } },
       },
+      userArtists: { include: { artist: { select: { id: true, name: true } } } },
+      employer: { select: { id: true, name: true, inn: true, ogrn: true } },
+    } as const;
+
+    // ── New flow: account is created from the pending registration on success ──
+    const pending = await prisma.pendingRegistration.findUnique({ where: { email: normalizedEmail } });
+    if (pending) {
+      if (pending.code !== code) return res.status(400).json({ error: 'Неверный код' });
+      if (pending.expiresAt < new Date()) {
+        return res.status(400).json({ error: 'Код истёк. Запросите новый.' });
+      }
+
+      const p = pending.payload as any;
+
+      // Final uniqueness guard — someone may have claimed the email/phone meanwhile.
+      const dupeEmail = await prisma.user.findUnique({ where: { email: normalizedEmail }, select: { id: true } });
+      if (dupeEmail) {
+        await prisma.pendingRegistration.delete({ where: { email: normalizedEmail } }).catch(() => {});
+        return res.status(400).json({ error: 'Пользователь с таким email уже существует' });
+      }
+      if (p.phone) {
+        const dupePhone = await prisma.user.findUnique({ where: { phone: p.phone }, select: { id: true } });
+        if (dupePhone) return res.status(400).json({ error: 'Пользователь с таким телефоном уже существует' });
+      }
+
+      // Resolve the single-use referral link now that we actually create the account.
+      let refLink: { id: string; ownerId: string } | null = null;
+      if (p.referralCode) {
+        const link = await prisma.referralLink.findUnique({
+          where: { code: p.referralCode },
+          select: { id: true, ownerId: true, usedById: true },
+        });
+        if (link && !link.usedById) refLink = { id: link.id, ownerId: link.ownerId };
+      }
+
+      // Create the real account — only now, with email already verified.
+      const user = await prisma.user.create({
+        data: {
+          email: normalizedEmail,
+          password: pending.passwordHash,
+          firstName: p.firstName,
+          lastName: p.lastName,
+          nickname: p.nickname,
+          phone: p.phone,
+          country: p.country,
+          city: p.city,
+          birthDate: p.birthDate ? new Date(p.birthDate) : undefined,
+          fieldOfActivityId: p.fieldOfActivityId || undefined,
+          referrerId: refLink?.ownerId || p.referrerId || undefined,
+          referralLinkUsed: refLink ? p.referralCode : undefined,
+          emailVerified: true,
+          userProfessions: p.userProfessions && p.userProfessions.length > 0
+            ? { create: p.userProfessions.map((up: any) => ({ professionId: up.professionId, features: up.features || [] })) }
+            : undefined,
+          userArtists: p.artistIds && p.artistIds.length > 0
+            ? { create: p.artistIds.map((artistId: string) => ({ artistId })) }
+            : undefined,
+        },
+        include: userInclude,
+      });
+
+      // Burn the single-use referral link — atomic guard against double-use.
+      if (refLink) {
+        const burned = await prisma.referralLink.updateMany({
+          where: { id: refLink.id, usedById: null },
+          data: { usedById: user.id, usedAt: new Date() },
+        }).catch(() => ({ count: 0 }));
+        if (burned.count === 0) {
+          await prisma.user.update({
+            where: { id: user.id },
+            data: { referrerId: p.referrerId || null, referralLinkUsed: null },
+          }).catch(() => {});
+        }
+      }
+
+      // Registration complete — drop the pending entry.
+      await prisma.pendingRegistration.delete({ where: { email: normalizedEmail } }).catch(() => {});
+
+      tgLog(`🆕 <b>Новый пользователь</b>\n👤 ${user.firstName} ${user.lastName}\n📧 ${normalizedEmail}\n🌍 ${user.city || '—'}`);
+
+      const token = generateToken({ userId: user.id });
+      const { password: _, ...safe } = user as any;
+
+      sendWelcomeEmail(user.email!, user.firstName, user.lastName).catch(err =>
+        console.error('[verify-email] welcome email failed:', err)
+      );
+
+      return res.json({ user: safe, token });
+    }
+
+    // ── Legacy flow: users created by the old register (pre-PendingRegistration) ──
+    const user = await prisma.user.findUnique({
+      where: { email: normalizedEmail },
+      include: userInclude,
     });
 
-    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
+    if (!user) return res.status(404).json({ error: 'Заявка не найдена. Зарегистрируйтесь заново.' });
     if (user.emailVerified) {
       return res.status(400).json({ error: 'Email уже подтверждён. Войдите в систему.' });
     }
@@ -278,7 +297,6 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
     const token = generateToken({ userId: user.id });
     const { password: _, emailVerificationCode: __, emailVerificationExpires: ___, ...safe } = user as any;
 
-    // Send welcome email (non-blocking, after successful activation)
     sendWelcomeEmail(user.email!, user.firstName, user.lastName).catch(err =>
       console.error('[verify-email] welcome email failed:', err)
     );
@@ -295,18 +313,34 @@ router.post('/resend-verification', registerLimiter, async (req, res) => {
   try {
     const { email } = req.body as { email: string };
     if (!email) return res.status(400).json({ error: 'email обязателен' });
-
-    const user = await prisma.user.findUnique({ where: { email: email.toLowerCase() } });
-    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
-    if (user.emailVerified) return res.status(400).json({ error: 'Email уже подтверждён' });
-
-    // Server-side cooldown: 60 seconds between resends
-    if (user.lastCodeSentAt && Date.now() - user.lastCodeSentAt.getTime() < 60_000) {
-      return res.status(429).json({ error: 'Подождите перед повторной отправкой кода.' });
-    }
+    const normalizedEmail = email.toLowerCase();
 
     const code = String(crypto.randomInt(100000, 1000000));
     const expires = new Date(Date.now() + 15 * 60 * 1000);
+
+    // ── New flow: resend code for a pending registration ──
+    const pending = await prisma.pendingRegistration.findUnique({ where: { email: normalizedEmail } });
+    if (pending) {
+      // Server-side cooldown: 60 seconds between resends
+      if (pending.lastSentAt && Date.now() - pending.lastSentAt.getTime() < 60_000) {
+        return res.status(429).json({ error: 'Подождите перед повторной отправкой кода.' });
+      }
+      await prisma.pendingRegistration.update({
+        where: { email: normalizedEmail },
+        data: { code, expiresAt: expires, lastSentAt: new Date() },
+      });
+      await sendVerificationEmail(email, code);
+      return res.json({ ok: true });
+    }
+
+    // ── Legacy flow: unverified user from the old register ──
+    const user = await prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (!user) return res.status(404).json({ error: 'Заявка не найдена. Зарегистрируйтесь заново.' });
+    if (user.emailVerified) return res.status(400).json({ error: 'Email уже подтверждён' });
+
+    if (user.lastCodeSentAt && Date.now() - user.lastCodeSentAt.getTime() < 60_000) {
+      return res.status(429).json({ error: 'Подождите перед повторной отправкой кода.' });
+    }
 
     await prisma.user.update({
       where: { id: user.id },
