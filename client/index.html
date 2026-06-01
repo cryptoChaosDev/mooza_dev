@@ -16,7 +16,18 @@
     </script>
     <!-- /Yandex.Metrika counter -->
 
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <!--
+      Load the Telegram Mini App SDK only when actually running inside Telegram.
+      For regular web visitors (the vast majority) this avoids a render-blocking
+      request to telegram.org, which is throttled in some regions (RU) and stalls
+      first paint. document.write keeps it synchronous so window.Telegram is ready
+      before the app boots when we ARE inside Telegram.
+    -->
+    <script>
+      if (window.TelegramWebviewProxy || /tgWebApp/.test(location.hash) || /tgWebApp/.test(location.search)) {
+        document.write('<script src="https://telegram.org/js/telegram-web-app.js"><\/script>');
+      }
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 
     <!-- PWA -->
