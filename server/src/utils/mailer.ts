@@ -1,9 +1,25 @@
 import nodemailer from 'nodemailer';
 
-const registerTransport = nodemailer.createTransport({
-  host: 'smtp.majordomo.ru',
-  port: 465,
+// SMTP endpoint is configurable so a server whose provider blocks outbound SMTP
+// (ports 465/587) can route mail through a relay. SMTP_SERVERNAME pins the TLS
+// certificate name when the relay host differs from the real SMTP host.
+const SMTP_HOST = process.env.SMTP_HOST || 'smtp.majordomo.ru';
+const SMTP_PORT = Number(process.env.SMTP_PORT || 465);
+const SMTP_SERVERNAME = process.env.SMTP_SERVERNAME || undefined;
+
+// Fail fast instead of hanging forever when SMTP is unreachable.
+const COMMON = {
+  host: SMTP_HOST,
+  port: SMTP_PORT,
   secure: true,
+  connectionTimeout: 10000,
+  greetingTimeout: 10000,
+  socketTimeout: 20000,
+  ...(SMTP_SERVERNAME ? { tls: { servername: SMTP_SERVERNAME } } : {}),
+} as const;
+
+const registerTransport = nodemailer.createTransport({
+  ...COMMON,
   auth: {
     user: process.env.SMTP_USER || 'register@moooza.ru',
     pass: process.env.SMTP_PASS || '',
@@ -11,9 +27,7 @@ const registerTransport = nodemailer.createTransport({
 });
 
 const recoverTransport = nodemailer.createTransport({
-  host: 'smtp.majordomo.ru',
-  port: 465,
-  secure: true,
+  ...COMMON,
   auth: {
     user: process.env.SMTP_RECOVER_USER || 'recover@moooza.ru',
     pass: process.env.SMTP_RECOVER_PASS || '',
