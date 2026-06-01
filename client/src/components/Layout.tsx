@@ -83,6 +83,15 @@ export default function Layout({ children }: LayoutProps) {
           </a>
           <div className="flex items-center gap-3">
             <NotificationBell />
+            {user?.isAdmin && (
+              <button
+                onClick={() => navigate('/admin')}
+                className={`transition-colors ${isActive('/admin') ? 'text-primary-400' : 'text-slate-500 hover:text-slate-300'}`}
+                aria-label="Администрирование"
+              >
+                <ShieldCheck size={20} strokeWidth={2} />
+              </button>
+            )}
             <button
               onClick={() => setShowInfo(true)}
               className="text-slate-500 hover:text-slate-300 transition-colors"
