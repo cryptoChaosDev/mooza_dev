@@ -109,7 +109,7 @@ server {
 
     location /api/      { proxy_pass http://localhost:4000; include /etc/nginx/moooza-proxy.conf; }
     location /uploads/  { proxy_pass http://localhost:4000; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; }
-    location /socket.io/ { proxy_pass http://localhost:4000; include /etc/nginx/moooza-proxy.conf; proxy_read_timeout 86400; proxy_send_timeout 86400; }
+    location /socket.io/ { proxy_pass http://localhost:4000; include /etc/nginx/moooza-proxy.conf; proxy_send_timeout 86400; }
     location /          { proxy_pass http://localhost:3000; include /etc/nginx/moooza-proxy.conf; }
 }
 NGINX
