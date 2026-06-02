@@ -179,6 +179,12 @@ export const referenceAPI = {
   }) => api.get('/references/search', { params }),
 };
 
+// Role API — artist-profile role catalog (collective / release / clip)
+export const roleAPI = {
+  list: (context: 'collective' | 'release' | 'clip') =>
+    api.get('/roles', { params: { context } }),
+};
+
 // Post API
 export const postAPI = {
   getFeed: (params?: { limit?: number; offset?: number; type?: string; authorKind?: string; period?: string; city?: string; employment?: string; artistType?: string; genre?: string }) =>
