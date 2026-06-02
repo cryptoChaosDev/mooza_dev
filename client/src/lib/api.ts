@@ -299,8 +299,10 @@ export const artistAPI = {
   follow: (id: string) => api.post(`/artists/${id}/follow`),
   unfollow: (id: string) => api.delete(`/artists/${id}/follow`),
   getFollowing: () => api.get('/artists/following'),
-  submitForModeration: (id: string) => api.patch(`/artists/${id}/submit`),
-  submitProof: (id: string, proofUrl: string) => api.patch(`/artists/${id}/submit-proof`, { proofUrl }),
+  checkName: (name: string) => api.get('/artists/check-name', { params: { name } }),
+  requestVerification: (id: string, verificationUrl: string) =>
+    api.patch(`/artists/${id}/request-verification`, { verificationUrl }),
+  withdrawVerification: (id: string) => api.patch(`/artists/${id}/withdraw`),
   uploadAvatar: (id: string, file: File) => {
     const fd = new FormData(); fd.append('avatar', file);
     return api.post(`/artists/${id}/avatar`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
@@ -404,9 +406,7 @@ export const adminAPI = {
   priceRanges: crudFor('price-ranges'),
   artists: crudFor('artists'),
   artistModeration: {
-    pending: () => api.get(`${adminBase}/artists/pending`),
     verification: () => api.get(`${adminBase}/artists/verification`),
-    approve: (id: string) => api.patch(`${adminBase}/artists/${id}/approve`),
     reject: (id: string, reason?: string) => api.patch(`${adminBase}/artists/${id}/reject`, { reason }),
     verify: (id: string) => api.patch(`${adminBase}/artists/${id}/verify`),
   },

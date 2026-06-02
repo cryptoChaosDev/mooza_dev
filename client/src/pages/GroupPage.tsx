@@ -149,12 +149,13 @@ export default function GroupPage() {
     mutationFn: (file: File) => artistAPI.uploadBanner(id!, file),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
   });
+  // Single-stage verification: the proof URL is submitted via request-verification.
   const submitMut = useMutation({
-    mutationFn: () => artistAPI.submitForModeration(id!),
+    mutationFn: () => artistAPI.requestVerification(id!, proofUrl),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
   });
   const submitProofMut = useMutation({
-    mutationFn: () => artistAPI.submitProof(id!, proofUrl),
+    mutationFn: () => artistAPI.requestVerification(id!, proofUrl),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); setProofUrl(''); },
   });
   const saveMut = useMutation({

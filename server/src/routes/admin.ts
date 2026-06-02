@@ -473,11 +473,11 @@ router.get('/artists/pending', authenticate, requireAdmin, async (_req, res) => 
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /admin/artists/verification — list approved artists with proof URL pending verification
+// GET /admin/artists/verification — list PENDING artists with proof URL awaiting verification
 router.get('/artists/verification', authenticate, requireAdmin, async (_req, res) => {
   try {
     const artists = await prisma.artist.findMany({
-      where: { status: 'APPROVED', verificationProofUrl: { not: null } },
+      where: { status: 'PENDING', verificationProofUrl: { not: null } },
       include: {
         submittedByUser: { select: { id: true, firstName: true, lastName: true, avatar: true } },
         genres: { include: { genre: true } },
@@ -488,25 +488,17 @@ router.get('/artists/verification', authenticate, requireAdmin, async (_req, res
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// PATCH /admin/artists/:id/approve — approve artist card + generate verification code
-router.patch('/artists/:id/approve', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const code = 'MOOOZA-' + crypto.randomBytes(3).toString('hex').toUpperCase();
-    const artist = await prisma.artist.update({
-      where: { id: req.params.id },
-      data: {
-        status: 'APPROVED',
-        verificationCode: code,
-        rejectionReason: null,
-        moderatedAt: new Date(),
-      },
-    });
-    res.json({ ...artist, listeners: Number(artist.listeners) });
-  } catch (e: any) { res.status(400).json({ error: e.message }); }
-});
+// Helper: recipients to notify about an artist moderation result (owner, submitter, fallback admins).
+async function artistNotifyRecipients(artistId: string, submittedById: string | null): Promise<string[]> {
+  const ids = new Set<string>();
+  const owner = await prisma.userArtist.findFirst({ where: { artistId, isOwner: true }, select: { userId: true } });
+  if (owner) ids.add(owner.userId);
+  if (submittedById) ids.add(submittedById);
+  return [...ids];
+}
 
 // PATCH /admin/artists/:id/reject — reject with reason
-router.patch('/artists/:id/reject', authenticate, requireAdmin, async (req, res) => {
+router.patch('/artists/:id/reject', authenticate, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const { reason } = req.body as { reason?: string };
     const artist = await prisma.artist.update({
@@ -517,17 +509,44 @@ router.patch('/artists/:id/reject', authenticate, requireAdmin, async (req, res)
         moderatedAt: new Date(),
       },
     });
+
+    const recipients = await artistNotifyRecipients(artist.id, artist.submittedById);
+    const reasonText = reason ? ` Причина: ${reason}.` : '';
+    await Promise.all(recipients.map(userId =>
+      prisma.notification.create({
+        data: {
+          userId, actorId: req.userId, type: 'artist_rejected',
+          title: 'Заявка отклонена',
+          body: `Заявка на верификацию «${artist.name}» отклонена.${reasonText} Исправьте данные и отправьте повторно.`,
+          link: `/artist/${artist.id}`,
+        },
+      })
+    ));
+
     res.json({ ...artist, listeners: Number(artist.listeners) });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
 // PATCH /admin/artists/:id/verify — mark artist as VERIFIED after checking proof
-router.patch('/artists/:id/verify', authenticate, requireAdmin, async (req, res) => {
+router.patch('/artists/:id/verify', authenticate, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const artist = await prisma.artist.update({
       where: { id: req.params.id },
       data: { status: 'VERIFIED', moderatedAt: new Date() },
     });
+
+    const recipients = await artistNotifyRecipients(artist.id, artist.submittedById);
+    await Promise.all(recipients.map(userId =>
+      prisma.notification.create({
+        data: {
+          userId, actorId: req.userId, type: 'artist_verified',
+          title: 'Артист верифицирован',
+          body: `Артист «${artist.name}» успешно верифицирован и добавлен в каталог`,
+          link: `/artist/${artist.id}`,
+        },
+      })
+    ));
+
     res.json({ ...artist, listeners: Number(artist.listeners) });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });

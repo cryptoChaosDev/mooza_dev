@@ -367,6 +367,7 @@ model Artist {
   verificationCode     String?      @unique
   verificationProofUrl String?
   moderatedAt          DateTime?
+  submitterRoles       String[]     @default([])
 
   genres      ArtistGenre[]
   userArtists UserArtist[]

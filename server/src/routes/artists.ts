@@ -5,8 +5,42 @@ import { uploadArtistAvatar, uploadArtistBanner } from '../middleware/upload';
 import { Prisma, ArtistType } from '@prisma/client';
 import crypto from 'crypto';
 import { tgEvent } from '../utils/telegram';
+import { classifyUrl, BLOCK_MESSAGE } from '../utils/socialPlatforms';
 
 const router = Router();
+
+// Allowed submitter-relationship roles (creator's declared relationship to the artist).
+const SUBMITTER_ROLES = ['Музыкант', 'Менеджер', 'Директор', 'Представитель группы', 'Лейбл'];
+
+// Minimum confirmed members required to request verification, by artist type.
+function minMembersForType(type: ArtistType | null | undefined): number {
+  if (type === 'SOLO' || type === 'TRIBUTE') return 1;
+  return 2;
+}
+
+// Russian plural helper: one / few / many.
+function plural(n: number, one: string, few: string, many: string): string {
+  const mod10 = n % 10;
+  const mod100 = n % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 10 || mod100 >= 20)) return few;
+  return many;
+}
+
+// Generate a unique verification code in the format MOOOZA-XXXXXX (6 uppercase alphanumerics).
+async function generateUniqueVerificationCode(): Promise<string> {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  for (let attempt = 0; attempt < 20; attempt++) {
+    let suffix = '';
+    const bytes = crypto.randomBytes(6);
+    for (let i = 0; i < 6; i++) suffix += alphabet[bytes[i] % alphabet.length];
+    const code = `MOOOZA-${suffix}`;
+    const existing = await prisma.artist.findUnique({ where: { verificationCode: code }, select: { id: true } });
+    if (!existing) return code;
+  }
+  // Extremely unlikely fallback.
+  return `MOOOZA-${crypto.randomBytes(6).toString('hex').toUpperCase().slice(0, 6)}`;
+}
 
 // BigInt → Number for JSON serialization (listeners field)
 function serializeArtist(artist: any) {
@@ -19,6 +53,14 @@ function serializeArtist(artist: any) {
 // Helper: check if user is a member of the artist
 async function isMember(artistId: string, userId: string): Promise<boolean> {
   return !!(await prisma.userArtist.findFirst({ where: { artistId, userId } }));
+}
+
+// Helper: is user an admin of the artist (UserArtist.isAdmin) or a system admin.
+async function isArtistAdmin(artistId: string, userId: string): Promise<boolean> {
+  const ua = await prisma.userArtist.findFirst({ where: { artistId, userId, isAdmin: true } });
+  if (ua) return true;
+  const me = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
+  return !!me?.isAdmin;
 }
 
 // ── GET /api/artists/suggest?q= ─────────────────────────────────────────────
@@ -79,6 +121,37 @@ router.get('/following', authenticate, async (req: AuthRequest, res: Response) =
   }
 });
 
+// ── GET /api/artists/check-name?name= ────────────────────────────────────────
+// Case-insensitive duplicate check across ALL artists (used by the create flow).
+router.get('/check-name', optionalAuthenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const name = typeof req.query.name === 'string' ? req.query.name.trim() : '';
+    if (!name) return res.json({ exists: false });
+
+    const artist = await prisma.artist.findFirst({
+      where: { name: { equals: name, mode: 'insensitive' } },
+      select: { id: true, name: true, avatar: true, type: true, status: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (!artist) return res.json({ exists: false });
+
+    return res.json({
+      exists: true,
+      artist: {
+        id: artist.id,
+        name: artist.name,
+        avatar: artist.avatar,
+        type: artist.type,
+        verified: artist.status === 'VERIFIED',
+      },
+    });
+  } catch (err) {
+    console.error('[artists] GET /check-name', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 // ── GET /api/artists/:id ─────────────────────────────────────────────────────
 router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -124,6 +197,7 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
         nickname: ua.user.nickname,
         profession: ua.profession ?? null,
         isOwner: ua.isOwner,
+        isAdmin: ua.isAdmin,
         inviteStatus: ua.inviteStatus,
       })),
     }));
@@ -147,6 +221,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       bandLink,
       listeners,
       genreIds,
+      submitterRoles,
     } = req.body as {
       name: string;
       type?: string;
@@ -157,11 +232,20 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       bandLink?: string;
       listeners?: number;
       genreIds?: string[];
+      submitterRoles?: string[];
     };
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Имя артиста обязательно' });
     }
+
+    // Validate submitter roles against the fixed set; silently ignore anything else.
+    const cleanSubmitterRoles = Array.isArray(submitterRoles)
+      ? submitterRoles.filter((r) => SUBMITTER_ROLES.includes(r))
+      : [];
+
+    // Generate the verification code immediately at creation.
+    const verificationCode = await generateUniqueVerificationCode();
 
     const artist = await prisma.artist.create({
       data: {
@@ -173,11 +257,19 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         socialLinks: socialLinks ?? undefined,
         bandLink,
         listeners: listeners ?? 0,
+        submitterRoles: cleanSubmitterRoles,
+        verificationCode,
         genres: genreIds?.length
           ? { create: genreIds.map((gId) => ({ genreId: gId })) }
           : undefined,
         userArtists: {
-          create: { userId, isOwner: true },
+          create: {
+            userId,
+            isOwner: true,
+            isAdmin: true,
+            inviteStatus: 'ACCEPTED',
+            participationStatus: 'ACTIVE_MEMBER',
+          },
         },
       },
       include: {
@@ -227,6 +319,9 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Нет прав для редактирования' });
     }
 
+    const existing = await prisma.artist.findUnique({ where: { id }, select: { name: true, status: true } });
+    if (!existing) return res.status(404).json({ error: 'Артист не найден' });
+
     const {
       name,
       type,
@@ -248,6 +343,17 @@ router.put('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       listeners?: number;
       genreIds?: string[];
     };
+
+    // A verified artist's name is locked — changing it requires support.
+    if (
+      existing.status === 'VERIFIED' &&
+      name !== undefined &&
+      name.trim() !== existing.name
+    ) {
+      return res.status(400).json({
+        error: 'Название верифицированного артиста нельзя изменить — обратитесь в поддержку',
+      });
+    }
 
     const updateData: Prisma.ArtistUpdateInput = {};
     if (name !== undefined) updateData.name = name.trim();
@@ -404,71 +510,113 @@ router.delete('/:id/follow', authenticate, async (req: AuthRequest, res: Respons
   }
 });
 
-// ── PATCH /api/artists/:id/submit ────────────────────────────────────────────
-// Member submits artist card for admin moderation
-router.patch('/:id/submit', authenticate, async (req: AuthRequest, res: Response) => {
+// ── PATCH /api/artists/:id/request-verification ──────────────────────────────
+// Admin of the artist submits the verification proof URL. Server validates ALL
+// submit conditions; on failure returns 400 { error:'CONDITIONS_NOT_MET', unmet }.
+router.patch('/:id/request-verification', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const userId = req.userId!;
+    const { verificationUrl } = req.body as { verificationUrl?: string };
 
-    if (!(await isMember(id, userId))) {
+    if (!(await isArtistAdmin(id, userId))) {
       return res.status(403).json({ error: 'Нет прав' });
     }
 
     const artist = await prisma.artist.findUnique({ where: { id } });
     if (!artist) return res.status(404).json({ error: 'Артист не найден' });
 
-    if (!['DRAFT', 'REJECTED'].includes(artist.status)) {
-      return res.status(400).json({ error: 'Карточка уже отправлена на модерацию' });
+    if (artist.status === 'VERIFIED') {
+      return res.status(400).json({ error: 'Артист уже верифицирован' });
+    }
+    if (artist.status === 'PENDING') {
+      return res.status(400).json({ error: 'Заявка уже на рассмотрении' });
     }
 
-    const updated = await prisma.artist.update({
-      where: { id },
-      data: { status: 'PENDING', submittedById: userId, rejectionReason: null },
+    const unmet: string[] = [];
+
+    // Required fields.
+    if (!artist.name || !artist.name.trim()) unmet.push('Заполните название');
+    if (!artist.avatar) unmet.push('Загрузите аватар');
+    if (!artist.type) unmet.push('Выберите тип артиста');
+
+    // Minimum confirmed members by type.
+    const confirmedMembers = await prisma.userArtist.count({
+      where: { artistId: id, inviteStatus: 'ACCEPTED' },
     });
+    const minMembers = minMembersForType(artist.type);
+    if (confirmedMembers < minMembers) {
+      const need = minMembers - confirmedMembers;
+      unmet.push(`Добавьте ещё ${need} ${plural(need, 'участника', 'участников', 'участников')}`);
+    }
+
+    // Verification URL: must be present and an allowed platform.
+    const url = (verificationUrl ?? '').trim();
+    if (!url) {
+      unmet.push('Укажите ссылку на профиль в одной из разрешённых соцсетей');
+    } else {
+      const classified = classifyUrl(url);
+      if (classified.status === 'blocked') {
+        unmet.push(BLOCK_MESSAGE);
+      } else if (classified.status !== 'allowed') {
+        unmet.push('Укажите ссылку на профиль в одной из разрешённых соцсетей');
+      }
+    }
+
+    if (unmet.length) {
+      return res.status(400).json({ error: 'CONDITIONS_NOT_MET', unmet });
+    }
+
+    // All conditions met. If the artist was rejected, regenerate a fresh code
+    // (invalidating the old one).
+    const data: Prisma.ArtistUpdateInput = {
+      verificationProofUrl: url,
+      status: 'PENDING',
+      rejectionReason: null,
+      submittedByUser: { connect: { id: userId } },
+    };
+    if (artist.status === 'REJECTED' || !artist.verificationCode) {
+      data.verificationCode = await generateUniqueVerificationCode();
+    }
+
+    const updated = await prisma.artist.update({ where: { id }, data });
 
     return res.json(serializeArtist(updated));
   } catch (err) {
-    console.error('[artists] PATCH /:id/submit', err);
+    console.error('[artists] PATCH /:id/request-verification', err);
     return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });
 
-// ── PATCH /api/artists/:id/submit-proof ─────────────────────────────────────
-// Member submits verification proof URL (link to post with the code)
-router.patch('/:id/submit-proof', authenticate, async (req: AuthRequest, res: Response) => {
+// ── PATCH /api/artists/:id/withdraw ──────────────────────────────────────────
+// Admin withdraws a pending verification request, returning the artist to DRAFT.
+router.patch('/:id/withdraw', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const userId = req.userId!;
-    const { proofUrl } = req.body as { proofUrl: string };
 
-    if (!(await isMember(id, userId))) {
+    if (!(await isArtistAdmin(id, userId))) {
       return res.status(403).json({ error: 'Нет прав' });
-    }
-
-    if (!proofUrl || !proofUrl.trim()) {
-      return res.status(400).json({ error: 'proofUrl обязателен' });
     }
 
     const artist = await prisma.artist.findUnique({ where: { id } });
     if (!artist) return res.status(404).json({ error: 'Артист не найден' });
 
-    if (artist.status !== 'APPROVED') {
-      return res.status(400).json({ error: 'Карточка должна быть одобрена перед верификацией' });
+    if (artist.status === 'VERIFIED') {
+      return res.status(400).json({ error: 'Нельзя отозвать заявку верифицированного артиста' });
     }
-
-    if (!artist.verificationCode) {
-      return res.status(400).json({ error: 'Код верификации ещё не выдан' });
+    if (artist.status !== 'PENDING') {
+      return res.status(400).json({ error: 'Заявка не находится на рассмотрении' });
     }
 
     const updated = await prisma.artist.update({
       where: { id },
-      data: { verificationProofUrl: proofUrl.trim() },
+      data: { status: 'DRAFT' },
     });
 
     return res.json(serializeArtist(updated));
   } catch (err) {
-    console.error('[artists] PATCH /:id/submit-proof', err);
+    console.error('[artists] PATCH /:id/withdraw', err);
     return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });

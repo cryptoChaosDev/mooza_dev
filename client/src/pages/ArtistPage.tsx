@@ -16,20 +16,22 @@ import AvatarComponent from '../components/Avatar';
 import SelectSheet from '../components/SelectSheet';
 import ShareButton from '../components/ShareButton';
 import { useAuthStore } from '../stores/authStore';
+import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 const TYPE_OPTIONS = [
-  { id: 'SOLO',        name: 'Соло артист' },
+  { id: 'SOLO',        name: 'Сольный артист' },
+  { id: 'DUET',        name: 'Дуэт' },
   { id: 'GROUP',       name: 'Группа' },
-  { id: 'COVER_GROUP', name: 'Кавер группа' },
+  { id: 'COVER_GROUP', name: 'Кавер-группа' },
+  { id: 'TRIBUTE',     name: 'Трибьют' },
+  { id: 'CHOIR',       name: 'Хор' },
+  { id: 'ENSEMBLE',    name: 'Ансамбль' },
+  { id: 'ORCHESTRA',   name: 'Оркестр' },
 ];
 
-const TYPE_LABELS: Record<string, string> = {
-  SOLO: 'Соло артист',
-  GROUP: 'Группа',
-  COVER_GROUP: 'Кавер группа',
-};
+const TYPE_LABELS: Record<string, string> = Object.fromEntries(TYPE_OPTIONS.map(t => [t.id, t.name]));
 
 function resolveUrl(path: string | null | undefined): string | null {
   if (!path) return null;
@@ -60,6 +62,7 @@ export default function ArtistPage() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [proofUrl, setProofUrl] = useState('');
+  const [verifyUnmet, setVerifyUnmet] = useState<string[]>([]);
   const [form, setForm] = useState<EditForm>({
     name: '', type: '', city: '', tourReady: '', description: '',
     bandLink: '', listeners: '', genreIds: [], socialLinks: {},
@@ -164,14 +167,22 @@ export default function ArtistPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
   });
 
-  const submitMut = useMutation({
-    mutationFn: () => artistAPI.submitForModeration(id!),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+  const requestVerifyMut = useMutation({
+    mutationFn: () => artistAPI.requestVerification(id!, proofUrl),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); setProofUrl(''); setVerifyUnmet([]); },
+    onError: (err: any) => {
+      const data = err?.response?.data;
+      if (data?.error === 'CONDITIONS_NOT_MET' && Array.isArray(data.unmet)) {
+        setVerifyUnmet(data.unmet);
+      } else {
+        setVerifyUnmet([data?.error || 'Не удалось отправить запрос']);
+      }
+    },
   });
 
-  const submitProofMut = useMutation({
-    mutationFn: () => artistAPI.submitProof(id!, proofUrl),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); setProofUrl(''); },
+  const withdrawMut = useMutation({
+    mutationFn: () => artistAPI.withdrawVerification(id!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
   });
 
   const saveMut = useMutation({
@@ -275,6 +286,10 @@ export default function ArtistPage() {
 
   const isMemberOfArtist = artist.members?.some(
     (m: { id: string; inviteStatus: string }) => m.id === currentUser?.id && m.inviteStatus === 'ACCEPTED'
+  );
+  const isAdminOfArtist = !!currentUser && (
+    artist.submittedById === currentUser.id ||
+    artist.members?.some((m: any) => m.id === currentUser.id && (m.isAdmin || m.isOwner))
   );
   const hasSocialLinks =
     artist.socialLinks && Object.values(artist.socialLinks as Record<string, string>).some(Boolean);
@@ -618,71 +633,94 @@ export default function ArtistPage() {
           {(artist.listeners ?? 0) > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{Number(artist.listeners).toLocaleString('ru-RU')}</span> {plural(Number(artist.listeners), 'слушатель', 'слушателя', 'слушателей')}</span></>}
         </div>
 
-        {/* Moderation panel for members */}
-        {isMemberOfArtist && (
+        {/* Verification panel for admins */}
+        {isAdminOfArtist && (
           <>
-            {(artist.status === 'DRAFT' || artist.status === 'REJECTED') && (
-              <div className={`mb-4 p-3 rounded-xl border ${artist.status === 'REJECTED' ? 'bg-red-500/5 border-red-500/20' : 'bg-slate-800/50 border-slate-700'}`}>
-                {artist.status === 'REJECTED' && artist.rejectionReason && (
-                  <p className="text-xs text-red-400 mb-2 flex items-start gap-1.5">
-                    <ShieldX size={13} className="flex-shrink-0 mt-0.5" />
-                    <span>Отклонено: {artist.rejectionReason}</span>
+            {/* DRAFT / REJECTED — request (or re-request) verification */}
+            {(artist.status === 'DRAFT' || artist.status === 'REJECTED') && (() => {
+              const classified = proofUrl.trim() ? classifyUrl(proofUrl.trim()) : null;
+              const urlBlocked = classified?.status === 'blocked';
+              const urlInvalid = classified?.status === 'invalid';
+              const urlOk = classified?.status === 'allowed';
+              return (
+                <div className={`mb-4 p-3 rounded-xl border ${artist.status === 'REJECTED' ? 'bg-red-500/5 border-red-500/20' : 'bg-slate-800/50 border-slate-700'}`}>
+                  <p className="text-xs font-medium mb-1 text-white">
+                    {artist.status === 'REJECTED'
+                      ? 'Заявка отклонена — требуется повторная подача'
+                      : 'Верификация не запрошена'}
                   </p>
-                )}
-                <p className="text-xs text-slate-400 mb-2">
-                  {artist.status === 'DRAFT'
-                    ? 'Карточка не опубликована. Отправьте на проверку, чтобы она появилась в каталоге.'
-                    : 'Карточка была отклонена. Исправьте данные и отправьте снова.'}
+                  {artist.status === 'REJECTED' && artist.rejectionReason && (
+                    <p className="text-xs text-red-400 mb-2 flex items-start gap-1.5">
+                      <ShieldX size={13} className="flex-shrink-0 mt-0.5" />
+                      <span>Причина: {artist.rejectionReason}</span>
+                    </p>
+                  )}
+                  <p className="text-xs text-slate-400 mb-2">
+                    Разместите этот код в посте или описании профиля артиста в соцсетях и пришлите ссылку на профиль:
+                  </p>
+                  <div className="flex items-center gap-2 mb-3 p-2 bg-slate-900 rounded-lg">
+                    <code className="text-sm font-mono font-bold text-primary-400 tracking-wider flex-1">
+                      {artist.verificationCode}
+                    </code>
+                    <button
+                      onClick={() => artist.verificationCode && navigator.clipboard.writeText(artist.verificationCode)}
+                      className="text-slate-500 hover:text-white text-xs px-2 py-0.5 bg-slate-800 rounded transition-colors"
+                    >
+                      Копировать
+                    </button>
+                  </div>
+                  <input
+                    value={proofUrl}
+                    onChange={e => { setProofUrl(e.target.value); setVerifyUnmet([]); }}
+                    placeholder="Ссылка на профиль для верификации..."
+                    className="w-full mb-2 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
+                  />
+                  {urlBlocked && <p className="text-xs text-red-400 mb-2">{BLOCK_MESSAGE}</p>}
+                  {urlInvalid && <p className="text-xs text-amber-400 mb-2">Введите корректную ссылку (http/https).</p>}
+                  {verifyUnmet.length > 0 && (
+                    <ul className="text-xs text-amber-400 mb-2 list-disc list-inside space-y-0.5">
+                      {verifyUnmet.map((u, i) => <li key={i}>{u}</li>)}
+                    </ul>
+                  )}
+                  <button
+                    onClick={() => requestVerifyMut.mutate()}
+                    disabled={requestVerifyMut.isPending || !urlOk}
+                    title={!urlOk ? 'Укажите ссылку на разрешённую соцсеть. Также добавьте участников (мин. по типу) на странице артиста.' : undefined}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+                  >
+                    {requestVerifyMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                    Отправить на верификацию
+                  </button>
+                </div>
+              );
+            })()}
+
+            {/* PENDING — request under review */}
+            {artist.status === 'PENDING' && (
+              <div className="mb-4 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
+                <p className="text-xs text-amber-300 font-medium mb-1 flex items-center gap-1.5">
+                  <Clock size={13} /> Заявка на рассмотрении
+                </p>
+                <p className="text-xs text-slate-400 mb-3">
+                  Мы проверим публикацию с кодом и уведомим вас о результате.
                 </p>
                 <button
-                  onClick={() => submitMut.mutate()}
-                  disabled={submitMut.isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+                  onClick={() => withdrawMut.mutate()}
+                  disabled={withdrawMut.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
                 >
-                  {submitMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-                  Отправить на модерацию
+                  {withdrawMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
+                  Отозвать заявку
                 </button>
               </div>
             )}
 
-            {artist.status === 'APPROVED' && (
-              <div className="mb-4 p-3 rounded-xl bg-sky-500/5 border border-sky-500/20">
-                <p className="text-xs text-sky-300 font-medium mb-1">Карточка одобрена — верифицируйте коллектив</p>
-                <p className="text-xs text-slate-400 mb-2">
-                  Опубликуйте этот код в официальных соцсетях коллектива и пришлите ссылку на публикацию:
+            {/* VERIFIED */}
+            {artist.status === 'VERIFIED' && (
+              <div className="mb-4 p-3 rounded-xl bg-green-500/5 border border-green-500/20">
+                <p className="text-xs text-green-400 font-medium flex items-center gap-1.5">
+                  <ShieldCheck size={13} /> Верификация пройдена
                 </p>
-                <div className="flex items-center gap-2 mb-3 p-2 bg-slate-900 rounded-lg">
-                  <code className="text-sm font-mono font-bold text-primary-400 tracking-wider flex-1">
-                    {artist.verificationCode}
-                  </code>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(artist.verificationCode)}
-                    className="text-slate-500 hover:text-white text-xs px-2 py-0.5 bg-slate-800 rounded transition-colors"
-                  >
-                    Копировать
-                  </button>
-                </div>
-                {artist.verificationProofUrl ? (
-                  <p className="text-xs text-slate-400">
-                    Ссылка отправлена на проверку. Ожидайте подтверждения администратора.
-                  </p>
-                ) : (
-                  <div className="flex gap-2">
-                    <input
-                      value={proofUrl}
-                      onChange={e => setProofUrl(e.target.value)}
-                      placeholder="Ссылка на публикацию..."
-                      className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
-                    />
-                    <button
-                      onClick={() => submitProofMut.mutate()}
-                      disabled={!proofUrl.trim() || submitProofMut.isPending}
-                      className="px-3 py-1.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
-                    >
-                      {submitProofMut.isPending ? <Loader2 size={13} className="animate-spin" /> : 'Отправить'}
-                    </button>
-                  </div>
-                )}
               </div>
             )}
           </>
