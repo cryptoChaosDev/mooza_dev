@@ -293,6 +293,48 @@ enum ArtistType {
   SOLO
   GROUP
   COVER_GROUP
+  DUET
+  TRIBUTE
+  CHOIR
+  ENSEMBLE
+  ORCHESTRA
+}
+
+enum ArtistActivityStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+  DISBANDED
+}
+
+enum MemberParticipationStatus {
+  ACTIVE_MEMBER
+  FORMER_MEMBER
+}
+
+enum RoleContext {
+  COLLECTIVE
+  RELEASE
+  CLIP
+}
+
+enum StreamingPlatform {
+  VK
+  SPOTIFY
+  YANDEX_MUSIC
+  APPLE_MUSIC
+}
+
+enum ClipPlatform {
+  VK_VIDEO
+  RUTUBE
+  YOUTUBE
+}
+
+enum ContactsVisibility {
+  ALL
+  REGISTERED
+  FRIENDS
 }
 
 enum ArtistStatus {
@@ -316,6 +358,8 @@ model Artist {
   banner      String?
   listeners   BigInt       @default(0)
 
+  activityStatus       ArtistActivityStatus @default(ACTIVE)
+
   status               ArtistStatus @default(DRAFT)
   submittedById        String?
   submittedByUser      User?        @relation("ArtistSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
@@ -328,6 +372,8 @@ model Artist {
   userArtists UserArtist[]
   followers   ArtistFollower[]
   posts       Post[]
+  releases    Release[]
+  clips       Clip[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -524,6 +570,11 @@ model User {
   birthDate             DateTime?
   birthDateVisible      Boolean   @default(false)
   contactsVisible       Boolean   @default(true)
+  contactsVisibility    ContactsVisibility @default(ALL)
+
+  // Release / Clip participation
+  releaseParticipations ReleaseParticipant[]
+  clipParticipations    ClipParticipant[]
   lastSeenAt            DateTime?
   termsAgreedAt         DateTime?
   onboardingCompletedAt DateTime?
@@ -687,21 +738,25 @@ enum GroupInviteStatus {
   PENDING
   ACCEPTED
   DECLINED
+  ARCHIVED
 }
 
 model UserArtist {
   id           String            @id @default(uuid())
   userId       String
   artistId     String
-  isOwner      Boolean           @default(false)
-  professionId String?
-  inviteStatus GroupInviteStatus @default(ACCEPTED)
-  invitedById  String?
+  isOwner             Boolean                   @default(false)
+  isAdmin             Boolean                   @default(false)
+  professionId        String?
+  inviteStatus        GroupInviteStatus         @default(ACCEPTED)
+  participationStatus MemberParticipationStatus @default(ACTIVE_MEMBER)
+  invitedById         String?
 
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   artist     Artist      @relation(fields: [artistId], references: [id], onDelete: Cascade)
   profession Profession? @relation(fields: [professionId], references: [id], onDelete: SetNull)
   invitedBy  User?       @relation("GroupInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+  roles      UserArtistRole[]
 
   createdAt DateTime @default(now())
 
@@ -709,6 +764,122 @@ model UserArtist {
   @@index([userId])
   @@index([artistId])
   @@index([inviteStatus])
+}
+
+// ============ ROLE CATALOG ============
+
+model Role {
+  id        String      @id @default(uuid())
+  name      String
+  context   RoleContext
+  category  String
+  sortOrder Int         @default(0)
+  createdAt DateTime    @default(now())
+
+  userArtistRoles         UserArtistRole[]
+  releaseParticipantRoles ReleaseParticipantRole[]
+  clipParticipantRoles    ClipParticipantRole[]
+
+  @@unique([context, category, name])
+  @@index([context, category])
+}
+
+model UserArtistRole {
+  id           String @id @default(uuid())
+  userArtistId String
+  roleId       String
+
+  userArtist UserArtist @relation(fields: [userArtistId], references: [id], onDelete: Cascade)
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userArtistId, roleId])
+}
+
+// ============ RELEASES ============
+
+model Release {
+  id          String            @id @default(uuid())
+  artistId    String
+  title       String
+  coverUrl    String?
+  releaseDate DateTime?
+  platform    StreamingPlatform
+  url         String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  artist       Artist               @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  participants ReleaseParticipant[]
+
+  @@index([artistId])
+}
+
+model ReleaseParticipant {
+  id            String            @id @default(uuid())
+  releaseId     String
+  userId        String
+  confirmStatus GroupInviteStatus @default(PENDING)
+  createdAt     DateTime          @default(now())
+
+  release Release                  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  user    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roles   ReleaseParticipantRole[]
+
+  @@unique([releaseId, userId])
+}
+
+model ReleaseParticipantRole {
+  id            String @id @default(uuid())
+  participantId String
+  roleId        String
+
+  participant ReleaseParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  role        Role               @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, roleId])
+}
+
+// ============ CLIPS ============
+
+model Clip {
+  id        String       @id @default(uuid())
+  artistId  String
+  title     String
+  coverUrl  String?
+  platform  ClipPlatform
+  url       String
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  artist       Artist            @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  participants ClipParticipant[]
+
+  @@index([artistId])
+}
+
+model ClipParticipant {
+  id            String            @id @default(uuid())
+  clipId        String
+  userId        String
+  confirmStatus GroupInviteStatus @default(PENDING)
+  createdAt     DateTime          @default(now())
+
+  clip  Clip                  @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  user  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roles ClipParticipantRole[]
+
+  @@unique([clipId, userId])
+}
+
+model ClipParticipantRole {
+  id            String @id @default(uuid())
+  participantId String
+  roleId        String
+
+  participant ClipParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  role        Role            @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, roleId])
 }
 
 // ============ EXISTING MODELS ============
