@@ -94,6 +94,7 @@ const userSelect = {
   birthDate: true,
   birthDateVisible: true,
   contactsVisible: true,
+  contactsVisibility: true,
   lastSeenAt: true,
   termsAgreedAt: true,
   onboardingCompletedAt: true,
@@ -158,6 +159,7 @@ const publicUserSelect = {
   birthDate: true,
   birthDateVisible: true,
   contactsVisible: true,
+  contactsVisibility: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
   portfolioLinks: { select: { id: true, type: true, url: true, title: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
@@ -169,6 +171,64 @@ const publicUserSelect = {
     }
   },
 } as const;
+
+// Contact links that are gated by the contacts-visibility setting.
+const CONTACT_LINK_KEYS = ['phone', 'email', 'tg_profile'];
+
+/**
+ * Decide whether the VIEWER may see the OWNER's contact fields, based on the
+ * owner's `contactsVisibility` (3-level enum). Falls back to the legacy
+ * `contactsVisible` boolean when the enum is absent.
+ *   ALL        → always visible
+ *   REGISTERED → visible only to authenticated viewers
+ *   FRIENDS    → visible only to accepted Connection / Friendship counterparts
+ * The owner viewing themselves always sees their own contacts.
+ */
+async function canViewContacts(
+  owner: { id: string; contactsVisibility?: string | null; contactsVisible?: boolean | null },
+  viewerId: string | null | undefined
+): Promise<boolean> {
+  // Owner viewing self.
+  if (viewerId && viewerId === owner.id) return true;
+
+  const mode = owner.contactsVisibility
+    || (owner.contactsVisible === false ? 'FRIENDS' : 'ALL');
+
+  if (mode === 'ALL') return true;
+  if (mode === 'REGISTERED') return !!viewerId;
+
+  // FRIENDS: require an accepted Connection (either direction) OR accepted Friendship.
+  if (!viewerId) return false;
+  const conn = await prisma.connection.findFirst({
+    where: {
+      status: 'ACCEPTED',
+      OR: [
+        { requesterId: viewerId, receiverId: owner.id },
+        { requesterId: owner.id, receiverId: viewerId },
+      ],
+    },
+    select: { id: true },
+  });
+  if (conn) return true;
+  const friend = await prisma.friendship.findFirst({
+    where: {
+      status: 'accepted',
+      OR: [
+        { requesterId: viewerId, receiverId: owner.id },
+        { requesterId: owner.id, receiverId: viewerId },
+      ],
+    },
+    select: { id: true },
+  });
+  return !!friend;
+}
+
+function stripContactLinks(socialLinks: any): any {
+  if (!socialLinks || typeof socialLinks !== 'object') return socialLinks;
+  const links = { ...(socialLinks as Record<string, any>) };
+  for (const k of CONTACT_LINK_KEYS) delete links[k];
+  return links;
+}
 
 // Public: resolve user by nickname or UUID — no auth required
 router.get('/handle/:handle', optionalAuthenticate, async (req: AuthRequest, res) => {
@@ -190,13 +250,14 @@ router.get('/handle/:handle', optionalAuthenticate, async (req: AuthRequest, res
     if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
 
     // Respect the same privacy gates as GET /:id.
-    const { birthDateVisible, contactsVisible, ...publicUser } = user as any;
+    const { birthDateVisible, contactsVisible, contactsVisibility, ...publicUser } = user as any;
     if (!birthDateVisible) publicUser.birthDate = null;
-    if (!contactsVisible && publicUser.socialLinks && typeof publicUser.socialLinks === 'object') {
-      const CONTACT_KEYS = ['phone', 'email', 'tg_profile'];
-      const links = { ...(publicUser.socialLinks as Record<string, any>) };
-      for (const k of CONTACT_KEYS) delete links[k];
-      publicUser.socialLinks = links;
+    const showContacts = await canViewContacts(
+      { id: publicUser.id, contactsVisibility, contactsVisible },
+      req.userId,
+    );
+    if (!showContacts) {
+      publicUser.socialLinks = stripContactLinks(publicUser.socialLinks);
     }
     res.json(publicUser);
   } catch (error) {
@@ -304,6 +365,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
       occupancyStatus,
       email, phone,
       contactsVisible,
+      contactsVisibility,
     } = req.body;
 
     // Parse birthDate: prefer the ISO field, fall back to dd.mm.yyyy, reject invalid dates
@@ -341,7 +403,20 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     const parsedBirthDate = parseBirthDate();
     if (parsedBirthDate !== undefined) updateData.birthDate = parsedBirthDate;
     if (birthDateVisible !== undefined) updateData.birthDateVisible = !!birthDateVisible;
-    if (contactsVisible !== undefined) updateData.contactsVisible = !!contactsVisible;
+    // 3-level contacts visibility (preferred). Keep legacy boolean in sync:
+    // ALL → contactsVisible true; REGISTERED/FRIENDS → false.
+    if (contactsVisibility !== undefined) {
+      const VALID = ['ALL', 'REGISTERED', 'FRIENDS'];
+      if (!VALID.includes(contactsVisibility)) {
+        return res.status(400).json({ error: 'Некорректное значение видимости контактов' });
+      }
+      updateData.contactsVisibility = contactsVisibility;
+      updateData.contactsVisible = contactsVisibility === 'ALL';
+    } else if (contactsVisible !== undefined) {
+      // Legacy boolean still supported on its own.
+      updateData.contactsVisible = !!contactsVisible;
+      updateData.contactsVisibility = contactsVisible ? 'ALL' : 'FRIENDS';
+    }
     if (occupancyStatus !== undefined) updateData.occupancyStatus = occupancyStatus || null;
 
     // Email — optional set with format + uniqueness check (both fields are @unique)
@@ -874,16 +949,17 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
 
     // Hide birthDate from other users unless the owner opted to show it.
     // (The owner views their own profile through /users/me, which is unaffected.)
-    const { birthDateVisible, contactsVisible, ...publicUser } = user as any;
+    const { birthDateVisible, contactsVisible, contactsVisibility, ...publicUser } = user as any;
     if (!birthDateVisible) publicUser.birthDate = null;
 
-    // Hide contact links (phone / email / telegram) unless the owner shows them.
-    // Contacts are otherwise visible to everyone (no viewer-completeness gate).
-    if (!contactsVisible && publicUser.socialLinks && typeof publicUser.socialLinks === 'object') {
-      const CONTACT_KEYS = ['phone', 'email', 'tg_profile'];
-      const links = { ...(publicUser.socialLinks as Record<string, any>) };
-      for (const k of CONTACT_KEYS) delete links[k];
-      publicUser.socialLinks = links;
+    // Hide contact links (phone / email / telegram) unless the viewer is allowed
+    // by the owner's 3-level contactsVisibility (ALL / REGISTERED / FRIENDS).
+    const showContacts = await canViewContacts(
+      { id: publicUser.id, contactsVisibility, contactsVisible },
+      req.userId,
+    );
+    if (!showContacts) {
+      publicUser.socialLinks = stripContactLinks(publicUser.socialLinks);
     }
 
     // Authoritative flag (from the VIEWER's DB record) for whether the viewer has

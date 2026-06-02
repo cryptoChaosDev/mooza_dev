@@ -146,7 +146,7 @@ export default function InvitePage() {
                   value={newLabel}
                   onChange={e => setNewLabel(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && newLabel.trim()) createMut.mutate(newLabel.trim()); }}
-                  placeholder="Название (напр. Instagram, Друзья)"
+                  placeholder="Название (напр. Коллеги, Друзья)"
                   maxLength={60}
                   autoFocus
                   className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"

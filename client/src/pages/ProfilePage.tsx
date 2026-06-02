@@ -116,6 +116,7 @@ export default function ProfilePage() {
     birthDate: '',
     birthDateVisible: false,
     contactsVisible: true,
+    contactsVisibility: 'ALL' as 'ALL' | 'REGISTERED' | 'FRIENDS',
     occupancyStatus: '' as '' | 'closed' | 'considering' | 'open',
   });
   const [showPrivacy, setShowPrivacy] = useState(false);
@@ -219,6 +220,7 @@ export default function ProfilePage() {
         birthDate: data.birthDate ? new Date(data.birthDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
         birthDateVisible: !!data.birthDateVisible,
         contactsVisible: data.contactsVisible !== false,
+        contactsVisibility: (['ALL', 'REGISTERED', 'FRIENDS'].includes(data.contactsVisibility) ? data.contactsVisibility : 'ALL') as 'ALL' | 'REGISTERED' | 'FRIENDS',
         occupancyStatus: data.occupancyStatus || '',
       });
       setMyStandaloneProfessions(
@@ -1669,8 +1671,45 @@ export default function ProfilePage() {
             <button onClick={() => setShowPrivacy(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
           </div>
           <div className="px-5 py-3">
+            {/* Contacts visibility — 3-level selector */}
+            <div className="py-3 border-b border-slate-800/60">
+              <p className="text-sm font-medium text-white">Кто видит контакты</p>
+              <p className="text-xs text-slate-500 mb-2.5">Телефон, email и Telegram</p>
+              <div className="space-y-1.5">
+                {([
+                  { value: 'ALL' as const, label: 'Все' },
+                  { value: 'REGISTERED' as const, label: 'Только зарегистрированные' },
+                  { value: 'FRIENDS' as const, label: 'Только друзья и коллеги' },
+                ]).map(opt => {
+                  const active = formData.contactsVisibility === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        const next = {
+                          ...formData,
+                          contactsVisibility: opt.value,
+                          contactsVisible: opt.value === 'ALL',
+                        };
+                        setFormData(next);
+                        updateMutation.mutate({ contactsVisibility: opt.value } as any, {
+                          onSettled: () => queryClient.invalidateQueries({ queryKey: ['profile'] }),
+                        });
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border text-sm text-left transition-colors ${active ? 'border-primary-500 bg-primary-500/10 text-white' : 'border-slate-700/60 bg-slate-800/40 text-slate-300 hover:border-slate-600'}`}
+                    >
+                      <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${active ? 'border-primary-500' : 'border-slate-600'}`}>
+                        {active && <span className="w-2 h-2 rounded-full bg-primary-500" />}
+                      </span>
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Birth date visibility — boolean toggle */}
             {([
-              { key: 'contactsVisible' as const, label: 'Показывать контакты', desc: 'Телефон, email и Telegram видны другим' },
               { key: 'birthDateVisible' as const, label: 'Показывать дату рождения', desc: 'Дата рождения видна в вашем профиле' },
             ]).map(row => (
               <div key={row.key} className="flex items-center gap-3 py-3 border-b border-slate-800/60 last:border-0">
