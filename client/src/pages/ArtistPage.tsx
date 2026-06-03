@@ -13,6 +13,7 @@ import { plural } from '../lib/plural';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
 import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
+import CityPicker from '../components/CityPicker';
 import AvatarComponent from '../components/Avatar';
 import SelectSheet from '../components/SelectSheet';
 import ShareButton from '../components/ShareButton';
@@ -88,7 +89,6 @@ export default function ArtistPage() {
   });
   const [genreSheetOpen, setGenreSheetOpen] = useState(false);
   const [typeSheetOpen, setTypeSheetOpen] = useState(false);
-  const [citySheetOpen, setCitySheetOpen] = useState(false);
 
   // Invite member state (legacy friend-invite flow)
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -155,14 +155,6 @@ export default function ArtistPage() {
     },
   });
 
-  // Cities restricted to the Moooza catalog (Geography reference). value = name.
-  const { data: cityOptions = [] } = useQuery({
-    queryKey: ['geographies'],
-    queryFn: async () => {
-      const { data } = await referenceAPI.getGeographies();
-      return (data as { id: string; name: string }[]).map(g => ({ id: g.name, name: g.name }));
-    },
-  });
 
   // ── Phase 6b: releases & clips lists ──────────────────────────────────────
   const { data: releases = [] } = useQuery({
@@ -596,19 +588,10 @@ export default function ArtistPage() {
               </button>
             </div>
 
-            {/* Город — только из каталога Музы */}
+            {/* Город — автокомплит реальных городов (выбор из списка) */}
             <div>
               <label className="block text-xs text-slate-500 mb-1">Город</label>
-              <button
-                type="button"
-                onClick={() => setCitySheetOpen(true)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
-              >
-                <span className={form.city ? 'text-white' : 'text-slate-500'}>
-                  {form.city || 'Выбрать город'}
-                </span>
-                <span className="text-slate-500 text-xs">▾</span>
-              </button>
+              <CityPicker city={form.city} country="" onChange={(c) => set('city', c)} />
             </div>
 
             {/* Готовность к туру */}
@@ -726,17 +709,6 @@ export default function ArtistPage() {
         height="full"
       />
 
-      <SelectSheet
-        isOpen={citySheetOpen}
-        onClose={() => setCitySheetOpen(false)}
-        title="Город"
-        options={cityOptions}
-        selectedIds={form.city}
-        onSelect={(v) => { set('city', v as string); setCitySheetOpen(false); }}
-        mode="single"
-        searchable
-        height="full"
-      />
       </>
     );
   }

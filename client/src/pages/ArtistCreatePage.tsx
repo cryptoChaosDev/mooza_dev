@@ -7,6 +7,7 @@ import { avatarUrl } from '../lib/avatar';
 import SelectSheet from '../components/SelectSheet';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
 import { SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
+import CityPicker from '../components/CityPicker';
 
 const TYPE_OPTIONS = [
   { id: 'SOLO',        name: 'Сольный артист' },
@@ -40,7 +41,6 @@ export default function ArtistCreatePage() {
   const [form, setForm] = useState<Form>({ name: '', type: '', city: '', genreIds: [], submitterRoles: [], socialLinks: {} });
   const [genreSheetOpen, setGenreSheetOpen] = useState(false);
   const [typeSheetOpen, setTypeSheetOpen] = useState(false);
-  const [citySheetOpen, setCitySheetOpen] = useState(false);
 
   // Avatar + banner (uploaded after the artist is created)
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -67,15 +67,6 @@ export default function ArtistCreatePage() {
     queryFn: async () => { const { data } = await referenceAPI.getGenres(); return data as { id: string; name: string }[]; },
   });
 
-  // Cities are restricted to the Moooza catalog (Geography reference).
-  const { data: cityOptions = [] } = useQuery({
-    queryKey: ['geographies'],
-    queryFn: async () => {
-      const { data } = await referenceAPI.getGeographies();
-      // value = the city name (Artist.city is a string), so selecting returns it directly.
-      return (data as { id: string; name: string }[]).map(g => ({ id: g.name, name: g.name }));
-    },
-  });
 
   // Debounced duplicate check while typing the name.
   const handleNameChange = (value: string) => {
@@ -309,19 +300,10 @@ export default function ArtistCreatePage() {
               </button>
             </div>
 
-            {/* Локация — только из каталога Музы */}
+            {/* Локация — автокомплит реальных городов (выбор из списка) */}
             <div>
               <label className="block text-xs text-slate-500 mb-1">Локация</label>
-              <button
-                type="button"
-                onClick={() => setCitySheetOpen(true)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-left flex justify-between items-center transition-colors hover:border-slate-600"
-              >
-                <span className={form.city ? 'text-white' : 'text-slate-500'}>
-                  {form.city || 'Выбрать город'}
-                </span>
-                <span className="text-slate-500 text-xs">▾</span>
-              </button>
+              <CityPicker city={form.city} country="" onChange={(c) => set('city', c)} />
             </div>
 
             {/* Контакты */}
@@ -418,17 +400,6 @@ export default function ArtistCreatePage() {
         />
       )}
 
-      <SelectSheet
-        isOpen={citySheetOpen}
-        onClose={() => setCitySheetOpen(false)}
-        title="Город"
-        options={cityOptions}
-        selectedIds={form.city}
-        onSelect={v => { set('city', v as string); setCitySheetOpen(false); }}
-        mode="single"
-        searchable
-        height="full"
-      />
 
       <SelectSheet
         isOpen={typeSheetOpen}
