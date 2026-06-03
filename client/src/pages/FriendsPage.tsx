@@ -10,6 +10,7 @@ import { friendshipAPI, connectionAPI, favoriteAPI, artistAPI, postAPI } from '.
 import AvatarComponent from '../components/Avatar';
 import { usePresenceStore } from '../stores/presenceStore';
 import { formatLastSeen } from '../lib/lastSeen';
+import { yoNorm } from '../lib/search';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -132,11 +133,11 @@ const { data: myBreakRequests = [] } = useQuery({
     return friends
       .map((item: any) => ({ ...item, friend: item.user ?? item }))
       .filter(({ friend }: any) => {
-        const q = search.toLowerCase();
+        const q = yoNorm(search);
         const matchesSearch = !q ||
-          `${friend.firstName} ${friend.lastName}`.toLowerCase().includes(q) ||
-          (friend.role ?? '').toLowerCase().includes(q) ||
-          (friend.city ?? '').toLowerCase().includes(q);
+          yoNorm(`${friend.firstName} ${friend.lastName}`).includes(q) ||
+          yoNorm(friend.role).includes(q) ||
+          yoNorm(friend.city).includes(q);
         const matchesOnline = !onlineOnly || onlineUsers.has(friend.id);
         return matchesSearch && matchesOnline;
       })

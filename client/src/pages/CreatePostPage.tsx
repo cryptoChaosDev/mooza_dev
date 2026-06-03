@@ -7,6 +7,7 @@ import {
   HelpCircle, ChevronDown, Hash, Music, Link2, MapPin, Search,
 } from 'lucide-react';
 import { postAPI, referenceAPI, userAPI } from '../lib/api';
+import { yoIncludes } from '../lib/search';
 import { useAuthStore } from '../stores/authStore';
 import AvatarComponent from '../components/Avatar';
 import EmojiPicker from '../components/EmojiPicker';
@@ -166,7 +167,7 @@ export default function CreatePostPage() {
 
   // ── Genres ────────────────────────────────────────────────────────────────
   const filteredGenres = genreCatalog.filter(g =>
-    !genres.includes(g) && g.toLowerCase().includes(genreSearch.trim().toLowerCase())
+    !genres.includes(g) && yoIncludes(g, genreSearch.trim())
   );
   const toggleGenre = (g: string) => {
     setGenres(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);

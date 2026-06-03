@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { upload, uploadBanner, uploadPortfolio } from '../middleware/upload';
+import { yoNorm } from '../utils/search';
 import path from 'path';
 import fs from 'fs';
 
@@ -659,35 +660,38 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
 
     if (query) {
       const words = (query as string).trim().split(/\s+/).filter(Boolean);
-      const m = 'insensitive' as const;
-      const wordClauses = words.map(word => ({
-        OR: [
-          // Identity
-          { firstName: { contains: word, mode: m } },
-          { lastName: { contains: word, mode: m } },
-          { nickname: { contains: word, mode: m } },
-          // Profile text
-          { bio: { contains: word, mode: m } },
-          { city: { contains: word, mode: m } },
-          { country: { contains: word, mode: m } },
-          // Service taxonomy
-          { userServices: { some: { profession: { name: { contains: word, mode: m } } } } },
-          { userServices: { some: { service: { name: { contains: word, mode: m } } } } },
-          { userServices: { some: { profession: { direction: { name: { contains: word, mode: m } } } } } },
-          { userServices: { some: { profession: { direction: { fieldOfActivity: { name: { contains: word, mode: m } } } } } } },
-          // Service filters
-          { userServices: { some: { genres: { some: { name: { contains: word, mode: m } } } } } },
-          { userServices: { some: { workFormats: { some: { name: { contains: word, mode: m } } } } } },
-          { userServices: { some: { employmentTypes: { some: { name: { contains: word, mode: m } } } } } },
-          { userServices: { some: { skillLevels: { some: { name: { contains: word, mode: m } } } } } },
-          { userServices: { some: { availabilities: { some: { name: { contains: word, mode: m } } } } } },
-          { userServices: { some: { geographies: { some: { name: { contains: word, mode: m } } } } } },
-          // Custom filter values
-          { userServices: { some: { selectedCustomFilterValues: { some: { value: { contains: word, mode: m } } } } } },
-          // Collectives
-          { userArtists: { some: { artist: { name: { contains: word, mode: m } } } } },
-        ],
-      }));
+      // Search against generated ё→е-normalized columns so "е" and "ё" are equal.
+      const wordClauses = words.map(word => {
+        const w = yoNorm(word);
+        return {
+          OR: [
+            // Identity
+            { firstNameNorm: { contains: w } },
+            { lastNameNorm: { contains: w } },
+            { nicknameNorm: { contains: w } },
+            // Profile text
+            { bioNorm: { contains: w } },
+            { cityNorm: { contains: w } },
+            { countryNorm: { contains: w } },
+            // Service taxonomy
+            { userServices: { some: { profession: { nameNorm: { contains: w } } } } },
+            { userServices: { some: { service: { nameNorm: { contains: w } } } } },
+            { userServices: { some: { profession: { direction: { nameNorm: { contains: w } } } } } },
+            { userServices: { some: { profession: { direction: { fieldOfActivity: { nameNorm: { contains: w } } } } } } },
+            // Service filters
+            { userServices: { some: { genres: { some: { nameNorm: { contains: w } } } } } },
+            { userServices: { some: { workFormats: { some: { nameNorm: { contains: w } } } } } },
+            { userServices: { some: { employmentTypes: { some: { nameNorm: { contains: w } } } } } },
+            { userServices: { some: { skillLevels: { some: { nameNorm: { contains: w } } } } } },
+            { userServices: { some: { availabilities: { some: { nameNorm: { contains: w } } } } } },
+            { userServices: { some: { geographies: { some: { nameNorm: { contains: w } } } } } },
+            // Custom filter values
+            { userServices: { some: { selectedCustomFilterValues: { some: { valueNorm: { contains: w } } } } } },
+            // Collectives
+            { userArtists: { some: { artist: { nameNorm: { contains: w } } } } },
+          ],
+        };
+      });
       andClauses.push({ AND: wordClauses });
     }
 
@@ -773,11 +777,12 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
     };
 
     if (query) {
+      const q = yoNorm(query as string);
       where.OR = [
-        { firstName: { contains: query as string, mode: 'insensitive' } },
-        { lastName: { contains: query as string, mode: 'insensitive' } },
-        { nickname: { contains: query as string, mode: 'insensitive' } },
-        { bio: { contains: query as string, mode: 'insensitive' } },
+        { firstNameNorm: { contains: q } },
+        { lastNameNorm: { contains: q } },
+        { nicknameNorm: { contains: q } },
+        { bioNorm: { contains: q } },
       ];
     }
 
@@ -786,7 +791,7 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
     }
 
     if (city) {
-      where.city = { contains: city as string, mode: 'insensitive' };
+      where.cityNorm = { contains: yoNorm(city as string) };
     }
 
     if (genre) {

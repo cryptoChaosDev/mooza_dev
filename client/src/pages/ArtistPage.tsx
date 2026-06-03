@@ -11,6 +11,7 @@ import {
 import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI, releaseAPI, clipAPI } from '../lib/api';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
+import { yoNorm } from '../lib/search';
 import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import CityPicker from '../components/CityPicker';
 import AvatarComponent from '../components/Avatar';
@@ -404,16 +405,16 @@ export default function ArtistPage() {
   // Filtered lists for invite modal — must be before early returns
   const filteredFriends = useMemo(() => {
     const memberIds = new Set((artist?.members ?? []).map((m: any) => m.id));
-    const q = inviteFriendSearch.toLowerCase();
+    const q = yoNorm(inviteFriendSearch);
     return friendsList.filter((f: any) =>
       !memberIds.has(f.id) &&
-      `${f.firstName} ${f.lastName}`.toLowerCase().includes(q)
+      yoNorm(`${f.firstName} ${f.lastName}`).includes(q)
     );
   }, [friendsList, artist?.members, inviteFriendSearch]);
 
   const filteredProfessions = useMemo(() => {
-    const q = inviteProfSearch.toLowerCase();
-    return allProfessions.filter((p: any) => p.name.toLowerCase().includes(q));
+    const q = yoNorm(inviteProfSearch);
+    return allProfessions.filter((p: any) => yoNorm(p.name).includes(q));
   }, [allProfessions, inviteProfSearch]);
 
   if (isLoading) {

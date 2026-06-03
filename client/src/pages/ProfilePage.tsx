@@ -18,6 +18,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import BadgeTooltip from '../components/BadgeTooltip';
 import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
+import { yoNorm } from '../lib/search';
 import ShareButton from '../components/ShareButton';
 import JoinArtistModal from '../components/JoinArtistModal';
 import ReviewsBlock from '../components/ReviewsBlock';
@@ -662,10 +663,10 @@ export default function ProfilePage() {
     // (убирает минус, точку, «e» и прочее, что допускает type=number).
     const onlyDigits = (v: string) => v.replace(/[^\d]/g, '');
 
-    const query = catalogSearch.trim().toLowerCase();
+    const query = yoNorm(catalogSearch.trim());
     const matches = query
       ? catalogServices
-          .filter(s => s.name.toLowerCase().includes(query))
+          .filter(s => yoNorm(s.name).includes(query))
           .filter(s => !userServices.some((us, i) => us.serviceId === s.id && i !== serviceFormOpen))
           .slice(0, 12)
       : [];

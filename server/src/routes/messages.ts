@@ -4,6 +4,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser, notifyUser, isUserOnline } from '../socket';
 import { uploadChatAttachment } from '../middleware/upload';
 import { messageLimiter } from '../middleware/rateLimiter';
+import { yoNorm } from '../utils/search';
 import { tgLog, tgEvent } from '../utils/telegram';
 
 const router = Router();
@@ -380,7 +381,7 @@ router.get('/conversations/:id/search', authenticate, async (req: AuthRequest, r
       where: {
         conversationId,
         deletedAt: null,
-        content: { contains: q, mode: 'insensitive' },
+        contentNorm: { contains: yoNorm(q) },
       },
       orderBy: { createdAt: 'desc' },
       take: 50,

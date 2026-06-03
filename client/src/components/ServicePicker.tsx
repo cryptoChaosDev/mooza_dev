@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useQuery } from '@tanstack/react-query';
 import { X, Search, ChevronRight, ArrowLeft, Loader2, Check } from 'lucide-react';
 import { referenceAPI } from '../lib/api';
+import { yoIncludes } from '../lib/search';
 
 export interface PickedService {
   sectionId: string;
@@ -45,7 +46,7 @@ export default function ServicePicker({ onSelect, onClose, excludeServiceIds = [
       items = (section.services || []).filter(s => !excludeServiceIds.includes(s.id));
     }
     if (!search) return items;
-    return items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
+    return items.filter(i => yoIncludes(i.name, search));
   }, [level, sections, section, search, excludeServiceIds]);
 
   const levelLabel: Record<Level, string> = {

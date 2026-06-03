@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../index';
+import { yoNorm } from '../utils/search';
 
 const router = Router();
 
@@ -145,7 +146,7 @@ router.get('/professions', async (req, res) => {
         : { some: {} };
     }
     if (directionId) where.directionId = directionId as string;
-    if (search) where.name = { contains: search as string, mode: 'insensitive' };
+    if (search) where.nameNorm = { contains: yoNorm(search as string) };
 
     const professions = await prisma.profession.findMany({
       where,
@@ -186,7 +187,7 @@ router.get('/services/search', async (req, res) => {
     // Search ONLY catalog professions (those with custom filters from muza_catalog import)
     const professions = await prisma.profession.findMany({
       where: {
-        name: { contains: q, mode: 'insensitive' },
+        nameNorm: { contains: yoNorm(q) },
         customFilters: { some: {} },
       },
       include: {
@@ -486,12 +487,13 @@ router.get('/search', async (req, res) => {
     }
 
     if (query) {
+      const q = yoNorm(query as string);
       andClauses.push({
         OR: [
-          { firstName: { contains: query as string, mode: 'insensitive' } },
-          { lastName: { contains: query as string, mode: 'insensitive' } },
-          { nickname: { contains: query as string, mode: 'insensitive' } },
-          { city: { contains: query as string, mode: 'insensitive' } },
+          { firstNameNorm: { contains: q } },
+          { lastNameNorm: { contains: q } },
+          { nicknameNorm: { contains: q } },
+          { cityNorm: { contains: q } },
         ],
       });
     }
@@ -579,12 +581,13 @@ router.get('/service-search', async (req, res) => {
     if (sectionId) where.service = { sectionId: String(sectionId) };
     if (cfvIds.length) where.selectedCustomFilterValues = { some: { id: { in: cfvIds } } };
     if (query) {
+      const q = yoNorm(String(query));
       where.OR = [
-        { user: { firstName: { contains: String(query), mode: 'insensitive' } } },
-        { user: { lastName: { contains: String(query), mode: 'insensitive' } } },
-        { user: { city: { contains: String(query), mode: 'insensitive' } } },
-        { service: { name: { contains: String(query), mode: 'insensitive' } } },
-        { name: { contains: String(query), mode: 'insensitive' } },
+        { user: { firstNameNorm: { contains: q } } },
+        { user: { lastNameNorm: { contains: q } } },
+        { user: { cityNorm: { contains: q } } },
+        { service: { nameNorm: { contains: q } } },
+        { nameNorm: { contains: q } },
       ];
     }
 
@@ -678,7 +681,7 @@ router.get('/artists', async (req, res) => {
   try {
     const { search, type } = req.query;
     const where: any = { status: 'VERIFIED' };
-    if (search) where.name = { contains: search as string, mode: 'insensitive' };
+    if (search) where.nameNorm = { contains: yoNorm(search as string) };
     if (type && type !== 'ALL') where.type = type as string;
     const artists = await prisma.artist.findMany({
       where,

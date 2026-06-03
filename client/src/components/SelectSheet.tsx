@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import BottomSheet from './BottomSheet';
 import { Search, Check, Circle, CheckCircle2 } from 'lucide-react';
+import { yoNorm } from '../lib/search';
 
 interface SelectOption {
   id: string;
@@ -43,10 +44,10 @@ export default function SelectSheet({
 
   const filteredOptions = useMemo(() => {
     if (!searchQuery.trim()) return options;
-    const query = searchQuery.toLowerCase();
+    const query = yoNorm(searchQuery);
     return options.filter(opt =>
-      opt.name.toLowerCase().includes(query) ||
-      opt.subtitle?.toLowerCase().includes(query)
+      yoNorm(opt.name).includes(query) ||
+      yoNorm(opt.subtitle).includes(query)
     );
   }, [options, searchQuery]);
 

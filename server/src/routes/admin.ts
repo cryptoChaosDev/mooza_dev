@@ -4,6 +4,7 @@ import { authenticate, AuthRequest } from '../middleware/auth';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { notifyMany } from '../utils/notify';
+import { yoNorm } from '../utils/search';
 
 const router = Router();
 
@@ -671,12 +672,13 @@ router.get('/users', async (req, res) => {
   const search = (req.query.search as string) || '';
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(50, Number(req.query.limit) || 20);
+  const sq = yoNorm(search);
   const where = search ? {
     OR: [
-      { firstName: { contains: search, mode: 'insensitive' as const } },
-      { lastName: { contains: search, mode: 'insensitive' as const } },
-      { nickname: { contains: search, mode: 'insensitive' as const } },
-      { email: { contains: search, mode: 'insensitive' as const } },
+      { firstNameNorm: { contains: sq } },
+      { lastNameNorm: { contains: sq } },
+      { nicknameNorm: { contains: sq } },
+      { emailNorm: { contains: sq } },
     ],
   } : {};
   const [users, total] = await Promise.all([

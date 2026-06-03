@@ -12,6 +12,7 @@ datasource db {
 model FieldOfActivity {
   id   String @id @default(uuid())
   name String @unique
+  nameNorm String? // generated (ё→е, lower) — search only, never written
 
   directions  Direction[]
   users       User[]
@@ -22,6 +23,7 @@ model FieldOfActivity {
 model Direction {
   id                String           @id @default(uuid())
   name              String
+  nameNorm          String? // generated (ё→е, lower) — search only, never written
   fieldOfActivityId String?
   fieldOfActivity   FieldOfActivity? @relation(fields: [fieldOfActivityId], references: [id], onDelete: SetNull)
 
@@ -38,6 +40,7 @@ model Direction {
 model Profession {
   id          String     @id @default(uuid())
   name        String
+  nameNorm    String? // generated (ё→е, lower) — search only, never written
   directionId String?
   direction   Direction? @relation(fields: [directionId], references: [id], onDelete: SetNull)
 
@@ -68,6 +71,7 @@ model Section {
 model Service {
   id        String      @id @default(uuid())
   name      String
+  nameNorm  String? // generated (ё→е, lower) — search only, never written
   sortOrder Int         @default(0)
 
   sectionId String?
@@ -100,6 +104,7 @@ model ServiceProfession {
 model Genre {
   id        String @id @default(uuid())
   name      String @unique
+  nameNorm  String? // generated (ё→е, lower) — search only, never written
   nameEn    String?
   sortOrder Int    @default(0)
 
@@ -113,6 +118,7 @@ model Genre {
 model WorkFormat {
   id        String @id @default(uuid())
   name      String @unique
+  nameNorm  String? // generated (ё→е, lower) — search only, never written
   nameEn    String?
   sortOrder Int    @default(0)
 
@@ -125,6 +131,7 @@ model WorkFormat {
 model EmploymentType {
   id        String @id @default(uuid())
   name      String @unique
+  nameNorm  String? // generated (ё→е, lower) — search only, never written
   nameEn    String?
   sortOrder Int    @default(0)
 
@@ -137,6 +144,7 @@ model EmploymentType {
 model SkillLevel {
   id        String @id @default(uuid())
   name      String @unique
+  nameNorm  String? // generated (ё→е, lower) — search only, never written
   nameEn    String?
   sortOrder Int    @default(0)
 
@@ -149,6 +157,7 @@ model SkillLevel {
 model Availability {
   id        String @id @default(uuid())
   name      String @unique
+  nameNorm  String? // generated (ё→е, lower) — search only, never written
   nameEn    String?
   sortOrder Int    @default(0)
 
@@ -161,6 +170,7 @@ model Availability {
 model Geography {
   id        String @id @default(uuid())
   name      String @unique
+  nameNorm  String? // generated (ё→е, lower) — search only, never written
   nameEn    String?
   sortOrder Int    @default(0)
 
@@ -199,6 +209,7 @@ model UserService {
   availabilities             Availability[]
   geographies                Geography[]
   name                       String?
+  nameNorm                   String? // generated (ё→е, lower) — search only, never written
   priceFrom                  Int?
   priceTo                    Int?
   deadlineFrom               Int?
@@ -348,6 +359,7 @@ enum ArtistStatus {
 model Artist {
   id          String       @id @default(uuid())
   name        String
+  nameNorm    String? // generated (ё→е, lower) — search only, never written
   type        ArtistType?
   city        String?
   tourReady   String?
@@ -472,6 +484,14 @@ model User {
   bio       String?
   country   String?
   city      String?
+  // Generated normalized copies (ё→е, lower) for ё/е-insensitive search — never written
+  firstNameNorm String?
+  lastNameNorm  String?
+  nicknameNorm  String?
+  bioNorm       String?
+  countryNorm   String?
+  cityNorm      String?
+  emailNorm     String?
   role      String?
   isAdmin   Boolean  @default(false)
   isBlocked  Boolean  @default(false)
@@ -1096,6 +1116,7 @@ model Message {
   senderId       String
   receiverId     String?
   content        String    @default("")
+  contentNorm    String? // generated (ё→е, lower) — search only, never written
   replyToId      String?
   isEdited       Boolean   @default(false)
   attachmentUrl  String?
@@ -1184,6 +1205,7 @@ model CustomFilter {
 model CustomFilterValue {
   id        String       @id @default(uuid())
   value     String
+  valueNorm String? // generated (ё→е, lower) — search only, never written
   sortOrder Int          @default(0)
   filterId  String
   filter    CustomFilter @relation(fields: [filterId], references: [id], onDelete: Cascade)

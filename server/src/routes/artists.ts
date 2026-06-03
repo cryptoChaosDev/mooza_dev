@@ -6,6 +6,7 @@ import { Prisma, ArtistType } from '@prisma/client';
 import crypto from 'crypto';
 import { tgEvent } from '../utils/telegram';
 import { classifyUrl, BLOCK_MESSAGE } from '../utils/socialPlatforms';
+import { yoNorm } from '../utils/search';
 import { notify, notifyMany } from '../utils/notify';
 
 const router = Router();
@@ -69,10 +70,10 @@ router.get('/suggest', authenticate, async (req: AuthRequest, res: Response) => 
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     if (q.length < 2) return res.json([]);
 
-    // Search ALL artists by name (duplicate detection + join targets).
+    // Search ALL artists by name (duplicate detection + join targets); ё/е-insensitive.
     const artists = await prisma.artist.findMany({
       where: {
-        name: { contains: q, mode: 'insensitive' },
+        nameNorm: { contains: yoNorm(q) },
       },
       include: {
         genres: { include: { genre: { select: { id: true, name: true } } } },
@@ -121,14 +122,14 @@ router.get('/following', authenticate, async (req: AuthRequest, res: Response) =
 });
 
 // ── GET /api/artists/check-name?name= ────────────────────────────────────────
-// Case-insensitive duplicate check across ALL artists (used by the create flow).
+// Duplicate check across ALL artists (used by the create flow); ё/е-insensitive.
 router.get('/check-name', optionalAuthenticate, async (req: AuthRequest, res: Response) => {
   try {
     const name = typeof req.query.name === 'string' ? req.query.name.trim() : '';
     if (!name) return res.json({ exists: false });
 
     const artist = await prisma.artist.findFirst({
-      where: { name: { equals: name, mode: 'insensitive' } },
+      where: { nameNorm: yoNorm(name) },
       select: { id: true, name: true, avatar: true, type: true, status: true },
       orderBy: { createdAt: 'asc' },
     });

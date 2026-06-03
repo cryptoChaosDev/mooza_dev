@@ -4,6 +4,7 @@ import { MessageCircle, Search, Plus, X, Check, User, Briefcase, Users, Crown, B
 import { messageAPI, friendshipAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
+import { yoIncludes } from '../lib/search';
 import ConfirmDialog from '../components/ConfirmDialog';
 
 interface ConvItem {
@@ -165,7 +166,7 @@ export default function MessagesPage() {
   const filtered = conversations
     .filter(c =>
       c.type === activeTab &&
-      c.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+      yoIncludes(c.name, searchQuery) &&
       (showArchived ? c.isArchived : !c.isArchived)
     )
     .sort((a, b) => {

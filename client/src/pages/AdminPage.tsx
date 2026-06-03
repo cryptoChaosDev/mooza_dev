@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { adminAPI, api, siteSettingsAPI, complaintAPI } from '../lib/api';
+import { yoNorm, yoIncludes } from '../lib/search';
 import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2, ShieldCheck, Clock, Zap, Download, ExternalLink, RefreshCw, BarChart2, AlertTriangle } from 'lucide-react';
 import AvatarComponent from '../components/Avatar';
 import * as XLSX from 'xlsx';
@@ -45,8 +46,8 @@ function SimpleTable({
     queryFn: () => apiModule.list().then((r: any) => r.data),
   });
 
-  const q = search.toLowerCase();
-  const filtered = q ? items.filter(i => i.name.toLowerCase().includes(q)) : items;
+  const q = yoNorm(search);
+  const filtered = q ? items.filter(i => yoNorm(i.name).includes(q)) : items;
 
   const invalidate = () => qc.invalidateQueries({ queryKey: [queryKey] });
 
@@ -766,11 +767,11 @@ function CustomFiltersSection() {
     queryFn: () => adminAPI.customFilters.list().then((r: any) => r.data),
   });
 
-  const q = search.toLowerCase();
+  const q = yoNorm(search);
   const filteredFilters = q
     ? filters.filter(f =>
-        f.name.toLowerCase().includes(q) ||
-        f.values.some(v => v.value.toLowerCase().includes(q))
+        yoNorm(f.name).includes(q) ||
+        f.values.some(v => yoNorm(v.value).includes(q))
       )
     : filters;
 
@@ -899,10 +900,10 @@ function DirectionsTab() {
   const [editName, setEditName] = useState('');
   const [search, setSearch] = useState('');
 
-  const q = search.toLowerCase();
+  const q = yoNorm(search);
   const nameCounts: Record<string, number> = {};
   directions.forEach(d => { nameCounts[d.name] = (nameCounts[d.name] ?? 0) + 1; });
-  const filtered = q ? directions.filter(d => d.name.toLowerCase().includes(q)) : directions;
+  const filtered = q ? directions.filter(d => yoNorm(d.name).includes(q)) : directions;
 
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
@@ -992,10 +993,10 @@ function ProfessionsTab() {
   const [editName, setEditName] = useState('');
   const [search, setSearch] = useState('');
 
-  const q = search.toLowerCase();
+  const q = yoNorm(search);
   const nameCounts: Record<string, number> = {};
   professions.forEach(p => { nameCounts[p.name] = (nameCounts[p.name] ?? 0) + 1; });
-  const filtered = q ? professions.filter(p => p.name.toLowerCase().includes(q)) : professions;
+  const filtered = q ? professions.filter(p => yoNorm(p.name).includes(q)) : professions;
 
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
@@ -1104,8 +1105,8 @@ function ServicesTab() {
     onSuccess: invalidate,
   });
 
-  const q = search.toLowerCase();
-  const filtered = q ? services.filter(s => s.name.toLowerCase().includes(q)) : services;
+  const q = yoNorm(search);
+  const filtered = q ? services.filter(s => yoNorm(s.name).includes(q)) : services;
 
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
@@ -1920,7 +1921,7 @@ function GroupsAdminTab() {
   });
 
   const filtered = groups.filter(g => {
-    if (search && !g.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !yoIncludes(g.name, search)) return false;
     if (filterType !== 'ALL') {
       if (filterType === 'NONE' && g.type !== null) return false;
       if (filterType !== 'NONE' && g.type !== filterType) return false;
