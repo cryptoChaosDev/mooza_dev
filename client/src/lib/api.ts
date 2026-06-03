@@ -352,6 +352,70 @@ export const artistAPI = {
   getInvite: (token: string) => api.get(`/artists/invite/${token}`),
 };
 
+// Release API — Phase 6a (releases on the artist profile)
+export const releaseAPI = {
+  fetchMetadata: (platform: string, url: string) =>
+    api.post('/releases/metadata', { platform, url }),
+  create: (data: {
+    artistId: string;
+    platform: 'VK' | 'SPOTIFY' | 'YANDEX_MUSIC' | 'APPLE_MUSIC';
+    url: string;
+    title: string;
+    coverUrl?: string;
+    releaseDate?: string;
+    participants: { userId: string; roleIds: string[] }[];
+  }) => api.post('/releases', data),
+  get: (id: string) => api.get(`/releases/${id}`),
+  listByArtist: (artistId: string) => api.get(`/releases/artist/${artistId}`),
+  update: (
+    id: string,
+    data: {
+      title?: string;
+      coverUrl?: string | null;
+      releaseDate?: string | null;
+      url?: string;
+      platform?: 'VK' | 'SPOTIFY' | 'YANDEX_MUSIC' | 'APPLE_MUSIC';
+      participants?: { userId: string; roleIds: string[] }[];
+    },
+  ) => api.patch(`/releases/${id}`, data),
+  confirmParticipant: (participantId: string) =>
+    api.patch(`/releases/participants/${participantId}/confirm`),
+  declineParticipant: (participantId: string) =>
+    api.patch(`/releases/participants/${participantId}/decline`),
+  remove: (id: string) => api.delete(`/releases/${id}`),
+};
+
+// Clip API — Phase 6a (clips on the artist profile)
+export const clipAPI = {
+  fetchMetadata: (platform: string, url: string) =>
+    api.post('/clips/metadata', { platform, url }),
+  create: (data: {
+    artistId: string;
+    platform: 'VK_VIDEO' | 'RUTUBE' | 'YOUTUBE';
+    url: string;
+    title: string;
+    coverUrl?: string;
+    participants: { userId: string; roleIds: string[] }[];
+  }) => api.post('/clips', data),
+  get: (id: string) => api.get(`/clips/${id}`),
+  listByArtist: (artistId: string) => api.get(`/clips/artist/${artistId}`),
+  update: (
+    id: string,
+    data: {
+      title?: string;
+      coverUrl?: string | null;
+      url?: string;
+      platform?: 'VK_VIDEO' | 'RUTUBE' | 'YOUTUBE';
+      participants?: { userId: string; roleIds: string[] }[];
+    },
+  ) => api.patch(`/clips/${id}`, data),
+  confirmParticipant: (participantId: string) =>
+    api.patch(`/clips/participants/${participantId}/confirm`),
+  declineParticipant: (participantId: string) =>
+    api.patch(`/clips/participants/${participantId}/decline`),
+  remove: (id: string) => api.delete(`/clips/${id}`),
+};
+
 // Connection API
 export const connectionAPI = {
   send: (receiverId: string, serviceIds: string[], requesterRole?: string, receiverRole?: string, needsDeal?: boolean) =>
