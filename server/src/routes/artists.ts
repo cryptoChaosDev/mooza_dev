@@ -11,7 +11,6 @@ import { notify, notifyMany } from '../utils/notify';
 const router = Router();
 
 // Allowed submitter-relationship roles (creator's declared relationship to the artist).
-const SUBMITTER_ROLES = ['Музыкант', 'Менеджер', 'Директор', 'Представитель группы', 'Лейбл'];
 
 // Minimum confirmed members required to request verification, by artist type.
 function minMembersForType(type: ArtistType | null | undefined): number {
@@ -307,8 +306,14 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     }
 
     // Validate submitter roles against the fixed set; silently ignore anything else.
+    // Submitter roles come from the seeded role catalog (collective context) —
+    // accept any non-empty role names, trimmed/deduped/capped.
     const cleanSubmitterRoles = Array.isArray(submitterRoles)
-      ? submitterRoles.filter((r) => SUBMITTER_ROLES.includes(r))
+      ? Array.from(new Set(
+          submitterRoles
+            .filter((r): r is string => typeof r === 'string' && r.trim().length > 0)
+            .map((r) => r.trim())
+        )).slice(0, 20)
       : [];
 
     // Generate the verification code immediately at creation.

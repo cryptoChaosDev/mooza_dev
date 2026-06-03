@@ -2,12 +2,13 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Loader2, Camera, Copy, Check, ShieldCheck, Image as ImageIcon } from 'lucide-react';
-import { artistAPI, referenceAPI } from '../lib/api';
+import { artistAPI, referenceAPI, roleAPI } from '../lib/api';
 import { avatarUrl } from '../lib/avatar';
 import SelectSheet from '../components/SelectSheet';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
 import { SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import CityPicker from '../components/CityPicker';
+import RolePicker from '../components/RolePicker';
 
 const TYPE_OPTIONS = [
   { id: 'SOLO',        name: 'Сольный артист' },
@@ -22,8 +23,6 @@ const TYPE_OPTIONS = [
 
 const TYPE_LABELS: Record<string, string> = Object.fromEntries(TYPE_OPTIONS.map(t => [t.id, t.name]));
 
-const SUBMITTER_ROLES = ['Музыкант', 'Менеджер', 'Директор', 'Представитель группы', 'Лейбл'];
-
 const INSTRUCTION =
   'Для размещения артиста в каталоге необходимо пройти верификацию. Вы получите уникальный код, который нужно разместить в посте или описании профиля артиста в соцсетях и прислать нам ссылку на этот профиль. Саппорт проверит код и опубликует карточку.';
 
@@ -32,15 +31,16 @@ type Form = {
   type: string;
   city: string;
   genreIds: string[];
-  submitterRoles: string[];
+  submitterRoleIds: string[];
   socialLinks: Record<string, string>;
 };
 
 export default function ArtistCreatePage() {
   const navigate = useNavigate();
-  const [form, setForm] = useState<Form>({ name: '', type: '', city: '', genreIds: [], submitterRoles: [], socialLinks: {} });
+  const [form, setForm] = useState<Form>({ name: '', type: '', city: '', genreIds: [], submitterRoleIds: [], socialLinks: {} });
   const [genreSheetOpen, setGenreSheetOpen] = useState(false);
   const [typeSheetOpen, setTypeSheetOpen] = useState(false);
+  const [rolePickerOpen, setRolePickerOpen] = useState(false);
 
   // Avatar + banner (uploaded after the artist is created)
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -66,6 +66,17 @@ export default function ArtistCreatePage() {
     queryKey: ['genres'],
     queryFn: async () => { const { data } = await referenceAPI.getGenres(); return data as { id: string; name: string }[]; },
   });
+
+  // Submitter role is picked from the seeded role catalog (collective context).
+  const { data: collectiveRoles = [] } = useQuery({
+    queryKey: ['roles', 'collective'],
+    queryFn: async () => {
+      const { data } = await roleAPI.list('collective');
+      return (data as { category: string; roles: { id: string; name: string }[] }[]).flatMap(c => c.roles);
+    },
+  });
+  const roleNameById = new Map(collectiveRoles.map(r => [r.id, r.name]));
+  const selectedRoleNames = form.submitterRoleIds.map(id => roleNameById.get(id)).filter(Boolean) as string[];
 
 
   // Debounced duplicate check while typing the name.
@@ -93,15 +104,6 @@ export default function ArtistCreatePage() {
   useEffect(() => () => { if (avatarPreview) URL.revokeObjectURL(avatarPreview); }, [avatarPreview]);
   useEffect(() => () => { if (bannerPreview) URL.revokeObjectURL(bannerPreview); }, [bannerPreview]);
 
-  const toggleRole = (role: string) => {
-    setForm(f => ({
-      ...f,
-      submitterRoles: f.submitterRoles.includes(role)
-        ? f.submitterRoles.filter(r => r !== role)
-        : [...f.submitterRoles, role],
-    }));
-  };
-
   // Step 1: create artist + receive verification code, then upload avatar.
   const createMut = useMutation({
     mutationFn: async () => {
@@ -110,7 +112,7 @@ export default function ArtistCreatePage() {
         type: form.type || undefined,
         city: form.city.trim() || undefined,
         genreIds: form.genreIds,
-        submitterRoles: form.submitterRoles,
+        submitterRoles: form.submitterRoleIds.map(id => roleNameById.get(id)).filter(Boolean),
         socialLinks: Object.keys(form.socialLinks).length ? form.socialLinks : undefined,
       });
       if (avatarFile) {
@@ -162,28 +164,26 @@ export default function ArtistCreatePage() {
 
         {!created ? (
           <>
-            {/* Submitter roles */}
+            {/* Submitter role — picked from the role catalog */}
             <div>
               <label className="block text-xs text-slate-500 mb-2">Кем вы являетесь для артиста</label>
-              <div className="flex flex-wrap gap-2">
-                {SUBMITTER_ROLES.map(role => {
-                  const active = form.submitterRoles.includes(role);
-                  return (
-                    <button
-                      key={role}
-                      type="button"
-                      onClick={() => toggleRole(role)}
-                      className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
-                        active
-                          ? 'bg-primary-600 border-primary-500 text-white'
-                          : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-600'
-                      }`}
-                    >
-                      {role}
-                    </button>
-                  );
-                })}
-              </div>
+              {selectedRoleNames.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-2">
+                  {selectedRoleNames.map(n => (
+                    <span key={n} className="px-3 py-1.5 rounded-full text-xs font-medium bg-primary-600/20 border border-primary-500/30 text-primary-200">{n}</span>
+                  ))}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setRolePickerOpen(true)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-left flex justify-between items-center transition-colors hover:border-slate-600"
+              >
+                <span className={selectedRoleNames.length ? 'text-white' : 'text-slate-500'}>
+                  {selectedRoleNames.length ? `Выбрано ролей: ${selectedRoleNames.length}` : 'Выбрать роль из каталога'}
+                </span>
+                <span className="text-slate-500 text-xs">▾</span>
+              </button>
             </div>
 
             {/* Banner */}
@@ -397,6 +397,16 @@ export default function ArtistCreatePage() {
           title="Обложка"
           onCancel={() => setCropBannerFile(null)}
           onCropped={blob => { onBannerPick(blobToFile(blob, 'banner.jpg')); setCropBannerFile(null); }}
+        />
+      )}
+
+      {rolePickerOpen && (
+        <RolePicker
+          context="collective"
+          value={form.submitterRoleIds}
+          onSave={(ids) => set('submitterRoleIds', ids)}
+          onClose={() => setRolePickerOpen(false)}
+          title="Ваша роль"
         />
       )}
 
