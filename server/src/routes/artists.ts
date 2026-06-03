@@ -172,6 +172,7 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
               select: { id: true, firstName: true, lastName: true, avatar: true, nickname: true },
             },
             profession: { select: { id: true, name: true } },
+            roles: { include: { role: { select: { id: true, name: true } } } },
           },
         },
       },
@@ -183,23 +184,72 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
 
     const { genres, _count, followers, userArtists, ...rest } = artist;
 
-    return res.json(serializeArtist({
-      ...rest,
-      genres: genres.map((ag) => ag.genre),
-      followersCount: _count.followers,
-      isFollowed: currentUserId ? followers.some((f) => f.userId === currentUserId) : false,
-      members: userArtists.map((ua: any) => ({
-        membershipId: ua.id,
+    // Is the requester an admin/owner of this artist (or a system admin)?
+    let viewerIsOwner = false;
+    let viewerIsAdmin = false;
+    if (currentUserId) {
+      const mine = userArtists.find(
+        (ua: any) => ua.userId === currentUserId && ua.inviteStatus === 'ACCEPTED',
+      );
+      viewerIsOwner = !!mine?.isOwner;
+      viewerIsAdmin = !!mine?.isAdmin;
+      if (!viewerIsAdmin) {
+        const sys = await prisma.user.findUnique({
+          where: { id: currentUserId },
+          select: { isAdmin: true },
+        });
+        if (sys?.isAdmin) viewerIsAdmin = true;
+      }
+    }
+
+    const serializeMember = (ua: any) => ({
+      membershipId: ua.id,
+      isOwner: ua.isOwner,
+      isAdmin: ua.isAdmin,
+      participationStatus: ua.participationStatus,
+      user: {
         id: ua.user.id,
         firstName: ua.user.firstName,
         lastName: ua.user.lastName,
         avatar: ua.user.avatar,
         nickname: ua.user.nickname,
-        profession: ua.profession ?? null,
-        isOwner: ua.isOwner,
-        isAdmin: ua.isAdmin,
-        inviteStatus: ua.inviteStatus,
-      })),
+      },
+      roles: ua.roles.map((r: any) => ({ id: r.role.id, name: r.role.name })),
+    });
+
+    // Back-compat flat member shape (legacy consumers read `members[].id`, profession, etc).
+    const legacyMembers = userArtists.map((ua: any) => ({
+      membershipId: ua.id,
+      id: ua.user.id,
+      firstName: ua.user.firstName,
+      lastName: ua.user.lastName,
+      avatar: ua.user.avatar,
+      nickname: ua.user.nickname,
+      profession: ua.profession ?? null,
+      isOwner: ua.isOwner,
+      isAdmin: ua.isAdmin,
+      inviteStatus: ua.inviteStatus,
+    }));
+
+    const confirmedMembers = userArtists
+      .filter((ua: any) => ua.inviteStatus === 'ACCEPTED')
+      .map(serializeMember);
+
+    const pendingMembers =
+      viewerIsOwner || viewerIsAdmin
+        ? userArtists.filter((ua: any) => ua.inviteStatus === 'PENDING').map(serializeMember)
+        : [];
+
+    return res.json(serializeArtist({
+      ...rest,
+      genres: genres.map((ag) => ag.genre),
+      followersCount: _count.followers,
+      isFollowed: currentUserId ? followers.some((f) => f.userId === currentUserId) : false,
+      members: legacyMembers,
+      confirmedMembers,
+      pendingMembers,
+      viewerIsOwner,
+      viewerIsAdmin,
     }));
   } catch (err) {
     console.error('[artists] GET /:id', err);
@@ -755,35 +805,547 @@ router.patch('/memberships/:id/reject', authenticate, async (req: AuthRequest, r
   }
 });
 
-// ── POST /api/artists/:id/invite-link — generate invite link for unregistered user
+// ─────────────────────────────────────────────────────────────────────────────
+// PHASE 5a — members / admins / ownership / role-bound invite links
+// ─────────────────────────────────────────────────────────────────────────────
+
+const APP_URL = process.env.APP_URL || 'https://moooza.ru';
+
+// Resolve the requester's effective admin status for an artist, returning the
+// confirmed-owner membership too. System admins are allowed but have no membership.
+async function requireArtistAdmin(
+  artistId: string,
+  userId: string,
+): Promise<{ ok: boolean; isSystemAdmin: boolean }> {
+  const ua = await prisma.userArtist.findFirst({
+    where: { artistId, userId, isAdmin: true, inviteStatus: 'ACCEPTED' },
+    select: { id: true },
+  });
+  if (ua) return { ok: true, isSystemAdmin: false };
+  const me = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
+  return { ok: !!me?.isAdmin, isSystemAdmin: !!me?.isAdmin };
+}
+
+// The confirmed OWNER membership of an artist (there is exactly one).
+async function getOwnerMembership(artistId: string) {
+  return prisma.userArtist.findFirst({
+    where: { artistId, isOwner: true, inviteStatus: 'ACCEPTED' },
+  });
+}
+
+async function actorName(userId: string): Promise<string> {
+  const u = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { firstName: true, lastName: true },
+  });
+  return `${u?.firstName ?? ''} ${u?.lastName ?? ''}`.trim();
+}
+
+// Role names for a set of role ids (for notification bodies).
+async function roleNames(roleIds: string[]): Promise<string> {
+  if (!roleIds.length) return '';
+  const roles = await prisma.role.findMany({
+    where: { id: { in: roleIds } },
+    select: { name: true },
+  });
+  return roles.map((r) => r.name).join(', ');
+}
+
+// ── POST /api/artists/:id/members — admin adds a registered user (invite) ─────
+router.post('/:id/members', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const artistId = req.params.id;
+    const { userId, roleIds, participationStatus } = req.body as {
+      userId?: string;
+      roleIds?: string[];
+      participationStatus?: 'ACTIVE_MEMBER' | 'FORMER_MEMBER';
+    };
+
+    if (!userId) return res.status(400).json({ error: 'userId обязателен' });
+
+    const { ok } = await requireArtistAdmin(artistId, meId);
+    if (!ok) return res.status(403).json({ error: 'Нет прав' });
+
+    const artist = await prisma.artist.findUnique({ where: { id: artistId }, select: { id: true, name: true } });
+    if (!artist) return res.status(404).json({ error: 'Артист не найден' });
+
+    const target = await prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
+    if (!target) return res.status(404).json({ error: 'Пользователь не найден' });
+
+    // Reject if already an active (PENDING or ACCEPTED) membership.
+    const existingActive = await prisma.userArtist.findFirst({
+      where: { artistId, userId, inviteStatus: { in: ['PENDING', 'ACCEPTED'] } },
+    });
+    if (existingActive) {
+      return res.status(400).json({ error: 'Пользователь уже является участником или приглашён' });
+    }
+
+    const cleanRoleIds = Array.isArray(roleIds) ? roleIds.filter((r) => typeof r === 'string') : [];
+    const part = participationStatus === 'FORMER_MEMBER' ? 'FORMER_MEMBER' : 'ACTIVE_MEMBER';
+
+    const membership = await prisma.userArtist.create({
+      data: {
+        userId,
+        artistId,
+        professionId: null,
+        isOwner: false,
+        isAdmin: false,
+        inviteStatus: 'PENDING',
+        participationStatus: part,
+        invitedById: meId,
+        roles: cleanRoleIds.length
+          ? { create: cleanRoleIds.map((roleId) => ({ roleId })) }
+          : undefined,
+      },
+      include: { roles: { include: { role: { select: { id: true, name: true } } } } },
+    });
+
+    const names = await roleNames(cleanRoleIds);
+    await prisma.notification.create({
+      data: {
+        userId,
+        actorId: meId,
+        type: 'artist_member_invite',
+        title: artist.name,
+        body: `«${artist.name}» приглашает вас стать участником${names ? ` в роли «${names}»` : ''}. Подтвердите участие.`,
+        link: `/artist/${artistId}`,
+      },
+    });
+
+    return res.status(201).json({
+      membershipId: membership.id,
+      userId: membership.userId,
+      inviteStatus: membership.inviteStatus,
+      participationStatus: membership.participationStatus,
+      roles: membership.roles.map((r: any) => ({ id: r.role.id, name: r.role.name })),
+    });
+  } catch (err) {
+    console.error('[artists] POST /:id/members', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── PATCH /api/artists/memberships/:membershipId/confirm — invitee confirms ───
+router.patch('/memberships/:membershipId/confirm', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const ua = await prisma.userArtist.findUnique({
+      where: { id: req.params.membershipId },
+      include: { artist: { select: { id: true, name: true } } },
+    });
+    if (!ua) return res.status(404).json({ error: 'Приглашение не найдено' });
+    if (ua.userId !== meId) return res.status(403).json({ error: 'Нет прав' });
+    if (ua.inviteStatus !== 'PENDING') {
+      return res.status(400).json({ error: 'Приглашение уже обработано' });
+    }
+
+    await prisma.userArtist.update({
+      where: { id: ua.id },
+      data: { inviteStatus: 'ACCEPTED' },
+    });
+
+    const name = await actorName(meId);
+    // Notify the inviter + all artist admins/owner.
+    const admins = await prisma.userArtist.findMany({
+      where: { artistId: ua.artistId, isAdmin: true, inviteStatus: 'ACCEPTED' },
+      select: { userId: true },
+    });
+    const recipientIds = new Set<string>(admins.map((a) => a.userId));
+    if (ua.invitedById) recipientIds.add(ua.invitedById);
+    recipientIds.delete(meId);
+    await Promise.all([...recipientIds].map((rid) =>
+      prisma.notification.create({
+        data: {
+          userId: rid,
+          actorId: meId,
+          type: 'artist_member_confirmed',
+          title: ua.artist.name,
+          body: `${name} подтвердил участие в «${ua.artist.name}».`,
+          link: `/artist/${ua.artistId}`,
+        },
+      }),
+    ));
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[artists] PATCH /memberships/:id/confirm', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── PATCH /api/artists/memberships/:membershipId/decline — invitee declines ───
+router.patch('/memberships/:membershipId/decline', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const ua = await prisma.userArtist.findUnique({
+      where: { id: req.params.membershipId },
+      include: { artist: { select: { id: true, name: true } } },
+    });
+    if (!ua) return res.status(404).json({ error: 'Приглашение не найдено' });
+    if (ua.userId !== meId) return res.status(403).json({ error: 'Нет прав' });
+    if (ua.inviteStatus !== 'PENDING') {
+      return res.status(400).json({ error: 'Приглашение уже обработано' });
+    }
+
+    await prisma.userArtist.update({
+      where: { id: ua.id },
+      data: { inviteStatus: 'DECLINED' },
+    });
+
+    const name = await actorName(meId);
+    if (ua.invitedById && ua.invitedById !== meId) {
+      await prisma.notification.create({
+        data: {
+          userId: ua.invitedById,
+          actorId: meId,
+          type: 'artist_member_declined',
+          title: ua.artist.name,
+          body: `${name} отклонил приглашение в «${ua.artist.name}».`,
+          link: `/artist/${ua.artistId}`,
+        },
+      });
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[artists] PATCH /memberships/:id/decline', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── PATCH /api/artists/:id/members/:membershipId/participation — admin ────────
+router.patch('/:id/members/:membershipId/participation', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const { id: artistId, membershipId } = req.params;
+    const { participationStatus } = req.body as {
+      participationStatus?: 'ACTIVE_MEMBER' | 'FORMER_MEMBER';
+    };
+
+    if (participationStatus !== 'ACTIVE_MEMBER' && participationStatus !== 'FORMER_MEMBER') {
+      return res.status(400).json({ error: 'Неверный participationStatus' });
+    }
+
+    const { ok } = await requireArtistAdmin(artistId, meId);
+    if (!ok) return res.status(403).json({ error: 'Нет прав' });
+
+    const ua = await prisma.userArtist.findUnique({ where: { id: membershipId } });
+    if (!ua || ua.artistId !== artistId) return res.status(404).json({ error: 'Участник не найден' });
+
+    await prisma.userArtist.update({
+      where: { id: membershipId },
+      data: { participationStatus },
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[artists] PATCH /:id/members/:membershipId/participation', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── PATCH /api/artists/:id/members/:membershipId/roles — admin replaces roles ─
+router.patch('/:id/members/:membershipId/roles', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const { id: artistId, membershipId } = req.params;
+    const { roleIds } = req.body as { roleIds?: string[] };
+
+    const { ok } = await requireArtistAdmin(artistId, meId);
+    if (!ok) return res.status(403).json({ error: 'Нет прав' });
+
+    const ua = await prisma.userArtist.findUnique({ where: { id: membershipId } });
+    if (!ua || ua.artistId !== artistId) return res.status(404).json({ error: 'Участник не найден' });
+
+    const cleanRoleIds = Array.isArray(roleIds) ? roleIds.filter((r) => typeof r === 'string') : [];
+
+    await prisma.$transaction([
+      prisma.userArtistRole.deleteMany({ where: { userArtistId: membershipId } }),
+      ...(cleanRoleIds.length
+        ? [prisma.userArtistRole.createMany({
+            data: cleanRoleIds.map((roleId) => ({ userArtistId: membershipId, roleId })),
+            skipDuplicates: true,
+          })]
+        : []),
+    ]);
+
+    const updated = await prisma.userArtist.findUnique({
+      where: { id: membershipId },
+      include: { roles: { include: { role: { select: { id: true, name: true } } } } },
+    });
+
+    return res.json({
+      ok: true,
+      roles: updated?.roles.map((r: any) => ({ id: r.role.id, name: r.role.name })) ?? [],
+    });
+  } catch (err) {
+    console.error('[artists] PATCH /:id/members/:membershipId/roles', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── DELETE /api/artists/:id/members/:membershipId — admin removes a member ────
+router.delete('/:id/members/:membershipId', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const { id: artistId, membershipId } = req.params;
+
+    const { ok } = await requireArtistAdmin(artistId, meId);
+    if (!ok) return res.status(403).json({ error: 'Нет прав' });
+
+    const ua = await prisma.userArtist.findUnique({ where: { id: membershipId } });
+    if (!ua || ua.artistId !== artistId) return res.status(404).json({ error: 'Участник не найден' });
+    if (ua.isOwner) return res.status(400).json({ error: 'Нельзя удалить владельца' });
+
+    await prisma.userArtist.delete({ where: { id: membershipId } });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[artists] DELETE /:id/members/:membershipId', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── PATCH /api/artists/:id/activity-status — admin; auto former-member on inactive
+router.patch('/:id/activity-status', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const artistId = req.params.id;
+    const { activityStatus } = req.body as {
+      activityStatus?: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED' | 'DISBANDED';
+    };
+
+    const valid = ['ACTIVE', 'INACTIVE', 'ARCHIVED', 'DISBANDED'];
+    if (!activityStatus || !valid.includes(activityStatus)) {
+      return res.status(400).json({ error: 'Неверный activityStatus' });
+    }
+
+    const { ok } = await requireArtistAdmin(artistId, meId);
+    if (!ok) return res.status(403).json({ error: 'Нет прав' });
+
+    const artist = await prisma.artist.findUnique({ where: { id: artistId } });
+    if (!artist) return res.status(404).json({ error: 'Артист не найден' });
+
+    const wasActive = artist.activityStatus === 'ACTIVE';
+
+    const updated = await prisma.artist.update({
+      where: { id: artistId },
+      data: { activityStatus },
+    });
+
+    // Active → non-active: freeze the lineup. Active members become former
+    // members (history preserved — no deletion).
+    if (wasActive && activityStatus !== 'ACTIVE') {
+      await prisma.userArtist.updateMany({
+        where: { artistId, participationStatus: 'ACTIVE_MEMBER' },
+        data: { participationStatus: 'FORMER_MEMBER' },
+      });
+    }
+
+    return res.json(serializeArtist(updated));
+  } catch (err) {
+    console.error('[artists] PATCH /:id/activity-status', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── PATCH /api/artists/:id/transfer-owner — OWNER only ────────────────────────
+router.patch('/:id/transfer-owner', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const artistId = req.params.id;
+    const { userId } = req.body as { userId?: string };
+    if (!userId) return res.status(400).json({ error: 'userId обязателен' });
+
+    const owner = await getOwnerMembership(artistId);
+    if (!owner || owner.userId !== meId) {
+      return res.status(403).json({ error: 'Только владелец может передать владение' });
+    }
+    if (userId === meId) return res.status(400).json({ error: 'Вы уже владелец' });
+
+    const artist = await prisma.artist.findUnique({ where: { id: artistId }, select: { name: true } });
+    if (!artist) return res.status(404).json({ error: 'Артист не найден' });
+
+    const target = await prisma.userArtist.findFirst({
+      where: { artistId, userId, inviteStatus: 'ACCEPTED' },
+    });
+    if (!target) return res.status(400).json({ error: 'Получатель должен быть подтверждённым участником' });
+
+    await prisma.$transaction([
+      prisma.userArtist.update({
+        where: { id: owner.id },
+        data: { isOwner: false, isAdmin: true },
+      }),
+      prisma.userArtist.update({
+        where: { id: target.id },
+        data: { isOwner: true, isAdmin: true },
+      }),
+    ]);
+
+    await prisma.notification.create({
+      data: {
+        userId,
+        actorId: meId,
+        type: 'artist_owner_transferred',
+        title: artist.name,
+        body: `Вам передано владение артистом «${artist.name}».`,
+        link: `/artist/${artistId}`,
+      },
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[artists] PATCH /:id/transfer-owner', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── POST /api/artists/:id/admins — OWNER only; grant admin ────────────────────
+router.post('/:id/admins', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const artistId = req.params.id;
+    const { userId } = req.body as { userId?: string };
+    if (!userId) return res.status(400).json({ error: 'userId обязателен' });
+
+    const owner = await getOwnerMembership(artistId);
+    if (!owner || owner.userId !== meId) {
+      return res.status(403).json({ error: 'Только владелец может назначать администраторов' });
+    }
+
+    const artist = await prisma.artist.findUnique({ where: { id: artistId }, select: { name: true } });
+    if (!artist) return res.status(404).json({ error: 'Артист не найден' });
+
+    const target = await prisma.userArtist.findFirst({
+      where: { artistId, userId, inviteStatus: 'ACCEPTED' },
+    });
+    if (!target) return res.status(400).json({ error: 'Получатель должен быть подтверждённым участником' });
+
+    await prisma.userArtist.update({ where: { id: target.id }, data: { isAdmin: true } });
+
+    await prisma.notification.create({
+      data: {
+        userId,
+        actorId: meId,
+        type: 'artist_admin_granted',
+        title: artist.name,
+        body: `Вас назначили администратором артиста «${artist.name}».`,
+        link: `/artist/${artistId}`,
+      },
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[artists] POST /:id/admins', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── DELETE /api/artists/:id/admins/:userId — OWNER only; revoke admin ─────────
+router.delete('/:id/admins/:userId', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const { id: artistId, userId } = req.params;
+
+    const owner = await getOwnerMembership(artistId);
+    if (!owner || owner.userId !== meId) {
+      return res.status(403).json({ error: 'Только владелец может снимать администраторов' });
+    }
+
+    const artist = await prisma.artist.findUnique({ where: { id: artistId }, select: { name: true } });
+    if (!artist) return res.status(404).json({ error: 'Артист не найден' });
+
+    const target = await prisma.userArtist.findFirst({
+      where: { artistId, userId, inviteStatus: 'ACCEPTED' },
+    });
+    if (!target) return res.status(404).json({ error: 'Участник не найден' });
+    if (target.isOwner) return res.status(400).json({ error: 'Нельзя снять администратора с владельца' });
+
+    await prisma.userArtist.update({ where: { id: target.id }, data: { isAdmin: false } });
+
+    await prisma.notification.create({
+      data: {
+        userId,
+        actorId: meId,
+        type: 'artist_admin_revoked',
+        title: artist.name,
+        body: `Вас сняли с администраторов артиста «${artist.name}».`,
+        link: `/artist/${artistId}`,
+      },
+    });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[artists] DELETE /:id/admins/:userId', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── POST /api/artists/:id/invite-link — admin; create role-bound invite link ──
 router.post('/:id/invite-link', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
     const artistId = req.params.id;
-    const { professionId } = req.body;
+    const { roleIds, participationStatus } = req.body as {
+      roleIds?: string[];
+      participationStatus?: 'ACTIVE_MEMBER' | 'FORMER_MEMBER';
+    };
 
-    // Check current user is owner/admin of artist
-    const myMembership = await prisma.userArtist.findFirst({
-      where: { artistId, userId: meId, isOwner: true, inviteStatus: 'ACCEPTED' },
+    const { ok } = await requireArtistAdmin(artistId, meId);
+    if (!ok) return res.status(403).json({ error: 'Нет прав' });
+
+    const artist = await prisma.artist.findUnique({ where: { id: artistId }, select: { id: true } });
+    if (!artist) return res.status(404).json({ error: 'Артист не найден' });
+
+    const cleanRoleIds = Array.isArray(roleIds) ? roleIds.filter((r) => typeof r === 'string') : [];
+    const part = participationStatus === 'FORMER_MEMBER' ? 'FORMER_MEMBER' : 'ACTIVE_MEMBER';
+    const token = crypto.randomBytes(16).toString('hex');
+
+    await prisma.artistInvite.create({
+      data: {
+        artistId,
+        token,
+        roleIds: cleanRoleIds,
+        participationStatus: part,
+        createdById: meId,
+      },
     });
-    const me = await prisma.user.findUnique({ where: { id: meId }, select: { isAdmin: true } });
-    if (!myMembership && !me?.isAdmin) {
-      return res.status(403).json({ error: 'Only artist owner can invite' });
-    }
 
-    const artist = await prisma.artist.findUnique({ where: { id: artistId }, select: { id: true, name: true } });
-    if (!artist) return res.status(404).json({ error: 'Artist not found' });
+    return res.status(201).json({
+      token,
+      url: `${APP_URL}/register?artistInvite=${token}`,
+    });
+  } catch (err) {
+    console.error('[artists] POST /:id/invite-link', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
 
-    // Generate unique token using artistId + professionId + timestamp (base64)
-    const payload = Buffer.from(JSON.stringify({
-      artistId, artistName: artist.name, professionId: professionId || null,
-      ts: Date.now(),
-    })).toString('base64url');
+// ── GET /api/artists/invite/:token — PUBLIC landing/OG preview ────────────────
+router.get('/invite/:token', async (req: AuthRequest, res: Response) => {
+  try {
+    const invite = await prisma.artistInvite.findUnique({
+      where: { token: req.params.token },
+      include: { artist: { select: { id: true, name: true, avatar: true } } },
+    });
+    if (!invite) return res.status(404).json({ error: 'Приглашение не найдено' });
 
-    const link = `https://moooza.ru/register?artistInvite=${payload}`;
-    res.json({ link, token: payload });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    const roles = invite.roleIds.length
+      ? await prisma.role.findMany({
+          where: { id: { in: invite.roleIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+
+    return res.json({
+      artist: { id: invite.artist.id, name: invite.artist.name, avatar: invite.artist.avatar },
+      roles,
+      participationStatus: invite.participationStatus,
+    });
+  } catch (err) {
+    console.error('[artists] GET /invite/:token', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });
 

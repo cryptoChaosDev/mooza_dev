@@ -316,8 +316,40 @@ export const artistAPI = {
   pendingMemberships: (artistId: string) => api.get(`/artists/${artistId}/memberships/pending`),
   approveMembership: (id: string) => api.patch(`/artists/memberships/${id}/approve`),
   rejectMembership: (id: string) => api.patch(`/artists/memberships/${id}/reject`),
-  generateInviteLink: (artistId: string, professionId?: string) =>
-    api.post(`/artists/${artistId}/invite-link`, { professionId }),
+
+  // Phase 5a — members / admins / ownership / invite links
+  addMember: (
+    artistId: string,
+    data: { userId: string; roleIds?: string[]; participationStatus?: 'ACTIVE_MEMBER' | 'FORMER_MEMBER' },
+  ) => api.post(`/artists/${artistId}/members`, data),
+  confirmMembership: (membershipId: string) =>
+    api.patch(`/artists/memberships/${membershipId}/confirm`),
+  declineMembership: (membershipId: string) =>
+    api.patch(`/artists/memberships/${membershipId}/decline`),
+  setMemberParticipation: (
+    artistId: string,
+    membershipId: string,
+    participationStatus: 'ACTIVE_MEMBER' | 'FORMER_MEMBER',
+  ) => api.patch(`/artists/${artistId}/members/${membershipId}/participation`, { participationStatus }),
+  setMemberRoles: (artistId: string, membershipId: string, roleIds: string[]) =>
+    api.patch(`/artists/${artistId}/members/${membershipId}/roles`, { roleIds }),
+  removeMember: (artistId: string, membershipId: string) =>
+    api.delete(`/artists/${artistId}/members/${membershipId}`),
+  setActivityStatus: (
+    artistId: string,
+    activityStatus: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED' | 'DISBANDED',
+  ) => api.patch(`/artists/${artistId}/activity-status`, { activityStatus }),
+  transferOwner: (artistId: string, userId: string) =>
+    api.patch(`/artists/${artistId}/transfer-owner`, { userId }),
+  addAdmin: (artistId: string, userId: string) =>
+    api.post(`/artists/${artistId}/admins`, { userId }),
+  removeAdmin: (artistId: string, userId: string) =>
+    api.delete(`/artists/${artistId}/admins/${userId}`),
+  createInviteLink: (
+    artistId: string,
+    data: { roleIds?: string[]; participationStatus?: 'ACTIVE_MEMBER' | 'FORMER_MEMBER' },
+  ) => api.post(`/artists/${artistId}/invite-link`, data),
+  getInvite: (token: string) => api.get(`/artists/invite/${token}`),
 };
 
 // Connection API

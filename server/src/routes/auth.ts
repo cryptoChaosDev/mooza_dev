@@ -68,6 +68,8 @@ const registerSchema = z.object({
   // Referral
   referrerId: z.string().optional(),
   referralCode: z.string().optional(),   // ReferralLink.code, if signed up via a named link
+  // Role-bound artist invite link (ArtistInvite.token) — consumed at user creation
+  artistInviteToken: z.string().optional(),
   // Age verification
   birthDate: z.string().optional(),
 });
@@ -260,6 +262,42 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
         },
         include: userInclude,
       });
+
+      // Consume a role-bound artist invite link, if one was provided at signup.
+      // Creates an already-ACCEPTED membership (no separate confirmation needed).
+      // No referral bonus. Guard against a pre-existing membership (e.g. the
+      // artistIds[] step above already added this artist).
+      if (p.artistInviteToken) {
+        try {
+          const invite = await prisma.artistInvite.findUnique({
+            where: { token: p.artistInviteToken },
+          });
+          if (invite) {
+            const existing = await prisma.userArtist.findFirst({
+              where: { artistId: invite.artistId, userId: user.id },
+              select: { id: true },
+            });
+            if (!existing) {
+              await prisma.userArtist.create({
+                data: {
+                  userId: user.id,
+                  artistId: invite.artistId,
+                  professionId: null,
+                  isOwner: false,
+                  isAdmin: false,
+                  inviteStatus: 'ACCEPTED',
+                  participationStatus: invite.participationStatus,
+                  roles: invite.roleIds.length
+                    ? { create: invite.roleIds.map((roleId: string) => ({ roleId })) }
+                    : undefined,
+                },
+              });
+            }
+          }
+        } catch (inviteErr) {
+          console.error('[verify-email] artist invite consume failed:', inviteErr);
+        }
+      }
 
       // Burn the single-use referral link — atomic guard against double-use.
       if (refLink) {

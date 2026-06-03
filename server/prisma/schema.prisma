@@ -375,6 +375,7 @@ model Artist {
   posts       Post[]
   releases    Release[]
   clips       Clip[]
+  invites     ArtistInvite[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -765,6 +766,20 @@ model UserArtist {
   @@index([userId])
   @@index([artistId])
   @@index([inviteStatus])
+}
+
+model ArtistInvite {
+  id                  String                    @id @default(uuid())
+  artistId            String
+  token               String                    @unique
+  roleIds             String[]                  @default([])
+  participationStatus MemberParticipationStatus @default(ACTIVE_MEMBER)
+  createdById         String?
+  createdAt           DateTime                  @default(now())
+
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
 }
 
 // ============ ROLE CATALOG ============
