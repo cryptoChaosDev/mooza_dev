@@ -717,18 +717,6 @@ export default function ArtistPage() {
           <ArrowLeft size={18} className="text-white" />
         </button>
 
-        {/* Edit button on the cover (owner only) */}
-        {isOwner && (
-          <div className="absolute top-4 right-4 z-10">
-            <button
-              onClick={() => setIsEditing(true)}
-              className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
-            >
-              <Edit3 size={16} className="text-white" />
-            </button>
-          </div>
-        )}
-
         {/* Banner camera button */}
         {isOwner && (
           <>
@@ -810,6 +798,15 @@ export default function ArtistPage() {
             iconSize={16}
             className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
           />
+          {isOwner && (
+            <button
+              onClick={() => setIsEditing(true)}
+              title="Редактировать"
+              className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
+            >
+              <Edit3 size={16} />
+            </button>
+          )}
         </div>
       </div>
 
