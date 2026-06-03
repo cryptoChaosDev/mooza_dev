@@ -530,7 +530,7 @@ const { data: myBreakRequests = [] } = useQuery({
                     {followedArtists.map((artist: any) => (
                       <div
                         key={artist.id}
-                        onClick={() => navigate(`/artists/${artist.id}`)}
+                        onClick={() => navigate(`/artist/${artist.id}`)}
                         className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
                       >
                         <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center overflow-hidden flex-shrink-0">

@@ -6,7 +6,7 @@ import {
   Camera, Navigation, Edit3, X, Save, Loader2,
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
   UserPlus, Trash2, Search,
-  Settings, Link2, Share2, Tag, Crown, Shield, UserCog, UserCheck, UserX,
+  Settings, Link2, Share2, Tag, Crown, Shield, UserCog, UserCheck, UserX, Star,
 } from 'lucide-react';
 import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI, releaseAPI, clipAPI } from '../lib/api';
 import { plural } from '../lib/plural';
@@ -221,14 +221,18 @@ export default function ArtistPage() {
     }
   }, [isEditing, artist]);
 
+  const favInvalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['artist', id] });
+    queryClient.invalidateQueries({ queryKey: ['followed-artists'] });
+  };
   const followMut = useMutation({
     mutationFn: () => artistAPI.follow(id!),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onSuccess: favInvalidate,
   });
 
   const unfollowMut = useMutation({
     mutationFn: () => artistAPI.unfollow(id!),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onSuccess: favInvalidate,
   });
 
   const uploadAvatarMut = useMutation({
@@ -713,34 +717,17 @@ export default function ArtistPage() {
           <ArrowLeft size={18} className="text-white" />
         </button>
 
-        {/* Top-right actions */}
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-          <ShareButton url={`/artist/${id}`} title={artist?.name} />
-          {isOwner && (
+        {/* Edit button on the cover (owner only) */}
+        {isOwner && (
+          <div className="absolute top-4 right-4 z-10">
             <button
               onClick={() => setIsEditing(true)}
               className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
             >
               <Edit3 size={16} className="text-white" />
             </button>
-          )}
-          {currentUser && !isMemberOfArtist && (
-            <button
-              onClick={() => {
-                if (artist.isFollowed) unfollowMut.mutate();
-                else followMut.mutate();
-              }}
-              disabled={followMut.isPending || unfollowMut.isPending}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                artist.isFollowed
-                  ? 'bg-slate-700/80 text-slate-200 border border-slate-600'
-                  : 'bg-primary-600 text-white'
-              }`}
-            >
-              {artist.isFollowed ? 'Отписаться' : 'Подписаться'}
-            </button>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Banner camera button */}
         {isOwner && (
@@ -767,7 +754,7 @@ export default function ArtistPage() {
       </div>
 
       {/* ── Avatar ── */}
-      <div className="relative px-4 -mt-14 mb-4 flex items-end">
+      <div className="relative px-4 -mt-14 mb-4 flex items-end justify-between">
         <div className="relative flex-shrink-0">
           <div className="w-28 h-28 rounded-full border-4 border-slate-950 overflow-hidden bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center shadow-xl">
             {avatarSrc ? (
@@ -799,6 +786,30 @@ export default function ArtistPage() {
               />
             </>
           )}
+        </div>
+
+        {/* Actions under the cover: favorite star + share */}
+        <div className="flex items-center gap-2 pb-1">
+          {currentUser && !isMemberOfArtist && (
+            <button
+              onClick={() => {
+                if (artist.isFollowed) unfollowMut.mutate();
+                else followMut.mutate();
+              }}
+              disabled={followMut.isPending || unfollowMut.isPending}
+              aria-label={artist.isFollowed ? 'Убрать из избранного' : 'В избранное'}
+              title={artist.isFollowed ? 'В избранном' : 'В избранное'}
+              className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center transition-colors disabled:opacity-60"
+            >
+              <Star size={17} className={artist.isFollowed ? 'text-amber-400 fill-amber-400' : 'text-slate-300'} />
+            </button>
+          )}
+          <ShareButton
+            url={`/artist/${id}`}
+            title={artist?.name}
+            iconSize={16}
+            className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
+          />
         </div>
       </div>
 
