@@ -112,7 +112,7 @@ export default function ArtistCreatePage() {
         type: form.type || undefined,
         city: form.city.trim() || undefined,
         genreIds: form.genreIds,
-        submitterRoles: form.submitterRoleIds.map(id => roleNameById.get(id)).filter(Boolean),
+        submitterRoleIds: form.submitterRoleIds,
         socialLinks: Object.keys(form.socialLinks).length ? form.socialLinks : undefined,
       });
       if (avatarFile) {

@@ -290,6 +290,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       listeners,
       genreIds,
       submitterRoles,
+      submitterRoleIds,
     } = req.body as {
       name: string;
       type?: string;
@@ -301,22 +302,29 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       listeners?: number;
       genreIds?: string[];
       submitterRoles?: string[];
+      submitterRoleIds?: string[];
     };
 
     if (!name || !name.trim()) {
       return res.status(400).json({ error: 'Имя артиста обязательно' });
     }
 
-    // Validate submitter roles against the fixed set; silently ignore anything else.
-    // Submitter roles come from the seeded role catalog (collective context) —
-    // accept any non-empty role names, trimmed/deduped/capped.
-    const cleanSubmitterRoles = Array.isArray(submitterRoles)
-      ? Array.from(new Set(
-          submitterRoles
-            .filter((r): r is string => typeof r === 'string' && r.trim().length > 0)
-            .map((r) => r.trim())
-        )).slice(0, 20)
+    // Submitter roles come from the seeded role catalog (collective context).
+    // We resolve the chosen role IDs → Role rows, store their names on the artist
+    // (descriptive) AND attach them to the creator's membership so they appear as
+    // the owner's roles in the line-up.
+    const roleIdSet = Array.isArray(submitterRoleIds)
+      ? Array.from(new Set(submitterRoleIds.filter((r): r is string => typeof r === 'string' && !!r))).slice(0, 20)
       : [];
+    const submitterRoleRows = roleIdSet.length
+      ? await prisma.role.findMany({ where: { id: { in: roleIdSet } }, select: { id: true, name: true } })
+      : [];
+    // Fall back to any plain role names sent (legacy), else use the resolved names.
+    const cleanSubmitterRoles = submitterRoleRows.length
+      ? submitterRoleRows.map((r) => r.name)
+      : Array.isArray(submitterRoles)
+        ? Array.from(new Set(submitterRoles.filter((r): r is string => typeof r === 'string' && r.trim().length > 0).map((r) => r.trim()))).slice(0, 20)
+        : [];
 
     // Generate the verification code immediately at creation.
     const verificationCode = await generateUniqueVerificationCode();
@@ -343,6 +351,9 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
             isAdmin: true,
             inviteStatus: 'ACCEPTED',
             participationStatus: 'ACTIVE_MEMBER',
+            roles: submitterRoleRows.length
+              ? { create: submitterRoleRows.map((r) => ({ roleId: r.id })) }
+              : undefined,
           },
         },
       },
