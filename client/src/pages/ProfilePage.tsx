@@ -21,6 +21,7 @@ import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import ShareButton from '../components/ShareButton';
 import JoinArtistModal from '../components/JoinArtistModal';
 import ReviewsBlock from '../components/ReviewsBlock';
+import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
 
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -120,6 +121,10 @@ export default function ProfilePage() {
     occupancyStatus: '' as '' | 'closed' | 'considering' | 'open',
   });
   const [showPrivacy, setShowPrivacy] = useState(false);
+
+  // Image cropping (avatar / banner) before upload
+  const [cropAvatarFile, setCropAvatarFile] = useState<File | null>(null);
+  const [cropBannerFile, setCropBannerFile] = useState<File | null>(null);
 
   const [userServices, setUserServices] = useState<UserServiceEntry[]>([]);
 
@@ -922,7 +927,7 @@ export default function ProfilePage() {
             <Camera size={12} />Сменить фон
           </button>
           <input ref={bannerInputRef} type="file" accept="image/*" className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) uploadBannerMutation.mutate(f); e.target.value = ''; }} />
+            onChange={e => { const f = e.target.files?.[0]; if (f) setCropBannerFile(f); e.target.value = ''; }} />
         </div>
 
         <div className="px-4">
@@ -941,7 +946,7 @@ export default function ProfilePage() {
                 <Camera size={13} />
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatarMutation.mutate(f); e.target.value = ''; }} />
+                onChange={e => { const f = e.target.files?.[0]; if (f) setCropAvatarFile(f); e.target.value = ''; }} />
             </div>
             <div className="flex items-center gap-2 mb-1">
               <ShareButton
@@ -1797,6 +1802,28 @@ export default function ProfilePage() {
     />
 
     {showJoinArtist && <JoinArtistModal onClose={() => setShowJoinArtist(false)} />}
+
+    {cropAvatarFile && (
+      <ImageCropModal
+        file={cropAvatarFile}
+        aspect={1}
+        cropShape="round"
+        title="Аватар"
+        onCancel={() => setCropAvatarFile(null)}
+        onCropped={blob => { uploadAvatarMutation.mutate(blobToFile(blob, 'avatar.jpg')); setCropAvatarFile(null); }}
+      />
+    )}
+
+    {cropBannerFile && (
+      <ImageCropModal
+        file={cropBannerFile}
+        aspect={3}
+        cropShape="rect"
+        title="Обложка"
+        onCancel={() => setCropBannerFile(null)}
+        onCropped={blob => { uploadBannerMutation.mutate(blobToFile(blob, 'banner.jpg')); setCropBannerFile(null); }}
+      />
+    )}
 
     {showProModal && createPortal(
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">

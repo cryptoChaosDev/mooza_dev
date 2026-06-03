@@ -6,6 +6,7 @@ import { artistAPI, referenceAPI } from '../lib/api';
 import { avatarUrl } from '../lib/avatar';
 import SelectSheet from '../components/SelectSheet';
 import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
+import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
 
 const TYPE_OPTIONS = [
   { id: 'SOLO',        name: 'Сольный артист' },
@@ -43,6 +44,8 @@ export default function ArtistCreatePage() {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
+  // Raw file selected from the picker, awaiting crop
+  const [cropAvatarFile, setCropAvatarFile] = useState<File | null>(null);
 
   // Duplicate check
   const [duplicate, setDuplicate] = useState<{ id: string; name: string; avatar: string | null; type: string | null; verified: boolean } | null>(null);
@@ -203,7 +206,7 @@ export default function ArtistCreatePage() {
                   type="file"
                   accept="image/*"
                   className="hidden"
-                  onChange={e => { const f = e.target.files?.[0]; if (f) onAvatarPick(f); e.target.value = ''; }}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) setCropAvatarFile(f); e.target.value = ''; }}
                 />
                 <p className="text-xs text-slate-500">Загрузите логотип или фото артиста</p>
               </div>
@@ -381,6 +384,17 @@ export default function ArtistCreatePage() {
           </>
         )}
       </div>
+
+      {cropAvatarFile && (
+        <ImageCropModal
+          file={cropAvatarFile}
+          aspect={1}
+          cropShape="round"
+          title="Аватар"
+          onCancel={() => setCropAvatarFile(null)}
+          onCropped={blob => { onAvatarPick(blobToFile(blob, 'avatar.jpg')); setCropAvatarFile(null); }}
+        />
+      )}
 
       <SelectSheet
         isOpen={typeSheetOpen}

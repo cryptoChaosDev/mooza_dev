@@ -22,6 +22,7 @@ import MediaRail from '../components/MediaRail';
 import MediaItemForm from '../components/MediaItemForm';
 import { useAuthStore } from '../stores/authStore';
 import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
+import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
 
 const ACTIVITY_OPTIONS = [
   { id: 'ACTIVE',    name: 'Действующий' },
@@ -74,6 +75,11 @@ export default function ArtistPage() {
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
   const [isEditing, setIsEditing] = useState(false);
+
+  // Image cropping (avatar / banner) before upload
+  const [cropAvatarFile, setCropAvatarFile] = useState<File | null>(null);
+  const [cropBannerFile, setCropBannerFile] = useState<File | null>(null);
+
   const [proofUrl, setProofUrl] = useState('');
   const [verifyUnmet, setVerifyUnmet] = useState<string[]>([]);
   const [form, setForm] = useState<EditForm>({
@@ -742,7 +748,7 @@ export default function ArtistPage() {
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) uploadBannerMut.mutate(file);
+                if (file) setCropBannerFile(file);
                 e.target.value = '';
               }}
             />
@@ -777,7 +783,7 @@ export default function ArtistPage() {
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) uploadAvatarMut.mutate(file);
+                  if (file) setCropAvatarFile(file);
                   e.target.value = '';
                 }}
               />
@@ -1670,6 +1676,28 @@ export default function ArtistPage() {
           kind="clip"
           artistId={id}
           onClose={() => setShowClipForm(false)}
+        />
+      )}
+
+      {/* ── Phase 7: avatar / banner cropping ── */}
+      {cropAvatarFile && (
+        <ImageCropModal
+          file={cropAvatarFile}
+          aspect={1}
+          cropShape="round"
+          title="Аватар"
+          onCancel={() => setCropAvatarFile(null)}
+          onCropped={blob => { uploadAvatarMut.mutate(blobToFile(blob, 'avatar.jpg')); setCropAvatarFile(null); }}
+        />
+      )}
+      {cropBannerFile && (
+        <ImageCropModal
+          file={cropBannerFile}
+          aspect={3}
+          cropShape="rect"
+          title="Обложка"
+          onCancel={() => setCropBannerFile(null)}
+          onCropped={blob => { uploadBannerMut.mutate(blobToFile(blob, 'banner.jpg')); setCropBannerFile(null); }}
         />
       )}
     </div>
