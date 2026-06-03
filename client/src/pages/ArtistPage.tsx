@@ -6,7 +6,7 @@ import {
   Camera, Navigation, Edit3, X, Save, Loader2,
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
   UserPlus, Trash2, Search,
-  Settings, Link2, Share2, Tag, Crown, Shield, UserCog,
+  Settings, Link2, Share2, Tag, Crown, Shield, UserCog, UserCheck, UserX,
 } from 'lucide-react';
 import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI, releaseAPI, clipAPI } from '../lib/api';
 import { plural } from '../lib/plural';
@@ -321,6 +321,16 @@ export default function ArtistPage() {
   const invalidateArtist = () => queryClient.invalidateQueries({ queryKey: ['artist', id] });
 
   // ── Phase 5b: mutations ────────────────────────────────────────────────────
+  // The viewer's own pending invitation: confirm / decline.
+  const confirmInviteMut = useMutation({
+    mutationFn: (membershipId: string) => artistAPI.confirmMembership(membershipId),
+    onSuccess: () => invalidateArtist(),
+  });
+  const declineInviteMut = useMutation({
+    mutationFn: (membershipId: string) => artistAPI.declineMembership(membershipId),
+    onSuccess: () => invalidateArtist(),
+  });
+
   const addMemberMut = useMutation({
     mutationFn: () =>
       artistAPI.addMember(id!, {
@@ -1018,6 +1028,36 @@ export default function ArtistPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── Viewer's own pending invitation: confirm / decline ── */}
+        {artist.viewerPendingMembership && (
+          <div className="mb-4 p-3.5 rounded-xl bg-primary-500/10 border border-primary-500/30">
+            <p className="text-sm text-white font-medium mb-1">
+              «{artist.name}» приглашает вас стать участником
+              {artist.viewerPendingMembership.roles?.length
+                ? <> в роли <span className="text-primary-300">{artist.viewerPendingMembership.roles.map((r: any) => r.name).join(', ')}</span></>
+                : null}
+            </p>
+            <p className="text-xs text-slate-400 mb-3">Подтвердите участие, чтобы появиться в составе.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => confirmInviteMut.mutate(artist.viewerPendingMembership.membershipId)}
+                disabled={confirmInviteMut.isPending || declineInviteMut.isPending}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
+              >
+                {confirmInviteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <UserCheck size={14} />}
+                Подтвердить
+              </button>
+              <button
+                onClick={() => declineInviteMut.mutate(artist.viewerPendingMembership.membershipId)}
+                disabled={confirmInviteMut.isPending || declineInviteMut.isPending}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-colors"
+              >
+                <UserX size={14} /> Отклонить
+              </button>
             </div>
           </div>
         )}

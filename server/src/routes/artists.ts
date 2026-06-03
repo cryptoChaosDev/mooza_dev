@@ -241,6 +241,18 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
         ? userArtists.filter((ua: any) => ua.inviteStatus === 'PENDING').map(serializeMember)
         : [];
 
+    // The viewer's OWN pending invitation (so they can confirm/decline right on
+    // the artist page — the member-invite notification links here).
+    const myPending = currentUserId
+      ? userArtists.find((ua: any) => ua.userId === currentUserId && ua.inviteStatus === 'PENDING')
+      : null;
+    const viewerPendingMembership = myPending
+      ? {
+          membershipId: myPending.id,
+          roles: myPending.roles.map((r: any) => ({ id: r.role.id, name: r.role.name })),
+        }
+      : null;
+
     return res.json(serializeArtist({
       ...rest,
       genres: genres.map((ag) => ag.genre),
@@ -251,6 +263,7 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
       pendingMembers,
       viewerIsOwner,
       viewerIsAdmin,
+      viewerPendingMembership,
     }));
   } catch (err) {
     console.error('[artists] GET /:id', err);
