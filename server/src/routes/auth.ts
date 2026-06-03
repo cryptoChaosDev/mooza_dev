@@ -108,6 +108,12 @@ router.get('/check-email', async (req, res) => {
 // Register
 router.post('/register', registerLimiter, async (req, res) => {
   try {
+    // Honor the site-wide registration switch.
+    const regSetting = await prisma.siteSetting.findUnique({ where: { key: 'registrationEnabled' } });
+    if (regSetting?.value === 'false') {
+      return res.status(403).json({ error: 'Регистрация временно закрыта' });
+    }
+
     const data = registerSchema.parse(req.body);
 
     // Normalize email

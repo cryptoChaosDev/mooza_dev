@@ -187,6 +187,12 @@ export default function LandingPage() {
             Находите работу, создавайте проекты и стройте карьеру вместе с теми, кто живёт музыкой.
           </motion.p>
 
+          {!registrationEnabled && (
+            <motion.div {...fadeUp(0.3)} className="mx-auto max-w-md mb-8 px-4 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-sm leading-relaxed">
+              Регистрация временно закрыта. Если у вас уже есть аккаунт — войдите.
+            </motion.div>
+          )}
+
           {(registrationEnabled || loginEnabled) && (
             <motion.div {...fadeUp(0.35)} className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12">
               {registrationEnabled && (
