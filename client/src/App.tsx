@@ -9,7 +9,7 @@ import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
 import CookieConsent from './components/CookieConsent';
 import { IS_TMA, initTelegramApp, twa } from './lib/telegram';
-import { authAPI, messageAPI } from './lib/api';
+import { authAPI, messageAPI, userAPI } from './lib/api';
 
 
 const LandingPage        = lazy(() => import('./pages/LandingPage'));
@@ -216,6 +216,16 @@ function App() {
   // Initialize TG SDK for already-authenticated users
   useEffect(() => {
     if (IS_TMA && token) initTelegramApp();
+  }, [token]);
+
+  // Refresh the cached user from the server on load, so changes made elsewhere
+  // (admin rights, role, block status, profile) propagate without re-login.
+  // A 401 here is handled by the axios interceptor (auto-logout).
+  useEffect(() => {
+    if (!token) return;
+    userAPI.getMe()
+      .then(({ data }) => useAuthStore.getState().setUser(data))
+      .catch(() => { /* network error — keep cached user; 401 handled by interceptor */ });
   }, [token]);
 
   useEffect(() => {
