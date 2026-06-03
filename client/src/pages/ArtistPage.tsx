@@ -8,7 +8,7 @@ import {
   UserPlus, Trash2, Search,
   Settings, Link2, Share2, Tag, Crown, Shield, UserCog,
 } from 'lucide-react';
-import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI } from '../lib/api';
+import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI, releaseAPI, clipAPI } from '../lib/api';
 import { plural } from '../lib/plural';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
@@ -18,6 +18,8 @@ import SelectSheet from '../components/SelectSheet';
 import ShareButton from '../components/ShareButton';
 import RolePicker from '../components/RolePicker';
 import ConfirmDialog from '../components/ConfirmDialog';
+import MediaRail from '../components/MediaRail';
+import MediaItemForm from '../components/MediaItemForm';
 import { useAuthStore } from '../stores/authStore';
 import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
 
@@ -125,6 +127,10 @@ export default function ArtistPage() {
   // Activity status sheet
   const [activitySheetOpen, setActivitySheetOpen] = useState(false);
 
+  // ── Phase 6b: releases & clips create-form modals ──────────────────────────
+  const [showReleaseForm, setShowReleaseForm] = useState(false);
+  const [showClipForm, setShowClipForm] = useState(false);
+
   const { data: artist, isLoading, isError } = useQuery({
     queryKey: ['artist', id],
     queryFn: async () => {
@@ -140,6 +146,25 @@ export default function ArtistPage() {
       const { data } = await referenceAPI.getGenres();
       return data as { id: string; name: string }[];
     },
+  });
+
+  // ── Phase 6b: releases & clips lists ──────────────────────────────────────
+  const { data: releases = [] } = useQuery({
+    queryKey: ['releases', 'artist', id],
+    queryFn: async () => {
+      const { data } = await releaseAPI.listByArtist(id!);
+      return data as { id: string; title: string; coverUrl?: string | null }[];
+    },
+    enabled: !!id,
+  });
+
+  const { data: clips = [] } = useQuery({
+    queryKey: ['clips', 'artist', id],
+    queryFn: async () => {
+      const { data } = await clipAPI.listByArtist(id!);
+      return data as { id: string; title: string; coverUrl?: string | null }[];
+    },
+    enabled: !!id,
   });
 
   const isOwner = !!currentUser && (
@@ -1062,6 +1087,28 @@ export default function ArtistPage() {
           )}
         </div>
 
+        {/* ── Phase 6b: Releases rail ── */}
+        {(viewerIsAdmin || releases.length > 0) && (
+          <MediaRail
+            title="Релизы"
+            items={releases}
+            to="/releases"
+            showAdd={viewerIsAdmin && isEditing}
+            onAdd={() => setShowReleaseForm(true)}
+          />
+        )}
+
+        {/* ── Phase 6b: Clips rail ── */}
+        {(viewerIsAdmin || clips.length > 0) && (
+          <MediaRail
+            title="Клипы"
+            items={clips}
+            to="/clips"
+            showAdd={viewerIsAdmin && isEditing}
+            onAdd={() => setShowClipForm(true)}
+          />
+        )}
+
         {/* ── Admin block (gear) ── */}
         {canSeeGear && showAdminBlock && (
           <div className="mb-4 p-3 rounded-xl bg-slate-900/70 border border-slate-800 space-y-4">
@@ -1607,6 +1654,24 @@ export default function ArtistPage() {
         onConfirm={() => { if (removeAdminUserId) removeAdminMut.mutate(removeAdminUserId); }}
         onCancel={() => setRemoveAdminUserId(null)}
       />
+
+      {/* ── Phase 6b: Create release form ── */}
+      {showReleaseForm && id && (
+        <MediaItemForm
+          kind="release"
+          artistId={id}
+          onClose={() => setShowReleaseForm(false)}
+        />
+      )}
+
+      {/* ── Phase 6b: Create clip form ── */}
+      {showClipForm && id && (
+        <MediaItemForm
+          kind="clip"
+          artistId={id}
+          onClose={() => setShowClipForm(false)}
+        />
+      )}
     </div>
   );
 }

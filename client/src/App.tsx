@@ -26,6 +26,8 @@ const ChatPage           = lazy(() => import('./pages/ChatPage'));
 const AdminPage          = lazy(() => import('./pages/AdminPage'));
 const ArtistPage         = lazy(() => import('./pages/ArtistPage'));
 const ArtistCreatePage   = lazy(() => import('./pages/ArtistCreatePage'));
+const ReleasePage        = lazy(() => import('./pages/ReleasePage'));
+const ClipPage           = lazy(() => import('./pages/ClipPage'));
 const GroupPage          = lazy(() => import('./pages/GroupPage'));
 const GroupCreatePage    = lazy(() => import('./pages/GroupCreatePage'));
 const GroupInvitesPage   = lazy(() => import('./pages/GroupInvitesPage'));
@@ -146,6 +148,8 @@ function AppRoutes() {
             <Route path="/profile/:userId"  element={<UserProfilePage />} />
             <Route path="/artist/create"     element={<ArtistCreatePage />} />
             <Route path="/artist/:id"       element={<ArtistPage />} />
+            <Route path="/releases/:id"     element={<ReleasePage />} />
+            <Route path="/clips/:id"        element={<ClipPage />} />
             <Route path="/groups/create"    element={<GroupCreatePage />} />
             <Route path="/groups/invites"   element={<GroupInvitesPage />} />
             <Route path="/groups/:id"       element={<GroupPage />} />
