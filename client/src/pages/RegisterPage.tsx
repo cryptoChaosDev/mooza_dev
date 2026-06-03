@@ -4,7 +4,7 @@ import {
   Eye, EyeOff, AlertCircle, Loader2,
   Check, Globe, ArrowRight, ArrowLeft, X, Search,
 } from 'lucide-react';
-import { authAPI, referenceAPI, referralAPI } from '../lib/api';
+import { authAPI, referenceAPI, referralAPI, siteSettingsAPI } from '../lib/api';
 import CityPicker from '../components/CityPicker';
 import VkLoginButton from '../components/VkLoginButton';
 
@@ -158,6 +158,17 @@ export default function RegisterPage() {
   const { setAuth } = useAuthStore();
   const [searchParams] = useSearchParams();
   const refCode = searchParams.get('ref') || undefined;
+
+  // Registration may be closed site-wide — bounce to login.
+  useEffect(() => {
+    siteSettingsAPI.get()
+      .then(({ data }) => {
+        if ((data as Record<string, string>)?.registrationEnabled === 'false') {
+          navigate('/login', { replace: true });
+        }
+      })
+      .catch(() => {});
+  }, [navigate]);
 
   // Resolve the ref code (single-use link code OR legacy userId) → owner id.
   const [referrerId, setReferrerId] = useState<string | undefined>(undefined);

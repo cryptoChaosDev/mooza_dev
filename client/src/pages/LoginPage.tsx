@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronDown, ShieldAlert, CheckCircle2, Check } from 'lucide-react';
-import { authAPI } from '../lib/api';
+import { authAPI, siteSettingsAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import VkLoginButton from '../components/VkLoginButton';
 
@@ -46,6 +46,14 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { setAuth, setUser } = useAuthStore();
+
+  // Registration may be closed site-wide — hide the "Зарегистрироваться" link.
+  const [registrationEnabled, setRegistrationEnabled] = useState(true);
+  useEffect(() => {
+    siteSettingsAPI.get()
+      .then(({ data }) => setRegistrationEnabled((data as Record<string, string>)?.registrationEnabled !== 'false'))
+      .catch(() => {});
+  }, []);
 
   // Handle VK server-side OAuth callback: ?vk_token=JWT or ?vk_error=reason
   useEffect(() => {
@@ -386,12 +394,16 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
             <a href="/forgot-password" className="text-sm text-slate-500 hover:text-slate-300 transition-colors">
               Забыли пароль?
             </a>
-            <p className="text-slate-400 text-sm">
-              Нет аккаунта?{' '}
-              <a href="/register" className="text-primary-400 hover:text-primary-300 font-medium transition-colors">
-                Зарегистрироваться
-              </a>
-            </p>
+            {registrationEnabled ? (
+              <p className="text-slate-400 text-sm">
+                Нет аккаунта?{' '}
+                <a href="/register" className="text-primary-400 hover:text-primary-300 font-medium transition-colors">
+                  Зарегистрироваться
+                </a>
+              </p>
+            ) : (
+              <p className="text-slate-500 text-sm">Регистрация временно закрыта</p>
+            )}
           </div>
         </div>
       </div>
