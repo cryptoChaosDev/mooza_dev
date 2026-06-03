@@ -290,7 +290,6 @@ export default function ProfilePage() {
     queryFn: async () => { const { data } = await dealAPI.getAll(); return data as any[]; },
   });
   const activeDeals = myDeals.filter((d: any) => !['COMPLETED', 'CANCELLED'].includes(d.status));
-  const totalDeals = myDeals.length;
 
   // One entry per unique partner
   const myConnPartners = Array.from(
@@ -1107,17 +1106,6 @@ export default function ProfilePage() {
                    '🔴 Не беру заказы'}
                 </span>
               )}
-              {/* ── Stats row ── */}
-              <div className="grid grid-cols-2 divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-                <button onClick={() => navigate('/friends?tab=connections')} className="flex flex-col items-center py-1.5 px-1 hover:bg-slate-800/40 transition-colors">
-                  <span className="text-sm font-bold text-white">{myConnPartners.length}</span>
-                  <span className="text-[9px] text-slate-500">Связи</span>
-                </button>
-                <button onClick={() => navigate('/deals')} className="flex flex-col items-center py-1.5 px-1 hover:bg-slate-800/40 transition-colors">
-                  <span className="text-sm font-bold text-white">{totalDeals}</span>
-                  <span className="text-[9px] text-slate-500">Сделки</span>
-                </button>
-              </div>
             </>
           )}
 
@@ -1412,7 +1400,6 @@ export default function ProfilePage() {
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <HandshakeIcon size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Мои сделки</span>
-                {totalDeals > 0 && <span className="text-xs text-slate-500">{totalDeals}</span>}
                 <button onClick={() => navigate('/deals')} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
                   Смотреть все
                 </button>
@@ -1459,7 +1446,6 @@ export default function ProfilePage() {
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <Link2 size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Связи</span>
-                {myConnPartners.length > 0 && <span className="text-xs text-slate-500">{myConnPartners.length}</span>}
                 {myConnPartners.length > 3 && profile?.id && (
                   <button onClick={() => navigate(`/profile/${profile.id}/connections`)} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
                     Смотреть все
@@ -1501,7 +1487,6 @@ export default function ProfilePage() {
                   <button key={tab.key} onClick={() => setPortfolioTab(tab.key)}
                     className={`flex-1 py-2 text-xs font-medium transition-colors relative ${portfolioTab === tab.key ? 'text-primary-400' : 'text-slate-500 hover:text-slate-300'}`}>
                     {tab.label}
-                    {tab.count > 0 && <span className="ml-1 text-[10px] opacity-70">{tab.count}</span>}
                     {portfolioTab === tab.key && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500 rounded-full" />}
                   </button>
                 ))}

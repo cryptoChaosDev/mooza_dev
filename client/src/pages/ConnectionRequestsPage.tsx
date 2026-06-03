@@ -5,7 +5,6 @@ import { ChevronLeft, Clock, X, Loader2 } from 'lucide-react';
 import { connectionAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import ConnectionViewModal from '../components/ConnectionViewModal';
-import { plural } from '../lib/plural';
 
 // Aggregate connection requests per partner — one card per person, listing all
 // their pending requests beneath (multiple pending connections are allowed).
@@ -65,9 +64,6 @@ export default function ConnectionRequestsPage() {
                 className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${tab === t.id ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
               >
                 {t.label}
-                {t.count > 0 && (
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${tab === t.id ? 'bg-white/20' : 'bg-slate-800 text-slate-400'}`}>{t.count}</span>
-                )}
               </button>
             ))}
           </div>
@@ -96,9 +92,6 @@ export default function ConnectionRequestsPage() {
                   </button>
                   <button onClick={() => navigate(`/profile/${group.partner.id}`)} className="flex-1 min-w-0 text-left">
                     <p className="text-sm font-semibold text-white truncate">{group.partner.firstName} {group.partner.lastName}</p>
-                    {group.items.length > 1 && (
-                      <p className="text-xs text-slate-500">{group.items.length} {plural(group.items.length, 'запрос', 'запроса', 'запросов')}</p>
-                    )}
                   </button>
                 </div>
 

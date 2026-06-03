@@ -59,9 +59,6 @@ export default function FriendRequestsPage() {
                 className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${tab === t.id ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
               >
                 {t.label}
-                {t.count > 0 && (
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${tab === t.id ? 'bg-white/20' : 'bg-slate-800 text-slate-400'}`}>{t.count}</span>
-                )}
               </button>
             ))}
           </div>

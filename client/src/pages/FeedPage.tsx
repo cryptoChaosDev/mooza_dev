@@ -480,11 +480,9 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
         <button onClick={() => requireAuth(() => { if (!isOwner) likeMut.mutate(); })} disabled={likeMut.isPending || (!!currentUserId && isOwner)} title={currentUserId && isOwner ? 'Нельзя лайкать свой пост' : undefined}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${currentUserId && isOwner ? 'cursor-default text-slate-600' : post.isLiked ? 'text-red-400 hover:bg-red-400/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}>
           <Heart size={15} className={post.isLiked ? 'fill-red-400 text-red-400' : ''} />
-          <span className="font-medium tabular-nums">{post._count.likes}</span>
         </button>
         <button onClick={() => requireAuth(() => { setShowComments(true); setTimeout(() => commentInputRef.current?.focus(), 50); })} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all">
           <MessageCircle size={15} />
-          <span className="font-medium tabular-nums">{post._count.comments}</span>
         </button>
         <button onClick={() => requireAuth(() => setShowRepost(true))} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all" title="Поделиться в ленте">
           <Repeat2 size={15} />

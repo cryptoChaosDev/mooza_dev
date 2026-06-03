@@ -9,7 +9,6 @@ import {
   Settings, Link2, Share2, Tag, Crown, Shield, UserCog, UserCheck, UserX, Star,
 } from 'lucide-react';
 import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI, releaseAPI, clipAPI } from '../lib/api';
-import { plural } from '../lib/plural';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
 import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
@@ -868,12 +867,6 @@ export default function ArtistPage() {
           </div>
         )}
 
-        {/* Stats — compact inline */}
-        <div className="flex items-center gap-2 text-xs text-slate-500 mb-3 flex-wrap">
-          <span><span className="font-semibold text-slate-300">{artist.followersCount ?? 0}</span> {plural(artist.followersCount ?? 0, 'подписчик', 'подписчика', 'подписчиков')}</span>
-          {(artist.members?.length ?? 0) > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{artist.members.length}</span> {plural(artist.members.length, 'участник', 'участника', 'участников')}</span></>}
-          {(artist.listeners ?? 0) > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{Number(artist.listeners).toLocaleString('ru-RU')}</span> {plural(Number(artist.listeners), 'слушатель', 'слушателя', 'слушателей')}</span></>}
-        </div>
 
         {/* Verification panel for admins */}
         {isAdminOfArtist && (
