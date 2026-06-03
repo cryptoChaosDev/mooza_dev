@@ -1261,23 +1261,6 @@ export default function ArtistPage() {
           </div>
         )}
 
-        {/* Follow/Unfollow for members */}
-        {currentUser && isMemberOfArtist && (
-          <button
-            onClick={() => {
-              if (artist.isFollowed) unfollowMut.mutate();
-              else followMut.mutate();
-            }}
-            disabled={followMut.isPending || unfollowMut.isPending}
-            className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors mb-4 ${
-              artist.isFollowed
-                ? 'bg-slate-800 text-slate-300 border border-slate-700'
-                : 'bg-primary-600/20 text-primary-300 border border-primary-500/30'
-            }`}
-          >
-            {artist.isFollowed ? 'Отписаться' : 'Подписаться на коллектив'}
-          </button>
-        )}
       </div>
 
       {/* ── Edit modal ── */}
