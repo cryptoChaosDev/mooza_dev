@@ -468,8 +468,8 @@ export default function ArtistPage() {
       {pending && (
         <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-400 rounded-md flex-shrink-0">ожидает</span>
       )}
-      {/* Admin controls (edit mode) */}
-      {!pending && viewerIsAdmin && isEditing && (
+      {/* Admin controls (visible to artist admins) */}
+      {!pending && viewerIsAdmin && (
         <div className="flex items-center gap-1 flex-shrink-0">
           {/* Toggle participation */}
           <button
@@ -1038,8 +1038,8 @@ export default function ArtistPage() {
             )}
           </div>
 
-          {/* Admin actions: add member / invite link (edit mode) */}
-          {viewerIsAdmin && isEditing && (
+          {/* Admin actions: add member / invite link */}
+          {viewerIsAdmin && (
             <div className="flex flex-wrap gap-2 mb-3">
               <button
                 onClick={() => { setShowAddMember(true); setAddFeedback(''); }}
@@ -1064,7 +1064,7 @@ export default function ArtistPage() {
                 {activeMembers.map((m: any) => <MemberCard key={m.membershipId} m={m} />)}
               </div>
             </div>
-          ) : (isEditing && viewerIsAdmin) ? (
+          ) : viewerIsAdmin ? (
             <p className="text-xs text-slate-600 italic mb-3">Действующих участников пока нет</p>
           ) : null}
 
@@ -1078,7 +1078,7 @@ export default function ArtistPage() {
             </div>
           )}
 
-          {activeMembers.length === 0 && formerMembers.length === 0 && !(isEditing && viewerIsAdmin) && (
+          {activeMembers.length === 0 && formerMembers.length === 0 && !viewerIsAdmin && (
             <p className="text-xs text-slate-600 italic">Участников пока нет</p>
           )}
 
@@ -1099,7 +1099,7 @@ export default function ArtistPage() {
             title="Релизы"
             items={releases}
             to="/releases"
-            showAdd={viewerIsAdmin && isEditing}
+            showAdd={viewerIsAdmin}
             onAdd={() => setShowReleaseForm(true)}
           />
         )}
@@ -1110,7 +1110,7 @@ export default function ArtistPage() {
             title="Клипы"
             items={clips}
             to="/clips"
-            showAdd={viewerIsAdmin && isEditing}
+            showAdd={viewerIsAdmin}
             onAdd={() => setShowClipForm(true)}
           />
         )}

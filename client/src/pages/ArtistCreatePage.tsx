@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Loader2, Camera, Copy, Check, ShieldCheck, Send } from 'lucide-react';
+import { ArrowLeft, Loader2, Camera, Copy, Check, ShieldCheck } from 'lucide-react';
 import { artistAPI, referenceAPI } from '../lib/api';
 import { avatarUrl } from '../lib/avatar';
 import SelectSheet from '../components/SelectSheet';
-import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
 
 const TYPE_OPTIONS = [
@@ -54,9 +53,6 @@ export default function ArtistCreatePage() {
   // Post-create state
   const [created, setCreated] = useState<any | null>(null);
   const [copied, setCopied] = useState(false);
-  const [verifyUrl, setVerifyUrl] = useState('');
-  const [verifyUnmet, setVerifyUnmet] = useState<string[]>([]);
-  const [requestDone, setRequestDone] = useState(false);
 
   const set = (key: keyof Form, value: any) => setForm(f => ({ ...f, [key]: value }));
 
@@ -115,28 +111,12 @@ export default function ArtistCreatePage() {
     onSuccess: (data) => setCreated(data),
   });
 
-  // Step 2: submit verification request.
-  const requestMut = useMutation({
-    mutationFn: () => artistAPI.requestVerification(created.id, verifyUrl.trim()),
-    onSuccess: () => { setRequestDone(true); setVerifyUnmet([]); },
-    onError: (err: any) => {
-      const d = err?.response?.data;
-      if (d?.error === 'CONDITIONS_NOT_MET' && Array.isArray(d.unmet)) setVerifyUnmet(d.unmet);
-      else setVerifyUnmet([d?.error || 'Не удалось отправить запрос']);
-    },
-  });
-
   const copyCode = () => {
     if (!created?.verificationCode) return;
     navigator.clipboard.writeText(created.verificationCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
-
-  const classified = verifyUrl.trim() ? classifyUrl(verifyUrl.trim()) : null;
-  const urlBlocked = classified?.status === 'blocked';
-  const urlInvalid = classified?.status === 'invalid';
-  const urlOk = classified?.status === 'allowed';
 
   const canCreate = !!form.name.trim() && !createMut.isPending;
 
@@ -328,59 +308,18 @@ export default function ArtistCreatePage() {
               </div>
             </div>
 
-            {requestDone ? (
-              <div className="p-3 rounded-xl bg-green-500/5 border border-green-500/20 text-center">
-                <ShieldCheck size={22} className="text-green-400 mx-auto mb-2" />
-                <p className="text-sm text-green-300 font-medium mb-1">Ваш запрос отправлен</p>
-                <p className="text-xs text-slate-400 mb-3">Мы проверим и уведомим вас о результате.</p>
-                <button
-                  onClick={() => navigate(`/artist/${created.id}`, { replace: true })}
-                  className="text-xs text-primary-400 hover:underline"
-                >
-                  Перейти на страницу артиста
-                </button>
-              </div>
-            ) : (
-              <>
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Ссылка для верификации</label>
-                  <input
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
-                    value={verifyUrl}
-                    onChange={e => { setVerifyUrl(e.target.value); setVerifyUnmet([]); }}
-                    placeholder="https://vk.com/..."
-                    autoComplete="off"
-                  />
-                  {urlBlocked && <p className="mt-1.5 text-xs text-red-400">{BLOCK_MESSAGE}</p>}
-                  {urlInvalid && <p className="mt-1.5 text-xs text-amber-400">Введите корректную ссылку (http/https).</p>}
-                </div>
-
-                {verifyUnmet.length > 0 && (
-                  <ul className="text-xs text-amber-400 list-disc list-inside space-y-0.5">
-                    {verifyUnmet.map((u, i) => <li key={i}>{u}</li>)}
-                  </ul>
-                )}
-
-                <button
-                  onClick={() => requestMut.mutate()}
-                  disabled={requestMut.isPending || !urlOk}
-                  title={!urlOk
-                    ? 'Укажите ссылку на разрешённую соцсеть. Также добавьте участников (мин. по типу) на странице артиста.'
-                    : undefined}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-sm font-semibold disabled:opacity-50 transition-colors"
-                >
-                  {requestMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-                  Отправить на верификацию
-                </button>
-
-                <button
-                  onClick={() => navigate(`/artist/${created.id}`, { replace: true })}
-                  className="w-full text-xs text-slate-400 hover:text-white transition-colors"
-                >
-                  Добавить участников и заполнить профиль на странице артиста
-                </button>
-              </>
-            )}
+            <div className="p-3 rounded-xl bg-primary-500/5 border border-primary-500/20">
+              <p className="text-xs text-slate-300 leading-relaxed mb-3">
+                Дальше — на странице артиста: добавьте участников (минимум по типу артиста),
+                разместите код в профиле артиста в соцсетях и отправьте заявку на верификацию.
+              </p>
+              <button
+                onClick={() => navigate(`/artist/${created.id}`, { replace: true })}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-sm font-semibold transition-colors"
+              >
+                <ShieldCheck size={16} /> Перейти на страницу артиста
+              </button>
+            </div>
           </>
         )}
       </div>
