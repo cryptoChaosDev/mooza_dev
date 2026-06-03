@@ -241,9 +241,12 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
         ? userArtists.filter((ua: any) => ua.inviteStatus === 'PENDING').map(serializeMember)
         : [];
 
-    // The viewer's OWN pending invitation (so they can confirm/decline right on
-    // the artist page — the member-invite notification links here).
-    const myPending = currentUserId
+    // The viewer's OWN pending invitation — shown ONLY to a user who is not
+    // already part of the collective (owners/admins/confirmed members never see
+    // the accept/decline banner). The member-invite notification links here.
+    const viewerHasAccepted =
+      !!currentUserId && userArtists.some((ua: any) => ua.userId === currentUserId && ua.inviteStatus === 'ACCEPTED');
+    const myPending = currentUserId && !viewerHasAccepted
       ? userArtists.find((ua: any) => ua.userId === currentUserId && ua.inviteStatus === 'PENDING')
       : null;
     const viewerPendingMembership = myPending
