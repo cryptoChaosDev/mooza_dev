@@ -12,7 +12,7 @@ import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI, releaseAPI, 
 import { plural } from '../lib/plural';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
-import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
+import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
 import SelectSheet from '../components/SelectSheet';
 import ShareButton from '../components/ShareButton';
@@ -88,6 +88,7 @@ export default function ArtistPage() {
   });
   const [genreSheetOpen, setGenreSheetOpen] = useState(false);
   const [typeSheetOpen, setTypeSheetOpen] = useState(false);
+  const [citySheetOpen, setCitySheetOpen] = useState(false);
 
   // Invite member state (legacy friend-invite flow)
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -151,6 +152,15 @@ export default function ArtistPage() {
     queryFn: async () => {
       const { data } = await referenceAPI.getGenres();
       return data as { id: string; name: string }[];
+    },
+  });
+
+  // Cities restricted to the Moooza catalog (Geography reference). value = name.
+  const { data: cityOptions = [] } = useQuery({
+    queryKey: ['geographies'],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getGeographies();
+      return (data as { id: string; name: string }[]).map(g => ({ id: g.name, name: g.name }));
     },
   });
 
@@ -586,15 +596,19 @@ export default function ArtistPage() {
               </button>
             </div>
 
-            {/* Город */}
+            {/* Город — только из каталога Музы */}
             <div>
               <label className="block text-xs text-slate-500 mb-1">Город</label>
-              <input
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
-                value={form.city}
-                onChange={(e) => set('city', e.target.value)}
-                placeholder="Москва"
-              />
+              <button
+                type="button"
+                onClick={() => setCitySheetOpen(true)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
+              >
+                <span className={form.city ? 'text-white' : 'text-slate-500'}>
+                  {form.city || 'Выбрать город'}
+                </span>
+                <span className="text-slate-500 text-xs">▾</span>
+              </button>
             </div>
 
             {/* Готовность к туру */}
@@ -661,14 +675,28 @@ export default function ArtistPage() {
               />
             </div>
 
+            {/* Контакты */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-2">Контакты</label>
+              <SocialLinksEditor
+                value={form.socialLinks}
+                onChange={(v) => set('socialLinks', v)}
+                only={CONTACT_KEYS}
+              />
+            </div>
+
             {/* Соцсети */}
             <div>
               <label className="block text-xs text-slate-500 mb-2">Социальные сети</label>
               <SocialLinksEditor
                 value={form.socialLinks}
                 onChange={(v) => set('socialLinks', v)}
+                only={SOCIAL_KEYS}
               />
             </div>
+
+            {/* Bottom spacer so the last field can scroll clear of the keyboard */}
+            <div className="h-40 flex-shrink-0" aria-hidden />
           </div>
         </div>
       </div>
@@ -695,6 +723,18 @@ export default function ArtistPage() {
         onSelect={(v) => { set('genreIds', v as string[]); }}
         mode="multiple"
         showConfirm
+        height="full"
+      />
+
+      <SelectSheet
+        isOpen={citySheetOpen}
+        onClose={() => setCitySheetOpen(false)}
+        title="Город"
+        options={cityOptions}
+        selectedIds={form.city}
+        onSelect={(v) => { set('city', v as string); setCitySheetOpen(false); }}
+        mode="single"
+        searchable
         height="full"
       />
       </>
@@ -1396,7 +1436,8 @@ export default function ArtistPage() {
             <h2 className="text-base font-semibold text-white flex-1">Добавить участника</h2>
             <button
               onClick={() => addMemberMut.mutate()}
-              disabled={!addSelectedUserId || addMemberMut.isPending}
+              disabled={!addSelectedUserId || addRoleIds.length === 0 || addMemberMut.isPending}
+              title={addRoleIds.length === 0 ? 'Выберите роль участника' : undefined}
               className="px-4 py-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center gap-2"
             >
               {addMemberMut.isPending && <Loader2 size={14} className="animate-spin" />}

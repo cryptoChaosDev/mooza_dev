@@ -4,7 +4,7 @@ import {
   Eye, EyeOff, AlertCircle, Loader2,
   Check, Globe, ArrowRight, ArrowLeft, X, Search,
 } from 'lucide-react';
-import { authAPI, referenceAPI, referralAPI } from '../lib/api';
+import { authAPI, referenceAPI, referralAPI, artistAPI } from '../lib/api';
 import CityPicker from '../components/CityPicker';
 import VkLoginButton from '../components/VkLoginButton';
 
@@ -158,6 +158,8 @@ export default function RegisterPage() {
   const { setAuth } = useAuthStore();
   const [searchParams] = useSearchParams();
   const refCode = searchParams.get('ref') || undefined;
+  // Role-bound artist invite link (/register?artistInvite=token).
+  const artistInvite = searchParams.get('artistInvite') || undefined;
 
   // Resolve the ref code (single-use link code OR legacy userId) → owner id.
   const [referrerId, setReferrerId] = useState<string | undefined>(undefined);
@@ -171,6 +173,15 @@ export default function RegisterPage() {
       })
       .catch(() => {});
   }, [refCode]);
+
+  // Resolve the artist-invite token → preview (artist name + roles) for the banner.
+  const [artistInvitePreview, setArtistInvitePreview] = useState<{ artist: { name: string }; roles: { id: string; name: string }[] } | null>(null);
+  useEffect(() => {
+    if (!artistInvite) return;
+    artistAPI.getInvite(artistInvite)
+      .then(({ data }) => setArtistInvitePreview(data))
+      .catch(() => setArtistInvitePreview(null));
+  }, [artistInvite]);
 
   const [step, setStep] = useState(0);
 
@@ -369,6 +380,7 @@ export default function RegisterPage() {
       if (digits.length >= 11) payload.phone = '+' + digits;
       if (referrerId) payload.referrerId = referrerId;
       if (refCode) payload.referralCode = refCode;
+      if (artistInvite) payload.artistInviteToken = artistInvite;
       if (!skipProfs && selectedProfs.length > 0) {
         payload.userProfessions = selectedProfs.map(p => ({
           professionId: p.professionId,
@@ -506,6 +518,16 @@ export default function RegisterPage() {
           <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs leading-relaxed">
             <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
             <span>Эта пригласительная ссылка уже использована. Вы можете зарегистрироваться, но она не будет засчитана пригласившему.</span>
+          </div>
+        )}
+        {artistInvitePreview && (
+          <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-2xl bg-primary-500/10 border border-primary-500/30 text-primary-200 text-xs leading-relaxed">
+            <Check size={15} className="flex-shrink-0 mt-0.5 text-primary-400" />
+            <span>
+              Приглашение в артиста <b className="text-white">{artistInvitePreview.artist.name}</b>
+              {artistInvitePreview.roles?.length ? <> в роли <b className="text-white">{artistInvitePreview.roles.map(r => r.name).join(', ')}</b></> : null}.
+              После регистрации вы автоматически станете участником.
+            </span>
           </div>
         )}
         <Field label="Email" hint="Используется для входа и восстановления пароля">

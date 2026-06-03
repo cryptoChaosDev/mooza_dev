@@ -872,6 +872,9 @@ router.post('/:id/members', authenticate, async (req: AuthRequest, res: Response
     };
 
     if (!userId) return res.status(400).json({ error: 'userId обязателен' });
+    if (!Array.isArray(roleIds) || roleIds.length === 0) {
+      return res.status(400).json({ error: 'Укажите хотя бы одну роль участника' });
+    }
 
     const { ok } = await requireArtistAdmin(artistId, meId);
     if (!ok) return res.status(403).json({ error: 'Нет прав' });

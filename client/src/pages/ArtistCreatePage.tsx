@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Loader2, Camera, Copy, Check, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Loader2, Camera, Copy, Check, ShieldCheck, Image as ImageIcon } from 'lucide-react';
 import { artistAPI, referenceAPI } from '../lib/api';
 import { avatarUrl } from '../lib/avatar';
 import SelectSheet from '../components/SelectSheet';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
+import { SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 
 const TYPE_OPTIONS = [
   { id: 'SOLO',        name: 'Сольный артист' },
@@ -31,20 +32,25 @@ type Form = {
   city: string;
   genreIds: string[];
   submitterRoles: string[];
+  socialLinks: Record<string, string>;
 };
 
 export default function ArtistCreatePage() {
   const navigate = useNavigate();
-  const [form, setForm] = useState<Form>({ name: '', type: '', city: '', genreIds: [], submitterRoles: [] });
+  const [form, setForm] = useState<Form>({ name: '', type: '', city: '', genreIds: [], submitterRoles: [], socialLinks: {} });
   const [genreSheetOpen, setGenreSheetOpen] = useState(false);
   const [typeSheetOpen, setTypeSheetOpen] = useState(false);
+  const [citySheetOpen, setCitySheetOpen] = useState(false);
 
-  // Avatar (uploaded after the artist is created)
+  // Avatar + banner (uploaded after the artist is created)
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement>(null);
-  // Raw file selected from the picker, awaiting crop
   const [cropAvatarFile, setCropAvatarFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [bannerPreview, setBannerPreview] = useState<string | null>(null);
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+  const [cropBannerFile, setCropBannerFile] = useState<File | null>(null);
 
   // Duplicate check
   const [duplicate, setDuplicate] = useState<{ id: string; name: string; avatar: string | null; type: string | null; verified: boolean } | null>(null);
@@ -59,6 +65,16 @@ export default function ArtistCreatePage() {
   const { data: genreOptions = [] } = useQuery({
     queryKey: ['genres'],
     queryFn: async () => { const { data } = await referenceAPI.getGenres(); return data as { id: string; name: string }[]; },
+  });
+
+  // Cities are restricted to the Moooza catalog (Geography reference).
+  const { data: cityOptions = [] } = useQuery({
+    queryKey: ['geographies'],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getGeographies();
+      // value = the city name (Artist.city is a string), so selecting returns it directly.
+      return (data as { id: string; name: string }[]).map(g => ({ id: g.name, name: g.name }));
+    },
   });
 
   // Debounced duplicate check while typing the name.
@@ -78,8 +94,13 @@ export default function ArtistCreatePage() {
     setAvatarFile(file);
     setAvatarPreview(URL.createObjectURL(file));
   };
+  const onBannerPick = (file: File) => {
+    setBannerFile(file);
+    setBannerPreview(URL.createObjectURL(file));
+  };
 
   useEffect(() => () => { if (avatarPreview) URL.revokeObjectURL(avatarPreview); }, [avatarPreview]);
+  useEffect(() => () => { if (bannerPreview) URL.revokeObjectURL(bannerPreview); }, [bannerPreview]);
 
   const toggleRole = (role: string) => {
     setForm(f => ({
@@ -99,12 +120,17 @@ export default function ArtistCreatePage() {
         city: form.city.trim() || undefined,
         genreIds: form.genreIds,
         submitterRoles: form.submitterRoles,
+        socialLinks: Object.keys(form.socialLinks).length ? form.socialLinks : undefined,
       });
       if (avatarFile) {
         try {
           const up = await artistAPI.uploadAvatar(data.id, avatarFile);
           data.avatar = up.data?.avatar ?? data.avatar;
-        } catch { /* avatar upload is non-fatal; user can retry on the artist page */ }
+        } catch { /* non-fatal; user can retry on the artist page */ }
+      }
+      if (bannerFile) {
+        try { await artistAPI.uploadBanner(data.id, bannerFile); }
+        catch { /* non-fatal; user can retry on the artist page */ }
       }
       return data;
     },
@@ -118,7 +144,8 @@ export default function ArtistCreatePage() {
     setTimeout(() => setCopied(false), 1500);
   };
 
-  const canCreate = !!form.name.trim() && !createMut.isPending;
+  // Required card fields: name, type, avatar.
+  const canCreate = !!form.name.trim() && !!form.type && !!avatarFile && !createMut.isPending;
 
   return (
     <div className="min-h-screen bg-slate-950 pb-24">
@@ -168,9 +195,30 @@ export default function ArtistCreatePage() {
               </div>
             </div>
 
+            {/* Banner */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-2">Обложка</label>
+              <button
+                type="button"
+                onClick={() => bannerInputRef.current?.click()}
+                className="relative w-full h-28 rounded-2xl bg-slate-800 border border-slate-700 overflow-hidden flex items-center justify-center hover:border-slate-600 transition-colors"
+              >
+                {bannerPreview
+                  ? <img src={bannerPreview} alt="" className="w-full h-full object-cover" />
+                  : <span className="flex items-center gap-2 text-slate-500 text-sm"><ImageIcon size={20} /> Добавить обложку</span>}
+              </button>
+              <input
+                ref={bannerInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) setCropBannerFile(f); e.target.value = ''; }}
+              />
+            </div>
+
             {/* Avatar */}
             <div>
-              <label className="block text-xs text-slate-500 mb-2">Аватар</label>
+              <label className="block text-xs text-slate-500 mb-2">Аватар <span className="text-red-400">*</span></label>
               <div className="flex items-center gap-3">
                 <button
                   type="button"
@@ -231,7 +279,7 @@ export default function ArtistCreatePage() {
 
             {/* Тип артиста */}
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Тип артиста</label>
+              <label className="block text-xs text-slate-500 mb-1">Тип артиста <span className="text-red-400">*</span></label>
               <button
                 type="button"
                 onClick={() => setTypeSheetOpen(true)}
@@ -261,14 +309,38 @@ export default function ArtistCreatePage() {
               </button>
             </div>
 
-            {/* Локация */}
+            {/* Локация — только из каталога Музы */}
             <div>
               <label className="block text-xs text-slate-500 mb-1">Локация</label>
-              <input
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
-                value={form.city}
-                onChange={e => set('city', e.target.value)}
-                placeholder="Москва"
+              <button
+                type="button"
+                onClick={() => setCitySheetOpen(true)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-left flex justify-between items-center transition-colors hover:border-slate-600"
+              >
+                <span className={form.city ? 'text-white' : 'text-slate-500'}>
+                  {form.city || 'Выбрать город'}
+                </span>
+                <span className="text-slate-500 text-xs">▾</span>
+              </button>
+            </div>
+
+            {/* Контакты */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-2">Контакты</label>
+              <SocialLinksEditor
+                value={form.socialLinks}
+                onChange={v => set('socialLinks', v)}
+                only={CONTACT_KEYS}
+              />
+            </div>
+
+            {/* Соцсети */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-2">Соцсети</label>
+              <SocialLinksEditor
+                value={form.socialLinks}
+                onChange={v => set('socialLinks', v)}
+                only={SOCIAL_KEYS}
               />
             </div>
 
@@ -334,6 +406,29 @@ export default function ArtistCreatePage() {
           onCropped={blob => { onAvatarPick(blobToFile(blob, 'avatar.jpg')); setCropAvatarFile(null); }}
         />
       )}
+
+      {cropBannerFile && (
+        <ImageCropModal
+          file={cropBannerFile}
+          aspect={3}
+          cropShape="rect"
+          title="Обложка"
+          onCancel={() => setCropBannerFile(null)}
+          onCropped={blob => { onBannerPick(blobToFile(blob, 'banner.jpg')); setCropBannerFile(null); }}
+        />
+      )}
+
+      <SelectSheet
+        isOpen={citySheetOpen}
+        onClose={() => setCitySheetOpen(false)}
+        title="Город"
+        options={cityOptions}
+        selectedIds={form.city}
+        onSelect={v => { set('city', v as string); setCitySheetOpen(false); }}
+        mode="single"
+        searchable
+        height="full"
+      />
 
       <SelectSheet
         isOpen={typeSheetOpen}
