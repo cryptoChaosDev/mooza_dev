@@ -6,6 +6,7 @@ import { Prisma, ArtistType } from '@prisma/client';
 import crypto from 'crypto';
 import { tgEvent } from '../utils/telegram';
 import { classifyUrl, BLOCK_MESSAGE } from '../utils/socialPlatforms';
+import { notify, notifyMany } from '../utils/notify';
 
 const router = Router();
 
@@ -712,16 +713,12 @@ router.post('/:id/join-request', authenticate, async (req: AuthRequest, res: Res
       const admins = await prisma.user.findMany({ where: { isAdmin: true }, select: { id: true } });
       notifyIds.push(...admins.map(a => a.id));
     }
-    await Promise.all(notifyIds.map(recipientId =>
-      prisma.notification.create({
-        data: {
-          userId: recipientId, actorId: userId, type: 'artist_join_request',
-          title: 'Запрос на участие',
-          body: `${actorName} запрашивает роль «${roleNames}» в «${artist.name}»`,
-          link: `/artist/${artistId}`,
-        },
-      })
-    ));
+    await notifyMany(notifyIds, {
+      actorId: userId, type: 'artist_join_request',
+      title: 'Запрос на участие',
+      body: `${actorName} запрашивает роль «${roleNames}» в «${artist.name}»`,
+      link: `/artist/${artistId}`,
+    });
 
     res.json({ ok: true });
   } catch (err: any) {
@@ -770,13 +767,11 @@ router.patch('/memberships/:id/approve', authenticate, async (req: AuthRequest, 
     if (!ua) return res.status(404).json({ error: 'Not found' });
     if (!allowed) return res.status(403).json({ error: 'Forbidden' });
     await prisma.userArtist.update({ where: { id: req.params.id }, data: { inviteStatus: 'ACCEPTED' } });
-    await prisma.notification.create({
-      data: {
-        userId: ua.userId, actorId: req.userId, type: 'artist_join_approved',
-        title: 'Участие подтверждено',
-        body: `Ваш запрос на роль «${ua.profession?.name ?? ''}» в «${ua.artist.name}» подтверждён!`,
-        link: `/profile/${ua.userId}`,
-      },
+    await notify({
+      userId: ua.userId, actorId: req.userId, type: 'artist_join_approved',
+      title: 'Участие подтверждено',
+      body: `Ваш запрос на роль «${ua.profession?.name ?? ''}» в «${ua.artist.name}» подтверждён!`,
+      link: `/profile/${ua.userId}`,
     });
     res.json({ ok: true });
   } catch {
@@ -791,13 +786,11 @@ router.patch('/memberships/:id/reject', authenticate, async (req: AuthRequest, r
     if (!ua) return res.status(404).json({ error: 'Not found' });
     if (!allowed) return res.status(403).json({ error: 'Forbidden' });
     await prisma.userArtist.delete({ where: { id: req.params.id } });
-    await prisma.notification.create({
-      data: {
-        userId: ua.userId, actorId: req.userId, type: 'artist_join_rejected',
-        title: 'Запрос отклонён',
-        body: `Ваш запрос на роль «${ua.profession?.name ?? ''}» в «${ua.artist.name}» отклонён.`,
-        link: `/profile/${ua.userId}`,
-      },
+    await notify({
+      userId: ua.userId, actorId: req.userId, type: 'artist_join_rejected',
+      title: 'Запрос отклонён',
+      body: `Ваш запрос на роль «${ua.profession?.name ?? ''}» в «${ua.artist.name}» отклонён.`,
+      link: `/profile/${ua.userId}`,
     });
     res.json({ ok: true });
   } catch {
@@ -902,15 +895,13 @@ router.post('/:id/members', authenticate, async (req: AuthRequest, res: Response
     });
 
     const names = await roleNames(cleanRoleIds);
-    await prisma.notification.create({
-      data: {
-        userId,
-        actorId: meId,
-        type: 'artist_member_invite',
-        title: artist.name,
-        body: `«${artist.name}» приглашает вас стать участником${names ? ` в роли «${names}»` : ''}. Подтвердите участие.`,
-        link: `/artist/${artistId}`,
-      },
+    await notify({
+      userId,
+      actorId: meId,
+      type: 'artist_member_invite',
+      title: artist.name,
+      body: `«${artist.name}» приглашает вас стать участником${names ? ` в роли «${names}»` : ''}. Подтвердите участие.`,
+      link: `/artist/${artistId}`,
     });
 
     return res.status(201).json({
@@ -954,18 +945,13 @@ router.patch('/memberships/:membershipId/confirm', authenticate, async (req: Aut
     const recipientIds = new Set<string>(admins.map((a) => a.userId));
     if (ua.invitedById) recipientIds.add(ua.invitedById);
     recipientIds.delete(meId);
-    await Promise.all([...recipientIds].map((rid) =>
-      prisma.notification.create({
-        data: {
-          userId: rid,
-          actorId: meId,
-          type: 'artist_member_confirmed',
-          title: ua.artist.name,
-          body: `${name} подтвердил участие в «${ua.artist.name}».`,
-          link: `/artist/${ua.artistId}`,
-        },
-      }),
-    ));
+    await notifyMany([...recipientIds], {
+      actorId: meId,
+      type: 'artist_member_confirmed',
+      title: ua.artist.name,
+      body: `${name} подтвердил участие в «${ua.artist.name}».`,
+      link: `/artist/${ua.artistId}`,
+    });
 
     return res.json({ ok: true });
   } catch (err) {
@@ -995,15 +981,13 @@ router.patch('/memberships/:membershipId/decline', authenticate, async (req: Aut
 
     const name = await actorName(meId);
     if (ua.invitedById && ua.invitedById !== meId) {
-      await prisma.notification.create({
-        data: {
-          userId: ua.invitedById,
-          actorId: meId,
-          type: 'artist_member_declined',
-          title: ua.artist.name,
-          body: `${name} отклонил приглашение в «${ua.artist.name}».`,
-          link: `/artist/${ua.artistId}`,
-        },
+      await notify({
+        userId: ua.invitedById,
+        actorId: meId,
+        type: 'artist_member_declined',
+        title: ua.artist.name,
+        body: `${name} отклонил приглашение в «${ua.artist.name}».`,
+        link: `/artist/${ua.artistId}`,
       });
     }
 
@@ -1183,15 +1167,13 @@ router.patch('/:id/transfer-owner', authenticate, async (req: AuthRequest, res: 
       }),
     ]);
 
-    await prisma.notification.create({
-      data: {
-        userId,
-        actorId: meId,
-        type: 'artist_owner_transferred',
-        title: artist.name,
-        body: `Вам передано владение артистом «${artist.name}».`,
-        link: `/artist/${artistId}`,
-      },
+    await notify({
+      userId,
+      actorId: meId,
+      type: 'artist_owner_transferred',
+      title: artist.name,
+      body: `Вам передано владение артистом «${artist.name}».`,
+      link: `/artist/${artistId}`,
     });
 
     return res.json({ ok: true });
@@ -1224,15 +1206,13 @@ router.post('/:id/admins', authenticate, async (req: AuthRequest, res: Response)
 
     await prisma.userArtist.update({ where: { id: target.id }, data: { isAdmin: true } });
 
-    await prisma.notification.create({
-      data: {
-        userId,
-        actorId: meId,
-        type: 'artist_admin_granted',
-        title: artist.name,
-        body: `Вас назначили администратором артиста «${artist.name}».`,
-        link: `/artist/${artistId}`,
-      },
+    await notify({
+      userId,
+      actorId: meId,
+      type: 'artist_admin_granted',
+      title: artist.name,
+      body: `Вас назначили администратором артиста «${artist.name}».`,
+      link: `/artist/${artistId}`,
     });
 
     return res.json({ ok: true });
@@ -1264,15 +1244,13 @@ router.delete('/:id/admins/:userId', authenticate, async (req: AuthRequest, res:
 
     await prisma.userArtist.update({ where: { id: target.id }, data: { isAdmin: false } });
 
-    await prisma.notification.create({
-      data: {
-        userId,
-        actorId: meId,
-        type: 'artist_admin_revoked',
-        title: artist.name,
-        body: `Вас сняли с администраторов артиста «${artist.name}».`,
-        link: `/artist/${artistId}`,
-      },
+    await notify({
+      userId,
+      actorId: meId,
+      type: 'artist_admin_revoked',
+      title: artist.name,
+      body: `Вас сняли с администраторов артиста «${artist.name}».`,
+      link: `/artist/${artistId}`,
     });
 
     return res.json({ ok: true });

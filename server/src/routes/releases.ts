@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { StreamingPlatform } from '@prisma/client';
 import { fetchStreamMetadata } from '../utils/streamMetadata';
+import { notify } from '../utils/notify';
 
 const router = Router();
 
@@ -129,15 +130,13 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     // Notify every participant to confirm their involvement.
     await Promise.all(
       release.participants.map((p) =>
-        prisma.notification.create({
-          data: {
-            userId: p.userId,
-            actorId: meId,
-            type: 'release_participant_invite',
-            title: artist.name,
-            body: `«${artist.name}» указал вас участником релиза «${release.title}». Подтвердите своё участие.`,
-            link: `/artist/${artistId}`,
-          },
+        notify({
+          userId: p.userId,
+          actorId: meId,
+          type: 'release_participant_invite',
+          title: artist.name,
+          body: `«${artist.name}» указал вас участником релиза «${release.title}». Подтвердите своё участие.`,
+          link: `/artist/${artistId}`,
         }),
       ),
     );
@@ -291,15 +290,13 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     const finalTitle = data.title ?? release.title;
     await Promise.all(
       newlyAdded.map((userId) =>
-        prisma.notification.create({
-          data: {
-            userId,
-            actorId: meId,
-            type: 'release_participant_invite',
-            title: release.artist.name,
-            body: `«${release.artist.name}» указал вас участником релиза «${finalTitle}». Подтвердите своё участие.`,
-            link: `/artist/${release.artistId}`,
-          },
+        notify({
+          userId,
+          actorId: meId,
+          type: 'release_participant_invite',
+          title: release.artist.name,
+          body: `«${release.artist.name}» указал вас участником релиза «${finalTitle}». Подтвердите своё участие.`,
+          link: `/artist/${release.artistId}`,
         }),
       ),
     );
@@ -345,15 +342,13 @@ router.patch('/participants/:participantId/confirm', authenticate, async (req: A
     const recipients = (await adminRecipients(participant.release.artistId)).filter((id) => id !== meId);
     await Promise.all(
       recipients.map((rid) =>
-        prisma.notification.create({
-          data: {
-            userId: rid,
-            actorId: meId,
-            type: 'release_participant_confirmed',
-            title: participant.release.artist.name,
-            body: `${name} подтвердил участие в релизе «${participant.release.title}».`,
-            link: `/artist/${participant.release.artistId}`,
-          },
+        notify({
+          userId: rid,
+          actorId: meId,
+          type: 'release_participant_confirmed',
+          title: participant.release.artist.name,
+          body: `${name} подтвердил участие в релизе «${participant.release.title}».`,
+          link: `/artist/${participant.release.artistId}`,
         }),
       ),
     );
@@ -385,15 +380,13 @@ router.patch('/participants/:participantId/decline', authenticate, async (req: A
     const recipients = (await adminRecipients(participant.release.artistId)).filter((id) => id !== meId);
     await Promise.all(
       recipients.map((rid) =>
-        prisma.notification.create({
-          data: {
-            userId: rid,
-            actorId: meId,
-            type: 'release_participant_declined',
-            title: participant.release.artist.name,
-            body: `${name} отклонил участие в релизе «${participant.release.title}».`,
-            link: `/artist/${participant.release.artistId}`,
-          },
+        notify({
+          userId: rid,
+          actorId: meId,
+          type: 'release_participant_declined',
+          title: participant.release.artist.name,
+          body: `${name} отклонил участие в релизе «${participant.release.title}».`,
+          link: `/artist/${participant.release.artistId}`,
         }),
       ),
     );
@@ -423,15 +416,13 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     const confirmed = release.participants.filter((p) => p.confirmStatus === 'ACCEPTED');
     await Promise.all(
       confirmed.map((p) =>
-        prisma.notification.create({
-          data: {
-            userId: p.userId,
-            actorId: meId,
-            type: 'release_deleted',
-            title: release.artist.name,
-            body: `Релиз «${release.title}» артиста «${release.artist.name}» был удалён.`,
-            link: `/artist/${release.artistId}`,
-          },
+        notify({
+          userId: p.userId,
+          actorId: meId,
+          type: 'release_deleted',
+          title: release.artist.name,
+          body: `Релиз «${release.title}» артиста «${release.artist.name}» был удалён.`,
+          link: `/artist/${release.artistId}`,
         }),
       ),
     );

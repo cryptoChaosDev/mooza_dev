@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { ClipPlatform } from '@prisma/client';
 import { fetchStreamMetadata } from '../utils/streamMetadata';
+import { notify } from '../utils/notify';
 
 const router = Router();
 
@@ -125,15 +126,13 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
 
     await Promise.all(
       clip.participants.map((p) =>
-        prisma.notification.create({
-          data: {
-            userId: p.userId,
-            actorId: meId,
-            type: 'clip_participant_invite',
-            title: artist.name,
-            body: `«${artist.name}» указал вас участником клипа «${clip.title}». Подтвердите своё участие.`,
-            link: `/artist/${artistId}`,
-          },
+        notify({
+          userId: p.userId,
+          actorId: meId,
+          type: 'clip_participant_invite',
+          title: artist.name,
+          body: `«${artist.name}» указал вас участником клипа «${clip.title}». Подтвердите своё участие.`,
+          link: `/artist/${artistId}`,
         }),
       ),
     );
@@ -278,15 +277,13 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     const finalTitle = data.title ?? clip.title;
     await Promise.all(
       newlyAdded.map((userId) =>
-        prisma.notification.create({
-          data: {
-            userId,
-            actorId: meId,
-            type: 'clip_participant_invite',
-            title: clip.artist.name,
-            body: `«${clip.artist.name}» указал вас участником клипа «${finalTitle}». Подтвердите своё участие.`,
-            link: `/artist/${clip.artistId}`,
-          },
+        notify({
+          userId,
+          actorId: meId,
+          type: 'clip_participant_invite',
+          title: clip.artist.name,
+          body: `«${clip.artist.name}» указал вас участником клипа «${finalTitle}». Подтвердите своё участие.`,
+          link: `/artist/${clip.artistId}`,
         }),
       ),
     );
@@ -331,15 +328,13 @@ router.patch('/participants/:participantId/confirm', authenticate, async (req: A
     const recipients = (await adminRecipients(participant.clip.artistId)).filter((id) => id !== meId);
     await Promise.all(
       recipients.map((rid) =>
-        prisma.notification.create({
-          data: {
-            userId: rid,
-            actorId: meId,
-            type: 'clip_participant_confirmed',
-            title: participant.clip.artist.name,
-            body: `${name} подтвердил участие в клипе «${participant.clip.title}».`,
-            link: `/artist/${participant.clip.artistId}`,
-          },
+        notify({
+          userId: rid,
+          actorId: meId,
+          type: 'clip_participant_confirmed',
+          title: participant.clip.artist.name,
+          body: `${name} подтвердил участие в клипе «${participant.clip.title}».`,
+          link: `/artist/${participant.clip.artistId}`,
         }),
       ),
     );
@@ -371,15 +366,13 @@ router.patch('/participants/:participantId/decline', authenticate, async (req: A
     const recipients = (await adminRecipients(participant.clip.artistId)).filter((id) => id !== meId);
     await Promise.all(
       recipients.map((rid) =>
-        prisma.notification.create({
-          data: {
-            userId: rid,
-            actorId: meId,
-            type: 'clip_participant_declined',
-            title: participant.clip.artist.name,
-            body: `${name} отклонил участие в клипе «${participant.clip.title}».`,
-            link: `/artist/${participant.clip.artistId}`,
-          },
+        notify({
+          userId: rid,
+          actorId: meId,
+          type: 'clip_participant_declined',
+          title: participant.clip.artist.name,
+          body: `${name} отклонил участие в клипе «${participant.clip.title}».`,
+          link: `/artist/${participant.clip.artistId}`,
         }),
       ),
     );
@@ -408,15 +401,13 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     const confirmed = clip.participants.filter((p) => p.confirmStatus === 'ACCEPTED');
     await Promise.all(
       confirmed.map((p) =>
-        prisma.notification.create({
-          data: {
-            userId: p.userId,
-            actorId: meId,
-            type: 'clip_deleted',
-            title: clip.artist.name,
-            body: `Клип «${clip.title}» артиста «${clip.artist.name}» был удалён.`,
-            link: `/artist/${clip.artistId}`,
-          },
+        notify({
+          userId: p.userId,
+          actorId: meId,
+          type: 'clip_deleted',
+          title: clip.artist.name,
+          body: `Клип «${clip.title}» артиста «${clip.artist.name}» был удалён.`,
+          link: `/artist/${clip.artistId}`,
         }),
       ),
     );

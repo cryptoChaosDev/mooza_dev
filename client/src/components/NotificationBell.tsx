@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Bell, MessageCircle, UserPlus, UserCheck, MessageSquare, X, CheckCheck, Link2, Users, UserX } from 'lucide-react';
+import { Bell, MessageCircle, UserPlus, UserCheck, MessageSquare, X, CheckCheck, Link2, Users, UserX, Mic2, Disc3, Film, BadgeCheck, ShieldCheck, ShieldX, Crown, Trash2 } from 'lucide-react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useBadgeStore } from '../stores/badgeStore';
 import AvatarComponent from './Avatar';
@@ -66,6 +66,28 @@ function typeIcon(type: string) {
     case 'connection_break':      return <UserX         size={13} className="text-red-400" />;
     case 'group_invite':          return <Users         size={13} className="text-amber-400" />;
     case 'group_invite_accepted': return <Users         size={13} className="text-green-400" />;
+    // ── Artist membership ──────────────────────────────────────────────────
+    case 'artist_join_request':   return <Mic2          size={13} className="text-amber-400" />;
+    case 'artist_join_approved':  return <UserCheck     size={13} className="text-green-400" />;
+    case 'artist_join_rejected':  return <UserX         size={13} className="text-red-400" />;
+    case 'artist_member_invite':  return <Mic2          size={13} className="text-primary-400" />;
+    case 'artist_member_confirmed': return <UserCheck   size={13} className="text-green-400" />;
+    case 'artist_member_declined':  return <UserX       size={13} className="text-red-400" />;
+    case 'artist_admin_granted':  return <ShieldCheck   size={13} className="text-emerald-400" />;
+    case 'artist_admin_revoked':  return <ShieldX       size={13} className="text-red-400" />;
+    case 'artist_owner_transferred': return <Crown      size={13} className="text-yellow-400" />;
+    case 'artist_verified':       return <BadgeCheck    size={13} className="text-sky-400" />;
+    case 'artist_rejected':       return <ShieldX       size={13} className="text-red-400" />;
+    // ── Releases ───────────────────────────────────────────────────────────
+    case 'release_participant_invite':    return <Disc3 size={13} className="text-primary-400" />;
+    case 'release_participant_confirmed': return <Disc3 size={13} className="text-green-400" />;
+    case 'release_participant_declined':  return <Disc3 size={13} className="text-red-400" />;
+    case 'release_deleted':       return <Trash2        size={13} className="text-red-400" />;
+    // ── Clips ──────────────────────────────────────────────────────────────
+    case 'clip_participant_invite':    return <Film     size={13} className="text-primary-400" />;
+    case 'clip_participant_confirmed': return <Film     size={13} className="text-green-400" />;
+    case 'clip_participant_declined':  return <Film     size={13} className="text-red-400" />;
+    case 'clip_deleted':          return <Trash2        size={13} className="text-red-400" />;
     default:                      return <Bell          size={13} className="text-slate-400" />;
   }
 }
