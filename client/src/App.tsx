@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from './stores/authStore';
 import { useBadgeStore } from './stores/badgeStore';
@@ -28,9 +28,6 @@ const ArtistPage         = lazy(() => import('./pages/ArtistPage'));
 const ArtistCreatePage   = lazy(() => import('./pages/ArtistCreatePage'));
 const ReleasePage        = lazy(() => import('./pages/ReleasePage'));
 const ClipPage           = lazy(() => import('./pages/ClipPage'));
-const GroupPage          = lazy(() => import('./pages/GroupPage'));
-const GroupCreatePage    = lazy(() => import('./pages/GroupCreatePage'));
-const GroupInvitesPage   = lazy(() => import('./pages/GroupInvitesPage'));
 const PrivacyPolicyPage  = lazy(() => import('./pages/PrivacyPolicyPage'));
 const TermsPage          = lazy(() => import('./pages/TermsPage'));
 const FlowSettingsPage   = lazy(() => import('./pages/FlowSettingsPage'));
@@ -101,6 +98,12 @@ async function apiFetch(path: string, token: string) {
   return res.json();
 }
 
+// Legacy /groups/:id → unified /artist/:id (Artist and Group are one entity).
+function GroupRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/artist/${id}`} replace />;
+}
+
 // ─── Clears badge counts when user navigates to relevant pages ───────────────
 function BadgeClearer() {
   const location = useLocation();
@@ -150,9 +153,10 @@ function AppRoutes() {
             <Route path="/artist/:id"       element={<ArtistPage />} />
             <Route path="/releases/:id"     element={<ReleasePage />} />
             <Route path="/clips/:id"        element={<ClipPage />} />
-            <Route path="/groups/create"    element={<GroupCreatePage />} />
-            <Route path="/groups/invites"   element={<GroupInvitesPage />} />
-            <Route path="/groups/:id"       element={<GroupPage />} />
+            {/* Legacy «Группы» routes — collapsed into the unified Artist page */}
+            <Route path="/groups/create"    element={<Navigate to="/artist/create" replace />} />
+            <Route path="/groups/invites"   element={<Navigate to="/" replace />} />
+            <Route path="/groups/:id"       element={<GroupRedirect />} />
             <Route path="/search"           element={<SearchPage />} />
             <Route path="/friends"          element={<FriendsPage />} />
             <Route path="/messages"         element={<MessagesPage />} />

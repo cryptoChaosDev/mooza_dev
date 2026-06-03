@@ -1170,7 +1170,7 @@ export default function ProfilePage() {
                   return (
                     <button
                       key={g.id}
-                      onClick={() => navigate('/groups/' + g.id)}
+                      onClick={() => navigate('/artist/' + g.id)}
                       className="flex flex-col gap-1.5 flex-shrink-0 text-left group"
                       style={{ width: 'calc((100% - 24px) / 3.5)' }}
                     >
