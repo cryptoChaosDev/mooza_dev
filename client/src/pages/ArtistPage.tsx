@@ -5,9 +5,10 @@ import {
   ArrowLeft, MapPin, ExternalLink,
   Camera, Navigation, Edit3, X, Save, Loader2,
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
-  UserPlus, Trash2, Search, Check,
+  UserPlus, Trash2, Search,
+  Settings, Link2, Share2, Tag, Crown, Shield, UserCog,
 } from 'lucide-react';
-import { artistAPI, referenceAPI, groupAPI, friendshipAPI } from '../lib/api';
+import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI } from '../lib/api';
 import { plural } from '../lib/plural';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
@@ -15,8 +16,18 @@ import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
 import SelectSheet from '../components/SelectSheet';
 import ShareButton from '../components/ShareButton';
+import RolePicker from '../components/RolePicker';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { useAuthStore } from '../stores/authStore';
 import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
+
+const ACTIVITY_OPTIONS = [
+  { id: 'ACTIVE',    name: 'Действующий' },
+  { id: 'INACTIVE',  name: 'Неактивный' },
+  { id: 'ARCHIVED',  name: 'Архивный' },
+  { id: 'DISBANDED', name: 'Распался' },
+];
+const ACTIVITY_LABELS: Record<string, string> = Object.fromEntries(ACTIVITY_OPTIONS.map(o => [o.id, o.name]));
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -70,16 +81,49 @@ export default function ArtistPage() {
   const [genreSheetOpen, setGenreSheetOpen] = useState(false);
   const [typeSheetOpen, setTypeSheetOpen] = useState(false);
 
-  // Leave / transfer ownership state
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [selectedNewOwnerMembershipId, setSelectedNewOwnerMembershipId] = useState('');
-
-  // Invite member state
+  // Invite member state (legacy friend-invite flow)
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteFriendId, setInviteFriendId] = useState('');
   const [inviteProfessionId, setInviteProfessionId] = useState('');
   const [inviteFriendSearch, setInviteFriendSearch] = useState('');
   const [inviteProfSearch, setInviteProfSearch] = useState('');
+
+  // ── Phase 5b state ─────────────────────────────────────────────────────────
+  // Admin block (gear) toggle
+  const [showAdminBlock, setShowAdminBlock] = useState(false);
+
+  // Add registered member modal
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [addSearch, setAddSearch] = useState('');
+  const [addSelectedUserId, setAddSelectedUserId] = useState('');
+  const [addRoleIds, setAddRoleIds] = useState<string[]>([]);
+  const [addParticipation, setAddParticipation] = useState<'ACTIVE_MEMBER' | 'FORMER_MEMBER'>('ACTIVE_MEMBER');
+  const [addRolePickerOpen, setAddRolePickerOpen] = useState(false);
+  const [addFeedback, setAddFeedback] = useState('');
+
+  // Invite-link (unregistered) flow
+  const [showInviteLink, setShowInviteLink] = useState(false);
+  const [linkRoleIds, setLinkRoleIds] = useState<string[]>([]);
+  const [linkParticipation, setLinkParticipation] = useState<'ACTIVE_MEMBER' | 'FORMER_MEMBER'>('ACTIVE_MEMBER');
+  const [linkRolePickerOpen, setLinkRolePickerOpen] = useState(false);
+  const [generatedLink, setGeneratedLink] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  // Per-member role editing
+  const [roleEditMembershipId, setRoleEditMembershipId] = useState<string | null>(null);
+  const [roleEditSeed, setRoleEditSeed] = useState<string[]>([]);
+
+  // Confirm dialogs
+  const [removeMembershipId, setRemoveMembershipId] = useState<string | null>(null);
+  const [transferOwnerUserId, setTransferOwnerUserId] = useState<string | null>(null);
+  const [removeAdminUserId, setRemoveAdminUserId] = useState<string | null>(null);
+
+  // Owner/admin picker dialogs (within admin block)
+  const [showOwnerPicker, setShowOwnerPicker] = useState(false);
+  const [showAdminPicker, setShowAdminPicker] = useState(false);
+
+  // Activity status sheet
+  const [activitySheetOpen, setActivitySheetOpen] = useState(false);
 
   const { data: artist, isLoading, isError } = useQuery({
     queryKey: ['artist', id],
@@ -98,7 +142,6 @@ export default function ArtistPage() {
     },
   });
 
-  const isGroup = artist?.type === 'GROUP' || artist?.type === 'COVER_GROUP';
   const isOwner = !!currentUser && (
     artist?.submittedById === currentUser.id ||
     artist?.members?.some((m: any) => m.id === currentUser.id && m.isOwner)
@@ -216,21 +259,6 @@ export default function ArtistPage() {
     },
   });
 
-  const removeMemberMut = useMutation({
-    mutationFn: (membershipId: string) => groupAPI.removeMember(id!, membershipId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
-  });
-
-  const leaveMut = useMutation({
-    mutationFn: () => groupAPI.leave(id!),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); navigate(-1); },
-  });
-
-  const transferOwnerMut = useMutation({
-    mutationFn: () => groupAPI.transferOwner(id!, selectedNewOwnerMembershipId),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); setShowLeaveModal(false); navigate(-1); },
-  });
-
   const { data: pendingMembers = [] } = useQuery<any[]>({
     queryKey: ['artist-pending-members', id],
     queryFn: () => artistAPI.pendingMemberships(id!).then((r: any) => r.data),
@@ -247,6 +275,81 @@ export default function ArtistPage() {
   const rejectMemberMut = useMutation({
     mutationFn: (membershipId: string) => artistAPI.rejectMembership(membershipId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist-pending-members', id] }),
+  });
+
+  // ── Phase 5b: user search for add-member modal ─────────────────────────────
+  const { data: searchResults = [], isFetching: searchLoading } = useQuery({
+    queryKey: ['user-search', addSearch],
+    queryFn: async () => {
+      const { data } = await userAPI.search({ query: addSearch.trim() });
+      return data as { id: string; firstName: string; lastName: string; nickname?: string; avatar?: string }[];
+    },
+    enabled: showAddMember && addSearch.trim().length >= 2,
+  });
+
+  const invalidateArtist = () => queryClient.invalidateQueries({ queryKey: ['artist', id] });
+
+  // ── Phase 5b: mutations ────────────────────────────────────────────────────
+  const addMemberMut = useMutation({
+    mutationFn: () =>
+      artistAPI.addMember(id!, {
+        userId: addSelectedUserId,
+        roleIds: addRoleIds,
+        participationStatus: addParticipation,
+      }),
+    onSuccess: () => {
+      invalidateArtist();
+      setAddFeedback('Приглашение отправлено');
+      setAddSelectedUserId('');
+      setAddRoleIds([]);
+      setAddParticipation('ACTIVE_MEMBER');
+      setAddSearch('');
+      setTimeout(() => { setAddFeedback(''); setShowAddMember(false); }, 1200);
+    },
+  });
+
+  const inviteLinkMut = useMutation({
+    mutationFn: () =>
+      artistAPI.createInviteLink(id!, { roleIds: linkRoleIds, participationStatus: linkParticipation }),
+    onSuccess: (res: any) => { setGeneratedLink(res.data?.url ?? ''); setLinkCopied(false); },
+  });
+
+  const setParticipationMut = useMutation({
+    mutationFn: (vars: { membershipId: string; status: 'ACTIVE_MEMBER' | 'FORMER_MEMBER' }) =>
+      artistAPI.setMemberParticipation(id!, vars.membershipId, vars.status),
+    onSuccess: invalidateArtist,
+  });
+
+  const setRolesMut = useMutation({
+    mutationFn: (vars: { membershipId: string; roleIds: string[] }) =>
+      artistAPI.setMemberRoles(id!, vars.membershipId, vars.roleIds),
+    onSuccess: invalidateArtist,
+  });
+
+  const removeMember5bMut = useMutation({
+    mutationFn: (membershipId: string) => artistAPI.removeMember(id!, membershipId),
+    onSuccess: invalidateArtist,
+  });
+
+  const setActivityMut = useMutation({
+    mutationFn: (status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED' | 'DISBANDED') =>
+      artistAPI.setActivityStatus(id!, status),
+    onSuccess: invalidateArtist,
+  });
+
+  const transferOwnerNewMut = useMutation({
+    mutationFn: (userId: string) => artistAPI.transferOwner(id!, userId),
+    onSuccess: invalidateArtist,
+  });
+
+  const addAdminMut = useMutation({
+    mutationFn: (userId: string) => artistAPI.addAdmin(id!, userId),
+    onSuccess: invalidateArtist,
+  });
+
+  const removeAdminMut = useMutation({
+    mutationFn: (userId: string) => artistAPI.removeAdmin(id!, userId),
+    onSuccess: invalidateArtist,
   });
 
   const set = (key: keyof EditForm, value: string | string[] | Record<string, string>) =>
@@ -296,6 +399,84 @@ export default function ArtistPage() {
 
   const bannerSrc = resolveUrl(artist.banner);
   const avatarSrc = avatarUrl(artist.avatar);
+
+  // ── Phase 5b derived data ──────────────────────────────────────────────────
+  // Owner/admin gating from the backend (preferred over legacy member-flag scan).
+  const viewerIsOwner: boolean = !!artist.viewerIsOwner;
+  const viewerIsAdmin: boolean = !!artist.viewerIsAdmin || viewerIsOwner;
+
+  const confirmedMembers: any[] = artist.confirmedMembers ?? [];
+  const pendingMembers5b: any[] = artist.pendingMembers ?? [];
+  const activeMembers = confirmedMembers.filter((m) => m.participationStatus === 'ACTIVE_MEMBER');
+  const formerMembers = confirmedMembers.filter((m) => m.participationStatus === 'FORMER_MEMBER');
+  const ownerMember = confirmedMembers.find((m) => m.isOwner) ?? null;
+  const adminMembers = confirmedMembers.filter((m) => m.isAdmin);
+  // Viewer is an active confirmed member (used to gate the gear button)
+  const viewerIsActiveMember = !!currentUser && confirmedMembers.some(
+    (m) => m.user.id === currentUser.id && m.participationStatus === 'ACTIVE_MEMBER',
+  );
+  const canSeeGear = viewerIsOwner || viewerIsAdmin || viewerIsActiveMember;
+  const memberName = (m: any) => `${m.user.lastName ?? ''} ${m.user.firstName ?? ''}`.trim();
+  const roleText = (m: any) => (m.roles ?? []).map((r: any) => r.name).join(', ');
+  const currentActivity: string = artist.activityStatus ?? 'ACTIVE';
+
+  // Helper to render a confirmed-member card (public + admin controls).
+  const MemberCard = ({ m, pending = false }: { m: any; pending?: boolean }) => (
+    <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+      <button onClick={() => navigate(`/profile/${m.user.id}`)} className="flex-shrink-0">
+        <AvatarComponent src={m.user.avatar} name={memberName(m)} size={40} />
+      </button>
+      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/profile/${m.user.id}`)}>
+        <p className="text-sm font-medium text-white truncate flex items-center gap-1.5">
+          {memberName(m)}
+          {m.isOwner && <Crown size={12} className="text-amber-400 flex-shrink-0" />}
+          {m.isAdmin && !m.isOwner && <Shield size={11} className="text-sky-400 flex-shrink-0" />}
+        </p>
+        <p className="text-xs text-slate-500 truncate">{roleText(m) || '—'}</p>
+      </div>
+      {pending && (
+        <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-400 rounded-md flex-shrink-0">ожидает</span>
+      )}
+      {/* Admin controls (edit mode) */}
+      {!pending && viewerIsAdmin && isEditing && (
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Toggle participation */}
+          <button
+            onClick={() => setParticipationMut.mutate({
+              membershipId: m.membershipId,
+              status: m.participationStatus === 'ACTIVE_MEMBER' ? 'FORMER_MEMBER' : 'ACTIVE_MEMBER',
+            })}
+            disabled={setParticipationMut.isPending}
+            title={m.participationStatus === 'ACTIVE_MEMBER' ? 'В бывшие' : 'В действующие'}
+            className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors"
+          >
+            <UserCog size={14} />
+          </button>
+          {/* Edit roles */}
+          <button
+            onClick={() => {
+              setRoleEditMembershipId(m.membershipId);
+              setRoleEditSeed((m.roles ?? []).map((r: any) => r.id));
+            }}
+            title="Изменить роли"
+            className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors"
+          >
+            <Tag size={14} />
+          </button>
+          {/* Remove (not owner) */}
+          {!m.isOwner && (
+            <button
+              onClick={() => setRemoveMembershipId(m.membershipId)}
+              title="Удалить участника"
+              className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   // ── Edit modal ───────────────────────────────────────────────────────────────
   function EditModal() {
@@ -810,76 +991,160 @@ export default function ArtistPage() {
           </div>
         )}
 
-        {/* Участники */}
-        {(isGroup || (artist.members?.length ?? 0) > 0) && (
-          <div className="mb-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Состав</span>
-              <div className="flex-1 h-px bg-slate-800" />
-              {isOwner && (
+        {/* ── Состав (Phase 5b: active / former blocks) ── */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Состав</span>
+            <div className="flex-1 h-px bg-slate-800" />
+            {canSeeGear && (
+              <button
+                onClick={() => setShowAdminBlock(v => !v)}
+                title="Управление"
+                className={`p-1.5 rounded-lg transition-colors ${showAdminBlock ? 'text-primary-400 bg-primary-500/10' : 'text-slate-500 hover:text-primary-400'}`}
+              >
+                <Settings size={15} />
+              </button>
+            )}
+          </div>
+
+          {/* Admin actions: add member / invite link (edit mode) */}
+          {viewerIsAdmin && isEditing && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              <button
+                onClick={() => { setShowAddMember(true); setAddFeedback(''); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-xs font-semibold transition-colors"
+              >
+                <UserPlus size={13} /> Добавить участника
+              </button>
+              <button
+                onClick={() => { setShowInviteLink(true); setGeneratedLink(''); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition-colors"
+              >
+                <Link2 size={13} /> Пригласить на сервис
+              </button>
+            </div>
+          )}
+
+          {/* Действующие участники */}
+          {activeMembers.length > 0 ? (
+            <div className="mb-3">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Действующие участники</p>
+              <div className="space-y-2">
+                {activeMembers.map((m: any) => <MemberCard key={m.membershipId} m={m} />)}
+              </div>
+            </div>
+          ) : (isEditing && viewerIsAdmin) ? (
+            <p className="text-xs text-slate-600 italic mb-3">Действующих участников пока нет</p>
+          ) : null}
+
+          {/* Бывшие участники */}
+          {formerMembers.length > 0 && (
+            <div className="mb-3">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Бывшие участники</p>
+              <div className="space-y-2">
+                {formerMembers.map((m: any) => <MemberCard key={m.membershipId} m={m} />)}
+              </div>
+            </div>
+          )}
+
+          {activeMembers.length === 0 && formerMembers.length === 0 && !(isEditing && viewerIsAdmin) && (
+            <p className="text-xs text-slate-600 italic">Участников пока нет</p>
+          )}
+
+          {/* Ожидают подтверждения (admins only, read-only indicator) */}
+          {viewerIsAdmin && pendingMembers5b.length > 0 && (
+            <div className="mt-3">
+              <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider mb-2">Ожидают подтверждения</p>
+              <div className="space-y-2">
+                {pendingMembers5b.map((m: any) => <MemberCard key={m.membershipId} m={m} pending />)}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Admin block (gear) ── */}
+        {canSeeGear && showAdminBlock && (
+          <div className="mb-4 p-3 rounded-xl bg-slate-900/70 border border-slate-800 space-y-4">
+            {/* Activity status */}
+            {viewerIsAdmin && (
+              <div>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Статус активности</p>
                 <button
-                  onClick={() => setShowInviteModal(true)}
-                  className="flex items-center gap-1 text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                  onClick={() => setActivitySheetOpen(true)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
                 >
-                  <UserPlus size={13} />
-                  Пригласить
+                  <span className="text-white">{ACTIVITY_LABELS[currentActivity] ?? 'Действующий'}</span>
+                  <span className="text-slate-500 text-xs">▾</span>
+                </button>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  При смене с «Действующий» все действующие участники переходят в бывшие.
+                </p>
+              </div>
+            )}
+
+            {/* Owner */}
+            <div>
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Владелец</p>
+              {ownerMember ? (
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
+                  <AvatarComponent src={ownerMember.user.avatar} name={memberName(ownerMember)} size={36} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate flex items-center gap-1.5">
+                      <Crown size={12} className="text-amber-400" /> {memberName(ownerMember)}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-600 italic">—</p>
+              )}
+              {viewerIsOwner && (
+                <button
+                  onClick={() => setShowOwnerPicker(true)}
+                  className="mt-2 text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                >
+                  Изменить владельца
                 </button>
               )}
             </div>
 
-            {(artist.members?.length ?? 0) === 0 ? (
-              <p className="text-xs text-slate-600 italic">Участников пока нет</p>
-            ) : (
-              <div className="space-y-2">
-                {artist.members.map((m: any) => (
-                  <div key={m.membershipId} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-                    <button onClick={() => navigate(`/profile/${m.id}`)} className="flex-shrink-0">
-                      <AvatarComponent src={m.avatar} name={`${m.firstName} ${m.lastName}`} size={40} />
-                    </button>
-                    <div className="flex-1 min-w-0" onClick={() => navigate(`/profile/${m.id}`)}>
-                      <p className="text-sm font-medium text-white truncate">{m.firstName} {m.lastName}</p>
-                      <p className="text-xs text-slate-500 truncate">
-                        {m.isOwner ? 'Владелец' : (m.profession?.name ?? '—')}
-                      </p>
+            {/* Admins */}
+            <div>
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Администраторы</p>
+              {adminMembers.length === 0 ? (
+                <p className="text-xs text-slate-600 italic">Нет администраторов</p>
+              ) : (
+                <div className="space-y-2">
+                  {adminMembers.map((m: any) => (
+                    <div key={m.membershipId} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
+                      <AvatarComponent src={m.user.avatar} name={memberName(m)} size={36} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate flex items-center gap-1.5">
+                          {m.isOwner ? <Crown size={12} className="text-amber-400" /> : <Shield size={11} className="text-sky-400" />}
+                          {memberName(m)}
+                        </p>
+                      </div>
+                      {viewerIsOwner && !m.isOwner && (
+                        <button
+                          onClick={() => setRemoveAdminUserId(m.user.id)}
+                          title="Снять администратора"
+                          className="p-1.5 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"
+                        >
+                          <X size={15} />
+                        </button>
+                      )}
                     </div>
-                    {m.inviteStatus === 'PENDING' && (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-400 rounded-md flex-shrink-0">ожидает</span>
-                    )}
-                    {/* Owner removes a non-owner member */}
-                    {isOwner && !m.isOwner && m.id !== currentUser?.id && (
-                      <button
-                        onClick={() => removeMemberMut.mutate(m.membershipId)}
-                        disabled={removeMemberMut.isPending}
-                        className="p-1.5 text-slate-600 hover:text-red-400 transition-colors flex-shrink-0"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                    {/* Current user leaves the group */}
-                    {m.id === currentUser?.id && !m.isOwner && (
-                      <button
-                        onClick={() => leaveMut.mutate()}
-                        disabled={leaveMut.isPending}
-                        className="p-1.5 text-slate-600 hover:text-red-400 transition-colors flex-shrink-0"
-                        title="Покинуть группу"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                    {/* Owner wants to leave — must transfer first */}
-                    {m.id === currentUser?.id && m.isOwner && (
-                      <button
-                        onClick={() => { setShowLeaveModal(true); setSelectedNewOwnerMembershipId(''); }}
-                        className="p-1.5 text-slate-600 hover:text-red-400 transition-colors flex-shrink-0"
-                        title="Покинуть группу"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+              {viewerIsOwner && (
+                <button
+                  onClick={() => setShowAdminPicker(true)}
+                  className="mt-2 text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                >
+                  Добавить администратора
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -904,67 +1169,6 @@ export default function ArtistPage() {
 
       {/* ── Edit modal ── */}
       {isEditing && EditModal()}
-
-      {/* ── Transfer ownership modal ── */}
-      {showLeaveModal && (() => {
-        const candidates = (artist?.members ?? []).filter(
-          (m: any) => m.id !== currentUser?.id && m.inviteStatus === 'ACCEPTED' && !m.isOwner
-        );
-        return (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
-            <div className="w-full max-w-sm bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800">
-                <h3 className="font-semibold text-white text-sm">Передача прав</h3>
-                <button onClick={() => setShowLeaveModal(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
-                  <X size={16} className="text-slate-400" />
-                </button>
-              </div>
-              <div className="p-4">
-                {candidates.length === 0 ? (
-                  <p className="text-sm text-slate-400 text-center py-4">
-                    Нет других участников. Удалите группу или сначала пригласите участника.
-                  </p>
-                ) : (
-                  <>
-                    <p className="text-xs text-slate-400 mb-3">
-                      Вы создатель группы. Выберите участника, которому передать права владельца:
-                    </p>
-                    <div className="space-y-1.5 max-h-56 overflow-y-auto mb-4">
-                      {candidates.map((m: any) => (
-                        <button
-                          key={m.membershipId}
-                          onClick={() => setSelectedNewOwnerMembershipId(m.membershipId)}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
-                            selectedNewOwnerMembershipId === m.membershipId
-                              ? 'bg-primary-600/20 border border-primary-500/40'
-                              : 'hover:bg-slate-800 border border-transparent'
-                          }`}
-                        >
-                          <AvatarComponent src={m.avatar} name={`${m.firstName} ${m.lastName}`} size={36} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-white truncate">{m.firstName} {m.lastName}</p>
-                            <p className="text-xs text-slate-500 truncate">{m.profession?.name ?? '—'}</p>
-                          </div>
-                          {selectedNewOwnerMembershipId === m.membershipId && (
-                            <Check size={16} className="text-primary-400 flex-shrink-0" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => transferOwnerMut.mutate()}
-                      disabled={!selectedNewOwnerMembershipId || transferOwnerMut.isPending}
-                      className="w-full py-2.5 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition-colors"
-                    >
-                      {transferOwnerMut.isPending ? 'Передача...' : 'Передать права и покинуть'}
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── Invite member modal ── */}
       {showInviteModal && (
@@ -1080,6 +1284,329 @@ export default function ArtistPage() {
           )}
         </div>
       )}
+
+      {/* ── Phase 5b: Add registered member modal ── */}
+      {showAddMember && (
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
+          <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-800 flex-shrink-0 bg-slate-900/80 backdrop-blur">
+            <button onClick={() => setShowAddMember(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors">
+              <ArrowLeft size={20} />
+            </button>
+            <h2 className="text-base font-semibold text-white flex-1">Добавить участника</h2>
+            <button
+              onClick={() => addMemberMut.mutate()}
+              disabled={!addSelectedUserId || addMemberMut.isPending}
+              className="px-4 py-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center gap-2"
+            >
+              {addMemberMut.isPending && <Loader2 size={14} className="animate-spin" />}
+              Добавить
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+            {/* Search users */}
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">1. Найдите пользователя</p>
+              <div className="relative mb-2">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  value={addSearch}
+                  onChange={e => { setAddSearch(e.target.value); setAddSelectedUserId(''); }}
+                  placeholder="Имя или никнейм..."
+                  className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 outline-none focus:border-primary-500"
+                />
+              </div>
+              {addSearch.trim().length < 2 ? (
+                <p className="text-xs text-slate-600 italic py-1">Введите минимум 2 символа</p>
+              ) : searchLoading ? (
+                <div className="flex justify-center py-4"><Loader2 size={20} className="animate-spin text-slate-500" /></div>
+              ) : searchResults.length === 0 ? (
+                <p className="text-xs text-slate-600 italic py-1">Никого не найдено</p>
+              ) : (
+                <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                  {searchResults.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => setAddSelectedUserId(u.id)}
+                      className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-colors text-left ${
+                        addSelectedUserId === u.id
+                          ? 'bg-primary-500/10 border-primary-500/40'
+                          : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <AvatarComponent src={u.avatar} name={`${u.lastName ?? ''} ${u.firstName ?? ''}`} size={36} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white truncate">{u.lastName} {u.firstName}</p>
+                        {u.nickname && <p className="text-xs text-slate-500 truncate">@{u.nickname}</p>}
+                      </div>
+                      {addSelectedUserId === u.id && <CheckCircle2 size={16} className="text-primary-400 flex-shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Roles */}
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">2. Роли</p>
+              <button
+                onClick={() => setAddRolePickerOpen(true)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
+              >
+                <span className={addRoleIds.length ? 'text-white' : 'text-slate-500'}>
+                  {addRoleIds.length ? `Выбрано ролей: ${addRoleIds.length}` : 'Выбрать роли'}
+                </span>
+                <Tag size={14} className="text-slate-500" />
+              </button>
+            </div>
+
+            {/* Participation */}
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">3. Статус участия</p>
+              <div className="flex gap-2">
+                {([['ACTIVE_MEMBER', 'Действующий участник'], ['FORMER_MEMBER', 'Бывший участник']] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    onClick={() => setAddParticipation(val)}
+                    className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-colors ${
+                      addParticipation === val
+                        ? 'bg-primary-500/10 border-primary-500/40 text-primary-300'
+                        : 'bg-slate-900 border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {addFeedback && (
+              <p className="text-sm text-emerald-400 flex items-center gap-1.5"><CheckCircle2 size={15} /> {addFeedback}</p>
+            )}
+            {addMemberMut.isError && (
+              <p className="text-sm text-red-400">{(addMemberMut.error as any)?.response?.data?.error ?? 'Ошибка. Попробуйте снова.'}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* RolePicker for add-member */}
+      {addRolePickerOpen && (
+        <RolePicker
+          context="collective"
+          value={addRoleIds}
+          onSave={(ids) => setAddRoleIds(ids)}
+          onClose={() => setAddRolePickerOpen(false)}
+          title="Роли участника"
+        />
+      )}
+
+      {/* ── Phase 5b: Invite-link (unregistered) flow ── */}
+      {showInviteLink && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="w-full max-w-sm bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800">
+              <h3 className="font-semibold text-white text-sm">Пригласить на сервис</h3>
+              <button onClick={() => setShowInviteLink(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+                <X size={16} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              {!generatedLink ? (
+                <>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Роли</p>
+                    <button
+                      onClick={() => setLinkRolePickerOpen(true)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
+                    >
+                      <span className={linkRoleIds.length ? 'text-white' : 'text-slate-500'}>
+                        {linkRoleIds.length ? `Выбрано ролей: ${linkRoleIds.length}` : 'Выбрать роли'}
+                      </span>
+                      <Tag size={14} className="text-slate-500" />
+                    </button>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Статус участия</p>
+                    <div className="flex gap-2">
+                      {([['ACTIVE_MEMBER', 'Действующий'], ['FORMER_MEMBER', 'Бывший']] as const).map(([val, label]) => (
+                        <button
+                          key={val}
+                          onClick={() => setLinkParticipation(val)}
+                          className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-colors ${
+                            linkParticipation === val
+                              ? 'bg-primary-500/10 border-primary-500/40 text-primary-300'
+                              : 'bg-slate-900 border-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => inviteLinkMut.mutate()}
+                    disabled={inviteLinkMut.isPending}
+                    className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                  >
+                    {inviteLinkMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
+                    Создать ссылку
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-slate-400">Ссылка-приглашение готова. Она привязана к выбранным ролям и не имеет срока действия.</p>
+                  <div className="flex items-center gap-2 p-2 bg-slate-800 rounded-lg">
+                    <code className="text-xs text-primary-300 truncate flex-1">{generatedLink}</code>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (navigator.share) {
+                        try { await navigator.share({ url: generatedLink }); } catch { /* cancelled */ }
+                      } else {
+                        try {
+                          await navigator.clipboard.writeText(generatedLink);
+                          setLinkCopied(true);
+                          setTimeout(() => setLinkCopied(false), 1500);
+                        } catch { /* ignore */ }
+                      }
+                    }}
+                    className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Share2 size={14} /> {linkCopied ? 'Скопировано' : 'Поделиться'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RolePicker for invite-link */}
+      {linkRolePickerOpen && (
+        <RolePicker
+          context="collective"
+          value={linkRoleIds}
+          onSave={(ids) => setLinkRoleIds(ids)}
+          onClose={() => setLinkRolePickerOpen(false)}
+          title="Роли приглашения"
+        />
+      )}
+
+      {/* RolePicker for editing a member's roles */}
+      {roleEditMembershipId && (
+        <RolePicker
+          context="collective"
+          value={roleEditSeed}
+          onSave={(ids) => setRolesMut.mutate({ membershipId: roleEditMembershipId, roleIds: ids })}
+          onClose={() => setRoleEditMembershipId(null)}
+          title="Роли участника"
+        />
+      )}
+
+      {/* ── Phase 5b: Owner picker (transfer owner) ── */}
+      {showOwnerPicker && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="w-full max-w-sm bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800">
+              <h3 className="font-semibold text-white text-sm">Изменить владельца</h3>
+              <button onClick={() => setShowOwnerPicker(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+                <X size={16} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-4">
+              {confirmedMembers.filter((m) => !m.isOwner).length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-4">Нет других участников.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                  {confirmedMembers.filter((m) => !m.isOwner).map((m: any) => (
+                    <button
+                      key={m.membershipId}
+                      onClick={() => { setTransferOwnerUserId(m.user.id); setShowOwnerPicker(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 border border-transparent transition-colors text-left"
+                    >
+                      <AvatarComponent src={m.user.avatar} name={memberName(m)} size={36} />
+                      <span className="text-sm text-white truncate">{memberName(m)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Phase 5b: Admin picker (add admin) ── */}
+      {showAdminPicker && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="w-full max-w-sm bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800">
+              <h3 className="font-semibold text-white text-sm">Добавить администратора</h3>
+              <button onClick={() => setShowAdminPicker(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+                <X size={16} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-4">
+              {confirmedMembers.filter((m) => !m.isAdmin).length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-4">Все участники уже администраторы.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                  {confirmedMembers.filter((m) => !m.isAdmin).map((m: any) => (
+                    <button
+                      key={m.membershipId}
+                      onClick={() => { addAdminMut.mutate(m.user.id); setShowAdminPicker(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 border border-transparent transition-colors text-left"
+                    >
+                      <AvatarComponent src={m.user.avatar} name={memberName(m)} size={36} />
+                      <span className="text-sm text-white truncate">{memberName(m)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Activity status sheet */}
+      <SelectSheet
+        isOpen={activitySheetOpen}
+        onClose={() => setActivitySheetOpen(false)}
+        title="Статус активности"
+        options={ACTIVITY_OPTIONS}
+        selectedIds={currentActivity}
+        onSelect={(v) => { setActivityMut.mutate(v as any); setActivitySheetOpen(false); }}
+        mode="single"
+        searchable={false}
+        height="auto"
+      />
+
+      {/* Confirm: remove member */}
+      <ConfirmDialog
+        open={!!removeMembershipId}
+        message="Удалить участника?"
+        confirmLabel="Удалить"
+        onConfirm={() => { if (removeMembershipId) removeMember5bMut.mutate(removeMembershipId); }}
+        onCancel={() => setRemoveMembershipId(null)}
+      />
+
+      {/* Confirm: transfer owner */}
+      <ConfirmDialog
+        open={!!transferOwnerUserId}
+        message="Точно сменить владельца?"
+        confirmLabel="Да, точно сменить владельца"
+        onConfirm={() => { if (transferOwnerUserId) transferOwnerNewMut.mutate(transferOwnerUserId); }}
+        onCancel={() => setTransferOwnerUserId(null)}
+      />
+
+      {/* Confirm: remove admin */}
+      <ConfirmDialog
+        open={!!removeAdminUserId}
+        message="Точно удалить администратора?"
+        confirmLabel="Да, точно удалить администратора"
+        onConfirm={() => { if (removeAdminUserId) removeAdminMut.mutate(removeAdminUserId); }}
+        onCancel={() => setRemoveAdminUserId(null)}
+      />
     </div>
   );
 }
