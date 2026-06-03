@@ -1028,7 +1028,7 @@ export default function ArtistPage() {
                   <AvatarComponent src={m.user.avatar} name={`${m.user.firstName} ${m.user.lastName}`} size={40} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-white truncate">{m.user.firstName} {m.user.lastName}</p>
-                    <p className="text-xs text-slate-400 truncate">{m.profession?.name ?? '—'}</p>
+                    <p className="text-xs text-slate-400 truncate">{m.roleNames?.length ? m.roleNames.join(', ') : (m.profession?.name ?? '—')}</p>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <button

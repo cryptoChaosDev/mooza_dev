@@ -69,11 +69,10 @@ router.get('/suggest', authenticate, async (req: AuthRequest, res: Response) => 
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
     if (q.length < 2) return res.json([]);
 
+    // Search ALL artists by name (duplicate detection + join targets).
     const artists = await prisma.artist.findMany({
       where: {
         name: { contains: q, mode: 'insensitive' },
-        status: 'DRAFT',
-        submittedById: null,
       },
       include: {
         genres: { include: { genre: { select: { id: true, name: true } } } },
@@ -245,8 +244,11 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
     // the accept/decline banner). The member-invite notification links here.
     const viewerHasAccepted =
       !!currentUserId && userArtists.some((ua: any) => ua.userId === currentUserId && ua.inviteStatus === 'ACCEPTED');
+    // Only an ADMIN-INVITED pending membership (invitedById set) shows the
+    // accept/decline banner. Self-requested joins (invitedById null) are
+    // approved by the artist admin instead.
     const myPending = currentUserId && !viewerHasAccepted
-      ? userArtists.find((ua: any) => ua.userId === currentUserId && ua.inviteStatus === 'PENDING')
+      ? userArtists.find((ua: any) => ua.userId === currentUserId && ua.inviteStatus === 'PENDING' && ua.invitedById)
       : null;
     const viewerPendingMembership = myPending
       ? {
@@ -698,31 +700,35 @@ router.post('/:id/join-request', authenticate, async (req: AuthRequest, res: Res
   try {
     const userId = req.userId!;
     const artistId = req.params.id;
-    const { professionIds } = req.body as { professionIds: string[] };
-    if (!professionIds?.length) return res.status(400).json({ error: 'Профессия обязательна' });
+    const { roleIds } = req.body as { roleIds: string[] };
+    if (!Array.isArray(roleIds) || roleIds.length === 0) {
+      return res.status(400).json({ error: 'Укажите хотя бы одну роль' });
+    }
 
     const artist = await prisma.artist.findUnique({ where: { id: artistId }, select: { id: true, name: true } });
     if (!artist) return res.status(404).json({ error: 'Артист не найден' });
 
+    // Already a member or request already pending?
+    const existing = await prisma.userArtist.findFirst({
+      where: { userId, artistId, inviteStatus: { in: ['PENDING', 'ACCEPTED'] } },
+    });
+    if (existing) return res.status(400).json({ error: 'Вы уже участник или заявка уже отправлена' });
+
+    // Roles come from the seeded role catalog (collective context).
+    const roles = await prisma.role.findMany({ where: { id: { in: roleIds } }, select: { id: true, name: true } });
+    if (!roles.length) return res.status(400).json({ error: 'Некорректные роли' });
+
+    // Self-requested membership (invitedById=null) — the artist admin approves it.
+    await prisma.userArtist.create({
+      data: {
+        userId, artistId, inviteStatus: 'PENDING', isOwner: false, participationStatus: 'ACTIVE_MEMBER',
+        roles: { create: roles.map(r => ({ roleId: r.id })) },
+      },
+    });
+
     const actor = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
     const actorName = `${actor?.firstName ?? ''} ${actor?.lastName ?? ''}`.trim();
-
-    const memberships: any[] = [];
-    for (const professionId of professionIds) {
-      const existing = await prisma.userArtist.findUnique({
-        where: { userId_artistId_professionId: { userId, artistId, professionId } },
-      });
-      if (existing) continue;
-      const profession = await prisma.profession.findUnique({ where: { id: professionId }, select: { name: true } });
-      const membership = await prisma.userArtist.create({
-        data: { userId, artistId, professionId, inviteStatus: 'PENDING', isOwner: false },
-      });
-      memberships.push({ membership, roleName: profession?.name ?? '' });
-    }
-
-    if (!memberships.length) return res.status(400).json({ error: 'Запрос уже отправлен' });
-
-    const roleNames = memberships.map(m => m.roleName).filter(Boolean).join(', ');
+    const roleNames = roles.map(r => r.name).join(', ');
     // Notify the artist owner
     const ownerMembership = await prisma.userArtist.findFirst({
       where: { artistId, isOwner: true },
@@ -756,14 +762,18 @@ router.get('/:id/memberships/pending', authenticate, async (req: AuthRequest, re
     const me = await prisma.user.findUnique({ where: { id: req.userId! }, select: { isAdmin: true } });
     if (!isOwner && !me?.isAdmin) return res.status(403).json({ error: 'Forbidden' });
     const memberships = await prisma.userArtist.findMany({
-      where: { artistId, inviteStatus: 'PENDING' },
+      where: { artistId, inviteStatus: 'PENDING', invitedById: null },
       include: {
         user: { select: { id: true, firstName: true, lastName: true, avatar: true } },
         profession: { select: { id: true, name: true } },
+        roles: { include: { role: { select: { id: true, name: true } } } },
       },
       orderBy: { createdAt: 'desc' },
     });
-    res.json(memberships);
+    res.json(memberships.map((m: any) => ({
+      ...m,
+      roleNames: m.roles.map((r: any) => r.role.name),
+    })));
   } catch {
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
