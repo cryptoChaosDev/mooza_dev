@@ -107,13 +107,6 @@ export default function ProPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const goToPay = () => {
-    if (donation?.cloudTipsUrl) {
-      window.open(donation.cloudTipsUrl, '_blank');
-    }
-    setStep('done');
-  };
-
   const proUntilLabel = user?.proUntil
     ? new Date(user.proUntil).toLocaleDateString('ru-RU')
     : null;
@@ -321,17 +314,43 @@ export default function ProPage() {
                     </button>
                   </div>
 
-                  <p className="text-xs text-slate-500 text-center mb-6 leading-relaxed">
-                    Впиши этот код в поле «Комментарий» при оплате. Без кода активация займёт больше времени.
+                  <p className="text-xs text-slate-500 text-center mb-4 leading-relaxed">
+                    Впиши этот код в поле «Комментарий» в форме ниже. Без кода активация займёт больше времени.
                   </p>
 
-                  <button
-                    onClick={goToPay}
-                    className="w-full py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-2xl transition-colors flex items-center justify-center gap-2"
-                  >
-                    <ExternalLink size={17} />
-                    Перейти к оплате
-                  </button>
+                  {donation?.cloudTipsUrl ? (
+                    <>
+                      <div className="rounded-2xl overflow-hidden border border-slate-800 mb-3 bg-slate-950" style={{ height: '68vh', minHeight: 460 }}>
+                        <iframe
+                          src={donation.cloudTipsUrl}
+                          title="Оплата CloudTips"
+                          className="w-full h-full"
+                          sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
+                          allow="payment *"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => window.open(donation.cloudTipsUrl, '_blank')}
+                        className="w-full mb-4 text-xs text-slate-400 hover:text-white transition-colors inline-flex items-center justify-center gap-1"
+                      >
+                        <ExternalLink size={13} /> Форма не открылась? Открыть в новой вкладке
+                      </button>
+                      <button
+                        onClick={() => setStep('done')}
+                        className="w-full py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-2xl transition-colors"
+                      >
+                        Я оплатил(а)
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setStep('done')}
+                      className="w-full py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-2xl transition-colors"
+                    >
+                      Продолжить
+                    </button>
+                  )}
                 </>
               )}
             </div>
