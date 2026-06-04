@@ -33,6 +33,7 @@ const TermsPage          = lazy(() => import('./pages/TermsPage'));
 const FlowSettingsPage   = lazy(() => import('./pages/FlowSettingsPage'));
 const CreatePostPage     = lazy(() => import('./pages/CreatePostPage'));
 const InvitePage         = lazy(() => import('./pages/InvitePage'));
+const ProPage            = lazy(() => import('./pages/ProPage'));
 const ServicePage        = lazy(() => import('./pages/ServicePage'));
 const ServicesPage       = lazy(() => import('./pages/ServicesPage'));
 const ConnectionsPage    = lazy(() => import('./pages/ConnectionsPage'));
@@ -165,6 +166,7 @@ function AppRoutes() {
             <Route path="/flow-settings"    element={<FlowSettingsPage />} />
             <Route path="/create-post"      element={<CreatePostPage />} />
             <Route path="/invite"           element={<InvitePage />} />
+            <Route path="/pro"              element={<ProPage />} />
             <Route path="/onboarding"       element={<OnboardingPage />} />
             <Route path="/vk-setup"         element={<VkSetupPage />} />
             <Route path="/services/:serviceId" element={<ServicePage />} />

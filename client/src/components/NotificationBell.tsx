@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Bell, MessageCircle, UserPlus, UserCheck, MessageSquare, X, CheckCheck, Link2, Users, UserX, Mic2, Disc3, Film, BadgeCheck, ShieldCheck, ShieldX, Crown, Trash2 } from 'lucide-react';
+import { Bell, MessageCircle, UserPlus, UserCheck, MessageSquare, X, CheckCheck, Link2, Users, UserX, Mic2, Disc3, Film, BadgeCheck, ShieldCheck, ShieldX, Crown, Trash2, Zap } from 'lucide-react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useBadgeStore } from '../stores/badgeStore';
 import AvatarComponent from './Avatar';
@@ -88,6 +88,8 @@ function typeIcon(type: string) {
     case 'clip_participant_confirmed': return <Film     size={13} className="text-green-400" />;
     case 'clip_participant_declined':  return <Film     size={13} className="text-red-400" />;
     case 'clip_deleted':          return <Trash2        size={13} className="text-red-400" />;
+    // ── Moooza Pro ─────────────────────────────────────────────────────────
+    case 'pro_activated':         return <Zap           size={13} className="text-violet-400" />;
     default:                      return <Bell          size={13} className="text-slate-400" />;
   }
 }

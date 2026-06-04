@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Copy, Check, Share2, Star, Music2,
-  Plus, Trash2, Link2, Loader2, X,
+  Plus, Trash2, Link2, Loader2, X, Zap,
 } from 'lucide-react';
 import { referralAPI } from '../lib/api';
 
@@ -110,6 +110,13 @@ export default function InvitePage() {
             <p className="text-slate-400 text-sm leading-relaxed max-w-xs mx-auto">
               Каждая ссылка — одноразовая: по ней может зарегистрироваться только один человек. Создавай столько, сколько нужно.
             </p>
+            <button
+              onClick={() => navigate('/pro')}
+              className="mt-4 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-violet-500/30 text-violet-400 hover:text-violet-300 hover:border-violet-500/60 text-xs font-medium transition-colors"
+            >
+              <Zap size={13} />
+              Каждые 10 приглашений — месяц Moooza Pro
+            </button>
           </div>
 
           {/* Ambassador block */}

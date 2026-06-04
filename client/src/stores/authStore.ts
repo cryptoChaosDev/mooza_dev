@@ -37,6 +37,8 @@ interface User {
   termsAgreedAt?: string | null;
   onboardingCompletedAt?: string | null;
   birthDate?: string | null;
+  isPro?: boolean;
+  proUntil?: string | null;
 }
 
 interface AuthState {
