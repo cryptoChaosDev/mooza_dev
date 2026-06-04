@@ -7,6 +7,7 @@ import { authLimiter, registerLimiter, codeLimiter } from '../middleware/rateLim
 import { generateToken } from '../utils/jwt';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail } from '../utils/mailer';
 import { tgLog, tgEvent } from '../utils/telegram';
+import { applyReferralProGrants } from '../utils/pro';
 
 // ─── Telegram bot-based auth (deep link + polling) ───────────────────────────
 // Map: token → { telegramId, firstName, lastName, username, photoUrl, resolvedAt }
@@ -316,6 +317,15 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
             where: { id: user.id },
             data: { referrerId: p.referrerId || null, referralLinkUsed: null },
           }).catch(() => {});
+        }
+      }
+
+      // Referral → Pro reward: every 10 referred signups grants the referrer
+      // 1 month of Pro. Fire-and-forget; guarded so it can never break signup.
+      {
+        const effectiveReferrerId = refLink?.ownerId || p.referrerId || undefined;
+        if (effectiveReferrerId) {
+          applyReferralProGrants(effectiveReferrerId).catch(() => {});
         }
       }
 

@@ -16,7 +16,13 @@ function genCode(): string {
 router.get('/stats', authenticate, async (req: AuthRequest, res) => {
   try {
     const count = await prisma.user.count({ where: { referrerId: req.userId } });
-    res.json({ count });
+    const perMonth = 10;
+    res.json({
+      count,
+      proMonthsEarned: Math.floor(count / perMonth),
+      towardNext: count % perMonth,
+      perMonth,
+    });
   } catch (error) {
     console.error('Referral stats error:', error);
     res.status(500).json({ error: 'Failed to get referral stats' });
