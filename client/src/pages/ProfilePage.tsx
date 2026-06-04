@@ -1100,12 +1100,7 @@ export default function ProfilePage() {
             <>
               <div className="flex items-center gap-2 flex-wrap mb-0.5">
                 <h1 className="text-2xl font-bold text-white leading-tight">{profile?.firstName} {profile?.lastName}</h1>
-                {profile?.isPro
-                  ? <BadgeTooltip label="PRO аккаунт"><Zap size={18} className="text-violet-400" /></BadgeTooltip>
-                  : <button onClick={() => navigate('/pro')} className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold border border-violet-500/30 text-violet-400/60 hover:text-violet-400 hover:border-violet-500/60 rounded-lg transition-colors">
-                      <Zap size={11} />PRO
-                    </button>
-                }
+                {isPro && <BadgeTooltip label="PRO аккаунт"><Zap size={18} className="text-violet-400" /></BadgeTooltip>}
                 {profile?.isPremium && <BadgeTooltip label="Premium"><Crown size={18} className="text-amber-400" /></BadgeTooltip>}
                 {profile?.isVerified && <BadgeTooltip label="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></BadgeTooltip>}
                 {(profile?._count?.referrals ?? 0) >= 100 && <BadgeTooltip label="Амбасадор Moooza"><Star size={18} className="text-orange-400" /></BadgeTooltip>}
@@ -1166,6 +1161,31 @@ export default function ProfilePage() {
                 <button onClick={() => setEditingBio(true)} className="p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800 flex-shrink-0 mt-0.5"><Edit3 size={13} /></button>
               </div>
             )}
+
+            {/* ── Moooza Pro ── */}
+            <button
+              onClick={() => navigate('/pro')}
+              className={`w-full flex items-center gap-3 rounded-2xl p-4 text-left transition-colors border ${
+                isPro
+                  ? 'bg-violet-500/10 border-violet-500/25 hover:bg-violet-500/15'
+                  : 'bg-gradient-to-r from-violet-600/15 to-violet-500/5 border-violet-500/25 hover:border-violet-500/50'
+              }`}
+            >
+              <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center flex-shrink-0">
+                <Zap size={20} className="text-violet-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-white">{isPro ? 'Moooza Pro активен' : 'Moooza Pro'}</p>
+                <p className="text-xs text-slate-400 truncate">
+                  {isPro
+                    ? (user?.proUntil
+                        ? `до ${new Date(user.proUntil).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                        : 'Спасибо, что поддерживаешь Moooza 🎵')
+                    : 'Больше портфолио, расширенный профиль, GIF-аватар, пресеты ленты'}
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-violet-400 flex-shrink-0">{isPro ? 'Управлять' : 'Поддержать →'}</span>
+            </button>
 
             {/* ── Collectives tile slider ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
