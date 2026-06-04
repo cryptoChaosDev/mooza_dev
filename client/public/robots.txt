@@ -1,0 +1,36 @@
+User-agent: *
+Allow: /$
+Allow: /login
+Allow: /register
+Allow: /assets/
+Allow: /favicon.png
+Allow: /apple-touch-icon.png
+Allow: /icon.svg
+Allow: /logo.png
+Allow: /logo.jpg
+Allow: /pwa-192x192.png
+Allow: /pwa-512x512.png
+
+Disallow: /messages
+Disallow: /chat
+Disallow: /profile
+Disallow: /profile/
+Disallow: /search
+Disallow: /friends
+Disallow: /deals
+Disallow: /create-post
+Disallow: /flow-settings
+Disallow: /invite
+Disallow: /pro
+Disallow: /onboarding
+Disallow: /connection
+Disallow: /connections
+Disallow: /artist
+Disallow: /releases
+Disallow: /clips
+Disallow: /services
+Disallow: /vk-setup
+Disallow: /admin
+
+Host: moooza.ru
+Sitemap: https://moooza.ru/sitemap.xml

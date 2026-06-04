@@ -161,6 +161,8 @@ export default function RegisterPage() {
   // Role-bound artist invite link (/register?artistInvite=token).
   const artistInvite = searchParams.get('artistInvite') || undefined;
 
+  useEffect(() => { document.title = 'Регистрация — Moooza'; }, []);
+
   // Registration may be closed site-wide — bounce to login.
   useEffect(() => {
     siteSettingsAPI.get()

@@ -46,6 +46,8 @@
     <!-- SEO -->
     <meta name="description" content="Moooza — социальная сеть для музыкантов" />
     <title>Moooza — Музыкальная социальная сеть</title>
+    <link rel="canonical" href="https://moooza.ru/" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
 
     <!-- Open Graph -->
     <meta property="og:type"        content="website" />
@@ -53,6 +55,9 @@
     <meta property="og:title"       content="Moooza — Платформа для музыкантов" />
     <meta property="og:description" content="Находите коллег, заказчиков и исполнителей. Создавайте проекты и стройте карьеру в музыкальной индустрии." />
     <meta property="og:image"       content="https://moooza.ru/pwa-512x512.png" />
+    <meta property="og:image:width"  content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt"   content="Moooza — социальная сеть для музыкантов" />
     <meta property="og:url"         content="https://moooza.ru" />
     <meta property="og:locale"      content="ru_RU" />
 
@@ -61,6 +66,42 @@
     <meta name="twitter:title"       content="Moooza — Платформа для музыкантов" />
     <meta name="twitter:description" content="Находите коллег, заказчиков и исполнителей. Создавайте проекты и стройте карьеру в музыкальной индустрии." />
     <meta name="twitter:image"       content="https://moooza.ru/pwa-512x512.png" />
+
+    <!-- Structured data (JSON-LD) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://moooza.ru/#organization",
+          "name": "Moooza",
+          "url": "https://moooza.ru/",
+          "logo": "https://moooza.ru/logo.png",
+          "description": "Moooza — социальная сеть для музыкантов. Находите коллег, заказчиков и исполнителей, создавайте проекты и стройте карьеру в музыкальной индустрии.",
+          "sameAs": [
+            "https://t.me/moooza_support"
+          ]
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://moooza.ru/#website",
+          "name": "Moooza",
+          "url": "https://moooza.ru/",
+          "inLanguage": "ru-RU",
+          "publisher": { "@id": "https://moooza.ru/#organization" },
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": {
+              "@type": "EntryPoint",
+              "urlTemplate": "https://moooza.ru/search?q={search_term_string}"
+            },
+            "query-input": "required name=search_term_string"
+          }
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <!-- Yandex.Metrika noscript fallback -->
