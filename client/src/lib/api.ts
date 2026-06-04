@@ -536,6 +536,16 @@ export const proAPI = {
   currentDonation: () => api.get('/pro/donation/current'),
 };
 
+// Feed preset API — server-persisted named feed-filter snapshots
+export const feedPresetAPI = {
+  list: () => api.get('/feed-presets'),
+  create: (name: string, filters: Record<string, unknown>) =>
+    api.post('/feed-presets', { name, filters }),
+  update: (id: string, body: { name?: string; filters?: Record<string, unknown> }) =>
+    api.put(`/feed-presets/${id}`, body),
+  remove: (id: string) => api.delete(`/feed-presets/${id}`),
+};
+
 export const dealAPI = {
   getAll: (params?: { role?: string; status?: string }) => api.get('/deals', { params }),
   getOne: (id: string) => api.get(`/deals/${id}`),
