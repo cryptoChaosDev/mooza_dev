@@ -60,6 +60,19 @@ const buildFeedInclude = (userId: string | undefined) => {
   },
   channel: { select: { id: true, name: true, avatar: true } },
   artist: { select: { id: true, name: true, avatar: true } },
+  // Structured «Услуга» post — the linked offering, used to render the feed card
+  // (title, section, price) and power the «Детали услуги»/«Написать»/«Сделка» buttons.
+  service: {
+    select: {
+      id: true,
+      name: true,
+      priceFrom: true,
+      priceTo: true,
+      priceItems: true,
+      service: { select: { name: true, section: { select: { name: true } } } },
+      user: { select: { id: true, firstName: true, lastName: true } },
+    },
+  },
   repostOf: {
     include: {
       author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, isPremium: true, isVerified: true } }
@@ -231,7 +244,7 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
   try {
     const {
       content, imageUrl, audioUrl, audioName, type, employmentStatus, pollOptions, pollEndsAt, channelId, artistId,
-      images, tags, genres, links, city, mentions, title, category,
+      images, tags, genres, links, city, mentions, title, category, serviceId,
     } = req.body;
 
     // Normalize new optional fields
@@ -251,6 +264,20 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
       }
     } else if (!content && !imageUrl && !audioUrl && imagesArr.length === 0 && !(type === 'employment' && employmentStatus)) {
       return res.status(400).json({ error: 'Post cannot be empty' });
+    }
+
+    // Structured «Услуга» post — validate the linked offering belongs to the author.
+    // (Freeform service posts without a serviceId keep working unchanged.)
+    let linkedServiceId: string | null = null;
+    if (type === 'service' && serviceId) {
+      const owned = await prisma.userService.findFirst({
+        where: { id: String(serviceId), userId: req.userId! },
+        select: { id: true },
+      });
+      if (!owned) {
+        return res.status(403).json({ error: 'Услуга не найдена или не принадлежит вам' });
+      }
+      linkedServiceId = owned.id;
     }
 
     // E8 — service update rate limit (per-user, lite): max 1 service post / 24h.
@@ -306,6 +333,7 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         mentions: mentions ?? null,
         title: title ?? null,
         category: category ?? null,
+        serviceId: linkedServiceId,
         ...(isPoll ? {
           pollOptions: (pollOptions as string[]).filter(o => o?.trim()).map(text => ({ text, votes: 0 })),
           pollEndsAt: pollEndsAt ? new Date(pollEndsAt) : null,
@@ -315,6 +343,17 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true } },
         channel: { select: { id: true, name: true, avatar: true } },
         artist: { select: { id: true, name: true, avatar: true } },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            priceFrom: true,
+            priceTo: true,
+            priceItems: true,
+            service: { select: { name: true, section: { select: { name: true } } } },
+            user: { select: { id: true, firstName: true, lastName: true } },
+          },
+        },
       }
     });
 
@@ -516,6 +555,17 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
         },
         channel: { select: { id: true, name: true, avatar: true } },
         artist: { select: { id: true, name: true, avatar: true } },
+        service: {
+          select: {
+            id: true,
+            name: true,
+            priceFrom: true,
+            priceTo: true,
+            priceItems: true,
+            service: { select: { name: true, section: { select: { name: true } } } },
+            user: { select: { id: true, firstName: true, lastName: true } },
+          },
+        },
         _count: {
           select: { likes: true, comments: true }
         }

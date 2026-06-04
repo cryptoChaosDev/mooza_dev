@@ -7,11 +7,14 @@ import {
   Crown, BadgeCheck, Ban, SlidersHorizontal,
   Plus, FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench,
   Zap, BarChart3, Star, WifiOff, RefreshCw, HelpCircle, Repeat2,
+  ExternalLink, MessageSquare, HandshakeIcon, Loader2 as Spinner,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import ShareButton from '../components/ShareButton';
-import { postAPI } from '../lib/api';
+import { postAPI, messageAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import { useAuthGate } from '../components/AuthGateModal';
+import DealCreateModal from '../components/DealCreateModal';
 import OnboardingPrompt from '../components/OnboardingPrompt';
 import AvatarComponent from '../components/Avatar';
 import AudioPlayer from '../components/AudioPlayer';
@@ -215,6 +218,20 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showRepost, setShowRepost] = useState(false);
   const [repostComment, setRepostComment] = useState('');
+
+  // Structured «Услуга» card — guest gating + «Написать» / «Оформить сделку».
+  const { ensureAuth, authGateModal } = useAuthGate();
+  const [showDeal, setShowDeal] = useState(false);
+  const [contacting, setContacting] = useState(false);
+  const svc = post.type === 'service' && post.service ? post.service : null;
+  const openServiceChat = () => {
+    if (!svc || contacting) return;
+    setContacting(true);
+    messageAPI.contactService(svc.id)
+      .then(({ data }) => navigate(`/messages/${data.conversationId}`))
+      .catch(() => navigate('/messages'))
+      .finally(() => setContacting(false));
+  };
 
   // Guests (no current user) cannot react — bounce them to login instead.
   const requireAuth = (action: () => void) => {
@@ -445,13 +462,72 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                   </div>
                 );
               })()}
-              {!isRepost && post.content && (
+              {/* Structured «Услуга» card — auto-pulled fields + 3 actions. */}
+              {!isRepost && svc && (() => {
+                const serviceTitle = post.title || svc.name || svc.service?.name || 'Услуга';
+                const sectionName = svc.service?.section?.name || '';
+                const price = (svc.priceFrom != null || svc.priceTo != null)
+                  ? [
+                      svc.priceFrom != null ? `от ${svc.priceFrom} ₽` : null,
+                      svc.priceTo != null ? `до ${svc.priceTo} ₽` : null,
+                    ].filter(Boolean).join(' ')
+                  : 'По договорённости';
+                const preview = (Array.isArray(post.images) && post.images[0]) || post.imageUrl;
+                return (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden">
+                    {preview && (
+                      <img src={`${API_URL}${preview}`} alt={serviceTitle} className="w-full max-h-72 object-cover" loading="lazy" />
+                    )}
+                    <div className="p-3.5 space-y-2.5">
+                      <p className="text-base font-bold text-white leading-snug">{serviceTitle}</p>
+                      <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+                        {sectionName && (
+                          <span className="text-xs text-slate-400">
+                            Раздел: <span className="text-slate-200">{sectionName}</span>
+                          </span>
+                        )}
+                        <span className="text-xs text-slate-400">
+                          Стоимость: <span className="text-primary-300 font-semibold">{price}</span>
+                        </span>
+                      </div>
+                      {post.content && (
+                        <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">{post.content}</p>
+                      )}
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/services/${svc.id}`)}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors"
+                        >
+                          <ExternalLink size={15} /> Детали услуги
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => ensureAuth(openServiceChat)}
+                          disabled={contacting}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-colors"
+                        >
+                          {contacting ? <Spinner size={15} className="animate-spin" /> : <MessageSquare size={15} />} Написать
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => ensureAuth(() => setShowDeal(true))}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-semibold rounded-xl transition-colors"
+                        >
+                          <HandshakeIcon size={15} /> Оформить сделку
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+              {!isRepost && !svc && post.content && (
                 <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
                   {isLongContent && !expanded ? post.content.slice(0, 280) + '…' : post.content}
                 </p>
               )}
-              {!isRepost && isLongContent && <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>}
-              {!isRepost && (Array.isArray(post.images) && post.images.length > 1 ? (
+              {!isRepost && !svc && isLongContent && <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>}
+              {!isRepost && !svc && (Array.isArray(post.images) && post.images.length > 1 ? (
                 <div className="mt-2 flex gap-2 overflow-x-auto scrollbar-none snap-x">
                   {post.images.map((url: string, i: number) => (
                     <img key={i} src={`${API_URL}${url}`} alt={`Вложение ${i + 1}`} className="h-48 w-auto flex-shrink-0 object-cover rounded-xl border border-slate-800 bg-slate-900/40 snap-start" loading="lazy" />
@@ -557,6 +633,18 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
         </div>,
         document.body
       )}
+
+      {/* Structured «Услуга» — оформить сделку with the provider */}
+      {showDeal && svc && (
+        <DealCreateModal
+          executorId={svc.user?.id}
+          executorName={svc.user ? `${svc.user.firstName} ${svc.user.lastName}`.trim() : ''}
+          userServiceId={svc.id}
+          serviceName={svc.name || svc.service?.name}
+          onClose={() => setShowDeal(false)}
+        />
+      )}
+      {authGateModal}
     </div>
   );
 }

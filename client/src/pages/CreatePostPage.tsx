@@ -45,6 +45,10 @@ export default function CreatePostPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const type = searchParams.get('type') || 'blog';
+  // When composing FROM a specific offering (?type=service&serviceId=<UserService id>)
+  // we show a structured form whose fields are auto-pulled from that service.
+  const linkedServiceId = searchParams.get('serviceId') || '';
+  const isStructuredService = type === 'service' && !!linkedServiceId;
   const meta = POST_TYPES[type] || POST_TYPES.blog;
   const { user: currentUser } = useAuthStore();
   const queryClient = useQueryClient();
@@ -57,6 +61,8 @@ export default function CreatePostPage() {
   const [uploading, setUploading] = useState(false);
   const [pickedServices, setPickedServices] = useState<PickedService[]>([]);
   const [showServicePicker, setShowServicePicker] = useState(false);
+  // Structured «Услуга» — manually entered short description (max 200 chars).
+  const [briefDescription, setBriefDescription] = useState('');
   const [employmentStatus, setEmploymentStatus] = useState('');
   const [pollOptions, setPollOptions] = useState<string[]>(['', '']);
   const [pollDuration, setPollDuration] = useState('7');
@@ -89,6 +95,20 @@ export default function CreatePostPage() {
   const { data: genresData } = useQuery({
     queryKey: ['ref-genres'],
     queryFn: async () => { const { data } = await referenceAPI.getGenres(); return data; },
+  });
+
+  // Structured «Услуга» — the offering this post advertises (auto-pulled fields).
+  const { data: linkedService } = useQuery({
+    queryKey: ['user-service', linkedServiceId],
+    queryFn: async () => { const { data } = await userAPI.getUserService(linkedServiceId); return data as any; },
+    enabled: isStructuredService,
+  });
+  // The reference Service carries the catalog section name (not on UserService).
+  const refServiceId: string | undefined = linkedService?.service?.id;
+  const { data: refServiceDetail } = useQuery({
+    queryKey: ['ref-service-detail', refServiceId],
+    queryFn: async () => { const { data } = await referenceAPI.getServiceDetail(refServiceId!); return data as any; },
+    enabled: !!refServiceId,
   });
   // Catalog of genre names (server names if available, otherwise the static fallback)
   const genreCatalog: string[] = Array.isArray(genresData) && genresData.length > 0
@@ -241,18 +261,22 @@ export default function CreatePostPage() {
   });
 
   const isService = type === 'service';
+  // Freeform service picker only applies when NOT composing from a specific service.
+  const isFreeformService = isService && !isStructuredService;
   const isEmployment = type === 'employment';
   const isPoll = type === 'poll';
   const isQuestion = type === 'question';
   const validPollOptions = pollOptions.filter(o => o.trim());
   const links = linksInput.split(/[\s\n]+/).map(s => s.trim()).filter(Boolean);
   const canPost = (
-    isQuestion
+    isStructuredService
+      ? !!linkedService
+      : isQuestion
       ? (questionTitle.trim() && content.trim())
       : (
           content.trim() ||
           images.length > 0 ||
-          (isService && pickedServices.length > 0) ||
+          (isFreeformService && pickedServices.length > 0) ||
           (isEmployment && !!employmentStatus) ||
           (isPoll && validPollOptions.length >= 2)
         )
@@ -260,14 +284,29 @@ export default function CreatePostPage() {
 
   const handlePublish = () => {
     if (!canPost) return;
+    const serverUrls = images.map(i => i.serverUrl);
+
+    // Structured «Услуга» post — title is the service name, content is the short
+    // description, and the post is linked to the offering via serviceId.
+    if (isStructuredService) {
+      createMut.mutate({
+        content: briefDescription.trim(),
+        type: 'service',
+        serviceId: linkedServiceId,
+        title: (linkedService?.name || linkedService?.service?.name || '').trim() || undefined,
+        imageUrl: serverUrls[0] ?? undefined,
+        images: serverUrls,
+      });
+      return;
+    }
+
     let finalContent = content;
-    if (isService && pickedServices.length > 0) {
+    if (isFreeformService && pickedServices.length > 0) {
       const serviceLines = pickedServices.map(s =>
         `🎸 ${s.serviceName} · ${s.sectionName}`
       ).join('\n');
       finalContent = serviceLines + (content.trim() ? '\n\n' + content : '');
     }
-    const serverUrls = images.map(i => i.serverUrl);
     createMut.mutate({
       content: finalContent,
       type,
@@ -355,7 +394,11 @@ export default function CreatePostPage() {
               />
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-semibold text-white">{currentUser.firstName} {currentUser.lastName}</p>
-                <p className="text-xs text-slate-500">{meta.label}</p>
+                <p className="text-xs text-slate-500 truncate">
+                  {isStructuredService
+                    ? [currentUser.role, currentUser.city].filter(Boolean).join(' · ') || meta.label
+                    : meta.label}
+                </p>
               </div>
             </div>
           )}
@@ -427,8 +470,79 @@ export default function CreatePostPage() {
             </div>
           )}
 
-          {/* Service selector — only for type=service */}
-          {isService && (
+          {/* Structured «Услуга» — composing FROM a specific offering.
+              All fields except краткое описание are auto-pulled from the service. */}
+          {isStructuredService && (() => {
+            const serviceTitle = linkedService?.name || linkedService?.service?.name || '';
+            const sectionName =
+              refServiceDetail?.sectionName || linkedService?.service?.section?.name || '';
+            const price = linkedService && (linkedService.priceFrom != null || linkedService.priceTo != null)
+              ? [
+                  linkedService.priceFrom != null ? `от ${linkedService.priceFrom} ₽` : null,
+                  linkedService.priceTo != null ? `до ${linkedService.priceTo} ₽` : null,
+                ].filter(Boolean).join(' ')
+              : 'По договорённости';
+            return (
+              <div className="mb-4 space-y-3">
+                {!linkedService ? (
+                  <div className="flex items-center justify-center py-8 text-slate-500">
+                    <Loader2 size={20} className="animate-spin" />
+                  </div>
+                ) : (
+                  <>
+                    {/* Type label */}
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border bg-primary-500/10 text-primary-400 border-primary-500/20">
+                      <Wrench size={11} /> Услуга
+                    </span>
+
+                    {/* Service title */}
+                    <div>
+                      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Услуга</p>
+                      <p className="text-base font-bold text-white">{serviceTitle || 'Без названия'}</p>
+                    </div>
+
+                    {/* Preview image — services have no image field; only show attached ones */}
+                    {images.length > 0 && (
+                      <img src={images[0].url} alt="Превью" className="w-full max-h-64 object-cover rounded-2xl border border-slate-800" />
+                    )}
+
+                    {/* Catalog section + price */}
+                    <div className="flex flex-wrap gap-x-6 gap-y-2">
+                      {sectionName && (
+                        <div>
+                          <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Раздел каталога</p>
+                          <p className="text-sm text-slate-200">{sectionName}</p>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-0.5">Стоимость</p>
+                        <p className="text-sm text-primary-300 font-semibold">{price}</p>
+                      </div>
+                    </div>
+
+                    {/* Краткое описание — manual, max 200 chars */}
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">
+                        Краткое описание
+                      </label>
+                      <textarea
+                        value={briefDescription}
+                        onChange={e => setBriefDescription(e.target.value.slice(0, 200))}
+                        maxLength={200}
+                        placeholder="Коротко расскажите об услуге..."
+                        rows={3}
+                        className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
+                      />
+                      <p className="text-[11px] text-slate-600 mt-1 text-right">{briefDescription.length} / 200</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* Service selector — only for freeform type=service (no specific service) */}
+          {isFreeformService && (
             <div className="mb-4">
               {/* Picked services */}
               {pickedServices.length > 0 && (
@@ -539,6 +653,7 @@ export default function CreatePostPage() {
             </div>
           )}
 
+          {!isStructuredService && (
           <div className="relative">
             <textarea
               ref={textareaRef}
@@ -547,11 +662,11 @@ export default function CreatePostPage() {
               onKeyUp={e => handleContentChange((e.target as HTMLTextAreaElement).value, (e.target as HTMLTextAreaElement).selectionStart)}
               placeholder={
                 isQuestion ? 'Опишите ваш вопрос подробнее...'
-                : isService && pickedServices.length > 0 ? 'Опишите подробнее — цены, условия, опыт...'
+                : isFreeformService && pickedServices.length > 0 ? 'Опишите подробнее — цены, условия, опыт...'
                 : meta.placeholder
               }
               className="w-full bg-transparent text-base text-white placeholder-slate-500 focus:outline-none resize-none min-h-[100px] leading-relaxed"
-              rows={isService && pickedServices.length > 0 ? 3 : 6}
+              rows={isFreeformService && pickedServices.length > 0 ? 3 : 6}
             />
 
             {/* Mention dropdown */}
@@ -571,6 +686,7 @@ export default function CreatePostPage() {
               </div>
             )}
           </div>
+          )}
 
           {/* Image thumbnails (multi, up to 10) */}
           {images.length > 0 && (
@@ -593,7 +709,8 @@ export default function CreatePostPage() {
             <p className="text-[11px] text-slate-600 mt-1">{images.length} / {MAX_IMAGES} фото</p>
           )}
 
-          {/* ── Дополнительно (optional secondary fields) ────────────────── */}
+          {/* ── Дополнительно (optional secondary fields) — hidden for structured «Услуга» ── */}
+          {!isStructuredService && (
           <div className="mt-5 border-t border-slate-800 pt-3">
             <button
               type="button"
@@ -708,6 +825,7 @@ export default function CreatePostPage() {
               </div>
             )}
           </div>
+          )}
 
         </div>
 
