@@ -6,6 +6,7 @@ import { uploadChatAttachment } from '../middleware/upload';
 import { messageLimiter } from '../middleware/rateLimiter';
 import { yoNorm } from '../utils/search';
 import { tgLog, tgEvent } from '../utils/telegram';
+import { notify } from '../utils/notify';
 
 const router = Router();
 // Lazy proxy — avoids circular-import TDZ when this module loads before prisma is initialized
@@ -193,6 +194,55 @@ router.get('/resolve/:id', authenticate, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('Resolve error:', error);
     res.status(500).json({ error: 'Failed to resolve conversation' });
+  }
+});
+
+// ─── POST /services/:userServiceId/contact ──────────────────────────────────
+// Ensures a direct conversation between the buyer and the service provider,
+// notifies the provider that the buyer is interested in the service, and
+// returns the conversation id. The conversation + notification are created
+// even if the buyer never sends a message, so the provider can write first.
+router.post('/services/:userServiceId/contact', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const buyerId = req.userId!;
+    const { userServiceId } = req.params;
+
+    const us = await prisma.userService.findUnique({
+      where: { id: userServiceId },
+      include: {
+        service: { select: { name: true } },
+        user: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+    if (!us) return res.status(404).json({ error: 'Service not found' });
+
+    const providerId = us.user.id;
+    if (providerId === buyerId) return res.status(400).json({ error: 'Cannot contact your own service' });
+
+    // Ensure a direct (personal) conversation exists between buyer and provider.
+    const { conv } = await findOrCreateDM(buyerId, providerId);
+
+    // Notify the provider about the interest (link to the service page).
+    const buyer = await prisma.user.findUnique({
+      where: { id: buyerId },
+      select: { firstName: true, lastName: true },
+    });
+    const buyerName = `${buyer?.firstName ?? ''} ${buyer?.lastName ?? ''}`.trim();
+    const serviceName = us.service?.name ?? '';
+    const text = `${buyerName} заинтересовался услугой «${serviceName}»`;
+    await notify({
+      userId: providerId,
+      actorId: buyerId,
+      type: 'service_inquiry',
+      title: text,
+      body: text,
+      link: `/services/${us.id}`,
+    });
+
+    res.json({ conversationId: conv.id });
+  } catch (error) {
+    console.error('Service contact error:', error);
+    res.status(500).json({ error: 'Failed to contact provider' });
   }
 });
 

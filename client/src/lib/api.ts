@@ -269,6 +269,8 @@ export const messageAPI = {
   getUnreadCount: () => api.get('/messages/unread/count'),
   getConversations: () => api.get('/messages/conversations'),
   resolve: (id: string) => api.get(`/messages/resolve/${id}`),
+  contactService: (userServiceId: string) =>
+    api.post<{ conversationId: string }>(`/messages/services/${userServiceId}/contact`),
   getConversation: (conversationId: string) => api.get(`/messages/conversations/${conversationId}`),
   sendMessage: (conversationId: string, content: string, replyToId?: string, attachment?: { url: string; name: string; size: number; type: string }) =>
     api.post(`/messages/conversations/${conversationId}/messages`, {
