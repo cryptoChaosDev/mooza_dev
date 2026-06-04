@@ -219,6 +219,7 @@ model UserService {
   status                     String    @default("active")
   selectedCustomFilterValues CustomFilterValue[]
   deals                      Deal[]
+  posts                      Post[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -994,6 +995,11 @@ model Post {
 
   artistId String?
   artist   Artist? @relation(fields: [artistId], references: [id], onDelete: SetNull)
+
+  // Structured "Услуга" post — link to the offering it advertises (for the
+  // «Детали услуги» button and to derive section/price at render time).
+  serviceId String?
+  service   UserService? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
 
   likes     Like[]
   comments  Comment[]
