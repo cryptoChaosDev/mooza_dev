@@ -82,7 +82,7 @@ type UserServiceEntry = {
   deadlineTo: string;
   description: string;
   priceItems: Array<{ name: string; price: string; from?: boolean }>;
-  status?: 'draft' | 'pending_review';
+  status?: 'draft' | 'active' | 'pending_review';
   professionFilters: Array<{ id: string; name: string; values: string[] }>;
   professionFilterValues: Record<string, string[]>;
 };
@@ -155,6 +155,22 @@ export default function ProfilePage() {
   const [publishDialog, setPublishDialog] = useState<{ userServiceId: string | null } | null>(null);
   const [updateDialog, setUpdateDialog] = useState<{ userServiceId: string | null } | null>(null);
 
+  // --- Accidental-close autosave (drafts) -------------------------------------
+  // If the user opens the ADD form, enters meaningful data, and then the form
+  // gets closed by navigating away / unmounting (NOT via «Отмена», «Опубликовать»
+  // or «Убрать в черновики»), we silently persist the entry as a draft.
+  // The cleanup closure captures stale state, so we mirror everything into refs.
+  const serviceFormOpenRef = useRef<'add' | number | null>(serviceFormOpen);
+  const pendingRef = useRef<UserServiceEntry>(pending);
+  const pendingServiceFilterSelRef = useRef<Record<string, string[]>>(pendingServiceFilterSel);
+  const userServicesRef = useRef<UserServiceEntry[]>([]);
+  // discardedRef: «Отмена» was pressed → never autosave.
+  // handledRef: «Опубликовать»/«Убрать в черновики» already saved → never autosave again.
+  const serviceFormDiscardedRef = useRef(false);
+  const serviceFormHandledRef = useRef(false);
+  // Guards a single autosave per form lifecycle (avoids double-save).
+  const autosaveDoneRef = useRef(false);
+
   const [editingHero, setEditingHero] = useState(false);
   const [editingBio, setEditingBio] = useState(false);
   const [editingServices, setEditingServices] = useState(false);
@@ -167,6 +183,49 @@ export default function ProfilePage() {
     triggerAutoSave(formData);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData]);
+
+  // Keep the autosave mirror refs in sync with the live state every render.
+  useEffect(() => { serviceFormOpenRef.current = serviceFormOpen; }, [serviceFormOpen]);
+  useEffect(() => { pendingRef.current = pending; }, [pending]);
+  useEffect(() => { pendingServiceFilterSelRef.current = pendingServiceFilterSel; }, [pendingServiceFilterSel]);
+  useEffect(() => { userServicesRef.current = userServices; }, [userServices]);
+
+  // True when the ADD form holds something worth keeping as a draft: a picked
+  // catalog service OR any non-empty name / price / description.
+  const pendingHasMeaningfulData = (p: UserServiceEntry): boolean =>
+    !!p.serviceId ||
+    p.name.trim().length > 0 ||
+    p.priceFrom.trim().length > 0 ||
+    p.priceTo.trim().length > 0 ||
+    p.description.trim().length > 0 ||
+    p.priceItems.some(it => it.name.trim().length > 0 || it.price.trim().length > 0);
+
+  // Unmount-only effect: if the page unmounts while the ADD form is open with
+  // meaningful data and the user neither cancelled nor explicitly saved, persist
+  // the entry as a draft. Fire-and-forget; never throws.
+  useEffect(() => {
+    return () => {
+      try {
+        if (serviceFormOpenRef.current !== 'add') return;          // add-only
+        if (serviceFormDiscardedRef.current) return;               // «Отмена»
+        if (serviceFormHandledRef.current) return;                 // already saved
+        if (autosaveDoneRef.current) return;                       // no double-save
+        const p = pendingRef.current;
+        if (!pendingHasMeaningfulData(p)) return;                  // no empty-save
+        autosaveDoneRef.current = true;
+        const draftEntry: UserServiceEntry = {
+          ...p,
+          customFilterValueIds: pendingServiceFilterSelRef.current,
+          status: 'draft',
+        };
+        // Fire-and-forget; swallow any rejection.
+        userAPI.updateServices([...userServicesRef.current, draftEntry] as any).catch(() => {});
+      } catch {
+        /* never throw from cleanup */
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [confirmDeleteServiceIdx, setConfirmDeleteServiceIdx] = useState<number | null>(null);
   const [confirmDeleteLinkId, setConfirmDeleteLinkId] = useState<string | null>(null);
@@ -542,8 +601,16 @@ export default function ProfilePage() {
   const removePriceItem = (i: number) =>
     setPending(prev => ({ ...prev, priceItems: prev.priceItems.filter((_, idx) => idx !== i) }));
 
+  // Reset the autosave flags for a fresh form lifecycle.
+  const resetServiceFormFlags = () => {
+    serviceFormDiscardedRef.current = false;
+    serviceFormHandledRef.current = false;
+    autosaveDoneRef.current = false;
+  };
+
   // Open the form to ADD a brand-new service.
   const openAddServiceForm = () => {
+    resetServiceFormFlags();
     setPending(emptyEntry());
     setPendingServiceFilters([]);
     setPendingServiceFilterSel({});
@@ -554,6 +621,7 @@ export default function ProfilePage() {
   // Open the form to EDIT an existing service entry: hydrate pending + load its
   // filters, mapping already-selected value ids back into the selection map.
   const openEditServiceForm = async (idx: number) => {
+    resetServiceFormFlags();
     const entry = userServices[idx];
     setPending({ ...entry });
     setPendingServiceFilters([]);
@@ -583,20 +651,26 @@ export default function ProfilePage() {
 
   // Commit the comprehensive form: build the full entry and append (add) or
   // replace (edit). Persists immediately via the existing services mutation.
-  const commitServiceForm = async () => {
+  // mode 'publish' → status 'active', then shows the Поток publish/update dialog.
+  // mode 'draft'   → status 'draft', NO Поток dialog (drafts skip Поток).
+  const commitServiceForm = async (mode: 'publish' | 'draft') => {
     const entry: UserServiceEntry = {
       ...pending,
       customFilterValueIds: pendingServiceFilterSel,
-      status: pending.status ?? 'pending_review',
+      status: mode === 'draft' ? 'draft' : 'active',
     };
     const isAdd = serviceFormOpen === 'add';
     const next = isAdd
       ? [...userServices, entry]
       : userServices.map((us, i) => (i === serviceFormOpen ? entry : us));
+    // Mark as explicitly handled so the unmount autosave never duplicates it.
+    serviceFormHandledRef.current = true;
+    autosaveDoneRef.current = true;
     setUserServices(next);
     closeServiceForm();
     try {
       const { data } = await updateServicesMutation.mutateAsync(next);
+      if (mode === 'draft') return; // drafts skip the Поток dialogs entirely
       // The server returns the full user-services list (each with its own id).
       // Resolve the just-saved service by catalog serviceId to deep-link Поток.
       const saved = Array.isArray(data)
@@ -907,15 +981,22 @@ export default function ProfilePage() {
             placeholder="Опишите услугу..." className={`${inputCls} resize-none`} />
         </div>
 
-        <div className="flex gap-2 pt-1">
-          <button onClick={closeServiceForm}
+        <div className="flex flex-wrap gap-2 pt-1">
+          <button
+            onClick={() => { serviceFormDiscardedRef.current = true; closeServiceForm(); }}
             className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors flex-shrink-0">
             Отмена
           </button>
           <button
-            onClick={commitServiceForm}
+            onClick={() => commitServiceForm('draft')}
             disabled={!canSave || updateServicesMutation.isPending}
-            className="flex-1 py-2 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
+            className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 text-sm font-medium transition-colors flex-shrink-0">
+            В черновики
+          </button>
+          <button
+            onClick={() => commitServiceForm('publish')}
+            disabled={!canSave || updateServicesMutation.isPending}
+            className="flex-1 min-w-[8rem] py-2 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
           >
             {updateServicesMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             {isEdit ? 'Сохранить изменения' : 'Добавить услугу'}
