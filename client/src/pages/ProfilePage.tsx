@@ -81,7 +81,7 @@ type UserServiceEntry = {
   deadlineFrom: string;
   deadlineTo: string;
   description: string;
-  priceItems: Array<{ name: string; price: string }>;
+  priceItems: Array<{ name: string; price: string; from?: boolean }>;
   status?: 'draft' | 'pending_review';
   professionFilters: Array<{ id: string; name: string; values: string[] }>;
   professionFilterValues: Record<string, string[]>;
@@ -148,6 +148,12 @@ export default function ProfilePage() {
   const [pendingServiceFilters, setPendingServiceFilters] = useState<ServiceCustomFilter[]>([]);
   const [pendingServiceFilterSel, setPendingServiceFilterSel] = useState<Record<string, string[]>>({});
   const [loadingServiceDetail, setLoadingServiceDetail] = useState(false);
+  // Post-save «Поток» dialogs. `publishDialog` is shown after a NEW service is
+  // saved («Опубликовать в Потоке?»); `updateDialog` after an EXISTING one is
+  // edited («Сообщить об изменениях в Потоке?»). Both carry the saved
+  // user-service id used to deep-link into the Поток composer.
+  const [publishDialog, setPublishDialog] = useState<{ userServiceId: string | null } | null>(null);
+  const [updateDialog, setUpdateDialog] = useState<{ userServiceId: string | null } | null>(null);
 
   const [editingHero, setEditingHero] = useState(false);
   const [editingBio, setEditingBio] = useState(false);
@@ -528,9 +534,10 @@ export default function ProfilePage() {
     });
   };
 
-  // Price-list row helpers (composite name + price rows).
-  const addPriceItem = () => setPending(prev => ({ ...prev, priceItems: [...prev.priceItems, { name: '', price: '' }] }));
-  const updatePriceItem = (i: number, patch: Partial<{ name: string; price: string }>) =>
+  // Price-list row helpers (composite name + price rows). A row's price may be a
+  // concrete number or the «от [сумма]» format (toggled per row via `from`).
+  const addPriceItem = () => setPending(prev => ({ ...prev, priceItems: [...prev.priceItems, { name: '', price: '', from: false }] }));
+  const updatePriceItem = (i: number, patch: Partial<{ name: string; price: string; from: boolean }>) =>
     setPending(prev => ({ ...prev, priceItems: prev.priceItems.map((it, idx) => idx === i ? { ...it, ...patch } : it) }));
   const removePriceItem = (i: number) =>
     setPending(prev => ({ ...prev, priceItems: prev.priceItems.filter((_, idx) => idx !== i) }));
@@ -582,13 +589,25 @@ export default function ProfilePage() {
       customFilterValueIds: pendingServiceFilterSel,
       status: pending.status ?? 'pending_review',
     };
-    const next = serviceFormOpen === 'add'
+    const isAdd = serviceFormOpen === 'add';
+    const next = isAdd
       ? [...userServices, entry]
       : userServices.map((us, i) => (i === serviceFormOpen ? entry : us));
     setUserServices(next);
     closeServiceForm();
-    try { await updateServicesMutation.mutateAsync(next); }
-    finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); }
+    try {
+      const { data } = await updateServicesMutation.mutateAsync(next);
+      // The server returns the full user-services list (each with its own id).
+      // Resolve the just-saved service by catalog serviceId to deep-link Поток.
+      const saved = Array.isArray(data)
+        ? data.find((s: any) => s.serviceId === entry.serviceId || s.service?.id === entry.serviceId)
+        : null;
+      const userServiceId = saved?.id ?? null;
+      if (isAdd) setPublishDialog({ userServiceId });
+      else setUpdateDialog({ userServiceId });
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    }
   };
 
   const handleDeleteService = async (idx: number) => {
@@ -817,6 +836,10 @@ export default function ProfilePage() {
             </div>
           </div>
           {priceInvalid && <p className="text-[11px] text-red-400 mt-1">«Стоимость от» не может быть больше «Стоимость до»</p>}
+          <p className="text-[11px] text-slate-500 mt-1">Не забудьте учесть комиссию сервиса.</p>
+          {pending.priceFrom === '' && pending.priceTo === '' && (
+            <p className="text-[11px] text-slate-500 mt-0.5">Если оставить пустым, стоимость будет указана как «По договорённости».</p>
+          )}
         </div>
 
         {/* 6 — Прайс-лист */}
@@ -824,10 +847,21 @@ export default function ProfilePage() {
           <label className={labelCls}>Прайс-лист</label>
           <div className="space-y-2">
             {pending.priceItems.map((item, i) => (
-              <div key={i} className="grid grid-cols-[1fr_6.5rem_auto] gap-2 items-center">
-                <input type="text" value={item.name}
+              <div key={i} className="grid grid-cols-[1fr_auto_6.5rem_auto] gap-2 items-center">
+                <input type="text" value={item.name} maxLength={100}
                   onChange={e => updatePriceItem(i, { name: e.target.value })}
                   placeholder="Название позиции" className={`${inputCls} min-w-0`} />
+                {/* «от» toggle: when on, the price is shown as «от [сумма]». */}
+                <button type="button"
+                  onClick={() => updatePriceItem(i, { from: !item.from })}
+                  aria-pressed={!!item.from}
+                  className={`px-2.5 py-2.5 rounded-xl text-xs font-medium border transition-all flex-shrink-0 ${
+                    item.from
+                      ? 'bg-primary-600 border-primary-500 text-white'
+                      : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:border-primary-500/40'
+                  }`}>
+                  от
+                </button>
                 <input type="number" inputMode="numeric" min={0} value={item.price}
                   onChange={e => updatePriceItem(i, { price: onlyDigits(e.target.value) })}
                   placeholder="Цена ₽" className={`${inputCls} min-w-0 text-center`} />
@@ -842,6 +876,7 @@ export default function ProfilePage() {
               <Plus size={13} />Добавить позицию
             </button>
           </div>
+          <p className="text-[11px] text-slate-500 mt-1.5">Не забудьте учесть комиссию сервиса.</p>
         </div>
 
         {/* 7 — Срок исполнения */}
@@ -861,6 +896,7 @@ export default function ProfilePage() {
             </div>
           </div>
           {deadlineInvalid && <p className="text-[11px] text-red-400 mt-1">«Срок от» не может быть больше «Срок до»</p>}
+          <p className="text-[11px] text-slate-500 mt-1">Укажите срок в днях.</p>
         </div>
 
         {/* 8 — Описание */}
@@ -1841,6 +1877,80 @@ export default function ProfilePage() {
       onConfirm={() => { if (confirmDeleteLinkId) handleDeleteLink(confirmDeleteLinkId); }}
       onCancel={() => setConfirmDeleteLinkId(null)}
     />
+
+    {/* Publish-to-Поток dialog — after a NEW service is saved. */}
+    {publishDialog && createPortal(
+      <>
+        <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm" onClick={() => setPublishDialog(null)} />
+        <div className="fixed inset-x-4 bottom-8 z-[81] max-w-sm mx-auto bg-slate-900 border border-slate-700 rounded-2xl p-5 shadow-2xl">
+          <div className="flex items-start gap-3 mb-1">
+            <div className="p-2 bg-primary-500/15 rounded-xl flex-shrink-0">
+              <Zap size={18} className="text-primary-400" />
+            </div>
+            <div className="pt-0.5">
+              <p className="text-sm font-semibold text-white">Опубликовать в Потоке?</p>
+              <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">Услуга уже сохранена и видна в профиле. Можно дополнительно рассказать о ней в Потоке.</p>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={() => setPublishDialog(null)}
+              className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white text-sm font-medium transition-colors"
+            >
+              Только услугу
+            </button>
+            <button
+              onClick={() => {
+                const id = publishDialog.userServiceId;
+                setPublishDialog(null);
+                navigate(`/create-post?type=service${id ? `&serviceId=${id}` : ''}`);
+              }}
+              className="flex-1 py-2.5 rounded-xl bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold transition-colors"
+            >
+              В Потоке
+            </button>
+          </div>
+        </div>
+      </>,
+      document.body
+    )}
+
+    {/* Announce-changes dialog — after an EXISTING service is edited. */}
+    {updateDialog && createPortal(
+      <>
+        <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm" onClick={() => setUpdateDialog(null)} />
+        <div className="fixed inset-x-4 bottom-8 z-[81] max-w-sm mx-auto bg-slate-900 border border-slate-700 rounded-2xl p-5 shadow-2xl">
+          <div className="flex items-start gap-3 mb-1">
+            <div className="p-2 bg-primary-500/15 rounded-xl flex-shrink-0">
+              <Zap size={18} className="text-primary-400" />
+            </div>
+            <div className="pt-0.5">
+              <p className="text-sm font-semibold text-white">Сообщить об изменениях в Потоке?</p>
+              <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">Изменения уже сохранены. Можно опубликовать апдейт услуги в Потоке.</p>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={() => setUpdateDialog(null)}
+              className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white text-sm font-medium transition-colors"
+            >
+              Нет
+            </button>
+            <button
+              onClick={() => {
+                const id = updateDialog.userServiceId;
+                setUpdateDialog(null);
+                navigate(`/create-post?type=service${id ? `&serviceId=${id}` : ''}`);
+              }}
+              className="flex-1 py-2.5 rounded-xl bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold transition-colors"
+            >
+              Сделать апдейт
+            </button>
+          </div>
+        </div>
+      </>,
+      document.body
+    )}
 
     {showJoinArtist && <JoinArtistModal onClose={() => setShowJoinArtist(false)} />}
 

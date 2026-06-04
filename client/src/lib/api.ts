@@ -91,13 +91,13 @@ export const userAPI = {
     description?: string;
     customFilterValueIds?: string[];
     status?: string;
-    priceItems?: Array<{name: string; price: string}>;
+    priceItems?: Array<{name: string; price: string; from?: boolean}>;
   }>) => api.put('/users/me/services', services),
   getUserService: (serviceId: string) => api.get(`/users/user-service/${serviceId}`),
   patchUserService: (serviceId: string, data: {
     name?: string; priceFrom?: number | null; priceTo?: number | null;
     deadlineFrom?: number | null; deadlineTo?: number | null; description?: string;
-    priceItems?: Array<{name: string; price: string}> | null;
+    priceItems?: Array<{name: string; price: string; from?: boolean}> | null;
   }) => api.patch(`/users/me/services/${serviceId}`, data),
   setServiceStatus: (serviceId: string, status: 'active' | 'draft' | 'archived' | 'pending_review') =>
     api.patch(`/users/me/services/${serviceId}/status`, { status }),
