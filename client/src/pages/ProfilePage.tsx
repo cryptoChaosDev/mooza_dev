@@ -18,6 +18,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import BadgeTooltip from '../components/BadgeTooltip';
 import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
+import { limitsFor, isProActive } from '../lib/proLimits';
 import { yoNorm } from '../lib/search';
 import ShareButton from '../components/ShareButton';
 import JoinArtistModal from '../components/JoinArtistModal';
@@ -102,7 +103,9 @@ const emptyEntry = (): UserServiceEntry => ({
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const { logout } = useAuthStore();
+  const { logout, user } = useAuthStore();
+  const isPro = isProActive(user);
+  const proLimits = limitsFor(isPro);
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -626,7 +629,9 @@ export default function ProfilePage() {
   const handlePortfolioUpload = async (files: FileList | null) => {
     if (!files) return;
     for (const file of Array.from(files)) {
-      if (portfolioFiles.length >= 5) break;
+      if (portfolioFiles.length >= proLimits.portfolioFiles) break;
+      // Reflect the server's effective per-file size cap before uploading.
+      if (file.size > proLimits.portfolioFileMB * 1024 * 1024) continue;
       const fd = new FormData();
       fd.append('file', file);
       setIsUploadingPortfolio(true);
@@ -901,6 +906,8 @@ export default function ProfilePage() {
   const audioFiles = portfolioFiles.filter((f: any) => f.mimeType?.startsWith('audio/'));
   const imageFiles = portfolioFiles.filter((f: any) => f.mimeType?.startsWith('image/'));
   const otherFiles = portfolioFiles.filter((f: any) => !f.mimeType?.startsWith('audio/') && !f.mimeType?.startsWith('image/'));
+  // At/over the effective portfolio file-count cap (Free 10 / Pro 20).
+  const portfolioFull = portfolioFiles.length >= proLimits.portfolioFiles;
 
   return (
     <>
@@ -926,7 +933,19 @@ export default function ProfilePage() {
             <Camera size={12} />Сменить фон
           </button>
           <input ref={bannerInputRef} type="file" accept="image/*" className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) setCropBannerFile(f); e.target.value = ''; }} />
+            onChange={e => {
+              const f = e.target.files?.[0];
+              if (f) {
+                // GIF cover is Pro-only; for Pro, skip cropping (would lose animation) and upload directly.
+                if (f.type === 'image/gif') {
+                  if (isPro) uploadBannerMutation.mutate(f);
+                  else window.alert('GIF-обложка доступна в Pro');
+                } else {
+                  setCropBannerFile(f);
+                }
+              }
+              e.target.value = '';
+            }} />
         </div>
 
         <div className="px-4">
@@ -945,13 +964,25 @@ export default function ProfilePage() {
                 <Camera size={13} />
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) setCropAvatarFile(f); e.target.value = ''; }} />
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    // GIF avatar is Pro-only; for Pro, skip cropping (would lose animation) and upload directly.
+                    if (f.type === 'image/gif') {
+                      if (isPro) uploadAvatarMutation.mutate(f);
+                      else window.alert('GIF-аватар доступен в Pro');
+                    } else {
+                      setCropAvatarFile(f);
+                    }
+                  }
+                  e.target.value = '';
+                }} />
             </div>
             <div className="flex items-center gap-2 mb-1">
               <ShareButton
                 url={`/profile/${profile?.id}`}
                 title={`${profile?.firstName} ${profile?.lastName} — Moooza`}
-                text={profile?.bio?.slice(0, 100)}
+                text={profile?.bio?.slice(0, proLimits.bioChars)}
                 className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
                 iconSize={16}
               />
@@ -1115,8 +1146,8 @@ export default function ProfilePage() {
             {/* Bio */}
             {editingBio ? (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-2">
-                <textarea value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} maxLength={100} rows={3} placeholder="Расскажите о себе..." className={`${inputCls} resize-none`} />
-                <p className="text-right text-[11px] text-slate-600">{formData.bio.length}/100</p>
+                <textarea value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} maxLength={proLimits.bioChars} rows={3} placeholder="Расскажите о себе..." className={`${inputCls} resize-none`} />
+                <p className="text-right text-[11px] text-slate-600">{formData.bio.length}/{proLimits.bioChars}</p>
                 <div className="flex gap-2">
                   <button onClick={() => setEditingBio(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
                   <button onClick={handleSaveBio} disabled={updateMutation.isPending} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
@@ -1493,9 +1524,14 @@ export default function ProfilePage() {
               </div>
               {/* Hint */}
               <div className="px-4 pt-2 pb-0">
-                {portfolioTab === 'audio' && <p className="text-[10px] text-slate-600">до 20 МБ · mp3, wav, flac, ogg</p>}
-                {portfolioTab === 'images' && <p className="text-[10px] text-slate-600">до 20 МБ · jpg, png, gif, webp</p>}
-                {portfolioTab === 'other' && <p className="text-[10px] text-slate-600">до 20 МБ · pdf, doc, xls</p>}
+                {portfolioTab === 'audio' && <p className="text-[10px] text-slate-600">до {proLimits.portfolioFileMB} МБ · mp3, wav, flac, ogg</p>}
+                {portfolioTab === 'images' && <p className="text-[10px] text-slate-600">до {proLimits.portfolioFileMB} МБ · jpg, png, gif, webp</p>}
+                {portfolioTab === 'other' && <p className="text-[10px] text-slate-600">до {proLimits.portfolioFileMB} МБ · pdf, doc, xls</p>}
+                {portfolioFiles.length >= proLimits.portfolioFiles && (
+                  <p className="text-[10px] text-amber-400/80 mt-0.5">
+                    Достигнут лимит файлов ({proLimits.portfolioFiles}){!isPro && ' · больше — в Pro'}
+                  </p>
+                )}
               </div>
               {/* Content */}
               <div className="px-4 py-3">
@@ -1506,12 +1542,12 @@ export default function ProfilePage() {
                     <p className="text-[11px] text-slate-400 leading-relaxed">Загружая файл, ты подтверждаешь, что у тебя есть права на его использование. Не заливай чужой контент без разрешения — можем удалить и ограничить доступ.</p>
                   </div>
                   <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                    <label className="flex flex-col gap-1 flex-shrink-0 cursor-pointer group w-16">
+                    <label className={`flex flex-col gap-1 flex-shrink-0 group w-16 ${portfolioFull ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
                       <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
                         {isUploadingPortfolio ? <Loader2 size={14} className="text-slate-500 animate-spin" /> : <Plus size={16} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
                       </div>
                       <span className="text-[9px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
-                      <input type="file" accept=".mp3,.wav,.ogg,.flac,.aac,.m4a,audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/flac,audio/aac,audio/x-m4a,audio/mp4" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+                      <input type="file" accept=".mp3,.wav,.ogg,.flac,.aac,.m4a,audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/flac,audio/aac,audio/x-m4a,audio/mp4" multiple className="hidden" disabled={isUploadingPortfolio || portfolioFull} onChange={e => handlePortfolioUpload(e.target.files)} />
                     </label>
                     {audioFiles.map((f: any) => (
                       <AudioTile key={f.id} url={`${API_URL}${f.url}`} title={f.originalName} onDelete={() => handlePortfolioDelete(f.id)} />
@@ -1524,12 +1560,12 @@ export default function ProfilePage() {
                 )}
                 {portfolioTab === 'images' && (
                   <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                    <label className="flex flex-col gap-1 flex-shrink-0 cursor-pointer group w-16">
+                    <label className={`flex flex-col gap-1 flex-shrink-0 group w-16 ${portfolioFull ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
                       <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
                         {isUploadingPortfolio ? <Loader2 size={14} className="text-slate-500 animate-spin" /> : <Plus size={16} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
                       </div>
                       <span className="text-[9px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
-                      <input type="file" accept="image/*" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+                      <input type="file" accept="image/*" multiple className="hidden" disabled={isUploadingPortfolio || portfolioFull} onChange={e => handlePortfolioUpload(e.target.files)} />
                     </label>
                     {imageFiles.map((f: any) => (
                       <div key={f.id} className="flex flex-col gap-1 flex-shrink-0 relative w-16">
@@ -1544,12 +1580,12 @@ export default function ProfilePage() {
                 )}
                 {portfolioTab === 'other' && (
                   <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                    <label className="flex flex-col gap-1 flex-shrink-0 cursor-pointer group w-16">
+                    <label className={`flex flex-col gap-1 flex-shrink-0 group w-16 ${portfolioFull ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
                       <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
                         {isUploadingPortfolio ? <Loader2 size={14} className="text-slate-500 animate-spin" /> : <Plus size={16} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
                       </div>
                       <span className="text-[9px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
-                      <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+                      <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" disabled={isUploadingPortfolio || portfolioFull} onChange={e => handlePortfolioUpload(e.target.files)} />
                     </label>
                     {otherFiles.map((f: any) => (
                       <div key={f.id} className="flex flex-col gap-1 flex-shrink-0 relative w-16">

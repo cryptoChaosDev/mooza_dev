@@ -105,7 +105,11 @@ export const uploadPortfolio = multer({
   storage: portfolioStorage,
   fileFilter: portfolioFileFilter,
   limits: {
-    fileSize: 20 * 1024 * 1024,
+    // Raised to the Pro MAX (50 MB). The effective per-user size limit
+    // (Free 20 MB / Pro 50 MB) is enforced in the route handler, since
+    // multer's fileSize is fixed at middleware-creation time and can't
+    // read per-request Pro state.
+    fileSize: 50 * 1024 * 1024,
   },
 });
 

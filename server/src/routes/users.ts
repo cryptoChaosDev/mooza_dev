@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { upload, uploadBanner, uploadPortfolio } from '../middleware/upload';
 import { yoNorm } from '../utils/search';
+import { isProActive, limitsFor } from '../utils/pro';
 import path from 'path';
 import fs from 'fs';
 
@@ -295,11 +296,18 @@ router.post('/me/avatar', authenticate, upload.single('avatar'), async (req: Aut
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // Get current user to delete old avatar
+    // Get current user to delete old avatar (+ Pro state for GIF gating)
     const currentUser = await prisma.user.findUnique({
       where: { id: req.userId },
-      select: { avatar: true }
+      select: { avatar: true, isPro: true, proUntil: true }
     });
+
+    // GIF avatar is Pro-only — delete the just-saved file and reject for non-Pro.
+    if (req.file.mimetype === 'image/gif' && !isProActive(currentUser)) {
+      const savedPath = path.join(process.cwd(), 'uploads', 'avatars', req.file.filename);
+      if (fs.existsSync(savedPath)) fs.unlinkSync(savedPath);
+      return res.status(400).json({ error: 'GIF-аватар и обложка доступны в Pro' });
+    }
 
     // Delete old avatar file if exists
     if (currentUser?.avatar) {
@@ -333,8 +341,15 @@ router.post('/me/banner', authenticate, uploadBanner.single('banner'), async (re
 
     const currentUser = await prisma.user.findUnique({
       where: { id: req.userId },
-      select: { bannerImage: true }
+      select: { bannerImage: true, isPro: true, proUntil: true }
     });
+
+    // GIF cover/banner is Pro-only — delete the just-saved file and reject for non-Pro.
+    if (req.file.mimetype === 'image/gif' && !isProActive(currentUser)) {
+      const savedPath = path.join(process.cwd(), 'uploads', 'covers', req.file.filename);
+      if (fs.existsSync(savedPath)) fs.unlinkSync(savedPath);
+      return res.status(400).json({ error: 'GIF-аватар и обложка доступны в Pro' });
+    }
 
     if (currentUser?.bannerImage) {
       const oldPath = path.join(process.cwd(), 'uploads', 'covers', path.basename(currentUser.bannerImage));
@@ -396,7 +411,18 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     if (firstName !== undefined) updateData.firstName = firstName;
     if (lastName !== undefined) updateData.lastName = lastName;
     if (nickname !== undefined) updateData.nickname = nickname;
-    if (bio !== undefined) updateData.bio = bio;
+    if (bio !== undefined) {
+      // Bio length is Pro-gated (Free 100 / Pro 200 chars).
+      const proRow = await prisma.user.findUnique({
+        where: { id: req.userId },
+        select: { isPro: true, proUntil: true },
+      });
+      const maxBio = limitsFor(isProActive(proRow)).bioChars;
+      if (typeof bio === 'string' && bio.length > maxBio) {
+        return res.status(400).json({ error: `Описание не должно превышать ${maxBio} символов` });
+      }
+      updateData.bio = bio;
+    }
     if (country !== undefined) updateData.country = country;
     if (city !== undefined) updateData.city = city;
     if (role !== undefined) updateData.role = role;
@@ -1000,8 +1026,32 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
 router.post('/me/portfolio', authenticate, uploadPortfolio.single('file'), async (req: AuthRequest, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const savedPath = path.join(process.cwd(), 'uploads', 'portfolio', req.file.filename);
+    const removeSaved = () => { if (fs.existsSync(savedPath)) fs.unlinkSync(savedPath); };
+
+    // Pro-gated limits (Free 10 files / 20 MB, Pro 20 files / 50 MB).
+    const proRow = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { isPro: true, proUntil: true },
+    });
+    const limits = limitsFor(isProActive(proRow));
+
+    // File COUNT cap.
     const count = await prisma.portfolioFile.count({ where: { userId: req.userId! } });
-    if (count >= 5) return res.status(400).json({ error: 'Max 5 portfolio files allowed' });
+    if (count >= limits.portfolioFiles) {
+      removeSaved();
+      return res.status(400).json({ error: `Достигнут лимит файлов портфолио (${limits.portfolioFiles})` });
+    }
+
+    // File SIZE cap (multer's fileSize is raised to the Pro MAX; enforce the
+    // effective per-user limit here and delete the just-saved file if over).
+    const maxBytes = limits.portfolioFileMB * 1024 * 1024;
+    if (req.file.size > maxBytes) {
+      removeSaved();
+      return res.status(400).json({ error: `Файл превышает лимит ${limits.portfolioFileMB} МБ` });
+    }
+
     const fileUrl = `/uploads/portfolio/${req.file.filename}`;
     const pf = await prisma.portfolioFile.create({
       data: { userId: req.userId!, url: fileUrl, originalName: Buffer.from(req.file.originalname, 'latin1').toString('utf8'), size: req.file.size, mimeType: req.file.mimetype },
