@@ -497,7 +497,9 @@ model User {
   isBlocked  Boolean  @default(false)
   blockedUntil DateTime?
   isPremium  Boolean  @default(false)
-  isPro      Boolean  @default(false)
+  isPro      Boolean  @default(false)          // manual permanent Pro override (admin)
+  proUntil   DateTime?                          // time-based Pro expiry (donation/referral); effective Pro = isPro || proUntil>now
+  proMonthsFromReferrals Int @default(0)        // referral-granted Pro months already applied (to compute deltas)
   isVerified Boolean  @default(false)
   emailVerified          Boolean   @default(false)
   emailVerificationCode  String?
@@ -577,6 +579,10 @@ model User {
   referralLinks    ReferralLink[] @relation("ReferralLinkOwner")
   usedReferralLink ReferralLink?  @relation("ReferralLinkConsumer")
   referralLinkUsed String?        // code of the ReferralLink this user signed up through
+
+  // Pro
+  donationCodes DonationCode[]
+  feedPresets   FeedPreset[]
 
   reviewsGiven    Review[] @relation("ReviewAuthor")
   reviewsReceived Review[] @relation("ReviewTarget")
@@ -1303,4 +1309,47 @@ model Notification {
   @@index([userId])
   @@index([userId, read])
   @@index([userId, createdAt])
+}
+
+// ============ PRO / DONATIONS ============
+
+enum DonationStatus {
+  CREATED   // code generated, not yet paid
+  PAID      // payment seen (optional intermediate state)
+  ACTIVATED // team verified payment and granted a Pro month
+}
+
+// One-time donation code (MOOOZA-XXXX) shown to the user before paying via CloudTips.
+// Each time the donate screen opens, a new code is issued and the previous one is
+// deactivated. The team matches the code from the payment comment to activate Pro.
+model DonationCode {
+  id          String         @id @default(uuid())
+  code        String         @unique          // MOOOZA-XXXX
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      DonationStatus @default(CREATED)
+  active      Boolean        @default(true)   // false once superseded by a newer code
+  amount      Int?                            // RUB, filled in at verification (optional)
+  note        String?                         // free-form admin note
+  createdAt   DateTime       @default(now())
+  paidAt      DateTime?
+  activatedAt DateTime?
+
+  @@index([userId])
+  @@index([code])
+  @@index([status])
+}
+
+// Saved feed-filter preset (Pro: multiple presets, free: a single one).
+model FeedPreset {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  filters   Json                              // serialized FlowFilters
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
