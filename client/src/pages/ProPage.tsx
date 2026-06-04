@@ -321,12 +321,14 @@ export default function ProPage() {
                   {donation?.cloudTipsUrl ? (
                     <>
                       <div className="rounded-2xl overflow-hidden border border-slate-800 mb-3 bg-slate-950" style={{ height: '68vh', minHeight: 460 }}>
+                        {/* No sandbox: CloudTips spawns nested payment/3DS frames that
+                            need scripts; it sets no X-Frame-Options and does not
+                            frame-bust, so a plain embed is the reliable option. */}
                         <iframe
                           src={donation.cloudTipsUrl}
                           title="Оплата CloudTips"
                           className="w-full h-full"
-                          sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-popups-to-escape-sandbox allow-top-navigation-by-user-activation"
-                          allow="payment *"
+                          allow="payment *; clipboard-write"
                         />
                       </div>
                       <button
