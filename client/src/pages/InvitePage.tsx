@@ -28,9 +28,17 @@ export default function InvitePage() {
 
   const { data: stats } = useQuery({
     queryKey: ['referral-stats'],
-    queryFn: async () => { const { data } = await referralAPI.getStats(); return data as { count: number }; },
+    queryFn: async () => {
+      const { data } = await referralAPI.getStats();
+      return data as { count: number; proMonthsEarned: number; towardNext: number; perMonth: number };
+    },
   });
   const referralCount = stats?.count ?? 0;
+  const proMonths = stats?.proMonthsEarned ?? 0;
+  const perMonth = stats?.perMonth ?? 10;
+  const towardNext = stats?.towardNext ?? 0;
+  const remainingToNext = Math.max(0, perMonth - towardNext);
+  const MAX_PRO_MONTHS = 6;
   const GOAL = 100;
 
   const { data: links = [], isLoading: linksLoading } = useQuery({
@@ -131,6 +139,16 @@ export default function InvitePage() {
                   Приведи 100 музыкантов на платформу и получи уникальный статус <span className="text-amber-300 font-semibold">Амбасадор Moooza</span> — особый бейдж в профиле и привилегии первого ряда.
                 </p>
               </div>
+            </div>
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="text-amber-300/80">До статуса Амбасадор</span>
+                <span className="text-slate-500">{Math.min(referralCount, GOAL)}/{GOAL}</span>
+              </div>
+              <div className="h-1.5 bg-amber-950/40 rounded-full overflow-hidden">
+                <div className="h-full bg-amber-500 rounded-full transition-all" style={{ width: `${Math.min(100, (referralCount / GOAL) * 100)}%` }} />
+              </div>
+              {referralCount >= GOAL && <p className="mt-2 text-xs text-amber-400 font-semibold text-center">🎉 Вы Амбасадор Moooza</p>}
             </div>
           </div>
 
@@ -246,29 +264,36 @@ export default function InvitePage() {
             </div>
           )}
 
-          {/* Total progress */}
+          {/* Pro progress */}
           <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-5">
-            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-4">Общий прогресс</p>
+            <div className="flex items-center gap-2 mb-4">
+              <Zap size={14} className="text-violet-400" />
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Прогресс Moooza Pro</p>
+            </div>
             <div className="flex items-center gap-4">
               <div className="text-center flex-1">
                 <p className="text-2xl font-bold text-white">{referralCount}</p>
-                <p className="text-xs text-slate-500 mt-0.5">Зарегистрировались</p>
+                <p className="text-xs text-slate-500 mt-0.5">Приглашено</p>
               </div>
               <div className="w-px h-10 bg-slate-800" />
               <div className="text-center flex-1">
-                <p className="text-2xl font-bold text-amber-400">{GOAL}</p>
-                <p className="text-xs text-slate-500 mt-0.5">Цель</p>
+                <p className="text-2xl font-bold text-violet-400">{proMonths}</p>
+                <p className="text-xs text-slate-500 mt-0.5">Месяцев Pro</p>
               </div>
             </div>
-            <div className="mt-4 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-primary-500 rounded-full transition-all"
-                style={{ width: `${Math.min(100, (referralCount / GOAL) * 100)}%` }}
-              />
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-xs mb-1.5">
+                <span className="text-slate-400">До следующего месяца Pro</span>
+                <span className="text-slate-500">{towardNext}/{perMonth}</span>
+              </div>
+              <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                <div className="h-full bg-violet-500 rounded-full transition-all" style={{ width: `${(towardNext / perMonth) * 100}%` }} />
+              </div>
             </div>
-            {referralCount >= GOAL && (
-              <p className="mt-3 text-xs text-amber-400 font-semibold text-center">🎉 Цель достигнута! Вы Амбасадор Moooza</p>
-            )}
+            <p className="mt-3 text-xs text-slate-500 leading-relaxed">
+              Каждые {perMonth} регистраций по вашим ссылкам — <span className="text-slate-300">+1 месяц Moooza Pro</span>.
+              {remainingToNext > 0 ? ` Ещё ${remainingToNext} до следующего месяца.` : ''} Накопить можно до {MAX_PRO_MONTHS} месяцев.
+            </p>
           </div>
 
           {/* How it works */}
@@ -277,7 +302,8 @@ export default function InvitePage() {
             {[
               { icon: Plus, text: 'Создайте отдельную ссылку для каждого приглашения' },
               { icon: Share2, text: 'Отправьте ссылку конкретному человеку — она сработает только для него' },
-              { icon: Star, text: 'После регистрации ссылка «сгорает». Копите 100 приглашений → статус Амбасадор' },
+              { icon: Zap, text: 'Каждые 10 регистраций по вашим ссылкам — +1 месяц Moooza Pro (до 6 месяцев)' },
+              { icon: Star, text: 'Ссылка «сгорает» после регистрации. 100 приглашений → статус Амбасадор' },
             ].map(({ icon: Icon, text }, i) => (
               <div key={i} className="flex items-start gap-3">
                 <div className="w-7 h-7 rounded-xl bg-slate-800 flex items-center justify-center flex-shrink-0 mt-0.5">
