@@ -714,6 +714,40 @@ router.get('/service-cities', async (req, res) => {
   }
 });
 
+// GET /api/references/people-locations — distinct user cities + countries for the
+// People-tab location filter. Searchable via ?q= (ё/е-insensitive).
+router.get('/people-locations', async (req, res) => {
+  try {
+    const { q } = req.query;
+    const rows = await prisma.user.findMany({
+      where: { OR: [{ city: { not: null } }, { country: { not: null } }] },
+      select: { city: true, cityNorm: true, country: true, countryNorm: true },
+      take: 5000,
+    });
+    const qn = q ? yoNorm(String(q)) : '';
+    const seen = new Set<string>();
+    const names: string[] = [];
+    const add = (raw?: string | null, norm?: string | null) => {
+      const name = raw?.trim();
+      if (!name) return;
+      const n = norm ?? yoNorm(name);
+      if (seen.has(n)) return;
+      if (qn && !n.includes(qn)) return;
+      seen.add(n);
+      names.push(name);
+    };
+    for (const r of rows) {
+      add(r.city, r.cityNorm);
+      add(r.country, r.countryNorm);
+    }
+    names.sort((a, b) => a.localeCompare(b, 'ru'));
+    res.json(names.slice(0, 50).map(name => ({ name })));
+  } catch (e: any) {
+    console.error('Get people locations error:', e);
+    res.status(500).json({ error: 'Failed to get locations' });
+  }
+});
+
 // Get all reference data in one call
 router.get('/all', async (_req, res) => {
   try {

@@ -682,6 +682,17 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
     const customFilterValueIds = customFilterValueIdsRaw
       ? (customFilterValueIdsRaw as string).split(',').map(s => s.trim()).filter(Boolean)
       : [];
+
+    // ── People-tab catalog filters/sort ──────────────────────────────────────
+    const splitList = (raw: any): string[] =>
+      raw ? String(raw).split(',').map(s => s.trim()).filter(Boolean) : [];
+    const locations = splitList(req.query.location);          // city/country names
+    const professionFilter = splitList(req.query.profession); // profession ids
+    const occupancy = splitList(req.query.occupancy).filter(o => ['open', 'considering', 'closed'].includes(o));
+    const sortRaw = String(req.query.sort ?? 'date');
+    const sort = ['date', 'rating', 'connections', 'alpha'].includes(sortRaw) ? sortRaw : 'date';
+    const alphaDir = String(req.query.alphaDir ?? 'asc') === 'desc' ? 'desc' : 'asc';
+
     const where: any = { id: { not: req.userId } };
 
     const andClauses: any[] = [];
@@ -751,8 +762,37 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
       });
     }
 
+    // ── People-tab: location (city OR country), profession, occupancy ────────
+    if (locations.length > 0) {
+      const locNorms = locations.map(l => yoNorm(l));
+      andClauses.push({
+        OR: locNorms.flatMap(n => [
+          { cityNorm: { contains: n } },
+          { countryNorm: { contains: n } },
+        ]),
+      });
+    }
+
+    if (professionFilter.length > 0) {
+      andClauses.push({ userServices: { some: { professionId: { in: professionFilter } } } });
+    }
+
+    if (occupancy.length > 0) {
+      andClauses.push({ occupancyStatus: { in: occupancy } });
+    }
+
     if (andClauses.length > 0) {
       where.AND = andClauses;
+    }
+
+    // DB-level ordering for the cheap sorts; rating/connections are sorted in JS
+    // after computing aggregates below.
+    let orderBy: any;
+    if (sort === 'alpha') {
+      orderBy = [{ lastName: alphaDir }, { firstName: alphaDir }];
+    } else {
+      // 'date' (default) — newest first; also a stable base for rating/connections.
+      orderBy = [{ createdAt: 'desc' }];
     }
 
     const users = await prisma.user.findMany({
@@ -763,20 +803,20 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
         lastName: true,
         nickname: true,
         avatar: true,
+        bio: true,
         city: true,
+        country: true,
+        occupancyStatus: true,
         isPremium: true,
         isVerified: true,
         isBlocked: true,
+        createdAt: true,
         fieldOfActivity: { select: { id: true, name: true } },
         userServices: {
           select: { profession: { select: { id: true, name: true } } },
           distinct: ['professionId'],
         },
-        portfolioFiles: {
-          select: { id: true, url: true, mimeType: true, originalName: true },
-          take: 6,
-          orderBy: { createdAt: 'desc' },
-        },
+        reviewsReceived: { select: { rating: true } },
         _count: {
           select: {
             sentConnections: { where: { status: 'ACCEPTED' } },
@@ -784,11 +824,30 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
           },
         },
       },
-      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      orderBy,
       take: 500,
     });
 
-    res.json(users);
+    // Compute per-user aggregates: avg rating, reviews count, connection count.
+    const enriched = users.map((u: any) => {
+      const reviews = u.reviewsReceived ?? [];
+      const reviewsCount = reviews.length;
+      const ratingAvg = reviewsCount > 0
+        ? reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviewsCount
+        : null;
+      const connectionsCount =
+        (u._count?.sentConnections ?? 0) + (u._count?.receivedConnections ?? 0);
+      const { reviewsReceived, ...rest } = u;
+      return { ...rest, ratingAvg, reviewsCount, connectionsCount };
+    });
+
+    if (sort === 'rating') {
+      enriched.sort((a: any, b: any) => (b.ratingAvg ?? -1) - (a.ratingAvg ?? -1));
+    } else if (sort === 'connections') {
+      enriched.sort((a: any, b: any) => b.connectionsCount - a.connectionsCount);
+    }
+
+    res.json(enriched);
   } catch (error) {
     console.error('[catalog] GET /catalog error:', error);
     res.status(500).json({ error: 'Failed to get catalog' });

@@ -114,7 +114,19 @@ export const userAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   search: (params: any) => api.get('/users/search', { params }),
-  catalog: (params?: { query?: string; fieldOfActivityId?: string; directionId?: string; professionId?: string; customFilterValueIds?: string }) =>
+  catalog: (params?: {
+    query?: string;
+    fieldOfActivityId?: string;
+    directionId?: string;
+    professionId?: string;
+    customFilterValueIds?: string;
+    // People-tab filters/sort
+    location?: string;       // comma-separated city/country names
+    profession?: string;     // comma-separated profession ids
+    occupancy?: string;      // comma-separated: open|considering|closed
+    sort?: 'date' | 'rating' | 'connections' | 'alpha';
+    alphaDir?: 'asc' | 'desc';
+  }) =>
     api.get('/users/catalog', { params }),
   getUser: (id: string) => api.get(`/users/${id}`),
   getUserServices: (id: string) => api.get(`/users/${id}/services`),
@@ -170,6 +182,8 @@ export const referenceAPI = {
     api.get('/references/service-search', { params }),
   // Distinct provider cities (for the location filter autocomplete).
   getServiceCities: (q?: string) => api.get('/references/service-cities', { params: { q } }),
+  // Distinct user cities + countries (People-tab location filter autocomplete).
+  getPeopleLocations: (q?: string) => api.get('/references/people-locations', { params: { q } }),
   getServiceDetail: (serviceId: string) => api.get(`/references/services/${serviceId}`),
   getServiceFilters: (serviceId: string) => api.get(`/references/services/${serviceId}/filters`),
   searchMusicians: (params: {
