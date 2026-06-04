@@ -582,10 +582,6 @@ const POST_TYPE_META: Record<string, { label: string; icon: any; accent: string;
 const POST_TYPE_OPTIONS = [
   { type: 'blog',       label: 'Блог',              icon: FileText,    desc: 'Свободная форма',     inDev: false },
   { type: 'question',   label: 'Вопрос',            icon: HelpCircle,  desc: 'Вопрос и обсуждение', inDev: false },
-  { type: 'vacancy',    label: 'Вакансия',           icon: Briefcase,   desc: 'В разработке',        inDev: true },
-  { type: 'event',      label: 'Мероприятие',        icon: Calendar,    desc: 'В разработке',        inDev: true },
-  { type: 'task',       label: 'Задача',             icon: CheckSquare, desc: 'В разработке',        inDev: true },
-  { type: 'offer',      label: 'Предложение',        icon: Lightbulb,   desc: 'В разработке',        inDev: true },
   { type: 'service',    label: 'Услуга',             icon: Wrench,      desc: 'Свободная форма',     inDev: false },
   { type: 'employment', label: 'Апдейт занятости',  icon: Zap,         desc: 'Обновить статус',     inDev: false },
   { type: 'poll',       label: 'Опрос',              icon: BarChart3,   desc: 'Голосование',         inDev: false },
