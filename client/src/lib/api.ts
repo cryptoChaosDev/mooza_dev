@@ -137,7 +137,7 @@ export const referenceAPI = {
   getProfessions: (params?: { directionId?: string; search?: string; excludeUserId?: string; all?: boolean }) =>
     api.get('/references/professions', { params }),
   getProfessionFeatures: () => api.get('/references/profession-features'),
-  getArtists: (params?: { search?: string; type?: string }) =>
+  getArtists: (params?: { search?: string; type?: string; genre?: string; sort?: 'date' | 'alpha' }) =>
     api.get('/references/artists', { params }),
   // Multi-level search endpoints
   getServices: (params?: { directionId?: string; professionId?: string; fieldOfActivityId?: string }) =>

@@ -312,18 +312,29 @@ export default function SearchPage() {
   // ── Artists tab state ──────────────────────────────────────────────────────
   const [artistQuery, setArtistQuery] = useState('');
   const [debouncedArtistQuery, setDebouncedArtistQuery] = useState('');
+  // Type is single-select among the 3 types ('' = «Все»). Genres combine on top.
+  const [artistTypeFilter, setArtistTypeFilter] = useState<string>('');
+  const [artistGenreFilter, setArtistGenreFilter] = useState<string[]>([]);
+  // Sort: 'date' (default, newest first) | 'alpha' (name A→Z).
+  const [artistSort, setArtistSort] = useState<'date' | 'alpha'>('date');
+  const [artistSortOpen, setArtistSortOpen] = useState(false);
+  // Advanced filter (genre multiselect) modal.
+  const [artistFilterOpen, setArtistFilterOpen] = useState(false);
+  const [tempArtistGenres, setTempArtistGenres] = useState<string[]>([]);
+
+  const ARTIST_SORT_OPTIONS: { value: 'date' | 'alpha'; label: string }[] = [
+    { value: 'date', label: 'По дате добавления' },
+    { value: 'alpha', label: 'По алфавиту' },
+  ];
 
   // ── People tab state ───────────────────────────────────────────────────────
   const [peopleQuery, setPeopleQuery] = useState('');
   const [debouncedPeopleQuery, setDebouncedPeopleQuery] = useState('');
-  const [artistTypeFilter, setArtistTypeFilter] = useState<string[]>([]);
-  const [artistGenreFilter, setArtistGenreFilter] = useState<string[]>([]);
 
-  function toggleType(value: string) {
-    if (value === 'ALL') { setArtistTypeFilter([]); return; }
-    setArtistTypeFilter(prev =>
-      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
-    );
+  // Single-select type ('' clears to «Все»; selecting the active type clears it).
+  function selectType(value: string) {
+    if (value === 'ALL') { setArtistTypeFilter(''); return; }
+    setArtistTypeFilter(prev => (prev === value ? '' : value));
   }
 
   function toggleGenre(id: string) {
@@ -414,23 +425,18 @@ export default function SearchPage() {
   });
 
   // ── Artists ────────────────────────────────────────────────────────────────
+  // Verified artists only (server-enforced). Search + type + genres + sort are
+  // all applied server-side; type is single-select, genres combine with it.
   const { data: artists, isLoading: artistsLoading } = useQuery({
-    queryKey: ['catalog-artists', debouncedArtistQuery, artistTypeFilter, artistGenreFilter],
+    queryKey: ['catalog-artists', debouncedArtistQuery, artistTypeFilter, artistGenreFilter, artistSort],
     queryFn: async () => {
-      // Only show groups (GROUP / COVER_GROUP), not solo artists
       const { data } = await referenceAPI.getArtists({
         search: debouncedArtistQuery || undefined,
+        type: artistTypeFilter || undefined,
+        genre: artistGenreFilter.length ? artistGenreFilter.join(',') : undefined,
+        sort: artistSort,
       });
-      let result = (data as any[]).filter((a: any) => a.type === 'GROUP' || a.type === 'COVER_GROUP');
-      if (artistTypeFilter.length > 0) {
-        result = result.filter((a: any) => artistTypeFilter.includes(a.type));
-      }
-      if (artistGenreFilter.length > 0) {
-        result = result.filter((a: any) =>
-          a.genres?.some((g: any) => artistGenreFilter.includes(g.genre?.id))
-        );
-      }
-      return result;
+      return data as any[];
     },
     enabled: activeTab === 'artists',
   });
@@ -767,12 +773,12 @@ export default function SearchPage() {
                 {ARTIST_TYPES.map(type => {
                   const Icon = type.icon;
                   const isActive = type.value === 'ALL'
-                    ? artistTypeFilter.length === 0
-                    : artistTypeFilter.includes(type.value);
+                    ? artistTypeFilter === ''
+                    : artistTypeFilter === type.value;
                   return (
                     <button
                       key={type.value}
-                      onClick={() => toggleType(type.value)}
+                      onClick={() => selectType(type.value)}
                       className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all flex-shrink-0 ${
                         isActive
                           ? 'bg-primary-600 text-white shadow-sm'
@@ -785,6 +791,56 @@ export default function SearchPage() {
                   );
                 })}
               </div>
+            </div>
+
+            {/* Sort + advanced filter controls */}
+            <div className="flex items-center gap-2 mb-4">
+              {/* Sort */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setArtistSortOpen(v => !v)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+                >
+                  <ArrowDownUp size={14} />
+                  {ARTIST_SORT_OPTIONS.find(o => o.value === artistSort)?.label}
+                  <ChevronDown size={13} className={`transition-transform ${artistSortOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {artistSortOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[55]" onClick={() => setArtistSortOpen(false)} />
+                    <div className="absolute left-0 mt-1.5 z-[56] w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1">
+                      {ARTIST_SORT_OPTIONS.map(o => (
+                        <button
+                          key={o.value}
+                          type="button"
+                          onClick={() => { setArtistSort(o.value); setArtistSortOpen(false); }}
+                          className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                            artistSort === o.value ? 'bg-primary-600/20 text-primary-300 font-medium' : 'text-slate-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Advanced filter (full genre multiselect) */}
+              <button
+                type="button"
+                onClick={() => { setTempArtistGenres(artistGenreFilter); setArtistFilterOpen(true); }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+              >
+                <SlidersHorizontal size={14} />
+                Фильтр
+                {artistGenreFilter.length > 0 && (
+                  <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                    {artistGenreFilter.length}
+                  </span>
+                )}
+              </button>
             </div>
 
             {/* Genre tiles */}
@@ -839,7 +895,9 @@ export default function SearchPage() {
             {/* Artist list */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Все артисты · от А до Я</p>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  {artistSort === 'alpha' ? 'Все артисты · от А до Я' : 'Все артисты · сначала новые'}
+                </p>
                 {artistsLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
               </div>
 
@@ -900,7 +958,7 @@ export default function SearchPage() {
                   <div className="p-4 bg-slate-800/50 rounded-2xl mb-3">
                     <Music2 size={28} className="text-slate-600" />
                   </div>
-                  <p className="text-slate-400 text-sm">Артисты не найдены</p>
+                  <p className="text-slate-400 text-sm">Такой артист не найден</p>
                 </div>
               )}
             </div>
@@ -1099,6 +1157,65 @@ export default function SearchPage() {
                   setPriceMax(tempPriceMax);
                   setFiltersOpen(false);
                 }}
+                className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors"
+              >
+                Применить
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Artist advanced filter modal — full genre multiselect */}
+      {artistFilterOpen && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setArtistFilterOpen(false)} />
+          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal size={16} className="text-primary-400" />
+                <h3 className="text-base font-semibold text-white">Жанры</h3>
+                {tempArtistGenres.length > 0 && (
+                  <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{tempArtistGenres.length}</span>
+                )}
+              </div>
+              <button onClick={() => setArtistFilterOpen(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
+            </div>
+
+            <div className="px-5 py-4 overflow-y-auto">
+              {(genresList ?? []).length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {(genresList ?? []).map((genre: any) => {
+                    const isActive = tempArtistGenres.includes(genre.id);
+                    return (
+                      <button
+                        key={genre.id}
+                        type="button"
+                        onClick={() => setTempArtistGenres(prev => prev.includes(genre.id) ? prev.filter(x => x !== genre.id) : [...prev, genre.id])}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                          isActive ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600'
+                        }`}
+                      >
+                        {genre.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-slate-500 text-sm">Жанры не найдены</p>
+              )}
+            </div>
+
+            <div className="px-5 pb-5 pt-4 border-t border-slate-800 flex gap-2.5 flex-shrink-0">
+              <button
+                onClick={() => { setTempArtistGenres([]); setArtistGenreFilter([]); setArtistFilterOpen(false); }}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors"
+              >
+                Сбросить
+              </button>
+              <button
+                onClick={() => { setArtistGenreFilter(tempArtistGenres); setArtistFilterOpen(false); }}
                 className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors"
               >
                 Применить

@@ -753,13 +753,30 @@ router.get('/profession-features', async (_req, res) => {
 // Get artists (with search, type filter, genres)
 router.get('/artists', async (req, res) => {
   try {
-    const { search, type } = req.query;
+    const { search, type, genre, sort } = req.query;
+    // Only verified artists are listed in the catalog.
     const where: any = { status: 'VERIFIED' };
     if (search) where.nameNorm = { contains: yoNorm(search as string) };
     if (type && type !== 'ALL') where.type = type as string;
+    // Genre filter: accept one or more genre ids OR names (comma-separated).
+    const genreTokens = String(genre || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (genreTokens.length) {
+      where.genres = {
+        some: {
+          OR: [
+            { genreId: { in: genreTokens } },
+            { genre: { name: { in: genreTokens } } },
+          ],
+        },
+      };
+    }
+    // Sort: alpha = name asc · date (default) = newest first.
+    const orderBy = sort === 'alpha'
+      ? { name: 'asc' as const }
+      : { createdAt: 'desc' as const };
     const artists = await prisma.artist.findMany({
       where,
-      orderBy: { name: 'asc' },
+      orderBy,
       take: 200,
       include: {
         genres: { include: { genre: { select: { id: true, name: true } } } },
