@@ -107,6 +107,13 @@ export default function ProPage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  // CloudTips is protected by Cloudflare Turnstile, which fails inside a
+  // cross-origin iframe — so payment must open top-level (new tab).
+  const goToPay = () => {
+    if (donation?.cloudTipsUrl) window.open(donation.cloudTipsUrl, '_blank', 'noopener');
+    setStep('done');
+  };
+
   const proUntilLabel = user?.proUntil
     ? new Date(user.proUntil).toLocaleDateString('ru-RU')
     : null;
@@ -314,45 +321,20 @@ export default function ProPage() {
                     </button>
                   </div>
 
-                  <p className="text-xs text-slate-500 text-center mb-4 leading-relaxed">
-                    Впиши этот код в поле «Комментарий» в форме ниже. Без кода активация займёт больше времени.
+                  <p className="text-xs text-slate-500 text-center mb-6 leading-relaxed">
+                    Впиши этот код в поле «Комментарий» при оплате. Без кода активация займёт больше времени.
                   </p>
 
-                  {donation?.cloudTipsUrl ? (
-                    <>
-                      <div className="rounded-2xl overflow-hidden border border-slate-800 mb-3 bg-slate-950" style={{ height: '68vh', minHeight: 460 }}>
-                        {/* No sandbox: CloudTips spawns nested payment/3DS frames that
-                            need scripts; it sets no X-Frame-Options and does not
-                            frame-bust, so a plain embed is the reliable option. */}
-                        <iframe
-                          src={donation.cloudTipsUrl}
-                          title="Оплата CloudTips"
-                          className="w-full h-full"
-                          allow="payment *; clipboard-write"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => window.open(donation.cloudTipsUrl, '_blank')}
-                        className="w-full mb-4 text-xs text-slate-400 hover:text-white transition-colors inline-flex items-center justify-center gap-1"
-                      >
-                        <ExternalLink size={13} /> Форма не открылась? Открыть в новой вкладке
-                      </button>
-                      <button
-                        onClick={() => setStep('done')}
-                        className="w-full py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-2xl transition-colors"
-                      >
-                        Я оплатил(а)
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => setStep('done')}
-                      className="w-full py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-2xl transition-colors"
-                    >
-                      Продолжить
-                    </button>
-                  )}
+                  <button
+                    onClick={goToPay}
+                    className="w-full py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-2xl transition-colors flex items-center justify-center gap-2"
+                  >
+                    <ExternalLink size={17} />
+                    Перейти к оплате
+                  </button>
+                  <p className="text-[11px] text-slate-600 text-center mt-3 leading-relaxed">
+                    Оплата откроется на защищённой странице CloudTips в новой вкладке.
+                  </p>
                 </>
               )}
             </div>
