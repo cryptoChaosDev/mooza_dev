@@ -521,6 +521,19 @@ export const adminAPI = {
     deleteUser: (id: string) => api.delete(`${adminBase}/users/${id}`),
     verifyEmail: (id: string) => api.patch(`${adminBase}/users/${id}/verify-email`),
   },
+  // Moooza Pro donations
+  listDonations: (status?: string) =>
+    api.get(`${adminBase}/donations`, { params: status ? { status } : undefined }),
+  activateDonation: (id: string, body?: { amount?: number; note?: string }) =>
+    api.post(`${adminBase}/donations/${id}/activate`, body ?? {}),
+  grantProMonth: (userId: string) =>
+    api.post(`${adminBase}/users/${userId}/grant-pro-month`),
+};
+
+// Moooza Pro API (user-facing donation flow)
+export const proAPI = {
+  startDonation: () => api.post('/pro/donation/start'),
+  currentDonation: () => api.get('/pro/donation/current'),
 };
 
 export const dealAPI = {

@@ -2462,6 +2462,171 @@ function ComplaintsTab() {
   );
 }
 
+// ─── Pro donations tab ───────────────────────────────────────────────────────
+
+interface DonationRow {
+  id: string;
+  code: string;
+  status: 'CREATED' | 'PAID' | 'ACTIVATED';
+  amount: number | null;
+  note: string | null;
+  createdAt: string;
+  activatedAt: string | null;
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    nickname: string | null;
+    email: string | null;
+    proUntil: string | null;
+    isPro: boolean;
+  };
+}
+
+const DONATION_STATUS_TABS = [
+  { id: '', label: 'Все' },
+  { id: 'CREATED', label: 'Ожидают' },
+  { id: 'PAID', label: 'Оплачены' },
+  { id: 'ACTIVATED', label: 'Активированы' },
+];
+
+const donationStatusBadge: Record<string, string> = {
+  CREATED: 'bg-amber-500/20 text-amber-400',
+  PAID: 'bg-blue-500/20 text-blue-400',
+  ACTIVATED: 'bg-emerald-500/20 text-emerald-400',
+};
+
+const donationStatusLabel: Record<string, string> = {
+  CREATED: 'Ожидает',
+  PAID: 'Оплачен',
+  ACTIVATED: 'Активирован',
+};
+
+function DonationsTab() {
+  const qc = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState('');
+  const [grantId, setGrantId] = useState('');
+
+  const { data: donations = [], isLoading } = useQuery<DonationRow[]>({
+    queryKey: ['admin-donations', statusFilter],
+    queryFn: () => adminAPI.listDonations(statusFilter || undefined).then((r: any) => r.data),
+    refetchInterval: 30000,
+  });
+
+  const activateMut = useMutation({
+    mutationFn: (id: string) => adminAPI.activateDonation(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-donations'] });
+    },
+  });
+
+  const grantMut = useMutation({
+    mutationFn: (userId: string) => adminAPI.grantProMonth(userId.trim()),
+    onSuccess: () => {
+      setGrantId('');
+      qc.invalidateQueries({ queryKey: ['admin-donations'] });
+    },
+  });
+
+  const userName = (u: DonationRow['user']) => {
+    const full = `${u.firstName} ${u.lastName}`.trim();
+    return u.nickname ? `${full} (@${u.nickname})` : full;
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Manual grant — "user forgot to enter the code" support case */}
+      <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 space-y-2">
+        <h3 className="font-semibold text-white flex items-center gap-2">
+          <Crown size={16} className="text-amber-400" /> Выдать месяц Pro вручную
+        </h3>
+        <p className="text-xs text-slate-500">
+          Для случая «пользователь задонатил, но забыл ввести код». Укажите ID пользователя.
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            value={grantId}
+            onChange={e => setGrantId(e.target.value)}
+            placeholder="ID пользователя"
+            className="flex-1 bg-slate-800 text-white text-sm px-3 py-2 rounded-lg outline-none border border-slate-700 focus:border-primary-500"
+          />
+          <button
+            onClick={() => grantId.trim() && grantMut.mutate(grantId)}
+            disabled={!grantId.trim() || grantMut.isPending}
+            className="flex items-center gap-1.5 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+          >
+            {grantMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            Выдать месяц
+          </button>
+        </div>
+        {grantMut.isError && <p className="text-xs text-red-400">Не удалось выдать Pro. Проверьте ID.</p>}
+        {grantMut.isSuccess && <p className="text-xs text-emerald-400">Месяц Pro выдан.</p>}
+      </div>
+
+      {/* Status filter */}
+      <div className="flex flex-wrap gap-1.5">
+        {DONATION_STATUS_TABS.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setStatusFilter(t.id)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              statusFilter === t.id ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-slate-500" /></div>
+      ) : donations.length === 0 ? (
+        <div className="text-center py-8 text-slate-500 text-sm">Нет донатов</div>
+      ) : (
+        <div className="space-y-2">
+          {donations.map(d => (
+            <div key={d.id} className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-sm text-white">{d.code}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${donationStatusBadge[d.status]}`}>
+                      {donationStatusLabel[d.status] ?? d.status}
+                    </span>
+                    {d.user.isPro && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 flex items-center gap-1">
+                        <Crown size={11} /> Pro
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-slate-300 mt-1 truncate">{userName(d.user)}</p>
+                  {d.user.email && <p className="text-xs text-slate-500 truncate">{d.user.email}</p>}
+                  <p className="text-xs text-slate-600 mt-1">
+                    {new Date(d.createdAt).toLocaleString('ru-RU')}
+                    <span className="text-slate-700"> · ID: {d.user.id}</span>
+                  </p>
+                </div>
+                {d.status !== 'ACTIVATED' && (
+                  <button
+                    onClick={() => activateMut.mutate(d.id)}
+                    disabled={activateMut.isPending}
+                    className="flex items-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-3 py-2 rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
+                  >
+                    {activateMut.isPending && activateMut.variables === d.id
+                      ? <Loader2 size={13} className="animate-spin" />
+                      : <Check size={13} />}
+                    Активировать Pro
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const TABS = [
   { id: 'structure',   label: 'Структура' },
   { id: 'spheres',     label: 'Сферы' },
@@ -2471,6 +2636,7 @@ const TABS = [
   { id: 'filters',     label: 'Фильтры' },
   { id: 'orgs',        label: 'Группы' },
   { id: 'users',       label: 'Пользователи' },
+  { id: 'donations',   label: 'Донаты Pro' },
   { id: 'moderation',  label: 'Модерация' },
   { id: 'settings',    label: 'Настройки' },
 ] as const;
@@ -2566,6 +2732,8 @@ export default function AdminPage() {
         )}
 
         {tab === 'users' && <UsersTab />}
+
+        {tab === 'donations' && <DonationsTab />}
 
         {tab === 'moderation' && (
           <div className="space-y-8">

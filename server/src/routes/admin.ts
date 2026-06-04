@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { notifyMany } from '../utils/notify';
 import { yoNorm } from '../utils/search';
+import { grantProMonth, isProActive } from '../utils/pro';
 
 const router = Router();
 
@@ -836,6 +837,71 @@ router.patch('/user-services/:id/reject', async (req, res) => {
     } catch {}
     res.json({ ok: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Pro Donations ───────────────────────────────────────────────────────────
+const donationUserSelect = {
+  id: true, firstName: true, lastName: true, nickname: true,
+  email: true, proUntil: true, isPro: true,
+} as const;
+
+const withIsPro = <T extends { user: { isPro: boolean; proUntil: Date | null } }>(row: T) => ({
+  ...row,
+  user: { ...row.user, isPro: isProActive(row.user) },
+});
+
+// GET /admin/donations — list donation codes (newest first), optional ?status= filter.
+// Pending (non-ACTIVATED) rows are surfaced first so the team sees them at a glance.
+router.get('/donations', async (req, res) => {
+  try {
+    const status = req.query.status as string | undefined;
+    const where = status ? { status: status as any } : {};
+    const donations = await prisma.donationCode.findMany({
+      where,
+      include: { user: { select: donationUserSelect } },
+      orderBy: { createdAt: 'desc' },
+    });
+    // Surface pending (non-ACTIVATED) rows first; keep newest-first within each group.
+    const sorted = [...donations].sort((a, b) => {
+      const ax = a.status === 'ACTIVATED' ? 1 : 0;
+      const bx = b.status === 'ACTIVATED' ? 1 : 0;
+      return ax - bx; // stable sort preserves the createdAt-desc order within groups
+    });
+    res.json(sorted.map(withIsPro));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /admin/donations/:id/activate — grant a Pro month and mark the code ACTIVATED.
+router.post('/donations/:id/activate', async (req, res) => {
+  try {
+    const donation = await prisma.donationCode.findUnique({ where: { id: req.params.id } });
+    if (!donation) return res.status(404).json({ error: 'Донат не найден' });
+    if (donation.status === 'ACTIVATED') return res.status(400).json({ error: 'Донат уже активирован' });
+
+    await grantProMonth(donation.userId, 'donation');
+
+    const { amount, note } = req.body as { amount?: number; note?: string };
+    const data: any = { status: 'ACTIVATED', activatedAt: new Date() };
+    if (amount !== undefined) data.amount = amount === null ? null : Number(amount);
+    if (note !== undefined) data.note = note || null;
+
+    const updated = await prisma.donationCode.update({
+      where: { id: donation.id },
+      data,
+      include: { user: { select: donationUserSelect } },
+    });
+    res.json(withIsPro(updated));
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+// POST /admin/users/:id/grant-pro-month — manual fallback for the "forgot the code" case.
+router.post('/users/:id/grant-pro-month', async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const proUntil = await grantProMonth(user.id, 'admin');
+    res.json({ proUntil });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
 // ── Site Settings ──────────────────────────────────────────────────────────────
