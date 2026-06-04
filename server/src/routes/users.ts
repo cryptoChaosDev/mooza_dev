@@ -566,7 +566,7 @@ router.put('/me/services', authenticate, async (req: AuthRequest, res) => {
             skillLevels:     { connect: toConnect(us.skillLevelIds) },
             availabilities:  { connect: toConnect(us.availabilityIds) },
             geographies:                 { connect: toConnect(us.geographyIds) },
-            name:                        (us as any).name || null,
+            name:                        (us as any).name ? String((us as any).name).slice(0, 50) : null,
             priceFrom:                   us.priceFrom ?? null,
             priceTo:                     us.priceTo ?? null,
             deadlineFrom:                (us as any).deadlineFrom != null ? Number((us as any).deadlineFrom) : null,
@@ -601,7 +601,7 @@ router.patch('/me/services/:serviceId', authenticate, async (req: AuthRequest, r
     const updated = await prisma.userService.update({
       where: { id: req.params.serviceId },
       data: {
-        ...(name !== undefined ? { name: name || null } : {}),
+        ...(name !== undefined ? { name: name ? String(name).slice(0, 50) : null } : {}),
         ...(priceFrom    !== undefined ? { priceFrom:    priceFrom    !== '' && priceFrom    != null ? Number(priceFrom)    : null } : {}),
         ...(priceTo      !== undefined ? { priceTo:      priceTo      !== '' && priceTo      != null ? Number(priceTo)      : null } : {}),
         ...(deadlineFrom !== undefined ? { deadlineFrom: deadlineFrom !== '' && deadlineFrom != null ? Number(deadlineFrom) : null } : {}),

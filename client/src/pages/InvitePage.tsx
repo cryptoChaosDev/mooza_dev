@@ -7,7 +7,9 @@ import {
 } from 'lucide-react';
 import { referralAPI } from '../lib/api';
 
-const APP_URL = 'https://moooza.ru';
+// Referral links point at the current origin (dev → dev links, prod → prod links),
+// falling back to the canonical domain when origin is unavailable.
+const APP_URL = (typeof window !== 'undefined' && window.location?.origin) || 'https://moooza.ru';
 
 interface RefLink {
   id: string;
