@@ -197,7 +197,6 @@ function ServiceCardItem({ card, currentUserId, onNavigate, onMessage, onDeal }:
               <span className="flex items-center gap-0.5 text-[11px] text-amber-400 font-medium">
                 <Star size={11} fill="currentColor" />
                 {Number(rating.avg).toFixed(1)}
-                <span className="text-slate-600">({rating.count})</span>
               </span>
             )}
             {user.city && <span className="text-[11px] text-slate-600 truncate">{user.city}</span>}
@@ -625,9 +624,6 @@ export default function SearchPage() {
                     : 'Все услуги'}
                 </p>
                 {catalogLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
-                {!catalogLoading && serviceCards && (
-                  <span className="text-xs text-slate-600">{serviceCards.length}</span>
-                )}
               </div>
 
               {catalogLoading ? (
@@ -752,9 +748,6 @@ export default function SearchPage() {
               <div className="flex items-center gap-2 mb-3">
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Все артисты · от А до Я</p>
                 {artistsLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
-                {!artistsLoading && artists && (
-                  <span className="text-xs text-slate-600">{artists.length}</span>
-                )}
               </div>
 
               {artistsLoading ? (
@@ -829,9 +822,6 @@ export default function SearchPage() {
                 {debouncedPeopleQuery ? `Результаты: «${debouncedPeopleQuery}»` : 'Все участники · от А до Я'}
               </p>
               {peopleLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
-              {!peopleLoading && peopleUsers && (
-                <span className="text-xs text-slate-600">{peopleUsers.length}</span>
-              )}
             </div>
 
             {peopleLoading ? (
