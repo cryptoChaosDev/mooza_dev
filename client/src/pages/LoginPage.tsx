@@ -30,6 +30,7 @@ function DocSection({ title, children }: { title: string; children: React.ReactN
 }
 
 export default function LoginPage() {
+  useEffect(() => { document.title = 'Вход — Moooza'; }, []);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);

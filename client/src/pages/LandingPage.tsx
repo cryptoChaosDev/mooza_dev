@@ -104,6 +104,8 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [activeFeature, setActiveFeature] = useState(0);
 
+  useEffect(() => { document.title = 'Moooza — Музыкальная социальная сеть'; }, []);
+
   const { data: settings } = useQuery({
     queryKey: ['site-settings'],
     queryFn: async () => { const { data } = await siteSettingsAPI.get(); return data as Record<string, string>; },

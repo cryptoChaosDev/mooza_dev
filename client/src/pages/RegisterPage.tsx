@@ -159,6 +159,8 @@ export default function RegisterPage() {
   const [searchParams] = useSearchParams();
   const refCode = searchParams.get('ref') || undefined;
 
+  useEffect(() => { document.title = 'Регистрация — Moooza'; }, []);
+
   // Registration may be closed site-wide — bounce to login.
   useEffect(() => {
     siteSettingsAPI.get()
