@@ -155,8 +155,21 @@ export const referenceAPI = {
   // New catalog (sections → services → service filters)
   getSections: () => api.get('/references/sections'),
   // Service-card search — finds service offerings (UserService), not people.
-  searchServiceCards: (params: { serviceId?: string; sectionId?: string; customFilterValueIds?: string; query?: string; page?: number; limit?: number }) =>
+  searchServiceCards: (params: {
+    serviceId?: string;
+    sectionId?: string;
+    customFilterValueIds?: string;
+    query?: string;
+    location?: string;
+    priceMin?: number;
+    priceMax?: number;
+    sort?: 'date' | 'price_asc' | 'price_desc' | 'rating';
+    page?: number;
+    limit?: number;
+  }) =>
     api.get('/references/service-search', { params }),
+  // Distinct provider cities (for the location filter autocomplete).
+  getServiceCities: (q?: string) => api.get('/references/service-cities', { params: { q } }),
   getServiceDetail: (serviceId: string) => api.get(`/references/services/${serviceId}`),
   getServiceFilters: (serviceId: string) => api.get(`/references/services/${serviceId}/filters`),
   searchMusicians: (params: {

@@ -4,6 +4,7 @@ import {
   Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   Crown, BadgeCheck, Ban, Users, Music2, Loader2, X,
   BookOpen, Link2, ShieldCheck, Star, MessageCircle, HandshakeIcon, SlidersHorizontal,
+  ArrowDownUp,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -12,6 +13,7 @@ import { usePresenceStore } from '../stores/presenceStore';
 import { referenceAPI, userAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import DealCreateModal from '../components/DealCreateModal';
+import { useAuthGate } from '../components/AuthGateModal';
 import { plural } from '../lib/plural';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
@@ -153,12 +155,14 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
 
 // ─── ServiceCardItem ─────────────────────────────────────────────────────────
 // Renders a single service offering (UserService) — a "service card", not a person.
-function ServiceCardItem({ card, currentUserId, onNavigate, onMessage, onDeal }: {
+function ServiceCardItem({ card, currentUserId, onNavigate, onMessage, onDeal, ensureAuth }: {
   card: any;
   currentUserId?: string;
   onNavigate: (card: any) => void;
   onMessage: (userId: string) => void;
   onDeal: (card: any) => void;
+  // Runs the action when signed in; otherwise opens the auth-gate modal.
+  ensureAuth: (action: () => void) => boolean;
 }) {
   const user = card.user ?? {};
   const isOwn = !!currentUserId && user.id === currentUserId;
@@ -239,13 +243,13 @@ function ServiceCardItem({ card, currentUserId, onNavigate, onMessage, onDeal }:
       {!isOwn && (
         <div className="flex gap-2 mt-3.5">
           <button
-            onClick={() => onMessage(user.id)}
+            onClick={() => ensureAuth(() => onMessage(user.id))}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-primary-600 hover:bg-primary-500 text-white text-xs font-medium rounded-xl transition-colors"
           >
             <MessageCircle size={14} /> Написать
           </button>
           <button
-            onClick={() => onDeal(card)}
+            onClick={() => ensureAuth(() => onDeal(card))}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-colors"
           >
             <HandshakeIcon size={14} /> Оформить сделку
@@ -261,6 +265,8 @@ export default function SearchPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user: currentUser } = useAuthStore();
+  // Auth gate for guest "Написать" / "Оформить сделку" (default modal text).
+  const { ensureAuth, authGateModal } = useAuthGate();
 
   const [activeTab, setActiveTab] = useState<CatalogTab>('services');
   const [dealCard, setDealCard] = useState<any>(null);
@@ -280,6 +286,28 @@ export default function SearchPage() {
   const [profFilterValues, setProfFilterValues] = useState<string[]>([]);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [tempFilters, setTempFilters] = useState<string[]>([]);
+
+  // ── Sort + location + price (applied) ────────────────────────────────────────
+  type ServiceSort = 'date' | 'price_asc' | 'price_desc' | 'rating';
+  const [sortMode, setSortMode] = useState<ServiceSort>('date');
+  const [sortOpen, setSortOpen] = useState(false);
+  const [locationFilter, setLocationFilter] = useState<string[]>([]); // applied cities
+  const [priceMin, setPriceMin] = useState<string>('');               // applied
+  const [priceMax, setPriceMax] = useState<string>('');               // applied
+
+  // Draft values edited inside the filters modal (committed on "Применить").
+  const [tempLocation, setTempLocation] = useState<string[]>([]);
+  const [tempPriceMin, setTempPriceMin] = useState<string>('');
+  const [tempPriceMax, setTempPriceMax] = useState<string>('');
+  const [cityQuery, setCityQuery] = useState('');
+  const [debouncedCityQuery, setDebouncedCityQuery] = useState('');
+
+  const SORT_OPTIONS: { value: ServiceSort; label: string }[] = [
+    { value: 'date', label: 'По дате добавления' },
+    { value: 'price_asc', label: 'По стоимости (возр.)' },
+    { value: 'price_desc', label: 'По стоимости (убыв.)' },
+    { value: 'rating', label: 'По оценке исполнителя' },
+  ];
 
   // ── Artists tab state ──────────────────────────────────────────────────────
   const [artistQuery, setArtistQuery] = useState('');
@@ -323,6 +351,11 @@ export default function SearchPage() {
     return () => clearTimeout(t);
   }, [peopleQuery]);
 
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedCityQuery(cityQuery), 250);
+    return () => clearTimeout(t);
+  }, [cityQuery]);
+
   // ── Reference data ─────────────────────────────────────────────────────────
 
   // Sections (each with its nested services) — for the "Услуги" browse.
@@ -347,7 +380,16 @@ export default function SearchPage() {
   });
 
   const activeFilters = serviceFilters;
-  const hasSelection = !!selectedService;
+
+  // City autocomplete for the location filter (only while the filters modal is open).
+  const { data: cityOptions } = useQuery({
+    queryKey: ['service-cities', debouncedCityQuery],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getServiceCities(debouncedCityQuery || undefined);
+      return (data as any[]).map((c) => c.name as string);
+    },
+    enabled: activeTab === 'services' && filtersOpen,
+  });
 
   // ── Service-card results (searchServiceCards) ───────────────────────────────
   const serviceSearchParams = {
@@ -355,6 +397,10 @@ export default function SearchPage() {
     sectionId: selectedSection?.id && !selectedService ? selectedSection.id : undefined,
     customFilterValueIds: profFilterValues.length ? profFilterValues.join(',') : undefined,
     query: debouncedServiceQuery || undefined,
+    location: locationFilter.length ? locationFilter.join(',') : undefined,
+    priceMin: priceMin !== '' ? Number(priceMin) : undefined,
+    priceMax: priceMax !== '' ? Number(priceMax) : undefined,
+    sort: sortMode,
   };
 
   const { data: serviceCards, isLoading: catalogLoading } = useQuery({
@@ -536,22 +582,68 @@ export default function SearchPage() {
             );
           })()}
 
-          {/* Attribute filters — hidden behind a button that opens a modal */}
-          {activeTab === 'services' && hasSelection && activeFilters && activeFilters.length > 0 && (
-            <button
-              type="button"
-              onClick={() => { setTempFilters(profFilterValues); setFiltersOpen(true); }}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
-            >
-              <SlidersHorizontal size={14} />
-              Фильтры
-              {profFilterValues.length > 0 && (
-                <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
-                  {profFilterValues.length}
-                </span>
-              )}
-            </button>
-          )}
+          {/* Sort + filters controls (services tab) */}
+          {activeTab === 'services' && (() => {
+            const activeFilterCount =
+              profFilterValues.length + locationFilter.length + (priceMin !== '' || priceMax !== '' ? 1 : 0);
+            return (
+              <div className="flex items-center gap-2">
+                {/* Sort */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setSortOpen(v => !v)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+                  >
+                    <ArrowDownUp size={14} />
+                    {SORT_OPTIONS.find(o => o.value === sortMode)?.label}
+                    <ChevronDown size={13} className={`transition-transform ${sortOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {sortOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[55]" onClick={() => setSortOpen(false)} />
+                      <div className="absolute left-0 mt-1.5 z-[56] w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1">
+                        {SORT_OPTIONS.map(o => (
+                          <button
+                            key={o.value}
+                            type="button"
+                            onClick={() => { setSortMode(o.value); setSortOpen(false); }}
+                            className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                              sortMode === o.value ? 'bg-primary-600/20 text-primary-300 font-medium' : 'text-slate-300 hover:bg-slate-800'
+                            }`}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Filters (location + price + service attributes) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTempFilters(profFilterValues);
+                    setTempLocation(locationFilter);
+                    setTempPriceMin(priceMin);
+                    setTempPriceMax(priceMax);
+                    setCityQuery('');
+                    setFiltersOpen(true);
+                  }}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+                >
+                  <SlidersHorizontal size={14} />
+                  Фильтры
+                  {activeFilterCount > 0 && (
+                    <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -649,6 +741,7 @@ export default function SearchPage() {
                       onNavigate={handleNavigateToServiceCard}
                       onMessage={(uid) => navigate(`/messages/${uid}`)}
                       onDeal={(c) => setDealCard(c)}
+                      ensureAuth={ensureAuth}
                     />
                   ))}
                 </div>
@@ -657,7 +750,7 @@ export default function SearchPage() {
                   <div className="p-4 bg-slate-800/50 rounded-2xl mb-3">
                     <Music2 size={28} className="text-slate-600" />
                   </div>
-                  <p className="text-slate-400 text-sm">Услуги не найдены</p>
+                  <p className="text-slate-400 text-sm">Такая услуга не найдена</p>
                 </div>
               )}
             </div>
@@ -881,14 +974,88 @@ export default function SearchPage() {
               <div className="flex items-center gap-2">
                 <SlidersHorizontal size={16} className="text-primary-400" />
                 <h3 className="text-base font-semibold text-white">Фильтры</h3>
-                {tempFilters.length > 0 && (
-                  <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{tempFilters.length}</span>
-                )}
+                {(() => {
+                  const n = tempFilters.length + tempLocation.length + (tempPriceMin !== '' || tempPriceMax !== '' ? 1 : 0);
+                  return n > 0 ? (
+                    <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{n}</span>
+                  ) : null;
+                })()}
               </div>
               <button onClick={() => setFiltersOpen(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
             </div>
 
-            <div className="px-5 py-4 space-y-4 overflow-y-auto">
+            <div className="px-5 py-4 space-y-5 overflow-y-auto">
+              {/* Location — multiselect with city autocomplete */}
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Локация</p>
+                {tempLocation.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {tempLocation.map(city => (
+                      <button
+                        key={city}
+                        type="button"
+                        onClick={() => setTempLocation(prev => prev.filter(c => c !== city))}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary-600 text-white"
+                      >
+                        {city}
+                        <X size={12} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                  <input
+                    type="text"
+                    value={cityQuery}
+                    onChange={e => setCityQuery(e.target.value)}
+                    placeholder="Город..."
+                    className="w-full pl-8 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600"
+                  />
+                </div>
+                {(cityOptions ?? []).filter(c => !tempLocation.includes(c)).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {(cityOptions ?? []).filter(c => !tempLocation.includes(c)).slice(0, 12).map(city => (
+                      <button
+                        key={city}
+                        type="button"
+                        onClick={() => { setTempLocation(prev => [...prev, city]); setCityQuery(''); }}
+                        className="px-3 py-1.5 rounded-xl text-xs font-medium border bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+                      >
+                        {city}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Price range */}
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Стоимость, ₽</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={tempPriceMin}
+                    onChange={e => setTempPriceMin(e.target.value)}
+                    placeholder="от"
+                    className="flex-1 min-w-0 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600"
+                  />
+                  <span className="text-slate-600">–</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={tempPriceMax}
+                    onChange={e => setTempPriceMax(e.target.value)}
+                    placeholder="до"
+                    className="flex-1 min-w-0 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600"
+                  />
+                </div>
+              </div>
+
+              {/* Service-specific attribute filters (only when a service is selected) */}
               {(activeFilters ?? []).map((group: any) => (
                 <div key={group.id}>
                   <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">{group.name}</p>
@@ -915,13 +1082,23 @@ export default function SearchPage() {
 
             <div className="px-5 pb-5 pt-4 border-t border-slate-800 flex gap-2.5 flex-shrink-0">
               <button
-                onClick={() => { setTempFilters([]); setProfFilterValues([]); setFiltersOpen(false); }}
+                onClick={() => {
+                  setTempFilters([]); setTempLocation([]); setTempPriceMin(''); setTempPriceMax(''); setCityQuery('');
+                  setProfFilterValues([]); setLocationFilter([]); setPriceMin(''); setPriceMax('');
+                  setFiltersOpen(false);
+                }}
                 className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors"
               >
                 Сбросить
               </button>
               <button
-                onClick={() => { setProfFilterValues(tempFilters); setFiltersOpen(false); }}
+                onClick={() => {
+                  setProfFilterValues(tempFilters);
+                  setLocationFilter(tempLocation);
+                  setPriceMin(tempPriceMin);
+                  setPriceMax(tempPriceMax);
+                  setFiltersOpen(false);
+                }}
                 className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors"
               >
                 Применить
@@ -931,6 +1108,9 @@ export default function SearchPage() {
         </div>,
         document.body
       )}
+
+      {/* Guest auth-gate for "Написать" / "Оформить сделку" */}
+      {authGateModal}
     </div>
   );
 }
