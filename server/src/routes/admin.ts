@@ -460,6 +460,29 @@ router.delete('/artists/:id', async (req, res) => {
 });
 
 // ─── Artist Moderation ────────────────────────────────────────────────────
+// For a set of artists, find OTHER artists sharing the same normalized name —
+// the duplicate-name signal the moderator needs when approving a verification.
+// Returns a map artistId → [{ id, name, verified }].
+async function duplicatesByArtist(
+  artists: { id: string; nameNorm: string | null }[],
+): Promise<Map<string, { id: string; name: string; verified: boolean }[]>> {
+  const map = new Map<string, { id: string; name: string; verified: boolean }[]>();
+  const norms = [...new Set(artists.map(a => a.nameNorm).filter((n): n is string => !!n))];
+  if (!norms.length) return map;
+  const same = await prisma.artist.findMany({
+    where: { nameNorm: { in: norms } },
+    select: { id: true, name: true, nameNorm: true, status: true },
+  });
+  for (const a of artists) {
+    if (!a.nameNorm) continue;
+    const dups = same
+      .filter(s => s.nameNorm === a.nameNorm && s.id !== a.id)
+      .map(s => ({ id: s.id, name: s.name, verified: s.status === 'VERIFIED' }));
+    if (dups.length) map.set(a.id, dups);
+  }
+  return map;
+}
+
 // GET /admin/artists/pending — list artists awaiting moderation
 router.get('/artists/pending', authenticate, requireAdmin, async (_req, res) => {
   try {
@@ -472,7 +495,8 @@ router.get('/artists/pending', authenticate, requireAdmin, async (_req, res) => 
       },
       orderBy: { updatedAt: 'asc' },
     });
-    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre), followersCount: a._count.followers })));
+    const dupMap = await duplicatesByArtist(artists);
+    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre), followersCount: a._count.followers, duplicates: dupMap.get(a.id) || [] })));
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
@@ -487,7 +511,8 @@ router.get('/artists/verification', authenticate, requireAdmin, async (_req, res
       },
       orderBy: { updatedAt: 'asc' },
     });
-    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre) })));
+    const dupMap = await duplicatesByArtist(artists);
+    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre), duplicates: dupMap.get(a.id) || [] })));
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 

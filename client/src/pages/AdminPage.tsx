@@ -1818,6 +1818,24 @@ function ArtistModerationTab() {
                   </div>
                 </div>
 
+                {artist.duplicates?.length > 0 && (
+                  <div className="mb-3 flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs leading-relaxed">
+                    <span className="flex-shrink-0">⚠️</span>
+                    <div>
+                      <span className="font-semibold">Возможный дубль названия.</span> Уже есть:{' '}
+                      {artist.duplicates.map((d: any, i: number) => (
+                        <span key={d.id}>
+                          {i > 0 && ', '}
+                          <a href={`/artist/${d.id}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-200 font-medium">
+                            {d.name}{d.verified ? ' ✓ (верифицирован)' : ''}
+                          </a>
+                        </span>
+                      ))}
+                      . Проверьте перед подтверждением.
+                    </div>
+                  </div>
+                )}
+
                 <div className="mb-3">
                   <p className="text-[10px] text-slate-500 mb-1">Код верификации</p>
                   <code className="text-sm font-mono font-bold text-primary-400">{artist.verificationCode}</code>
