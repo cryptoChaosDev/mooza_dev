@@ -39,7 +39,7 @@ export default function JoinArtistModal({ onClose }: Props) {
 
   // Artist search
   useEffect(() => {
-    if (!artistQuery.trim() || artistQuery.trim().length < 2) {
+    if (!artistQuery.trim() || artistQuery.trim().length < 1) {
       setArtistSuggestions([]); setNotFound(false); return;
     }
     if (artistDebounce.current) clearTimeout(artistDebounce.current);
@@ -147,7 +147,7 @@ export default function JoinArtistModal({ onClose }: Props) {
               )}
 
               {/* Not found */}
-              {!selectedArtist && notFound && artistQuery.trim().length >= 2 && (
+              {!selectedArtist && notFound && artistQuery.trim().length >= 1 && (
                 <div className="mt-1 bg-slate-800 border border-slate-700 rounded-2xl p-3 text-center space-y-2">
                   <p className="text-xs text-slate-500">Такого артиста не найдено</p>
                   <button

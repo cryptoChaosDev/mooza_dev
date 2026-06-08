@@ -115,7 +115,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
   // Debounced user search
   useEffect(() => {
     const q = search.trim();
-    if (q.length < 2) {
+    if (q.length < 1) {
       setSearchResults([]);
       return;
     }
@@ -357,7 +357,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
                     className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 outline-none focus:border-primary-500"
                   />
                 </div>
-                {search.trim().length >= 2 && (
+                {search.trim().length >= 1 && (
                   searching ? (
                     <div className="flex justify-center py-3">
                       <Loader2 size={18} className="animate-spin text-slate-500" />

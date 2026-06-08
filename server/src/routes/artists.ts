@@ -68,7 +68,7 @@ async function isArtistAdmin(artistId: string, userId: string): Promise<boolean>
 router.get('/suggest', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
-    if (q.length < 2) return res.json([]);
+    if (q.length < 1) return res.json([]);
 
     // Search ALL artists by name (duplicate detection + join targets); ё/е-insensitive.
     const artists = await prisma.artist.findMany({

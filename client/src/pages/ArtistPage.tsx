@@ -331,7 +331,7 @@ export default function ArtistPage() {
       const { data } = await userAPI.search({ query: addSearch.trim() });
       return data as { id: string; firstName: string; lastName: string; nickname?: string; avatar?: string }[];
     },
-    enabled: showAddMember && addSearch.trim().length >= 2,
+    enabled: showAddMember && addSearch.trim().length >= 1,
   });
 
   const invalidateArtist = () => queryClient.invalidateQueries({ queryKey: ['artist', id] });
@@ -1409,8 +1409,8 @@ export default function ArtistPage() {
                   className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 outline-none focus:border-primary-500"
                 />
               </div>
-              {addSearch.trim().length < 2 ? (
-                <p className="text-xs text-slate-600 italic py-1">Введите минимум 2 символа</p>
+              {addSearch.trim().length < 1 ? (
+                <p className="text-xs text-slate-600 italic py-1">Начните вводить имя</p>
               ) : searchLoading ? (
                 <div className="flex justify-center py-4"><Loader2 size={20} className="animate-spin text-slate-500" /></div>
               ) : searchResults.length === 0 ? (
