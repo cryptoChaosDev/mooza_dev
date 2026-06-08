@@ -400,11 +400,17 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
                         <AvatarComponent src={p.avatar} name={p.name} size={36} />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-white truncate">{p.name}</p>
-                          <p className="text-xs text-slate-500 truncate">
-                            {p.roleIds.length
-                              ? p.roleIds.map((id) => roleNameById.get(id) ?? id).join(', ')
-                              : 'Роли не выбраны'}
-                          </p>
+                          {p.roleIds.length ? (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {p.roleIds.map((id) => (
+                                <span key={id} className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] leading-tight">
+                                  {roleNameById.get(id) ?? id}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-slate-500">Роли не выбраны</p>
+                          )}
                         </div>
                         <button
                           onClick={() => setRolePickerUserId(p.userId)}

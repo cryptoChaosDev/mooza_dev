@@ -203,7 +203,7 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
             <div className="space-y-2">
               {participants.map((p) => {
                 const name = `${p.user.lastName ?? ''} ${p.user.firstName ?? ''}`.trim();
-                const roleText = (p.roles ?? []).map((r) => r.name).join(', ');
+                const roleList = p.roles ?? [];
                 return (
                   <div
                     key={p.id}
@@ -213,7 +213,17 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
                     <AvatarComponent src={p.user.avatar} name={name} size={40} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-white truncate">{name}</p>
-                      <p className="text-xs text-slate-500 truncate">{roleText || '—'}</p>
+                      {roleList.length ? (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {roleList.map((r, i) => (
+                            <span key={i} className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] leading-tight">
+                              {r.name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-slate-500">—</p>
+                      )}
                     </div>
                     {p.confirmStatus === 'PENDING' && (
                       <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-400 rounded-md flex-shrink-0">
