@@ -779,6 +779,10 @@ model UserArtist {
   professionId        String?
   inviteStatus        GroupInviteStatus         @default(ACCEPTED)
   participationStatus MemberParticipationStatus @default(ACTIVE_MEMBER)
+  // True when the member was demoted to FORMER automatically because the artist
+  // left ACTIVE. Lets reactivation restore exactly those members (and not the
+  // ones an admin manually marked as former). Cleared on any manual change.
+  autoFormered        Boolean                   @default(false)
   invitedById         String?
 
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)

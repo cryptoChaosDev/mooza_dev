@@ -1065,7 +1065,9 @@ router.patch('/:id/members/:membershipId/participation', authenticate, async (re
 
     await prisma.userArtist.update({
       where: { id: membershipId },
-      data: { participationStatus },
+      // Manual change overrides the auto-lifecycle: clear the flag so a future
+      // reactivation won't revert the admin's decision.
+      data: { participationStatus, autoFormered: false },
     });
 
     return res.json({ ok: true });
@@ -1165,11 +1167,22 @@ router.patch('/:id/activity-status', authenticate, async (req: AuthRequest, res:
     });
 
     // Active → non-active: freeze the lineup. Active members become former
-    // members (history preserved — no deletion).
+    // members (history preserved — no deletion). Tag them `autoFormered` so a
+    // later reactivation can restore exactly this set.
     if (wasActive && activityStatus !== 'ACTIVE') {
       await prisma.userArtist.updateMany({
         where: { artistId, participationStatus: 'ACTIVE_MEMBER' },
-        data: { participationStatus: 'FORMER_MEMBER' },
+        data: { participationStatus: 'FORMER_MEMBER', autoFormered: true },
+      });
+    }
+
+    // Non-active → active: restore the lineup. Members auto-demoted when the
+    // artist went inactive become active again; members an admin marked former
+    // manually (autoFormered=false) are left untouched.
+    if (!wasActive && activityStatus === 'ACTIVE') {
+      await prisma.userArtist.updateMany({
+        where: { artistId, participationStatus: 'FORMER_MEMBER', autoFormered: true },
+        data: { participationStatus: 'ACTIVE_MEMBER', autoFormered: false },
       });
     }
 
