@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { dealAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import { DEALS_ENABLED } from '../lib/features';
 
 interface DuplicateValues {
   title?: string;
@@ -71,6 +72,10 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
   });
 
   const canSubmit = title.trim().length >= 3 && (dealType !== 'event' || !!eventDate);
+
+  // Deal creation is temporarily disabled — never render the form (belt-and-suspenders
+  // alongside the gated entry points). Re-enable via DEALS_ENABLED.
+  if (!DEALS_ENABLED) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">

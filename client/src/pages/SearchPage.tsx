@@ -13,6 +13,7 @@ import { usePresenceStore } from '../stores/presenceStore';
 import { referenceAPI, userAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import DealCreateModal from '../components/DealCreateModal';
+import { DEALS_ENABLED } from '../lib/features';
 import { useAuthGate } from '../components/AuthGateModal';
 import { plural } from '../lib/plural';
 
@@ -253,12 +254,14 @@ function ServiceCardItem({ card, currentUserId, onNavigate, onMessage, onDeal, e
           >
             <MessageCircle size={14} /> Написать
           </button>
-          <button
-            onClick={() => ensureAuth(() => onDeal(card))}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-colors"
-          >
-            <HandshakeIcon size={14} /> Оформить сделку
-          </button>
+          {DEALS_ENABLED && (
+            <button
+              onClick={() => ensureAuth(() => onDeal(card))}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-colors"
+            >
+              <HandshakeIcon size={14} /> Оформить сделку
+            </button>
+          )}
         </div>
       )}
     </div>

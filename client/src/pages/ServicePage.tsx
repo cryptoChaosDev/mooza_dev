@@ -11,6 +11,7 @@ import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { useAuthStore } from '../stores/authStore';
 import ConfirmDialog from '../components/ConfirmDialog';
 import DealCreateModal from '../components/DealCreateModal';
+import { DEALS_ENABLED } from '../lib/features';
 import { useAuthGate } from '../components/AuthGateModal';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -335,13 +336,15 @@ export default function ServicePage() {
               {writingMessage ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />}
               Написать
             </button>
-            <button
-              onClick={() => ensureAuth(() => setShowDeal(true))}
-              className="w-full py-3.5 flex items-center justify-center gap-2 text-sm font-medium border border-primary-500/40 text-primary-300 hover:bg-primary-600/10 rounded-2xl transition-colors"
-            >
-              <HandshakeIcon size={16} />
-              Оформить сделку
-            </button>
+            {DEALS_ENABLED && (
+              <button
+                onClick={() => ensureAuth(() => setShowDeal(true))}
+                className="w-full py-3.5 flex items-center justify-center gap-2 text-sm font-medium border border-primary-500/40 text-primary-300 hover:bg-primary-600/10 rounded-2xl transition-colors"
+              >
+                <HandshakeIcon size={16} />
+                Оформить сделку
+              </button>
+            )}
           </div>
         )}
       </div>

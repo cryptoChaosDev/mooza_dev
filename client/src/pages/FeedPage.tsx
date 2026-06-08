@@ -15,6 +15,7 @@ import { postAPI, messageAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import { useAuthGate } from '../components/AuthGateModal';
 import DealCreateModal from '../components/DealCreateModal';
+import { DEALS_ENABLED } from '../lib/features';
 import OnboardingPrompt from '../components/OnboardingPrompt';
 import AvatarComponent from '../components/Avatar';
 import AudioPlayer from '../components/AudioPlayer';
@@ -509,13 +510,15 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                         >
                           {contacting ? <Spinner size={15} className="animate-spin" /> : <MessageSquare size={15} />} Написать
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => ensureAuth(() => setShowDeal(true))}
-                          className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-semibold rounded-xl transition-colors"
-                        >
-                          <HandshakeIcon size={15} /> Оформить сделку
-                        </button>
+                        {DEALS_ENABLED && (
+                          <button
+                            type="button"
+                            onClick={() => ensureAuth(() => setShowDeal(true))}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-semibold rounded-xl transition-colors"
+                          >
+                            <HandshakeIcon size={15} /> Оформить сделку
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>

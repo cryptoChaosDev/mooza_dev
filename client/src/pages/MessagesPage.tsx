@@ -5,6 +5,7 @@ import { messageAPI, friendshipAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
 import { yoIncludes } from '../lib/search';
+import { DEALS_ENABLED } from '../lib/features';
 import ConfirmDialog from '../components/ConfirmDialog';
 
 interface ConvItem {
@@ -159,7 +160,8 @@ export default function MessagesPage() {
 
   const TABS = [
     { id: 'personal' as const, label: 'Личные', icon: User },
-    { id: 'business' as const, label: 'Деловые', icon: Briefcase },
+    // «Деловые» temporarily hidden together with deal creation (DEALS_ENABLED).
+    ...(DEALS_ENABLED ? [{ id: 'business' as const, label: 'Деловые', icon: Briefcase }] : []),
     { id: 'group' as const, label: 'Групповые', icon: Users },
   ];
 
@@ -251,7 +253,7 @@ export default function MessagesPage() {
                 <Pin size={15} className={convMenu.conv.isPinned ? 'text-primary-400' : 'text-slate-400'} />
                 {convMenu.conv.isPinned ? 'Открепить' : 'Закрепить'}
               </button>
-              {!convMenu.conv.isGroup && (
+              {DEALS_ENABLED && !convMenu.conv.isGroup && (
                 <button
                   onClick={() => handleSetType(convMenu.conv, convMenu.conv.type === 'business' ? 'personal' : 'business')}
                   className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-200 hover:bg-slate-700/60 transition-colors"
