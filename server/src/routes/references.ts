@@ -396,6 +396,20 @@ router.get('/geographies', async (_req, res) => {
   }
 });
 
+// Controlled city catalog — the profile/registration picker only offers these.
+router.get('/cities', async (_req, res) => {
+  try {
+    const cities = await prisma.city.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      select: { id: true, name: true, country: true },
+    });
+    res.json(cities);
+  } catch (error) {
+    console.error('Get cities error:', error);
+    res.status(500).json({ error: 'Failed to get cities' });
+  }
+});
+
 // Get price ranges
 router.get('/price-ranges', async (_req, res) => {
   try {

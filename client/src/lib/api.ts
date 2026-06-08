@@ -161,6 +161,7 @@ export const referenceAPI = {
   getSkillLevels: () => api.get('/references/skill-levels'),
   getAvailabilities: () => api.get('/references/availabilities'),
   getGeographies: () => api.get('/references/geographies'),
+  getCities: () => api.get('/references/cities'),
   getPriceRanges: () => api.get('/references/price-ranges'),
   getAllReferences: () => api.get('/references/all'),
   getProfessionFilters: (professionId: string) => api.get(`/references/professions/${professionId}/filters`),

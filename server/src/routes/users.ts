@@ -448,7 +448,22 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
       updateData.bio = bio;
     }
     if (country !== undefined) updateData.country = country;
-    if (city !== undefined) updateData.city = city;
+    if (city !== undefined) {
+      // Only catalog cities may be set. Validate just on change so existing
+      // (possibly legacy free-text) cities don't block unrelated profile saves.
+      const newCity = typeof city === 'string' ? city.trim() : '';
+      if (newCity) {
+        const current = await prisma.user.findUnique({ where: { id: req.userId }, select: { city: true } });
+        if (newCity !== current?.city) {
+          const inCatalog = await prisma.city.findFirst({
+            where: { name: { equals: newCity, mode: 'insensitive' } },
+            select: { id: true },
+          });
+          if (!inCatalog) return res.status(400).json({ error: 'Выберите город из списка' });
+        }
+      }
+      updateData.city = city;
+    }
     if (role !== undefined) updateData.role = role;
     if (genres !== undefined) updateData.genres = genres;
     if (socialLinks !== undefined) updateData.socialLinks = socialLinks;

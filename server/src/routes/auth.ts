@@ -161,6 +161,16 @@ router.post('/register', registerLimiter, async (req, res) => {
       return res.status(400).json({ error: 'Этот никнейм уже занят' });
     }
 
+    // City must come from the catalog — drop a non-catalog value (e.g. from
+    // geolocation autofill) rather than failing signup.
+    if (data.city) {
+      const inCatalog = await prisma.city.findFirst({
+        where: { name: { equals: data.city, mode: 'insensitive' } },
+        select: { id: true },
+      });
+      if (!inCatalog) data.city = undefined;
+    }
+
     // Age validation: must be at least 16
     if (data.birthDate) {
       const birth = new Date(data.birthDate);
