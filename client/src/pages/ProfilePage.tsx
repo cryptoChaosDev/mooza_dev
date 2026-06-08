@@ -9,7 +9,7 @@ import {
   Globe, Calendar,
   Headphones, Edit3, Plus,
   FileText, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
-  Music2, Play, Pause, HandshakeIcon, Eye, Phone, Shield,
+  Music2, Play, Pause, HandshakeIcon, Eye, Phone, Shield, ChevronDown,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConnectionCard from '../components/ConnectionCard';
@@ -24,6 +24,7 @@ import ShareButton from '../components/ShareButton';
 import JoinArtistModal from '../components/JoinArtistModal';
 import ReviewsBlock from '../components/ReviewsBlock';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
+import ProfileProgressBar from '../components/ProfileProgressBar';
 
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -100,6 +101,14 @@ const emptyEntry = (): UserServiceEntry => ({
   professionFilterValues: {},
 });
 
+// Profile-field saves (hero/bio/contacts/socials/autosave) must NOT send
+// userProfessions: those rows carry per-profession filter selections that are
+// only complete when saved via handleSaveProfessions. Including the lean copy
+// here would wipe the saved filters server-side (deleteMany + recreate).
+function stripProfessions<T extends { userProfessions?: unknown }>(data: T): Omit<T, 'userProfessions'> {
+  const { userProfessions, ...rest } = data;
+  return rest;
+}
 
 export default function ProfilePage() {
   const navigate = useNavigate();
@@ -246,6 +255,11 @@ export default function ProfilePage() {
   const [savingProfessions, setSavingProfessions] = useState(false);
   const [profFiltersData, setProfFiltersData] = useState<Record<string, any[]>>({});
   const [profFilterSelections, setProfFilterSelections] = useState<Record<string, string[]>>({});
+  // Per-profession filter accordions are collapsed by default (profId → open filterIds).
+  const [profOpenFilters, setProfOpenFilters] = useState<Record<string, Set<string>>>({});
+  // Editable profession features (profId → selected feature names) + the catalog.
+  const [profFeatures, setProfFeatures] = useState<Record<string, string[]>>({});
+  const [allFeatures, setAllFeatures] = useState<{ id: string; name: string }[]>([]);
 
 
   // Flat profession search (Task 1)
@@ -273,6 +287,12 @@ export default function ProfilePage() {
     myStandaloneProfessions.forEach(p => { loadProfFilters(p.professionId); });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingProfessions, myStandaloneProfessions]);
+
+  // Load the global profession-features catalog once, when the editor opens.
+  useEffect(() => {
+    if (!editingProfessions || allFeatures.length) return;
+    referenceAPI.getProfessionFeatures().then(r => setAllFeatures(r.data)).catch(() => {});
+  }, [editingProfessions, allFeatures.length]);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],
@@ -304,10 +324,13 @@ export default function ProfilePage() {
       );
       if (data.userProfessions) {
         const selections: Record<string, string[]> = {};
+        const feats: Record<string, string[]> = {};
         data.userProfessions.forEach((up: any) => {
           selections[up.professionId] = up.selectedCustomFilterValues?.map((cfv: any) => cfv.id) || [];
+          feats[up.professionId] = up.features || [];
         });
         setProfFilterSelections(selections);
+        setProfFeatures(feats);
       }
       setPortfolioFiles(data.portfolioFiles ?? []);
       setPortfolioLinks(data.portfolioLinks ?? []);
@@ -403,7 +426,7 @@ export default function ProfilePage() {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(async () => {
       try {
-        await userAPI.updateMe(data);
+        await userAPI.updateMe(stripProfessions(data));
         setAutoSaved(true);
         setTimeout(() => setAutoSaved(false), 2000);
       } catch {}
@@ -441,12 +464,12 @@ export default function ProfilePage() {
     const birthDateISO = bd.length === 10
       ? `${bd.slice(6)}-${bd.slice(3, 5)}-${bd.slice(0, 2)}`
       : undefined;
-    try { await updateMutation.mutateAsync({ ...formData, birthDate: birthDateISO ?? null }); }
+    try { await updateMutation.mutateAsync({ ...stripProfessions(formData), birthDate: birthDateISO ?? null }); }
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingHero(false); }
   };
 
   const handleSaveBio = async () => {
-    try { await updateMutation.mutateAsync(formData); }
+    try { await updateMutation.mutateAsync(stripProfessions(formData)); }
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingBio(false); }
   };
 
@@ -465,12 +488,12 @@ export default function ProfilePage() {
   };
 
   const handleSaveContacts = async () => {
-    try { await updateMutation.mutateAsync(formData); }
+    try { await updateMutation.mutateAsync(stripProfessions(formData)); }
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingContacts(false); }
   };
 
   const handleSaveSocials = async () => {
-    try { await updateMutation.mutateAsync(formData); }
+    try { await updateMutation.mutateAsync(stripProfessions(formData)); }
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingSocials(false); }
   };
 
@@ -498,12 +521,29 @@ export default function ProfilePage() {
     });
   };
 
+  const toggleProfFilterOpen = (profId: string, filterId: string) => {
+    setProfOpenFilters(prev => {
+      const cur = new Set(prev[profId] || []);
+      if (cur.has(filterId)) cur.delete(filterId); else cur.add(filterId);
+      return { ...prev, [profId]: cur };
+    });
+  };
+
+  const toggleProfFeature = (profId: string, name: string) => {
+    setProfFeatures(prev => {
+      const cur = prev[profId] || [];
+      const next = cur.includes(name) ? cur.filter(f => f !== name) : [...cur, name];
+      return { ...prev, [profId]: next };
+    });
+  };
+
   const handleSaveProfessions = async (list: { professionId: string; professionName: string }[]) => {
     setSavingProfessions(true);
     try {
       await updateMutation.mutateAsync({
         userProfessions: list.map(p => ({
           professionId: p.professionId,
+          features: profFeatures[p.professionId] || [],
           selectedCustomFilterValueIds: profFilterSelections[p.professionId] || [],
         })),
       });
@@ -1138,16 +1178,16 @@ export default function ProfilePage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Имя</label>
-                  <input type="text" value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} className={inputCls} placeholder="Имя" />
+                  <input type="text" maxLength={20} value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} className={inputCls} placeholder="Имя" />
                 </div>
                 <div>
                   <label className={labelCls}>Фамилия</label>
-                  <input type="text" value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} className={inputCls} placeholder="Фамилия" />
+                  <input type="text" maxLength={30} value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} className={inputCls} placeholder="Фамилия" />
                 </div>
               </div>
               <div>
                 <label className={labelCls}>Никнейм</label>
-                <input type="text" value={formData.nickname} onChange={e => setFormData({ ...formData, nickname: e.target.value })} placeholder="@nickname" className={inputCls} />
+                <input type="text" maxLength={20} value={formData.nickname} onChange={e => setFormData({ ...formData, nickname: e.target.value })} placeholder="@nickname" className={inputCls} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1254,6 +1294,9 @@ export default function ProfilePage() {
 
           {/* ── CONTENT CARDS ────────────────────────────────────────────────── */}
           <div className="space-y-3">
+
+            {/* Profile completion meter (own profile only) */}
+            <ProfileProgressBar profile={profile} />
 
             {/* Bio */}
             {editingBio ? (
@@ -1373,34 +1416,79 @@ export default function ProfilePage() {
                               <X size={12} />
                             </button>
                           </div>
-                          {/* Filters always expanded for easy multi-select */}
+                          {/* Each filter is a collapsible accordion — collapsed by default. */}
                           {!profFiltersData[p.professionId] && (
                             <p className="text-[10px] text-slate-600 mt-1.5">Загрузка параметров...</p>
                           )}
-                          {profFiltersData[p.professionId]?.length > 0 && (
-                            <div className="mt-2 space-y-2">
-                              {profFiltersData[p.professionId].map((filter: any) => (
-                                <div key={filter.id}>
-                                  <p className="text-xs text-slate-500 mb-1">{filter.name}</p>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {filter.values.map((v: any) => {
-                                      const isSelected = profFilterSelections[p.professionId]?.includes(v.id);
-                                      return (
-                                        <button key={v.id} type="button"
-                                          onClick={() => toggleProfFilterValue(p.professionId, v.id)}
-                                          className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
-                                            isSelected ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                                          }`}>
-                                          {v.value}
-                                        </button>
-                                      );
-                                    })}
+                          {(profFiltersData[p.professionId]?.length > 0 || allFeatures.length > 0) && (
+                            <div className="mt-2">
+                              {(profFiltersData[p.professionId] || []).map((filter: any) => {
+                                const sel = profFilterSelections[p.professionId] || [];
+                                const selCount = filter.values.filter((v: any) => sel.includes(v.id)).length;
+                                const open = profOpenFilters[p.professionId]?.has(filter.id);
+                                return (
+                                  <div key={filter.id} className="border-b border-slate-800/60 last:border-0">
+                                    <button type="button"
+                                      onClick={() => toggleProfFilterOpen(p.professionId, filter.id)}
+                                      className="w-full flex items-center gap-1.5 py-1.5 text-left">
+                                      <span className="text-xs text-slate-400 flex-1">{filter.name}</span>
+                                      {selCount > 0 && <span className="text-[10px] bg-primary-600/80 text-white px-1.5 py-0.5 rounded-full">{selCount}</span>}
+                                      <ChevronDown size={13} className={`text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    {open && (
+                                      <div className="flex flex-wrap gap-1.5 pb-2">
+                                        {filter.values.map((v: any) => {
+                                          const isSelected = sel.includes(v.id);
+                                          return (
+                                            <button key={v.id} type="button"
+                                              onClick={() => toggleProfFilterValue(p.professionId, v.id)}
+                                              className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
+                                                isSelected ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                              }`}>
+                                              {v.value}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
+                              {/* Profession features (e.g. «Начинающий», «Платно») — collapsible. */}
+                              {allFeatures.length > 0 && (() => {
+                                const selF = profFeatures[p.professionId] || [];
+                                const open = profOpenFilters[p.professionId]?.has('__features__');
+                                return (
+                                  <div className="border-b border-slate-800/60 last:border-0">
+                                    <button type="button"
+                                      onClick={() => toggleProfFilterOpen(p.professionId, '__features__')}
+                                      className="w-full flex items-center gap-1.5 py-1.5 text-left">
+                                      <span className="text-xs text-slate-400 flex-1">Особенности</span>
+                                      {selF.length > 0 && <span className="text-[10px] bg-primary-600/80 text-white px-1.5 py-0.5 rounded-full">{selF.length}</span>}
+                                      <ChevronDown size={13} className={`text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    {open && (
+                                      <div className="flex flex-wrap gap-1.5 pb-2">
+                                        {allFeatures.map((f) => {
+                                          const isSelected = selF.includes(f.name);
+                                          return (
+                                            <button key={f.id} type="button"
+                                              onClick={() => toggleProfFeature(p.professionId, f.name)}
+                                              className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
+                                                isSelected ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                              }`}>
+                                              {f.name}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           )}
-                          {profFiltersData[p.professionId]?.length === 0 && (
+                          {profFiltersData[p.professionId]?.length === 0 && allFeatures.length === 0 && (
                             <p className="text-[10px] text-slate-600 mt-1.5">Нет параметров для этой профессии</p>
                           )}
                         </div>

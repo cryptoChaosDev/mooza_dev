@@ -47,16 +47,16 @@ function Field({
 }
 
 function Input({
-  type = 'text', value, onChange, placeholder, autoFocus, right, disabled,
+  type = 'text', value, onChange, placeholder, autoFocus, right, disabled, maxLength,
 }: {
   type?: string; value: string; onChange: (v: string) => void;
-  placeholder?: string; autoFocus?: boolean; right?: React.ReactNode; disabled?: boolean;
+  placeholder?: string; autoFocus?: boolean; right?: React.ReactNode; disabled?: boolean; maxLength?: number;
 }) {
   return (
     <div className="relative">
       <input
         type={type} value={value} onChange={e => onChange(e.target.value)}
-        placeholder={placeholder} autoFocus={autoFocus} disabled={disabled}
+        placeholder={placeholder} autoFocus={autoFocus} disabled={disabled} maxLength={maxLength}
         className={`w-full pl-4 py-3.5 bg-slate-800/70 border border-slate-700/60 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 transition-all text-sm disabled:opacity-50 ${right ? 'pr-12' : 'pr-4'}`}
       />
       {right && <div className="absolute right-4 top-1/2 -translate-y-1/2">{right}</div>}
@@ -665,10 +665,10 @@ export default function RegisterPage() {
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Имя" required>
-            <Input value={firstName} onChange={setFirstName} placeholder="Иван" autoFocus />
+            <Input value={firstName} onChange={setFirstName} placeholder="Иван" autoFocus maxLength={20} />
           </Field>
           <Field label="Фамилия" required>
-            <Input value={lastName} onChange={setLastName} placeholder="Иванов" />
+            <Input value={lastName} onChange={setLastName} placeholder="Иванов" maxLength={30} />
           </Field>
         </div>
         <Field label="Никнейм" hint="Необязательно — короткое имя для поиска">
@@ -678,6 +678,7 @@ export default function RegisterPage() {
               value={nickname}
               onChange={e => setNickname(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ''))}
               placeholder="username"
+              maxLength={20}
               className={`w-full pl-8 pr-10 py-3.5 bg-slate-800/70 border rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 transition-all text-sm ${
                 nicknameTaken ? 'border-red-500/60 focus:ring-red-500/30' : 'border-slate-700/60 focus:ring-primary-500/50'
               }`}

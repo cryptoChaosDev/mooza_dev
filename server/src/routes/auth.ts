@@ -8,6 +8,7 @@ import { generateToken } from '../utils/jwt';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail } from '../utils/mailer';
 import { tgLog, tgEvent } from '../utils/telegram';
 import { applyReferralProGrants } from '../utils/pro';
+import { yoNorm } from '../utils/search';
 
 // ─── Telegram bot-based auth (deep link + polling) ───────────────────────────
 // Map: token → { telegramId, firstName, lastName, username, photoUrl, resolvedAt }
@@ -41,6 +42,26 @@ setInterval(() => {
 
 const router = Router();
 
+// Nickname uniqueness — case- and ё/е-insensitive, via the generated nicknameNorm
+// column. Returns true if the nickname is already taken by another user.
+async function nicknameTaken(nickname: string | null | undefined, excludeUserId?: string): Promise<boolean> {
+  const norm = yoNorm(nickname ?? '');
+  if (!norm) return false;
+  const clash = await prisma.user.findFirst({
+    where: { nicknameNorm: norm, ...(excludeUserId ? { NOT: { id: excludeUserId } } : {}) },
+    select: { id: true },
+  });
+  return !!clash;
+}
+
+// For social signups (VK/Telegram): use the source handle as the nickname only if
+// it is free, otherwise leave it null so the unique constraint can't break signup.
+async function safeNickname(candidate: string | null | undefined): Promise<string | null> {
+  const v = (candidate ?? '').trim();
+  if (!v) return null;
+  return (await nicknameTaken(v)) ? null : v;
+}
+
 const registerSchema = z.object({
   // Step 1: Location
   country: z.string().optional(),
@@ -49,9 +70,9 @@ const registerSchema = z.object({
   phone: z.string().optional(),
   email: z.string().email(),
   // Step 3: Personal
-  lastName: z.string().min(1),
-  firstName: z.string().min(1),
-  nickname: z.string().optional(),
+  lastName: z.string().min(1).max(30, 'Фамилия — не более 30 символов'),
+  firstName: z.string().min(1).max(20, 'Имя — не более 20 символов'),
+  nickname: z.string().max(20, 'Никнейм — не более 20 символов').optional(),
   // Step 4: Field of Activity
   fieldOfActivityId: z.string().optional(),
   // Step 5: Professions (multi-level)
@@ -84,11 +105,7 @@ const loginSchema = z.object({
 router.get('/check-nickname', async (req, res) => {
   const { nickname } = req.query as { nickname: string };
   if (!nickname || nickname.trim().length < 2) return res.json({ available: false });
-  const existing = await prisma.user.findFirst({
-    where: { nickname: { equals: nickname.trim(), mode: 'insensitive' } },
-    select: { id: true },
-  });
-  res.json({ available: !existing });
+  res.json({ available: !(await nicknameTaken(nickname.trim())) });
 });
 
 // Check email availability (so the «уже занят» hint appears on the email step,
@@ -137,6 +154,11 @@ router.post('/register', registerLimiter, async (req, res) => {
       if (existingPhone) {
         return res.status(400).json({ error: 'Пользователь с таким телефоном уже существует' });
       }
+    }
+
+    // Nickname uniqueness (case/ё-insensitive) if provided.
+    if (data.nickname && (await nicknameTaken(data.nickname))) {
+      return res.status(400).json({ error: 'Этот никнейм уже занят' });
     }
 
     // Age validation: must be at least 16
@@ -232,6 +254,9 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
       if (p.phone) {
         const dupePhone = await prisma.user.findUnique({ where: { phone: p.phone }, select: { id: true } });
         if (dupePhone) return res.status(400).json({ error: 'Пользователь с таким телефоном уже существует' });
+      }
+      if (p.nickname && (await nicknameTaken(p.nickname))) {
+        return res.status(400).json({ error: 'Этот никнейм уже занят' });
       }
 
       // Resolve the single-use referral link now that we actually create the account.
@@ -515,7 +540,7 @@ router.get('/telegram/poll/:token', authLimiter, async (req, res) => {
           telegramUsername: entry.username || null,
           firstName: entry.firstName || 'Пользователь',
           lastName: entry.lastName || '',
-          nickname: entry.username || null,
+          nickname: await safeNickname(entry.username),
           avatar: entry.photoUrl || null,
         },
       });
@@ -620,7 +645,7 @@ router.post('/telegram/miniapp', authLimiter, async (req, res) => {
           telegramUsername: tgUser.username || null,
           firstName: tgUser.first_name || 'Пользователь',
           lastName: tgUser.last_name || '',
-          nickname: tgUser.username || null,
+          nickname: await safeNickname(tgUser.username),
           avatar: tgUser.photo_url || null,
         },
       });
@@ -768,7 +793,7 @@ router.post('/vk/token', authLimiter, async (req, res) => {
           lastName: vkUser.last_name || '',
           email: email || null,
           avatar: vkUser.avatar || null,
-          nickname: vkUser.screen_name || null,
+          nickname: await safeNickname(vkUser.screen_name),
         },
       });
       isNew = true;
@@ -855,7 +880,7 @@ router.post('/vk/exchange', authLimiter, async (req, res) => {
           lastName: vkUser.last_name || '',
           email: email || null,
           avatar: vkUser.avatar || null,
-          nickname: vkUser.screen_name || null,
+          nickname: await safeNickname(vkUser.screen_name),
         },
       });
       isNew = true;

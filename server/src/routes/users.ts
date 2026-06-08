@@ -408,9 +408,33 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
 
     // Update basic fields
     const updateData: any = {};
-    if (firstName !== undefined) updateData.firstName = firstName;
-    if (lastName !== undefined) updateData.lastName = lastName;
-    if (nickname !== undefined) updateData.nickname = nickname;
+    if (firstName !== undefined) {
+      if (typeof firstName === 'string' && firstName.length > 20) {
+        return res.status(400).json({ error: 'Имя — не более 20 символов' });
+      }
+      updateData.firstName = firstName;
+    }
+    if (lastName !== undefined) {
+      if (typeof lastName === 'string' && lastName.length > 30) {
+        return res.status(400).json({ error: 'Фамилия — не более 30 символов' });
+      }
+      updateData.lastName = lastName;
+    }
+    if (nickname !== undefined) {
+      if (typeof nickname === 'string' && nickname.length > 20) {
+        return res.status(400).json({ error: 'Никнейм — не более 20 символов' });
+      }
+      // Uniqueness (case/ё-insensitive) — only when a non-empty nickname is set.
+      const nk = typeof nickname === 'string' ? nickname.trim() : '';
+      if (nk) {
+        const clash = await prisma.user.findFirst({
+          where: { nicknameNorm: yoNorm(nk), NOT: { id: req.userId } },
+          select: { id: true },
+        });
+        if (clash) return res.status(409).json({ error: 'Этот никнейм уже занят' });
+      }
+      updateData.nickname = nickname;
+    }
     if (bio !== undefined) {
       // Bio length is Pro-gated (Free 100 / Pro 200 chars).
       const proRow = await prisma.user.findUnique({
