@@ -160,6 +160,8 @@ export default function RegisterPage() {
   const refCode = searchParams.get('ref') || undefined;
   // Role-bound artist invite link (/register?artistInvite=token).
   const artistInvite = searchParams.get('artistInvite') || undefined;
+  // Already-logged-in visitors get an accept screen instead of the signup form.
+  const isAuthed = !!localStorage.getItem('token');
 
   useEffect(() => { document.title = 'Регистрация — Moooza'; }, []);
 
@@ -195,6 +197,27 @@ export default function RegisterPage() {
       .then(({ data }) => setArtistInvitePreview(data))
       .catch(() => setArtistInvitePreview(null));
   }, [artistInvite]);
+
+  // ── Accept-invite flow for users who are ALREADY logged in ──────────────────
+  const [accepting, setAccepting] = useState(false);
+  const [acceptError, setAcceptError] = useState('');
+  // A logged-in user who lands on /register without an invite has nothing here.
+  useEffect(() => {
+    if (isAuthed && !artistInvite) navigate('/', { replace: true });
+  }, [isAuthed, artistInvite, navigate]);
+
+  const handleAcceptInvite = async () => {
+    if (!artistInvite) return;
+    setAccepting(true);
+    setAcceptError('');
+    try {
+      const { data } = await artistAPI.acceptInvite(artistInvite);
+      navigate(`/artist/${data.artistId}`, { replace: true });
+    } catch (err: any) {
+      setAcceptError(err.response?.data?.error || 'Не удалось принять приглашение');
+      setAccepting(false);
+    }
+  };
 
   const [step, setStep] = useState(0);
 
@@ -461,6 +484,43 @@ export default function RegisterPage() {
       { timeout: 10000 }
     );
   }, []);
+
+  // ── Logged-in visitor opened an artist invite link → confirm & join ─────────
+  if (isAuthed && artistInvite) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center px-6">
+        <div className="w-full max-w-sm text-center">
+          <div className="text-5xl mb-4">🎤</div>
+          <h2 className="text-2xl font-bold text-white mb-2">Приглашение в артиста</h2>
+          {artistInvitePreview ? (
+            <p className="text-slate-400 text-sm leading-relaxed mb-6">
+              Вас приглашают присоединиться к{' '}
+              <span className="text-white font-medium">{artistInvitePreview.artist.name}</span>
+              {artistInvitePreview.roles?.length
+                ? <> в роли <span className="text-white font-medium">{artistInvitePreview.roles.map(r => r.name).join(', ')}</span></>
+                : null}.
+            </p>
+          ) : (
+            <p className="text-slate-500 text-sm mb-6">Загрузка приглашения…</p>
+          )}
+          {acceptError && (
+            <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-red-400 text-sm">
+              <AlertCircle size={15} className="flex-shrink-0" />{acceptError}
+            </div>
+          )}
+          <button onClick={handleAcceptInvite} disabled={accepting || !artistInvitePreview}
+            className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-40 text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base mb-3">
+            {accepting ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+            Принять приглашение
+          </button>
+          <button onClick={() => navigate('/', { replace: true })}
+            className="w-full py-2.5 text-sm text-slate-500 hover:text-slate-300 transition-colors">
+            Не сейчас
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ── Email verification screen ─────────────────────────────────────────────
   if (pendingEmail) {

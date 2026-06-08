@@ -497,12 +497,34 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
       }
     }
 
-    // Handle artists: delete old, create new
+    // Handle artists — NON-DESTRUCTIVE reconcile. The legacy `artistIds` flow must
+    // never wipe memberships owned by the artist system: owner/admin status, admin
+    // invites, role-bound and invite-link memberships are managed on the artist
+    // page, not through the profile. We only add newly-picked artists and drop the
+    // plain self-memberships the user actually deselected. (Previously this did a
+    // blanket deleteMany + recreate, which silently stripped roles/owner/admin and
+    // erased invite-link memberships on any profile save.)
     if (artistIds !== undefined) {
-      await prisma.userArtist.deleteMany({ where: { userId: req.userId } });
-      if (artistIds.length > 0) {
+      const current = await prisma.userArtist.findMany({
+        where: { userId: req.userId },
+        select: {
+          id: true, artistId: true, isOwner: true, isAdmin: true,
+          invitedById: true, _count: { select: { roles: true } },
+        },
+      });
+      const have = new Set(current.map((c) => c.artistId));
+      const toRemove = current
+        .filter((c) =>
+          !c.isOwner && !c.isAdmin && !c.invitedById && c._count.roles === 0 &&
+          !artistIds.includes(c.artistId))
+        .map((c) => c.id);
+      if (toRemove.length > 0) {
+        await prisma.userArtist.deleteMany({ where: { id: { in: toRemove } } });
+      }
+      const toAdd = artistIds.filter((id: string) => !have.has(id));
+      if (toAdd.length > 0) {
         updateData.userArtists = {
-          create: artistIds.map((artistId: string) => ({ artistId })),
+          create: toAdd.map((artistId: string) => ({ artistId })),
         };
       }
     }

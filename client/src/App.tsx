@@ -169,6 +169,9 @@ function AppRoutes() {
             <Route path="/pro"              element={<ProPage />} />
             <Route path="/onboarding"       element={<OnboardingPage />} />
             <Route path="/vk-setup"         element={<VkSetupPage />} />
+            {/* Logged-in visitors who open an artist invite link land here too;
+                RegisterPage shows an accept screen (or bounces home if no invite). */}
+            <Route path="/register"         element={<RegisterPage />} />
             <Route path="/services/:serviceId" element={<ServicePage />} />
             <Route path="/profile/:userId/services" element={<ServicesPage />} />
             <Route path="/profile/:userId/connections" element={<ConnectionsPage />} />

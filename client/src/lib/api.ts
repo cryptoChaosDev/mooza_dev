@@ -379,6 +379,7 @@ export const artistAPI = {
     data: { roleIds?: string[]; participationStatus?: 'ACTIVE_MEMBER' | 'FORMER_MEMBER' },
   ) => api.post(`/artists/${artistId}/invite-link`, data),
   getInvite: (token: string) => api.get(`/artists/invite/${token}`),
+  acceptInvite: (token: string) => api.post(`/artists/invite/${token}/accept`),
 };
 
 // Release API — Phase 6a (releases on the artist profile)

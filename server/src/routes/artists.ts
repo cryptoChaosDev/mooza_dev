@@ -1373,4 +1373,49 @@ router.get('/invite/:token', async (req: AuthRequest, res: Response) => {
   }
 });
 
+// ── POST /api/artists/invite/:token/accept — already-logged-in user joins ──────
+// Counterpart of the signup-time consume in auth.ts: lets an EXISTING user accept
+// a role-bound invite link. Creates an already-ACCEPTED membership (idempotent).
+router.post('/invite/:token/accept', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const invite = await prisma.artistInvite.findUnique({ where: { token: req.params.token } });
+    if (!invite) return res.status(404).json({ error: 'Приглашение не найдено' });
+
+    const existing = await prisma.userArtist.findFirst({
+      where: { artistId: invite.artistId, userId: meId },
+      select: { id: true, inviteStatus: true },
+    });
+    if (existing) {
+      // Already linked — promote a pending/declined membership to accepted, else no-op.
+      if (existing.inviteStatus !== 'ACCEPTED') {
+        await prisma.userArtist.update({
+          where: { id: existing.id },
+          data: { inviteStatus: 'ACCEPTED' },
+        });
+      }
+      return res.json({ artistId: invite.artistId, alreadyMember: true });
+    }
+
+    await prisma.userArtist.create({
+      data: {
+        userId: meId,
+        artistId: invite.artistId,
+        professionId: null,
+        isOwner: false,
+        isAdmin: false,
+        inviteStatus: 'ACCEPTED',
+        participationStatus: invite.participationStatus,
+        roles: invite.roleIds.length
+          ? { create: invite.roleIds.map((roleId: string) => ({ roleId })) }
+          : undefined,
+      },
+    });
+    return res.json({ artistId: invite.artistId });
+  } catch (err) {
+    console.error('[artists] POST /invite/:token/accept', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 export default router;
