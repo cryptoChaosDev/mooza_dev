@@ -48,6 +48,16 @@ const TYPE_OPTIONS = [
 
 const TYPE_LABELS: Record<string, string> = Object.fromEntries(TYPE_OPTIONS.map(t => [t.id, t.name]));
 
+// What each verification status means + the owner's next step. Shown under the
+// status badge to the artist's owner/admins.
+const ARTIST_STATUS_DESC: Record<string, string> = {
+  DRAFT: 'Черновик: профиль ещё не отправлен на верификацию. Заполните данные, добавьте участников и отправьте код верификации в соцсети.',
+  PENDING: 'На модерации: заявка отправлена и ожидает проверки. Мы сверим публикацию с кодом и уведомим о результате.',
+  REJECTED: 'Отклонён: заявка не прошла проверку. Посмотрите причину ниже, исправьте данные и отправьте повторно.',
+  VERIFIED: 'Верифицирован: профиль подтверждён. Артист отображается в каталоге и помечен значком верификации.',
+  APPROVED: 'Одобрен модератором.',
+};
+
 function resolveUrl(path: string | null | undefined): string | null {
   if (!path) return null;
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
@@ -850,6 +860,13 @@ export default function ArtistPage() {
           )}
         </div>
 
+        {/* Status description (owner/admin) — what the current status means + next step. */}
+        {isAdminOfArtist && ARTIST_STATUS_DESC[artist.status] && (
+          <p className="text-xs text-slate-400 leading-relaxed mb-1.5">
+            {ARTIST_STATUS_DESC[artist.status]}
+          </p>
+        )}
+
         {/* City + tour readiness */}
         {(artist.city || artist.tourReady) && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-1">
@@ -931,15 +948,9 @@ export default function ArtistPage() {
               );
             })()}
 
-            {/* PENDING — request under review */}
+            {/* PENDING — withdraw action (status meaning is shown in the line above) */}
             {artist.status === 'PENDING' && (
-              <div className="mb-4 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
-                <p className="text-xs text-amber-300 font-medium mb-1 flex items-center gap-1.5">
-                  <Clock size={13} /> Заявка на рассмотрении
-                </p>
-                <p className="text-xs text-slate-400 mb-3">
-                  Мы проверим публикацию с кодом и уведомим вас о результате.
-                </p>
+              <div className="mb-4">
                 <button
                   onClick={() => withdrawMut.mutate()}
                   disabled={withdrawMut.isPending}
@@ -948,15 +959,6 @@ export default function ArtistPage() {
                   {withdrawMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
                   Отозвать заявку
                 </button>
-              </div>
-            )}
-
-            {/* VERIFIED */}
-            {artist.status === 'VERIFIED' && (
-              <div className="mb-4 p-3 rounded-xl bg-green-500/5 border border-green-500/20">
-                <p className="text-xs text-green-400 font-medium flex items-center gap-1.5">
-                  <ShieldCheck size={13} /> Верификация пройдена
-                </p>
               </div>
             )}
           </>
