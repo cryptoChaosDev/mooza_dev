@@ -19,6 +19,7 @@ let cachedCities: City[] | null = null;
 
 export default function CityPicker({ city, country: _country, onChange }: Props) {
   const [catalog, setCatalog] = useState<City[]>(cachedCities ?? []);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [query, setQuery] = useState(city || '');
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(!!city);
@@ -29,7 +30,7 @@ export default function CityPicker({ city, country: _country, onChange }: Props)
     if (cachedCities) return;
     referenceAPI.getCities()
       .then((r) => { cachedCities = r.data; setCatalog(r.data); })
-      .catch(() => {});
+      .catch(() => setLoadFailed(true));
   }, []);
 
   // Reflect an externally-set city (e.g. loaded profile).
@@ -82,7 +83,12 @@ export default function CityPicker({ city, country: _country, onChange }: Props)
           <input
             ref={inputRef}
             value={query}
-            onChange={(e) => { setQuery(e.target.value); setSelected(false); setOpen(true); }}
+            onChange={(e) => {
+              const v = e.target.value;
+              setQuery(v); setSelected(false); setOpen(true);
+              // Degrade gracefully if the catalog failed to load — accept free text.
+              if (loadFailed) onChange(v.trim(), 'Россия');
+            }}
             onFocus={() => setOpen(true)}
             placeholder="Начните вводить город..."
             className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
@@ -94,7 +100,7 @@ export default function CityPicker({ city, country: _country, onChange }: Props)
           )}
         </div>
 
-        {open && (
+        {open && !loadFailed && (
           <div ref={dropdownRef} className="absolute left-0 right-0 top-full mt-1.5 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl z-50 overflow-hidden max-h-64 overflow-y-auto">
             {results.length > 0 ? results.map((c) => (
               <button
@@ -116,7 +122,9 @@ export default function CityPicker({ city, country: _country, onChange }: Props)
 
       <p className="text-xs text-slate-500 flex items-start gap-1.5">
         <span className="text-slate-600 mt-0.5">ℹ</span>
-        Выберите город из списка. Если вашего нет — выберите ближайший крупный.
+        {loadFailed
+          ? 'Каталог временно недоступен — введите город вручную.'
+          : 'Выберите город из списка. Если вашего нет — выберите ближайший крупный.'}
       </p>
     </div>
   );

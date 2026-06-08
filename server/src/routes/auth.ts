@@ -755,7 +755,7 @@ router.get('/vk/callback', async (req, res) => {
           lastName: vkProfile.last_name || '',
           email: email || null,
           avatar: vkProfile.photo_100 || null,
-          nickname: vkProfile.screen_name || null,
+          nickname: await safeNickname(vkProfile.screen_name),
         },
       });
       isNew = true;
@@ -949,7 +949,7 @@ router.post('/telegram', authLimiter, async (req, res) => {
           firstName: first_name || 'Пользователь',
           lastName: last_name || '',
           avatar: photo_url || null,
-          nickname: username || null,
+          nickname: await safeNickname(username),
         },
       });
     } else {

@@ -639,6 +639,11 @@ router.post('/users', async (req, res) => {
     const existing = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     if (existing) return res.status(409).json({ error: 'Email уже занят' });
 
+    if (nickname?.trim()) {
+      const nclash = await prisma.user.findFirst({ where: { nicknameNorm: yoNorm(nickname.trim()) }, select: { id: true } });
+      if (nclash) return res.status(409).json({ error: 'Этот никнейм уже занят' });
+    }
+
     const hashed = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: {
@@ -671,7 +676,14 @@ router.patch('/users/:id', async (req, res) => {
     const data: Record<string, any> = {};
     if (firstName !== undefined) data.firstName = firstName.trim();
     if (lastName !== undefined) data.lastName = lastName.trim();
-    if (nickname !== undefined) data.nickname = nickname.trim() || null;
+    if (nickname !== undefined) {
+      const nk = (nickname ?? '').trim();
+      if (nk) {
+        const nclash = await prisma.user.findFirst({ where: { nicknameNorm: yoNorm(nk), NOT: { id: req.params.id } }, select: { id: true } });
+        if (nclash) return res.status(409).json({ error: 'Этот никнейм уже занят' });
+      }
+      data.nickname = nk || null;
+    }
     if (email !== undefined) data.email = email.trim().toLowerCase() || null;
     if (phone !== undefined) data.phone = phone.trim() || null;
     if (city !== undefined) data.city = city.trim() || null;

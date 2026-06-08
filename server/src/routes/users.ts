@@ -433,7 +433,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
         });
         if (clash) return res.status(409).json({ error: 'Этот никнейм уже занят' });
       }
-      updateData.nickname = nickname;
+      updateData.nickname = nk || null;
     }
     if (bio !== undefined) {
       // Bio length is Pro-gated (Free 100 / Pro 200 chars).
