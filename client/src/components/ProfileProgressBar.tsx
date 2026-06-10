@@ -29,10 +29,18 @@ const FIELDS: { key: string; hint: string; filled: (p: any) => boolean }[] = [
   },
 ];
 
+// Profile completion as a 0–100 percentage (10 equally-weighted fields).
+// Reused for the avatar completion ring.
+export function profileCompletion(profile: any): number {
+  if (!profile) return 0;
+  const filled = FIELDS.filter((f) => f.filled(profile)).length;
+  return Math.round((filled / FIELDS.length) * 100);
+}
+
 export default function ProfileProgressBar({ profile }: Props) {
   if (!profile) return null;
   const filledCount = FIELDS.filter((f) => f.filled(profile)).length;
-  const pct = Math.round((filledCount / FIELDS.length) * 100);
+  const pct = profileCompletion(profile);
   if (pct >= 100) return null; // nothing to nudge — keep a complete profile clean
 
   const nextHint = FIELDS.find((f) => !f.filled(profile))?.hint;

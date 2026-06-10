@@ -25,7 +25,7 @@ import ShareButton from '../components/ShareButton';
 import JoinArtistModal from '../components/JoinArtistModal';
 import ReviewsBlock from '../components/ReviewsBlock';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
-import ProfileProgressBar from '../components/ProfileProgressBar';
+import ProfileProgressBar, { profileCompletion } from '../components/ProfileProgressBar';
 import PublicConsentGate from '../components/PublicConsentGate';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
@@ -1127,6 +1127,7 @@ export default function ProfilePage() {
 
   const aUrl = getAvatarUrl(profile?.avatar);
   const bUrl = profile?.bannerImage ? `${API_URL}${profile.bannerImage}` : null;
+  const completionPct = profileCompletion(profile);
   const socialLinksMap = (profile?.socialLinks as Record<string, string>) || {};
   const hasContactLinks = CONTACT_KEYS.some(k => socialLinksMap[k]);
   const hasSocialNetworkLinks = SOCIAL_KEYS.some(k => socialLinksMap[k]);
@@ -1187,13 +1188,21 @@ export default function ProfilePage() {
           {/* Avatar + action buttons */}
           <div className="flex items-end justify-between -mt-14 mb-4">
             <div className="relative z-10">
-              <div className="w-28 h-28 rounded-full overflow-hidden ring-4 ring-slate-950 shadow-2xl bg-gradient-to-br from-primary-500 to-purple-600">
-                {aUrl
-                  ? <img src={aUrl} alt="Avatar" className="w-full h-full object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center">
-                      <span className="text-3xl font-bold text-white">{profile?.firstName?.[0]}{profile?.lastName?.[0]}</span>
-                    </div>
-                }
+              <div
+                className="rounded-full p-[3px]"
+                title={`Профиль заполнен на ${completionPct}%`}
+                style={{ background: `conic-gradient(#8b5cf6 0% ${completionPct}%, rgba(139,92,246,0.18) ${completionPct}% 100%)` }}
+              >
+                <div className="rounded-full p-[3px] bg-slate-950">
+                  <div className="w-28 h-28 rounded-full overflow-hidden shadow-2xl bg-gradient-to-br from-primary-500 to-purple-600">
+                    {aUrl
+                      ? <img src={aUrl} alt="Avatar" className="w-full h-full object-cover" />
+                      : <div className="w-full h-full flex items-center justify-center">
+                          <span className="text-3xl font-bold text-white">{profile?.firstName?.[0]}{profile?.lastName?.[0]}</span>
+                        </div>
+                    }
+                  </div>
+                </div>
               </div>
               <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-0.5 right-0.5 bg-primary-500 hover:bg-primary-600 text-white p-2 rounded-full shadow-lg transition-all border-2 border-slate-950">
                 <Camera size={13} />
