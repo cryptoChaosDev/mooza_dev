@@ -28,9 +28,13 @@ export default function LegalDocsModal({ onClose }: { onClose: () => void }) {
       .then((r) => (r.ok ? r.text() : Promise.reject(r.status)))
       .then((t) => { if (alive) setContent(t); })
       .catch(() => { if (alive) setContent('<p>Не удалось загрузить документ. Попробуйте позже.</p>'); })
-      .finally(() => { if (alive) setLoading(false); });
+      // Note: no `alive` gate here — a stale `loading: true` after going back
+      // mid-fetch left the next view blank (the "back to an empty window" bug).
+      .finally(() => setLoading(false));
     return () => { alive = false; };
   }, [active]);
+
+  const goBack = () => { setActive(null); setContent(''); setLoading(false); };
 
   return createPortal(
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -40,7 +44,7 @@ export default function LegalDocsModal({ onClose }: { onClose: () => void }) {
         <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-800 flex-shrink-0">
           {active ? (
             <button
-              onClick={() => setActive(null)}
+              onClick={goBack}
               className="p-1.5 -ml-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
               aria-label="Назад к списку"
             >
@@ -61,29 +65,33 @@ export default function LegalDocsModal({ onClose }: { onClose: () => void }) {
           </button>
         </div>
 
-        {/* Body */}
-        {!active ? (
-          <div className="overflow-y-auto p-2 sm:p-3">
-            {DOCS.map((d) => (
-              <button
-                key={d.slug}
-                onClick={() => setActive(d)}
-                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left hover:bg-slate-800/60 transition-colors"
-              >
-                <FileText size={16} className="text-slate-500 flex-shrink-0" />
-                <span className="text-sm text-slate-200">{d.title}</span>
-              </button>
-            ))}
-          </div>
-        ) : loading ? (
-          <div className="flex-1 flex items-center justify-center py-16">
-            <Loader2 size={26} className="animate-spin text-slate-500" />
-          </div>
-        ) : (
-          <div
-            className="overflow-y-auto px-5 py-4 legal-prose"
-            dangerouslySetInnerHTML={{ __html: content }}
-          />
+        {/* Body. The list stays mounted (just hidden) so «Назад» always returns
+            to a live element — remounting it raced with in-flight fetch state
+            and could leave the modal blank. */}
+        <div className={`overflow-y-auto overscroll-contain p-2 sm:p-3 ${active ? 'hidden' : ''}`}>
+          {DOCS.map((d) => (
+            <button
+              key={d.slug}
+              onClick={() => setActive(d)}
+              className="w-full flex items-center gap-3 px-3 py-3 rounded-xl text-left hover:bg-slate-800/60 transition-colors"
+            >
+              <FileText size={16} className="text-slate-500 flex-shrink-0" />
+              <span className="text-sm text-slate-200">{d.title}</span>
+            </button>
+          ))}
+        </div>
+        {active && (
+          loading || !content ? (
+            <div className="flex-1 flex items-center justify-center py-16">
+              <Loader2 size={26} className="animate-spin text-slate-500" />
+            </div>
+          ) : (
+            <div
+              key={active.slug}
+              className="overflow-y-auto overscroll-contain px-5 py-4 legal-prose"
+              dangerouslySetInnerHTML={{ __html: content }}
+            />
+          )
         )}
       </div>
     </div>,
