@@ -732,6 +732,26 @@ export default function ProfilePage() {
     queryClient.invalidateQueries({ queryKey: ['profile'] });
   };
 
+  // ── Consent to public distribution of PD (152-ФЗ ст. 10.1) ──────────────────
+  // One-time gate before the first public action (publish service / upload
+  // portfolio / set contacts to «Все»). MUST stay above the isLoading return —
+  // these are hooks and run on every render.
+  const [consentAction, setConsentAction] = useState<(() => void) | null>(null);
+  const [locallyConsented, setLocallyConsented] = useState(false);
+  const hasPublicConsent = !!(profile as any)?.publicConsentAt || locallyConsented;
+  const ensurePublicConsent = (action: () => void) => {
+    if (hasPublicConsent) { action(); return; }
+    setConsentAction(() => action);
+  };
+  const handleConsentAccept = async () => {
+    try { await userAPI.givePublicConsent(); } catch { /* recorded best-effort */ }
+    setLocallyConsented(true);
+    queryClient.invalidateQueries({ queryKey: ['profile'] });
+    const action = consentAction;
+    setConsentAction(null);
+    action?.();
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-slate-950 flex items-center justify-center">
@@ -786,25 +806,6 @@ export default function ProfilePage() {
   const handleDeleteLink = async (linkId: string) => {
     await userAPI.deletePortfolioLink(linkId);
     setPortfolioLinks(prev => prev.filter((l: any) => l.id !== linkId));
-  };
-
-  // ── Consent to public distribution of PD (152-ФЗ ст. 10.1) ──────────────────
-  // One-time gate before the first public action (publish service / upload
-  // portfolio / set contacts to «Все»). Recorded server-side via givePublicConsent.
-  const [consentAction, setConsentAction] = useState<(() => void) | null>(null);
-  const [locallyConsented, setLocallyConsented] = useState(false);
-  const hasPublicConsent = !!(profile as any)?.publicConsentAt || locallyConsented;
-  const ensurePublicConsent = (action: () => void) => {
-    if (hasPublicConsent) { action(); return; }
-    setConsentAction(() => action);
-  };
-  const handleConsentAccept = async () => {
-    try { await userAPI.givePublicConsent(); } catch { /* recorded best-effort */ }
-    setLocallyConsented(true);
-    queryClient.invalidateQueries({ queryKey: ['profile'] });
-    const action = consentAction;
-    setConsentAction(null);
-    action?.();
   };
 
 
