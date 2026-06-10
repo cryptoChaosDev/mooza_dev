@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useEditor, EditorContent, type Editor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
+import Mention from '@tiptap/extension-mention';
+import { mentionSuggestion } from './mentionSuggestion';
 import { Bold, Italic, Strikethrough, List, ListOrdered, Quote, Link2 } from 'lucide-react';
 
 interface Props {
@@ -11,11 +13,12 @@ interface Props {
   minHeight?: number;
   autoFocus?: boolean;
   onReady?: (editor: Editor) => void;  // exposes the instance (e.g. for emoji insert)
+  onPasteImage?: (files: File[]) => void; // pasted images → handled by the parent
 }
 
 // WYSIWYG post editor (TipTap). Basic formatting: bold / italic / strike /
 // bullet & ordered lists / blockquote / link. Emits HTML ('' when empty).
-export default function RichTextEditor({ value, onChange, placeholder, minHeight = 120, autoFocus, onReady }: Props) {
+export default function RichTextEditor({ value, onChange, placeholder, minHeight = 120, autoFocus, onReady, onPasteImage }: Props) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -31,11 +34,31 @@ export default function RichTextEditor({ value, onChange, placeholder, minHeight
         },
       }),
       Placeholder.configure({ placeholder: placeholder || 'Напишите что-нибудь…' }),
+      Mention.configure({
+        HTMLAttributes: { class: 'post-mention' },
+        suggestion: mentionSuggestion,
+      }),
     ],
     content: value || '',
     autofocus: autoFocus ? 'end' : false,
     onUpdate: ({ editor }) => onChange(editor.isEmpty ? '' : editor.getHTML()),
-    editorProps: { attributes: { class: 'rte-content' } },
+    editorProps: {
+      attributes: { class: 'rte-content' },
+      handlePaste: (_view, event) => {
+        const dt = event.clipboardData;
+        if (!dt || !onPasteImage) return false;
+        const files: File[] = [];
+        for (const item of Array.from(dt.items || [])) {
+          if (item.kind === 'file' && item.type.startsWith('image/')) {
+            const f = item.getAsFile();
+            if (f) files.push(f);
+          }
+        }
+        if (!files.length) for (const f of Array.from(dt.files || [])) if (f.type.startsWith('image/')) files.push(f);
+        if (files.length) { event.preventDefault(); onPasteImage(files); return true; }
+        return false;
+      },
+    },
   });
 
   // Reflect external value changes (draft load, reset after submit) without

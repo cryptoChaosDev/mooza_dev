@@ -372,3 +372,7 @@ input[type='range'].price-thumb::-moz-range-thumb {
 .rte-content li, .post-prose li { margin: 0.15rem 0; }
 .rte-content blockquote, .post-prose blockquote { border-left: 3px solid #475569; padding-left: 0.75rem; margin: 0.4rem 0; color: #cbd5e1; }
 .rte-content a, .post-prose a { color: #818cf8; text-decoration: underline; word-break: break-word; }
+.rte-content .post-mention, .post-prose .post-mention { color: #818cf8; font-weight: 500; }
+.rte-content .post-mention { background: rgba(129,140,248,0.12); border-radius: 4px; padding: 0 2px; }
+.post-prose .post-mention { cursor: pointer; }
+.post-prose .post-mention:hover { text-decoration: underline; }

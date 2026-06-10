@@ -571,6 +571,7 @@ export default function CreatePostPage() {
               value={content}
               onChange={setContent}
               onReady={(e) => { editorRef.current = e; }}
+              onPasteImage={uploadFiles}
               autoFocus
               minHeight={isFreeformService && pickedServices.length > 0 ? 80 : 140}
               placeholder={
