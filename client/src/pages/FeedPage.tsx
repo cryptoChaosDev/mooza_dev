@@ -745,6 +745,7 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
 }
 
 const SORT_OPTIONS = [
+  { id: 'smart', label: 'Для вас' },
   { id: 'new', label: 'Новые' },
   { id: 'popular', label: 'Популярные' },
   { id: 'discussed', label: 'Обсуждаемые' },

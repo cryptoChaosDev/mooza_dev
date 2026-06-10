@@ -122,10 +122,31 @@ const buildFeedInclude = (userId: string | undefined) => {
 // See server/prisma/seeds/welcome-posts.ts
 const TEAM_EMAIL = 'team@moooza.ru';
 
+// ── Smart feed («Для вас») ───────────────────────────────────────────────────
+// Per-(viewer+filters) ranked id list, cached briefly; paginated by index.
+const SMART_TTL_MS = 3 * 60 * 1000;
+const smartCache = new Map<string, { ids: string[]; at: number }>();
+
+// Greedy author-diversity pass: avoid the same author within `window` slots.
+function diversifyByAuthor<T extends { authorId: string }>(items: T[], window = 4): T[] {
+  const out: T[] = [];
+  const recent: string[] = [];
+  const pool = items.slice();
+  while (pool.length) {
+    let i = pool.findIndex((p) => !recent.includes(p.authorId));
+    if (i === -1) i = 0;
+    const [picked] = pool.splice(i, 1);
+    out.push(picked);
+    recent.push(picked.authorId);
+    if (recent.length > window) recent.shift();
+  }
+  return out;
+}
+
 // Get feed (all posts from the social network). Supports:
 //   type       — post type (blog | question | poll | service | employment | …)
 //   authorKind — all | resident (profile) | channel | artist | mine
-//   sort       — new (default) | popular (by reactions) | discussed (by comments)
+//   sort       — new (default) | popular | discussed | smart («Для вас»)
 //   limit/offset — pagination for infinite scroll
 router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
   try {
@@ -200,6 +221,102 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
     // Genre — artist posts whose artist is tagged with the given genre.
     if (genre && genre !== 'all') {
       where.artist = { ...(where.artist || {}), genres: { some: { genre: { name: String(genre) } } } };
+    }
+
+    // ── Smart feed («Для вас») ──────────────────────────────────────────────
+    if (String(sort) === 'smart') {
+      const vid = req.userId || null;
+      const cacheKey = `${vid || 'guest'}|${String(type || '')}|${kind}|${periodStr}|${String(city || '')}|${String(employment || '')}|${String(artistType || '')}|${String(genre || '')}`;
+      const nowMs = Date.now();
+      let entry = smartCache.get(cacheKey);
+
+      if (!entry || nowMs - entry.at > SMART_TTL_MS) {
+        // Viewer affinity signals (empty for guests → global "trending" ranking).
+        let friendIds = new Set<string>(), connIds = new Set<string>(), subChannelIds = new Set<string>(),
+            favUserIds = new Set<string>(), myArtistIds = new Set<string>(), vGenres = new Set<string>();
+        let vCity: string | null = null, vField: string | null = null;
+        if (vid) {
+          const [friendships, connections, subs, favorites, myArtists, viewer] = await Promise.all([
+            prisma.friendship.findMany({ where: { status: 'accepted', OR: [{ requesterId: vid }, { receiverId: vid }] }, select: { requesterId: true, receiverId: true } }),
+            prisma.connection.findMany({ where: { status: { in: ['ACCEPTED', 'BREAK_REQUESTED'] }, OR: [{ requesterId: vid }, { receiverId: vid }] }, select: { requesterId: true, receiverId: true } }),
+            prisma.channelSubscription.findMany({ where: { userId: vid }, select: { channelId: true } }),
+            prisma.favorite.findMany({ where: { userId: vid }, select: { targetId: true } }),
+            prisma.userArtist.findMany({ where: { userId: vid }, select: { artistId: true } }),
+            prisma.user.findUnique({ where: { id: vid }, select: { city: true, genres: true, fieldOfActivityId: true } }),
+          ]);
+          friendIds = new Set(friendships.map((f) => (f.requesterId === vid ? f.receiverId : f.requesterId)));
+          connIds = new Set(connections.map((c) => (c.requesterId === vid ? c.receiverId : c.requesterId)));
+          subChannelIds = new Set(subs.map((s) => s.channelId));
+          favUserIds = new Set(favorites.map((f) => f.targetId));
+          myArtistIds = new Set(myArtists.map((a) => a.artistId));
+          vGenres = new Set(viewer?.genres ?? []);
+          vCity = viewer?.city ?? null;
+          vField = viewer?.fieldOfActivityId ?? null;
+        }
+
+        // Candidate pool: the 600 most-recent posts matching the active filters
+        // (team excluded — handled separately below).
+        const candidates: any[] = await prisma.post.findMany({
+          where,
+          select: {
+            id: true, createdAt: true, authorId: true, channelId: true, artistId: true, city: true, genres: true,
+            author: { select: { fieldOfActivityId: true } },
+            _count: { select: { reactions: true, comments: true, likes: true, savedBy: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: 600,
+        });
+
+        // score = freshness × (1 + engagement + affinity + relevance)
+        const HALF_LIFE_H = 20;
+        const scored = candidates.map((p) => {
+          const ageH = Math.max(0, (nowMs - new Date(p.createdAt).getTime()) / 3_600_000);
+          const freshness = Math.pow(0.5, ageH / HALF_LIFE_H);
+          const c = p._count;
+          const eng = Math.log1p(c.reactions + 2 * c.comments + 0.5 * c.likes + 1.5 * c.savedBy);
+          let aff = 0;
+          if (friendIds.has(p.authorId)) aff += 1.2; else if (connIds.has(p.authorId)) aff += 0.8;
+          if (favUserIds.has(p.authorId)) aff += 0.6;
+          if (p.channelId && subChannelIds.has(p.channelId)) aff += 1.0;
+          if (p.artistId && myArtistIds.has(p.artistId)) aff += 1.0;
+          let rel = 0;
+          if (p.city && vCity && p.city === vCity) rel += 0.4;
+          if (vGenres.size && p.genres?.length) {
+            const o = p.genres.filter((g: string) => vGenres.has(g)).length;
+            if (o) rel += Math.min(0.6, 0.3 * o);
+          }
+          if (p.author?.fieldOfActivityId && vField && p.author.fieldOfActivityId === vField) rel += 0.3;
+          return { id: p.id, authorId: p.authorId, score: freshness * (1 + 0.6 * eng + aff + rel) };
+        });
+        scored.sort((a, b) => b.score - a.score);
+        const ranked = diversifyByAuthor(scored);
+
+        // Official Moooza account posts ALWAYS rank highest (top of the feed),
+        // newest first — or oldest first (onboarding order) for brand-new users.
+        let teamIds: string[] = [];
+        if (teamUserId && kind === 'all') {
+          const newUser = vid ? (await prisma.post.count({ where: { authorId: vid } })) === 0 : false;
+          const teamWhere: any = { authorId: teamUserId };
+          if (type && type !== 'all') teamWhere.type = String(type);
+          if (where.createdAt) teamWhere.createdAt = where.createdAt;
+          if (where.city) teamWhere.city = where.city;
+          const teamPosts = await prisma.post.findMany({ where: teamWhere, select: { id: true }, orderBy: { createdAt: newUser ? 'asc' : 'desc' }, take: 25 });
+          teamIds = teamPosts.map((p) => p.id);
+        }
+        const teamSet = new Set(teamIds);
+        const ids = [...teamIds, ...ranked.filter((p) => !teamSet.has(p.id)).map((p) => p.id)];
+        if (smartCache.size > 1000) smartCache.clear();
+        entry = { ids, at: nowMs };
+        smartCache.set(cacheKey, entry);
+      }
+
+      const pageIds = entry.ids.slice(offsetNum, offsetNum + limitNum);
+      if (pageIds.length === 0) { res.json([]); return; }
+      const pagePosts: any[] = await prisma.post.findMany({ where: { id: { in: pageIds } }, include });
+      const orderMap = new Map(pageIds.map((id, i) => [id, i]));
+      pagePosts.sort((a, b) => (orderMap.get(a.id)! - orderMap.get(b.id)!));
+      res.json(pagePosts.map((post) => ({ ...post, isLiked: post.likes.length > 0, isSaved: post.savedBy.length > 0 })));
+      return;
     }
 
     // Sort order — newest by default, or by engagement (reactions / comments)
