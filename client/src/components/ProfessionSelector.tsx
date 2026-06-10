@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Search, Plus, Check } from 'lucide-react';
 import { SORTED_PROFESSIONS } from '../constants/professions';
+import { yoNorm } from '../lib/search';
 
 interface ProfessionSelectorProps {
   isOpen: boolean;
@@ -20,9 +21,9 @@ export default function ProfessionSelector({
 
   const filteredProfessions = useMemo(() => {
     if (!searchQuery.trim()) return SORTED_PROFESSIONS;
-    const query = searchQuery.toLowerCase();
+    const query = yoNorm(searchQuery);
     return SORTED_PROFESSIONS.filter(profession =>
-      profession.toLowerCase().includes(query)
+      yoNorm(profession).includes(query)
     );
   }, [searchQuery]);
 

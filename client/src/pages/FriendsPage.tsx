@@ -10,6 +10,7 @@ import { friendshipAPI, connectionAPI, favoriteAPI, artistAPI, postAPI } from '.
 import AvatarComponent from '../components/Avatar';
 import { usePresenceStore } from '../stores/presenceStore';
 import { formatLastSeen } from '../lib/lastSeen';
+import { yoNorm } from '../lib/search';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -17,13 +18,10 @@ import ConfirmDialog from '../components/ConfirmDialog';
 type Tab = 'friends' | 'connections' | 'favorites';
 
 
-function SectionHeader({ label, count, danger }: { label: string; count?: number; danger?: boolean }) {
+function SectionHeader({ label, danger }: { label: string; count?: number; danger?: boolean }) {
   return (
     <div className="px-4 py-2 bg-slate-900/80 border-b border-slate-800 flex items-center gap-2">
       <span className={`text-xs font-semibold uppercase tracking-wide ${danger ? 'text-red-500/70' : 'text-slate-500'}`}>{label}</span>
-      {count !== undefined && count > 0 && (
-        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${danger ? 'bg-red-500/15 text-red-400' : 'bg-slate-800 text-slate-400'}`}>{count}</span>
-      )}
     </div>
   );
 }
@@ -135,11 +133,11 @@ const { data: myBreakRequests = [] } = useQuery({
     return friends
       .map((item: any) => ({ ...item, friend: item.user ?? item }))
       .filter(({ friend }: any) => {
-        const q = search.toLowerCase();
+        const q = yoNorm(search);
         const matchesSearch = !q ||
-          `${friend.firstName} ${friend.lastName}`.toLowerCase().includes(q) ||
-          (friend.role ?? '').toLowerCase().includes(q) ||
-          (friend.city ?? '').toLowerCase().includes(q);
+          yoNorm(`${friend.firstName} ${friend.lastName}`).includes(q) ||
+          yoNorm(friend.role).includes(q) ||
+          yoNorm(friend.city).includes(q);
         const matchesOnline = !onlineOnly || onlineUsers.has(friend.id);
         return matchesSearch && matchesOnline;
       })
@@ -194,11 +192,6 @@ const { data: myBreakRequests = [] } = useQuery({
                   }`}
                 >
                   <span>{tab.label}</span>
-                  {tab.badge > 0 && (
-                    <span className={`px-1.5 py-0.5 rounded-full text-xs font-bold ${
-                      activeTab === tab.id ? 'bg-white/20' : 'bg-slate-800 text-slate-400'
-                    }`}>{tab.badge}</span>
-                  )}
                 </button>
               ))}
             </div>
@@ -247,11 +240,6 @@ const { data: myBreakRequests = [] } = useQuery({
                     {requests.length > 0 ? `${requests.length} новых` : sentRequests.length > 0 ? `${sentRequests.length} отправлено` : 'Нет новых запросов'}
                   </p>
                 </div>
-                {(requests.length + sentRequests.length) > 0 && (
-                  <span className="min-w-[20px] h-5 px-1.5 bg-primary-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center flex-shrink-0">
-                    {requests.length + sentRequests.length}
-                  </span>
-                )}
                 <ChevronRight size={16} className="text-slate-600 flex-shrink-0" />
               </button>
 
@@ -343,11 +331,6 @@ const { data: myBreakRequests = [] } = useQuery({
                     {connRequests.length > 0 ? `${connRequests.length} новых` : connSent.length > 0 ? `${connSent.length} отправлено` : 'Нет новых запросов'}
                   </p>
                 </div>
-                {(connRequests.length + connSent.length) > 0 && (
-                  <span className="min-w-[20px] h-5 px-1.5 bg-primary-600 text-white text-[10px] font-bold rounded-full flex items-center justify-center flex-shrink-0">
-                    {connRequests.length + connSent.length}
-                  </span>
-                )}
                 <ChevronRight size={16} className="text-slate-600 flex-shrink-0" />
               </button>
 
@@ -530,7 +513,7 @@ const { data: myBreakRequests = [] } = useQuery({
                     {followedArtists.map((artist: any) => (
                       <div
                         key={artist.id}
-                        onClick={() => navigate(`/artists/${artist.id}`)}
+                        onClick={() => navigate(`/artist/${artist.id}`)}
                         className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors cursor-pointer"
                       >
                         <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center overflow-hidden flex-shrink-0">

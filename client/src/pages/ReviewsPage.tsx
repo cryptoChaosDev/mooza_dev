@@ -76,7 +76,7 @@ export default function ReviewsPage() {
         <div className="flex-1 min-w-0">
           <h1 className="text-base font-bold text-white">Отзывы</h1>
           {reviews.length > 0 && (
-            <p className="text-xs text-slate-500">{reviews.length} · {avgRating.toFixed(1)} <Star size={10} className="inline text-amber-400 fill-amber-400 -mt-0.5" /></p>
+            <p className="text-xs text-slate-500">{avgRating.toFixed(1)} <Star size={10} className="inline text-amber-400 fill-amber-400 -mt-0.5" /></p>
           )}
         </div>
       </div>

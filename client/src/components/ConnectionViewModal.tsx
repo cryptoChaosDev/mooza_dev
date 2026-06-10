@@ -6,6 +6,7 @@ import { connectionAPI, reviewAPI } from '../lib/api';
 import AvatarComponent from './Avatar';
 import { useNavigate } from 'react-router-dom';
 import DealCreateModal from './DealCreateModal';
+import { DEALS_ENABLED } from '../lib/features';
 
 interface Connection {
   id: string;
@@ -307,12 +308,14 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
           {/* ACCEPTED → close + deal + review */}
           {status === 'ACCEPTED' && !showReview && (
             <>
-              <button
-                onClick={() => setShowDeal(true)}
-                className="flex-1 py-2.5 bg-primary-600/20 hover:bg-primary-600/30 border border-primary-500/30 text-primary-300 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
-              >
-                <HandshakeIcon size={14} />Сделка
-              </button>
+              {DEALS_ENABLED && (
+                <button
+                  onClick={() => setShowDeal(true)}
+                  className="flex-1 py-2.5 bg-primary-600/20 hover:bg-primary-600/30 border border-primary-500/30 text-primary-300 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <HandshakeIcon size={14} />Сделка
+                </button>
+              )}
               <button
                 onClick={() => setShowReview(true)}
                 className="flex-1 py-2.5 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-400 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-1.5"

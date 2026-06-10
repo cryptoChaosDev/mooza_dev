@@ -573,7 +573,6 @@ export default function UserProfilePage() {
                     <button key={tab.key} onClick={() => setPortfolioTab(tab.key)}
                       className={`flex-1 py-2 text-xs font-medium transition-colors relative ${portfolioTab === tab.key ? 'text-primary-400' : 'text-slate-500 hover:text-slate-300'}`}>
                       {tab.label}
-                      {tab.count > 0 && <span className="ml-1 text-[10px] opacity-70">{tab.count}</span>}
                       {portfolioTab === tab.key && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500 rounded-full" />}
                     </button>
                   ))}

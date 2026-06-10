@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { upload, uploadBanner, uploadPortfolio } from '../middleware/upload';
+import { yoNorm } from '../utils/search';
+import { isProActive, limitsFor } from '../utils/pro';
 import path from 'path';
 import fs from 'fs';
 
@@ -62,6 +64,7 @@ const userSelect = {
   isBlocked: true,
   isPremium: true,
   isPro: true,
+  proUntil: true,
   isVerified: true,
   genres: true,
   fieldOfActivityId: true,
@@ -94,8 +97,11 @@ const userSelect = {
   birthDate: true,
   birthDateVisible: true,
   contactsVisible: true,
+  contactsVisibility: true,
   lastSeenAt: true,
   termsAgreedAt: true,
+  publicConsentAt: true,
+  publicConsentVersion: true,
   onboardingCompletedAt: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
@@ -124,6 +130,7 @@ const publicUserSelect = {
   role: true,
   isPremium: true,
   isPro: true,
+  proUntil: true,
   isVerified: true,
   isBlocked: true,
   genres: true,
@@ -158,6 +165,7 @@ const publicUserSelect = {
   birthDate: true,
   birthDateVisible: true,
   contactsVisible: true,
+  contactsVisibility: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
   portfolioLinks: { select: { id: true, type: true, url: true, title: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
@@ -169,6 +177,64 @@ const publicUserSelect = {
     }
   },
 } as const;
+
+// Contact links that are gated by the contacts-visibility setting.
+const CONTACT_LINK_KEYS = ['phone', 'email', 'tg_profile'];
+
+/**
+ * Decide whether the VIEWER may see the OWNER's contact fields, based on the
+ * owner's `contactsVisibility` (3-level enum). Falls back to the legacy
+ * `contactsVisible` boolean when the enum is absent.
+ *   ALL        → always visible
+ *   REGISTERED → visible only to authenticated viewers
+ *   FRIENDS    → visible only to accepted Connection / Friendship counterparts
+ * The owner viewing themselves always sees their own contacts.
+ */
+async function canViewContacts(
+  owner: { id: string; contactsVisibility?: string | null; contactsVisible?: boolean | null },
+  viewerId: string | null | undefined
+): Promise<boolean> {
+  // Owner viewing self.
+  if (viewerId && viewerId === owner.id) return true;
+
+  const mode = owner.contactsVisibility
+    || (owner.contactsVisible === false ? 'FRIENDS' : 'ALL');
+
+  if (mode === 'ALL') return true;
+  if (mode === 'REGISTERED') return !!viewerId;
+
+  // FRIENDS: require an accepted Connection (either direction) OR accepted Friendship.
+  if (!viewerId) return false;
+  const conn = await prisma.connection.findFirst({
+    where: {
+      status: 'ACCEPTED',
+      OR: [
+        { requesterId: viewerId, receiverId: owner.id },
+        { requesterId: owner.id, receiverId: viewerId },
+      ],
+    },
+    select: { id: true },
+  });
+  if (conn) return true;
+  const friend = await prisma.friendship.findFirst({
+    where: {
+      status: 'accepted',
+      OR: [
+        { requesterId: viewerId, receiverId: owner.id },
+        { requesterId: owner.id, receiverId: viewerId },
+      ],
+    },
+    select: { id: true },
+  });
+  return !!friend;
+}
+
+function stripContactLinks(socialLinks: any): any {
+  if (!socialLinks || typeof socialLinks !== 'object') return socialLinks;
+  const links = { ...(socialLinks as Record<string, any>) };
+  for (const k of CONTACT_LINK_KEYS) delete links[k];
+  return links;
+}
 
 // Public: resolve user by nickname or UUID — no auth required
 router.get('/handle/:handle', optionalAuthenticate, async (req: AuthRequest, res) => {
@@ -190,13 +256,14 @@ router.get('/handle/:handle', optionalAuthenticate, async (req: AuthRequest, res
     if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
 
     // Respect the same privacy gates as GET /:id.
-    const { birthDateVisible, contactsVisible, ...publicUser } = user as any;
+    const { birthDateVisible, contactsVisible, contactsVisibility, ...publicUser } = user as any;
     if (!birthDateVisible) publicUser.birthDate = null;
-    if (!contactsVisible && publicUser.socialLinks && typeof publicUser.socialLinks === 'object') {
-      const CONTACT_KEYS = ['phone', 'email', 'tg_profile'];
-      const links = { ...(publicUser.socialLinks as Record<string, any>) };
-      for (const k of CONTACT_KEYS) delete links[k];
-      publicUser.socialLinks = links;
+    const showContacts = await canViewContacts(
+      { id: publicUser.id, contactsVisibility, contactsVisible },
+      req.userId,
+    );
+    if (!showContacts) {
+      publicUser.socialLinks = stripContactLinks(publicUser.socialLinks);
     }
     res.json(publicUser);
   } catch (error) {
@@ -224,6 +291,28 @@ router.get('/me', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
+// Record consent to processing personal data allowed for public distribution
+// (152-ФЗ ст. 10.1). One-time: keeps the original timestamp if already given.
+const PUBLIC_CONSENT_VERSION = '2026-05-31';
+router.post('/me/public-consent', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const me = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { publicConsentAt: true },
+    });
+    if (!me?.publicConsentAt) {
+      await prisma.user.update({
+        where: { id: req.userId },
+        data: { publicConsentAt: new Date(), publicConsentVersion: PUBLIC_CONSENT_VERSION },
+      });
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Public consent error:', error);
+    res.status(500).json({ error: 'Failed to record consent' });
+  }
+});
+
 // Upload avatar
 router.post('/me/avatar', authenticate, upload.single('avatar'), async (req: AuthRequest, res) => {
   try {
@@ -231,11 +320,18 @@ router.post('/me/avatar', authenticate, upload.single('avatar'), async (req: Aut
       return res.status(400).json({ error: 'No file uploaded' });
     }
 
-    // Get current user to delete old avatar
+    // Get current user to delete old avatar (+ Pro state for GIF gating)
     const currentUser = await prisma.user.findUnique({
       where: { id: req.userId },
-      select: { avatar: true }
+      select: { avatar: true, isPro: true, proUntil: true }
     });
+
+    // GIF avatar is Pro-only — delete the just-saved file and reject for non-Pro.
+    if (req.file.mimetype === 'image/gif' && !isProActive(currentUser)) {
+      const savedPath = path.join(process.cwd(), 'uploads', 'avatars', req.file.filename);
+      if (fs.existsSync(savedPath)) fs.unlinkSync(savedPath);
+      return res.status(400).json({ error: 'GIF-аватар и обложка доступны в Pro' });
+    }
 
     // Delete old avatar file if exists
     if (currentUser?.avatar) {
@@ -269,8 +365,15 @@ router.post('/me/banner', authenticate, uploadBanner.single('banner'), async (re
 
     const currentUser = await prisma.user.findUnique({
       where: { id: req.userId },
-      select: { bannerImage: true }
+      select: { bannerImage: true, isPro: true, proUntil: true }
     });
+
+    // GIF cover/banner is Pro-only — delete the just-saved file and reject for non-Pro.
+    if (req.file.mimetype === 'image/gif' && !isProActive(currentUser)) {
+      const savedPath = path.join(process.cwd(), 'uploads', 'covers', req.file.filename);
+      if (fs.existsSync(savedPath)) fs.unlinkSync(savedPath);
+      return res.status(400).json({ error: 'GIF-аватар и обложка доступны в Pro' });
+    }
 
     if (currentUser?.bannerImage) {
       const oldPath = path.join(process.cwd(), 'uploads', 'covers', path.basename(currentUser.bannerImage));
@@ -304,6 +407,7 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
       occupancyStatus,
       email, phone,
       contactsVisible,
+      contactsVisibility,
     } = req.body;
 
     // Parse birthDate: prefer the ISO field, fall back to dd.mm.yyyy, reject invalid dates
@@ -328,12 +432,62 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
 
     // Update basic fields
     const updateData: any = {};
-    if (firstName !== undefined) updateData.firstName = firstName;
-    if (lastName !== undefined) updateData.lastName = lastName;
-    if (nickname !== undefined) updateData.nickname = nickname;
-    if (bio !== undefined) updateData.bio = bio;
+    if (firstName !== undefined) {
+      if (typeof firstName === 'string' && firstName.length > 20) {
+        return res.status(400).json({ error: 'Имя — не более 20 символов' });
+      }
+      updateData.firstName = firstName;
+    }
+    if (lastName !== undefined) {
+      if (typeof lastName === 'string' && lastName.length > 30) {
+        return res.status(400).json({ error: 'Фамилия — не более 30 символов' });
+      }
+      updateData.lastName = lastName;
+    }
+    if (nickname !== undefined) {
+      if (typeof nickname === 'string' && nickname.length > 20) {
+        return res.status(400).json({ error: 'Никнейм — не более 20 символов' });
+      }
+      // Uniqueness (case/ё-insensitive) — only when a non-empty nickname is set.
+      const nk = typeof nickname === 'string' ? nickname.trim() : '';
+      if (nk) {
+        const clash = await prisma.user.findFirst({
+          where: { nicknameNorm: yoNorm(nk), NOT: { id: req.userId } },
+          select: { id: true },
+        });
+        if (clash) return res.status(409).json({ error: 'Этот никнейм уже занят' });
+      }
+      updateData.nickname = nk || null;
+    }
+    if (bio !== undefined) {
+      // Bio length is Pro-gated (Free 100 / Pro 200 chars).
+      const proRow = await prisma.user.findUnique({
+        where: { id: req.userId },
+        select: { isPro: true, proUntil: true },
+      });
+      const maxBio = limitsFor(isProActive(proRow)).bioChars;
+      if (typeof bio === 'string' && bio.length > maxBio) {
+        return res.status(400).json({ error: `Описание не должно превышать ${maxBio} символов` });
+      }
+      updateData.bio = bio;
+    }
     if (country !== undefined) updateData.country = country;
-    if (city !== undefined) updateData.city = city;
+    if (city !== undefined) {
+      // Only catalog cities may be set. Validate just on change so existing
+      // (possibly legacy free-text) cities don't block unrelated profile saves.
+      const newCity = typeof city === 'string' ? city.trim() : '';
+      if (newCity) {
+        const current = await prisma.user.findUnique({ where: { id: req.userId }, select: { city: true } });
+        if (newCity !== current?.city) {
+          const inCatalog = await prisma.city.findFirst({
+            where: { name: { equals: newCity, mode: 'insensitive' } },
+            select: { id: true },
+          });
+          if (!inCatalog) return res.status(400).json({ error: 'Выберите город из списка' });
+        }
+      }
+      updateData.city = city;
+    }
     if (role !== undefined) updateData.role = role;
     if (genres !== undefined) updateData.genres = genres;
     if (socialLinks !== undefined) updateData.socialLinks = socialLinks;
@@ -341,7 +495,20 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     const parsedBirthDate = parseBirthDate();
     if (parsedBirthDate !== undefined) updateData.birthDate = parsedBirthDate;
     if (birthDateVisible !== undefined) updateData.birthDateVisible = !!birthDateVisible;
-    if (contactsVisible !== undefined) updateData.contactsVisible = !!contactsVisible;
+    // 3-level contacts visibility (preferred). Keep legacy boolean in sync:
+    // ALL → contactsVisible true; REGISTERED/FRIENDS → false.
+    if (contactsVisibility !== undefined) {
+      const VALID = ['ALL', 'REGISTERED', 'FRIENDS'];
+      if (!VALID.includes(contactsVisibility)) {
+        return res.status(400).json({ error: 'Некорректное значение видимости контактов' });
+      }
+      updateData.contactsVisibility = contactsVisibility;
+      updateData.contactsVisible = contactsVisibility === 'ALL';
+    } else if (contactsVisible !== undefined) {
+      // Legacy boolean still supported on its own.
+      updateData.contactsVisible = !!contactsVisible;
+      updateData.contactsVisibility = contactsVisible ? 'ALL' : 'FRIENDS';
+    }
     if (occupancyStatus !== undefined) updateData.occupancyStatus = occupancyStatus || null;
 
     // Email — optional set with format + uniqueness check (both fields are @unique)
@@ -393,12 +560,34 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
       }
     }
 
-    // Handle artists: delete old, create new
+    // Handle artists — NON-DESTRUCTIVE reconcile. The legacy `artistIds` flow must
+    // never wipe memberships owned by the artist system: owner/admin status, admin
+    // invites, role-bound and invite-link memberships are managed on the artist
+    // page, not through the profile. We only add newly-picked artists and drop the
+    // plain self-memberships the user actually deselected. (Previously this did a
+    // blanket deleteMany + recreate, which silently stripped roles/owner/admin and
+    // erased invite-link memberships on any profile save.)
     if (artistIds !== undefined) {
-      await prisma.userArtist.deleteMany({ where: { userId: req.userId } });
-      if (artistIds.length > 0) {
+      const current = await prisma.userArtist.findMany({
+        where: { userId: req.userId },
+        select: {
+          id: true, artistId: true, isOwner: true, isAdmin: true,
+          invitedById: true, _count: { select: { roles: true } },
+        },
+      });
+      const have = new Set(current.map((c) => c.artistId));
+      const toRemove = current
+        .filter((c) =>
+          !c.isOwner && !c.isAdmin && !c.invitedById && c._count.roles === 0 &&
+          !artistIds.includes(c.artistId))
+        .map((c) => c.id);
+      if (toRemove.length > 0) {
+        await prisma.userArtist.deleteMany({ where: { id: { in: toRemove } } });
+      }
+      const toAdd = artistIds.filter((id: string) => !have.has(id));
+      if (toAdd.length > 0) {
         updateData.userArtists = {
-          create: artistIds.map((artistId: string) => ({ artistId })),
+          create: toAdd.map((artistId: string) => ({ artistId })),
         };
       }
     }
@@ -462,7 +651,7 @@ router.put('/me/services', authenticate, async (req: AuthRequest, res) => {
             skillLevels:     { connect: toConnect(us.skillLevelIds) },
             availabilities:  { connect: toConnect(us.availabilityIds) },
             geographies:                 { connect: toConnect(us.geographyIds) },
-            name:                        (us as any).name || null,
+            name:                        (us as any).name ? String((us as any).name).slice(0, 50) : null,
             priceFrom:                   us.priceFrom ?? null,
             priceTo:                     us.priceTo ?? null,
             deadlineFrom:                (us as any).deadlineFrom != null ? Number((us as any).deadlineFrom) : null,
@@ -497,7 +686,7 @@ router.patch('/me/services/:serviceId', authenticate, async (req: AuthRequest, r
     const updated = await prisma.userService.update({
       where: { id: req.params.serviceId },
       data: {
-        ...(name !== undefined ? { name: name || null } : {}),
+        ...(name !== undefined ? { name: name ? String(name).slice(0, 50) : null } : {}),
         ...(priceFrom    !== undefined ? { priceFrom:    priceFrom    !== '' && priceFrom    != null ? Number(priceFrom)    : null } : {}),
         ...(priceTo      !== undefined ? { priceTo:      priceTo      !== '' && priceTo      != null ? Number(priceTo)      : null } : {}),
         ...(deadlineFrom !== undefined ? { deadlineFrom: deadlineFrom !== '' && deadlineFrom != null ? Number(deadlineFrom) : null } : {}),
@@ -578,41 +767,55 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
     const customFilterValueIds = customFilterValueIdsRaw
       ? (customFilterValueIdsRaw as string).split(',').map(s => s.trim()).filter(Boolean)
       : [];
+
+    // ── People-tab catalog filters/sort ──────────────────────────────────────
+    const splitList = (raw: any): string[] =>
+      raw ? String(raw).split(',').map(s => s.trim()).filter(Boolean) : [];
+    const locations = splitList(req.query.location);          // city/country names
+    const professionFilter = splitList(req.query.profession); // profession ids
+    const occupancy = splitList(req.query.occupancy).filter(o => ['open', 'considering', 'closed'].includes(o));
+    const sortRaw = String(req.query.sort ?? 'date');
+    const sort = ['date', 'rating', 'connections', 'alpha'].includes(sortRaw) ? sortRaw : 'date';
+    const alphaDir = String(req.query.alphaDir ?? 'asc') === 'desc' ? 'desc' : 'asc';
+
     const where: any = { id: { not: req.userId } };
 
     const andClauses: any[] = [];
 
     if (query) {
       const words = (query as string).trim().split(/\s+/).filter(Boolean);
-      const m = 'insensitive' as const;
-      const wordClauses = words.map(word => ({
-        OR: [
-          // Identity
-          { firstName: { contains: word, mode: m } },
-          { lastName: { contains: word, mode: m } },
-          { nickname: { contains: word, mode: m } },
-          // Profile text
-          { bio: { contains: word, mode: m } },
-          { city: { contains: word, mode: m } },
-          { country: { contains: word, mode: m } },
-          // Service taxonomy
-          { userServices: { some: { profession: { name: { contains: word, mode: m } } } } },
-          { userServices: { some: { service: { name: { contains: word, mode: m } } } } },
-          { userServices: { some: { profession: { direction: { name: { contains: word, mode: m } } } } } },
-          { userServices: { some: { profession: { direction: { fieldOfActivity: { name: { contains: word, mode: m } } } } } } },
-          // Service filters
-          { userServices: { some: { genres: { some: { name: { contains: word, mode: m } } } } } },
-          { userServices: { some: { workFormats: { some: { name: { contains: word, mode: m } } } } } },
-          { userServices: { some: { employmentTypes: { some: { name: { contains: word, mode: m } } } } } },
-          { userServices: { some: { skillLevels: { some: { name: { contains: word, mode: m } } } } } },
-          { userServices: { some: { availabilities: { some: { name: { contains: word, mode: m } } } } } },
-          { userServices: { some: { geographies: { some: { name: { contains: word, mode: m } } } } } },
-          // Custom filter values
-          { userServices: { some: { selectedCustomFilterValues: { some: { value: { contains: word, mode: m } } } } } },
-          // Collectives
-          { userArtists: { some: { artist: { name: { contains: word, mode: m } } } } },
-        ],
-      }));
+      // Search against generated ё→е-normalized columns so "е" and "ё" are equal.
+      const wordClauses = words.map(word => {
+        const w = yoNorm(word);
+        return {
+          OR: [
+            // Identity
+            { firstNameNorm: { contains: w } },
+            { lastNameNorm: { contains: w } },
+            { nicknameNorm: { contains: w } },
+            // Profile text
+            { bioNorm: { contains: w } },
+            { cityNorm: { contains: w } },
+            { countryNorm: { contains: w } },
+            // Service taxonomy
+            { userServices: { some: { profession: { nameNorm: { contains: w } } } } },
+            { userServices: { some: { service: { nameNorm: { contains: w } } } } },
+            { userServices: { some: { profession: { direction: { nameNorm: { contains: w } } } } } },
+            { userServices: { some: { profession: { direction: { fieldOfActivity: { nameNorm: { contains: w } } } } } } },
+            // Service filters
+            { userServices: { some: { genres: { some: { nameNorm: { contains: w } } } } } },
+            { userServices: { some: { workFormats: { some: { nameNorm: { contains: w } } } } } },
+            { userServices: { some: { employmentTypes: { some: { nameNorm: { contains: w } } } } } },
+            { userServices: { some: { skillLevels: { some: { nameNorm: { contains: w } } } } } },
+            { userServices: { some: { availabilities: { some: { nameNorm: { contains: w } } } } } },
+            { userServices: { some: { geographies: { some: { nameNorm: { contains: w } } } } } },
+            // Custom filter values
+            { userServices: { some: { selectedCustomFilterValues: { some: { valueNorm: { contains: w } } } } } },
+            // Collectives
+            { userArtists: { some: { artist: { nameNorm: { contains: w } } } } },
+          ],
+        };
+      });
       andClauses.push({ AND: wordClauses });
     }
 
@@ -644,8 +847,37 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
       });
     }
 
+    // ── People-tab: location (city OR country), profession, occupancy ────────
+    if (locations.length > 0) {
+      const locNorms = locations.map(l => yoNorm(l));
+      andClauses.push({
+        OR: locNorms.flatMap(n => [
+          { cityNorm: { contains: n } },
+          { countryNorm: { contains: n } },
+        ]),
+      });
+    }
+
+    if (professionFilter.length > 0) {
+      andClauses.push({ userServices: { some: { professionId: { in: professionFilter } } } });
+    }
+
+    if (occupancy.length > 0) {
+      andClauses.push({ occupancyStatus: { in: occupancy } });
+    }
+
     if (andClauses.length > 0) {
       where.AND = andClauses;
+    }
+
+    // DB-level ordering for the cheap sorts; rating/connections are sorted in JS
+    // after computing aggregates below.
+    let orderBy: any;
+    if (sort === 'alpha') {
+      orderBy = [{ lastName: alphaDir }, { firstName: alphaDir }];
+    } else {
+      // 'date' (default) — newest first; also a stable base for rating/connections.
+      orderBy = [{ createdAt: 'desc' }];
     }
 
     const users = await prisma.user.findMany({
@@ -656,20 +888,20 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
         lastName: true,
         nickname: true,
         avatar: true,
+        bio: true,
         city: true,
+        country: true,
+        occupancyStatus: true,
         isPremium: true,
         isVerified: true,
         isBlocked: true,
+        createdAt: true,
         fieldOfActivity: { select: { id: true, name: true } },
         userServices: {
           select: { profession: { select: { id: true, name: true } } },
           distinct: ['professionId'],
         },
-        portfolioFiles: {
-          select: { id: true, url: true, mimeType: true, originalName: true },
-          take: 6,
-          orderBy: { createdAt: 'desc' },
-        },
+        reviewsReceived: { select: { rating: true } },
         _count: {
           select: {
             sentConnections: { where: { status: 'ACCEPTED' } },
@@ -677,11 +909,30 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
           },
         },
       },
-      orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      orderBy,
       take: 500,
     });
 
-    res.json(users);
+    // Compute per-user aggregates: avg rating, reviews count, connection count.
+    const enriched = users.map((u: any) => {
+      const reviews = u.reviewsReceived ?? [];
+      const reviewsCount = reviews.length;
+      const ratingAvg = reviewsCount > 0
+        ? reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviewsCount
+        : null;
+      const connectionsCount =
+        (u._count?.sentConnections ?? 0) + (u._count?.receivedConnections ?? 0);
+      const { reviewsReceived, ...rest } = u;
+      return { ...rest, ratingAvg, reviewsCount, connectionsCount };
+    });
+
+    if (sort === 'rating') {
+      enriched.sort((a: any, b: any) => (b.ratingAvg ?? -1) - (a.ratingAvg ?? -1));
+    } else if (sort === 'connections') {
+      enriched.sort((a: any, b: any) => b.connectionsCount - a.connectionsCount);
+    }
+
+    res.json(enriched);
   } catch (error) {
     console.error('[catalog] GET /catalog error:', error);
     res.status(500).json({ error: 'Failed to get catalog' });
@@ -698,11 +949,12 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
     };
 
     if (query) {
+      const q = yoNorm(query as string);
       where.OR = [
-        { firstName: { contains: query as string, mode: 'insensitive' } },
-        { lastName: { contains: query as string, mode: 'insensitive' } },
-        { nickname: { contains: query as string, mode: 'insensitive' } },
-        { bio: { contains: query as string, mode: 'insensitive' } },
+        { firstNameNorm: { contains: q } },
+        { lastNameNorm: { contains: q } },
+        { nicknameNorm: { contains: q } },
+        { bioNorm: { contains: q } },
       ];
     }
 
@@ -711,7 +963,7 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
     }
 
     if (city) {
-      where.city = { contains: city as string, mode: 'insensitive' };
+      where.cityNorm = { contains: yoNorm(city as string) };
     }
 
     if (genre) {
@@ -874,16 +1126,17 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
 
     // Hide birthDate from other users unless the owner opted to show it.
     // (The owner views their own profile through /users/me, which is unaffected.)
-    const { birthDateVisible, contactsVisible, ...publicUser } = user as any;
+    const { birthDateVisible, contactsVisible, contactsVisibility, ...publicUser } = user as any;
     if (!birthDateVisible) publicUser.birthDate = null;
 
-    // Hide contact links (phone / email / telegram) unless the owner shows them.
-    // Contacts are otherwise visible to everyone (no viewer-completeness gate).
-    if (!contactsVisible && publicUser.socialLinks && typeof publicUser.socialLinks === 'object') {
-      const CONTACT_KEYS = ['phone', 'email', 'tg_profile'];
-      const links = { ...(publicUser.socialLinks as Record<string, any>) };
-      for (const k of CONTACT_KEYS) delete links[k];
-      publicUser.socialLinks = links;
+    // Hide contact links (phone / email / telegram) unless the viewer is allowed
+    // by the owner's 3-level contactsVisibility (ALL / REGISTERED / FRIENDS).
+    const showContacts = await canViewContacts(
+      { id: publicUser.id, contactsVisibility, contactsVisible },
+      req.userId,
+    );
+    if (!showContacts) {
+      publicUser.socialLinks = stripContactLinks(publicUser.socialLinks);
     }
 
     // Authoritative flag (from the VIEWER's DB record) for whether the viewer has
@@ -917,8 +1170,32 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
 router.post('/me/portfolio', authenticate, uploadPortfolio.single('file'), async (req: AuthRequest, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+    const savedPath = path.join(process.cwd(), 'uploads', 'portfolio', req.file.filename);
+    const removeSaved = () => { if (fs.existsSync(savedPath)) fs.unlinkSync(savedPath); };
+
+    // Pro-gated limits (Free 10 files / 20 MB, Pro 20 files / 50 MB).
+    const proRow = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { isPro: true, proUntil: true },
+    });
+    const limits = limitsFor(isProActive(proRow));
+
+    // File COUNT cap.
     const count = await prisma.portfolioFile.count({ where: { userId: req.userId! } });
-    if (count >= 5) return res.status(400).json({ error: 'Max 5 portfolio files allowed' });
+    if (count >= limits.portfolioFiles) {
+      removeSaved();
+      return res.status(400).json({ error: `Достигнут лимит файлов портфолио (${limits.portfolioFiles})` });
+    }
+
+    // File SIZE cap (multer's fileSize is raised to the Pro MAX; enforce the
+    // effective per-user limit here and delete the just-saved file if over).
+    const maxBytes = limits.portfolioFileMB * 1024 * 1024;
+    if (req.file.size > maxBytes) {
+      removeSaved();
+      return res.status(400).json({ error: `Файл превышает лимит ${limits.portfolioFileMB} МБ` });
+    }
+
     const fileUrl = `/uploads/portfolio/${req.file.filename}`;
     const pf = await prisma.portfolioFile.create({
       data: { userId: req.userId!, url: fileUrl, originalName: Buffer.from(req.file.originalname, 'latin1').toString('utf8'), size: req.file.size, mimeType: req.file.mimetype },

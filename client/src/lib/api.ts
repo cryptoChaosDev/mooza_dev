@@ -74,6 +74,7 @@ export const authAPI = {
 export const userAPI = {
   getMe: () => api.get('/users/me'),
   updateMe: (data: any) => api.put('/users/me', data),
+  givePublicConsent: () => api.post('/users/me/public-consent'),
   updateServices: (services: Array<{
     professionId: string;
     serviceId: string;
@@ -91,13 +92,13 @@ export const userAPI = {
     description?: string;
     customFilterValueIds?: string[];
     status?: string;
-    priceItems?: Array<{name: string; price: string}>;
+    priceItems?: Array<{name: string; price: string; from?: boolean}>;
   }>) => api.put('/users/me/services', services),
   getUserService: (serviceId: string) => api.get(`/users/user-service/${serviceId}`),
   patchUserService: (serviceId: string, data: {
     name?: string; priceFrom?: number | null; priceTo?: number | null;
     deadlineFrom?: number | null; deadlineTo?: number | null; description?: string;
-    priceItems?: Array<{name: string; price: string}> | null;
+    priceItems?: Array<{name: string; price: string; from?: boolean}> | null;
   }) => api.patch(`/users/me/services/${serviceId}`, data),
   setServiceStatus: (serviceId: string, status: 'active' | 'draft' | 'archived' | 'pending_review') =>
     api.patch(`/users/me/services/${serviceId}/status`, { status }),
@@ -114,7 +115,19 @@ export const userAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   search: (params: any) => api.get('/users/search', { params }),
-  catalog: (params?: { query?: string; fieldOfActivityId?: string; directionId?: string; professionId?: string; customFilterValueIds?: string }) =>
+  catalog: (params?: {
+    query?: string;
+    fieldOfActivityId?: string;
+    directionId?: string;
+    professionId?: string;
+    customFilterValueIds?: string;
+    // People-tab filters/sort
+    location?: string;       // comma-separated city/country names
+    profession?: string;     // comma-separated profession ids
+    occupancy?: string;      // comma-separated: open|considering|closed
+    sort?: 'date' | 'rating' | 'connections' | 'alpha';
+    alphaDir?: 'asc' | 'desc';
+  }) =>
     api.get('/users/catalog', { params }),
   getUser: (id: string) => api.get(`/users/${id}`),
   getUserServices: (id: string) => api.get(`/users/${id}/services`),
@@ -137,7 +150,7 @@ export const referenceAPI = {
   getProfessions: (params?: { directionId?: string; search?: string; excludeUserId?: string; all?: boolean }) =>
     api.get('/references/professions', { params }),
   getProfessionFeatures: () => api.get('/references/profession-features'),
-  getArtists: (params?: { search?: string; type?: string }) =>
+  getArtists: (params?: { search?: string; type?: string; genre?: string; sort?: 'date' | 'alpha' }) =>
     api.get('/references/artists', { params }),
   // Multi-level search endpoints
   getServices: (params?: { directionId?: string; professionId?: string; fieldOfActivityId?: string }) =>
@@ -149,14 +162,30 @@ export const referenceAPI = {
   getSkillLevels: () => api.get('/references/skill-levels'),
   getAvailabilities: () => api.get('/references/availabilities'),
   getGeographies: () => api.get('/references/geographies'),
+  getCities: () => api.get('/references/cities'),
   getPriceRanges: () => api.get('/references/price-ranges'),
   getAllReferences: () => api.get('/references/all'),
   getProfessionFilters: (professionId: string) => api.get(`/references/professions/${professionId}/filters`),
   // New catalog (sections → services → service filters)
   getSections: () => api.get('/references/sections'),
   // Service-card search — finds service offerings (UserService), not people.
-  searchServiceCards: (params: { serviceId?: string; sectionId?: string; customFilterValueIds?: string; query?: string; page?: number; limit?: number }) =>
+  searchServiceCards: (params: {
+    serviceId?: string;
+    sectionId?: string;
+    customFilterValueIds?: string;
+    query?: string;
+    location?: string;
+    priceMin?: number;
+    priceMax?: number;
+    sort?: 'date' | 'price_asc' | 'price_desc' | 'rating';
+    page?: number;
+    limit?: number;
+  }) =>
     api.get('/references/service-search', { params }),
+  // Distinct provider cities (for the location filter autocomplete).
+  getServiceCities: (q?: string) => api.get('/references/service-cities', { params: { q } }),
+  // Distinct user cities + countries (People-tab location filter autocomplete).
+  getPeopleLocations: (q?: string) => api.get('/references/people-locations', { params: { q } }),
   getServiceDetail: (serviceId: string) => api.get(`/references/services/${serviceId}`),
   getServiceFilters: (serviceId: string) => api.get(`/references/services/${serviceId}/filters`),
   searchMusicians: (params: {
@@ -179,12 +208,18 @@ export const referenceAPI = {
   }) => api.get('/references/search', { params }),
 };
 
+// Role API — artist-profile role catalog (collective / release / clip)
+export const roleAPI = {
+  list: (context: 'collective' | 'release' | 'clip') =>
+    api.get('/roles', { params: { context } }),
+};
+
 // Post API
 export const postAPI = {
   getFeed: (params?: { limit?: number; offset?: number; type?: string; authorKind?: string; period?: string; city?: string; employment?: string; artistType?: string; genre?: string }) =>
     api.get('/posts/feed', { params }),
   getMyAuthors: () => api.get('/posts/my-authors'),
-  createPost: (data: { content: string; type?: string; imageUrl?: string; audioUrl?: string; audioName?: string; channelId?: string | null; artistId?: string | null; employmentStatus?: string; pollOptions?: string[]; pollEndsAt?: string; images?: string[]; tags?: string[]; genres?: string[]; links?: string[]; city?: string | null; mentions?: Array<{ id: string; type: string; name: string }>; title?: string; category?: string }) =>
+  createPost: (data: { content: string; type?: string; imageUrl?: string; audioUrl?: string; audioName?: string; channelId?: string | null; artistId?: string | null; employmentStatus?: string; pollOptions?: string[]; pollEndsAt?: string; images?: string[]; tags?: string[]; genres?: string[]; links?: string[]; city?: string | null; mentions?: Array<{ id: string; type: string; name: string }>; title?: string; category?: string; serviceId?: string }) =>
     api.post('/posts', data),
   repostPost: (postId: string, comment?: string) =>
     api.post(`/posts/${postId}/repost`, { comment }),
@@ -250,6 +285,8 @@ export const messageAPI = {
   getUnreadCount: () => api.get('/messages/unread/count'),
   getConversations: () => api.get('/messages/conversations'),
   resolve: (id: string) => api.get(`/messages/resolve/${id}`),
+  contactService: (userServiceId: string) =>
+    api.post<{ conversationId: string }>(`/messages/services/${userServiceId}/contact`),
   getConversation: (conversationId: string) => api.get(`/messages/conversations/${conversationId}`),
   sendMessage: (conversationId: string, content: string, replyToId?: string, attachment?: { url: string; name: string; size: number; type: string }) =>
     api.post(`/messages/conversations/${conversationId}/messages`, {
@@ -293,8 +330,10 @@ export const artistAPI = {
   follow: (id: string) => api.post(`/artists/${id}/follow`),
   unfollow: (id: string) => api.delete(`/artists/${id}/follow`),
   getFollowing: () => api.get('/artists/following'),
-  submitForModeration: (id: string) => api.patch(`/artists/${id}/submit`),
-  submitProof: (id: string, proofUrl: string) => api.patch(`/artists/${id}/submit-proof`, { proofUrl }),
+  checkName: (name: string) => api.get('/artists/check-name', { params: { name } }),
+  requestVerification: (id: string, verificationUrl: string) =>
+    api.patch(`/artists/${id}/request-verification`, { verificationUrl }),
+  withdrawVerification: (id: string) => api.patch(`/artists/${id}/withdraw`),
   uploadAvatar: (id: string, file: File) => {
     const fd = new FormData(); fd.append('avatar', file);
     return api.post(`/artists/${id}/avatar`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
@@ -303,13 +342,110 @@ export const artistAPI = {
     const fd = new FormData(); fd.append('banner', file);
     return api.post(`/artists/${id}/banner`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
-  requestJoin: (artistId: string, professionIds: string[]) =>
-    api.post(`/artists/${artistId}/join-request`, { professionIds }),
+  requestJoin: (artistId: string, roleIds: string[]) =>
+    api.post(`/artists/${artistId}/join-request`, { roleIds }),
   pendingMemberships: (artistId: string) => api.get(`/artists/${artistId}/memberships/pending`),
   approveMembership: (id: string) => api.patch(`/artists/memberships/${id}/approve`),
   rejectMembership: (id: string) => api.patch(`/artists/memberships/${id}/reject`),
-  generateInviteLink: (artistId: string, professionId?: string) =>
-    api.post(`/artists/${artistId}/invite-link`, { professionId }),
+
+  // Phase 5a — members / admins / ownership / invite links
+  addMember: (
+    artistId: string,
+    data: { userId: string; roleIds?: string[]; participationStatus?: 'ACTIVE_MEMBER' | 'FORMER_MEMBER' },
+  ) => api.post(`/artists/${artistId}/members`, data),
+  confirmMembership: (membershipId: string) =>
+    api.patch(`/artists/memberships/${membershipId}/confirm`),
+  declineMembership: (membershipId: string) =>
+    api.patch(`/artists/memberships/${membershipId}/decline`),
+  setMemberParticipation: (
+    artistId: string,
+    membershipId: string,
+    participationStatus: 'ACTIVE_MEMBER' | 'FORMER_MEMBER',
+  ) => api.patch(`/artists/${artistId}/members/${membershipId}/participation`, { participationStatus }),
+  setMemberRoles: (artistId: string, membershipId: string, roleIds: string[]) =>
+    api.patch(`/artists/${artistId}/members/${membershipId}/roles`, { roleIds }),
+  removeMember: (artistId: string, membershipId: string) =>
+    api.delete(`/artists/${artistId}/members/${membershipId}`),
+  setActivityStatus: (
+    artistId: string,
+    activityStatus: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED' | 'DISBANDED',
+  ) => api.patch(`/artists/${artistId}/activity-status`, { activityStatus }),
+  transferOwner: (artistId: string, userId: string) =>
+    api.patch(`/artists/${artistId}/transfer-owner`, { userId }),
+  addAdmin: (artistId: string, userId: string) =>
+    api.post(`/artists/${artistId}/admins`, { userId }),
+  removeAdmin: (artistId: string, userId: string) =>
+    api.delete(`/artists/${artistId}/admins/${userId}`),
+  createInviteLink: (
+    artistId: string,
+    data: { roleIds?: string[]; participationStatus?: 'ACTIVE_MEMBER' | 'FORMER_MEMBER' },
+  ) => api.post(`/artists/${artistId}/invite-link`, data),
+  getInvite: (token: string) => api.get(`/artists/invite/${token}`),
+  acceptInvite: (token: string) => api.post(`/artists/invite/${token}/accept`),
+};
+
+// Release API — Phase 6a (releases on the artist profile)
+export const releaseAPI = {
+  fetchMetadata: (platform: string, url: string) =>
+    api.post('/releases/metadata', { platform, url }),
+  create: (data: {
+    artistId: string;
+    platform: 'VK' | 'SPOTIFY' | 'YANDEX_MUSIC' | 'APPLE_MUSIC';
+    url: string;
+    title: string;
+    coverUrl?: string;
+    releaseDate?: string;
+    participants: { userId: string; roleIds: string[] }[];
+  }) => api.post('/releases', data),
+  get: (id: string) => api.get(`/releases/${id}`),
+  listByArtist: (artistId: string) => api.get(`/releases/artist/${artistId}`),
+  update: (
+    id: string,
+    data: {
+      title?: string;
+      coverUrl?: string | null;
+      releaseDate?: string | null;
+      url?: string;
+      platform?: 'VK' | 'SPOTIFY' | 'YANDEX_MUSIC' | 'APPLE_MUSIC';
+      participants?: { userId: string; roleIds: string[] }[];
+    },
+  ) => api.patch(`/releases/${id}`, data),
+  confirmParticipant: (participantId: string) =>
+    api.patch(`/releases/participants/${participantId}/confirm`),
+  declineParticipant: (participantId: string) =>
+    api.patch(`/releases/participants/${participantId}/decline`),
+  remove: (id: string) => api.delete(`/releases/${id}`),
+};
+
+// Clip API — Phase 6a (clips on the artist profile)
+export const clipAPI = {
+  fetchMetadata: (platform: string, url: string) =>
+    api.post('/clips/metadata', { platform, url }),
+  create: (data: {
+    artistId: string;
+    platform: 'VK_VIDEO' | 'RUTUBE' | 'YOUTUBE';
+    url: string;
+    title: string;
+    coverUrl?: string;
+    participants: { userId: string; roleIds: string[] }[];
+  }) => api.post('/clips', data),
+  get: (id: string) => api.get(`/clips/${id}`),
+  listByArtist: (artistId: string) => api.get(`/clips/artist/${artistId}`),
+  update: (
+    id: string,
+    data: {
+      title?: string;
+      coverUrl?: string | null;
+      url?: string;
+      platform?: 'VK_VIDEO' | 'RUTUBE' | 'YOUTUBE';
+      participants?: { userId: string; roleIds: string[] }[];
+    },
+  ) => api.patch(`/clips/${id}`, data),
+  confirmParticipant: (participantId: string) =>
+    api.patch(`/clips/participants/${participantId}/confirm`),
+  declineParticipant: (participantId: string) =>
+    api.patch(`/clips/participants/${participantId}/decline`),
+  remove: (id: string) => api.delete(`/clips/${id}`),
 };
 
 // Connection API
@@ -398,9 +534,7 @@ export const adminAPI = {
   priceRanges: crudFor('price-ranges'),
   artists: crudFor('artists'),
   artistModeration: {
-    pending: () => api.get(`${adminBase}/artists/pending`),
     verification: () => api.get(`${adminBase}/artists/verification`),
-    approve: (id: string) => api.patch(`${adminBase}/artists/${id}/approve`),
     reject: (id: string, reason?: string) => api.patch(`${adminBase}/artists/${id}/reject`, { reason }),
     verify: (id: string) => api.patch(`${adminBase}/artists/${id}/verify`),
   },
@@ -419,6 +553,29 @@ export const adminAPI = {
     deleteUser: (id: string) => api.delete(`${adminBase}/users/${id}`),
     verifyEmail: (id: string) => api.patch(`${adminBase}/users/${id}/verify-email`),
   },
+  // Moooza Pro donations
+  listDonations: (status?: string) =>
+    api.get(`${adminBase}/donations`, { params: status ? { status } : undefined }),
+  activateDonation: (id: string, body?: { amount?: number; note?: string }) =>
+    api.post(`${adminBase}/donations/${id}/activate`, body ?? {}),
+  grantProMonth: (userId: string) =>
+    api.post(`${adminBase}/users/${userId}/grant-pro-month`),
+};
+
+// Moooza Pro API (user-facing donation flow)
+export const proAPI = {
+  startDonation: () => api.post('/pro/donation/start'),
+  currentDonation: () => api.get('/pro/donation/current'),
+};
+
+// Feed preset API — server-persisted named feed-filter snapshots
+export const feedPresetAPI = {
+  list: () => api.get('/feed-presets'),
+  create: (name: string, filters: Record<string, unknown>) =>
+    api.post('/feed-presets', { name, filters }),
+  update: (id: string, body: { name?: string; filters?: Record<string, unknown> }) =>
+    api.put(`/feed-presets/${id}`, body),
+  remove: (id: string) => api.delete(`/feed-presets/${id}`),
 };
 
 export const dealAPI = {

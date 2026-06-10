@@ -3,6 +3,9 @@ import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
+import { notifyMany } from '../utils/notify';
+import { yoNorm } from '../utils/search';
+import { grantProMonth, isProActive } from '../utils/pro';
 
 const router = Router();
 
@@ -457,6 +460,29 @@ router.delete('/artists/:id', async (req, res) => {
 });
 
 // ─── Artist Moderation ────────────────────────────────────────────────────
+// For a set of artists, find OTHER artists sharing the same normalized name —
+// the duplicate-name signal the moderator needs when approving a verification.
+// Returns a map artistId → [{ id, name, verified }].
+async function duplicatesByArtist(
+  artists: { id: string; nameNorm: string | null }[],
+): Promise<Map<string, { id: string; name: string; verified: boolean }[]>> {
+  const map = new Map<string, { id: string; name: string; verified: boolean }[]>();
+  const norms = [...new Set(artists.map(a => a.nameNorm).filter((n): n is string => !!n))];
+  if (!norms.length) return map;
+  const same = await prisma.artist.findMany({
+    where: { nameNorm: { in: norms } },
+    select: { id: true, name: true, nameNorm: true, status: true },
+  });
+  for (const a of artists) {
+    if (!a.nameNorm) continue;
+    const dups = same
+      .filter(s => s.nameNorm === a.nameNorm && s.id !== a.id)
+      .map(s => ({ id: s.id, name: s.name, verified: s.status === 'VERIFIED' }));
+    if (dups.length) map.set(a.id, dups);
+  }
+  return map;
+}
+
 // GET /admin/artists/pending — list artists awaiting moderation
 router.get('/artists/pending', authenticate, requireAdmin, async (_req, res) => {
   try {
@@ -469,44 +495,38 @@ router.get('/artists/pending', authenticate, requireAdmin, async (_req, res) => 
       },
       orderBy: { updatedAt: 'asc' },
     });
-    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre), followersCount: a._count.followers })));
+    const dupMap = await duplicatesByArtist(artists);
+    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre), followersCount: a._count.followers, duplicates: dupMap.get(a.id) || [] })));
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /admin/artists/verification — list approved artists with proof URL pending verification
+// GET /admin/artists/verification — list PENDING artists with proof URL awaiting verification
 router.get('/artists/verification', authenticate, requireAdmin, async (_req, res) => {
   try {
     const artists = await prisma.artist.findMany({
-      where: { status: 'APPROVED', verificationProofUrl: { not: null } },
+      where: { status: 'PENDING', verificationProofUrl: { not: null } },
       include: {
         submittedByUser: { select: { id: true, firstName: true, lastName: true, avatar: true } },
         genres: { include: { genre: true } },
       },
       orderBy: { updatedAt: 'asc' },
     });
-    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre) })));
+    const dupMap = await duplicatesByArtist(artists);
+    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre), duplicates: dupMap.get(a.id) || [] })));
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// PATCH /admin/artists/:id/approve — approve artist card + generate verification code
-router.patch('/artists/:id/approve', authenticate, requireAdmin, async (req, res) => {
-  try {
-    const code = 'MOOOZA-' + crypto.randomBytes(3).toString('hex').toUpperCase();
-    const artist = await prisma.artist.update({
-      where: { id: req.params.id },
-      data: {
-        status: 'APPROVED',
-        verificationCode: code,
-        rejectionReason: null,
-        moderatedAt: new Date(),
-      },
-    });
-    res.json({ ...artist, listeners: Number(artist.listeners) });
-  } catch (e: any) { res.status(400).json({ error: e.message }); }
-});
+// Helper: recipients to notify about an artist moderation result (owner, submitter, fallback admins).
+async function artistNotifyRecipients(artistId: string, submittedById: string | null): Promise<string[]> {
+  const ids = new Set<string>();
+  const owner = await prisma.userArtist.findFirst({ where: { artistId, isOwner: true }, select: { userId: true } });
+  if (owner) ids.add(owner.userId);
+  if (submittedById) ids.add(submittedById);
+  return [...ids];
+}
 
 // PATCH /admin/artists/:id/reject — reject with reason
-router.patch('/artists/:id/reject', authenticate, requireAdmin, async (req, res) => {
+router.patch('/artists/:id/reject', authenticate, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const { reason } = req.body as { reason?: string };
     const artist = await prisma.artist.update({
@@ -517,17 +537,36 @@ router.patch('/artists/:id/reject', authenticate, requireAdmin, async (req, res)
         moderatedAt: new Date(),
       },
     });
+
+    const recipients = await artistNotifyRecipients(artist.id, artist.submittedById);
+    const reasonText = reason ? ` Причина: ${reason}.` : '';
+    await notifyMany(recipients, {
+      actorId: req.userId, type: 'artist_rejected',
+      title: 'Заявка отклонена',
+      body: `Заявка на верификацию «${artist.name}» отклонена.${reasonText} Исправьте данные и отправьте повторно.`,
+      link: `/artist/${artist.id}`,
+    });
+
     res.json({ ...artist, listeners: Number(artist.listeners) });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
 // PATCH /admin/artists/:id/verify — mark artist as VERIFIED after checking proof
-router.patch('/artists/:id/verify', authenticate, requireAdmin, async (req, res) => {
+router.patch('/artists/:id/verify', authenticate, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const artist = await prisma.artist.update({
       where: { id: req.params.id },
       data: { status: 'VERIFIED', moderatedAt: new Date() },
     });
+
+    const recipients = await artistNotifyRecipients(artist.id, artist.submittedById);
+    await notifyMany(recipients, {
+      actorId: req.userId, type: 'artist_verified',
+      title: 'Артист верифицирован',
+      body: `Артист «${artist.name}» успешно верифицирован и добавлен в каталог`,
+      link: `/artist/${artist.id}`,
+    });
+
     res.json({ ...artist, listeners: Number(artist.listeners) });
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
@@ -600,6 +639,11 @@ router.post('/users', async (req, res) => {
     const existing = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     if (existing) return res.status(409).json({ error: 'Email уже занят' });
 
+    if (nickname?.trim()) {
+      const nclash = await prisma.user.findFirst({ where: { nicknameNorm: yoNorm(nickname.trim()) }, select: { id: true } });
+      if (nclash) return res.status(409).json({ error: 'Этот никнейм уже занят' });
+    }
+
     const hashed = await bcrypt.hash(password, 10);
     const user = await prisma.user.create({
       data: {
@@ -632,7 +676,14 @@ router.patch('/users/:id', async (req, res) => {
     const data: Record<string, any> = {};
     if (firstName !== undefined) data.firstName = firstName.trim();
     if (lastName !== undefined) data.lastName = lastName.trim();
-    if (nickname !== undefined) data.nickname = nickname.trim() || null;
+    if (nickname !== undefined) {
+      const nk = (nickname ?? '').trim();
+      if (nk) {
+        const nclash = await prisma.user.findFirst({ where: { nicknameNorm: yoNorm(nk), NOT: { id: req.params.id } }, select: { id: true } });
+        if (nclash) return res.status(409).json({ error: 'Этот никнейм уже занят' });
+      }
+      data.nickname = nk || null;
+    }
     if (email !== undefined) data.email = email.trim().toLowerCase() || null;
     if (phone !== undefined) data.phone = phone.trim() || null;
     if (city !== undefined) data.city = city.trim() || null;
@@ -659,12 +710,13 @@ router.get('/users', async (req, res) => {
   const search = (req.query.search as string) || '';
   const page = Math.max(1, Number(req.query.page) || 1);
   const limit = Math.min(50, Number(req.query.limit) || 20);
+  const sq = yoNorm(search);
   const where = search ? {
     OR: [
-      { firstName: { contains: search, mode: 'insensitive' as const } },
-      { lastName: { contains: search, mode: 'insensitive' as const } },
-      { nickname: { contains: search, mode: 'insensitive' as const } },
-      { email: { contains: search, mode: 'insensitive' as const } },
+      { firstNameNorm: { contains: sq } },
+      { lastNameNorm: { contains: sq } },
+      { nicknameNorm: { contains: sq } },
+      { emailNorm: { contains: sq } },
     ],
   } : {};
   const [users, total] = await Promise.all([
@@ -822,6 +874,71 @@ router.patch('/user-services/:id/reject', async (req, res) => {
     } catch {}
     res.json({ ok: true });
   } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ─── Pro Donations ───────────────────────────────────────────────────────────
+const donationUserSelect = {
+  id: true, firstName: true, lastName: true, nickname: true,
+  email: true, proUntil: true, isPro: true,
+} as const;
+
+const withIsPro = <T extends { user: { isPro: boolean; proUntil: Date | null } }>(row: T) => ({
+  ...row,
+  user: { ...row.user, isPro: isProActive(row.user) },
+});
+
+// GET /admin/donations — list donation codes (newest first), optional ?status= filter.
+// Pending (non-ACTIVATED) rows are surfaced first so the team sees them at a glance.
+router.get('/donations', async (req, res) => {
+  try {
+    const status = req.query.status as string | undefined;
+    const where = status ? { status: status as any } : {};
+    const donations = await prisma.donationCode.findMany({
+      where,
+      include: { user: { select: donationUserSelect } },
+      orderBy: { createdAt: 'desc' },
+    });
+    // Surface pending (non-ACTIVATED) rows first; keep newest-first within each group.
+    const sorted = [...donations].sort((a, b) => {
+      const ax = a.status === 'ACTIVATED' ? 1 : 0;
+      const bx = b.status === 'ACTIVATED' ? 1 : 0;
+      return ax - bx; // stable sort preserves the createdAt-desc order within groups
+    });
+    res.json(sorted.map(withIsPro));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /admin/donations/:id/activate — grant a Pro month and mark the code ACTIVATED.
+router.post('/donations/:id/activate', async (req, res) => {
+  try {
+    const donation = await prisma.donationCode.findUnique({ where: { id: req.params.id } });
+    if (!donation) return res.status(404).json({ error: 'Донат не найден' });
+    if (donation.status === 'ACTIVATED') return res.status(400).json({ error: 'Донат уже активирован' });
+
+    await grantProMonth(donation.userId, 'donation');
+
+    const { amount, note } = req.body as { amount?: number; note?: string };
+    const data: any = { status: 'ACTIVATED', activatedAt: new Date() };
+    if (amount !== undefined) data.amount = amount === null ? null : Number(amount);
+    if (note !== undefined) data.note = note || null;
+
+    const updated = await prisma.donationCode.update({
+      where: { id: donation.id },
+      data,
+      include: { user: { select: donationUserSelect } },
+    });
+    res.json(withIsPro(updated));
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
+});
+
+// POST /admin/users/:id/grant-pro-month — manual fallback for the "forgot the code" case.
+router.post('/users/:id/grant-pro-month', async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    const proUntil = await grantProMonth(user.id, 'admin');
+    res.json({ proUntil });
+  } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
 // ── Site Settings ──────────────────────────────────────────────────────────────

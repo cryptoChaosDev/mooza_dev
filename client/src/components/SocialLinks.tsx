@@ -1,25 +1,46 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
 
 // ─── Service definitions ──────────────────────────────────────────────────────
+//
+// The editor offers EXACTLY the allowed platforms (see lib/socialPlatforms.ts):
+// ВКонтакте, Telegram, TenChat, Одноклассники, RuTube, Яндекс Музыка, Яндекс
+// Дзен, SoundCloud, Bandlink, Официальный сайт — plus the contact-only keys
+// (phone / email / Telegram-for-contact).
+//
+// Removed (blocked / deprecated): youtube, spotify, twitter, dropbox, lastfm,
+// instagram. Legacy stored values for those keys are silently filtered at render
+// time (see ALLOWED_KEYS / filtering in SocialIconRow & SocialLinksEditor).
 
 export type SocialKey =
   | 'phone'
   | 'email'
-  | 'tg_profile'
-  | 'tg_channel'
-  | 'vk_profile'
-  | 'vk_community'
-  | 'youtube'
-  | 'bandlink'
-  | 'yandex_music'
-  | 'dropbox'
-  | 'spotify'
-  | 'lastfm'
-  | 'twitter';
+  | 'tg_profile'   // Telegram (used as a contact)
+  | 'vk'           // ВКонтакте
+  | 'telegram'     // Telegram channel / profile (social)
+  | 'tenchat'      // TenChat
+  | 'ok'           // Одноклассники
+  | 'rutube'       // RuTube
+  | 'yandex_music' // Яндекс Музыка
+  | 'dzen'         // Яндекс Дзен
+  | 'soundcloud'   // SoundCloud
+  | 'bandlink'     // Bandlink
+  | 'website';     // Официальный сайт
 
 // Contact keys vs social keys — used to split the profile "Contacts" card
 export const CONTACT_KEYS: SocialKey[] = ['phone', 'email', 'tg_profile'];
-export const SOCIAL_KEYS: SocialKey[] = ['vk_profile', 'youtube', 'tg_channel'];
+export const SOCIAL_KEYS: SocialKey[] = [
+  'vk',
+  'telegram',
+  'tenchat',
+  'ok',
+  'rutube',
+  'yandex_music',
+  'dzen',
+  'soundcloud',
+  'bandlink',
+  'website',
+];
 
 export interface SocialService {
   key: SocialKey;
@@ -44,33 +65,16 @@ const VKIcon = () => (
   </svg>
 );
 
-const YouTubeIcon = () => (
+const OkIcon = () => (
   <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-    <path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+    <path d="M12.005 8.36a2.114 2.114 0 1 1 .002-4.228 2.114 2.114 0 0 1-.002 4.228m0 2.022a4.135 4.135 0 0 0 4.133-4.135A4.135 4.135 0 0 0 12.005 2.11 4.135 4.135 0 0 0 7.87 6.247a4.135 4.135 0 0 0 4.135 4.135m2.957 3.503a8.83 8.83 0 0 1-2.812.802l1.798 1.799 2.04 2.04a1.485 1.485 0 0 1-2.1 2.1l-1.888-1.889-1.889 1.889a1.485 1.485 0 1 1-2.1-2.1l2.04-2.04 1.797-1.799a8.83 8.83 0 0 1-2.81-.802 1.485 1.485 0 1 1 1.34-2.65 5.866 5.866 0 0 0 5.245 0 1.485 1.485 0 1 1 1.34 2.65"/>
   </svg>
 );
 
-const SpotifyIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-    <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
-  </svg>
-);
-
-const TwitterIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
-  </svg>
-);
-
-const LastFmIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-    <path d="M10.584 17.21l-.88-2.392s-1.43 1.595-3.573 1.595c-1.897 0-3.244-1.65-3.244-4.289 0-3.381 1.704-4.596 3.381-4.596 2.42 0 3.189 1.562 3.848 3.574l.88 2.74c.88 2.674 2.54 4.817 7.31 4.817 3.42 0 5.737-1.056 5.737-3.824 0-2.242-1.276-3.396-3.65-3.957l-1.76-.396c-1.23-.265-1.584-.748-1.584-1.54 0-.9.703-1.43 1.848-1.43 1.254 0 1.936.462 2.045 1.562l2.617-.33c-.22-2.374-1.848-3.343-4.53-3.343-2.374 0-4.64.9-4.64 3.783 0 1.804.879 2.946 3.08 3.474l1.87.44c1.408.33 1.98.857 1.98 1.738 0 1.01-.99 1.408-2.99 1.408-2.9 0-4.11-1.518-4.815-3.65l-.9-2.76c-1.165-3.607-3.013-4.95-6.505-4.95C2.062 7.654 0 10.38 0 12.255c0 3.805 2.2 5.823 5.812 5.823 2.553 0 4.178-1.276 4.772-1.848z"/>
-  </svg>
-);
-
-const DropboxIcon = () => (
-  <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
-    <path d="M6 1.807L0 5.62l6 3.812 6-3.812zm12 0l-6 3.813 6 3.812 6-3.812zM0 13.245l6 3.812 6-3.812-6-3.813zm18-3.813l-6 3.813 6 3.812 6-3.812zM6 17.98l6 3.812 6-3.812-6-3.813z"/>
+const RutubeIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
+    <rect x="2" y="5" width="20" height="14" rx="3"/>
+    <path d="m10 9 5 3-5 3z" fill="currentColor" stroke="none"/>
   </svg>
 );
 
@@ -80,11 +84,37 @@ const MusicNoteIcon = () => (
   </svg>
 );
 
+const DzenIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
+    <path d="M12 0c.27 6.13 1.6 7.46 7.73 7.73v.54C13.6 8.54 12.27 9.87 12 16h-.54c-.27-6.13-1.6-7.46-7.73-7.73v-.54C9.87 7.46 11.2 6.13 11.46 0z"/>
+    <path d="M12 8c.27 6.13 1.6 7.46 7.73 7.73v.54C13.6 16.54 12.27 17.87 12 24h-.54c-.27-6.13-1.6-7.46-7.73-7.73v-.54c6.14-.27 7.47-1.6 7.73-7.73z" opacity=".55"/>
+  </svg>
+);
+
+const SoundCloudIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="w-full h-full">
+    <path d="M1.175 12.225c-.051 0-.094.046-.101.1l-.233 2.154.233 2.105c.007.058.05.1.101.1.05 0 .09-.042.099-.1l.255-2.105-.27-2.154c0-.057-.045-.1-.09-.1m-.899.828c-.06 0-.091.037-.104.094L0 14.479l.165 1.308c0 .055.045.094.09.094s.089-.045.104-.104l.21-1.319-.21-1.334c0-.061-.044-.09-.09-.09m1.83-1.229c-.061 0-.12.05-.12.12l-.21 2.563.225 2.46c0 .075.06.12.12.12.061 0 .12-.045.12-.12l.255-2.46-.27-2.563c0-.075-.06-.12-.12-.12m.945-.089c-.075 0-.135.06-.15.135l-.193 2.64.21 2.544c.016.077.075.138.149.138.075 0 .135-.061.15-.15l.225-2.532-.225-2.623c-.015-.089-.075-.135-.151-.135l-.015.001m1.155.36c-.005-.09-.075-.149-.159-.149-.09 0-.158.06-.164.149l-.217 2.43.2 2.563c.005.09.075.157.164.157.084 0 .151-.064.159-.159l.222-2.563-.222-2.43zm.845-.974c-.105 0-.18.075-.18.18l-.21 3.090.195 2.555c0 .105.09.18.18.18.104 0 .179-.09.179-.18l.225-2.555-.225-3.090c0-.104-.075-.18-.18-.18m1.05-.044c-.105 0-.195.09-.195.195l-.18 3.135.18 2.535c0 .105.09.195.195.195.104 0 .194-.09.194-.195l.21-2.535-.21-3.135c0-.105-.09-.195-.194-.195m1.05.36c-.119 0-.21.09-.225.21l-.165 2.76.165 2.49c.015.12.105.21.225.21.119 0 .21-.09.225-.21l.18-2.49-.18-2.76c-.015-.12-.105-.21-.225-.21m1.05-.42c-.135 0-.24.105-.24.24l-.15 3.135.15 2.475c0 .135.105.24.24.24.119 0 .224-.105.24-.24l.165-2.475-.165-3.135c-.016-.135-.121-.24-.24-.24m1.05-.105c-.135 0-.255.105-.255.255l-.135 3.225.135 2.46c0 .135.12.255.255.255.135 0 .255-.12.255-.255l.149-2.46-.149-3.225c0-.135-.12-.255-.255-.255m1.083.629c-.151 0-.27.119-.27.27l-.12 2.595.12 2.43c0 .15.119.269.27.269.149 0 .27-.119.285-.269l.12-2.43-.12-2.595c-.016-.151-.135-.27-.285-.27m1.097-1.143c-.166 0-.285.135-.285.299l-.105 3.435.105 2.41c0 .164.119.299.285.299.165 0 .299-.135.299-.299l.121-2.41-.121-3.435c0-.164-.134-.299-.299-.299m1.082-.06c-.18 0-.314.149-.314.314l-.09 3.495.09 2.385c0 .179.135.314.314.314.18 0 .314-.135.314-.314l.105-2.385-.105-3.495c0-.165-.135-.314-.314-.314m1.2 1.349c-.045-.255-.255-.45-.51-.45s-.464.195-.51.45l-.075 1.96.09 2.37c.045.255.255.449.495.449.255 0 .465-.194.51-.449l.075-2.37-.075-1.96zm6.81-1.439c-.42 0-.81.135-1.13.36-.21-2.385-2.205-4.245-4.65-4.245-.6 0-1.185.119-1.71.314-.21.075-.255.15-.255.314v8.4c0 .166.135.301.301.314h7.444c1.5 0 2.715-1.215 2.715-2.715s-1.215-2.715-2.715-2.715"/>
+  </svg>
+);
 
 const LinkIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="w-full h-full">
     <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
     <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+  </svg>
+);
+
+const GlobeIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
+    <circle cx="12" cy="12" r="10"/>
+    <path d="M2 12h20"/>
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+  </svg>
+);
+
+const TenChatIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" className="w-full h-full">
+    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
   </svg>
 );
 
@@ -122,7 +152,7 @@ export const SOCIAL_SERVICES: SocialService[] = [
   },
   {
     key: 'tg_profile',
-    label: 'Telegram профиль',
+    label: 'Telegram',
     baseUrl: 'https://t.me/',
     placeholder: 'никнейм',
     color: 'sky',
@@ -130,17 +160,8 @@ export const SOCIAL_SERVICES: SocialService[] = [
     icon: <TelegramIcon />,
   },
   {
-    key: 'tg_channel',
-    label: 'Telegram канал',
-    baseUrl: 'https://t.me/',
-    placeholder: 'canal_name',
-    color: 'sky',
-    iconBg: '#0088cc',
-    icon: <TelegramIcon />,
-  },
-  {
-    key: 'vk_profile',
-    label: 'VK профиль',
+    key: 'vk',
+    label: 'ВКонтакте',
     baseUrl: 'https://vk.com/',
     placeholder: 'id123456',
     color: 'blue',
@@ -148,31 +169,40 @@ export const SOCIAL_SERVICES: SocialService[] = [
     icon: <VKIcon />,
   },
   {
-    key: 'vk_community',
-    label: 'VK сообщество',
-    baseUrl: 'https://vk.com/',
-    placeholder: 'publicXXXX',
-    color: 'blue',
-    iconBg: '#4680C2',
-    icon: <VKIcon />,
+    key: 'telegram',
+    label: 'Telegram',
+    baseUrl: 'https://t.me/',
+    placeholder: 'канал или никнейм',
+    color: 'sky',
+    iconBg: '#0088cc',
+    icon: <TelegramIcon />,
   },
   {
-    key: 'youtube',
-    label: 'YouTube канал',
-    baseUrl: 'https://www.youtube.com/',
-    placeholder: '@channel',
-    color: 'red',
-    iconBg: '#FF0000',
-    icon: <YouTubeIcon />,
+    key: 'tenchat',
+    label: 'TenChat',
+    baseUrl: 'https://tenchat.ru/',
+    placeholder: 'username',
+    color: 'indigo',
+    iconBg: '#5B6CF9',
+    icon: <TenChatIcon />,
   },
   {
-    key: 'bandlink',
-    label: 'Bandlink',
-    baseUrl: 'https://band.link/',
-    placeholder: 'yourpage',
-    color: 'purple',
-    iconBg: '#7C3AED',
-    icon: <LinkIcon />,
+    key: 'ok',
+    label: 'Одноклассники',
+    baseUrl: 'https://ok.ru/',
+    placeholder: 'profile/123',
+    color: 'orange',
+    iconBg: '#EE8208',
+    icon: <OkIcon />,
+  },
+  {
+    key: 'rutube',
+    label: 'RuTube',
+    baseUrl: 'https://rutube.ru/channel/',
+    placeholder: 'channel/123',
+    color: 'slate',
+    iconBg: '#000000',
+    icon: <RutubeIcon />,
   },
   {
     key: 'yandex_music',
@@ -184,42 +214,47 @@ export const SOCIAL_SERVICES: SocialService[] = [
     icon: <MusicNoteIcon />,
   },
   {
-    key: 'dropbox',
-    label: 'Dropbox',
-    baseUrl: 'https://www.dropbox.com/sh/',
-    placeholder: 'ссылка',
-    color: 'blue',
-    iconBg: '#0061FF',
-    icon: <DropboxIcon />,
-  },
-  {
-    key: 'spotify',
-    label: 'Spotify',
-    baseUrl: 'https://open.spotify.com/artist/',
-    placeholder: 'ID артиста',
-    color: 'green',
-    iconBg: '#1DB954',
-    icon: <SpotifyIcon />,
-  },
-  {
-    key: 'lastfm',
-    label: 'Last.fm',
-    baseUrl: 'https://www.last.fm/user/',
-    placeholder: 'username',
-    color: 'red',
-    iconBg: '#D51007',
-    icon: <LastFmIcon />,
-  },
-  {
-    key: 'twitter',
-    label: 'Twitter (X)',
-    baseUrl: 'https://x.com/',
-    placeholder: 'username',
+    key: 'dzen',
+    label: 'Яндекс Дзен',
+    baseUrl: 'https://dzen.ru/',
+    placeholder: 'id или канал',
     color: 'slate',
     iconBg: '#000000',
-    icon: <TwitterIcon />,
+    icon: <DzenIcon />,
+  },
+  {
+    key: 'soundcloud',
+    label: 'SoundCloud',
+    baseUrl: 'https://soundcloud.com/',
+    placeholder: 'username',
+    color: 'orange',
+    iconBg: '#FF5500',
+    icon: <SoundCloudIcon />,
+  },
+  {
+    key: 'bandlink',
+    label: 'Bandlink',
+    baseUrl: 'https://band.link/',
+    placeholder: 'yourpage',
+    color: 'purple',
+    iconBg: '#7C3AED',
+    icon: <LinkIcon />,
+  },
+  {
+    key: 'website',
+    label: 'Официальный сайт',
+    baseUrl: 'https://',
+    placeholder: 'example.com',
+    color: 'teal',
+    iconBg: '#0D9488',
+    icon: <GlobeIcon />,
   },
 ];
+
+// Set of keys that are still offered/rendered. Legacy stored keys outside this
+// set (youtube/spotify/twitter/dropbox/lastfm/instagram/vk_profile/…) are
+// silently filtered at render time — see SocialIconRow / SocialLinksEditor.
+export const ALLOWED_KEYS: Set<string> = new Set(SOCIAL_SERVICES.map(s => s.key));
 
 export const getSocialService = (key: SocialKey) =>
   SOCIAL_SERVICES.find(s => s.key === key)!;
@@ -237,7 +272,7 @@ export function extractSlug(service: SocialService, fullUrl: string): string {
   if (!fullUrl) return '';
   // Strip base URL prefix if present
   for (const base of [service.baseUrl, service.baseUrl.replace('https://', 'http://')]) {
-    if (fullUrl.startsWith(base)) return fullUrl.slice(base.length);
+    if (base && fullUrl.startsWith(base)) return fullUrl.slice(base.length);
   }
   return fullUrl;
 }
@@ -246,6 +281,7 @@ export function extractSlug(service: SocialService, fullUrl: string): string {
 
 export function SocialIconRow({ links, labeled = false, only }: { links: Record<string, string>; labeled?: boolean; only?: SocialKey[] }) {
   const pool = only ? SOCIAL_SERVICES.filter(s => only.includes(s.key)) : SOCIAL_SERVICES;
+  // Filter out legacy keys that are no longer offered (they silently disappear).
   const entries = pool.filter(s => links[s.key]);
   if (entries.length === 0) return null;
 
@@ -299,6 +335,12 @@ export function SocialIconRow({ links, labeled = false, only }: { links: Record<
 
 // ─── Edit: input list ─────────────────────────────────────────────────────────
 
+// Keys that are real social URLs (block-on-paste applies). Contact keys
+// (phone via tel:, email via mailto:) are not http(s) URLs, so they are exempt.
+const URL_KEYS: Set<string> = new Set(
+  SOCIAL_SERVICES.filter(s => s.key !== 'phone' && s.key !== 'email').map(s => s.key)
+);
+
 export function SocialLinksEditor({
   value,
   onChange,
@@ -309,41 +351,74 @@ export function SocialLinksEditor({
   only?: SocialKey[];
 }) {
   const services = only ? SOCIAL_SERVICES.filter(s => only.includes(s.key)) : SOCIAL_SERVICES;
+  // Per-field validation message (e.g. blocked platform). Keyed by SocialKey.
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   return (
     <div className="space-y-2">
       {services.map(service => {
         const slug = extractSlug(service, value[service.key] || '');
+        const error = errors[service.key];
+        const checkUrl = URL_KEYS.has(service.key);
         return (
-          <div key={service.key} className="flex items-center gap-2">
-            {/* Icon */}
-            <div
-              className="w-8 h-8 rounded-lg flex items-center justify-center text-white flex-shrink-0 p-1.5"
-              style={{ backgroundColor: service.iconBg }}
-            >
-              {service.icon}
+          <div key={service.key} className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              {/* Icon */}
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-white flex-shrink-0 p-1.5"
+                style={{ backgroundColor: service.iconBg }}
+              >
+                {service.icon}
+              </div>
+              {/* Input with prefix */}
+              <div className={`flex-1 flex items-center bg-slate-700/50 border rounded-xl overflow-hidden focus-within:ring-2 text-xs min-w-0 ${error ? 'border-red-500/60 focus-within:ring-red-500' : 'border-slate-600/50 focus-within:ring-primary-500'}`}>
+                <span className="px-2 text-slate-500 shrink-0 border-r border-slate-600/50 py-2 text-[10px] leading-none max-w-[110px] truncate">
+                  {service.baseUrl.replace('https://', '')}
+                </span>
+                <input
+                  type="text"
+                  value={slug}
+                  onChange={e => {
+                    const newSlug = e.target.value.trim();
+                    const updated = { ...value };
+                    if (!newSlug) {
+                      delete updated[service.key];
+                      setErrors(prev => { const n = { ...prev }; delete n[service.key]; return n; });
+                      onChange(updated);
+                      return;
+                    }
+                    const full = buildUrl(service, newSlug);
+                    // BLOCK-ON-PASTE: only run classifyUrl on real http(s) URLs.
+                    // Bare slugs (no scheme) build to an allowed base URL and pass.
+                    if (checkUrl && (newSlug.startsWith('http://') || newSlug.startsWith('https://'))) {
+                      const result = classifyUrl(full);
+                      if (result.status === 'blocked') {
+                        // Reject: surface BLOCK_MESSAGE, do NOT store the value.
+                        setErrors(prev => ({ ...prev, [service.key]: BLOCK_MESSAGE }));
+                        delete updated[service.key];
+                        onChange(updated);
+                        return;
+                      }
+                      if (result.status === 'invalid') {
+                        // Mild hint, but still let them keep typing (don't store).
+                        setErrors(prev => ({ ...prev, [service.key]: 'Похоже, это не ссылка' }));
+                        delete updated[service.key];
+                        onChange(updated);
+                        return;
+                      }
+                    }
+                    setErrors(prev => { const n = { ...prev }; delete n[service.key]; return n; });
+                    updated[service.key] = full;
+                    onChange(updated);
+                  }}
+                  placeholder={service.placeholder}
+                  className="flex-1 min-w-0 px-2 py-2 bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none"
+                />
+              </div>
             </div>
-            {/* Input with prefix */}
-            <div className="flex-1 flex items-center bg-slate-700/50 border border-slate-600/50 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-primary-500 text-xs min-w-0">
-              <span className="px-2 text-slate-500 shrink-0 border-r border-slate-600/50 py-2 text-[10px] leading-none max-w-[110px] truncate">
-                {service.baseUrl.replace('https://', '')}
-              </span>
-              <input
-                type="text"
-                value={slug}
-                onChange={e => {
-                  const newSlug = e.target.value.trim();
-                  const updated = { ...value };
-                  if (newSlug) {
-                    updated[service.key] = buildUrl(service, newSlug);
-                  } else {
-                    delete updated[service.key];
-                  }
-                  onChange(updated);
-                }}
-                placeholder={service.placeholder}
-                className="flex-1 min-w-0 px-2 py-2 bg-transparent text-xs text-white placeholder-slate-500 focus:outline-none"
-              />
-            </div>
+            {error && (
+              <p className="text-[11px] text-red-400 leading-snug pl-10">{error}</p>
+            )}
           </div>
         );
       })}

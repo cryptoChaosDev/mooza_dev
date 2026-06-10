@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from './stores/authStore';
 import { useBadgeStore } from './stores/badgeStore';
@@ -26,14 +26,14 @@ const ChatPage           = lazy(() => import('./pages/ChatPage'));
 const AdminPage          = lazy(() => import('./pages/AdminPage'));
 const ArtistPage         = lazy(() => import('./pages/ArtistPage'));
 const ArtistCreatePage   = lazy(() => import('./pages/ArtistCreatePage'));
-const GroupPage          = lazy(() => import('./pages/GroupPage'));
-const GroupCreatePage    = lazy(() => import('./pages/GroupCreatePage'));
-const GroupInvitesPage   = lazy(() => import('./pages/GroupInvitesPage'));
+const ReleasePage        = lazy(() => import('./pages/ReleasePage'));
+const ClipPage           = lazy(() => import('./pages/ClipPage'));
 const PrivacyPolicyPage  = lazy(() => import('./pages/PrivacyPolicyPage'));
 const TermsPage          = lazy(() => import('./pages/TermsPage'));
 const FlowSettingsPage   = lazy(() => import('./pages/FlowSettingsPage'));
 const CreatePostPage     = lazy(() => import('./pages/CreatePostPage'));
 const InvitePage         = lazy(() => import('./pages/InvitePage'));
+const ProPage            = lazy(() => import('./pages/ProPage'));
 const ServicePage        = lazy(() => import('./pages/ServicePage'));
 const ServicesPage       = lazy(() => import('./pages/ServicesPage'));
 const ConnectionsPage    = lazy(() => import('./pages/ConnectionsPage'));
@@ -99,6 +99,12 @@ async function apiFetch(path: string, token: string) {
   return res.json();
 }
 
+// Legacy /groups/:id → unified /artist/:id (Artist and Group are one entity).
+function GroupRedirect() {
+  const { id } = useParams();
+  return <Navigate to={`/artist/${id}`} replace />;
+}
+
 // ─── Clears badge counts when user navigates to relevant pages ───────────────
 function BadgeClearer() {
   const location = useLocation();
@@ -146,9 +152,12 @@ function AppRoutes() {
             <Route path="/profile/:userId"  element={<UserProfilePage />} />
             <Route path="/artist/create"     element={<ArtistCreatePage />} />
             <Route path="/artist/:id"       element={<ArtistPage />} />
-            <Route path="/groups/create"    element={<GroupCreatePage />} />
-            <Route path="/groups/invites"   element={<GroupInvitesPage />} />
-            <Route path="/groups/:id"       element={<GroupPage />} />
+            <Route path="/releases/:id"     element={<ReleasePage />} />
+            <Route path="/clips/:id"        element={<ClipPage />} />
+            {/* Legacy «Группы» routes — collapsed into the unified Artist page */}
+            <Route path="/groups/create"    element={<Navigate to="/artist/create" replace />} />
+            <Route path="/groups/invites"   element={<Navigate to="/" replace />} />
+            <Route path="/groups/:id"       element={<GroupRedirect />} />
             <Route path="/search"           element={<SearchPage />} />
             <Route path="/friends"          element={<FriendsPage />} />
             <Route path="/messages"         element={<MessagesPage />} />
@@ -157,8 +166,12 @@ function AppRoutes() {
             <Route path="/flow-settings"    element={<FlowSettingsPage />} />
             <Route path="/create-post"      element={<CreatePostPage />} />
             <Route path="/invite"           element={<InvitePage />} />
+            <Route path="/pro"              element={<ProPage />} />
             <Route path="/onboarding"       element={<OnboardingPage />} />
             <Route path="/vk-setup"         element={<VkSetupPage />} />
+            {/* Logged-in visitors who open an artist invite link land here too;
+                RegisterPage shows an accept screen (or bounces home if no invite). */}
+            <Route path="/register"         element={<RegisterPage />} />
             <Route path="/services/:serviceId" element={<ServicePage />} />
             <Route path="/profile/:userId/services" element={<ServicesPage />} />
             <Route path="/profile/:userId/connections" element={<ConnectionsPage />} />

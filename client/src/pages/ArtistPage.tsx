@@ -5,30 +5,57 @@ import {
   ArrowLeft, MapPin, ExternalLink,
   Camera, Navigation, Edit3, X, Save, Loader2,
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
-  UserPlus, Trash2, Search, Check,
+  UserPlus, Trash2, Search,
+  Settings, Link2, Share2, Tag, Crown, Shield, UserCog, UserCheck, UserX, Star,
 } from 'lucide-react';
-import { artistAPI, referenceAPI, groupAPI, friendshipAPI } from '../lib/api';
-import { plural } from '../lib/plural';
+import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI, releaseAPI, clipAPI } from '../lib/api';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
-import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
+import { yoNorm } from '../lib/search';
+import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
+import CityPicker from '../components/CityPicker';
 import AvatarComponent from '../components/Avatar';
 import SelectSheet from '../components/SelectSheet';
 import ShareButton from '../components/ShareButton';
+import RolePicker from '../components/RolePicker';
+import ConfirmDialog from '../components/ConfirmDialog';
+import MediaRail from '../components/MediaRail';
+import MediaItemForm from '../components/MediaItemForm';
 import { useAuthStore } from '../stores/authStore';
+import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
+import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
+
+const ACTIVITY_OPTIONS = [
+  { id: 'ACTIVE',    name: 'Действующий' },
+  { id: 'INACTIVE',  name: 'Неактивный' },
+  { id: 'ARCHIVED',  name: 'Архивный' },
+  { id: 'DISBANDED', name: 'Распался' },
+];
+const ACTIVITY_LABELS: Record<string, string> = Object.fromEntries(ACTIVITY_OPTIONS.map(o => [o.id, o.name]));
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 const TYPE_OPTIONS = [
-  { id: 'SOLO',        name: 'Соло артист' },
+  { id: 'SOLO',        name: 'Сольный артист' },
+  { id: 'DUET',        name: 'Дуэт' },
   { id: 'GROUP',       name: 'Группа' },
-  { id: 'COVER_GROUP', name: 'Кавер группа' },
+  { id: 'COVER_GROUP', name: 'Кавер-группа' },
+  { id: 'TRIBUTE',     name: 'Трибьют' },
+  { id: 'CHOIR',       name: 'Хор' },
+  { id: 'ENSEMBLE',    name: 'Ансамбль' },
+  { id: 'ORCHESTRA',   name: 'Оркестр' },
 ];
 
-const TYPE_LABELS: Record<string, string> = {
-  SOLO: 'Соло артист',
-  GROUP: 'Группа',
-  COVER_GROUP: 'Кавер группа',
+const TYPE_LABELS: Record<string, string> = Object.fromEntries(TYPE_OPTIONS.map(t => [t.id, t.name]));
+
+// What each verification status means + the owner's next step. Shown under the
+// status badge to the artist's owner/admins.
+const ARTIST_STATUS_DESC: Record<string, string> = {
+  DRAFT: 'Черновик: профиль ещё не отправлен на верификацию. Заполните данные, добавьте участников и отправьте код верификации в соцсети.',
+  PENDING: 'На модерации: заявка отправлена и ожидает проверки. Мы сверим публикацию с кодом и уведомим о результате.',
+  REJECTED: 'Отклонён: заявка не прошла проверку. Посмотрите причину ниже, исправьте данные и отправьте повторно.',
+  VERIFIED: 'Верифицирован: профиль подтверждён. Артист отображается в каталоге и помечен значком верификации.',
+  APPROVED: 'Одобрен модератором.',
 };
 
 function resolveUrl(path: string | null | undefined): string | null {
@@ -59,7 +86,13 @@ export default function ArtistPage() {
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
   const [isEditing, setIsEditing] = useState(false);
+
+  // Image cropping (avatar / banner) before upload
+  const [cropAvatarFile, setCropAvatarFile] = useState<File | null>(null);
+  const [cropBannerFile, setCropBannerFile] = useState<File | null>(null);
+
   const [proofUrl, setProofUrl] = useState('');
+  const [verifyUnmet, setVerifyUnmet] = useState<string[]>([]);
   const [form, setForm] = useState<EditForm>({
     name: '', type: '', city: '', tourReady: '', description: '',
     bandLink: '', listeners: '', genreIds: [], socialLinks: {},
@@ -67,16 +100,53 @@ export default function ArtistPage() {
   const [genreSheetOpen, setGenreSheetOpen] = useState(false);
   const [typeSheetOpen, setTypeSheetOpen] = useState(false);
 
-  // Leave / transfer ownership state
-  const [showLeaveModal, setShowLeaveModal] = useState(false);
-  const [selectedNewOwnerMembershipId, setSelectedNewOwnerMembershipId] = useState('');
-
-  // Invite member state
+  // Invite member state (legacy friend-invite flow)
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteFriendId, setInviteFriendId] = useState('');
   const [inviteProfessionId, setInviteProfessionId] = useState('');
   const [inviteFriendSearch, setInviteFriendSearch] = useState('');
   const [inviteProfSearch, setInviteProfSearch] = useState('');
+
+  // ── Phase 5b state ─────────────────────────────────────────────────────────
+  // Admin block (gear) toggle
+  const [showAdminBlock, setShowAdminBlock] = useState(false);
+
+  // Add registered member modal
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [addSearch, setAddSearch] = useState('');
+  const [addSelectedUserId, setAddSelectedUserId] = useState('');
+  const [addRoleIds, setAddRoleIds] = useState<string[]>([]);
+  const [addParticipation, setAddParticipation] = useState<'ACTIVE_MEMBER' | 'FORMER_MEMBER'>('ACTIVE_MEMBER');
+  const [addRolePickerOpen, setAddRolePickerOpen] = useState(false);
+  const [addFeedback, setAddFeedback] = useState('');
+
+  // Invite-link (unregistered) flow
+  const [showInviteLink, setShowInviteLink] = useState(false);
+  const [linkRoleIds, setLinkRoleIds] = useState<string[]>([]);
+  const [linkParticipation, setLinkParticipation] = useState<'ACTIVE_MEMBER' | 'FORMER_MEMBER'>('ACTIVE_MEMBER');
+  const [linkRolePickerOpen, setLinkRolePickerOpen] = useState(false);
+  const [generatedLink, setGeneratedLink] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
+
+  // Per-member role editing
+  const [roleEditMembershipId, setRoleEditMembershipId] = useState<string | null>(null);
+  const [roleEditSeed, setRoleEditSeed] = useState<string[]>([]);
+
+  // Confirm dialogs
+  const [removeMembershipId, setRemoveMembershipId] = useState<string | null>(null);
+  const [transferOwnerUserId, setTransferOwnerUserId] = useState<string | null>(null);
+  const [removeAdminUserId, setRemoveAdminUserId] = useState<string | null>(null);
+
+  // Owner/admin picker dialogs (within admin block)
+  const [showOwnerPicker, setShowOwnerPicker] = useState(false);
+  const [showAdminPicker, setShowAdminPicker] = useState(false);
+
+  // Activity status sheet
+  const [activitySheetOpen, setActivitySheetOpen] = useState(false);
+
+  // ── Phase 6b: releases & clips create-form modals ──────────────────────────
+  const [showReleaseForm, setShowReleaseForm] = useState(false);
+  const [showClipForm, setShowClipForm] = useState(false);
 
   const { data: artist, isLoading, isError } = useQuery({
     queryKey: ['artist', id],
@@ -95,7 +165,26 @@ export default function ArtistPage() {
     },
   });
 
-  const isGroup = artist?.type === 'GROUP' || artist?.type === 'COVER_GROUP';
+
+  // ── Phase 6b: releases & clips lists ──────────────────────────────────────
+  const { data: releases = [] } = useQuery({
+    queryKey: ['releases', 'artist', id],
+    queryFn: async () => {
+      const { data } = await releaseAPI.listByArtist(id!);
+      return data as { id: string; title: string; coverUrl?: string | null }[];
+    },
+    enabled: !!id,
+  });
+
+  const { data: clips = [] } = useQuery({
+    queryKey: ['clips', 'artist', id],
+    queryFn: async () => {
+      const { data } = await clipAPI.listByArtist(id!);
+      return data as { id: string; title: string; coverUrl?: string | null }[];
+    },
+    enabled: !!id,
+  });
+
   const isOwner = !!currentUser && (
     artist?.submittedById === currentUser.id ||
     artist?.members?.some((m: any) => m.id === currentUser.id && m.isOwner)
@@ -144,14 +233,18 @@ export default function ArtistPage() {
     }
   }, [isEditing, artist]);
 
+  const favInvalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['artist', id] });
+    queryClient.invalidateQueries({ queryKey: ['followed-artists'] });
+  };
   const followMut = useMutation({
     mutationFn: () => artistAPI.follow(id!),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onSuccess: favInvalidate,
   });
 
   const unfollowMut = useMutation({
     mutationFn: () => artistAPI.unfollow(id!),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onSuccess: favInvalidate,
   });
 
   const uploadAvatarMut = useMutation({
@@ -164,14 +257,22 @@ export default function ArtistPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
   });
 
-  const submitMut = useMutation({
-    mutationFn: () => artistAPI.submitForModeration(id!),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+  const requestVerifyMut = useMutation({
+    mutationFn: () => artistAPI.requestVerification(id!, proofUrl),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); setProofUrl(''); setVerifyUnmet([]); },
+    onError: (err: any) => {
+      const data = err?.response?.data;
+      if (data?.error === 'CONDITIONS_NOT_MET' && Array.isArray(data.unmet)) {
+        setVerifyUnmet(data.unmet);
+      } else {
+        setVerifyUnmet([data?.error || 'Не удалось отправить запрос']);
+      }
+    },
   });
 
-  const submitProofMut = useMutation({
-    mutationFn: () => artistAPI.submitProof(id!, proofUrl),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); setProofUrl(''); },
+  const withdrawMut = useMutation({
+    mutationFn: () => artistAPI.withdrawVerification(id!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
   });
 
   const saveMut = useMutation({
@@ -205,21 +306,6 @@ export default function ArtistPage() {
     },
   });
 
-  const removeMemberMut = useMutation({
-    mutationFn: (membershipId: string) => groupAPI.removeMember(id!, membershipId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
-  });
-
-  const leaveMut = useMutation({
-    mutationFn: () => groupAPI.leave(id!),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); navigate(-1); },
-  });
-
-  const transferOwnerMut = useMutation({
-    mutationFn: () => groupAPI.transferOwner(id!, selectedNewOwnerMembershipId),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); setShowLeaveModal(false); navigate(-1); },
-  });
-
   const { data: pendingMembers = [] } = useQuery<any[]>({
     queryKey: ['artist-pending-members', id],
     queryFn: () => artistAPI.pendingMemberships(id!).then((r: any) => r.data),
@@ -238,22 +324,107 @@ export default function ArtistPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist-pending-members', id] }),
   });
 
+  // ── Phase 5b: user search for add-member modal ─────────────────────────────
+  const { data: searchResults = [], isFetching: searchLoading } = useQuery({
+    queryKey: ['user-search', addSearch],
+    queryFn: async () => {
+      const { data } = await userAPI.search({ query: addSearch.trim() });
+      return data as { id: string; firstName: string; lastName: string; nickname?: string; avatar?: string }[];
+    },
+    enabled: showAddMember && addSearch.trim().length >= 1,
+  });
+
+  const invalidateArtist = () => queryClient.invalidateQueries({ queryKey: ['artist', id] });
+
+  // ── Phase 5b: mutations ────────────────────────────────────────────────────
+  // The viewer's own pending invitation: confirm / decline.
+  const confirmInviteMut = useMutation({
+    mutationFn: (membershipId: string) => artistAPI.confirmMembership(membershipId),
+    onSuccess: () => invalidateArtist(),
+  });
+  const declineInviteMut = useMutation({
+    mutationFn: (membershipId: string) => artistAPI.declineMembership(membershipId),
+    onSuccess: () => invalidateArtist(),
+  });
+
+  const addMemberMut = useMutation({
+    mutationFn: () =>
+      artistAPI.addMember(id!, {
+        userId: addSelectedUserId,
+        roleIds: addRoleIds,
+        participationStatus: addParticipation,
+      }),
+    onSuccess: () => {
+      invalidateArtist();
+      setAddFeedback('Приглашение отправлено');
+      setAddSelectedUserId('');
+      setAddRoleIds([]);
+      setAddParticipation('ACTIVE_MEMBER');
+      setAddSearch('');
+      setTimeout(() => { setAddFeedback(''); setShowAddMember(false); }, 1200);
+    },
+  });
+
+  const inviteLinkMut = useMutation({
+    mutationFn: () =>
+      artistAPI.createInviteLink(id!, { roleIds: linkRoleIds, participationStatus: linkParticipation }),
+    onSuccess: (res: any) => { setGeneratedLink(res.data?.url ?? ''); setLinkCopied(false); },
+  });
+
+  const setParticipationMut = useMutation({
+    mutationFn: (vars: { membershipId: string; status: 'ACTIVE_MEMBER' | 'FORMER_MEMBER' }) =>
+      artistAPI.setMemberParticipation(id!, vars.membershipId, vars.status),
+    onSuccess: invalidateArtist,
+  });
+
+  const setRolesMut = useMutation({
+    mutationFn: (vars: { membershipId: string; roleIds: string[] }) =>
+      artistAPI.setMemberRoles(id!, vars.membershipId, vars.roleIds),
+    onSuccess: invalidateArtist,
+  });
+
+  const removeMember5bMut = useMutation({
+    mutationFn: (membershipId: string) => artistAPI.removeMember(id!, membershipId),
+    onSuccess: invalidateArtist,
+  });
+
+  const setActivityMut = useMutation({
+    mutationFn: (status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED' | 'DISBANDED') =>
+      artistAPI.setActivityStatus(id!, status),
+    onSuccess: invalidateArtist,
+  });
+
+  const transferOwnerNewMut = useMutation({
+    mutationFn: (userId: string) => artistAPI.transferOwner(id!, userId),
+    onSuccess: invalidateArtist,
+  });
+
+  const addAdminMut = useMutation({
+    mutationFn: (userId: string) => artistAPI.addAdmin(id!, userId),
+    onSuccess: invalidateArtist,
+  });
+
+  const removeAdminMut = useMutation({
+    mutationFn: (userId: string) => artistAPI.removeAdmin(id!, userId),
+    onSuccess: invalidateArtist,
+  });
+
   const set = (key: keyof EditForm, value: string | string[] | Record<string, string>) =>
     setForm((f) => ({ ...f, [key]: value }));
 
   // Filtered lists for invite modal — must be before early returns
   const filteredFriends = useMemo(() => {
     const memberIds = new Set((artist?.members ?? []).map((m: any) => m.id));
-    const q = inviteFriendSearch.toLowerCase();
+    const q = yoNorm(inviteFriendSearch);
     return friendsList.filter((f: any) =>
       !memberIds.has(f.id) &&
-      `${f.firstName} ${f.lastName}`.toLowerCase().includes(q)
+      yoNorm(`${f.firstName} ${f.lastName}`).includes(q)
     );
   }, [friendsList, artist?.members, inviteFriendSearch]);
 
   const filteredProfessions = useMemo(() => {
-    const q = inviteProfSearch.toLowerCase();
-    return allProfessions.filter((p: any) => p.name.toLowerCase().includes(q));
+    const q = yoNorm(inviteProfSearch);
+    return allProfessions.filter((p: any) => yoNorm(p.name).includes(q));
   }, [allProfessions, inviteProfSearch]);
 
   if (isLoading) {
@@ -276,11 +447,93 @@ export default function ArtistPage() {
   const isMemberOfArtist = artist.members?.some(
     (m: { id: string; inviteStatus: string }) => m.id === currentUser?.id && m.inviteStatus === 'ACCEPTED'
   );
+  const isAdminOfArtist = !!currentUser && (
+    artist.submittedById === currentUser.id ||
+    artist.members?.some((m: any) => m.id === currentUser.id && (m.isAdmin || m.isOwner))
+  );
   const hasSocialLinks =
     artist.socialLinks && Object.values(artist.socialLinks as Record<string, string>).some(Boolean);
 
   const bannerSrc = resolveUrl(artist.banner);
   const avatarSrc = avatarUrl(artist.avatar);
+
+  // ── Phase 5b derived data ──────────────────────────────────────────────────
+  // Owner/admin gating from the backend (preferred over legacy member-flag scan).
+  const viewerIsOwner: boolean = !!artist.viewerIsOwner;
+  const viewerIsAdmin: boolean = !!artist.viewerIsAdmin || viewerIsOwner;
+
+  const confirmedMembers: any[] = artist.confirmedMembers ?? [];
+  const pendingMembers5b: any[] = artist.pendingMembers ?? [];
+  const activeMembers = confirmedMembers.filter((m) => m.participationStatus === 'ACTIVE_MEMBER');
+  const formerMembers = confirmedMembers.filter((m) => m.participationStatus === 'FORMER_MEMBER');
+  const ownerMember = confirmedMembers.find((m) => m.isOwner) ?? null;
+  const adminMembers = confirmedMembers.filter((m) => m.isAdmin);
+  // Viewer is an active confirmed member (used to gate the gear button)
+  const viewerIsActiveMember = !!currentUser && confirmedMembers.some(
+    (m) => m.user.id === currentUser.id && m.participationStatus === 'ACTIVE_MEMBER',
+  );
+  const canSeeGear = viewerIsOwner || viewerIsAdmin || viewerIsActiveMember;
+  const memberName = (m: any) => `${m.user.lastName ?? ''} ${m.user.firstName ?? ''}`.trim();
+  const roleText = (m: any) => (m.roles ?? []).map((r: any) => r.name).join(', ');
+  const currentActivity: string = artist.activityStatus ?? 'ACTIVE';
+
+  // Helper to render a confirmed-member card (public + admin controls).
+  const MemberCard = ({ m, pending = false }: { m: any; pending?: boolean }) => (
+    <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 border border-slate-800">
+      <button onClick={() => navigate(`/profile/${m.user.id}`)} className="flex-shrink-0">
+        <AvatarComponent src={m.user.avatar} name={memberName(m)} size={40} />
+      </button>
+      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/profile/${m.user.id}`)}>
+        <p className="text-sm font-medium text-white truncate flex items-center gap-1.5">
+          {memberName(m)}
+          {m.isOwner && <Crown size={12} className="text-amber-400 flex-shrink-0" />}
+          {m.isAdmin && !m.isOwner && <Shield size={11} className="text-sky-400 flex-shrink-0" />}
+        </p>
+        <p className="text-xs text-slate-500 truncate">{roleText(m) || '—'}</p>
+      </div>
+      {pending && (
+        <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-400 rounded-md flex-shrink-0">ожидает</span>
+      )}
+      {/* Admin controls (visible to artist admins) */}
+      {!pending && viewerIsAdmin && (
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {/* Toggle participation */}
+          <button
+            onClick={() => setParticipationMut.mutate({
+              membershipId: m.membershipId,
+              status: m.participationStatus === 'ACTIVE_MEMBER' ? 'FORMER_MEMBER' : 'ACTIVE_MEMBER',
+            })}
+            disabled={setParticipationMut.isPending}
+            title={m.participationStatus === 'ACTIVE_MEMBER' ? 'В бывшие' : 'В действующие'}
+            className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors"
+          >
+            <UserCog size={14} />
+          </button>
+          {/* Edit roles */}
+          <button
+            onClick={() => {
+              setRoleEditMembershipId(m.membershipId);
+              setRoleEditSeed((m.roles ?? []).map((r: any) => r.id));
+            }}
+            title="Изменить роли"
+            className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors"
+          >
+            <Tag size={14} />
+          </button>
+          {/* Remove (not owner) */}
+          {!m.isOwner && (
+            <button
+              onClick={() => setRemoveMembershipId(m.membershipId)}
+              title="Удалить участника"
+              className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
 
   // ── Edit modal ───────────────────────────────────────────────────────────────
   function EditModal() {
@@ -345,15 +598,10 @@ export default function ArtistPage() {
               </button>
             </div>
 
-            {/* Город */}
+            {/* Город — автокомплит реальных городов (выбор из списка) */}
             <div>
               <label className="block text-xs text-slate-500 mb-1">Город</label>
-              <input
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
-                value={form.city}
-                onChange={(e) => set('city', e.target.value)}
-                placeholder="Москва"
-              />
+              <CityPicker city={form.city} country="" onChange={(c) => set('city', c)} />
             </div>
 
             {/* Готовность к туру */}
@@ -420,14 +668,28 @@ export default function ArtistPage() {
               />
             </div>
 
+            {/* Контакты */}
+            <div>
+              <label className="block text-xs text-slate-500 mb-2">Контакты</label>
+              <SocialLinksEditor
+                value={form.socialLinks}
+                onChange={(v) => set('socialLinks', v)}
+                only={CONTACT_KEYS}
+              />
+            </div>
+
             {/* Соцсети */}
             <div>
               <label className="block text-xs text-slate-500 mb-2">Социальные сети</label>
               <SocialLinksEditor
                 value={form.socialLinks}
                 onChange={(v) => set('socialLinks', v)}
+                only={SOCIAL_KEYS}
               />
             </div>
+
+            {/* Bottom spacer so the last field can scroll clear of the keyboard */}
+            <div className="h-40 flex-shrink-0" aria-hidden />
           </div>
         </div>
       </div>
@@ -456,6 +718,7 @@ export default function ArtistPage() {
         showConfirm
         height="full"
       />
+
       </>
     );
   }
@@ -476,35 +739,6 @@ export default function ArtistPage() {
           <ArrowLeft size={18} className="text-white" />
         </button>
 
-        {/* Top-right actions */}
-        <div className="absolute top-4 right-4 z-10 flex items-center gap-2">
-          <ShareButton url={`/artist/${id}`} title={artist?.name} />
-          {isOwner && (
-            <button
-              onClick={() => setIsEditing(true)}
-              className="w-9 h-9 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center"
-            >
-              <Edit3 size={16} className="text-white" />
-            </button>
-          )}
-          {currentUser && !isMemberOfArtist && (
-            <button
-              onClick={() => {
-                if (artist.isFollowed) unfollowMut.mutate();
-                else followMut.mutate();
-              }}
-              disabled={followMut.isPending || unfollowMut.isPending}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${
-                artist.isFollowed
-                  ? 'bg-slate-700/80 text-slate-200 border border-slate-600'
-                  : 'bg-primary-600 text-white'
-              }`}
-            >
-              {artist.isFollowed ? 'Отписаться' : 'Подписаться'}
-            </button>
-          )}
-        </div>
-
         {/* Banner camera button */}
         {isOwner && (
           <>
@@ -521,7 +755,7 @@ export default function ArtistPage() {
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
-                if (file) uploadBannerMut.mutate(file);
+                if (file) setCropBannerFile(file);
                 e.target.value = '';
               }}
             />
@@ -530,7 +764,7 @@ export default function ArtistPage() {
       </div>
 
       {/* ── Avatar ── */}
-      <div className="relative px-4 -mt-14 mb-4 flex items-end">
+      <div className="relative px-4 -mt-14 mb-4 flex items-end justify-between">
         <div className="relative flex-shrink-0">
           <div className="w-28 h-28 rounded-full border-4 border-slate-950 overflow-hidden bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center shadow-xl">
             {avatarSrc ? (
@@ -556,11 +790,44 @@ export default function ArtistPage() {
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) uploadAvatarMut.mutate(file);
+                  if (file) setCropAvatarFile(file);
                   e.target.value = '';
                 }}
               />
             </>
+          )}
+        </div>
+
+        {/* Actions under the cover: favorite star + share */}
+        <div className="flex items-center gap-2 pb-1">
+          {currentUser && !isMemberOfArtist && (
+            <button
+              onClick={() => {
+                if (artist.isFollowed) unfollowMut.mutate();
+                else followMut.mutate();
+              }}
+              disabled={followMut.isPending || unfollowMut.isPending}
+              aria-label={artist.isFollowed ? 'Убрать из избранного' : 'В избранное'}
+              title={artist.isFollowed ? 'В избранном' : 'В избранное'}
+              className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center transition-colors disabled:opacity-60"
+            >
+              <Star size={17} className={artist.isFollowed ? 'text-amber-400 fill-amber-400' : 'text-slate-300'} />
+            </button>
+          )}
+          <ShareButton
+            url={`/artist/${id}`}
+            title={artist?.name}
+            iconSize={16}
+            className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
+          />
+          {isOwner && (
+            <button
+              onClick={() => setIsEditing(true)}
+              title="Редактировать"
+              className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
+            >
+              <Edit3 size={16} />
+            </button>
           )}
         </div>
       </div>
@@ -593,6 +860,13 @@ export default function ArtistPage() {
           )}
         </div>
 
+        {/* Status description (owner/admin) — what the current status means + next step. */}
+        {isAdminOfArtist && ARTIST_STATUS_DESC[artist.status] && (
+          <p className="text-xs text-slate-400 leading-relaxed mb-1.5">
+            {ARTIST_STATUS_DESC[artist.status]}
+          </p>
+        )}
+
         {/* City + tour readiness */}
         {(artist.city || artist.tourReady) && (
           <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-1">
@@ -611,78 +885,80 @@ export default function ArtistPage() {
           </div>
         )}
 
-        {/* Stats — compact inline */}
-        <div className="flex items-center gap-2 text-xs text-slate-500 mb-3 flex-wrap">
-          <span><span className="font-semibold text-slate-300">{artist.followersCount ?? 0}</span> {plural(artist.followersCount ?? 0, 'подписчик', 'подписчика', 'подписчиков')}</span>
-          {(artist.members?.length ?? 0) > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{artist.members.length}</span> {plural(artist.members.length, 'участник', 'участника', 'участников')}</span></>}
-          {(artist.listeners ?? 0) > 0 && <><span className="text-slate-700">·</span><span><span className="font-semibold text-slate-300">{Number(artist.listeners).toLocaleString('ru-RU')}</span> {plural(Number(artist.listeners), 'слушатель', 'слушателя', 'слушателей')}</span></>}
-        </div>
 
-        {/* Moderation panel for members */}
-        {isMemberOfArtist && (
+        {/* Verification panel for admins */}
+        {isAdminOfArtist && (
           <>
-            {(artist.status === 'DRAFT' || artist.status === 'REJECTED') && (
-              <div className={`mb-4 p-3 rounded-xl border ${artist.status === 'REJECTED' ? 'bg-red-500/5 border-red-500/20' : 'bg-slate-800/50 border-slate-700'}`}>
-                {artist.status === 'REJECTED' && artist.rejectionReason && (
-                  <p className="text-xs text-red-400 mb-2 flex items-start gap-1.5">
-                    <ShieldX size={13} className="flex-shrink-0 mt-0.5" />
-                    <span>Отклонено: {artist.rejectionReason}</span>
+            {/* DRAFT / REJECTED — request (or re-request) verification */}
+            {(artist.status === 'DRAFT' || artist.status === 'REJECTED') && (() => {
+              const classified = proofUrl.trim() ? classifyUrl(proofUrl.trim()) : null;
+              const urlBlocked = classified?.status === 'blocked';
+              const urlInvalid = classified?.status === 'invalid';
+              const urlOk = classified?.status === 'allowed';
+              return (
+                <div className={`mb-4 p-3 rounded-xl border ${artist.status === 'REJECTED' ? 'bg-red-500/5 border-red-500/20' : 'bg-slate-800/50 border-slate-700'}`}>
+                  <p className="text-xs font-medium mb-1 text-white">
+                    {artist.status === 'REJECTED'
+                      ? 'Заявка отклонена — требуется повторная подача'
+                      : 'Верификация не запрошена'}
                   </p>
-                )}
-                <p className="text-xs text-slate-400 mb-2">
-                  {artist.status === 'DRAFT'
-                    ? 'Карточка не опубликована. Отправьте на проверку, чтобы она появилась в каталоге.'
-                    : 'Карточка была отклонена. Исправьте данные и отправьте снова.'}
-                </p>
-                <button
-                  onClick={() => submitMut.mutate()}
-                  disabled={submitMut.isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
-                >
-                  {submitMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-                  Отправить на модерацию
-                </button>
-              </div>
-            )}
-
-            {artist.status === 'APPROVED' && (
-              <div className="mb-4 p-3 rounded-xl bg-sky-500/5 border border-sky-500/20">
-                <p className="text-xs text-sky-300 font-medium mb-1">Карточка одобрена — верифицируйте коллектив</p>
-                <p className="text-xs text-slate-400 mb-2">
-                  Опубликуйте этот код в официальных соцсетях коллектива и пришлите ссылку на публикацию:
-                </p>
-                <div className="flex items-center gap-2 mb-3 p-2 bg-slate-900 rounded-lg">
-                  <code className="text-sm font-mono font-bold text-primary-400 tracking-wider flex-1">
-                    {artist.verificationCode}
-                  </code>
-                  <button
-                    onClick={() => navigator.clipboard.writeText(artist.verificationCode)}
-                    className="text-slate-500 hover:text-white text-xs px-2 py-0.5 bg-slate-800 rounded transition-colors"
-                  >
-                    Копировать
-                  </button>
-                </div>
-                {artist.verificationProofUrl ? (
-                  <p className="text-xs text-slate-400">
-                    Ссылка отправлена на проверку. Ожидайте подтверждения администратора.
+                  {artist.status === 'REJECTED' && artist.rejectionReason && (
+                    <p className="text-xs text-red-400 mb-2 flex items-start gap-1.5">
+                      <ShieldX size={13} className="flex-shrink-0 mt-0.5" />
+                      <span>Причина: {artist.rejectionReason}</span>
+                    </p>
+                  )}
+                  <p className="text-xs text-slate-400 mb-2">
+                    Разместите этот код в посте или описании профиля артиста в соцсетях и пришлите ссылку на профиль:
                   </p>
-                ) : (
-                  <div className="flex gap-2">
-                    <input
-                      value={proofUrl}
-                      onChange={e => setProofUrl(e.target.value)}
-                      placeholder="Ссылка на публикацию..."
-                      className="flex-1 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
-                    />
+                  <div className="flex items-center gap-2 mb-3 p-2 bg-slate-900 rounded-lg">
+                    <code className="text-sm font-mono font-bold text-primary-400 tracking-wider flex-1">
+                      {artist.verificationCode}
+                    </code>
                     <button
-                      onClick={() => submitProofMut.mutate()}
-                      disabled={!proofUrl.trim() || submitProofMut.isPending}
-                      className="px-3 py-1.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+                      onClick={() => artist.verificationCode && navigator.clipboard.writeText(artist.verificationCode)}
+                      className="text-slate-500 hover:text-white text-xs px-2 py-0.5 bg-slate-800 rounded transition-colors"
                     >
-                      {submitProofMut.isPending ? <Loader2 size={13} className="animate-spin" /> : 'Отправить'}
+                      Копировать
                     </button>
                   </div>
-                )}
+                  <input
+                    value={proofUrl}
+                    onChange={e => { setProofUrl(e.target.value); setVerifyUnmet([]); }}
+                    placeholder="Ссылка на профиль для верификации..."
+                    className="w-full mb-2 bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
+                  />
+                  {urlBlocked && <p className="text-xs text-red-400 mb-2">{BLOCK_MESSAGE}</p>}
+                  {urlInvalid && <p className="text-xs text-amber-400 mb-2">Введите корректную ссылку (http/https).</p>}
+                  {verifyUnmet.length > 0 && (
+                    <ul className="text-xs text-amber-400 mb-2 list-disc list-inside space-y-0.5">
+                      {verifyUnmet.map((u, i) => <li key={i}>{u}</li>)}
+                    </ul>
+                  )}
+                  <button
+                    onClick={() => requestVerifyMut.mutate()}
+                    disabled={requestVerifyMut.isPending || !urlOk}
+                    title={!urlOk ? 'Укажите ссылку на разрешённую соцсеть. Также добавьте участников (мин. по типу) на странице артиста.' : undefined}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+                  >
+                    {requestVerifyMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                    Отправить на верификацию
+                  </button>
+                </div>
+              );
+            })()}
+
+            {/* PENDING — withdraw action (status meaning is shown in the line above) */}
+            {artist.status === 'PENDING' && (
+              <div className="mb-4">
+                <button
+                  onClick={() => withdrawMut.mutate()}
+                  disabled={withdrawMut.isPending}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white text-xs font-medium rounded-lg transition-colors"
+                >
+                  {withdrawMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <X size={13} />}
+                  Отозвать заявку
+                </button>
               </div>
             )}
           </>
@@ -748,7 +1024,7 @@ export default function ArtistPage() {
                   <AvatarComponent src={m.user.avatar} name={`${m.user.firstName} ${m.user.lastName}`} size={40} />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-semibold text-white truncate">{m.user.firstName} {m.user.lastName}</p>
-                    <p className="text-xs text-slate-400 truncate">{m.profession?.name ?? '—'}</p>
+                    <p className="text-xs text-slate-400 truncate">{m.roleNames?.length ? m.roleNames.join(', ') : (m.profession?.name ?? '—')}</p>
                   </div>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <button
@@ -772,161 +1048,219 @@ export default function ArtistPage() {
           </div>
         )}
 
-        {/* Участники */}
-        {(isGroup || (artist.members?.length ?? 0) > 0) && (
-          <div className="mb-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Состав</span>
-              <div className="flex-1 h-px bg-slate-800" />
-              {isOwner && (
+        {/* ── Viewer's own pending invitation: confirm / decline ── */}
+        {artist.viewerPendingMembership && (
+          <div className="mb-4 p-3.5 rounded-xl bg-primary-500/10 border border-primary-500/30">
+            <p className="text-sm text-white font-medium mb-1">
+              «{artist.name}» приглашает вас стать участником
+              {artist.viewerPendingMembership.roles?.length
+                ? <> в роли <span className="text-primary-300">{artist.viewerPendingMembership.roles.map((r: any) => r.name).join(', ')}</span></>
+                : null}
+            </p>
+            <p className="text-xs text-slate-400 mb-3">Подтвердите участие, чтобы появиться в составе.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => confirmInviteMut.mutate(artist.viewerPendingMembership.membershipId)}
+                disabled={confirmInviteMut.isPending || declineInviteMut.isPending}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-sm font-semibold transition-colors"
+              >
+                {confirmInviteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <UserCheck size={14} />}
+                Подтвердить
+              </button>
+              <button
+                onClick={() => declineInviteMut.mutate(artist.viewerPendingMembership.membershipId)}
+                disabled={confirmInviteMut.isPending || declineInviteMut.isPending}
+                className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-sm font-medium transition-colors"
+              >
+                <UserX size={14} /> Отклонить
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ── Состав (Phase 5b: active / former blocks) ── */}
+        <div className="mb-4">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Состав</span>
+            <div className="flex-1 h-px bg-slate-800" />
+            {canSeeGear && (
+              <button
+                onClick={() => setShowAdminBlock(v => !v)}
+                title="Управление"
+                className={`p-1.5 rounded-lg transition-colors ${showAdminBlock ? 'text-primary-400 bg-primary-500/10' : 'text-slate-500 hover:text-primary-400'}`}
+              >
+                <Settings size={15} />
+              </button>
+            )}
+          </div>
+
+          {/* Admin actions: add member / invite link */}
+          {viewerIsAdmin && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              <button
+                onClick={() => { setShowAddMember(true); setAddFeedback(''); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-xs font-semibold transition-colors"
+              >
+                <UserPlus size={13} /> Добавить участника
+              </button>
+              <button
+                onClick={() => { setShowInviteLink(true); setGeneratedLink(''); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition-colors"
+              >
+                <Link2 size={13} /> Пригласить на сервис
+              </button>
+            </div>
+          )}
+
+          {/* Действующие участники */}
+          {activeMembers.length > 0 ? (
+            <div className="mb-3">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Действующие участники</p>
+              <div className="space-y-2">
+                {activeMembers.map((m: any) => <MemberCard key={m.membershipId} m={m} />)}
+              </div>
+            </div>
+          ) : viewerIsAdmin ? (
+            <p className="text-xs text-slate-600 italic mb-3">Действующих участников пока нет</p>
+          ) : null}
+
+          {/* Бывшие участники */}
+          {formerMembers.length > 0 && (
+            <div className="mb-3">
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Бывшие участники</p>
+              <div className="space-y-2">
+                {formerMembers.map((m: any) => <MemberCard key={m.membershipId} m={m} />)}
+              </div>
+            </div>
+          )}
+
+          {activeMembers.length === 0 && formerMembers.length === 0 && !viewerIsAdmin && (
+            <p className="text-xs text-slate-600 italic">Участников пока нет</p>
+          )}
+
+          {/* Ожидают подтверждения (admins only, read-only indicator) */}
+          {viewerIsAdmin && pendingMembers5b.length > 0 && (
+            <div className="mt-3">
+              <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider mb-2">Ожидают подтверждения</p>
+              <div className="space-y-2">
+                {pendingMembers5b.map((m: any) => <MemberCard key={m.membershipId} m={m} pending />)}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Phase 6b: Releases rail ── */}
+        {(viewerIsAdmin || releases.length > 0) && (
+          <MediaRail
+            title="Релизы"
+            items={releases}
+            to="/releases"
+            showAdd={viewerIsAdmin}
+            onAdd={() => setShowReleaseForm(true)}
+          />
+        )}
+
+        {/* ── Phase 6b: Clips rail ── */}
+        {(viewerIsAdmin || clips.length > 0) && (
+          <MediaRail
+            title="Клипы"
+            items={clips}
+            to="/clips"
+            showAdd={viewerIsAdmin}
+            onAdd={() => setShowClipForm(true)}
+          />
+        )}
+
+        {/* ── Admin block (gear) ── */}
+        {canSeeGear && showAdminBlock && (
+          <div className="mb-4 p-3 rounded-xl bg-slate-900/70 border border-slate-800 space-y-4">
+            {/* Activity status */}
+            {viewerIsAdmin && (
+              <div>
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Статус активности</p>
                 <button
-                  onClick={() => setShowInviteModal(true)}
-                  className="flex items-center gap-1 text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                  onClick={() => setActivitySheetOpen(true)}
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
                 >
-                  <UserPlus size={13} />
-                  Пригласить
+                  <span className="text-white">{ACTIVITY_LABELS[currentActivity] ?? 'Действующий'}</span>
+                  <span className="text-slate-500 text-xs">▾</span>
+                </button>
+                <p className="text-[10px] text-slate-500 mt-1">
+                  При смене с «Действующий» все действующие участники переходят в бывшие.
+                </p>
+              </div>
+            )}
+
+            {/* Owner */}
+            <div>
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Владелец</p>
+              {ownerMember ? (
+                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
+                  <AvatarComponent src={ownerMember.user.avatar} name={memberName(ownerMember)} size={36} />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-white truncate flex items-center gap-1.5">
+                      <Crown size={12} className="text-amber-400" /> {memberName(ownerMember)}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-xs text-slate-600 italic">—</p>
+              )}
+              {viewerIsOwner && (
+                <button
+                  onClick={() => setShowOwnerPicker(true)}
+                  className="mt-2 text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                >
+                  Изменить владельца
                 </button>
               )}
             </div>
 
-            {(artist.members?.length ?? 0) === 0 ? (
-              <p className="text-xs text-slate-600 italic">Участников пока нет</p>
-            ) : (
-              <div className="space-y-2">
-                {artist.members.map((m: any) => (
-                  <div key={m.membershipId} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-                    <button onClick={() => navigate(`/profile/${m.id}`)} className="flex-shrink-0">
-                      <AvatarComponent src={m.avatar} name={`${m.firstName} ${m.lastName}`} size={40} />
-                    </button>
-                    <div className="flex-1 min-w-0" onClick={() => navigate(`/profile/${m.id}`)}>
-                      <p className="text-sm font-medium text-white truncate">{m.firstName} {m.lastName}</p>
-                      <p className="text-xs text-slate-500 truncate">
-                        {m.isOwner ? 'Владелец' : (m.profession?.name ?? '—')}
-                      </p>
+            {/* Admins */}
+            <div>
+              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Администраторы</p>
+              {adminMembers.length === 0 ? (
+                <p className="text-xs text-slate-600 italic">Нет администраторов</p>
+              ) : (
+                <div className="space-y-2">
+                  {adminMembers.map((m: any) => (
+                    <div key={m.membershipId} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
+                      <AvatarComponent src={m.user.avatar} name={memberName(m)} size={36} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate flex items-center gap-1.5">
+                          {m.isOwner ? <Crown size={12} className="text-amber-400" /> : <Shield size={11} className="text-sky-400" />}
+                          {memberName(m)}
+                        </p>
+                      </div>
+                      {viewerIsOwner && !m.isOwner && (
+                        <button
+                          onClick={() => setRemoveAdminUserId(m.user.id)}
+                          title="Снять администратора"
+                          className="p-1.5 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"
+                        >
+                          <X size={15} />
+                        </button>
+                      )}
                     </div>
-                    {m.inviteStatus === 'PENDING' && (
-                      <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-400 rounded-md flex-shrink-0">ожидает</span>
-                    )}
-                    {/* Owner removes a non-owner member */}
-                    {isOwner && !m.isOwner && m.id !== currentUser?.id && (
-                      <button
-                        onClick={() => removeMemberMut.mutate(m.membershipId)}
-                        disabled={removeMemberMut.isPending}
-                        className="p-1.5 text-slate-600 hover:text-red-400 transition-colors flex-shrink-0"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                    {/* Current user leaves the group */}
-                    {m.id === currentUser?.id && !m.isOwner && (
-                      <button
-                        onClick={() => leaveMut.mutate()}
-                        disabled={leaveMut.isPending}
-                        className="p-1.5 text-slate-600 hover:text-red-400 transition-colors flex-shrink-0"
-                        title="Покинуть группу"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                    {/* Owner wants to leave — must transfer first */}
-                    {m.id === currentUser?.id && m.isOwner && (
-                      <button
-                        onClick={() => { setShowLeaveModal(true); setSelectedNewOwnerMembershipId(''); }}
-                        className="p-1.5 text-slate-600 hover:text-red-400 transition-colors flex-shrink-0"
-                        title="Покинуть группу"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+              {viewerIsOwner && (
+                <button
+                  onClick={() => setShowAdminPicker(true)}
+                  className="mt-2 text-xs text-primary-400 hover:text-primary-300 transition-colors"
+                >
+                  Добавить администратора
+                </button>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Follow/Unfollow for members */}
-        {currentUser && isMemberOfArtist && (
-          <button
-            onClick={() => {
-              if (artist.isFollowed) unfollowMut.mutate();
-              else followMut.mutate();
-            }}
-            disabled={followMut.isPending || unfollowMut.isPending}
-            className={`w-full py-2.5 rounded-xl text-sm font-semibold transition-colors mb-4 ${
-              artist.isFollowed
-                ? 'bg-slate-800 text-slate-300 border border-slate-700'
-                : 'bg-primary-600/20 text-primary-300 border border-primary-500/30'
-            }`}
-          >
-            {artist.isFollowed ? 'Отписаться' : 'Подписаться на коллектив'}
-          </button>
-        )}
       </div>
 
       {/* ── Edit modal ── */}
       {isEditing && EditModal()}
-
-      {/* ── Transfer ownership modal ── */}
-      {showLeaveModal && (() => {
-        const candidates = (artist?.members ?? []).filter(
-          (m: any) => m.id !== currentUser?.id && m.inviteStatus === 'ACCEPTED' && !m.isOwner
-        );
-        return (
-          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
-            <div className="w-full max-w-sm bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800">
-                <h3 className="font-semibold text-white text-sm">Передача прав</h3>
-                <button onClick={() => setShowLeaveModal(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
-                  <X size={16} className="text-slate-400" />
-                </button>
-              </div>
-              <div className="p-4">
-                {candidates.length === 0 ? (
-                  <p className="text-sm text-slate-400 text-center py-4">
-                    Нет других участников. Удалите группу или сначала пригласите участника.
-                  </p>
-                ) : (
-                  <>
-                    <p className="text-xs text-slate-400 mb-3">
-                      Вы создатель группы. Выберите участника, которому передать права владельца:
-                    </p>
-                    <div className="space-y-1.5 max-h-56 overflow-y-auto mb-4">
-                      {candidates.map((m: any) => (
-                        <button
-                          key={m.membershipId}
-                          onClick={() => setSelectedNewOwnerMembershipId(m.membershipId)}
-                          className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
-                            selectedNewOwnerMembershipId === m.membershipId
-                              ? 'bg-primary-600/20 border border-primary-500/40'
-                              : 'hover:bg-slate-800 border border-transparent'
-                          }`}
-                        >
-                          <AvatarComponent src={m.avatar} name={`${m.firstName} ${m.lastName}`} size={36} />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-white truncate">{m.firstName} {m.lastName}</p>
-                            <p className="text-xs text-slate-500 truncate">{m.profession?.name ?? '—'}</p>
-                          </div>
-                          {selectedNewOwnerMembershipId === m.membershipId && (
-                            <Check size={16} className="text-primary-400 flex-shrink-0" />
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                    <button
-                      onClick={() => transferOwnerMut.mutate()}
-                      disabled={!selectedNewOwnerMembershipId || transferOwnerMut.isPending}
-                      className="w-full py-2.5 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl text-sm font-semibold transition-colors"
-                    >
-                      {transferOwnerMut.isPending ? 'Передача...' : 'Передать права и покинуть'}
-                    </button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── Invite member modal ── */}
       {showInviteModal && (
@@ -1041,6 +1375,370 @@ export default function ArtistPage() {
             </p>
           )}
         </div>
+      )}
+
+      {/* ── Phase 5b: Add registered member modal ── */}
+      {showAddMember && (
+        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
+          <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-800 flex-shrink-0 bg-slate-900/80 backdrop-blur">
+            <button onClick={() => setShowAddMember(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors">
+              <ArrowLeft size={20} />
+            </button>
+            <h2 className="text-base font-semibold text-white flex-1">Добавить участника</h2>
+            <button
+              onClick={() => addMemberMut.mutate()}
+              disabled={!addSelectedUserId || addRoleIds.length === 0 || addMemberMut.isPending}
+              title={addRoleIds.length === 0 ? 'Выберите роль участника' : undefined}
+              className="px-4 py-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center gap-2"
+            >
+              {addMemberMut.isPending && <Loader2 size={14} className="animate-spin" />}
+              Добавить
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+            {/* Search users */}
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">1. Найдите пользователя</p>
+              <div className="relative mb-2">
+                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+                <input
+                  value={addSearch}
+                  onChange={e => { setAddSearch(e.target.value); setAddSelectedUserId(''); }}
+                  placeholder="Имя или никнейм..."
+                  className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 outline-none focus:border-primary-500"
+                />
+              </div>
+              {addSearch.trim().length < 1 ? (
+                <p className="text-xs text-slate-600 italic py-1">Начните вводить имя</p>
+              ) : searchLoading ? (
+                <div className="flex justify-center py-4"><Loader2 size={20} className="animate-spin text-slate-500" /></div>
+              ) : searchResults.length === 0 ? (
+                <p className="text-xs text-slate-600 italic py-1">Никого не найдено</p>
+              ) : (
+                <div className="space-y-1.5 max-h-56 overflow-y-auto">
+                  {searchResults.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => setAddSelectedUserId(u.id)}
+                      className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-colors text-left ${
+                        addSelectedUserId === u.id
+                          ? 'bg-primary-500/10 border-primary-500/40'
+                          : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <AvatarComponent src={u.avatar} name={`${u.lastName ?? ''} ${u.firstName ?? ''}`} size={36} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-white truncate">{u.lastName} {u.firstName}</p>
+                        {u.nickname && <p className="text-xs text-slate-500 truncate">@{u.nickname}</p>}
+                      </div>
+                      {addSelectedUserId === u.id && <CheckCircle2 size={16} className="text-primary-400 flex-shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Roles */}
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">2. Роли</p>
+              <button
+                onClick={() => setAddRolePickerOpen(true)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
+              >
+                <span className={addRoleIds.length ? 'text-white' : 'text-slate-500'}>
+                  {addRoleIds.length ? `Выбрано ролей: ${addRoleIds.length}` : 'Выбрать роли'}
+                </span>
+                <Tag size={14} className="text-slate-500" />
+              </button>
+            </div>
+
+            {/* Participation */}
+            <div>
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">3. Статус участия</p>
+              <div className="flex gap-2">
+                {([['ACTIVE_MEMBER', 'Действующий участник'], ['FORMER_MEMBER', 'Бывший участник']] as const).map(([val, label]) => (
+                  <button
+                    key={val}
+                    onClick={() => setAddParticipation(val)}
+                    className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-colors ${
+                      addParticipation === val
+                        ? 'bg-primary-500/10 border-primary-500/40 text-primary-300'
+                        : 'bg-slate-900 border-slate-800 text-slate-400'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {addFeedback && (
+              <p className="text-sm text-emerald-400 flex items-center gap-1.5"><CheckCircle2 size={15} /> {addFeedback}</p>
+            )}
+            {addMemberMut.isError && (
+              <p className="text-sm text-red-400">{(addMemberMut.error as any)?.response?.data?.error ?? 'Ошибка. Попробуйте снова.'}</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* RolePicker for add-member */}
+      {addRolePickerOpen && (
+        <RolePicker
+          context="collective"
+          value={addRoleIds}
+          onSave={(ids) => setAddRoleIds(ids)}
+          onClose={() => setAddRolePickerOpen(false)}
+          title="Роли участника"
+        />
+      )}
+
+      {/* ── Phase 5b: Invite-link (unregistered) flow ── */}
+      {showInviteLink && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="w-full max-w-sm bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800">
+              <h3 className="font-semibold text-white text-sm">Пригласить на сервис</h3>
+              <button onClick={() => setShowInviteLink(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+                <X size={16} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              {!generatedLink ? (
+                <>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Роли</p>
+                    <button
+                      onClick={() => setLinkRolePickerOpen(true)}
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
+                    >
+                      <span className={linkRoleIds.length ? 'text-white' : 'text-slate-500'}>
+                        {linkRoleIds.length ? `Выбрано ролей: ${linkRoleIds.length}` : 'Выбрать роли'}
+                      </span>
+                      <Tag size={14} className="text-slate-500" />
+                    </button>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Статус участия</p>
+                    <div className="flex gap-2">
+                      {([['ACTIVE_MEMBER', 'Действующий'], ['FORMER_MEMBER', 'Бывший']] as const).map(([val, label]) => (
+                        <button
+                          key={val}
+                          onClick={() => setLinkParticipation(val)}
+                          className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-colors ${
+                            linkParticipation === val
+                              ? 'bg-primary-500/10 border-primary-500/40 text-primary-300'
+                              : 'bg-slate-900 border-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => inviteLinkMut.mutate()}
+                    disabled={inviteLinkMut.isPending}
+                    className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                  >
+                    {inviteLinkMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
+                    Создать ссылку
+                  </button>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-slate-400">Ссылка-приглашение готова. Она привязана к выбранным ролям и не имеет срока действия.</p>
+                  <div className="flex items-center gap-2 p-2 bg-slate-800 rounded-lg">
+                    <code className="text-xs text-primary-300 truncate flex-1">{generatedLink}</code>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      if (navigator.share) {
+                        try { await navigator.share({ url: generatedLink }); } catch { /* cancelled */ }
+                      } else {
+                        try {
+                          await navigator.clipboard.writeText(generatedLink);
+                          setLinkCopied(true);
+                          setTimeout(() => setLinkCopied(false), 1500);
+                        } catch { /* ignore */ }
+                      }
+                    }}
+                    className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                  >
+                    <Share2 size={14} /> {linkCopied ? 'Скопировано' : 'Поделиться'}
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* RolePicker for invite-link */}
+      {linkRolePickerOpen && (
+        <RolePicker
+          context="collective"
+          value={linkRoleIds}
+          onSave={(ids) => setLinkRoleIds(ids)}
+          onClose={() => setLinkRolePickerOpen(false)}
+          title="Роли приглашения"
+        />
+      )}
+
+      {/* RolePicker for editing a member's roles */}
+      {roleEditMembershipId && (
+        <RolePicker
+          context="collective"
+          value={roleEditSeed}
+          onSave={(ids) => setRolesMut.mutate({ membershipId: roleEditMembershipId, roleIds: ids })}
+          onClose={() => setRoleEditMembershipId(null)}
+          title="Роли участника"
+        />
+      )}
+
+      {/* ── Phase 5b: Owner picker (transfer owner) ── */}
+      {showOwnerPicker && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="w-full max-w-sm bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800">
+              <h3 className="font-semibold text-white text-sm">Изменить владельца</h3>
+              <button onClick={() => setShowOwnerPicker(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+                <X size={16} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-4">
+              {confirmedMembers.filter((m) => !m.isOwner).length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-4">Нет других участников.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                  {confirmedMembers.filter((m) => !m.isOwner).map((m: any) => (
+                    <button
+                      key={m.membershipId}
+                      onClick={() => { setTransferOwnerUserId(m.user.id); setShowOwnerPicker(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 border border-transparent transition-colors text-left"
+                    >
+                      <AvatarComponent src={m.user.avatar} name={memberName(m)} size={36} />
+                      <span className="text-sm text-white truncate">{memberName(m)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Phase 5b: Admin picker (add admin) ── */}
+      {showAdminPicker && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
+          <div className="w-full max-w-sm bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800">
+              <h3 className="font-semibold text-white text-sm">Добавить администратора</h3>
+              <button onClick={() => setShowAdminPicker(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+                <X size={16} className="text-slate-400" />
+              </button>
+            </div>
+            <div className="p-4">
+              {confirmedMembers.filter((m) => !m.isAdmin).length === 0 ? (
+                <p className="text-sm text-slate-400 text-center py-4">Все участники уже администраторы.</p>
+              ) : (
+                <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                  {confirmedMembers.filter((m) => !m.isAdmin).map((m: any) => (
+                    <button
+                      key={m.membershipId}
+                      onClick={() => { addAdminMut.mutate(m.user.id); setShowAdminPicker(false); }}
+                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 border border-transparent transition-colors text-left"
+                    >
+                      <AvatarComponent src={m.user.avatar} name={memberName(m)} size={36} />
+                      <span className="text-sm text-white truncate">{memberName(m)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Activity status sheet */}
+      <SelectSheet
+        isOpen={activitySheetOpen}
+        onClose={() => setActivitySheetOpen(false)}
+        title="Статус активности"
+        options={ACTIVITY_OPTIONS}
+        selectedIds={currentActivity}
+        onSelect={(v) => { setActivityMut.mutate(v as any); setActivitySheetOpen(false); }}
+        mode="single"
+        searchable={false}
+        height="auto"
+      />
+
+      {/* Confirm: remove member */}
+      <ConfirmDialog
+        open={!!removeMembershipId}
+        message="Удалить участника?"
+        confirmLabel="Удалить"
+        onConfirm={() => { if (removeMembershipId) removeMember5bMut.mutate(removeMembershipId); }}
+        onCancel={() => setRemoveMembershipId(null)}
+      />
+
+      {/* Confirm: transfer owner */}
+      <ConfirmDialog
+        open={!!transferOwnerUserId}
+        message="Точно сменить владельца?"
+        confirmLabel="Да, точно сменить владельца"
+        onConfirm={() => { if (transferOwnerUserId) transferOwnerNewMut.mutate(transferOwnerUserId); }}
+        onCancel={() => setTransferOwnerUserId(null)}
+      />
+
+      {/* Confirm: remove admin */}
+      <ConfirmDialog
+        open={!!removeAdminUserId}
+        message="Точно удалить администратора?"
+        confirmLabel="Да, точно удалить администратора"
+        onConfirm={() => { if (removeAdminUserId) removeAdminMut.mutate(removeAdminUserId); }}
+        onCancel={() => setRemoveAdminUserId(null)}
+      />
+
+      {/* ── Phase 6b: Create release form ── */}
+      {showReleaseForm && id && (
+        <MediaItemForm
+          kind="release"
+          artistId={id}
+          onClose={() => setShowReleaseForm(false)}
+        />
+      )}
+
+      {/* ── Phase 6b: Create clip form ── */}
+      {showClipForm && id && (
+        <MediaItemForm
+          kind="clip"
+          artistId={id}
+          onClose={() => setShowClipForm(false)}
+        />
+      )}
+
+      {/* ── Phase 7: avatar / banner cropping ── */}
+      {cropAvatarFile && (
+        <ImageCropModal
+          file={cropAvatarFile}
+          aspect={1}
+          cropShape="round"
+          title="Аватар"
+          onCancel={() => setCropAvatarFile(null)}
+          onCropped={blob => { uploadAvatarMut.mutate(blobToFile(blob, 'avatar.jpg')); setCropAvatarFile(null); }}
+        />
+      )}
+      {cropBannerFile && (
+        <ImageCropModal
+          file={cropBannerFile}
+          aspect={3}
+          cropShape="rect"
+          title="Обложка"
+          onCancel={() => setCropBannerFile(null)}
+          onCropped={blob => { uploadBannerMut.mutate(blobToFile(blob, 'banner.jpg')); setCropBannerFile(null); }}
+        />
       )}
     </div>
   );

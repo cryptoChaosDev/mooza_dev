@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { X, Search, Plus, Check, Loader2, Music2 } from 'lucide-react';
-import { artistAPI, referenceAPI } from '../lib/api';
+import { artistAPI, roleAPI } from '../lib/api';
 import { useNavigate } from 'react-router-dom';
+import RolePicker from './RolePicker';
 
 interface Props {
   onClose: () => void;
@@ -18,19 +19,27 @@ export default function JoinArtistModal({ onClose }: Props) {
   const [selectedArtist, setSelectedArtist] = useState<{ id: string; name: string; avatar: string | null } | null>(null);
   const [notFound, setNotFound] = useState(false);
 
-  const [roleQuery, setRoleQuery] = useState('');
-  const [roleSuggestions, setRoleSuggestions] = useState<any[]>([]);
-  const [roleSearching, setRoleSearching] = useState(false);
-  const [selectedRoles, setSelectedRoles] = useState<{ id: string; name: string }[]>([]);
+  const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
+  const [rolePickerOpen, setRolePickerOpen] = useState(false);
 
   const [success, setSuccess] = useState(false);
 
   const artistDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const roleDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Roles come from the seeded role catalog (collective context).
+  const { data: collectiveRoles = [] } = useQuery({
+    queryKey: ['roles', 'collective'],
+    queryFn: async () => {
+      const { data } = await roleAPI.list('collective');
+      return (data as { category: string; roles: { id: string; name: string }[] }[]).flatMap(c => c.roles);
+    },
+  });
+  const roleNameById = new Map(collectiveRoles.map(r => [r.id, r.name]));
+  const selectedRoleNames = selectedRoleIds.map(id => roleNameById.get(id)).filter(Boolean) as string[];
 
   // Artist search
   useEffect(() => {
-    if (!artistQuery.trim() || artistQuery.trim().length < 2) {
+    if (!artistQuery.trim() || artistQuery.trim().length < 1) {
       setArtistSuggestions([]); setNotFound(false); return;
     }
     if (artistDebounce.current) clearTimeout(artistDebounce.current);
@@ -45,36 +54,12 @@ export default function JoinArtistModal({ onClose }: Props) {
     }, 300);
   }, [artistQuery]);
 
-  // Role search
-  useEffect(() => {
-    if (!roleQuery.trim() || roleQuery.trim().length < 1) {
-      setRoleSuggestions([]); return;
-    }
-    if (roleDebounce.current) clearTimeout(roleDebounce.current);
-    roleDebounce.current = setTimeout(async () => {
-      setRoleSearching(true);
-      try {
-        const { data } = await referenceAPI.getProfessions({ search: roleQuery.trim(), all: true });
-        setRoleSuggestions(data);
-      } catch { setRoleSuggestions([]); }
-      finally { setRoleSearching(false); }
-    }, 250);
-  }, [roleQuery]);
-
   const joinMut = useMutation({
-    mutationFn: () => artistAPI.requestJoin(selectedArtist!.id, selectedRoles.map(r => r.id)),
+    mutationFn: () => artistAPI.requestJoin(selectedArtist!.id, selectedRoleIds),
     onSuccess: () => setSuccess(true),
   });
 
-  const toggleRole = (role: { id: string; name: string }) => {
-    setSelectedRoles(prev =>
-      prev.some(r => r.id === role.id)
-        ? prev.filter(r => r.id !== role.id)
-        : [...prev, role]
-    );
-  };
-
-  const canSubmit = selectedArtist && selectedRoles.length > 0 && !joinMut.isPending;
+  const canSubmit = selectedArtist && selectedRoleIds.length > 0 && !joinMut.isPending;
 
   return createPortal(
     <>
@@ -162,7 +147,7 @@ export default function JoinArtistModal({ onClose }: Props) {
               )}
 
               {/* Not found */}
-              {!selectedArtist && notFound && artistQuery.trim().length >= 2 && (
+              {!selectedArtist && notFound && artistQuery.trim().length >= 1 && (
                 <div className="mt-1 bg-slate-800 border border-slate-700 rounded-2xl p-3 text-center space-y-2">
                   <p className="text-xs text-slate-500">Такого артиста не найдено</p>
                   <button
@@ -175,53 +160,29 @@ export default function JoinArtistModal({ onClose }: Props) {
               )}
             </div>
 
-            {/* Role search */}
+            {/* Role — from the seeded role catalog */}
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Роль *</label>
               <p className="text-[10px] text-slate-600 mb-1.5">Если у вас несколько ролей — укажите каждую</p>
 
-              {/* Selected roles chips */}
-              {selectedRoles.length > 0 && (
+              {selectedRoleNames.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-2">
-                  {selectedRoles.map(r => (
-                    <div key={r.id} className="flex items-center gap-1 px-2.5 py-1 bg-primary-500/10 border border-primary-500/25 rounded-xl">
-                      <span className="text-xs text-primary-300 font-medium">{r.name}</span>
-                      <button onClick={() => toggleRole(r)}><X size={11} className="text-primary-400/60 hover:text-red-400" /></button>
-                    </div>
+                  {selectedRoleNames.map(n => (
+                    <span key={n} className="px-2.5 py-1 bg-primary-500/10 border border-primary-500/25 rounded-xl text-xs text-primary-300 font-medium">{n}</span>
                   ))}
                 </div>
               )}
 
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input
-                  type="text"
-                  value={roleQuery}
-                  onChange={e => setRoleQuery(e.target.value)}
-                  placeholder="Вокал / Гитара / Барабаны"
-                  className="w-full pl-8 pr-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-500 transition-colors"
-                />
-                {roleSearching && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
-              </div>
-
-              {roleSuggestions.length > 0 && (
-                <div className="mt-1 bg-slate-800 border border-slate-700 rounded-2xl overflow-hidden max-h-40 overflow-y-auto">
-                  {roleSuggestions.map((p: any) => {
-                    const isSelected = selectedRoles.some(r => r.id === p.id);
-                    return (
-                      <button key={p.id} type="button" onClick={() => { toggleRole({ id: p.id, name: p.name }); setRoleQuery(''); setRoleSuggestions([]); }}
-                        className={`w-full flex items-center justify-between px-3 py-2.5 hover:bg-slate-700 transition-colors text-left ${isSelected ? 'bg-primary-500/10' : ''}`}>
-                        <span className="text-sm text-white">{p.name}</span>
-                        {isSelected && <Check size={14} className="text-primary-400 flex-shrink-0" />}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-
-              {roleQuery.trim().length >= 1 && !roleSearching && roleSuggestions.length === 0 && (
-                <p className="mt-1 text-xs text-slate-500 text-center py-2">Такой роли не найдено</p>
-              )}
+              <button
+                type="button"
+                onClick={() => setRolePickerOpen(true)}
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm text-left flex justify-between items-center hover:border-slate-600 transition-colors"
+              >
+                <span className={selectedRoleNames.length ? 'text-white' : 'text-slate-500'}>
+                  {selectedRoleNames.length ? `Выбрано ролей: ${selectedRoleNames.length}` : 'Выбрать роль из каталога'}
+                </span>
+                <span className="text-slate-500 text-xs">▾</span>
+              </button>
             </div>
 
             {/* Submit */}
@@ -244,6 +205,15 @@ export default function JoinArtistModal({ onClose }: Props) {
           </div>
         )}
       </div>
+      {rolePickerOpen && (
+        <RolePicker
+          context="collective"
+          value={selectedRoleIds}
+          onSave={(ids) => setSelectedRoleIds(ids)}
+          onClose={() => setRolePickerOpen(false)}
+          title="Ваша роль"
+        />
+      )}
     </>,
     document.body
   );

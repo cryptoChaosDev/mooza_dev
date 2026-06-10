@@ -11,6 +11,8 @@ import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { useAuthStore } from '../stores/authStore';
 import ConfirmDialog from '../components/ConfirmDialog';
 import DealCreateModal from '../components/DealCreateModal';
+import { DEALS_ENABLED } from '../lib/features';
+import { useAuthGate } from '../components/AuthGateModal';
 
 const STATUS_LABEL: Record<string, string> = {
   active: 'Действующая',
@@ -32,9 +34,12 @@ export default function ServicePage() {
   const showPostDialog = searchParams.get('showPostDialog') === '1';
   const me = useAuthStore(s => s.user);
   const queryClient = useQueryClient();
+  const { ensureAuth, authGateModal } = useAuthGate();
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [writingMessage, setWritingMessage] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [customText, setCustomText] = useState('');
   const [showDeal, setShowDeal] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [editName, setEditName] = useState('');
@@ -85,25 +90,22 @@ export default function ServicePage() {
     },
   });
 
-  const inquireMut = useMutation({
-    mutationFn: () => userAPI.inquireService(serviceId!),
-  });
-
   useEffect(() => {
     if (showPostDialog && us?.status === 'active') {
       setPostDialogOpen(true);
     }
   }, [showPostDialog, us?.status]);
 
-  const handleWrite = async () => {
-    if (!us?.user?.id || writingMessage) return;
+  // Open the chat with the chosen/typed first message prefilled. The contact
+  // endpoint ensures the direct conversation exists and notifies the provider
+  // even if the buyer never actually sends anything.
+  const openChatWith = async (prefill: string) => {
+    if (!serviceId || writingMessage) return;
     setWritingMessage(true);
     try {
-      const { data } = await messageAPI.resolve(us.user.id);
-      const convId = data.conversationId;
-      const prefill = `Добрый день! Хочу уточнить по услуге «${us.service?.name ?? ''}»`;
-      inquireMut.mutate();
-      navigate(`/messages/${convId}`, { state: { prefillMessage: prefill } });
+      const { data } = await messageAPI.contactService(serviceId);
+      setShowTemplates(false);
+      navigate(`/messages/${data.conversationId}`, { state: { prefillMessage: prefill } });
     } catch {
       setWritingMessage(false);
     }
@@ -327,20 +329,22 @@ export default function ServicePage() {
         {!isOwner && us.user && (
           <div className="space-y-2">
             <button
-              onClick={handleWrite}
+              onClick={() => ensureAuth(() => { setCustomText(''); setShowTemplates(true); })}
               disabled={writingMessage}
               className="w-full py-3.5 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 active:bg-primary-700 disabled:opacity-60 text-white rounded-2xl transition-colors"
             >
               {writingMessage ? <Loader2 size={16} className="animate-spin" /> : <MessageCircle size={16} />}
               Написать
             </button>
-            <button
-              onClick={() => setShowDeal(true)}
-              className="w-full py-3.5 flex items-center justify-center gap-2 text-sm font-medium border border-primary-500/40 text-primary-300 hover:bg-primary-600/10 rounded-2xl transition-colors"
-            >
-              <HandshakeIcon size={16} />
-              Оформить сделку
-            </button>
+            {DEALS_ENABLED && (
+              <button
+                onClick={() => ensureAuth(() => setShowDeal(true))}
+                className="w-full py-3.5 flex items-center justify-center gap-2 text-sm font-medium border border-primary-500/40 text-primary-300 hover:bg-primary-600/10 rounded-2xl transition-colors"
+              >
+                <HandshakeIcon size={16} />
+                Оформить сделку
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -354,6 +358,62 @@ export default function ServicePage() {
           serviceName={us.service?.name}
           onClose={() => setShowDeal(false)}
         />
+      )}
+
+      {authGateModal}
+
+      {/* First-message template chooser (bottom sheet) */}
+      {showTemplates && createPortal(
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => !writingMessage && setShowTemplates(false)} />
+          <div className="relative w-full sm:max-w-sm bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800">
+              <h3 className="text-base font-semibold text-white">Сообщение исполнителю</h3>
+              <button onClick={() => setShowTemplates(false)} disabled={writingMessage} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-2">
+              {[
+                `Добрый день! Хочу уточнить по услуге «${us.service?.name ?? ''}»`,
+                'Хочу узнать сроки',
+                'Хочу обсудить детали',
+                'Хочу заказать прямо сейчас',
+              ].map((tpl, i) => (
+                <button
+                  key={i}
+                  onClick={() => openChatWith(tpl)}
+                  disabled={writingMessage}
+                  className="w-full text-left px-4 py-3 bg-slate-800/60 hover:bg-slate-800 border border-slate-700/50 rounded-xl text-sm text-slate-200 transition-colors disabled:opacity-50"
+                >
+                  {tpl}
+                </button>
+              ))}
+
+              <div className="pt-2">
+                <label className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5 block">Или своё сообщение</label>
+                <textarea
+                  value={customText}
+                  onChange={e => setCustomText(e.target.value)}
+                  placeholder="Напишите сообщение..."
+                  rows={3}
+                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
+                />
+              </div>
+            </div>
+            <div className="px-5 pb-5">
+              <button
+                onClick={() => openChatWith(customText.trim())}
+                disabled={writingMessage}
+                className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-2xl transition-colors disabled:opacity-50"
+              >
+                {writingMessage ? <Loader2 size={15} className="animate-spin" /> : <MessageCircle size={15} />}
+                {customText.trim() ? 'Отправить своё' : 'Открыть чат'}
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       <ConfirmDialog

@@ -1,10 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
-import { Search, Loader2, X, MapPin } from 'lucide-react';
+import { useState, useRef, useEffect, useMemo } from 'react';
+import { Search, X, MapPin } from 'lucide-react';
+import { referenceAPI } from '../lib/api';
 
-interface CityResult {
-  city: string;
+interface City {
+  id: string;
+  name: string;
   country: string;
-  displayName: string;
 }
 
 interface Props {
@@ -13,79 +14,37 @@ interface Props {
   onChange: (city: string, country: string) => void;
 }
 
-async function searchCities(query: string): Promise<CityResult[]> {
-  const url = new URL('https://nominatim.openstreetmap.org/search');
-  url.searchParams.set('q', query);
-  url.searchParams.set('format', 'json');
-  url.searchParams.set('addressdetails', '1');
-  url.searchParams.set('limit', '8');
-  url.searchParams.set('accept-language', 'ru');
-  url.searchParams.set('featuretype', 'city');
-  url.searchParams.set('dedupe', '1');
+// The catalog is static — cache it across mounts so the picker is instant.
+let cachedCities: City[] | null = null;
 
-  const res = await fetch(url.toString(), {
-    headers: { 'User-Agent': 'Moooza/1.0 (moooza.ru)' },
-  });
-  const data: any[] = await res.json();
-
-  const seen = new Set<string>();
-  const results: CityResult[] = [];
-
-  for (const item of data) {
-    const addr = item.address || {};
-    const city = addr.city || addr.town || addr.village || addr.municipality || addr.county || '';
-    const country = addr.country || '';
-    if (!city || !country) continue;
-
-    const key = `${city}|${country}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    results.push({ city, country, displayName: `${city}, ${country}` });
-    if (results.length >= 6) break;
-  }
-
-  return results;
-}
-
-export default function CityPicker({ city, country, onChange }: Props) {
-  const [query, setQuery] = useState(city ? `${city}${country ? `, ${country}` : ''}` : '');
-  const [results, setResults] = useState<CityResult[]>([]);
-  const [loading, setLoading] = useState(false);
+export default function CityPicker({ city, country: _country, onChange }: Props) {
+  const [catalog, setCatalog] = useState<City[]>(cachedCities ?? []);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [query, setQuery] = useState(city || '');
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(!!city);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Sync query if city changes externally (e.g. geolocation)
   useEffect(() => {
-    if (city) {
-      setQuery(country ? `${city}, ${country}` : city);
-      setSelected(true);
-    }
-  }, [city, country]);
+    if (cachedCities) return;
+    referenceAPI.getCities()
+      .then((r) => { cachedCities = r.data; setCatalog(r.data); })
+      .catch(() => setLoadFailed(true));
+  }, []);
 
+  // Reflect an externally-set city (e.g. loaded profile).
   useEffect(() => {
-    if (selected) return; // don't search when a value is already selected
-    const q = query.trim();
-    if (q.length < 2) { setResults([]); setOpen(false); return; }
+    if (city) { setQuery(city); setSelected(true); }
+  }, [city]);
 
-    setLoading(true);
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
-      try {
-        const found = await searchCities(q);
-        setResults(found);
-        setOpen(found.length > 0);
-      } catch { setResults([]); }
-      finally { setLoading(false); }
-    }, 400);
+  const results = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return catalog.slice(0, 40);
+    return catalog.filter((c) => c.name.toLowerCase().includes(q)).slice(0, 40);
+  }, [query, catalog]);
 
-    return () => { if (timer.current) clearTimeout(timer.current); };
-  }, [query, selected]);
-
-  // Close dropdown on outside click
+  // Close dropdown on outside click.
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (
@@ -97,17 +56,16 @@ export default function CityPicker({ city, country, onChange }: Props) {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const pick = (r: CityResult) => {
-    setQuery(r.displayName);
+  const pick = (c: City) => {
+    setQuery(c.name);
     setSelected(true);
     setOpen(false);
-    onChange(r.city, r.country);
+    onChange(c.name, c.country);
   };
 
   const clear = () => {
     setQuery('');
     setSelected(false);
-    setResults([]);
     setOpen(false);
     onChange('', '');
     inputRef.current?.focus();
@@ -119,17 +77,19 @@ export default function CityPicker({ city, country, onChange }: Props) {
         <div className={`flex items-center gap-2 bg-slate-800/70 border rounded-2xl px-4 py-3.5 transition-all ${
           open ? 'border-primary-500/50 ring-2 ring-primary-500/20' : 'border-slate-700/60'
         }`}>
-          {loading
-            ? <Loader2 size={16} className="text-slate-500 flex-shrink-0 animate-spin" />
-            : selected
-              ? <MapPin size={16} className="text-primary-400 flex-shrink-0" />
-              : <Search size={16} className="text-slate-500 flex-shrink-0" />
-          }
+          {selected
+            ? <MapPin size={16} className="text-primary-400 flex-shrink-0" />
+            : <Search size={16} className="text-slate-500 flex-shrink-0" />}
           <input
             ref={inputRef}
             value={query}
-            onChange={e => { setQuery(e.target.value); setSelected(false); }}
-            onFocus={() => results.length > 0 && !selected && setOpen(true)}
+            onChange={(e) => {
+              const v = e.target.value;
+              setQuery(v); setSelected(false); setOpen(true);
+              // Degrade gracefully if the catalog failed to load — accept free text.
+              if (loadFailed) onChange(v.trim(), 'Россия');
+            }}
+            onFocus={() => setOpen(true)}
             placeholder="Начните вводить город..."
             className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
           />
@@ -140,29 +100,31 @@ export default function CityPicker({ city, country, onChange }: Props) {
           )}
         </div>
 
-        {open && results.length > 0 && (
-          <div ref={dropdownRef} className="absolute left-0 right-0 top-full mt-1.5 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl z-50 overflow-hidden">
-            {results.map((r, i) => (
+        {open && !loadFailed && (
+          <div ref={dropdownRef} className="absolute left-0 right-0 top-full mt-1.5 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl z-50 overflow-hidden max-h-64 overflow-y-auto">
+            {results.length > 0 ? results.map((c) => (
               <button
-                key={i}
+                key={c.id}
                 type="button"
-                onMouseDown={e => { e.preventDefault(); pick(r); }}
+                onMouseDown={(e) => { e.preventDefault(); pick(c); }}
                 className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-700/50 transition-colors text-left"
               >
                 <MapPin size={14} className="text-slate-500 flex-shrink-0" />
-                <div>
-                  <span className="text-sm text-white font-medium">{r.city}</span>
-                  <span className="text-xs text-slate-500 ml-2">{r.country}</span>
-                </div>
+                <span className="text-sm text-white font-medium">{c.name}</span>
+                <span className="text-xs text-slate-500 ml-auto">{c.country}</span>
               </button>
-            ))}
+            )) : (
+              <p className="px-4 py-3 text-xs text-slate-500">Город не найден в каталоге</p>
+            )}
           </div>
         )}
       </div>
 
       <p className="text-xs text-slate-500 flex items-start gap-1.5">
         <span className="text-slate-600 mt-0.5">ℹ</span>
-        Если не нашли свой город — выберите ближайший крупный
+        {loadFailed
+          ? 'Каталог временно недоступен — введите город вручную.'
+          : 'Выберите город из списка. Если вашего нет — выберите ближайший крупный.'}
       </p>
     </div>
   );

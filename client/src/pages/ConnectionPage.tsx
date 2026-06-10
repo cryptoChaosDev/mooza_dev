@@ -44,11 +44,6 @@ function TagCloud({ items, colorClass }: { items: { id: string; name: string; co
           <span className={`inline-block px-3 py-1.5 rounded-xl text-xs font-medium border ${colorClass}`}>
             {item.name}
           </span>
-          {item.count > 1 && (
-            <span className="absolute -top-2 -right-2 min-w-[18px] h-[18px] px-1 bg-slate-700 border border-slate-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
-              ×{item.count}
-            </span>
-          )}
         </div>
       ))}
     </div>
@@ -112,9 +107,6 @@ export default function ConnectionPage() {
             <Link2 size={15} className="text-primary-400 flex-shrink-0" />
             <h1 className="text-base font-bold text-white truncate">Связи с {partner?.firstName ?? '…'}</h1>
           </div>
-          {totalConns > 0 && (
-            <span className="text-xs text-slate-500 flex-shrink-0">{totalConns}</span>
-          )}
         </div>
       </div>
 
@@ -162,7 +154,6 @@ export default function ConnectionPage() {
           <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-3">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Коллеги</span>
-              <span className="text-xs text-slate-600">{colleagueConns.length}</span>
             </div>
             <TagCloud items={colleagueTags} colorClass={ROLE_COLOR.COLLEAGUE} />
           </div>
@@ -175,7 +166,6 @@ export default function ConnectionPage() {
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                 {isMe ? 'Я — исполнитель' : `${partner?.firstName ?? ''} — исполнитель`}
               </span>
-              <span className="text-xs text-slate-600">{executorConns.length}</span>
             </div>
             <TagCloud items={executorTags} colorClass={ROLE_COLOR.EXECUTOR} />
           </div>
@@ -188,7 +178,6 @@ export default function ConnectionPage() {
               <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                 {isMe ? 'Я — заказчик' : `${partner?.firstName ?? ''} — заказчик`}
               </span>
-              <span className="text-xs text-slate-600">{customerConns.length}</span>
             </div>
             <TagCloud items={customerTags} colorClass={ROLE_COLOR.CUSTOMER} />
           </div>

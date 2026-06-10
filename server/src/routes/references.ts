@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../index';
+import { yoNorm } from '../utils/search';
 
 const router = Router();
 
@@ -145,7 +146,7 @@ router.get('/professions', async (req, res) => {
         : { some: {} };
     }
     if (directionId) where.directionId = directionId as string;
-    if (search) where.name = { contains: search as string, mode: 'insensitive' };
+    if (search) where.nameNorm = { contains: yoNorm(search as string) };
 
     const professions = await prisma.profession.findMany({
       where,
@@ -186,7 +187,7 @@ router.get('/services/search', async (req, res) => {
     // Search ONLY catalog professions (those with custom filters from muza_catalog import)
     const professions = await prisma.profession.findMany({
       where: {
-        name: { contains: q, mode: 'insensitive' },
+        nameNorm: { contains: yoNorm(q) },
         customFilters: { some: {} },
       },
       include: {
@@ -395,6 +396,20 @@ router.get('/geographies', async (_req, res) => {
   }
 });
 
+// Controlled city catalog — the profile/registration picker only offers these.
+router.get('/cities', async (_req, res) => {
+  try {
+    const cities = await prisma.city.findMany({
+      orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }],
+      select: { id: true, name: true, country: true },
+    });
+    res.json(cities);
+  } catch (error) {
+    console.error('Get cities error:', error);
+    res.status(500).json({ error: 'Failed to get cities' });
+  }
+});
+
 // Get price ranges
 router.get('/price-ranges', async (_req, res) => {
   try {
@@ -486,12 +501,13 @@ router.get('/search', async (req, res) => {
     }
 
     if (query) {
+      const q = yoNorm(query as string);
       andClauses.push({
         OR: [
-          { firstName: { contains: query as string, mode: 'insensitive' } },
-          { lastName: { contains: query as string, mode: 'insensitive' } },
-          { nickname: { contains: query as string, mode: 'insensitive' } },
-          { city: { contains: query as string, mode: 'insensitive' } },
+          { firstNameNorm: { contains: q } },
+          { lastNameNorm: { contains: q } },
+          { nicknameNorm: { contains: q } },
+          { cityNorm: { contains: q } },
         ],
       });
     }
@@ -565,67 +581,111 @@ router.get('/search', async (req, res) => {
 //   sectionId        — any service in that catalog section
 //   customFilterValueIds — comma-separated CustomFilterValue ids (offering must have them)
 //   query            — matches the provider's name/city or the service name
+//   location         — comma-separated city names; offering provider must be in one of them
+//   priceMin/priceMax — numeric price range (rub); overlaps the offering's [priceFrom, priceTo]
+//   sort             — date (default, newest first) | price_asc | price_desc | rating
 router.get('/service-search', async (req, res) => {
   try {
-    const { serviceId, sectionId, customFilterValueIds, query, page = '1', limit = '20' } = req.query;
+    const { serviceId, sectionId, customFilterValueIds, query, location, priceMin, priceMax, sort, page = '1', limit = '20' } = req.query;
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
     const skip = (pageNum - 1) * limitNum;
     const cfvIds = String(customFilterValueIds || '').split(',').map(s => s.trim()).filter(Boolean);
+    const cities = String(location || '').split(',').map(s => s.trim()).filter(Boolean).map(c => yoNorm(c));
+    const priceMinNum = priceMin != null && priceMin !== '' ? parseInt(priceMin as string, 10) : null;
+    const priceMaxNum = priceMax != null && priceMax !== '' ? parseInt(priceMax as string, 10) : null;
+    const sortMode = ['date', 'price_asc', 'price_desc', 'rating'].includes(String(sort)) ? String(sort) : 'date';
 
     // Show every created/submitted offering — only hide unfinished drafts and archived ones.
     const where: any = { status: { notIn: ['draft', 'archived'] } };
     if (serviceId) where.serviceId = String(serviceId);
     if (sectionId) where.service = { sectionId: String(sectionId) };
     if (cfvIds.length) where.selectedCustomFilterValues = { some: { id: { in: cfvIds } } };
-    if (query) {
-      where.OR = [
-        { user: { firstName: { contains: String(query), mode: 'insensitive' } } },
-        { user: { lastName: { contains: String(query), mode: 'insensitive' } } },
-        { user: { city: { contains: String(query), mode: 'insensitive' } } },
-        { service: { name: { contains: String(query), mode: 'insensitive' } } },
-        { name: { contains: String(query), mode: 'insensitive' } },
+    if (cities.length) where.user = { cityNorm: { in: cities } };
+    // Price range: keep offerings whose advertised range overlaps [priceMinNum, priceMaxNum].
+    if (priceMinNum != null && !Number.isNaN(priceMinNum)) {
+      // Drop offerings that are entirely cheaper than the requested minimum.
+      where.OR = [{ priceTo: null }, { priceTo: { gte: priceMinNum } }, { priceFrom: { gte: priceMinNum } }];
+    }
+    if (priceMaxNum != null && !Number.isNaN(priceMaxNum)) {
+      // Drop offerings that are entirely more expensive than the requested maximum.
+      where.AND = [
+        ...(where.AND ?? []),
+        { OR: [{ priceFrom: null }, { priceFrom: { lte: priceMaxNum } }, { priceTo: { lte: priceMaxNum } }] },
       ];
     }
+    if (query) {
+      const q = yoNorm(String(query));
+      const queryOr = [
+        { user: { firstNameNorm: { contains: q } } },
+        { user: { lastNameNorm: { contains: q } } },
+        { user: { cityNorm: { contains: q } } },
+        { service: { nameNorm: { contains: q } } },
+        { nameNorm: { contains: q } },
+      ];
+      // If a price-min OR already exists, AND the two OR groups together.
+      if (where.OR) {
+        where.AND = [...(where.AND ?? []), { OR: where.OR }, { OR: queryOr }];
+        delete where.OR;
+      } else {
+        where.OR = queryOr;
+      }
+    }
 
-    const [items, totalCount] = await Promise.all([
-      prisma.userService.findMany({
-        where,
-        skip,
-        take: limitNum,
-        orderBy: { updatedAt: 'desc' },
-        select: {
-          id: true,
-          name: true,
-          priceFrom: true,
-          priceTo: true,
-          priceItems: true,
-          description: true,
-          user: { select: { id: true, firstName: true, lastName: true, avatar: true, city: true, isPremium: true, isVerified: true } },
-          service: { select: { id: true, name: true, section: { select: { id: true, name: true } } } },
-          profession: { select: { id: true, name: true } },
-          selectedCustomFilterValues: { select: { id: true, value: true, filter: { select: { id: true, name: true } } } },
-        },
-      }),
-      prisma.userService.count({ where }),
-    ]);
+    const select = {
+      id: true,
+      name: true,
+      priceFrom: true,
+      priceTo: true,
+      priceItems: true,
+      description: true,
+      createdAt: true,
+      user: { select: { id: true, firstName: true, lastName: true, avatar: true, city: true, isPremium: true, isVerified: true } },
+      service: { select: { id: true, name: true, section: { select: { id: true, name: true } } } },
+      profession: { select: { id: true, name: true } },
+      selectedCustomFilterValues: { select: { id: true, value: true, filter: { select: { id: true, name: true } } } },
+    } as const;
 
-    // Average rating per provider (only meaningful when count > 0).
-    const userIds = [...new Set(items.map(i => i.user?.id).filter(Boolean) as string[])];
-    const ratings = userIds.length
-      ? await prisma.review.groupBy({
-          by: ['targetId'],
-          where: { targetId: { in: userIds } },
-          _avg: { rating: true },
-          _count: { _all: true },
-        })
-      : [];
-    const ratingByUser = new Map(ratings.map(r => [r.targetId, { avg: r._avg.rating, count: r._count._all }]));
+    const totalCount = await prisma.userService.count({ where });
 
-    const results = items.map(i => ({
-      ...i,
-      user: i.user ? { ...i.user, rating: ratingByUser.get(i.user.id) ?? null } : i.user,
-    }));
+    // Compute provider ratings; needed both for "rating" sort and for display.
+    const attachRatings = async (rows: any[]) => {
+      const userIds = [...new Set(rows.map(i => i.user?.id).filter(Boolean) as string[])];
+      const ratings = userIds.length
+        ? await prisma.review.groupBy({
+            by: ['targetId'],
+            where: { targetId: { in: userIds } },
+            _avg: { rating: true },
+            _count: { _all: true },
+          })
+        : [];
+      const ratingByUser = new Map(ratings.map(r => [r.targetId, { avg: r._avg.rating, count: r._count._all }]));
+      return rows.map(i => ({
+        ...i,
+        user: i.user ? { ...i.user, rating: ratingByUser.get(i.user.id) ?? null } : i.user,
+      }));
+    };
+
+    let results: any[];
+    if (sortMode === 'rating') {
+      // Rating is computed post-query, so DB-side ordering isn't possible. Fetch all
+      // matching rows (capped), attach ratings, sort by avg rating, then paginate.
+      const all = await prisma.userService.findMany({ where, orderBy: { createdAt: 'desc' }, take: 500, select });
+      const withRatings = await attachRatings(all);
+      withRatings.sort((a, b) => {
+        const ra = a.user?.rating?.count > 0 ? Number(a.user.rating.avg) : -1;
+        const rb = b.user?.rating?.count > 0 ? Number(b.user.rating.avg) : -1;
+        return rb - ra;
+      });
+      results = withRatings.slice(skip, skip + limitNum);
+    } else {
+      const orderBy =
+        sortMode === 'price_asc' ? [{ priceFrom: { sort: 'asc', nulls: 'last' } as any }, { createdAt: 'desc' as const }]
+        : sortMode === 'price_desc' ? [{ priceFrom: { sort: 'desc', nulls: 'last' } as any }, { createdAt: 'desc' as const }]
+        : [{ createdAt: 'desc' as const }];
+      const items = await prisma.userService.findMany({ where, skip, take: limitNum, orderBy, select });
+      results = await attachRatings(items);
+    }
 
     res.json({
       results,
@@ -634,6 +694,71 @@ router.get('/service-search', async (req, res) => {
   } catch (error) {
     console.error('Service search error:', error);
     res.status(500).json({ error: 'Service search failed' });
+  }
+});
+
+// GET /api/references/service-cities — distinct provider cities for the location filter.
+//   q — optional case/ё-insensitive substring to autocomplete over.
+// → [{ name }]  (only cities that have at least one non-draft service offering)
+router.get('/service-cities', async (req, res) => {
+  try {
+    const { q } = req.query;
+    const rows = await prisma.userService.findMany({
+      where: { status: { notIn: ['draft', 'archived'] }, user: { city: { not: null } } },
+      select: { user: { select: { city: true, cityNorm: true } } },
+      distinct: ['userId'],
+      take: 2000,
+    });
+    const qn = q ? yoNorm(String(q)) : '';
+    const seen = new Set<string>();
+    const cities: string[] = [];
+    for (const r of rows) {
+      const city = r.user?.city?.trim();
+      const norm = r.user?.cityNorm ?? (city ? yoNorm(city) : '');
+      if (!city || seen.has(norm)) continue;
+      if (qn && !norm.includes(qn)) continue;
+      seen.add(norm);
+      cities.push(city);
+    }
+    cities.sort((a, b) => a.localeCompare(b, 'ru'));
+    res.json(cities.slice(0, 50).map(name => ({ name })));
+  } catch (e: any) {
+    console.error('Get service cities error:', e);
+    res.status(500).json({ error: 'Failed to get cities' });
+  }
+});
+
+// GET /api/references/people-locations — distinct user cities + countries for the
+// People-tab location filter. Searchable via ?q= (ё/е-insensitive).
+router.get('/people-locations', async (req, res) => {
+  try {
+    const { q } = req.query;
+    const rows = await prisma.user.findMany({
+      where: { OR: [{ city: { not: null } }, { country: { not: null } }] },
+      select: { city: true, cityNorm: true, country: true, countryNorm: true },
+      take: 5000,
+    });
+    const qn = q ? yoNorm(String(q)) : '';
+    const seen = new Set<string>();
+    const names: string[] = [];
+    const add = (raw?: string | null, norm?: string | null) => {
+      const name = raw?.trim();
+      if (!name) return;
+      const n = norm ?? yoNorm(name);
+      if (seen.has(n)) return;
+      if (qn && !n.includes(qn)) return;
+      seen.add(n);
+      names.push(name);
+    };
+    for (const r of rows) {
+      add(r.city, r.cityNorm);
+      add(r.country, r.countryNorm);
+    }
+    names.sort((a, b) => a.localeCompare(b, 'ru'));
+    res.json(names.slice(0, 50).map(name => ({ name })));
+  } catch (e: any) {
+    console.error('Get people locations error:', e);
+    res.status(500).json({ error: 'Failed to get locations' });
   }
 });
 
@@ -676,13 +801,30 @@ router.get('/profession-features', async (_req, res) => {
 // Get artists (with search, type filter, genres)
 router.get('/artists', async (req, res) => {
   try {
-    const { search, type } = req.query;
-    const where: any = { status: { in: ['APPROVED', 'VERIFIED'] } };
-    if (search) where.name = { contains: search as string, mode: 'insensitive' };
+    const { search, type, genre, sort } = req.query;
+    // Only verified artists are listed in the catalog.
+    const where: any = { status: 'VERIFIED' };
+    if (search) where.nameNorm = { contains: yoNorm(search as string) };
     if (type && type !== 'ALL') where.type = type as string;
+    // Genre filter: accept one or more genre ids OR names (comma-separated).
+    const genreTokens = String(genre || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (genreTokens.length) {
+      where.genres = {
+        some: {
+          OR: [
+            { genreId: { in: genreTokens } },
+            { genre: { name: { in: genreTokens } } },
+          ],
+        },
+      };
+    }
+    // Sort: alpha = name asc · date (default) = newest first.
+    const orderBy = sort === 'alpha'
+      ? { name: 'asc' as const }
+      : { createdAt: 'desc' as const };
     const artists = await prisma.artist.findMany({
       where,
-      orderBy: { name: 'asc' },
+      orderBy,
       take: 200,
       include: {
         genres: { include: { genre: { select: { id: true, name: true } } } },

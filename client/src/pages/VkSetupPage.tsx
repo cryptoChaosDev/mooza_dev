@@ -330,14 +330,14 @@ export default function VkSetupPage() {
           <Field label="Имя" required>
             <input
               value={firstName} onChange={e => setFirstName(e.target.value)}
-              placeholder="Иван" autoFocus
+              placeholder="Иван" autoFocus maxLength={20}
               className="w-full px-4 py-3.5 bg-slate-800/70 border border-slate-700/60 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 text-sm"
             />
           </Field>
           <Field label="Фамилия" required>
             <input
               value={lastName} onChange={e => setLastName(e.target.value)}
-              placeholder="Иванов"
+              placeholder="Иванов" maxLength={30}
               className="w-full px-4 py-3.5 bg-slate-800/70 border border-slate-700/60 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 text-sm"
             />
           </Field>
@@ -350,6 +350,7 @@ export default function VkSetupPage() {
               value={nickname}
               onChange={e => setNickname(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ''))}
               placeholder="username"
+              maxLength={20}
               className={`w-full pl-8 pr-10 py-3.5 bg-slate-800/70 border rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 transition-all text-sm ${
                 nicknameTaken ? 'border-red-500/60 focus:ring-red-500/30' : 'border-slate-700/60 focus:ring-primary-500/50'
               }`}

@@ -9,7 +9,7 @@ import {
   Globe, Calendar,
   Headphones, Edit3, Plus,
   FileText, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
-  Music2, Play, Pause, HandshakeIcon, Eye, Phone, Shield,
+  Music2, Play, Pause, HandshakeIcon, Eye, Phone, Shield, ChevronDown,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConnectionCard from '../components/ConnectionCard';
@@ -18,9 +18,14 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import BadgeTooltip from '../components/BadgeTooltip';
 import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
+import { limitsFor, isProActive } from '../lib/proLimits';
+import { yoNorm } from '../lib/search';
 import ShareButton from '../components/ShareButton';
 import JoinArtistModal from '../components/JoinArtistModal';
 import ReviewsBlock from '../components/ReviewsBlock';
+import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
+import ProfileProgressBar from '../components/ProfileProgressBar';
+import PublicConsentGate from '../components/PublicConsentGate';
 
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -78,8 +83,8 @@ type UserServiceEntry = {
   deadlineFrom: string;
   deadlineTo: string;
   description: string;
-  priceItems: Array<{ name: string; price: string }>;
-  status?: 'draft' | 'pending_review';
+  priceItems: Array<{ name: string; price: string; from?: boolean }>;
+  status?: 'draft' | 'active' | 'pending_review';
   professionFilters: Array<{ id: string; name: string; values: string[] }>;
   professionFilterValues: Record<string, string[]>;
 };
@@ -97,10 +102,20 @@ const emptyEntry = (): UserServiceEntry => ({
   professionFilterValues: {},
 });
 
+// Profile-field saves (hero/bio/contacts/socials/autosave) must NOT send
+// userProfessions: those rows carry per-profession filter selections that are
+// only complete when saved via handleSaveProfessions. Including the lean copy
+// here would wipe the saved filters server-side (deleteMany + recreate).
+function stripProfessions<T extends { userProfessions?: unknown }>(data: T): Omit<T, 'userProfessions'> {
+  const { userProfessions, ...rest } = data;
+  return rest;
+}
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const { logout } = useAuthStore();
+  const { logout, user } = useAuthStore();
+  const isPro = isProActive(user);
+  const proLimits = limitsFor(isPro);
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -116,9 +131,14 @@ export default function ProfilePage() {
     birthDate: '',
     birthDateVisible: false,
     contactsVisible: true,
+    contactsVisibility: 'ALL' as 'ALL' | 'REGISTERED' | 'FRIENDS',
     occupancyStatus: '' as '' | 'closed' | 'considering' | 'open',
   });
   const [showPrivacy, setShowPrivacy] = useState(false);
+
+  // Image cropping (avatar / banner) before upload
+  const [cropAvatarFile, setCropAvatarFile] = useState<File | null>(null);
+  const [cropBannerFile, setCropBannerFile] = useState<File | null>(null);
 
   const [userServices, setUserServices] = useState<UserServiceEntry[]>([]);
 
@@ -138,6 +158,28 @@ export default function ProfilePage() {
   const [pendingServiceFilters, setPendingServiceFilters] = useState<ServiceCustomFilter[]>([]);
   const [pendingServiceFilterSel, setPendingServiceFilterSel] = useState<Record<string, string[]>>({});
   const [loadingServiceDetail, setLoadingServiceDetail] = useState(false);
+  // Post-save «Поток» dialogs. `publishDialog` is shown after a NEW service is
+  // saved («Опубликовать в Потоке?»); `updateDialog` after an EXISTING one is
+  // edited («Сообщить об изменениях в Потоке?»). Both carry the saved
+  // user-service id used to deep-link into the Поток composer.
+  const [publishDialog, setPublishDialog] = useState<{ userServiceId: string | null } | null>(null);
+  const [updateDialog, setUpdateDialog] = useState<{ userServiceId: string | null } | null>(null);
+
+  // --- Accidental-close autosave (drafts) -------------------------------------
+  // If the user opens the ADD form, enters meaningful data, and then the form
+  // gets closed by navigating away / unmounting (NOT via «Отмена», «Опубликовать»
+  // or «Убрать в черновики»), we silently persist the entry as a draft.
+  // The cleanup closure captures stale state, so we mirror everything into refs.
+  const serviceFormOpenRef = useRef<'add' | number | null>(serviceFormOpen);
+  const pendingRef = useRef<UserServiceEntry>(pending);
+  const pendingServiceFilterSelRef = useRef<Record<string, string[]>>(pendingServiceFilterSel);
+  const userServicesRef = useRef<UserServiceEntry[]>([]);
+  // discardedRef: «Отмена» was pressed → never autosave.
+  // handledRef: «Опубликовать»/«Убрать в черновики» already saved → never autosave again.
+  const serviceFormDiscardedRef = useRef(false);
+  const serviceFormHandledRef = useRef(false);
+  // Guards a single autosave per form lifecycle (avoids double-save).
+  const autosaveDoneRef = useRef(false);
 
   const [editingHero, setEditingHero] = useState(false);
   const [editingBio, setEditingBio] = useState(false);
@@ -152,6 +194,49 @@ export default function ProfilePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formData]);
 
+  // Keep the autosave mirror refs in sync with the live state every render.
+  useEffect(() => { serviceFormOpenRef.current = serviceFormOpen; }, [serviceFormOpen]);
+  useEffect(() => { pendingRef.current = pending; }, [pending]);
+  useEffect(() => { pendingServiceFilterSelRef.current = pendingServiceFilterSel; }, [pendingServiceFilterSel]);
+  useEffect(() => { userServicesRef.current = userServices; }, [userServices]);
+
+  // True when the ADD form holds something worth keeping as a draft: a picked
+  // catalog service OR any non-empty name / price / description.
+  const pendingHasMeaningfulData = (p: UserServiceEntry): boolean =>
+    !!p.serviceId ||
+    p.name.trim().length > 0 ||
+    p.priceFrom.trim().length > 0 ||
+    p.priceTo.trim().length > 0 ||
+    p.description.trim().length > 0 ||
+    p.priceItems.some(it => it.name.trim().length > 0 || it.price.trim().length > 0);
+
+  // Unmount-only effect: if the page unmounts while the ADD form is open with
+  // meaningful data and the user neither cancelled nor explicitly saved, persist
+  // the entry as a draft. Fire-and-forget; never throws.
+  useEffect(() => {
+    return () => {
+      try {
+        if (serviceFormOpenRef.current !== 'add') return;          // add-only
+        if (serviceFormDiscardedRef.current) return;               // «Отмена»
+        if (serviceFormHandledRef.current) return;                 // already saved
+        if (autosaveDoneRef.current) return;                       // no double-save
+        const p = pendingRef.current;
+        if (!pendingHasMeaningfulData(p)) return;                  // no empty-save
+        autosaveDoneRef.current = true;
+        const draftEntry: UserServiceEntry = {
+          ...p,
+          customFilterValueIds: pendingServiceFilterSelRef.current,
+          status: 'draft',
+        };
+        // Fire-and-forget; swallow any rejection.
+        userAPI.updateServices([...userServicesRef.current, draftEntry] as any).catch(() => {});
+      } catch {
+        /* never throw from cleanup */
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [confirmDeleteServiceIdx, setConfirmDeleteServiceIdx] = useState<number | null>(null);
   const [confirmDeleteLinkId, setConfirmDeleteLinkId] = useState<string | null>(null);
 
@@ -164,7 +249,6 @@ export default function ProfilePage() {
   const [editingProfessions, setEditingProfessions] = useState(false);
   const [selectedProfession, setSelectedProfession] = useState<{ professionId: string; professionName: string } | null>(null);
   const [showJoinArtist, setShowJoinArtist] = useState(false);
-  const [showProModal, setShowProModal] = useState(false);
   const [profAddOpen, setProfAddOpen] = useState(false);
   const [profSearch, setProfSearch] = useState('');
   const [profSearchResults, setProfSearchResults] = useState<any[]>([]);
@@ -172,6 +256,11 @@ export default function ProfilePage() {
   const [savingProfessions, setSavingProfessions] = useState(false);
   const [profFiltersData, setProfFiltersData] = useState<Record<string, any[]>>({});
   const [profFilterSelections, setProfFilterSelections] = useState<Record<string, string[]>>({});
+  // Per-profession filter accordions are collapsed by default (profId → open filterIds).
+  const [profOpenFilters, setProfOpenFilters] = useState<Record<string, Set<string>>>({});
+  // Editable profession features (profId → selected feature names) + the catalog.
+  const [profFeatures, setProfFeatures] = useState<Record<string, string[]>>({});
+  const [allFeatures, setAllFeatures] = useState<{ id: string; name: string }[]>([]);
 
 
   // Flat profession search (Task 1)
@@ -200,6 +289,12 @@ export default function ProfilePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingProfessions, myStandaloneProfessions]);
 
+  // Load the global profession-features catalog once, when the editor opens.
+  useEffect(() => {
+    if (!editingProfessions || allFeatures.length) return;
+    referenceAPI.getProfessionFeatures().then(r => setAllFeatures(r.data)).catch(() => {});
+  }, [editingProfessions, allFeatures.length]);
+
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],
     queryFn: async () => {
@@ -219,6 +314,7 @@ export default function ProfilePage() {
         birthDate: data.birthDate ? new Date(data.birthDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
         birthDateVisible: !!data.birthDateVisible,
         contactsVisible: data.contactsVisible !== false,
+        contactsVisibility: (['ALL', 'REGISTERED', 'FRIENDS'].includes(data.contactsVisibility) ? data.contactsVisibility : 'ALL') as 'ALL' | 'REGISTERED' | 'FRIENDS',
         occupancyStatus: data.occupancyStatus || '',
       });
       setMyStandaloneProfessions(
@@ -229,10 +325,13 @@ export default function ProfilePage() {
       );
       if (data.userProfessions) {
         const selections: Record<string, string[]> = {};
+        const feats: Record<string, string[]> = {};
         data.userProfessions.forEach((up: any) => {
           selections[up.professionId] = up.selectedCustomFilterValues?.map((cfv: any) => cfv.id) || [];
+          feats[up.professionId] = up.features || [];
         });
         setProfFilterSelections(selections);
+        setProfFeatures(feats);
       }
       setPortfolioFiles(data.portfolioFiles ?? []);
       setPortfolioLinks(data.portfolioLinks ?? []);
@@ -283,7 +382,6 @@ export default function ProfilePage() {
     queryFn: async () => { const { data } = await dealAPI.getAll(); return data as any[]; },
   });
   const activeDeals = myDeals.filter((d: any) => !['COMPLETED', 'CANCELLED'].includes(d.status));
-  const totalDeals = myDeals.length;
 
   // One entry per unique partner
   const myConnPartners = Array.from(
@@ -329,7 +427,7 @@ export default function ProfilePage() {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(async () => {
       try {
-        await userAPI.updateMe(data);
+        await userAPI.updateMe(stripProfessions(data));
         setAutoSaved(true);
         setTimeout(() => setAutoSaved(false), 2000);
       } catch {}
@@ -367,12 +465,12 @@ export default function ProfilePage() {
     const birthDateISO = bd.length === 10
       ? `${bd.slice(6)}-${bd.slice(3, 5)}-${bd.slice(0, 2)}`
       : undefined;
-    try { await updateMutation.mutateAsync({ ...formData, birthDate: birthDateISO ?? null }); }
+    try { await updateMutation.mutateAsync({ ...stripProfessions(formData), birthDate: birthDateISO ?? null }); }
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingHero(false); }
   };
 
   const handleSaveBio = async () => {
-    try { await updateMutation.mutateAsync(formData); }
+    try { await updateMutation.mutateAsync(stripProfessions(formData)); }
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingBio(false); }
   };
 
@@ -391,12 +489,12 @@ export default function ProfilePage() {
   };
 
   const handleSaveContacts = async () => {
-    try { await updateMutation.mutateAsync(formData); }
+    try { await updateMutation.mutateAsync(stripProfessions(formData)); }
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingContacts(false); }
   };
 
   const handleSaveSocials = async () => {
-    try { await updateMutation.mutateAsync(formData); }
+    try { await updateMutation.mutateAsync(stripProfessions(formData)); }
     finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingSocials(false); }
   };
 
@@ -424,12 +522,29 @@ export default function ProfilePage() {
     });
   };
 
+  const toggleProfFilterOpen = (profId: string, filterId: string) => {
+    setProfOpenFilters(prev => {
+      const cur = new Set(prev[profId] || []);
+      if (cur.has(filterId)) cur.delete(filterId); else cur.add(filterId);
+      return { ...prev, [profId]: cur };
+    });
+  };
+
+  const toggleProfFeature = (profId: string, name: string) => {
+    setProfFeatures(prev => {
+      const cur = prev[profId] || [];
+      const next = cur.includes(name) ? cur.filter(f => f !== name) : [...cur, name];
+      return { ...prev, [profId]: next };
+    });
+  };
+
   const handleSaveProfessions = async (list: { professionId: string; professionName: string }[]) => {
     setSavingProfessions(true);
     try {
       await updateMutation.mutateAsync({
         userProfessions: list.map(p => ({
           professionId: p.professionId,
+          features: profFeatures[p.professionId] || [],
           selectedCustomFilterValueIds: profFilterSelections[p.professionId] || [],
         })),
       });
@@ -519,15 +634,24 @@ export default function ProfilePage() {
     });
   };
 
-  // Price-list row helpers (composite name + price rows).
-  const addPriceItem = () => setPending(prev => ({ ...prev, priceItems: [...prev.priceItems, { name: '', price: '' }] }));
-  const updatePriceItem = (i: number, patch: Partial<{ name: string; price: string }>) =>
+  // Price-list row helpers (composite name + price rows). A row's price may be a
+  // concrete number or the «от [сумма]» format (toggled per row via `from`).
+  const addPriceItem = () => setPending(prev => ({ ...prev, priceItems: [...prev.priceItems, { name: '', price: '', from: false }] }));
+  const updatePriceItem = (i: number, patch: Partial<{ name: string; price: string; from: boolean }>) =>
     setPending(prev => ({ ...prev, priceItems: prev.priceItems.map((it, idx) => idx === i ? { ...it, ...patch } : it) }));
   const removePriceItem = (i: number) =>
     setPending(prev => ({ ...prev, priceItems: prev.priceItems.filter((_, idx) => idx !== i) }));
 
+  // Reset the autosave flags for a fresh form lifecycle.
+  const resetServiceFormFlags = () => {
+    serviceFormDiscardedRef.current = false;
+    serviceFormHandledRef.current = false;
+    autosaveDoneRef.current = false;
+  };
+
   // Open the form to ADD a brand-new service.
   const openAddServiceForm = () => {
+    resetServiceFormFlags();
     setPending(emptyEntry());
     setPendingServiceFilters([]);
     setPendingServiceFilterSel({});
@@ -538,6 +662,7 @@ export default function ProfilePage() {
   // Open the form to EDIT an existing service entry: hydrate pending + load its
   // filters, mapping already-selected value ids back into the selection map.
   const openEditServiceForm = async (idx: number) => {
+    resetServiceFormFlags();
     const entry = userServices[idx];
     setPending({ ...entry });
     setPendingServiceFilters([]);
@@ -567,19 +692,37 @@ export default function ProfilePage() {
 
   // Commit the comprehensive form: build the full entry and append (add) or
   // replace (edit). Persists immediately via the existing services mutation.
-  const commitServiceForm = async () => {
+  // mode 'publish' → status 'active', then shows the Поток publish/update dialog.
+  // mode 'draft'   → status 'draft', NO Поток dialog (drafts skip Поток).
+  const commitServiceForm = async (mode: 'publish' | 'draft') => {
     const entry: UserServiceEntry = {
       ...pending,
       customFilterValueIds: pendingServiceFilterSel,
-      status: pending.status ?? 'pending_review',
+      status: mode === 'draft' ? 'draft' : 'active',
     };
-    const next = serviceFormOpen === 'add'
+    const isAdd = serviceFormOpen === 'add';
+    const next = isAdd
       ? [...userServices, entry]
       : userServices.map((us, i) => (i === serviceFormOpen ? entry : us));
+    // Mark as explicitly handled so the unmount autosave never duplicates it.
+    serviceFormHandledRef.current = true;
+    autosaveDoneRef.current = true;
     setUserServices(next);
     closeServiceForm();
-    try { await updateServicesMutation.mutateAsync(next); }
-    finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); }
+    try {
+      const { data } = await updateServicesMutation.mutateAsync(next);
+      if (mode === 'draft') return; // drafts skip the Поток dialogs entirely
+      // The server returns the full user-services list (each with its own id).
+      // Resolve the just-saved service by catalog serviceId to deep-link Поток.
+      const saved = Array.isArray(data)
+        ? data.find((s: any) => s.serviceId === entry.serviceId || s.service?.id === entry.serviceId)
+        : null;
+      const userServiceId = saved?.id ?? null;
+      if (isAdd) setPublishDialog({ userServiceId });
+      else setUpdateDialog({ userServiceId });
+    } finally {
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    }
   };
 
   const handleDeleteService = async (idx: number) => {
@@ -587,6 +730,26 @@ export default function ProfilePage() {
     setUserServices(newServices);
     await updateServicesMutation.mutateAsync(newServices);
     queryClient.invalidateQueries({ queryKey: ['profile'] });
+  };
+
+  // ── Consent to public distribution of PD (152-ФЗ ст. 10.1) ──────────────────
+  // One-time gate before the first public action (publish service / upload
+  // portfolio / set contacts to «Все»). MUST stay above the isLoading return —
+  // these are hooks and run on every render.
+  const [consentAction, setConsentAction] = useState<(() => void) | null>(null);
+  const [locallyConsented, setLocallyConsented] = useState(false);
+  const hasPublicConsent = !!(profile as any)?.publicConsentAt || locallyConsented;
+  const ensurePublicConsent = (action: () => void) => {
+    if (hasPublicConsent) { action(); return; }
+    setConsentAction(() => action);
+  };
+  const handleConsentAccept = async () => {
+    try { await userAPI.givePublicConsent(); } catch { /* recorded best-effort */ }
+    setLocallyConsented(true);
+    queryClient.invalidateQueries({ queryKey: ['profile'] });
+    const action = consentAction;
+    setConsentAction(null);
+    action?.();
   };
 
   if (isLoading) {
@@ -617,17 +780,22 @@ export default function ProfilePage() {
   );
 
 
-  const handlePortfolioUpload = async (files: FileList | null) => {
+  const handlePortfolioUpload = (files: FileList | null) => {
     if (!files) return;
-    for (const file of Array.from(files)) {
-      if (portfolioFiles.length >= 5) break;
-      const fd = new FormData();
-      fd.append('file', file);
-      setIsUploadingPortfolio(true);
-      try { const { data } = await userAPI.uploadPortfolio(fd); setPortfolioFiles(prev => [...prev, data]); }
-      catch { /* ignore */ }
-      finally { setIsUploadingPortfolio(false); }
-    }
+    // Publishing portfolio is a public action — gate on first-time consent.
+    ensurePublicConsent(async () => {
+      for (const file of Array.from(files)) {
+        if (portfolioFiles.length >= proLimits.portfolioFiles) break;
+        // Reflect the server's effective per-file size cap before uploading.
+        if (file.size > proLimits.portfolioFileMB * 1024 * 1024) continue;
+        const fd = new FormData();
+        fd.append('file', file);
+        setIsUploadingPortfolio(true);
+        try { const { data } = await userAPI.uploadPortfolio(fd); setPortfolioFiles(prev => [...prev, data]); }
+        catch { /* ignore */ }
+        finally { setIsUploadingPortfolio(false); }
+      }
+    });
   };
 
   const handlePortfolioDelete = async (fileId: string) => {
@@ -656,10 +824,10 @@ export default function ProfilePage() {
     // (убирает минус, точку, «e» и прочее, что допускает type=number).
     const onlyDigits = (v: string) => v.replace(/[^\d]/g, '');
 
-    const query = catalogSearch.trim().toLowerCase();
+    const query = yoNorm(catalogSearch.trim());
     const matches = query
       ? catalogServices
-          .filter(s => s.name.toLowerCase().includes(query))
+          .filter(s => yoNorm(s.name).includes(query))
           .filter(s => !userServices.some((us, i) => us.serviceId === s.id && i !== serviceFormOpen))
           .slice(0, 12)
       : [];
@@ -806,6 +974,10 @@ export default function ProfilePage() {
             </div>
           </div>
           {priceInvalid && <p className="text-[11px] text-red-400 mt-1">«Стоимость от» не может быть больше «Стоимость до»</p>}
+          <p className="text-[11px] text-slate-500 mt-1">Не забудьте учесть комиссию сервиса.</p>
+          {pending.priceFrom === '' && pending.priceTo === '' && (
+            <p className="text-[11px] text-slate-500 mt-0.5">Если оставить пустым, стоимость будет указана как «По договорённости».</p>
+          )}
         </div>
 
         {/* 6 — Прайс-лист */}
@@ -813,10 +985,21 @@ export default function ProfilePage() {
           <label className={labelCls}>Прайс-лист</label>
           <div className="space-y-2">
             {pending.priceItems.map((item, i) => (
-              <div key={i} className="grid grid-cols-[1fr_6.5rem_auto] gap-2 items-center">
-                <input type="text" value={item.name}
+              <div key={i} className="grid grid-cols-[1fr_auto_6.5rem_auto] gap-2 items-center">
+                <input type="text" value={item.name} maxLength={100}
                   onChange={e => updatePriceItem(i, { name: e.target.value })}
                   placeholder="Название позиции" className={`${inputCls} min-w-0`} />
+                {/* «от» toggle: when on, the price is shown as «от [сумма]». */}
+                <button type="button"
+                  onClick={() => updatePriceItem(i, { from: !item.from })}
+                  aria-pressed={!!item.from}
+                  className={`px-2.5 py-2.5 rounded-xl text-xs font-medium border transition-all flex-shrink-0 ${
+                    item.from
+                      ? 'bg-primary-600 border-primary-500 text-white'
+                      : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:border-primary-500/40'
+                  }`}>
+                  от
+                </button>
                 <input type="number" inputMode="numeric" min={0} value={item.price}
                   onChange={e => updatePriceItem(i, { price: onlyDigits(e.target.value) })}
                   placeholder="Цена ₽" className={`${inputCls} min-w-0 text-center`} />
@@ -831,6 +1014,7 @@ export default function ProfilePage() {
               <Plus size={13} />Добавить позицию
             </button>
           </div>
+          <p className="text-[11px] text-slate-500 mt-1.5">Не забудьте учесть комиссию сервиса.</p>
         </div>
 
         {/* 7 — Срок исполнения */}
@@ -850,6 +1034,7 @@ export default function ProfilePage() {
             </div>
           </div>
           {deadlineInvalid && <p className="text-[11px] text-red-400 mt-1">«Срок от» не может быть больше «Срок до»</p>}
+          <p className="text-[11px] text-slate-500 mt-1">Укажите срок в днях.</p>
         </div>
 
         {/* 8 — Описание */}
@@ -860,15 +1045,22 @@ export default function ProfilePage() {
             placeholder="Опишите услугу..." className={`${inputCls} resize-none`} />
         </div>
 
-        <div className="flex gap-2 pt-1">
-          <button onClick={closeServiceForm}
+        <div className="flex flex-wrap gap-2 pt-1">
+          <button
+            onClick={() => { serviceFormDiscardedRef.current = true; closeServiceForm(); }}
             className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors flex-shrink-0">
             Отмена
           </button>
           <button
-            onClick={commitServiceForm}
+            onClick={() => commitServiceForm('draft')}
             disabled={!canSave || updateServicesMutation.isPending}
-            className="flex-1 py-2 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
+            className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 text-sm font-medium transition-colors flex-shrink-0">
+            В черновики
+          </button>
+          <button
+            onClick={() => ensurePublicConsent(() => commitServiceForm('publish'))}
+            disabled={!canSave || updateServicesMutation.isPending}
+            className="flex-1 min-w-[8rem] py-2 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
           >
             {updateServicesMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             {isEdit ? 'Сохранить изменения' : 'Добавить услугу'}
@@ -895,6 +1087,8 @@ export default function ProfilePage() {
   const audioFiles = portfolioFiles.filter((f: any) => f.mimeType?.startsWith('audio/'));
   const imageFiles = portfolioFiles.filter((f: any) => f.mimeType?.startsWith('image/'));
   const otherFiles = portfolioFiles.filter((f: any) => !f.mimeType?.startsWith('audio/') && !f.mimeType?.startsWith('image/'));
+  // At/over the effective portfolio file-count cap (Free 10 / Pro 20).
+  const portfolioFull = portfolioFiles.length >= proLimits.portfolioFiles;
 
   return (
     <>
@@ -920,7 +1114,19 @@ export default function ProfilePage() {
             <Camera size={12} />Сменить фон
           </button>
           <input ref={bannerInputRef} type="file" accept="image/*" className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) uploadBannerMutation.mutate(f); e.target.value = ''; }} />
+            onChange={e => {
+              const f = e.target.files?.[0];
+              if (f) {
+                // GIF cover is Pro-only; for Pro, skip cropping (would lose animation) and upload directly.
+                if (f.type === 'image/gif') {
+                  if (isPro) uploadBannerMutation.mutate(f);
+                  else window.alert('GIF-обложка доступна в Pro');
+                } else {
+                  setCropBannerFile(f);
+                }
+              }
+              e.target.value = '';
+            }} />
         </div>
 
         <div className="px-4">
@@ -939,13 +1145,25 @@ export default function ProfilePage() {
                 <Camera size={13} />
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
-                onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatarMutation.mutate(f); e.target.value = ''; }} />
+                onChange={e => {
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    // GIF avatar is Pro-only; for Pro, skip cropping (would lose animation) and upload directly.
+                    if (f.type === 'image/gif') {
+                      if (isPro) uploadAvatarMutation.mutate(f);
+                      else window.alert('GIF-аватар доступен в Pro');
+                    } else {
+                      setCropAvatarFile(f);
+                    }
+                  }
+                  e.target.value = '';
+                }} />
             </div>
             <div className="flex items-center gap-2 mb-1">
               <ShareButton
                 url={`/profile/${profile?.id}`}
                 title={`${profile?.firstName} ${profile?.lastName} — Moooza`}
-                text={profile?.bio?.slice(0, 100)}
+                text={profile?.bio?.slice(0, proLimits.bioChars)}
                 className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
                 iconSize={16}
               />
@@ -984,16 +1202,16 @@ export default function ProfilePage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Имя</label>
-                  <input type="text" value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} className={inputCls} placeholder="Имя" />
+                  <input type="text" maxLength={20} value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} className={inputCls} placeholder="Имя" />
                 </div>
                 <div>
                   <label className={labelCls}>Фамилия</label>
-                  <input type="text" value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} className={inputCls} placeholder="Фамилия" />
+                  <input type="text" maxLength={30} value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} className={inputCls} placeholder="Фамилия" />
                 </div>
               </div>
               <div>
                 <label className={labelCls}>Никнейм</label>
-                <input type="text" value={formData.nickname} onChange={e => setFormData({ ...formData, nickname: e.target.value })} placeholder="@nickname" className={inputCls} />
+                <input type="text" maxLength={20} value={formData.nickname} onChange={e => setFormData({ ...formData, nickname: e.target.value })} placeholder="@nickname" className={inputCls} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1063,12 +1281,7 @@ export default function ProfilePage() {
             <>
               <div className="flex items-center gap-2 flex-wrap mb-0.5">
                 <h1 className="text-2xl font-bold text-white leading-tight">{profile?.firstName} {profile?.lastName}</h1>
-                {profile?.isPro
-                  ? <BadgeTooltip label="PRO аккаунт"><Zap size={18} className="text-violet-400" /></BadgeTooltip>
-                  : <button onClick={() => setShowProModal(true)} className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold border border-violet-500/30 text-violet-400/60 hover:text-violet-400 hover:border-violet-500/60 rounded-lg transition-colors">
-                      <Zap size={11} />PRO
-                    </button>
-                }
+                {isPro && <BadgeTooltip label="PRO аккаунт"><Zap size={18} className="text-violet-400" /></BadgeTooltip>}
                 {profile?.isPremium && <BadgeTooltip label="Premium"><Crown size={18} className="text-amber-400" /></BadgeTooltip>}
                 {profile?.isVerified && <BadgeTooltip label="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></BadgeTooltip>}
                 {(profile?._count?.referrals ?? 0) >= 100 && <BadgeTooltip label="Амбасадор Moooza"><Star size={18} className="text-orange-400" /></BadgeTooltip>}
@@ -1100,28 +1313,20 @@ export default function ProfilePage() {
                    '🔴 Не беру заказы'}
                 </span>
               )}
-              {/* ── Stats row ── */}
-              <div className="grid grid-cols-2 divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
-                <button onClick={() => navigate('/friends?tab=connections')} className="flex flex-col items-center py-1.5 px-1 hover:bg-slate-800/40 transition-colors">
-                  <span className="text-sm font-bold text-white">{myConnPartners.length}</span>
-                  <span className="text-[9px] text-slate-500">Связи</span>
-                </button>
-                <button onClick={() => navigate('/deals')} className="flex flex-col items-center py-1.5 px-1 hover:bg-slate-800/40 transition-colors">
-                  <span className="text-sm font-bold text-white">{totalDeals}</span>
-                  <span className="text-[9px] text-slate-500">Сделки</span>
-                </button>
-              </div>
             </>
           )}
 
           {/* ── CONTENT CARDS ────────────────────────────────────────────────── */}
           <div className="space-y-3">
 
+            {/* Profile completion meter (own profile only) */}
+            <ProfileProgressBar profile={profile} />
+
             {/* Bio */}
             {editingBio ? (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-2">
-                <textarea value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} maxLength={100} rows={3} placeholder="Расскажите о себе..." className={`${inputCls} resize-none`} />
-                <p className="text-right text-[11px] text-slate-600">{formData.bio.length}/100</p>
+                <textarea value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} maxLength={proLimits.bioChars} rows={3} placeholder="Расскажите о себе..." className={`${inputCls} resize-none`} />
+                <p className="text-right text-[11px] text-slate-600">{formData.bio.length}/{proLimits.bioChars}</p>
                 <div className="flex gap-2">
                   <button onClick={() => setEditingBio(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
                   <button onClick={handleSaveBio} disabled={updateMutation.isPending} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
@@ -1140,6 +1345,31 @@ export default function ProfilePage() {
                 <button onClick={() => setEditingBio(true)} className="p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800 flex-shrink-0 mt-0.5"><Edit3 size={13} /></button>
               </div>
             )}
+
+            {/* ── Moooza Pro ── */}
+            <button
+              onClick={() => navigate('/pro')}
+              className={`w-full flex items-center gap-3 rounded-2xl p-4 text-left transition-colors border ${
+                isPro
+                  ? 'bg-violet-500/10 border-violet-500/25 hover:bg-violet-500/15'
+                  : 'bg-gradient-to-r from-violet-600/15 to-violet-500/5 border-violet-500/25 hover:border-violet-500/50'
+              }`}
+            >
+              <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center flex-shrink-0">
+                <Zap size={20} className="text-violet-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-white">{isPro ? 'Moooza Pro активен' : 'Moooza Pro'}</p>
+                <p className="text-xs text-slate-400 truncate">
+                  {isPro
+                    ? (user?.proUntil
+                        ? `до ${new Date(user.proUntil).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                        : 'Спасибо, что поддерживаешь Moooza 🎵')
+                    : 'Больше портфолио, расширенный профиль, GIF-аватар, пресеты ленты'}
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-violet-400 flex-shrink-0">{isPro ? 'Управлять' : 'Поддержать →'}</span>
+            </button>
 
             {/* ── Collectives tile slider ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
@@ -1163,7 +1393,7 @@ export default function ProfilePage() {
                   return (
                     <button
                       key={g.id}
-                      onClick={() => navigate('/groups/' + g.id)}
+                      onClick={() => navigate('/artist/' + g.id)}
                       className="flex flex-col gap-1.5 flex-shrink-0 text-left group"
                       style={{ width: 'calc((100% - 24px) / 3.5)' }}
                     >
@@ -1210,34 +1440,79 @@ export default function ProfilePage() {
                               <X size={12} />
                             </button>
                           </div>
-                          {/* Filters always expanded for easy multi-select */}
+                          {/* Each filter is a collapsible accordion — collapsed by default. */}
                           {!profFiltersData[p.professionId] && (
                             <p className="text-[10px] text-slate-600 mt-1.5">Загрузка параметров...</p>
                           )}
-                          {profFiltersData[p.professionId]?.length > 0 && (
-                            <div className="mt-2 space-y-2">
-                              {profFiltersData[p.professionId].map((filter: any) => (
-                                <div key={filter.id}>
-                                  <p className="text-xs text-slate-500 mb-1">{filter.name}</p>
-                                  <div className="flex flex-wrap gap-1.5">
-                                    {filter.values.map((v: any) => {
-                                      const isSelected = profFilterSelections[p.professionId]?.includes(v.id);
-                                      return (
-                                        <button key={v.id} type="button"
-                                          onClick={() => toggleProfFilterValue(p.professionId, v.id)}
-                                          className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
-                                            isSelected ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                                          }`}>
-                                          {v.value}
-                                        </button>
-                                      );
-                                    })}
+                          {(profFiltersData[p.professionId]?.length > 0 || allFeatures.length > 0) && (
+                            <div className="mt-2">
+                              {(profFiltersData[p.professionId] || []).map((filter: any) => {
+                                const sel = profFilterSelections[p.professionId] || [];
+                                const selCount = filter.values.filter((v: any) => sel.includes(v.id)).length;
+                                const open = profOpenFilters[p.professionId]?.has(filter.id);
+                                return (
+                                  <div key={filter.id} className="border-b border-slate-800/60 last:border-0">
+                                    <button type="button"
+                                      onClick={() => toggleProfFilterOpen(p.professionId, filter.id)}
+                                      className="w-full flex items-center gap-1.5 py-1.5 text-left">
+                                      <span className="text-xs text-slate-400 flex-1">{filter.name}</span>
+                                      {selCount > 0 && <span className="text-[10px] bg-primary-600/80 text-white px-1.5 py-0.5 rounded-full">{selCount}</span>}
+                                      <ChevronDown size={13} className={`text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    {open && (
+                                      <div className="flex flex-wrap gap-1.5 pb-2">
+                                        {filter.values.map((v: any) => {
+                                          const isSelected = sel.includes(v.id);
+                                          return (
+                                            <button key={v.id} type="button"
+                                              onClick={() => toggleProfFilterValue(p.professionId, v.id)}
+                                              className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
+                                                isSelected ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                              }`}>
+                                              {v.value}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
+                              {/* Profession features (e.g. «Начинающий», «Платно») — collapsible. */}
+                              {allFeatures.length > 0 && (() => {
+                                const selF = profFeatures[p.professionId] || [];
+                                const open = profOpenFilters[p.professionId]?.has('__features__');
+                                return (
+                                  <div className="border-b border-slate-800/60 last:border-0">
+                                    <button type="button"
+                                      onClick={() => toggleProfFilterOpen(p.professionId, '__features__')}
+                                      className="w-full flex items-center gap-1.5 py-1.5 text-left">
+                                      <span className="text-xs text-slate-400 flex-1">Особенности</span>
+                                      {selF.length > 0 && <span className="text-[10px] bg-primary-600/80 text-white px-1.5 py-0.5 rounded-full">{selF.length}</span>}
+                                      <ChevronDown size={13} className={`text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+                                    </button>
+                                    {open && (
+                                      <div className="flex flex-wrap gap-1.5 pb-2">
+                                        {allFeatures.map((f) => {
+                                          const isSelected = selF.includes(f.name);
+                                          return (
+                                            <button key={f.id} type="button"
+                                              onClick={() => toggleProfFeature(p.professionId, f.name)}
+                                              className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
+                                                isSelected ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                              }`}>
+                                              {f.name}
+                                            </button>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           )}
-                          {profFiltersData[p.professionId]?.length === 0 && (
+                          {profFiltersData[p.professionId]?.length === 0 && allFeatures.length === 0 && (
                             <p className="text-[10px] text-slate-600 mt-1.5">Нет параметров для этой профессии</p>
                           )}
                         </div>
@@ -1405,7 +1680,6 @@ export default function ProfilePage() {
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <HandshakeIcon size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Мои сделки</span>
-                {totalDeals > 0 && <span className="text-xs text-slate-500">{totalDeals}</span>}
                 <button onClick={() => navigate('/deals')} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
                   Смотреть все
                 </button>
@@ -1452,7 +1726,6 @@ export default function ProfilePage() {
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <Link2 size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Связи</span>
-                {myConnPartners.length > 0 && <span className="text-xs text-slate-500">{myConnPartners.length}</span>}
                 {myConnPartners.length > 3 && profile?.id && (
                   <button onClick={() => navigate(`/profile/${profile.id}/connections`)} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
                     Смотреть все
@@ -1494,16 +1767,20 @@ export default function ProfilePage() {
                   <button key={tab.key} onClick={() => setPortfolioTab(tab.key)}
                     className={`flex-1 py-2 text-xs font-medium transition-colors relative ${portfolioTab === tab.key ? 'text-primary-400' : 'text-slate-500 hover:text-slate-300'}`}>
                     {tab.label}
-                    {tab.count > 0 && <span className="ml-1 text-[10px] opacity-70">{tab.count}</span>}
                     {portfolioTab === tab.key && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary-500 rounded-full" />}
                   </button>
                 ))}
               </div>
               {/* Hint */}
               <div className="px-4 pt-2 pb-0">
-                {portfolioTab === 'audio' && <p className="text-[10px] text-slate-600">до 20 МБ · mp3, wav, flac, ogg</p>}
-                {portfolioTab === 'images' && <p className="text-[10px] text-slate-600">до 20 МБ · jpg, png, gif, webp</p>}
-                {portfolioTab === 'other' && <p className="text-[10px] text-slate-600">до 20 МБ · pdf, doc, xls</p>}
+                {portfolioTab === 'audio' && <p className="text-[10px] text-slate-600">до {proLimits.portfolioFileMB} МБ · mp3, wav, flac, ogg</p>}
+                {portfolioTab === 'images' && <p className="text-[10px] text-slate-600">до {proLimits.portfolioFileMB} МБ · jpg, png, gif, webp</p>}
+                {portfolioTab === 'other' && <p className="text-[10px] text-slate-600">до {proLimits.portfolioFileMB} МБ · pdf, doc, xls</p>}
+                {portfolioFiles.length >= proLimits.portfolioFiles && (
+                  <p className="text-[10px] text-amber-400/80 mt-0.5">
+                    Достигнут лимит файлов ({proLimits.portfolioFiles}){!isPro && ' · больше — в Pro'}
+                  </p>
+                )}
               </div>
               {/* Content */}
               <div className="px-4 py-3">
@@ -1514,12 +1791,12 @@ export default function ProfilePage() {
                     <p className="text-[11px] text-slate-400 leading-relaxed">Загружая файл, ты подтверждаешь, что у тебя есть права на его использование. Не заливай чужой контент без разрешения — можем удалить и ограничить доступ.</p>
                   </div>
                   <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                    <label className="flex flex-col gap-1 flex-shrink-0 cursor-pointer group w-16">
+                    <label className={`flex flex-col gap-1 flex-shrink-0 group w-16 ${portfolioFull ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
                       <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
                         {isUploadingPortfolio ? <Loader2 size={14} className="text-slate-500 animate-spin" /> : <Plus size={16} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
                       </div>
                       <span className="text-[9px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
-                      <input type="file" accept=".mp3,.wav,.ogg,.flac,.aac,.m4a,audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/flac,audio/aac,audio/x-m4a,audio/mp4" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+                      <input type="file" accept=".mp3,.wav,.ogg,.flac,.aac,.m4a,audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/flac,audio/aac,audio/x-m4a,audio/mp4" multiple className="hidden" disabled={isUploadingPortfolio || portfolioFull} onChange={e => handlePortfolioUpload(e.target.files)} />
                     </label>
                     {audioFiles.map((f: any) => (
                       <AudioTile key={f.id} url={`${API_URL}${f.url}`} title={f.originalName} onDelete={() => handlePortfolioDelete(f.id)} />
@@ -1532,12 +1809,12 @@ export default function ProfilePage() {
                 )}
                 {portfolioTab === 'images' && (
                   <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                    <label className="flex flex-col gap-1 flex-shrink-0 cursor-pointer group w-16">
+                    <label className={`flex flex-col gap-1 flex-shrink-0 group w-16 ${portfolioFull ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
                       <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
                         {isUploadingPortfolio ? <Loader2 size={14} className="text-slate-500 animate-spin" /> : <Plus size={16} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
                       </div>
                       <span className="text-[9px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
-                      <input type="file" accept="image/*" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+                      <input type="file" accept="image/*" multiple className="hidden" disabled={isUploadingPortfolio || portfolioFull} onChange={e => handlePortfolioUpload(e.target.files)} />
                     </label>
                     {imageFiles.map((f: any) => (
                       <div key={f.id} className="flex flex-col gap-1 flex-shrink-0 relative w-16">
@@ -1552,12 +1829,12 @@ export default function ProfilePage() {
                 )}
                 {portfolioTab === 'other' && (
                   <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                    <label className="flex flex-col gap-1 flex-shrink-0 cursor-pointer group w-16">
+                    <label className={`flex flex-col gap-1 flex-shrink-0 group w-16 ${portfolioFull ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
                       <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
                         {isUploadingPortfolio ? <Loader2 size={14} className="text-slate-500 animate-spin" /> : <Plus size={16} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
                       </div>
                       <span className="text-[9px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
-                      <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" disabled={isUploadingPortfolio} onChange={e => handlePortfolioUpload(e.target.files)} />
+                      <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" disabled={isUploadingPortfolio || portfolioFull} onChange={e => handlePortfolioUpload(e.target.files)} />
                     </label>
                     {otherFiles.map((f: any) => (
                       <div key={f.id} className="flex flex-col gap-1 flex-shrink-0 relative w-16">
@@ -1669,8 +1946,49 @@ export default function ProfilePage() {
             <button onClick={() => setShowPrivacy(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
           </div>
           <div className="px-5 py-3">
+            {/* Contacts visibility — 3-level selector */}
+            <div className="py-3 border-b border-slate-800/60">
+              <p className="text-sm font-medium text-white">Кто видит контакты</p>
+              <p className="text-xs text-slate-500 mb-2.5">Телефон, email и Telegram</p>
+              <div className="space-y-1.5">
+                {([
+                  { value: 'ALL' as const, label: 'Все' },
+                  { value: 'REGISTERED' as const, label: 'Только зарегистрированные' },
+                  { value: 'FRIENDS' as const, label: 'Только друзья и коллеги' },
+                ]).map(opt => {
+                  const active = formData.contactsVisibility === opt.value;
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => {
+                        const apply = () => {
+                          const next = {
+                            ...formData,
+                            contactsVisibility: opt.value,
+                            contactsVisible: opt.value === 'ALL',
+                          };
+                          setFormData(next);
+                          updateMutation.mutate({ contactsVisibility: opt.value } as any, {
+                            onSettled: () => queryClient.invalidateQueries({ queryKey: ['profile'] }),
+                          });
+                        };
+                        // «Все» = public distribution of contacts → gate on consent.
+                        if (opt.value === 'ALL') ensurePublicConsent(apply); else apply();
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border text-sm text-left transition-colors ${active ? 'border-primary-500 bg-primary-500/10 text-white' : 'border-slate-700/60 bg-slate-800/40 text-slate-300 hover:border-slate-600'}`}
+                    >
+                      <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${active ? 'border-primary-500' : 'border-slate-600'}`}>
+                        {active && <span className="w-2 h-2 rounded-full bg-primary-500" />}
+                      </span>
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Birth date visibility — boolean toggle */}
             {([
-              { key: 'contactsVisible' as const, label: 'Показывать контакты', desc: 'Телефон, email и Telegram видны другим' },
               { key: 'birthDateVisible' as const, label: 'Показывать дату рождения', desc: 'Дата рождения видна в вашем профиле' },
             ]).map(row => (
               <div key={row.key} className="flex items-center gap-3 py-3 border-b border-slate-800/60 last:border-0">
@@ -1757,49 +2075,106 @@ export default function ProfilePage() {
       onCancel={() => setConfirmDeleteLinkId(null)}
     />
 
-    {showJoinArtist && <JoinArtistModal onClose={() => setShowJoinArtist(false)} />}
+    {consentAction && (
+      <PublicConsentGate onAccept={handleConsentAccept} onClose={() => setConsentAction(null)} />
+    )}
 
-    {showProModal && createPortal(
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowProModal(false)} />
-        <div className="relative w-full sm:max-w-sm bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
-          <div className="px-5 pt-6 pb-4 text-center border-b border-slate-800">
-            <div className="w-14 h-14 rounded-2xl bg-violet-500/15 border border-violet-500/30 flex items-center justify-center mx-auto mb-3">
-              <Zap size={28} className="text-violet-400" />
+    {/* Publish-to-Поток dialog — after a NEW service is saved. */}
+    {publishDialog && createPortal(
+      <>
+        <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm" onClick={() => setPublishDialog(null)} />
+        <div className="fixed inset-x-4 bottom-8 z-[81] max-w-sm mx-auto bg-slate-900 border border-slate-700 rounded-2xl p-5 shadow-2xl">
+          <div className="flex items-start gap-3 mb-1">
+            <div className="p-2 bg-primary-500/15 rounded-xl flex-shrink-0">
+              <Zap size={18} className="text-primary-400" />
             </div>
-            <h3 className="text-lg font-bold text-white mb-1">Moooza PRO</h3>
-            <p className="text-sm text-slate-400">Расширенные возможности для профессионалов</p>
+            <div className="pt-0.5">
+              <p className="text-sm font-semibold text-white">Опубликовать в Потоке?</p>
+              <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">Услуга уже сохранена и видна в профиле. Можно дополнительно рассказать о ней в Потоке.</p>
+            </div>
           </div>
-          <div className="px-5 py-4 space-y-3">
-            {[
-              ['Приоритет в каталоге', 'Ваш профиль показывается выше в поиске'],
-              ['Расширенная аналитика', 'Статистика просмотров и обращений'],
-              ['Неограниченные услуги', 'Добавляйте любое количество услуг'],
-              ['PRO-бейдж на профиле', 'Подчеркните свой профессионализм'],
-              ['Расширенный портфолио', 'До 50 файлов вместо 5'],
-            ].map(([title, desc]) => (
-              <div key={title} className="flex items-start gap-3">
-                <div className="w-5 h-5 rounded-full bg-violet-500/20 flex items-center justify-center flex-shrink-0 mt-0.5">
-                  <span className="text-violet-400 text-xs font-bold">✓</span>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-white">{title}</p>
-                  <p className="text-xs text-slate-500">{desc}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="px-5 pb-6 space-y-2">
-            <button className="w-full py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-2xl transition-colors flex items-center justify-center gap-2">
-              <Zap size={16} />Скоро — следите за новостями
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={() => setPublishDialog(null)}
+              className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white text-sm font-medium transition-colors"
+            >
+              Только услугу
             </button>
-            <button onClick={() => setShowProModal(false)} className="w-full py-2.5 text-sm text-slate-400 hover:text-white transition-colors">
-              Закрыть
+            <button
+              onClick={() => {
+                const id = publishDialog.userServiceId;
+                setPublishDialog(null);
+                navigate(`/create-post?type=service${id ? `&serviceId=${id}` : ''}`);
+              }}
+              className="flex-1 py-2.5 rounded-xl bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold transition-colors"
+            >
+              В Потоке
             </button>
           </div>
         </div>
-      </div>,
+      </>,
       document.body
+    )}
+
+    {/* Announce-changes dialog — after an EXISTING service is edited. */}
+    {updateDialog && createPortal(
+      <>
+        <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm" onClick={() => setUpdateDialog(null)} />
+        <div className="fixed inset-x-4 bottom-8 z-[81] max-w-sm mx-auto bg-slate-900 border border-slate-700 rounded-2xl p-5 shadow-2xl">
+          <div className="flex items-start gap-3 mb-1">
+            <div className="p-2 bg-primary-500/15 rounded-xl flex-shrink-0">
+              <Zap size={18} className="text-primary-400" />
+            </div>
+            <div className="pt-0.5">
+              <p className="text-sm font-semibold text-white">Сообщить об изменениях в Потоке?</p>
+              <p className="text-xs text-slate-400 mt-0.5 leading-relaxed">Изменения уже сохранены. Можно опубликовать апдейт услуги в Потоке.</p>
+            </div>
+          </div>
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={() => setUpdateDialog(null)}
+              className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white text-sm font-medium transition-colors"
+            >
+              Нет
+            </button>
+            <button
+              onClick={() => {
+                const id = updateDialog.userServiceId;
+                setUpdateDialog(null);
+                navigate(`/create-post?type=service${id ? `&serviceId=${id}` : ''}`);
+              }}
+              className="flex-1 py-2.5 rounded-xl bg-primary-500 hover:bg-primary-600 text-white text-sm font-semibold transition-colors"
+            >
+              Сделать апдейт
+            </button>
+          </div>
+        </div>
+      </>,
+      document.body
+    )}
+
+    {showJoinArtist && <JoinArtistModal onClose={() => setShowJoinArtist(false)} />}
+
+    {cropAvatarFile && (
+      <ImageCropModal
+        file={cropAvatarFile}
+        aspect={1}
+        cropShape="round"
+        title="Аватар"
+        onCancel={() => setCropAvatarFile(null)}
+        onCropped={blob => { uploadAvatarMutation.mutate(blobToFile(blob, 'avatar.jpg')); setCropAvatarFile(null); }}
+      />
+    )}
+
+    {cropBannerFile && (
+      <ImageCropModal
+        file={cropBannerFile}
+        aspect={3}
+        cropShape="rect"
+        title="Обложка"
+        onCancel={() => setCropBannerFile(null)}
+        onCropped={blob => { uploadBannerMutation.mutate(blobToFile(blob, 'banner.jpg')); setCropBannerFile(null); }}
+      />
     )}
 
     </>

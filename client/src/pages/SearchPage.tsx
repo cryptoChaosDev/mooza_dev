@@ -4,6 +4,7 @@ import {
   Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   Crown, BadgeCheck, Ban, Users, Music2, Loader2, X,
   BookOpen, Link2, ShieldCheck, Star, MessageCircle, HandshakeIcon, SlidersHorizontal,
+  ArrowDownUp,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -12,9 +13,9 @@ import { usePresenceStore } from '../stores/presenceStore';
 import { referenceAPI, userAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import DealCreateModal from '../components/DealCreateModal';
+import { DEALS_ENABLED } from '../lib/features';
+import { useAuthGate } from '../components/AuthGateModal';
 import { plural } from '../lib/plural';
-
-const API_URL = import.meta.env.VITE_API_URL || '';
 
 // ─── Tile gradients ──────────────────────────────────────────────────────────
 const TILE_GRADIENTS = [
@@ -44,58 +45,57 @@ const ARTIST_TYPES = [
 function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; searchProfile?: any; onNavigate: (id: string) => void }) {
   const [expanded, setExpanded] = useState(false);
   const isOnline = usePresenceStore((s) => s.onlineUsers.has(user.id));
-  const connCount = (user._count?.sentConnections ?? 0) + (user._count?.receivedConnections ?? 0);
+  // Connections: catalog now returns a flat `connectionsCount`; fall back to _count.
+  const connCount = user.connectionsCount
+    ?? ((user._count?.sentConnections ?? 0) + (user._count?.receivedConnections ?? 0));
   // Professions: prefer searchMusicians.searchProfile, fall back to userServices.
   const professions: string[] = (searchProfile?.professions?.map((p: any) => p?.name).filter(Boolean))
     ?? user.userServices?.map((us: any) => us.profession?.name).filter(Boolean)
     ?? [];
-  const services: string[] = searchProfile?.services?.map((s: any) => s?.name).filter(Boolean) ?? [];
-  const portfolio = user.portfolioFiles ?? [];
+  // Rating aggregates (only shown if there are reviews).
+  const reviewsCount: number = user.reviewsCount ?? 0;
+  const ratingAvg: number | null = user.ratingAvg ?? null;
+  const hasRating = reviewsCount > 0 && ratingAvg != null;
+  const location = user.city || user.country || '';
 
   return (
     <div className="border-b border-slate-800/50 last:border-0">
-      {/* Row */}
+      {/* ── Collapsed row (always visible) ── */}
       <div className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/30 transition-colors">
         {/* Avatar — click navigates to profile */}
         <div
           className="relative flex-shrink-0 cursor-pointer"
           onClick={() => onNavigate(user.id)}
         >
-          <AvatarComponent src={user.avatar} name={`${user.firstName} ${user.lastName}`} size={44} className="rounded-xl" />
+          <AvatarComponent src={user.avatar} name={`${user.lastName ?? ''} ${user.firstName ?? ''}`} size={44} className="rounded-xl" />
           {isOnline && (
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-slate-950 rounded-full" />
           )}
         </div>
 
-        {/* Info — click navigates to profile */}
+        {/* Info — click navigates to profile. Surname first per spec. */}
         <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onNavigate(user.id)}>
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-sm font-semibold text-white">
-              {user.firstName} {user.lastName}
+              {user.lastName} {user.firstName}
             </span>
-            {user.isPremium && <span title="Premium"><Crown size={12} className="text-amber-400 flex-shrink-0" /></span>}
             {user.isVerified && <span title="Верифицирован"><BadgeCheck size={12} className="text-sky-400 flex-shrink-0" /></span>}
             {user.isBlocked && <span title="Заблокирован"><Ban size={12} className="text-red-400 flex-shrink-0" /></span>}
           </div>
 
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+            {location && <span className="text-xs text-slate-500 truncate">{location}</span>}
             {professions.length > 0 && (
-              <span className="text-xs text-slate-400 truncate">{professions.slice(0, 2).join(', ')}</span>
+              <span className="text-xs text-slate-400 truncate">{location ? '· ' : ''}{professions.slice(0, 2).join(', ')}</span>
             )}
-            {services.length > 0 && (
-              <span className="text-xs text-primary-400/80 truncate">{services.slice(0, 2).join(', ')}</span>
-            )}
-            {connCount > 0 && (
-              <span className="flex items-center gap-0.5 text-xs text-slate-500">
-                <Link2 size={10} />
-                {connCount} {plural(connCount, 'связь', 'связи', 'связей')}
-              </span>
-            )}
-            {user.city && <span className="text-xs text-slate-600 truncate">· {user.city}</span>}
+            <span className="flex items-center gap-0.5 text-xs text-slate-500">
+              <Link2 size={10} />
+              {connCount} {plural(connCount, 'связь', 'связи', 'связей')}
+            </span>
           </div>
         </div>
 
-        {/* Expand toggle */}
+        {/* Expand toggle (down arrow indicates expandable) */}
         <button
           onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
           className="p-2 text-slate-500 hover:text-primary-400 hover:bg-primary-500/10 rounded-xl transition-all flex-shrink-0"
@@ -105,45 +105,53 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
         </button>
       </div>
 
-      {/* Expanded section */}
+      {/* ── Expanded preview (max ~half the screen, scroll inside) ── */}
       {expanded && (
-        <div
-          className="px-4 pb-4 bg-slate-900/40 cursor-pointer"
-          onClick={() => onNavigate(user.id)}
-        >
-          {/* Portfolio grid */}
-          {portfolio.length > 0 && (
-            <div className="mb-3">
-              <p className="text-xs text-slate-500 mb-2 font-medium uppercase tracking-wider">Портфолио</p>
-              <div className="grid grid-cols-3 gap-1.5">
-                {portfolio.filter((f: any) => f.mimeType?.startsWith('image/')).slice(0, 6).map((f: any) => (
-                  <div
-                    key={f.id}
-                    className="aspect-square rounded-lg overflow-hidden bg-slate-800"
-                    onClick={e => { e.stopPropagation(); window.open(`${API_URL}${f.url}`, '_blank'); }}
-                  >
-                    <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover hover:opacity-80 transition-opacity" />
-                  </div>
-                ))}
-                {portfolio.filter((f: any) => !f.mimeType?.startsWith('image/')).slice(0, 3).map((f: any) => (
-                  <div key={f.id} className="flex items-center gap-1.5 p-2 bg-slate-800 rounded-lg col-span-1">
-                    <BookOpen size={12} className="text-slate-400 flex-shrink-0" />
-                    <span className="text-xs text-slate-400 truncate">{f.originalName}</span>
-                  </div>
-                ))}
-              </div>
-              {portfolio.filter((f: any) => f.mimeType?.startsWith('image/')).length === 0 && (
-                <p className="text-xs text-slate-600 italic">Нет изображений в портфолио</p>
-              )}
+        <div className="px-4 pb-4 bg-slate-900/40 max-h-[50vh] overflow-y-auto space-y-3">
+          {/* О себе */}
+          {user.bio?.trim() ? (
+            <div>
+              <p className="text-[11px] text-slate-500 mb-1 font-medium uppercase tracking-wider">О себе</p>
+              <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">{user.bio}</p>
             </div>
-          )}
-          {portfolio.length === 0 && (
-            <p className="text-xs text-slate-600 italic mb-2">Портфолио не добавлено</p>
+          ) : (
+            <p className="text-xs text-slate-600 italic">Описание не добавлено</p>
           )}
 
-          <p className="text-xs text-primary-400 hover:text-primary-300 transition-colors text-right mt-1">
-            Открыть профиль →
-          </p>
+          {/* Профессии — full list */}
+          {professions.length > 0 && (
+            <div>
+              <p className="text-[11px] text-slate-500 mb-1.5 font-medium uppercase tracking-wider">Профессии</p>
+              <div className="flex flex-wrap gap-1.5">
+                {professions.map((p, i) => (
+                  <span key={i} className="px-2.5 py-1 rounded-lg text-xs bg-slate-800 text-slate-300">{p}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Средняя оценка + отзывы — only if there are ratings */}
+          <div className="flex items-center gap-4">
+            {hasRating && (
+              <span className="flex items-center gap-1 text-xs text-amber-400 font-medium">
+                <Star size={13} fill="currentColor" />
+                {ratingAvg!.toFixed(1)}
+                <span className="text-slate-500 font-normal">· {reviewsCount} {plural(reviewsCount, 'отзыв', 'отзыва', 'отзывов')}</span>
+              </span>
+            )}
+            <span className="flex items-center gap-1 text-xs text-slate-400">
+              <Link2 size={12} />
+              {connCount} {plural(connCount, 'связь', 'связи', 'связей')}
+            </span>
+          </div>
+
+          {/* Перейти в профиль */}
+          <button
+            onClick={() => onNavigate(user.id)}
+            className="w-full mt-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors"
+          >
+            Перейти в профиль
+          </button>
         </div>
       )}
     </div>
@@ -153,12 +161,14 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
 
 // ─── ServiceCardItem ─────────────────────────────────────────────────────────
 // Renders a single service offering (UserService) — a "service card", not a person.
-function ServiceCardItem({ card, currentUserId, onNavigate, onMessage, onDeal }: {
+function ServiceCardItem({ card, currentUserId, onNavigate, onMessage, onDeal, ensureAuth }: {
   card: any;
   currentUserId?: string;
   onNavigate: (card: any) => void;
   onMessage: (userId: string) => void;
   onDeal: (card: any) => void;
+  // Runs the action when signed in; otherwise opens the auth-gate modal.
+  ensureAuth: (action: () => void) => boolean;
 }) {
   const user = card.user ?? {};
   const isOwn = !!currentUserId && user.id === currentUserId;
@@ -239,17 +249,19 @@ function ServiceCardItem({ card, currentUserId, onNavigate, onMessage, onDeal }:
       {!isOwn && (
         <div className="flex gap-2 mt-3.5">
           <button
-            onClick={() => onMessage(user.id)}
+            onClick={() => ensureAuth(() => onMessage(user.id))}
             className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-primary-600 hover:bg-primary-500 text-white text-xs font-medium rounded-xl transition-colors"
           >
             <MessageCircle size={14} /> Написать
           </button>
-          <button
-            onClick={() => onDeal(card)}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-colors"
-          >
-            <HandshakeIcon size={14} /> Оформить сделку
-          </button>
+          {DEALS_ENABLED && (
+            <button
+              onClick={() => ensureAuth(() => onDeal(card))}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-colors"
+            >
+              <HandshakeIcon size={14} /> Оформить сделку
+            </button>
+          )}
         </div>
       )}
     </div>
@@ -261,6 +273,8 @@ export default function SearchPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user: currentUser } = useAuthStore();
+  // Auth gate for guest "Написать" / "Оформить сделку" (default modal text).
+  const { ensureAuth, authGateModal } = useAuthGate();
 
   const [activeTab, setActiveTab] = useState<CatalogTab>('services');
   const [dealCard, setDealCard] = useState<any>(null);
@@ -281,21 +295,87 @@ export default function SearchPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [tempFilters, setTempFilters] = useState<string[]>([]);
 
+  // ── Sort + location + price (applied) ────────────────────────────────────────
+  type ServiceSort = 'date' | 'price_asc' | 'price_desc' | 'rating';
+  const [sortMode, setSortMode] = useState<ServiceSort>('date');
+  const [sortOpen, setSortOpen] = useState(false);
+  const [locationFilter, setLocationFilter] = useState<string[]>([]); // applied cities
+  const [priceMin, setPriceMin] = useState<string>('');               // applied
+  const [priceMax, setPriceMax] = useState<string>('');               // applied
+
+  // Draft values edited inside the filters modal (committed on "Применить").
+  const [tempLocation, setTempLocation] = useState<string[]>([]);
+  const [tempPriceMin, setTempPriceMin] = useState<string>('');
+  const [tempPriceMax, setTempPriceMax] = useState<string>('');
+  const [cityQuery, setCityQuery] = useState('');
+  const [debouncedCityQuery, setDebouncedCityQuery] = useState('');
+
+  const SORT_OPTIONS: { value: ServiceSort; label: string }[] = [
+    { value: 'date', label: 'По дате добавления' },
+    { value: 'price_asc', label: 'По стоимости (возр.)' },
+    { value: 'price_desc', label: 'По стоимости (убыв.)' },
+    { value: 'rating', label: 'По оценке исполнителя' },
+  ];
+
   // ── Artists tab state ──────────────────────────────────────────────────────
   const [artistQuery, setArtistQuery] = useState('');
   const [debouncedArtistQuery, setDebouncedArtistQuery] = useState('');
+  // Type is single-select among the 3 types ('' = «Все»). Genres combine on top.
+  const [artistTypeFilter, setArtistTypeFilter] = useState<string>('');
+  const [artistGenreFilter, setArtistGenreFilter] = useState<string[]>([]);
+  // Sort: 'date' (default, newest first) | 'alpha' (name A→Z).
+  const [artistSort, setArtistSort] = useState<'date' | 'alpha'>('date');
+  const [artistSortOpen, setArtistSortOpen] = useState(false);
+  // Advanced filter (genre multiselect) modal.
+  const [artistFilterOpen, setArtistFilterOpen] = useState(false);
+  const [tempArtistGenres, setTempArtistGenres] = useState<string[]>([]);
+
+  const ARTIST_SORT_OPTIONS: { value: 'date' | 'alpha'; label: string }[] = [
+    { value: 'date', label: 'По дате добавления' },
+    { value: 'alpha', label: 'По алфавиту' },
+  ];
 
   // ── People tab state ───────────────────────────────────────────────────────
   const [peopleQuery, setPeopleQuery] = useState('');
   const [debouncedPeopleQuery, setDebouncedPeopleQuery] = useState('');
-  const [artistTypeFilter, setArtistTypeFilter] = useState<string[]>([]);
-  const [artistGenreFilter, setArtistGenreFilter] = useState<string[]>([]);
 
-  function toggleType(value: string) {
-    if (value === 'ALL') { setArtistTypeFilter([]); return; }
-    setArtistTypeFilter(prev =>
-      prev.includes(value) ? prev.filter(v => v !== value) : [...prev, value]
-    );
+  // Applied filters (committed): location names, profession ids, occupancy values.
+  const [peopleLocation, setPeopleLocation] = useState<string[]>([]);
+  const [peopleProfession, setPeopleProfession] = useState<string[]>([]);
+  const [peopleOccupancy, setPeopleOccupancy] = useState<string[]>([]);
+  // Sort: date (default) | rating | connections | alpha. Alpha has a direction.
+  type PeopleSort = 'date' | 'rating' | 'connections' | 'alpha';
+  const [peopleSort, setPeopleSort] = useState<PeopleSort>('date');
+  const [peopleAlphaDir, setPeopleAlphaDir] = useState<'asc' | 'desc'>('asc');
+  const [peopleSortOpen, setPeopleSortOpen] = useState(false);
+
+  // Filter panel (draft values committed on "Применить").
+  const [peopleFilterOpen, setPeopleFilterOpen] = useState(false);
+  const [tempPeopleLocation, setTempPeopleLocation] = useState<string[]>([]);
+  const [tempPeopleProfession, setTempPeopleProfession] = useState<string[]>([]);
+  const [tempPeopleOccupancy, setTempPeopleOccupancy] = useState<string[]>([]);
+  // Per-checklist search boxes.
+  const [peopleLocSearch, setPeopleLocSearch] = useState('');
+  const [debouncedPeopleLocSearch, setDebouncedPeopleLocSearch] = useState('');
+  const [peopleProfSearch, setPeopleProfSearch] = useState('');
+
+  const PEOPLE_SORT_OPTIONS: { value: PeopleSort; label: string }[] = [
+    { value: 'date', label: 'По дате регистрации' },
+    { value: 'rating', label: 'По оценке' },
+    { value: 'connections', label: 'По количеству связей' },
+    { value: 'alpha', label: 'По алфавиту' },
+  ];
+
+  const OCCUPANCY_OPTIONS: { value: string; label: string }[] = [
+    { value: 'open', label: 'Открыт для работы' },
+    { value: 'considering', label: 'Рассматриваю предложения' },
+    { value: 'closed', label: 'Занят' },
+  ];
+
+  // Single-select type ('' clears to «Все»; selecting the active type clears it).
+  function selectType(value: string) {
+    if (value === 'ALL') { setArtistTypeFilter(''); return; }
+    setArtistTypeFilter(prev => (prev === value ? '' : value));
   }
 
   function toggleGenre(id: string) {
@@ -323,6 +403,16 @@ export default function SearchPage() {
     return () => clearTimeout(t);
   }, [peopleQuery]);
 
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedCityQuery(cityQuery), 250);
+    return () => clearTimeout(t);
+  }, [cityQuery]);
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedPeopleLocSearch(peopleLocSearch), 250);
+    return () => clearTimeout(t);
+  }, [peopleLocSearch]);
+
   // ── Reference data ─────────────────────────────────────────────────────────
 
   // Sections (each with its nested services) — for the "Услуги" browse.
@@ -347,7 +437,16 @@ export default function SearchPage() {
   });
 
   const activeFilters = serviceFilters;
-  const hasSelection = !!selectedService;
+
+  // City autocomplete for the location filter (only while the filters modal is open).
+  const { data: cityOptions } = useQuery({
+    queryKey: ['service-cities', debouncedCityQuery],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getServiceCities(debouncedCityQuery || undefined);
+      return (data as any[]).map((c) => c.name as string);
+    },
+    enabled: activeTab === 'services' && filtersOpen,
+  });
 
   // ── Service-card results (searchServiceCards) ───────────────────────────────
   const serviceSearchParams = {
@@ -355,6 +454,10 @@ export default function SearchPage() {
     sectionId: selectedSection?.id && !selectedService ? selectedSection.id : undefined,
     customFilterValueIds: profFilterValues.length ? profFilterValues.join(',') : undefined,
     query: debouncedServiceQuery || undefined,
+    location: locationFilter.length ? locationFilter.join(',') : undefined,
+    priceMin: priceMin !== '' ? Number(priceMin) : undefined,
+    priceMax: priceMax !== '' ? Number(priceMax) : undefined,
+    sort: sortMode,
   };
 
   const { data: serviceCards, isLoading: catalogLoading } = useQuery({
@@ -368,37 +471,56 @@ export default function SearchPage() {
   });
 
   // ── Artists ────────────────────────────────────────────────────────────────
+  // Verified artists only (server-enforced). Search + type + genres + sort are
+  // all applied server-side; type is single-select, genres combine with it.
   const { data: artists, isLoading: artistsLoading } = useQuery({
-    queryKey: ['catalog-artists', debouncedArtistQuery, artistTypeFilter, artistGenreFilter],
+    queryKey: ['catalog-artists', debouncedArtistQuery, artistTypeFilter, artistGenreFilter, artistSort],
     queryFn: async () => {
-      // Only show groups (GROUP / COVER_GROUP), not solo artists
       const { data } = await referenceAPI.getArtists({
         search: debouncedArtistQuery || undefined,
+        type: artistTypeFilter || undefined,
+        genre: artistGenreFilter.length ? artistGenreFilter.join(',') : undefined,
+        sort: artistSort,
       });
-      let result = (data as any[]).filter((a: any) => a.type === 'GROUP' || a.type === 'COVER_GROUP');
-      if (artistTypeFilter.length > 0) {
-        result = result.filter((a: any) => artistTypeFilter.includes(a.type));
-      }
-      if (artistGenreFilter.length > 0) {
-        result = result.filter((a: any) =>
-          a.genres?.some((g: any) => artistGenreFilter.includes(g.genre?.id))
-        );
-      }
-      return result;
+      return data as any[];
     },
     enabled: activeTab === 'artists',
   });
 
   // ── People ────────────────────────────────────────────────────────────────
   const { data: peopleUsers, isLoading: peopleLoading } = useQuery({
-    queryKey: ['catalog-people', debouncedPeopleQuery],
+    queryKey: ['catalog-people', debouncedPeopleQuery, peopleLocation, peopleProfession, peopleOccupancy, peopleSort, peopleAlphaDir],
     queryFn: async () => {
       const { data } = await userAPI.catalog({
         query: debouncedPeopleQuery || undefined,
+        location: peopleLocation.length ? peopleLocation.join(',') : undefined,
+        profession: peopleProfession.length ? peopleProfession.join(',') : undefined,
+        occupancy: peopleOccupancy.length ? peopleOccupancy.join(',') : undefined,
+        sort: peopleSort,
+        alphaDir: peopleSort === 'alpha' ? peopleAlphaDir : undefined,
       });
       return (data as any[]).filter((u: any) => u.id !== currentUser?.id);
     },
     enabled: activeTab === 'people',
+  });
+
+  // People filter reference data (only while the People tab is active).
+  const { data: peopleLocationOptions } = useQuery({
+    queryKey: ['people-locations', debouncedPeopleLocSearch],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getPeopleLocations(debouncedPeopleLocSearch || undefined);
+      return (data as any[]).map((c) => c.name as string);
+    },
+    enabled: activeTab === 'people' && peopleFilterOpen,
+  });
+
+  const { data: peopleProfessionOptions } = useQuery({
+    queryKey: ['people-professions'],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getProfessions();
+      return (data as any[]).map((p) => ({ id: p.id as string, name: p.name as string }));
+    },
+    enabled: activeTab === 'people' && peopleFilterOpen,
   });
 
   // ── Genres for artist filter ───────────────────────────────────────────────
@@ -536,22 +658,68 @@ export default function SearchPage() {
             );
           })()}
 
-          {/* Attribute filters — hidden behind a button that opens a modal */}
-          {activeTab === 'services' && hasSelection && activeFilters && activeFilters.length > 0 && (
-            <button
-              type="button"
-              onClick={() => { setTempFilters(profFilterValues); setFiltersOpen(true); }}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
-            >
-              <SlidersHorizontal size={14} />
-              Фильтры
-              {profFilterValues.length > 0 && (
-                <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
-                  {profFilterValues.length}
-                </span>
-              )}
-            </button>
-          )}
+          {/* Sort + filters controls (services tab) */}
+          {activeTab === 'services' && (() => {
+            const activeFilterCount =
+              profFilterValues.length + locationFilter.length + (priceMin !== '' || priceMax !== '' ? 1 : 0);
+            return (
+              <div className="flex items-center gap-2">
+                {/* Sort */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setSortOpen(v => !v)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+                  >
+                    <ArrowDownUp size={14} />
+                    {SORT_OPTIONS.find(o => o.value === sortMode)?.label}
+                    <ChevronDown size={13} className={`transition-transform ${sortOpen ? 'rotate-180' : ''}`} />
+                  </button>
+                  {sortOpen && (
+                    <>
+                      <div className="fixed inset-0 z-[55]" onClick={() => setSortOpen(false)} />
+                      <div className="absolute left-0 mt-1.5 z-[56] w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1">
+                        {SORT_OPTIONS.map(o => (
+                          <button
+                            key={o.value}
+                            type="button"
+                            onClick={() => { setSortMode(o.value); setSortOpen(false); }}
+                            className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                              sortMode === o.value ? 'bg-primary-600/20 text-primary-300 font-medium' : 'text-slate-300 hover:bg-slate-800'
+                            }`}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* Filters (location + price + service attributes) */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTempFilters(profFilterValues);
+                    setTempLocation(locationFilter);
+                    setTempPriceMin(priceMin);
+                    setTempPriceMax(priceMax);
+                    setCityQuery('');
+                    setFiltersOpen(true);
+                  }}
+                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+                >
+                  <SlidersHorizontal size={14} />
+                  Фильтры
+                  {activeFilterCount > 0 && (
+                    <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                      {activeFilterCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -649,6 +817,7 @@ export default function SearchPage() {
                       onNavigate={handleNavigateToServiceCard}
                       onMessage={(uid) => navigate(`/messages/${uid}`)}
                       onDeal={(c) => setDealCard(c)}
+                      ensureAuth={ensureAuth}
                     />
                   ))}
                 </div>
@@ -657,7 +826,7 @@ export default function SearchPage() {
                   <div className="p-4 bg-slate-800/50 rounded-2xl mb-3">
                     <Music2 size={28} className="text-slate-600" />
                   </div>
-                  <p className="text-slate-400 text-sm">Услуги не найдены</p>
+                  <p className="text-slate-400 text-sm">Такая услуга не найдена</p>
                 </div>
               )}
             </div>
@@ -674,12 +843,12 @@ export default function SearchPage() {
                 {ARTIST_TYPES.map(type => {
                   const Icon = type.icon;
                   const isActive = type.value === 'ALL'
-                    ? artistTypeFilter.length === 0
-                    : artistTypeFilter.includes(type.value);
+                    ? artistTypeFilter === ''
+                    : artistTypeFilter === type.value;
                   return (
                     <button
                       key={type.value}
-                      onClick={() => toggleType(type.value)}
+                      onClick={() => selectType(type.value)}
                       className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all flex-shrink-0 ${
                         isActive
                           ? 'bg-primary-600 text-white shadow-sm'
@@ -692,6 +861,56 @@ export default function SearchPage() {
                   );
                 })}
               </div>
+            </div>
+
+            {/* Sort + advanced filter controls */}
+            <div className="flex items-center gap-2 mb-4">
+              {/* Sort */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setArtistSortOpen(v => !v)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+                >
+                  <ArrowDownUp size={14} />
+                  {ARTIST_SORT_OPTIONS.find(o => o.value === artistSort)?.label}
+                  <ChevronDown size={13} className={`transition-transform ${artistSortOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {artistSortOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[55]" onClick={() => setArtistSortOpen(false)} />
+                    <div className="absolute left-0 mt-1.5 z-[56] w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1">
+                      {ARTIST_SORT_OPTIONS.map(o => (
+                        <button
+                          key={o.value}
+                          type="button"
+                          onClick={() => { setArtistSort(o.value); setArtistSortOpen(false); }}
+                          className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                            artistSort === o.value ? 'bg-primary-600/20 text-primary-300 font-medium' : 'text-slate-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Advanced filter (full genre multiselect) */}
+              <button
+                type="button"
+                onClick={() => { setTempArtistGenres(artistGenreFilter); setArtistFilterOpen(true); }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+              >
+                <SlidersHorizontal size={14} />
+                Фильтр
+                {artistGenreFilter.length > 0 && (
+                  <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                    {artistGenreFilter.length}
+                  </span>
+                )}
+              </button>
             </div>
 
             {/* Genre tiles */}
@@ -746,7 +965,9 @@ export default function SearchPage() {
             {/* Artist list */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Все артисты · от А до Я</p>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                  {artistSort === 'alpha' ? 'Все артисты · от А до Я' : 'Все артисты · сначала новые'}
+                </p>
                 {artistsLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
               </div>
 
@@ -807,7 +1028,7 @@ export default function SearchPage() {
                   <div className="p-4 bg-slate-800/50 rounded-2xl mb-3">
                     <Music2 size={28} className="text-slate-600" />
                   </div>
-                  <p className="text-slate-400 text-sm">Артисты не найдены</p>
+                  <p className="text-slate-400 text-sm">Такой артист не найден</p>
                 </div>
               )}
             </div>
@@ -817,10 +1038,74 @@ export default function SearchPage() {
         {/* ══ PEOPLE TAB ══ */}
         {activeTab === 'people' && (
           <div className="mt-4">
+            {/* Filters control */}
+            <div className="flex items-center gap-2 mb-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setTempPeopleLocation(peopleLocation);
+                  setTempPeopleProfession(peopleProfession);
+                  setTempPeopleOccupancy(peopleOccupancy);
+                  setPeopleLocSearch('');
+                  setPeopleProfSearch('');
+                  setPeopleFilterOpen(true);
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+              >
+                <SlidersHorizontal size={14} />
+                Фильтры
+                {(() => {
+                  const n = peopleLocation.length + peopleProfession.length + peopleOccupancy.length;
+                  return n > 0 ? (
+                    <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{n}</span>
+                  ) : null;
+                })()}
+              </button>
+            </div>
+
+            {/* "Все участники" + sort (no participant count) */}
             <div className="flex items-center gap-2 mb-3">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                {debouncedPeopleQuery ? `Результаты: «${debouncedPeopleQuery}»` : 'Все участники · от А до Я'}
-              </p>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Все участники</p>
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setPeopleSortOpen(v => !v)}
+                  className="p-1.5 text-slate-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg transition-all"
+                  title="Сортировка"
+                >
+                  <ArrowDownUp size={14} />
+                </button>
+                {peopleSortOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[55]" onClick={() => setPeopleSortOpen(false)} />
+                    <div className="absolute left-0 mt-1.5 z-[56] w-60 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1">
+                      {PEOPLE_SORT_OPTIONS.map(o => (
+                        <button
+                          key={o.value}
+                          type="button"
+                          onClick={() => {
+                            if (o.value === 'alpha' && peopleSort === 'alpha') {
+                              setPeopleAlphaDir(d => (d === 'asc' ? 'desc' : 'asc'));
+                            } else {
+                              setPeopleSort(o.value);
+                              if (o.value === 'alpha') setPeopleAlphaDir('asc');
+                            }
+                            if (o.value !== 'alpha') setPeopleSortOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs transition-colors flex items-center justify-between gap-2 ${
+                            peopleSort === o.value ? 'bg-primary-600/20 text-primary-300 font-medium' : 'text-slate-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          <span>{o.label}</span>
+                          {o.value === 'alpha' && peopleSort === 'alpha' && (
+                            <span className="text-[10px] text-primary-400">{peopleAlphaDir === 'asc' ? 'А→Я' : 'Я→А'}</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
               {peopleLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
             </div>
 
@@ -851,9 +1136,7 @@ export default function SearchPage() {
                 <div className="p-4 bg-slate-800/50 rounded-2xl mb-3">
                   <Users size={28} className="text-slate-600" />
                 </div>
-                <p className="text-slate-400 text-sm">
-                  {debouncedPeopleQuery ? 'Никого не найдено' : 'Нет участников'}
-                </p>
+                <p className="text-slate-400 text-sm">Такой пользователь не найден</p>
               </div>
             )}
           </div>
@@ -881,14 +1164,88 @@ export default function SearchPage() {
               <div className="flex items-center gap-2">
                 <SlidersHorizontal size={16} className="text-primary-400" />
                 <h3 className="text-base font-semibold text-white">Фильтры</h3>
-                {tempFilters.length > 0 && (
-                  <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{tempFilters.length}</span>
-                )}
+                {(() => {
+                  const n = tempFilters.length + tempLocation.length + (tempPriceMin !== '' || tempPriceMax !== '' ? 1 : 0);
+                  return n > 0 ? (
+                    <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{n}</span>
+                  ) : null;
+                })()}
               </div>
               <button onClick={() => setFiltersOpen(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
             </div>
 
-            <div className="px-5 py-4 space-y-4 overflow-y-auto">
+            <div className="px-5 py-4 space-y-5 overflow-y-auto">
+              {/* Location — multiselect with city autocomplete */}
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Локация</p>
+                {tempLocation.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {tempLocation.map(city => (
+                      <button
+                        key={city}
+                        type="button"
+                        onClick={() => setTempLocation(prev => prev.filter(c => c !== city))}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary-600 text-white"
+                      >
+                        {city}
+                        <X size={12} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                  <input
+                    type="text"
+                    value={cityQuery}
+                    onChange={e => setCityQuery(e.target.value)}
+                    placeholder="Город..."
+                    className="w-full pl-8 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600"
+                  />
+                </div>
+                {(cityOptions ?? []).filter(c => !tempLocation.includes(c)).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {(cityOptions ?? []).filter(c => !tempLocation.includes(c)).slice(0, 12).map(city => (
+                      <button
+                        key={city}
+                        type="button"
+                        onClick={() => { setTempLocation(prev => [...prev, city]); setCityQuery(''); }}
+                        className="px-3 py-1.5 rounded-xl text-xs font-medium border bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+                      >
+                        {city}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Price range */}
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Стоимость, ₽</p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={tempPriceMin}
+                    onChange={e => setTempPriceMin(e.target.value)}
+                    placeholder="от"
+                    className="flex-1 min-w-0 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600"
+                  />
+                  <span className="text-slate-600">–</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    value={tempPriceMax}
+                    onChange={e => setTempPriceMax(e.target.value)}
+                    placeholder="до"
+                    className="flex-1 min-w-0 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600"
+                  />
+                </div>
+              </div>
+
+              {/* Service-specific attribute filters (only when a service is selected) */}
               {(activeFilters ?? []).map((group: any) => (
                 <div key={group.id}>
                   <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">{group.name}</p>
@@ -915,13 +1272,23 @@ export default function SearchPage() {
 
             <div className="px-5 pb-5 pt-4 border-t border-slate-800 flex gap-2.5 flex-shrink-0">
               <button
-                onClick={() => { setTempFilters([]); setProfFilterValues([]); setFiltersOpen(false); }}
+                onClick={() => {
+                  setTempFilters([]); setTempLocation([]); setTempPriceMin(''); setTempPriceMax(''); setCityQuery('');
+                  setProfFilterValues([]); setLocationFilter([]); setPriceMin(''); setPriceMax('');
+                  setFiltersOpen(false);
+                }}
                 className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors"
               >
                 Сбросить
               </button>
               <button
-                onClick={() => { setProfFilterValues(tempFilters); setFiltersOpen(false); }}
+                onClick={() => {
+                  setProfFilterValues(tempFilters);
+                  setLocationFilter(tempLocation);
+                  setPriceMin(tempPriceMin);
+                  setPriceMax(tempPriceMax);
+                  setFiltersOpen(false);
+                }}
                 className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors"
               >
                 Применить
@@ -931,6 +1298,241 @@ export default function SearchPage() {
         </div>,
         document.body
       )}
+
+      {/* Artist advanced filter modal — full genre multiselect */}
+      {artistFilterOpen && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setArtistFilterOpen(false)} />
+          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal size={16} className="text-primary-400" />
+                <h3 className="text-base font-semibold text-white">Жанры</h3>
+                {tempArtistGenres.length > 0 && (
+                  <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{tempArtistGenres.length}</span>
+                )}
+              </div>
+              <button onClick={() => setArtistFilterOpen(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
+            </div>
+
+            <div className="px-5 py-4 overflow-y-auto">
+              {(genresList ?? []).length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {(genresList ?? []).map((genre: any) => {
+                    const isActive = tempArtistGenres.includes(genre.id);
+                    return (
+                      <button
+                        key={genre.id}
+                        type="button"
+                        onClick={() => setTempArtistGenres(prev => prev.includes(genre.id) ? prev.filter(x => x !== genre.id) : [...prev, genre.id])}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                          isActive ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600'
+                        }`}
+                      >
+                        {genre.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-slate-500 text-sm">Жанры не найдены</p>
+              )}
+            </div>
+
+            <div className="px-5 pb-5 pt-4 border-t border-slate-800 flex gap-2.5 flex-shrink-0">
+              <button
+                onClick={() => { setTempArtistGenres([]); setArtistGenreFilter([]); setArtistFilterOpen(false); }}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors"
+              >
+                Сбросить
+              </button>
+              <button
+                onClick={() => { setArtistGenreFilter(tempArtistGenres); setArtistFilterOpen(false); }}
+                className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors"
+              >
+                Применить
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* People filter modal — 3 checklist filters (location / profession / occupancy) */}
+      {peopleFilterOpen && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setPeopleFilterOpen(false)} />
+          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800 flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <SlidersHorizontal size={16} className="text-primary-400" />
+                <h3 className="text-base font-semibold text-white">Фильтры</h3>
+                {(() => {
+                  const n = tempPeopleLocation.length + tempPeopleProfession.length + tempPeopleOccupancy.length;
+                  return n > 0 ? (
+                    <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{n}</span>
+                  ) : null;
+                })()}
+              </div>
+              <button onClick={() => setPeopleFilterOpen(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
+            </div>
+
+            <div className="px-5 py-4 space-y-6 overflow-y-auto">
+              {/* Локация — searchable checklist, chosen pinned as tags */}
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Локация</p>
+                {tempPeopleLocation.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {tempPeopleLocation.map(loc => (
+                      <button
+                        key={loc}
+                        type="button"
+                        onClick={() => setTempPeopleLocation(prev => prev.filter(c => c !== loc))}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary-600 text-white"
+                      >
+                        {loc}
+                        <X size={12} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                  <input
+                    type="text"
+                    value={peopleLocSearch}
+                    onChange={e => setPeopleLocSearch(e.target.value)}
+                    placeholder="Город или страна..."
+                    className="w-full pl-8 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600"
+                  />
+                </div>
+                <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-slate-800 divide-y divide-slate-800/60">
+                  {(peopleLocationOptions ?? []).filter(c => !tempPeopleLocation.includes(c)).length > 0 ? (
+                    (peopleLocationOptions ?? []).filter(c => !tempPeopleLocation.includes(c)).map(loc => (
+                      <button
+                        key={loc}
+                        type="button"
+                        onClick={() => { setTempPeopleLocation(prev => [...prev, loc]); }}
+                        className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/60 transition-colors"
+                      >
+                        {loc}
+                      </button>
+                    ))
+                  ) : (
+                    <p className="px-3 py-2 text-xs text-slate-600">Ничего не найдено</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Профессия — searchable checklist over professions catalog */}
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Профессия</p>
+                {tempPeopleProfession.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {tempPeopleProfession.map(pid => {
+                      const p = (peopleProfessionOptions ?? []).find(o => o.id === pid);
+                      return (
+                        <button
+                          key={pid}
+                          type="button"
+                          onClick={() => setTempPeopleProfession(prev => prev.filter(x => x !== pid))}
+                          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary-600 text-white"
+                        >
+                          {p?.name ?? '…'}
+                          <X size={12} />
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                  <input
+                    type="text"
+                    value={peopleProfSearch}
+                    onChange={e => setPeopleProfSearch(e.target.value)}
+                    placeholder="Профессия..."
+                    className="w-full pl-8 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600"
+                  />
+                </div>
+                <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-slate-800 divide-y divide-slate-800/60">
+                  {(() => {
+                    const qn = peopleProfSearch.trim().toLowerCase();
+                    const list = (peopleProfessionOptions ?? [])
+                      .filter(p => !tempPeopleProfession.includes(p.id))
+                      .filter(p => !qn || p.name.toLowerCase().includes(qn));
+                    return list.length > 0 ? (
+                      list.slice(0, 100).map(p => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setTempPeopleProfession(prev => [...prev, p.id])}
+                          className="w-full text-left px-3 py-2 text-sm text-slate-300 hover:bg-slate-800/60 transition-colors"
+                        >
+                          {p.name}
+                        </button>
+                      ))
+                    ) : (
+                      <p className="px-3 py-2 text-xs text-slate-600">Ничего не найдено</p>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Статус занятости — small fixed checklist */}
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Статус занятости</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {OCCUPANCY_OPTIONS.map(opt => {
+                    const isActive = tempPeopleOccupancy.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setTempPeopleOccupancy(prev => prev.includes(opt.value) ? prev.filter(x => x !== opt.value) : [...prev, opt.value])}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                          isActive ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="px-5 pb-5 pt-4 border-t border-slate-800 flex gap-2.5 flex-shrink-0">
+              <button
+                onClick={() => {
+                  setTempPeopleLocation([]); setTempPeopleProfession([]); setTempPeopleOccupancy([]);
+                  setPeopleLocSearch(''); setPeopleProfSearch('');
+                  setPeopleLocation([]); setPeopleProfession([]); setPeopleOccupancy([]);
+                  setPeopleFilterOpen(false);
+                }}
+                className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors"
+              >
+                Сбросить
+              </button>
+              <button
+                onClick={() => {
+                  setPeopleLocation(tempPeopleLocation);
+                  setPeopleProfession(tempPeopleProfession);
+                  setPeopleOccupancy(tempPeopleOccupancy);
+                  setPeopleFilterOpen(false);
+                }}
+                className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors"
+              >
+                Применить
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Guest auth-gate for "Написать" / "Оформить сделку" */}
+      {authGateModal}
     </div>
   );
 }

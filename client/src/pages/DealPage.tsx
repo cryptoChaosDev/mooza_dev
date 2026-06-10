@@ -6,6 +6,7 @@ import {
   Clock, AlertCircle, Wrench, Send, Check, X, Star, Copy, Pencil, Calendar,
 } from 'lucide-react';
 import { dealAPI, reviewAPI } from '../lib/api';
+import { DEALS_ENABLED } from '../lib/features';
 import { useAuthStore } from '../stores/authStore';
 import AvatarComponent from '../components/Avatar';
 
@@ -119,18 +120,20 @@ export default function DealPage() {
             <h1 className="text-base font-bold text-white truncate">{deal.title}</h1>
           </div>
           {/* Дублировать — открывает форму создания с заполненными полями */}
-          <button
-            onClick={() => {
-              const other = isCustomer ? deal.executor : deal.customer;
-              const otherId = isCustomer ? deal.executorId : deal.customerId;
-              const otherName = other ? `${other.firstName} ${other.lastName}` : '';
-              navigate('/deals', { state: { duplicate: { title: deal.title, executorId: otherId, executorName: otherName, price: deal.price, revisionCount: deal.revisionCount, result: deal.result } } });
-            }}
-            className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all flex-shrink-0"
-            title="Дублировать сделку"
-          >
-            <Copy size={16} />
-          </button>
+          {DEALS_ENABLED && (
+            <button
+              onClick={() => {
+                const other = isCustomer ? deal.executor : deal.customer;
+                const otherId = isCustomer ? deal.executorId : deal.customerId;
+                const otherName = other ? `${other.firstName} ${other.lastName}` : '';
+                navigate('/deals', { state: { duplicate: { title: deal.title, executorId: otherId, executorName: otherName, price: deal.price, revisionCount: deal.revisionCount, result: deal.result } } });
+              }}
+              className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all flex-shrink-0"
+              title="Дублировать сделку"
+            >
+              <Copy size={16} />
+            </button>
+          )}
         </div>
 
         {/* Status */}

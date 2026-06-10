@@ -26,6 +26,7 @@ import postRoutes from './routes/posts';
 import friendshipRoutes from './routes/friendships';
 import messageRoutes from './routes/messages';
 import referenceRoutes from './routes/references';
+import roleRoutes from './routes/roles';
 import adminRoutes from './routes/admin';
 import notificationRoutes from './routes/notifications';
 import pushRoutes from './routes/push';
@@ -39,6 +40,10 @@ import siteSettingsRoutes from './routes/site-settings';
 import reviewRoutes from './routes/reviews';
 import dealRoutes from './routes/deals';
 import complaintRoutes from './routes/complaints';
+import releaseRoutes from './routes/releases';
+import clipRoutes from './routes/clips';
+import proRoutes from './routes/pro';
+import feedPresetRoutes from './routes/feedPresets';
 
 // Load environment variables
 dotenv.config();
@@ -141,6 +146,7 @@ app.use('/api/posts', postRoutes);
 app.use('/api/friendships', friendshipRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/references', referenceRoutes);
+app.use('/api/roles', roleRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/push', pushRoutes);
@@ -154,6 +160,10 @@ app.use('/api/site-settings', siteSettingsRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/deals', dealRoutes);
 app.use('/api/complaints', complaintRoutes);
+app.use('/api/releases', releaseRoutes);
+app.use('/api/clips', clipRoutes);
+app.use('/api/pro', proRoutes);
+app.use('/api/feed-presets', feedPresetRoutes);
 
 // ── OG tags for social bots ────────────────────────────────────────────────
 app.get('/api/og/profile/:userId', async (req: express.Request, res: express.Response) => {

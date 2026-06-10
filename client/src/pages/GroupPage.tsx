@@ -10,6 +10,7 @@ import {
 import { artistAPI, referenceAPI, groupAPI, friendshipAPI } from '../lib/api';
 import { plural } from '../lib/plural';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
+import { yoNorm } from '../lib/search';
 import { avatarUrl } from '../lib/avatar';
 import { SocialIconRow, SocialLinksEditor } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
@@ -104,13 +105,13 @@ export default function GroupPage() {
 
   const filteredFriends = useMemo(() => {
     const memberIds = new Set((group?.members ?? []).map((m: any) => m.id));
-    const q = inviteFriendSearch.toLowerCase();
-    return friendsList.filter((f: any) => !memberIds.has(f.id) && `${f.firstName} ${f.lastName}`.toLowerCase().includes(q));
+    const q = yoNorm(inviteFriendSearch);
+    return friendsList.filter((f: any) => !memberIds.has(f.id) && yoNorm(`${f.firstName} ${f.lastName}`).includes(q));
   }, [friendsList, group?.members, inviteFriendSearch]);
 
   const filteredProfessions = useMemo(() => {
-    const q = inviteProfSearch.toLowerCase();
-    return allProfessions.filter((p: any) => p.name.toLowerCase().includes(q));
+    const q = yoNorm(inviteProfSearch);
+    return allProfessions.filter((p: any) => yoNorm(p.name).includes(q));
   }, [allProfessions, inviteProfSearch]);
 
   useEffect(() => {
@@ -149,12 +150,13 @@ export default function GroupPage() {
     mutationFn: (file: File) => artistAPI.uploadBanner(id!, file),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
   });
+  // Single-stage verification: the proof URL is submitted via request-verification.
   const submitMut = useMutation({
-    mutationFn: () => artistAPI.submitForModeration(id!),
+    mutationFn: () => artistAPI.requestVerification(id!, proofUrl),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
   });
   const submitProofMut = useMutation({
-    mutationFn: () => artistAPI.submitProof(id!, proofUrl),
+    mutationFn: () => artistAPI.requestVerification(id!, proofUrl),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); setProofUrl(''); },
   });
   const saveMut = useMutation({

@@ -12,6 +12,7 @@ datasource db {
 model FieldOfActivity {
   id   String @id @default(uuid())
   name String @unique
+  nameNorm String? // generated (ё→е, lower) — search only, never written
 
   directions  Direction[]
   users       User[]
@@ -22,6 +23,7 @@ model FieldOfActivity {
 model Direction {
   id                String           @id @default(uuid())
   name              String
+  nameNorm          String? // generated (ё→е, lower) — search only, never written
   fieldOfActivityId String?
   fieldOfActivity   FieldOfActivity? @relation(fields: [fieldOfActivityId], references: [id], onDelete: SetNull)
 
@@ -38,6 +40,7 @@ model Direction {
 model Profession {
   id          String     @id @default(uuid())
   name        String
+  nameNorm    String? // generated (ё→е, lower) — search only, never written
   directionId String?
   direction   Direction? @relation(fields: [directionId], references: [id], onDelete: SetNull)
 
@@ -68,6 +71,7 @@ model Section {
 model Service {
   id        String      @id @default(uuid())
   name      String
+  nameNorm  String? // generated (ё→е, lower) — search only, never written
   sortOrder Int         @default(0)
 
   sectionId String?
@@ -100,6 +104,7 @@ model ServiceProfession {
 model Genre {
   id        String @id @default(uuid())
   name      String @unique
+  nameNorm  String? // generated (ё→е, lower) — search only, never written
   nameEn    String?
   sortOrder Int    @default(0)
 
@@ -113,6 +118,7 @@ model Genre {
 model WorkFormat {
   id        String @id @default(uuid())
   name      String @unique
+  nameNorm  String? // generated (ё→е, lower) — search only, never written
   nameEn    String?
   sortOrder Int    @default(0)
 
@@ -125,6 +131,7 @@ model WorkFormat {
 model EmploymentType {
   id        String @id @default(uuid())
   name      String @unique
+  nameNorm  String? // generated (ё→е, lower) — search only, never written
   nameEn    String?
   sortOrder Int    @default(0)
 
@@ -137,6 +144,7 @@ model EmploymentType {
 model SkillLevel {
   id        String @id @default(uuid())
   name      String @unique
+  nameNorm  String? // generated (ё→е, lower) — search only, never written
   nameEn    String?
   sortOrder Int    @default(0)
 
@@ -149,6 +157,7 @@ model SkillLevel {
 model Availability {
   id        String @id @default(uuid())
   name      String @unique
+  nameNorm  String? // generated (ё→е, lower) — search only, never written
   nameEn    String?
   sortOrder Int    @default(0)
 
@@ -161,12 +170,25 @@ model Availability {
 model Geography {
   id        String @id @default(uuid())
   name      String @unique
+  nameNorm  String? // generated (ё→е, lower) — search only, never written
   nameEn    String?
   sortOrder Int    @default(0)
 
   userServices UserService[]
 
   createdAt DateTime @default(now())
+}
+
+// Controlled catalog of cities for profile/registration. User.city must match a
+// City.name (validated server-side); the picker only offers these values.
+model City {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  country   String   @default("Россия")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([sortOrder])
 }
 
 // Independent filter: price range (discrete buckets)
@@ -199,6 +221,7 @@ model UserService {
   availabilities             Availability[]
   geographies                Geography[]
   name                       String?
+  nameNorm                   String? // generated (ё→е, lower) — search only, never written
   priceFrom                  Int?
   priceTo                    Int?
   deadlineFrom               Int?
@@ -208,6 +231,7 @@ model UserService {
   status                     String    @default("active")
   selectedCustomFilterValues CustomFilterValue[]
   deals                      Deal[]
+  posts                      Post[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -293,6 +317,48 @@ enum ArtistType {
   SOLO
   GROUP
   COVER_GROUP
+  DUET
+  TRIBUTE
+  CHOIR
+  ENSEMBLE
+  ORCHESTRA
+}
+
+enum ArtistActivityStatus {
+  ACTIVE
+  INACTIVE
+  ARCHIVED
+  DISBANDED
+}
+
+enum MemberParticipationStatus {
+  ACTIVE_MEMBER
+  FORMER_MEMBER
+}
+
+enum RoleContext {
+  COLLECTIVE
+  RELEASE
+  CLIP
+}
+
+enum StreamingPlatform {
+  VK
+  SPOTIFY
+  YANDEX_MUSIC
+  APPLE_MUSIC
+}
+
+enum ClipPlatform {
+  VK_VIDEO
+  RUTUBE
+  YOUTUBE
+}
+
+enum ContactsVisibility {
+  ALL
+  REGISTERED
+  FRIENDS
 }
 
 enum ArtistStatus {
@@ -306,6 +372,7 @@ enum ArtistStatus {
 model Artist {
   id          String       @id @default(uuid())
   name        String
+  nameNorm    String? // generated (ё→е, lower) — search only, never written
   type        ArtistType?
   city        String?
   tourReady   String?
@@ -316,6 +383,8 @@ model Artist {
   banner      String?
   listeners   BigInt       @default(0)
 
+  activityStatus       ArtistActivityStatus @default(ACTIVE)
+
   status               ArtistStatus @default(DRAFT)
   submittedById        String?
   submittedByUser      User?        @relation("ArtistSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
@@ -323,11 +392,15 @@ model Artist {
   verificationCode     String?      @unique
   verificationProofUrl String?
   moderatedAt          DateTime?
+  submitterRoles       String[]     @default([])
 
   genres      ArtistGenre[]
   userArtists UserArtist[]
   followers   ArtistFollower[]
   posts       Post[]
+  releases    Release[]
+  clips       Clip[]
+  invites     ArtistInvite[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -424,12 +497,22 @@ model User {
   bio       String?
   country   String?
   city      String?
+  // Generated normalized copies (ё→е, lower) for ё/е-insensitive search — never written
+  firstNameNorm String?
+  lastNameNorm  String?
+  nicknameNorm  String?
+  bioNorm       String?
+  countryNorm   String?
+  cityNorm      String?
+  emailNorm     String?
   role      String?
   isAdmin   Boolean  @default(false)
   isBlocked  Boolean  @default(false)
   blockedUntil DateTime?
   isPremium  Boolean  @default(false)
-  isPro      Boolean  @default(false)
+  isPro      Boolean  @default(false)          // manual permanent Pro override (admin)
+  proUntil   DateTime?                          // time-based Pro expiry (donation/referral); effective Pro = isPro || proUntil>now
+  proMonthsFromReferrals Int @default(0)        // referral-granted Pro months already applied (to compute deltas)
   isVerified Boolean  @default(false)
   emailVerified          Boolean   @default(false)
   emailVerificationCode  String?
@@ -510,6 +593,10 @@ model User {
   usedReferralLink ReferralLink?  @relation("ReferralLinkConsumer")
   referralLinkUsed String?        // code of the ReferralLink this user signed up through
 
+  // Pro
+  donationCodes DonationCode[]
+  feedPresets   FeedPreset[]
+
   reviewsGiven    Review[] @relation("ReviewAuthor")
   reviewsReceived Review[] @relation("ReviewTarget")
 
@@ -524,6 +611,16 @@ model User {
   birthDate             DateTime?
   birthDateVisible      Boolean   @default(false)
   contactsVisible       Boolean   @default(true)
+  contactsVisibility    ContactsVisibility @default(ALL)
+
+  // Consent to processing PD allowed for public distribution (152-ФЗ ст.10.1).
+  // Obtained once, at the first public action (service/portfolio/public contacts).
+  publicConsentAt       DateTime?
+  publicConsentVersion  String?
+
+  // Release / Clip participation
+  releaseParticipations ReleaseParticipant[]
+  clipParticipations    ClipParticipant[]
   lastSeenAt            DateTime?
   termsAgreedAt         DateTime?
   onboardingCompletedAt DateTime?
@@ -687,21 +784,29 @@ enum GroupInviteStatus {
   PENDING
   ACCEPTED
   DECLINED
+  ARCHIVED
 }
 
 model UserArtist {
   id           String            @id @default(uuid())
   userId       String
   artistId     String
-  isOwner      Boolean           @default(false)
-  professionId String?
-  inviteStatus GroupInviteStatus @default(ACCEPTED)
-  invitedById  String?
+  isOwner             Boolean                   @default(false)
+  isAdmin             Boolean                   @default(false)
+  professionId        String?
+  inviteStatus        GroupInviteStatus         @default(ACCEPTED)
+  participationStatus MemberParticipationStatus @default(ACTIVE_MEMBER)
+  // True when the member was demoted to FORMER automatically because the artist
+  // left ACTIVE. Lets reactivation restore exactly those members (and not the
+  // ones an admin manually marked as former). Cleared on any manual change.
+  autoFormered        Boolean                   @default(false)
+  invitedById         String?
 
   user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   artist     Artist      @relation(fields: [artistId], references: [id], onDelete: Cascade)
   profession Profession? @relation(fields: [professionId], references: [id], onDelete: SetNull)
   invitedBy  User?       @relation("GroupInviter", fields: [invitedById], references: [id], onDelete: SetNull)
+  roles      UserArtistRole[]
 
   createdAt DateTime @default(now())
 
@@ -709,6 +814,136 @@ model UserArtist {
   @@index([userId])
   @@index([artistId])
   @@index([inviteStatus])
+}
+
+model ArtistInvite {
+  id                  String                    @id @default(uuid())
+  artistId            String
+  token               String                    @unique
+  roleIds             String[]                  @default([])
+  participationStatus MemberParticipationStatus @default(ACTIVE_MEMBER)
+  createdById         String?
+  createdAt           DateTime                  @default(now())
+
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
+}
+
+// ============ ROLE CATALOG ============
+
+model Role {
+  id        String      @id @default(uuid())
+  name      String
+  context   RoleContext
+  category  String
+  sortOrder Int         @default(0)
+  createdAt DateTime    @default(now())
+
+  userArtistRoles         UserArtistRole[]
+  releaseParticipantRoles ReleaseParticipantRole[]
+  clipParticipantRoles    ClipParticipantRole[]
+
+  @@unique([context, category, name])
+  @@index([context, category])
+}
+
+model UserArtistRole {
+  id           String @id @default(uuid())
+  userArtistId String
+  roleId       String
+
+  userArtist UserArtist @relation(fields: [userArtistId], references: [id], onDelete: Cascade)
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userArtistId, roleId])
+}
+
+// ============ RELEASES ============
+
+model Release {
+  id          String            @id @default(uuid())
+  artistId    String
+  title       String
+  coverUrl    String?
+  releaseDate DateTime?
+  platform    StreamingPlatform
+  url         String
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  artist       Artist               @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  participants ReleaseParticipant[]
+
+  @@index([artistId])
+}
+
+model ReleaseParticipant {
+  id            String            @id @default(uuid())
+  releaseId     String
+  userId        String
+  confirmStatus GroupInviteStatus @default(PENDING)
+  createdAt     DateTime          @default(now())
+
+  release Release                  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  user    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roles   ReleaseParticipantRole[]
+
+  @@unique([releaseId, userId])
+}
+
+model ReleaseParticipantRole {
+  id            String @id @default(uuid())
+  participantId String
+  roleId        String
+
+  participant ReleaseParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  role        Role               @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, roleId])
+}
+
+// ============ CLIPS ============
+
+model Clip {
+  id        String       @id @default(uuid())
+  artistId  String
+  title     String
+  coverUrl  String?
+  platform  ClipPlatform
+  url       String
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  artist       Artist            @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  participants ClipParticipant[]
+
+  @@index([artistId])
+}
+
+model ClipParticipant {
+  id            String            @id @default(uuid())
+  clipId        String
+  userId        String
+  confirmStatus GroupInviteStatus @default(PENDING)
+  createdAt     DateTime          @default(now())
+
+  clip  Clip                  @relation(fields: [clipId], references: [id], onDelete: Cascade)
+  user  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roles ClipParticipantRole[]
+
+  @@unique([clipId, userId])
+}
+
+model ClipParticipantRole {
+  id            String @id @default(uuid())
+  participantId String
+  roleId        String
+
+  participant ClipParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  role        Role            @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, roleId])
 }
 
 // ============ EXISTING MODELS ============
@@ -781,6 +1016,11 @@ model Post {
 
   artistId String?
   artist   Artist? @relation(fields: [artistId], references: [id], onDelete: SetNull)
+
+  // Structured "Услуга" post — link to the offering it advertises (for the
+  // «Детали услуги» button and to derive section/price at render time).
+  serviceId String?
+  service   UserService? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
 
   likes     Like[]
   comments  Comment[]
@@ -909,6 +1149,7 @@ model Message {
   senderId       String
   receiverId     String?
   content        String    @default("")
+  contentNorm    String? // generated (ё→е, lower) — search only, never written
   replyToId      String?
   isEdited       Boolean   @default(false)
   attachmentUrl  String?
@@ -997,6 +1238,7 @@ model CustomFilter {
 model CustomFilterValue {
   id        String       @id @default(uuid())
   value     String
+  valueNorm String? // generated (ё→е, lower) — search only, never written
   sortOrder Int          @default(0)
   filterId  String
   filter    CustomFilter @relation(fields: [filterId], references: [id], onDelete: Cascade)
@@ -1094,4 +1336,47 @@ model Notification {
   @@index([userId])
   @@index([userId, read])
   @@index([userId, createdAt])
+}
+
+// ============ PRO / DONATIONS ============
+
+enum DonationStatus {
+  CREATED   // code generated, not yet paid
+  PAID      // payment seen (optional intermediate state)
+  ACTIVATED // team verified payment and granted a Pro month
+}
+
+// One-time donation code (MOOOZA-XXXX) shown to the user before paying via CloudTips.
+// Each time the donate screen opens, a new code is issued and the previous one is
+// deactivated. The team matches the code from the payment comment to activate Pro.
+model DonationCode {
+  id          String         @id @default(uuid())
+  code        String         @unique          // MOOOZA-XXXX
+  userId      String
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status      DonationStatus @default(CREATED)
+  active      Boolean        @default(true)   // false once superseded by a newer code
+  amount      Int?                            // RUB, filled in at verification (optional)
+  note        String?                         // free-form admin note
+  createdAt   DateTime       @default(now())
+  paidAt      DateTime?
+  activatedAt DateTime?
+
+  @@index([userId])
+  @@index([code])
+  @@index([status])
+}
+
+// Saved feed-filter preset (Pro: multiple presets, free: a single one).
+model FeedPreset {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  filters   Json                              // serialized FlowFilters
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }

@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, SlidersHorizontal, Search, Loader2, X, MapPin } from 'lucide-react';
+import { ArrowLeft, SlidersHorizontal, Search, Loader2, X, MapPin, Bookmark, Plus, Trash2, Crown } from 'lucide-react';
+import { feedPresetAPI } from '../lib/api';
+import { useAuthStore } from '../stores/authStore';
+import { isProActive, limitsFor } from '../lib/proLimits';
 
 export interface FlowFilters {
   postType: string;
@@ -231,9 +234,66 @@ function CityMultiSelect({ selected, onAdd, onRemove }: { selected: string[]; on
 }
 
 
+interface FeedPreset {
+  id: string;
+  name: string;
+  filters: FlowFilters;
+}
+
 export default function FlowSettingsPage() {
   const navigate = useNavigate();
   const [filters, setFilters] = useState<FlowFilters>(loadFilters);
+
+  const user = useAuthStore(s => s.user);
+  const presetCap = limitsFor(isProActive(user)).feedPresets;
+
+  // ── Presets (server-persisted) ──
+  const [presets, setPresets] = useState<FeedPreset[]>([]);
+  const [presetsLoading, setPresetsLoading] = useState(true);
+  const [savingPreset, setSavingPreset] = useState(false);
+  const [presetError, setPresetError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    feedPresetAPI.list()
+      .then(res => { if (active) setPresets(res.data); })
+      .catch(() => { if (active) setPresets([]); })
+      .finally(() => { if (active) setPresetsLoading(false); });
+    return () => { active = false; };
+  }, []);
+
+  const atCap = presets.length >= presetCap;
+
+  const applyPreset = (preset: FeedPreset) => {
+    const next = { ...DEFAULT_FILTERS, ...preset.filters };
+    setFilters(next);
+    localStorage.setItem(FLOW_FILTERS_KEY, JSON.stringify(next));
+  };
+
+  const saveCurrentAsPreset = async () => {
+    if (atCap || savingPreset) return;
+    const name = window.prompt('Название пресета')?.trim();
+    if (!name) return;
+    setSavingPreset(true);
+    setPresetError(null);
+    try {
+      const res = await feedPresetAPI.create(name, filters as unknown as Record<string, unknown>);
+      setPresets(prev => [...prev, res.data]);
+    } catch (e: any) {
+      setPresetError(e?.response?.data?.error || 'Не удалось сохранить пресет');
+    } finally {
+      setSavingPreset(false);
+    }
+  };
+
+  const deletePreset = async (id: string) => {
+    try {
+      await feedPresetAPI.remove(id);
+      setPresets(prev => prev.filter(p => p.id !== id));
+    } catch (e: any) {
+      setPresetError(e?.response?.data?.error || 'Не удалось удалить пресет');
+    }
+  };
 
   const set = (key: 'postType' | 'authorKind' | 'period' | 'employment' | 'artistType' | 'genre', value: string) => {
     setFilters(prev => {
@@ -281,6 +341,77 @@ export default function FlowSettingsPage() {
         </div>
 
         <div className="pb-44 lg:pb-24">
+          {/* ── Presets ── */}
+          <div className="px-4 py-4 border-b border-slate-800/60">
+            <div className="flex items-center gap-2 mb-3">
+              <Bookmark size={14} className="text-primary-400" />
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Пресеты</p>
+            </div>
+
+            {presetsLoading ? (
+              <div className="flex items-center gap-2 text-slate-500 text-sm py-1">
+                <Loader2 size={14} className="animate-spin" /> Загрузка…
+              </div>
+            ) : (
+              <>
+                {presets.length > 0 && (
+                  <div className="space-y-2 mb-3">
+                    {presets.map(preset => (
+                      <div key={preset.id} className="flex items-center gap-2">
+                        <button
+                          onClick={() => applyPreset(preset)}
+                          className="flex-1 text-left px-4 py-2.5 rounded-2xl bg-slate-800/70 hover:bg-slate-700 text-sm font-medium text-white transition-colors truncate"
+                        >
+                          {preset.name}
+                        </button>
+                        <button
+                          onClick={() => deletePreset(preset.id)}
+                          aria-label="Удалить пресет"
+                          className="p-2.5 rounded-2xl bg-slate-800/70 text-slate-500 hover:text-red-400 hover:bg-slate-700 transition-colors flex-shrink-0"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {presets.length === 0 && (
+                  <p className="text-[13px] text-slate-500 mb-3">
+                    Сохраните текущие фильтры как пресет, чтобы переключаться между ними в один тап.
+                  </p>
+                )}
+
+                <button
+                  onClick={saveCurrentAsPreset}
+                  disabled={atCap || savingPreset}
+                  className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-2xl text-sm font-semibold transition-colors ${
+                    atCap
+                      ? 'bg-slate-800/50 text-slate-600 cursor-not-allowed'
+                      : 'bg-slate-800 text-white hover:bg-slate-700'
+                  }`}
+                >
+                  {savingPreset ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
+                  Сохранить текущие как пресет
+                </button>
+
+                {atCap && (
+                  <button
+                    onClick={() => navigate('/pro')}
+                    className="mt-2 w-full flex items-center justify-center gap-1.5 text-[13px] text-amber-400 hover:text-amber-300 transition-colors"
+                  >
+                    <Crown size={13} />
+                    Несколько пресетов — в Pro
+                  </button>
+                )}
+
+                {presetError && (
+                  <p className="mt-2 text-[13px] text-red-400">{presetError}</p>
+                )}
+              </>
+            )}
+          </div>
+
           <Section title="Тип поста">
             {POST_TYPES.map(t => (
               <Chip key={t.id} label={t.label} active={filters.postType === t.id} onClick={() => set('postType', t.id)} />

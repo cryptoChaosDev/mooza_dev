@@ -4,7 +4,7 @@ import {
   Eye, EyeOff, AlertCircle, Loader2,
   Check, Globe, ArrowRight, ArrowLeft, X, Search,
 } from 'lucide-react';
-import { authAPI, referenceAPI, referralAPI, siteSettingsAPI } from '../lib/api';
+import { authAPI, referenceAPI, referralAPI, artistAPI, siteSettingsAPI } from '../lib/api';
 import CityPicker from '../components/CityPicker';
 import VkLoginButton from '../components/VkLoginButton';
 
@@ -47,16 +47,16 @@ function Field({
 }
 
 function Input({
-  type = 'text', value, onChange, placeholder, autoFocus, right, disabled,
+  type = 'text', value, onChange, placeholder, autoFocus, right, disabled, maxLength,
 }: {
   type?: string; value: string; onChange: (v: string) => void;
-  placeholder?: string; autoFocus?: boolean; right?: React.ReactNode; disabled?: boolean;
+  placeholder?: string; autoFocus?: boolean; right?: React.ReactNode; disabled?: boolean; maxLength?: number;
 }) {
   return (
     <div className="relative">
       <input
         type={type} value={value} onChange={e => onChange(e.target.value)}
-        placeholder={placeholder} autoFocus={autoFocus} disabled={disabled}
+        placeholder={placeholder} autoFocus={autoFocus} disabled={disabled} maxLength={maxLength}
         className={`w-full pl-4 py-3.5 bg-slate-800/70 border border-slate-700/60 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 transition-all text-sm disabled:opacity-50 ${right ? 'pr-12' : 'pr-4'}`}
       />
       {right && <div className="absolute right-4 top-1/2 -translate-y-1/2">{right}</div>}
@@ -158,6 +158,12 @@ export default function RegisterPage() {
   const { setAuth } = useAuthStore();
   const [searchParams] = useSearchParams();
   const refCode = searchParams.get('ref') || undefined;
+  // Role-bound artist invite link (/register?artistInvite=token).
+  const artistInvite = searchParams.get('artistInvite') || undefined;
+  // Already-logged-in visitors get an accept screen instead of the signup form.
+  const isAuthed = !!localStorage.getItem('token');
+
+  useEffect(() => { document.title = 'Регистрация — Moooza'; }, []);
 
   useEffect(() => { document.title = 'Регистрация — Moooza'; }, []);
 
@@ -184,6 +190,36 @@ export default function RegisterPage() {
       })
       .catch(() => {});
   }, [refCode]);
+
+  // Resolve the artist-invite token → preview (artist name + roles) for the banner.
+  const [artistInvitePreview, setArtistInvitePreview] = useState<{ artist: { name: string }; roles: { id: string; name: string }[] } | null>(null);
+  useEffect(() => {
+    if (!artistInvite) return;
+    artistAPI.getInvite(artistInvite)
+      .then(({ data }) => setArtistInvitePreview(data))
+      .catch(() => setArtistInvitePreview(null));
+  }, [artistInvite]);
+
+  // ── Accept-invite flow for users who are ALREADY logged in ──────────────────
+  const [accepting, setAccepting] = useState(false);
+  const [acceptError, setAcceptError] = useState('');
+  // A logged-in user who lands on /register without an invite has nothing here.
+  useEffect(() => {
+    if (isAuthed && !artistInvite) navigate('/', { replace: true });
+  }, [isAuthed, artistInvite, navigate]);
+
+  const handleAcceptInvite = async () => {
+    if (!artistInvite) return;
+    setAccepting(true);
+    setAcceptError('');
+    try {
+      const { data } = await artistAPI.acceptInvite(artistInvite);
+      navigate(`/artist/${data.artistId}`, { replace: true });
+    } catch (err: any) {
+      setAcceptError(err.response?.data?.error || 'Не удалось принять приглашение');
+      setAccepting(false);
+    }
+  };
 
   const [step, setStep] = useState(0);
 
@@ -382,6 +418,7 @@ export default function RegisterPage() {
       if (digits.length >= 11) payload.phone = '+' + digits;
       if (referrerId) payload.referrerId = referrerId;
       if (refCode) payload.referralCode = refCode;
+      if (artistInvite) payload.artistInviteToken = artistInvite;
       if (!skipProfs && selectedProfs.length > 0) {
         payload.userProfessions = selectedProfs.map(p => ({
           professionId: p.professionId,
@@ -449,6 +486,43 @@ export default function RegisterPage() {
       { timeout: 10000 }
     );
   }, []);
+
+  // ── Logged-in visitor opened an artist invite link → confirm & join ─────────
+  if (isAuthed && artistInvite) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center px-6">
+        <div className="w-full max-w-sm text-center">
+          <div className="text-5xl mb-4">🎤</div>
+          <h2 className="text-2xl font-bold text-white mb-2">Приглашение в артиста</h2>
+          {artistInvitePreview ? (
+            <p className="text-slate-400 text-sm leading-relaxed mb-6">
+              Вас приглашают присоединиться к{' '}
+              <span className="text-white font-medium">{artistInvitePreview.artist.name}</span>
+              {artistInvitePreview.roles?.length
+                ? <> в роли <span className="text-white font-medium">{artistInvitePreview.roles.map(r => r.name).join(', ')}</span></>
+                : null}.
+            </p>
+          ) : (
+            <p className="text-slate-500 text-sm mb-6">Загрузка приглашения…</p>
+          )}
+          {acceptError && (
+            <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-red-400 text-sm">
+              <AlertCircle size={15} className="flex-shrink-0" />{acceptError}
+            </div>
+          )}
+          <button onClick={handleAcceptInvite} disabled={accepting || !artistInvitePreview}
+            className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-40 text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base mb-3">
+            {accepting ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+            Принять приглашение
+          </button>
+          <button onClick={() => navigate('/', { replace: true })}
+            className="w-full py-2.5 text-sm text-slate-500 hover:text-slate-300 transition-colors">
+            Не сейчас
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ── Email verification screen ─────────────────────────────────────────────
   if (pendingEmail) {
@@ -521,6 +595,16 @@ export default function RegisterPage() {
             <span>Эта пригласительная ссылка уже использована. Вы можете зарегистрироваться, но она не будет засчитана пригласившему.</span>
           </div>
         )}
+        {artistInvitePreview && (
+          <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-2xl bg-primary-500/10 border border-primary-500/30 text-primary-200 text-xs leading-relaxed">
+            <Check size={15} className="flex-shrink-0 mt-0.5 text-primary-400" />
+            <span>
+              Приглашение в артиста <b className="text-white">{artistInvitePreview.artist.name}</b>
+              {artistInvitePreview.roles?.length ? <> в роли <b className="text-white">{artistInvitePreview.roles.map(r => r.name).join(', ')}</b></> : null}.
+              После регистрации вы автоматически станете участником.
+            </span>
+          </div>
+        )}
         <Field label="Email" hint="Используется для входа и восстановления пароля">
           <Input type="email" value={email} onChange={setEmail} placeholder="you@example.com" autoFocus
             right={emailChecking
@@ -583,10 +667,10 @@ export default function RegisterPage() {
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <Field label="Имя" required>
-            <Input value={firstName} onChange={setFirstName} placeholder="Иван" autoFocus />
+            <Input value={firstName} onChange={setFirstName} placeholder="Иван" autoFocus maxLength={20} />
           </Field>
           <Field label="Фамилия" required>
-            <Input value={lastName} onChange={setLastName} placeholder="Иванов" />
+            <Input value={lastName} onChange={setLastName} placeholder="Иванов" maxLength={30} />
           </Field>
         </div>
         <Field label="Никнейм" hint="Необязательно — короткое имя для поиска">
@@ -596,6 +680,7 @@ export default function RegisterPage() {
               value={nickname}
               onChange={e => setNickname(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ''))}
               placeholder="username"
+              maxLength={20}
               className={`w-full pl-8 pr-10 py-3.5 bg-slate-800/70 border rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 transition-all text-sm ${
                 nicknameTaken ? 'border-red-500/60 focus:ring-red-500/30' : 'border-slate-700/60 focus:ring-primary-500/50'
               }`}

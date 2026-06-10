@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { adminAPI, api, siteSettingsAPI, complaintAPI } from '../lib/api';
+import { yoNorm, yoIncludes } from '../lib/search';
 import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2, ShieldCheck, Clock, Zap, Download, ExternalLink, RefreshCw, BarChart2, AlertTriangle } from 'lucide-react';
 import AvatarComponent from '../components/Avatar';
 import * as XLSX from 'xlsx';
@@ -45,8 +46,8 @@ function SimpleTable({
     queryFn: () => apiModule.list().then((r: any) => r.data),
   });
 
-  const q = search.toLowerCase();
-  const filtered = q ? items.filter(i => i.name.toLowerCase().includes(q)) : items;
+  const q = yoNorm(search);
+  const filtered = q ? items.filter(i => yoNorm(i.name).includes(q)) : items;
 
   const invalidate = () => qc.invalidateQueries({ queryKey: [queryKey] });
 
@@ -766,11 +767,11 @@ function CustomFiltersSection() {
     queryFn: () => adminAPI.customFilters.list().then((r: any) => r.data),
   });
 
-  const q = search.toLowerCase();
+  const q = yoNorm(search);
   const filteredFilters = q
     ? filters.filter(f =>
-        f.name.toLowerCase().includes(q) ||
-        f.values.some(v => v.value.toLowerCase().includes(q))
+        yoNorm(f.name).includes(q) ||
+        f.values.some(v => yoNorm(v.value).includes(q))
       )
     : filters;
 
@@ -899,10 +900,10 @@ function DirectionsTab() {
   const [editName, setEditName] = useState('');
   const [search, setSearch] = useState('');
 
-  const q = search.toLowerCase();
+  const q = yoNorm(search);
   const nameCounts: Record<string, number> = {};
   directions.forEach(d => { nameCounts[d.name] = (nameCounts[d.name] ?? 0) + 1; });
-  const filtered = q ? directions.filter(d => d.name.toLowerCase().includes(q)) : directions;
+  const filtered = q ? directions.filter(d => yoNorm(d.name).includes(q)) : directions;
 
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
@@ -992,10 +993,10 @@ function ProfessionsTab() {
   const [editName, setEditName] = useState('');
   const [search, setSearch] = useState('');
 
-  const q = search.toLowerCase();
+  const q = yoNorm(search);
   const nameCounts: Record<string, number> = {};
   professions.forEach(p => { nameCounts[p.name] = (nameCounts[p.name] ?? 0) + 1; });
-  const filtered = q ? professions.filter(p => p.name.toLowerCase().includes(q)) : professions;
+  const filtered = q ? professions.filter(p => yoNorm(p.name).includes(q)) : professions;
 
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
@@ -1104,8 +1105,8 @@ function ServicesTab() {
     onSuccess: invalidate,
   });
 
-  const q = search.toLowerCase();
-  const filtered = q ? services.filter(s => s.name.toLowerCase().includes(q)) : services;
+  const q = yoNorm(search);
+  const filtered = q ? services.filter(s => yoNorm(s.name).includes(q)) : services;
 
   return (
     <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
@@ -1762,24 +1763,14 @@ function ArtistModerationTab() {
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
-  const { data: pending = [], isLoading: loadingPending } = useQuery<any[]>({
-    queryKey: ['admin-artists-pending'],
-    queryFn: () => adminAPI.artistModeration.pending().then((r: any) => r.data),
-  });
-
   const { data: verification = [], isLoading: loadingVerification } = useQuery<any[]>({
     queryKey: ['admin-artists-verification'],
     queryFn: () => adminAPI.artistModeration.verification().then((r: any) => r.data),
   });
 
-  const approveMut = useMutation({
-    mutationFn: (id: string) => adminAPI.artistModeration.approve(id),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-artists-pending'] }); },
-  });
-
   const rejectMut = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => adminAPI.artistModeration.reject(id, reason),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-artists-pending'] }); setRejectId(null); setRejectReason(''); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-artists-verification'] }); setRejectId(null); setRejectReason(''); },
   });
 
   const verifyMut = useMutation({
@@ -1789,23 +1780,23 @@ function ArtistModerationTab() {
 
   return (
     <div className="space-y-6">
-      {/* Pending moderation */}
+      {/* Verification requests */}
       <div>
         <div className="flex items-center gap-2 mb-3">
-          <Clock size={15} className="text-amber-400" />
-          <h2 className="text-sm font-semibold text-white">Ожидают модерации</h2>
-          {pending.length > 0 && (
-            <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[11px] rounded-full font-semibold">{pending.length}</span>
+          <ShieldCheck size={15} className="text-sky-400" />
+          <h2 className="text-sm font-semibold text-white">Запросы верификации</h2>
+          {verification.length > 0 && (
+            <span className="px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-[11px] rounded-full font-semibold">{verification.length}</span>
           )}
         </div>
 
-        {loadingPending ? (
+        {loadingVerification ? (
           <div className="text-sm text-slate-500 py-4 text-center">Загрузка...</div>
-        ) : pending.length === 0 ? (
-          <div className="text-sm text-slate-500 py-4 text-center bg-slate-900 rounded-xl border border-slate-800">Очередь пуста</div>
+        ) : verification.length === 0 ? (
+          <div className="text-sm text-slate-500 py-4 text-center bg-slate-900 rounded-xl border border-slate-800">Нет запросов</div>
         ) : (
           <div className="space-y-3">
-            {pending.map((artist: any) => (
+            {verification.map((artist: any) => (
               <div key={artist.id} className="bg-slate-900 rounded-xl border border-slate-800 p-4">
                 <div className="flex items-start gap-3 mb-3">
                   <AvatarComponent src={artist.avatar} name={artist.name} size={40} />
@@ -1817,9 +1808,6 @@ function ArtistModerationTab() {
                         Отправил: {artist.submittedByUser.firstName} {artist.submittedByUser.lastName}
                       </p>
                     )}
-                    {artist.description && (
-                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">{artist.description}</p>
-                    )}
                     {(artist.genres ?? []).length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {artist.genres.map((g: any) => (
@@ -1828,6 +1816,41 @@ function ArtistModerationTab() {
                       </div>
                     )}
                   </div>
+                </div>
+
+                {artist.duplicates?.length > 0 && (
+                  <div className="mb-3 flex items-start gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs leading-relaxed">
+                    <span className="flex-shrink-0">⚠️</span>
+                    <div>
+                      <span className="font-semibold">Возможный дубль названия.</span> Уже есть:{' '}
+                      {artist.duplicates.map((d: any, i: number) => (
+                        <span key={d.id}>
+                          {i > 0 && ', '}
+                          <a href={`/artist/${d.id}`} target="_blank" rel="noopener noreferrer" className="underline hover:text-amber-200 font-medium">
+                            {d.name}{d.verified ? ' ✓ (верифицирован)' : ''}
+                          </a>
+                        </span>
+                      ))}
+                      . Проверьте перед подтверждением.
+                    </div>
+                  </div>
+                )}
+
+                <div className="mb-3">
+                  <p className="text-[10px] text-slate-500 mb-1">Код верификации</p>
+                  <code className="text-sm font-mono font-bold text-primary-400">{artist.verificationCode}</code>
+                </div>
+
+                <div className="mb-3">
+                  <p className="text-[10px] text-slate-500 mb-1">Ссылка на публикацию</p>
+                  <a
+                    href={artist.verificationProofUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-sky-400 hover:underline break-all"
+                  >
+                    {artist.verificationProofUrl}
+                  </a>
                 </div>
 
                 {rejectId === artist.id ? (
@@ -1850,14 +1873,14 @@ function ArtistModerationTab() {
                     </button>
                   </div>
                 ) : (
-                  <div className="flex gap-2 mt-2">
+                  <div className="flex gap-2">
                     <button
-                      onClick={() => approveMut.mutate(artist.id)}
-                      disabled={approveMut.isPending}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600/20 hover:bg-green-600/30 text-green-400 border border-green-600/30 text-xs rounded-lg transition-colors disabled:opacity-50"
+                      onClick={() => verifyMut.mutate(artist.id)}
+                      disabled={verifyMut.isPending}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600/20 hover:bg-sky-600/30 text-sky-400 border border-sky-600/30 text-xs rounded-lg transition-colors disabled:opacity-50"
                     >
-                      {approveMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-                      Одобрить
+                      {verifyMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />}
+                      Верифицировать
                     </button>
                     <button
                       onClick={() => { setRejectId(artist.id); setRejectReason(''); }}
@@ -1868,67 +1891,6 @@ function ArtistModerationTab() {
                     </button>
                   </div>
                 )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Verification requests */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <ShieldCheck size={15} className="text-sky-400" />
-          <h2 className="text-sm font-semibold text-white">Запросы верификации</h2>
-          {verification.length > 0 && (
-            <span className="px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-[11px] rounded-full font-semibold">{verification.length}</span>
-          )}
-        </div>
-
-        {loadingVerification ? (
-          <div className="text-sm text-slate-500 py-4 text-center">Загрузка...</div>
-        ) : verification.length === 0 ? (
-          <div className="text-sm text-slate-500 py-4 text-center bg-slate-900 rounded-xl border border-slate-800">Нет запросов</div>
-        ) : (
-          <div className="space-y-3">
-            {verification.map((artist: any) => (
-              <div key={artist.id} className="bg-slate-900 rounded-xl border border-slate-800 p-4">
-                <div className="flex items-center gap-3 mb-3">
-                  <AvatarComponent src={artist.avatar} name={artist.name} size={40} />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-white text-sm">{artist.name}</p>
-                    {artist.submittedByUser && (
-                      <p className="text-xs text-slate-500">
-                        {artist.submittedByUser.firstName} {artist.submittedByUser.lastName}
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="mb-3">
-                  <p className="text-[10px] text-slate-500 mb-1">Код верификации</p>
-                  <code className="text-sm font-mono font-bold text-primary-400">{artist.verificationCode}</code>
-                </div>
-
-                <div className="mb-3">
-                  <p className="text-[10px] text-slate-500 mb-1">Ссылка на публикацию</p>
-                  <a
-                    href={artist.verificationProofUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-sky-400 hover:underline break-all"
-                  >
-                    {artist.verificationProofUrl}
-                  </a>
-                </div>
-
-                <button
-                  onClick={() => verifyMut.mutate(artist.id)}
-                  disabled={verifyMut.isPending}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600/20 hover:bg-sky-600/30 text-sky-400 border border-sky-600/30 text-xs rounded-lg transition-colors disabled:opacity-50"
-                >
-                  {verifyMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />}
-                  Верифицировать
-                </button>
               </div>
             ))}
           </div>
@@ -1977,7 +1939,7 @@ function GroupsAdminTab() {
   });
 
   const filtered = groups.filter(g => {
-    if (search && !g.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (search && !yoIncludes(g.name, search)) return false;
     if (filterType !== 'ALL') {
       if (filterType === 'NONE' && g.type !== null) return false;
       if (filterType !== 'NONE' && g.type !== filterType) return false;
@@ -2518,6 +2480,171 @@ function ComplaintsTab() {
   );
 }
 
+// ─── Pro donations tab ───────────────────────────────────────────────────────
+
+interface DonationRow {
+  id: string;
+  code: string;
+  status: 'CREATED' | 'PAID' | 'ACTIVATED';
+  amount: number | null;
+  note: string | null;
+  createdAt: string;
+  activatedAt: string | null;
+  user: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    nickname: string | null;
+    email: string | null;
+    proUntil: string | null;
+    isPro: boolean;
+  };
+}
+
+const DONATION_STATUS_TABS = [
+  { id: '', label: 'Все' },
+  { id: 'CREATED', label: 'Ожидают' },
+  { id: 'PAID', label: 'Оплачены' },
+  { id: 'ACTIVATED', label: 'Активированы' },
+];
+
+const donationStatusBadge: Record<string, string> = {
+  CREATED: 'bg-amber-500/20 text-amber-400',
+  PAID: 'bg-blue-500/20 text-blue-400',
+  ACTIVATED: 'bg-emerald-500/20 text-emerald-400',
+};
+
+const donationStatusLabel: Record<string, string> = {
+  CREATED: 'Ожидает',
+  PAID: 'Оплачен',
+  ACTIVATED: 'Активирован',
+};
+
+function DonationsTab() {
+  const qc = useQueryClient();
+  const [statusFilter, setStatusFilter] = useState('');
+  const [grantId, setGrantId] = useState('');
+
+  const { data: donations = [], isLoading } = useQuery<DonationRow[]>({
+    queryKey: ['admin-donations', statusFilter],
+    queryFn: () => adminAPI.listDonations(statusFilter || undefined).then((r: any) => r.data),
+    refetchInterval: 30000,
+  });
+
+  const activateMut = useMutation({
+    mutationFn: (id: string) => adminAPI.activateDonation(id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-donations'] });
+    },
+  });
+
+  const grantMut = useMutation({
+    mutationFn: (userId: string) => adminAPI.grantProMonth(userId.trim()),
+    onSuccess: () => {
+      setGrantId('');
+      qc.invalidateQueries({ queryKey: ['admin-donations'] });
+    },
+  });
+
+  const userName = (u: DonationRow['user']) => {
+    const full = `${u.firstName} ${u.lastName}`.trim();
+    return u.nickname ? `${full} (@${u.nickname})` : full;
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Manual grant — "user forgot to enter the code" support case */}
+      <div className="bg-slate-900 rounded-xl border border-slate-800 p-4 space-y-2">
+        <h3 className="font-semibold text-white flex items-center gap-2">
+          <Crown size={16} className="text-amber-400" /> Выдать месяц Pro вручную
+        </h3>
+        <p className="text-xs text-slate-500">
+          Для случая «пользователь задонатил, но забыл ввести код». Укажите ID пользователя.
+        </p>
+        <div className="flex items-center gap-2">
+          <input
+            value={grantId}
+            onChange={e => setGrantId(e.target.value)}
+            placeholder="ID пользователя"
+            className="flex-1 bg-slate-800 text-white text-sm px-3 py-2 rounded-lg outline-none border border-slate-700 focus:border-primary-500"
+          />
+          <button
+            onClick={() => grantId.trim() && grantMut.mutate(grantId)}
+            disabled={!grantId.trim() || grantMut.isPending}
+            className="flex items-center gap-1.5 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg transition-colors whitespace-nowrap"
+          >
+            {grantMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+            Выдать месяц
+          </button>
+        </div>
+        {grantMut.isError && <p className="text-xs text-red-400">Не удалось выдать Pro. Проверьте ID.</p>}
+        {grantMut.isSuccess && <p className="text-xs text-emerald-400">Месяц Pro выдан.</p>}
+      </div>
+
+      {/* Status filter */}
+      <div className="flex flex-wrap gap-1.5">
+        {DONATION_STATUS_TABS.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setStatusFilter(t.id)}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              statusFilter === t.id ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-slate-500" /></div>
+      ) : donations.length === 0 ? (
+        <div className="text-center py-8 text-slate-500 text-sm">Нет донатов</div>
+      ) : (
+        <div className="space-y-2">
+          {donations.map(d => (
+            <div key={d.id} className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-sm text-white">{d.code}</span>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${donationStatusBadge[d.status]}`}>
+                      {donationStatusLabel[d.status] ?? d.status}
+                    </span>
+                    {d.user.isPro && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 flex items-center gap-1">
+                        <Crown size={11} /> Pro
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-sm text-slate-300 mt-1 truncate">{userName(d.user)}</p>
+                  {d.user.email && <p className="text-xs text-slate-500 truncate">{d.user.email}</p>}
+                  <p className="text-xs text-slate-600 mt-1">
+                    {new Date(d.createdAt).toLocaleString('ru-RU')}
+                    <span className="text-slate-700"> · ID: {d.user.id}</span>
+                  </p>
+                </div>
+                {d.status !== 'ACTIVATED' && (
+                  <button
+                    onClick={() => activateMut.mutate(d.id)}
+                    disabled={activateMut.isPending}
+                    className="flex items-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-3 py-2 rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
+                  >
+                    {activateMut.isPending && activateMut.variables === d.id
+                      ? <Loader2 size={13} className="animate-spin" />
+                      : <Check size={13} />}
+                    Активировать Pro
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 const TABS = [
   { id: 'structure',   label: 'Структура' },
   { id: 'spheres',     label: 'Сферы' },
@@ -2527,6 +2654,7 @@ const TABS = [
   { id: 'filters',     label: 'Фильтры' },
   { id: 'orgs',        label: 'Группы' },
   { id: 'users',       label: 'Пользователи' },
+  { id: 'donations',   label: 'Донаты Pro' },
   { id: 'moderation',  label: 'Модерация' },
   { id: 'settings',    label: 'Настройки' },
 ] as const;
@@ -2622,6 +2750,8 @@ export default function AdminPage() {
         )}
 
         {tab === 'users' && <UsersTab />}
+
+        {tab === 'donations' && <DonationsTab />}
 
         {tab === 'moderation' && (
           <div className="space-y-8">

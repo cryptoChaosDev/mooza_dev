@@ -82,7 +82,6 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
       <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
         <Star size={14} className="text-amber-400 fill-amber-400" />
         <span className="text-sm font-semibold text-white">Отзывы</span>
-        {reviews.length > 0 && <span className="text-xs text-slate-500">{reviews.length}</span>}
         {reviews.length > 0 && <span className="text-xs text-amber-400 font-medium">{avgRating.toFixed(1)}</span>}
         {reviews.length > 0 && (
           <button
