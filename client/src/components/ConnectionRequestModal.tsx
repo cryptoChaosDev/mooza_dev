@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { X, Link2, ArrowLeft, Check, Loader2, ChevronRight, Clock } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { connectionAPI, referenceAPI } from '../lib/api';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 import AvatarComponent from './Avatar';
 
 interface Props {
@@ -45,10 +47,12 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
   const acceptMut = useMutation({
     mutationFn: () => connectionAPI.accept(existingConn.id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connections-accepted'] }); onClose(); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось принять запрос')),
   });
   const rejectMut = useMutation({
     mutationFn: () => connectionAPI.reject(existingConn.id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['connections-requests'] }); onClose(); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить запрос')),
   });
 
   const [step, setStep] = useState<'relation' | 'catalog'>('relation');
@@ -87,6 +91,7 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
       queryClient.invalidateQueries({ queryKey: ['connections-sent'] });
       onClose();
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить запрос')),
   });
 
   const toggle = (id: string) => setSelected(prev => {

@@ -8,6 +8,8 @@ import {
 import { dealAPI, reviewAPI } from '../lib/api';
 import { DEALS_ENABLED } from '../lib/features';
 import { useAuthStore } from '../stores/authStore';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 import AvatarComponent from '../components/Avatar';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
@@ -57,16 +59,17 @@ export default function DealPage() {
       dealId: dealId!,
     }),
     onSuccess: () => { setReviewSent(true); qc.invalidateQueries({ queryKey: ['reviews', partner?.id] }); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить оценку')),
   });
 
-  const acceptMut  = useMutation({ mutationFn: () => dealAPI.accept(dealId!),  onSuccess: invalidate });
-  const rejectMut  = useMutation({ mutationFn: (r: string) => dealAPI.reject(dealId!, r), onSuccess: invalidate });
-  const cancelMut  = useMutation({ mutationFn: (r: string) => dealAPI.cancel(dealId!, r), onSuccess: () => { invalidate(); setShowCancelInput(false); } });
-  const payMut     = useMutation({ mutationFn: () => dealAPI.pay(dealId!),     onSuccess: invalidate });
-  const submitMut  = useMutation({ mutationFn: () => dealAPI.submit(dealId!),  onSuccess: invalidate });
-  const approveMut = useMutation({ mutationFn: () => dealAPI.approve(dealId!), onSuccess: invalidate });
-  const revisionMut= useMutation({ mutationFn: () => dealAPI.revision(dealId!, revisionComment), onSuccess: () => { invalidate(); setShowRevisionInput(false); setRevisionComment(''); } });
-  const confirmMut = useMutation({ mutationFn: () => dealAPI.confirm(dealId!), onSuccess: invalidate });
+  const acceptMut  = useMutation({ mutationFn: () => dealAPI.accept(dealId!),  onSuccess: invalidate, onError: (e: any) => toast.error(getApiError(e, 'Не удалось принять сделку')) });
+  const rejectMut  = useMutation({ mutationFn: (r: string) => dealAPI.reject(dealId!, r), onSuccess: invalidate, onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить сделку')) });
+  const cancelMut  = useMutation({ mutationFn: (r: string) => dealAPI.cancel(dealId!, r), onSuccess: () => { invalidate(); setShowCancelInput(false); }, onError: (e: any) => toast.error(getApiError(e, 'Не удалось отменить сделку')) });
+  const payMut     = useMutation({ mutationFn: () => dealAPI.pay(dealId!),     onSuccess: invalidate, onError: (e: any) => toast.error(getApiError(e, 'Не удалось подтвердить оплату')) });
+  const submitMut  = useMutation({ mutationFn: () => dealAPI.submit(dealId!),  onSuccess: invalidate, onError: (e: any) => toast.error(getApiError(e, 'Не удалось сдать работу')) });
+  const approveMut = useMutation({ mutationFn: () => dealAPI.approve(dealId!), onSuccess: invalidate, onError: (e: any) => toast.error(getApiError(e, 'Не удалось принять работу')) });
+  const revisionMut= useMutation({ mutationFn: () => dealAPI.revision(dealId!, revisionComment), onSuccess: () => { invalidate(); setShowRevisionInput(false); setRevisionComment(''); }, onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить на доработку')) });
+  const confirmMut = useMutation({ mutationFn: () => dealAPI.confirm(dealId!), onSuccess: invalidate, onError: (e: any) => toast.error(getApiError(e, 'Не удалось подтвердить оказание услуги')) });
 
   const requestEditMut = useMutation({
     mutationFn: () => dealAPI.requestEdit(dealId!, {
@@ -74,15 +77,18 @@ export default function DealPage() {
       revisionCount: editRevisions ? Number(editRevisions) : undefined,
     }),
     onSuccess: () => { invalidate(); setShowEditForm(false); setEditDeadline(''); setEditRevisions(''); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить запрос на изменение')),
   });
 
   const acceptEditMut = useMutation({
     mutationFn: (reqId: string) => dealAPI.acceptEdit(reqId),
     onSuccess: invalidate,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось принять изменение условий')),
   });
   const rejectEditMut = useMutation({
     mutationFn: (reqId: string) => dealAPI.rejectEdit(reqId),
     onSuccess: invalidate,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить изменение условий')),
   });
 
   if (isLoading) return (

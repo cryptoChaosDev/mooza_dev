@@ -5,6 +5,8 @@ import { ChevronLeft, Star, MessageSquare, Trash2, Loader2 } from 'lucide-react'
 import { reviewAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -46,6 +48,7 @@ export default function ReviewsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => reviewAPI.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['reviews', userId] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить отзыв')),
   });
 
   const handleReply = async (reviewId: string) => {
@@ -56,6 +59,8 @@ export default function ReviewsPage() {
       queryClient.invalidateQueries({ queryKey: ['reviews', userId] });
       setReplyingId(null);
       setReplyText('');
+    } catch (e: any) {
+      toast.error(getApiError(e, 'Не удалось отправить ответ'));
     } finally {
       setSavingReply(false);
     }

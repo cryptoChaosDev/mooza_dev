@@ -26,6 +26,8 @@ import ReviewsBlock from '../components/ReviewsBlock';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
 import ProfileProgressBar from '../components/ProfileProgressBar';
 import PublicConsentGate from '../components/PublicConsentGate';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -406,6 +408,7 @@ export default function ProfilePage() {
       return data;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['profile'] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось загрузить аватар')),
   });
 
   const uploadBannerMutation = useMutation({
@@ -416,9 +419,13 @@ export default function ProfilePage() {
       return data;
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['profile'] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось загрузить обложку')),
   });
 
-  const updateMutation = useMutation({ mutationFn: userAPI.updateMe });
+  const updateMutation = useMutation({
+    mutationFn: userAPI.updateMe,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
+  });
   const [autoSaved, setAutoSaved] = useState(false);
 
   // Debounce autosave: when editing is open and formData changes, auto-save after 1.5s
@@ -430,7 +437,7 @@ export default function ProfilePage() {
         await userAPI.updateMe(stripProfessions(data));
         setAutoSaved(true);
         setTimeout(() => setAutoSaved(false), 2000);
-      } catch {}
+      } catch (e: any) { toast.error(getApiError(e, 'Не удалось сохранить изменения')); }
     }, 1500);
   }, []);
 
@@ -457,6 +464,7 @@ export default function ProfilePage() {
         priceItems: us.priceItems.length > 0 ? us.priceItems : undefined,
       }))
     ),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить услуги')),
   });
 
   const handleSaveHero = async () => {
@@ -792,20 +800,28 @@ export default function ProfilePage() {
         fd.append('file', file);
         setIsUploadingPortfolio(true);
         try { const { data } = await userAPI.uploadPortfolio(fd); setPortfolioFiles(prev => [...prev, data]); }
-        catch { /* ignore */ }
+        catch (e: any) { toast.error(getApiError(e, 'Не удалось загрузить файл')); }
         finally { setIsUploadingPortfolio(false); }
       }
     });
   };
 
   const handlePortfolioDelete = async (fileId: string) => {
-    await userAPI.deletePortfolioFile(fileId);
-    setPortfolioFiles(prev => prev.filter((f: any) => f.id !== fileId));
+    try {
+      await userAPI.deletePortfolioFile(fileId);
+      setPortfolioFiles(prev => prev.filter((f: any) => f.id !== fileId));
+    } catch (e: any) {
+      toast.error(getApiError(e, 'Не удалось удалить файл'));
+    }
   };
 
   const handleDeleteLink = async (linkId: string) => {
-    await userAPI.deletePortfolioLink(linkId);
-    setPortfolioLinks(prev => prev.filter((l: any) => l.id !== linkId));
+    try {
+      await userAPI.deletePortfolioLink(linkId);
+      setPortfolioLinks(prev => prev.filter((l: any) => l.id !== linkId));
+    } catch (e: any) {
+      toast.error(getApiError(e, 'Не удалось удалить ссылку'));
+    }
   };
 
 

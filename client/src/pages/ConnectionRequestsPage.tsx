@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, Clock, X, Loader2 } from 'lucide-react';
 import { connectionAPI } from '../lib/api';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 import AvatarComponent from '../components/Avatar';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 
@@ -37,6 +39,7 @@ export default function ConnectionRequestsPage() {
   const cancelMut = useMutation({
     mutationFn: (id: string) => connectionAPI.cancel(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['connections-sent'] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отменить запрос')),
   });
 
   const isLoading = tab === 'received' ? loadingR : loadingS;

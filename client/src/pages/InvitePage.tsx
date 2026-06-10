@@ -6,6 +6,8 @@ import {
   Plus, Trash2, Link2, Loader2, X, Zap,
 } from 'lucide-react';
 import { referralAPI } from '../lib/api';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 // Referral links point at the current origin (dev → dev links, prod → prod links),
 // falling back to the canonical domain when origin is unavailable.
@@ -60,6 +62,7 @@ export default function InvitePage() {
   const deleteMut = useMutation({
     mutationFn: (id: string) => referralAPI.deleteLink(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['referral-links'] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить ссылку')),
   });
 
   const linkUrl = (code: string) => `${APP_URL}/register?ref=${code}`;

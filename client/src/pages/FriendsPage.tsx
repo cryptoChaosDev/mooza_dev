@@ -14,6 +14,8 @@ import { yoNorm } from '../lib/search';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 
 import ConfirmDialog from '../components/ConfirmDialog';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 type Tab = 'friends' | 'connections' | 'favorites';
 
@@ -120,12 +122,14 @@ const { data: myBreakRequests = [] } = useQuery({
   const removeMutation = useMutation({
     mutationFn: friendshipAPI.removeFriend,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['friends'] }); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить из друзей')),
   });
 
   // ── Mutations (favorites) ──
   const removeFavMutation = useMutation({
     mutationFn: (targetId: string) => favoriteAPI.remove(targetId),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['favorites'] }); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось убрать из избранного')),
   });
 
 

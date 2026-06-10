@@ -24,6 +24,8 @@ import MediaItemForm from '../components/MediaItemForm';
 import { useAuthStore } from '../stores/authStore';
 import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 const ACTIVITY_OPTIONS = [
   { id: 'ACTIVE',    name: 'Действующий' },
@@ -240,21 +242,25 @@ export default function ArtistPage() {
   const followMut = useMutation({
     mutationFn: () => artistAPI.follow(id!),
     onSuccess: favInvalidate,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось добавить в избранное')),
   });
 
   const unfollowMut = useMutation({
     mutationFn: () => artistAPI.unfollow(id!),
     onSuccess: favInvalidate,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось убрать из избранного')),
   });
 
   const uploadAvatarMut = useMutation({
     mutationFn: (file: File) => artistAPI.uploadAvatar(id!, file),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось загрузить аватар')),
   });
 
   const uploadBannerMut = useMutation({
     mutationFn: (file: File) => artistAPI.uploadBanner(id!, file),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось загрузить обложку')),
   });
 
   const requestVerifyMut = useMutation({
@@ -273,6 +279,7 @@ export default function ArtistPage() {
   const withdrawMut = useMutation({
     mutationFn: () => artistAPI.withdrawVerification(id!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отозвать заявку')),
   });
 
   const saveMut = useMutation({
@@ -292,6 +299,7 @@ export default function ArtistPage() {
       queryClient.invalidateQueries({ queryKey: ['artist', id] });
       setIsEditing(false);
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
 
   const inviteMut = useMutation({
@@ -318,10 +326,12 @@ export default function ArtistPage() {
       queryClient.invalidateQueries({ queryKey: ['artist', id] });
       queryClient.invalidateQueries({ queryKey: ['artist-pending-members', id] });
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось подтвердить заявку')),
   });
   const rejectMemberMut = useMutation({
     mutationFn: (membershipId: string) => artistAPI.rejectMembership(membershipId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist-pending-members', id] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить заявку')),
   });
 
   // ── Phase 5b: user search for add-member modal ─────────────────────────────
@@ -341,10 +351,12 @@ export default function ArtistPage() {
   const confirmInviteMut = useMutation({
     mutationFn: (membershipId: string) => artistAPI.confirmMembership(membershipId),
     onSuccess: () => invalidateArtist(),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось подтвердить участие')),
   });
   const declineInviteMut = useMutation({
     mutationFn: (membershipId: string) => artistAPI.declineMembership(membershipId),
     onSuccess: () => invalidateArtist(),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить приглашение')),
   });
 
   const addMemberMut = useMutation({
@@ -369,44 +381,52 @@ export default function ArtistPage() {
     mutationFn: () =>
       artistAPI.createInviteLink(id!, { roleIds: linkRoleIds, participationStatus: linkParticipation }),
     onSuccess: (res: any) => { setGeneratedLink(res.data?.url ?? ''); setLinkCopied(false); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось создать ссылку')),
   });
 
   const setParticipationMut = useMutation({
     mutationFn: (vars: { membershipId: string; status: 'ACTIVE_MEMBER' | 'FORMER_MEMBER' }) =>
       artistAPI.setMemberParticipation(id!, vars.membershipId, vars.status),
     onSuccess: invalidateArtist,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось изменить статус участника')),
   });
 
   const setRolesMut = useMutation({
     mutationFn: (vars: { membershipId: string; roleIds: string[] }) =>
       artistAPI.setMemberRoles(id!, vars.membershipId, vars.roleIds),
     onSuccess: invalidateArtist,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось изменить роли')),
   });
 
   const removeMember5bMut = useMutation({
     mutationFn: (membershipId: string) => artistAPI.removeMember(id!, membershipId),
     onSuccess: invalidateArtist,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить участника')),
   });
 
   const setActivityMut = useMutation({
     mutationFn: (status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED' | 'DISBANDED') =>
       artistAPI.setActivityStatus(id!, status),
     onSuccess: invalidateArtist,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось изменить статус активности')),
   });
 
   const transferOwnerNewMut = useMutation({
     mutationFn: (userId: string) => artistAPI.transferOwner(id!, userId),
     onSuccess: invalidateArtist,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сменить владельца')),
   });
 
   const addAdminMut = useMutation({
     mutationFn: (userId: string) => artistAPI.addAdmin(id!, userId),
     onSuccess: invalidateArtist,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось добавить администратора')),
   });
 
   const removeAdminMut = useMutation({
     mutationFn: (userId: string) => artistAPI.removeAdmin(id!, userId),
     onSuccess: invalidateArtist,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось снять администратора')),
   });
 
   const set = (key: keyof EditForm, value: string | string[] | Record<string, string>) =>

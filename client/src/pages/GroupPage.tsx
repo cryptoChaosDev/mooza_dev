@@ -18,6 +18,8 @@ import SelectSheet from '../components/SelectSheet';
 import ShareButton from '../components/ShareButton';
 import { useAuthStore } from '../stores/authStore';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -137,27 +139,33 @@ export default function GroupPage() {
   const followMut = useMutation({
     mutationFn: () => artistAPI.follow(id!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось подписаться')),
   });
   const unfollowMut = useMutation({
     mutationFn: () => artistAPI.unfollow(id!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отписаться')),
   });
   const uploadAvatarMut = useMutation({
     mutationFn: (file: File) => artistAPI.uploadAvatar(id!, file),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось загрузить аватар')),
   });
   const uploadBannerMut = useMutation({
     mutationFn: (file: File) => artistAPI.uploadBanner(id!, file),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось загрузить обложку')),
   });
   // Single-stage verification: the proof URL is submitted via request-verification.
   const submitMut = useMutation({
     mutationFn: () => artistAPI.requestVerification(id!, proofUrl),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить на модерацию')),
   });
   const submitProofMut = useMutation({
     mutationFn: () => artistAPI.requestVerification(id!, proofUrl),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); setProofUrl(''); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить ссылку')),
   });
   const saveMut = useMutation({
     mutationFn: () => artistAPI.updateArtist(id!, {
@@ -170,6 +178,7 @@ export default function GroupPage() {
       socialLinks: form.socialLinks,
     }),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); setIsEditing(false); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
   const inviteMut = useMutation({
     mutationFn: () => groupAPI.invite(id!, inviteFriendId, inviteProfessionId),
@@ -179,14 +188,17 @@ export default function GroupPage() {
       setInviteFriendId(''); setInviteProfessionId('');
       setInviteFriendSearch(''); setInviteProfSearch('');
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить приглашение')),
   });
   const removeMemberMut = useMutation({
     mutationFn: (membershipId: string) => groupAPI.removeMember(id!, membershipId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить участника')),
   });
   const deleteGroupMut = useMutation({
     mutationFn: () => groupAPI.deleteGroup(id!),
     onSuccess: () => navigate('/friends', { replace: true }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить группу')),
   });
 
   const set = (key: keyof EditForm, value: string | string[] | Record<string, string>) =>

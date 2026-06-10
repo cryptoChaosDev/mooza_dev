@@ -8,6 +8,7 @@ import { connectSocket, disconnectSocket, getSocket } from './lib/socket';
 import Layout from './components/Layout';
 import ErrorBoundary from './components/ErrorBoundary';
 import CookieConsent from './components/CookieConsent';
+import Toaster from './components/Toaster';
 import { IS_TMA, initTelegramApp, twa } from './lib/telegram';
 import { authAPI, messageAPI, userAPI } from './lib/api';
 
@@ -487,6 +488,7 @@ function App() {
           </Routes>
         </Suspense>
         <CookieConsent />
+        <Toaster />
       </ErrorBoundary>
     );
   }
@@ -495,6 +497,7 @@ function App() {
     <ErrorBoundary>
       <AppRoutes />
       <CookieConsent />
+      <Toaster />
     </ErrorBoundary>
   );
 }

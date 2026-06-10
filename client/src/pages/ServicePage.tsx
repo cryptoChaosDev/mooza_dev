@@ -13,6 +13,8 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import DealCreateModal from '../components/DealCreateModal';
 import { DEALS_ENABLED } from '../lib/features';
 import { useAuthGate } from '../components/AuthGateModal';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 const STATUS_LABEL: Record<string, string> = {
   active: 'Действующая',
@@ -71,6 +73,7 @@ export default function ServicePage() {
       queryClient.invalidateQueries({ queryKey: ['user-service', serviceId] });
       setShowEdit(false);
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
 
   const statusMut = useMutation({
@@ -80,6 +83,7 @@ export default function ServicePage() {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       queryClient.invalidateQueries({ queryKey: ['user-services'] });
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось изменить статус услуги')),
   });
 
   const deleteMut = useMutation({
@@ -88,6 +92,7 @@ export default function ServicePage() {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       navigate(-1);
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить услугу')),
   });
 
   useEffect(() => {
@@ -106,7 +111,8 @@ export default function ServicePage() {
       const { data } = await messageAPI.contactService(serviceId);
       setShowTemplates(false);
       navigate(`/messages/${data.conversationId}`, { state: { prefillMessage: prefill } });
-    } catch {
+    } catch (e: any) {
+      toast.error(getApiError(e, 'Не удалось открыть чат'));
       setWritingMessage(false);
     }
   };

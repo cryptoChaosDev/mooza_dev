@@ -19,6 +19,8 @@ import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
 import { groupReactions } from '../components/ReactionBar';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -460,6 +462,7 @@ export default function ChatPage() {
       }
     } catch (err) {
       console.error('Failed:', err);
+      toast.error(getApiError(err, editingId ? 'Не удалось сохранить изменения' : 'Не удалось отправить сообщение'));
       setNewMessage(text);
       if (fileToSend) setPendingFile(fileToSend);
     } finally {
@@ -494,6 +497,7 @@ export default function ChatPage() {
       );
     } catch (err) {
       console.error('Failed to delete:', err);
+      toast.error(getApiError(err, 'Не удалось удалить сообщение'));
     }
   };
 
@@ -508,6 +512,7 @@ export default function ChatPage() {
       }));
     } catch (err) {
       console.error('Failed to react:', err);
+      toast.error(getApiError(err, 'Не удалось поставить реакцию'));
     }
   };
 
@@ -521,6 +526,7 @@ export default function ChatPage() {
       }));
     } catch (err) {
       console.error('Failed to unreact:', err);
+      toast.error(getApiError(err, 'Не удалось убрать реакцию'));
     }
   };
 
@@ -625,6 +631,7 @@ export default function ChatPage() {
       await loadChat();
     } catch (err: any) {
       console.error('Failed to add member:', err);
+      toast.error(getApiError(err, 'Не удалось добавить участника'));
     }
   };
 
@@ -639,6 +646,7 @@ export default function ChatPage() {
       }
     } catch (err) {
       console.error('Failed to remove member:', err);
+      toast.error(getApiError(err, 'Не удалось удалить участника'));
     }
   };
 
@@ -649,6 +657,7 @@ export default function ChatPage() {
       navigate('/messages');
     } catch (err) {
       console.error('Failed to delete group:', err);
+      toast.error(getApiError(err, 'Не удалось удалить группу'));
     }
   };
 

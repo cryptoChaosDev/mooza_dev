@@ -7,6 +7,8 @@ import { useAuthStore } from '../stores/authStore';
 import AvatarComponent from '../components/Avatar';
 import ConfirmDialog from '../components/ConfirmDialog';
 import MediaItemForm, { MediaItemInitial } from '../components/MediaItemForm';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 const RELEASE_PLATFORM_LABELS: Record<string, string> = {
   VK: 'ВКонтакте',
@@ -64,15 +66,18 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
         navigate(-1);
       }
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить')),
   });
 
   const confirmMut = useMutation({
     mutationFn: (participantId: string) => api.confirmParticipant(participantId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [kind, id] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось подтвердить участие')),
   });
   const declineMut = useMutation({
     mutationFn: (participantId: string) => api.declineParticipant(participantId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: [kind, id] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить участие')),
   });
 
   if (isLoading) {

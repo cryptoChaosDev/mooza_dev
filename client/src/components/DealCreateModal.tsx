@@ -6,6 +6,8 @@ import { useNavigate } from 'react-router-dom';
 import { dealAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import { DEALS_ENABLED } from '../lib/features';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 interface DuplicateValues {
   title?: string;
@@ -69,6 +71,7 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
       navigate(`/deals/${res.data.id}`);
       onClose();
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось оформить сделку')),
   });
 
   const canSubmit = title.trim().length >= 3 && (dealType !== 'event' || !!eventDate);

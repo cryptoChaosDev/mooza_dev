@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { X, Loader2, Flag } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { complaintAPI } from '../lib/api';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 const CATEGORIES_USER = [
   'Спам', 'Недостоверная информация', 'Мошенничество / обман',
@@ -31,6 +33,7 @@ export default function ComplaintModal({ targetType, targetId, onClose }: Props)
   const mut = useMutation({
     mutationFn: () => complaintAPI.submit({ targetType, targetId, category, text: text.trim() }),
     onSuccess: () => setSent(true),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить жалобу')),
   });
 
   return createPortal(

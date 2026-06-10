@@ -15,6 +15,8 @@ import { type Editor } from '@tiptap/react';
 import EmojiPicker from '../components/EmojiPicker';
 import ServicePicker, { PickedService } from '../components/ServicePicker';
 import CityPicker from '../components/CityPicker';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 const POST_TYPES: Record<string, { label: string; icon: React.FC<any>; placeholder: string; inDev: boolean }> = {
   blog:       { label: 'Блог',              icon: FileText,    placeholder: 'Напишите что-нибудь...', inDev: false },
@@ -172,6 +174,7 @@ export default function CreatePostPage() {
       queryClient.invalidateQueries({ queryKey: ['feed'] });
       navigate('/');
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось опубликовать')),
   });
 
   const isService = type === 'service';

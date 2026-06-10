@@ -13,6 +13,8 @@ import {
 import { createPortal } from 'react-dom';
 import ShareButton from '../components/ShareButton';
 import { postAPI, messageAPI } from '../lib/api';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 import { useAuthStore } from '../stores/authStore';
 import { useAuthGate } from '../components/AuthGateModal';
 import DealCreateModal from '../components/DealCreateModal';
@@ -76,26 +78,31 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
   const deleteMut = useMutation({
     mutationFn: () => postAPI.deleteComment(postId, comment.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить комментарий')),
   });
 
   const editMut = useMutation({
     mutationFn: () => postAPI.editComment(postId, comment.id, editText),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setEditing(false); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить комментарий')),
   });
 
   const reactMut = useMutation({
     mutationFn: (emoji: string) => postAPI.reactComment(postId, comment.id, emoji),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось поставить реакцию')),
   });
 
   const unreactMut = useMutation({
     mutationFn: () => postAPI.unreactComment(postId, comment.id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось убрать реакцию')),
   });
 
   const replyMut = useMutation({
     mutationFn: (content: string) => postAPI.commentPost(postId, content, comment.id),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setReplyText(''); setShowReplyInput(false); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить ответ')),
   });
 
   const isEdited = new Date(comment.updatedAt).getTime() - new Date(comment.createdAt).getTime() > 3000;
@@ -261,17 +268,18 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   }, []);
 
 
-  const likeMut = useMutation({ mutationFn: () => post.isLiked ? postAPI.unlikePost(post.id) : postAPI.likePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
-  const commentMut = useMutation({ mutationFn: (content: string) => postAPI.commentPost(post.id, content), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setCommentText(''); } });
-  const editMut = useMutation({ mutationFn: () => postAPI.editPost(post.id, { content: editContent, imageUrl: editImagePreview?.serverUrl ?? null, audioUrl: null, audioName: null }), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setEditing(false); } });
-  const deleteMut = useMutation({ mutationFn: () => postAPI.deletePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
-  const reactMut = useMutation({ mutationFn: (emoji: string) => postAPI.reactPost(post.id, emoji), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
-  const unreactMut = useMutation({ mutationFn: () => postAPI.unreactPost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
-  const voteMut = useMutation({ mutationFn: (optionIndex: number) => postAPI.votePoll(post.id, optionIndex), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
-  const saveMut = useMutation({ mutationFn: () => postAPI.toggleSave(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
+  const likeMut = useMutation({ mutationFn: () => post.isLiked ? postAPI.unlikePost(post.id) : postAPI.likePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось поставить лайк')) });
+  const commentMut = useMutation({ mutationFn: (content: string) => postAPI.commentPost(post.id, content), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setCommentText(''); }, onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить комментарий')) });
+  const editMut = useMutation({ mutationFn: () => postAPI.editPost(post.id, { content: editContent, imageUrl: editImagePreview?.serverUrl ?? null, audioUrl: null, audioName: null }), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setEditing(false); }, onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')) });
+  const deleteMut = useMutation({ mutationFn: () => postAPI.deletePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить пост')) });
+  const reactMut = useMutation({ mutationFn: (emoji: string) => postAPI.reactPost(post.id, emoji), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось поставить реакцию')) });
+  const unreactMut = useMutation({ mutationFn: () => postAPI.unreactPost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось убрать реакцию')) });
+  const voteMut = useMutation({ mutationFn: (optionIndex: number) => postAPI.votePoll(post.id, optionIndex), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось проголосовать')) });
+  const saveMut = useMutation({ mutationFn: () => postAPI.toggleSave(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить пост')) });
   const repostMut = useMutation({
     mutationFn: (comment: string) => postAPI.repostPost(post.id, comment.trim() || undefined),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['feed'] }); setShowRepost(false); setRepostComment(''); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось поделиться постом')),
   });
 
   const uploadEditFile = async (file: File) => {

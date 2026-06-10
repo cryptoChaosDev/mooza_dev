@@ -6,6 +6,8 @@ import { Star, X, MessageSquare, Trash2, Loader2 } from 'lucide-react';
 import { reviewAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 interface Review {
   id: string;
@@ -59,6 +61,7 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
       queryClient.invalidateQueries({ queryKey: ['reviews', userId] });
       setSelected(null);
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить отзыв')),
   });
 
   const handleReply = async () => {
@@ -68,6 +71,8 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
       await reviewAPI.reply(selected.id, replyText.trim());
       queryClient.invalidateQueries({ queryKey: ['reviews', userId] });
       setSelected(null);
+    } catch (e: any) {
+      toast.error(getApiError(e, 'Не удалось отправить ответ'));
     } finally {
       setSavingReply(false);
     }

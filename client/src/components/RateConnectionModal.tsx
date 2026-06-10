@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { X, Star, Check, Loader2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { reviewAPI } from '../lib/api';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 const RATING_LABEL: Record<number, string> = {
   10: 'Восхитительно', 9: 'Отлично', 8: 'Очень хорошо', 7: 'Хорошо', 6: 'Приемлемо',
@@ -32,6 +34,7 @@ export default function RateConnectionModal({ targetId, targetName, serviceId, o
       serviceId,
     }),
     onSuccess: () => { setSent(true); queryClient.invalidateQueries({ queryKey: ['reviews', targetId] }); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить оценку')),
   });
 
   return createPortal(

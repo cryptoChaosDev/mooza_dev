@@ -7,6 +7,8 @@ import { getSocket } from '../lib/socket';
 import { yoIncludes } from '../lib/search';
 import { DEALS_ENABLED } from '../lib/features';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 interface ConvItem {
   id: string;
@@ -105,6 +107,7 @@ export default function MessagesPage() {
       navigate(`/messages/${res.data.id}`);
     } catch (err) {
       console.error('Failed to create group:', err);
+      toast.error(getApiError(err, 'Не удалось создать проект'));
     } finally {
       setCreatingGroup(false);
     }
@@ -115,7 +118,7 @@ export default function MessagesPage() {
     try {
       await messageAPI.togglePin(conv.id);
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, isPinned: !c.isPinned } : c));
-    } catch { /* ignore */ }
+    } catch (e: any) { toast.error(getApiError(e, 'Не удалось изменить закрепление')); }
   };
 
   const handleToggleArchive = async (conv: ConvItem) => {
@@ -123,7 +126,7 @@ export default function MessagesPage() {
     try {
       await messageAPI.toggleArchive(conv.id);
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, isArchived: !c.isArchived, isPinned: c.isArchived ? c.isPinned : false } : c));
-    } catch { /* ignore */ }
+    } catch (e: any) { toast.error(getApiError(e, 'Не удалось изменить архив')); }
   };
 
   const handleSetType = async (conv: ConvItem, type: 'personal' | 'business') => {
@@ -131,7 +134,7 @@ export default function MessagesPage() {
     try {
       await messageAPI.setType(conv.id, type);
       setConversations(prev => prev.map(c => c.id === conv.id ? { ...c, type } : c));
-    } catch { /* ignore */ }
+    } catch (e: any) { toast.error(getApiError(e, 'Не удалось изменить тип чата')); }
   };
 
   const handleDeleteConversation = async (conv: ConvItem) => {
@@ -139,7 +142,7 @@ export default function MessagesPage() {
     try {
       await messageAPI.deleteConversation(conv.id);
       setConversations(prev => prev.filter(c => c.id !== conv.id));
-    } catch { /* ignore */ }
+    } catch (e: any) { toast.error(getApiError(e, 'Не удалось удалить чат')); }
   };
 
   const openConvMenu = (e: React.MouseEvent | React.TouchEvent, conv: ConvItem) => {

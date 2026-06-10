@@ -4,6 +4,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, Check, X, Clock, Loader2 } from 'lucide-react';
 import { friendshipAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 export default function FriendRequestsPage() {
   const navigate = useNavigate();
@@ -25,14 +27,17 @@ export default function FriendRequestsPage() {
       queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
       queryClient.invalidateQueries({ queryKey: ['friends'] });
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось принять запрос')),
   });
   const rejectMut = useMutation({
     mutationFn: (id: string) => friendshipAPI.rejectRequest(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['friend-requests'] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить запрос')),
   });
   const cancelMut = useMutation({
     mutationFn: (id: string) => friendshipAPI.rejectRequest(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['friend-requests-sent'] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отменить запрос')),
   });
 
   const isLoading = tab === 'received' ? loadingR : loadingS;

@@ -3,6 +3,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Check, X, Loader2, Users } from 'lucide-react';
 import { groupAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 export default function GroupInvitesPage() {
   const navigate = useNavigate();
@@ -19,11 +21,13 @@ export default function GroupInvitesPage() {
   const acceptMut = useMutation({
     mutationFn: (membershipId: string) => groupAPI.acceptInvite(membershipId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['group-invites'] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось принять приглашение')),
   });
 
   const declineMut = useMutation({
     mutationFn: (membershipId: string) => groupAPI.declineInvite(membershipId),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['group-invites'] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить приглашение')),
   });
 
   return (

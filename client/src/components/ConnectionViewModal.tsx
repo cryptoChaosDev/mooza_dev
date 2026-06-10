@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { X, Link2, Check, Clock, CheckCheck, Loader2, XCircle, Star, HandshakeIcon } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { connectionAPI, reviewAPI } from '../lib/api';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 import AvatarComponent from './Avatar';
 import { useNavigate } from 'react-router-dom';
 import DealCreateModal from './DealCreateModal';
@@ -73,6 +75,7 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
       serviceId: services?.[0]?.id,
     }),
     onSuccess: () => { setReviewSent(true); queryClient.invalidateQueries({ queryKey: ['reviews', partner.id] }); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить оценку')),
   });
 
   const invalidate = () => {
@@ -91,14 +94,17 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
   const acceptMut = useMutation({
     mutationFn: () => connectionAPI.accept(connection.id),
     onSuccess: () => { invalidate(); onClose(); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось принять запрос')),
   });
   const rejectMut = useMutation({
     mutationFn: () => connectionAPI.reject(connection.id),
     onSuccess: () => { invalidate(); onClose(); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить запрос')),
   });
   const cancelMut = useMutation({
     mutationFn: () => connectionAPI.cancel(connection.id),
     onSuccess: () => { invalidate(); onClose(); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отменить запрос')),
   });
 
   const statusLabel = () => {

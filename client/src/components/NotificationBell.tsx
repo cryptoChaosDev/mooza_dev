@@ -6,6 +6,8 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useBadgeStore } from '../stores/badgeStore';
 import AvatarComponent from './Avatar';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -214,6 +216,7 @@ export default function NotificationBell() {
   const readOneMutation = useMutation({
     mutationFn: markRead,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отметить уведомление прочитанным')),
   });
 
   const readAllMutation = useMutation({
@@ -222,6 +225,7 @@ export default function NotificationBell() {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
       clearNotifications();
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отметить все прочитанными')),
   });
 
   function handleClick(notif: Notification) {

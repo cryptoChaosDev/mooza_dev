@@ -23,6 +23,8 @@ import ReviewsBlock from '../components/ReviewsBlock';
 import { useAuthStore } from '../stores/authStore';
 import { formatLastSeen } from '../lib/lastSeen';
 import { usePresenceStore } from '../stores/presenceStore';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -100,14 +102,17 @@ export default function UserProfilePage() {
   const addFavMut = useMutation({
     mutationFn: () => favoriteAPI.add(userId!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['favorite-status', userId] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось добавить в избранное')),
   });
   const removeFavMut = useMutation({
     mutationFn: () => favoriteAPI.remove(userId!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['favorite-status', userId] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось убрать из избранного')),
   });
   const sendFriendMut = useMutation({
     mutationFn: () => friendshipAPI.sendRequest(userId!),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить заявку')),
   });
   const cancelFriendMut = useMutation({
     mutationFn: () => {
@@ -115,6 +120,7 @@ export default function UserProfilePage() {
       return friendshipAPI.rejectRequest(user.friendshipId);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отменить заявку')),
   });
   const acceptFriendMut = useMutation({
     mutationFn: () => {
@@ -122,6 +128,7 @@ export default function UserProfilePage() {
       return friendshipAPI.acceptRequest(user.friendshipId);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось принять заявку')),
   });
   const removeFriendMut = useMutation({
     mutationFn: () => {
@@ -129,6 +136,7 @@ export default function UserProfilePage() {
       return friendshipAPI.removeFriend(user.friendshipId);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить из друзей')),
   });
 
   const handleShareProfile = async () => {

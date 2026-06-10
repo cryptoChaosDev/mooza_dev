@@ -4,6 +4,8 @@ import { adminAPI, api, siteSettingsAPI, complaintAPI } from '../lib/api';
 import { yoNorm, yoIncludes } from '../lib/search';
 import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2, ShieldCheck, Clock, Zap, Download, ExternalLink, RefreshCw, BarChart2, AlertTriangle } from 'lucide-react';
 import AvatarComponent from '../components/Avatar';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 import * as XLSX from 'xlsx';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -54,14 +56,17 @@ function SimpleTable({
   const createMut = useMutation({
     mutationFn: (data: any) => apiModule.create(data),
     onSuccess: () => { invalidate(); setAdding(false); setForm({}); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось создать запись')),
   });
   const updateMut = useMutation({
     mutationFn: ({ id, data }: { id: string; data: any }) => apiModule.update(id, data),
     onSuccess: () => { invalidate(); setEditId(null); setForm({}); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
   const deleteMut = useMutation({
     mutationFn: (id: string) => apiModule.remove(id),
     onSuccess: invalidate,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить запись')),
   });
 
   const startEdit = (item: Item) => {
@@ -280,24 +285,29 @@ function DirectionNode({ direction, allProfessions, allCustomFilters, allService
   const updateMut = useMutation({
     mutationFn: (name: string) => adminAPI.directions.update(direction.id, { name }),
     onSuccess: () => { invalidateD(); setEditing(false); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
   const deleteMut = useMutation({
     mutationFn: () => adminAPI.directions.remove(direction.id),
     onSuccess: invalidateD,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить направление')),
   });
   const setFiltersMut = useMutation({
     mutationFn: ({ filterIds, filterTypes }: { filterIds: string[]; filterTypes: string[] }) =>
       adminAPI.directions.setFilters(direction.id, filterIds, filterTypes),
     onSuccess: invalidateD,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось обновить фильтры')),
   });
   const setServicesMut = useMutation({
     mutationFn: (serviceIds: string[]) => adminAPI.directions.setServices(direction.id, serviceIds),
     onSuccess: invalidateD,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось обновить услуги')),
   });
   const setProfMut = useMutation({
     mutationFn: ({ profId, dirId }: { profId: string; dirId: string | null }) =>
       adminAPI.professions.setDirection(profId, dirId),
     onSuccess: invalidateP,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось обновить профессию')),
   });
 
   const toggleService = (serviceId: string) => {
@@ -468,14 +478,17 @@ function FieldNode({ field, allDirections, allProfessions, allCustomFilters, all
   const updateMut = useMutation({
     mutationFn: (name: string) => adminAPI.fieldsOfActivity.update(field.id, { name }),
     onSuccess: () => { invalidateF(); setEditing(false); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
   const deleteMut = useMutation({
     mutationFn: () => adminAPI.fieldsOfActivity.remove(field.id),
     onSuccess: invalidateF,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить сферу')),
   });
   const linkDirMut = useMutation({
     mutationFn: (dirId: string) => adminAPI.directions.setSphere(dirId, field.id),
     onSuccess: () => { invalidateD(); setLinkDirId(''); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось привязать направление')),
   });
 
   const profCount = linkedDirections.reduce(
@@ -581,6 +594,7 @@ function StructureTree() {
   const addFieldMut = useMutation({
     mutationFn: (name: string) => adminAPI.fieldsOfActivity.create({ name }),
     onSuccess: () => { invalidateF(); setAddingField(false); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось создать сферу')),
   });
 
   return (
@@ -780,15 +794,18 @@ function CustomFiltersSection() {
   const createMut = useMutation({
     mutationFn: (data: { name: string; values: string[] }) => adminAPI.customFilters.create(data),
     onSuccess: () => { invalidate(); setAddingFilter(false); setNewFilterName(''); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось создать фильтр')),
   });
   const updateMut = useMutation({
     mutationFn: ({ id, name, values }: { id: string; name: string; values: string[] }) =>
       adminAPI.customFilters.update(id, { name, values }),
     onSuccess: invalidate,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить фильтр')),
   });
   const deleteMut = useMutation({
     mutationFn: (id: string) => adminAPI.customFilters.remove(id),
     onSuccess: invalidate,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить фильтр')),
   });
 
   return (
@@ -885,14 +902,17 @@ function DirectionsTab() {
   const createMut = useMutation({
     mutationFn: (name: string) => adminAPI.directions.create({ name }),
     onSuccess: invalidate,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось создать направление')),
   });
   const updateMut = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => adminAPI.directions.update(id, { name }),
     onSuccess: () => { invalidate(); setEditId(null); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
   const deleteMut = useMutation({
     mutationFn: (id: string) => adminAPI.directions.remove(id),
     onSuccess: invalidate,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить направление')),
   });
 
   const [adding, setAdding] = useState(false);
@@ -978,14 +998,17 @@ function ProfessionsTab() {
   const createMut = useMutation({
     mutationFn: (name: string) => adminAPI.professions.create({ name }),
     onSuccess: invalidate,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось создать профессию')),
   });
   const updateMut = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => adminAPI.professions.update(id, { name }),
     onSuccess: () => { invalidate(); setEditId(null); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
   const deleteMut = useMutation({
     mutationFn: (id: string) => adminAPI.professions.remove(id),
     onSuccess: invalidate,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить профессию')),
   });
 
   const [adding, setAdding] = useState(false);
@@ -1095,14 +1118,17 @@ function ServicesTab() {
   const createMut = useMutation({
     mutationFn: (name: string) => adminAPI.services.create({ name }),
     onSuccess: () => { invalidate(); setAdding(false); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось создать услугу')),
   });
   const updateMut = useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => adminAPI.services.update(id, { name }),
     onSuccess: () => { invalidate(); setEditId(null); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
   const deleteMut = useMutation({
     mutationFn: (id: string) => adminAPI.services.remove(id),
     onSuccess: invalidate,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить услугу')),
   });
 
   const q = yoNorm(search);
@@ -1230,21 +1256,25 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
   const saveMut = useMutation({
     mutationFn: () => api.patch(`/admin/users/${user.id}`, form),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); onUpdated(); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
 
   const toggleMut = useMutation({
     mutationFn: (field: 'block' | 'premium' | 'verified' | 'pro') => api.patch(`/admin/users/${user.id}/${field}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); onUpdated(); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось изменить статус пользователя')),
   });
 
   const verifyEmailMut = useMutation({
     mutationFn: () => adminAPI.users.verifyEmail(user.id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); onUpdated(); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось верифицировать email')),
   });
 
   const deleteMut = useMutation({
     mutationFn: () => adminAPI.users.deleteUser(user.id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); onDeleted(); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить пользователя')),
   });
 
   const fullName = `${user.firstName} ${user.lastName}`.trim();
@@ -1453,6 +1483,7 @@ function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const createMut = useMutation({
     mutationFn: () => api.post('/admin/users', form),
     onSuccess: () => { onCreated(); onClose(); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось создать пользователя')),
   });
 
   const inputCls = 'w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary-500';
@@ -1683,10 +1714,12 @@ function ServiceModerationTab() {
   const approveMut = useMutation({
     mutationFn: (id: string) => adminAPI.serviceModeration.approve(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-services-pending'] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось одобрить услугу')),
   });
   const rejectMut = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => adminAPI.serviceModeration.reject(id, reason),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-services-pending'] }); setRejectId(null); setRejectReason(''); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить услугу')),
   });
 
   return (
@@ -1769,11 +1802,13 @@ function ArtistModerationTab() {
   const rejectMut = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => adminAPI.artistModeration.reject(id, reason),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-artists-verification'] }); setRejectId(null); setRejectReason(''); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить запрос')),
   });
 
   const verifyMut = useMutation({
     mutationFn: (id: string) => adminAPI.artistModeration.verify(id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-artists-verification'] }); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось верифицировать артиста')),
   });
 
   return (
@@ -1926,14 +1961,17 @@ function GroupsAdminTab() {
   const createMut = useMutation({
     mutationFn: () => adminAPI.groups.create(form),
     onSuccess: () => { invalidate(); setShowCreate(false); setForm({ name: '', type: 'GROUP', city: '', description: '' }); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось создать группу')),
   });
   const updateMut = useMutation({
     mutationFn: () => adminAPI.groups.update(editId!, form),
     onSuccess: () => { invalidate(); setEditId(null); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
   const deleteMut = useMutation({
     mutationFn: (id: string) => adminAPI.groups.remove(id),
     onSuccess: invalidate,
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить группу')),
   });
 
   const filtered = groups.filter(g => {
@@ -2083,6 +2121,7 @@ function SiteSettingsTab() {
   const mut = useMutation({
     mutationFn: (upd: Record<string, string>) => siteSettingsAPI.update(upd),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['site-settings'] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить настройку')),
   });
 
   const toggle = (key: string, current: boolean) => mut.mutate({ [key]: current ? 'false' : 'true' });
@@ -2152,6 +2191,7 @@ function ComplaintsTab() {
       setActionBlockDays('');
       setDeleteContent(false);
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось обработать жалобу')),
   });
 
   const openAction = (id: string) => {
@@ -2534,6 +2574,7 @@ function DonationsTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-donations'] });
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось активировать Pro')),
   });
 
   const grantMut = useMutation({
