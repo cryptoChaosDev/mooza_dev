@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { isProActive } from '../lib/proLimits';
-import { proAPI, referralAPI } from '../lib/api';
+import { proAPI, referralAPI, userAPI } from '../lib/api';
 
 const SUPPORT_URL = 'https://t.me/moooza_support';
 
@@ -60,8 +60,15 @@ function SupportLink() {
 
 export default function ProPage() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
-  const proActive = isProActive(user);
+  const { user, setUser } = useAuthStore();
+  // Refresh from the server so a just-granted Pro and its expiry show immediately
+  // (the stored user is set at login and may predate a donation/admin grant).
+  const { data: me } = useQuery({
+    queryKey: ['me-pro'],
+    queryFn: async () => { const { data } = await userAPI.getMe(); setUser(data); return data; },
+  });
+  const current = me ?? user;
+  const proActive = isProActive(current);
 
   const [step, setStep] = useState<Step>('page');
   const [donation, setDonation] = useState<{ code: string; cloudTipsUrl: string } | null>(null);
@@ -114,8 +121,8 @@ export default function ProPage() {
     setStep('done');
   };
 
-  const proUntilLabel = user?.proUntil
-    ? new Date(user.proUntil).toLocaleDateString('ru-RU')
+  const proUntilLabel = current?.proUntil
+    ? new Date(current.proUntil).toLocaleDateString('ru-RU')
     : null;
 
   const towardNext = refStats?.towardNext ?? 0;

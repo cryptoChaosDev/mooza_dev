@@ -1218,6 +1218,7 @@ interface AdminUser {
   isPremium: boolean;
   isVerified: boolean;
   isPro: boolean;
+  proUntil?: string | null;
   createdAt: string;
 }
 
@@ -1265,6 +1266,11 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось изменить статус пользователя')),
   });
 
+  // Effective Pro = manual flag OR unexpired subscription. Expiry shown only for
+  // the timed (donation/referral) case; a manual isPro override is permanent.
+  const proActive = user.isPro || (!!user.proUntil && new Date(user.proUntil).getTime() > Date.now());
+  const proExpiry = !user.isPro && user.proUntil ? new Date(user.proUntil).toLocaleDateString('ru-RU') : null;
+
   const verifyEmailMut = useMutation({
     mutationFn: () => adminAPI.users.verifyEmail(user.id),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); onUpdated(); },
@@ -1300,7 +1306,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               <p className="text-sm font-semibold text-white">{fullName}</p>
-              {user.isPro && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-500/20 text-violet-400 text-[10px] rounded-full border border-violet-500/30"><Zap size={9} />PRO</span>}
+              {proActive && <span title={proExpiry ? `Pro до ${proExpiry}` : 'Pro (вечный)'} className="flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-500/20 text-violet-400 text-[10px] rounded-full border border-violet-500/30"><Zap size={9} />PRO{proExpiry ? ` до ${proExpiry}` : ''}</span>}
               {user.isPremium && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded-full border border-amber-500/30"><Crown size={9} />Premium</span>}
               {user.isVerified && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-[10px] rounded-full border border-sky-500/30"><BadgeCheck size={9} />Verified</span>}
               {user.isAdmin && <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-400 text-[10px] rounded-full border border-purple-500/30">Admin</span>}
@@ -1348,9 +1354,9 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
           <button
             onClick={() => toggleMut.mutate('pro')}
             disabled={toggleMut.isPending}
-            title={user.isPro ? 'Убрать PRO' : 'Выдать PRO'}
+            title={proActive ? (proExpiry ? `Снять Pro (до ${proExpiry})` : 'Снять Pro') : 'Выдать Pro (вечный)'}
             className={`flex items-center justify-center px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
-              user.isPro ? 'bg-violet-500/20 text-violet-400 border-violet-500/30 hover:bg-violet-500/30' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
+              proActive ? 'bg-violet-500/20 text-violet-400 border-violet-500/30 hover:bg-violet-500/30' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
             }`}
           >
             <Zap size={13} />
@@ -2583,6 +2589,14 @@ function DonationsTab() {
       setGrantId('');
       qc.invalidateQueries({ queryKey: ['admin-donations'] });
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось выдать Pro')),
+  });
+
+  // Annul Pro (e.g. a donation accepted by mistake) — clears isPro + proUntil.
+  const revokeMut = useMutation({
+    mutationFn: (userId: string) => api.patch(`/admin/users/${userId}/pro`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-donations'] }),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось снять Pro')),
   });
 
   const userName = (u: DonationRow['user']) => {
@@ -2641,7 +2655,10 @@ function DonationsTab() {
         <div className="text-center py-8 text-slate-500 text-sm">Нет донатов</div>
       ) : (
         <div className="space-y-2">
-          {donations.map(d => (
+          {donations.map(d => {
+            const dProActive = d.user.isPro || (!!d.user.proUntil && new Date(d.user.proUntil).getTime() > Date.now());
+            const dExpiry = !d.user.isPro && d.user.proUntil ? new Date(d.user.proUntil).toLocaleDateString('ru-RU') : null;
+            return (
             <div key={d.id} className="bg-slate-900 rounded-xl border border-slate-800 p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -2650,9 +2667,9 @@ function DonationsTab() {
                     <span className={`text-xs px-2 py-0.5 rounded-full ${donationStatusBadge[d.status]}`}>
                       {donationStatusLabel[d.status] ?? d.status}
                     </span>
-                    {d.user.isPro && (
+                    {dProActive && (
                       <span className="text-xs px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 flex items-center gap-1">
-                        <Crown size={11} /> Pro
+                        <Crown size={11} /> Pro{dExpiry ? ` до ${dExpiry}` : ''}
                       </span>
                     )}
                   </div>
@@ -2663,21 +2680,37 @@ function DonationsTab() {
                     <span className="text-slate-700"> · ID: {d.user.id}</span>
                   </p>
                 </div>
-                {d.status !== 'ACTIVATED' && (
-                  <button
-                    onClick={() => activateMut.mutate(d.id)}
-                    disabled={activateMut.isPending}
-                    className="flex items-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-3 py-2 rounded-lg transition-colors whitespace-nowrap flex-shrink-0"
-                  >
-                    {activateMut.isPending && activateMut.variables === d.id
-                      ? <Loader2 size={13} className="animate-spin" />
-                      : <Check size={13} />}
-                    Активировать Pro
-                  </button>
-                )}
+                <div className="flex flex-col gap-1.5 flex-shrink-0">
+                  {d.status !== 'ACTIVATED' && (
+                    <button
+                      onClick={() => activateMut.mutate(d.id)}
+                      disabled={activateMut.isPending}
+                      className="flex items-center gap-1.5 text-xs bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white px-3 py-2 rounded-lg transition-colors whitespace-nowrap"
+                    >
+                      {activateMut.isPending && activateMut.variables === d.id
+                        ? <Loader2 size={13} className="animate-spin" />
+                        : <Check size={13} />}
+                      Активировать Pro
+                    </button>
+                  )}
+                  {dProActive && (
+                    <button
+                      onClick={() => { if (window.confirm('Снять Pro у пользователя? Подписка будет аннулирована.')) revokeMut.mutate(d.user.id); }}
+                      disabled={revokeMut.isPending}
+                      title="Аннулировать Pro"
+                      className="flex items-center gap-1.5 text-xs bg-red-600/80 hover:bg-red-600 disabled:opacity-50 text-white px-3 py-2 rounded-lg transition-colors whitespace-nowrap"
+                    >
+                      {revokeMut.isPending && revokeMut.variables === d.user.id
+                        ? <Loader2 size={13} className="animate-spin" />
+                        : <X size={13} />}
+                      Снять Pro
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

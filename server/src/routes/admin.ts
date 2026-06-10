@@ -661,7 +661,7 @@ router.post('/users', async (req, res) => {
       select: {
         id: true, firstName: true, lastName: true, nickname: true,
         email: true, avatar: true, isAdmin: true, isBlocked: true,
-        isPremium: true, isVerified: true, isPro: true, createdAt: true,
+        isPremium: true, isVerified: true, isPro: true, proUntil: true, createdAt: true,
         city: true, country: true, bio: true, phone: true,
       },
     });
@@ -698,7 +698,7 @@ router.patch('/users/:id', async (req, res) => {
       select: {
         id: true, firstName: true, lastName: true, nickname: true,
         email: true, avatar: true, isAdmin: true, isBlocked: true,
-        isPremium: true, isVerified: true, isPro: true, createdAt: true,
+        isPremium: true, isVerified: true, isPro: true, proUntil: true, createdAt: true,
         city: true, country: true, bio: true, phone: true,
       },
     });
@@ -725,7 +725,7 @@ router.get('/users', async (req, res) => {
       select: {
         id: true, firstName: true, lastName: true, nickname: true,
         email: true, avatar: true, isAdmin: true, isBlocked: true,
-        isPremium: true, isVerified: true, isPro: true, createdAt: true,
+        isPremium: true, isVerified: true, isPro: true, proUntil: true, createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
       skip: (page - 1) * limit,
@@ -786,14 +786,18 @@ router.patch('/users/:id/verified', async (req, res) => {
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
+// Toggle effective Pro. Active (manual flag OR unexpired subscription) → fully
+// revoke (clears both isPro and the timed proUntil, so a mistakenly accepted
+// donation can be annulled). Inactive → grant permanent manual Pro.
 router.patch('/users/:id/pro', async (req, res) => {
   try {
-    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { isPro: true } });
+    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { isPro: true, proUntil: true } });
     if (!user) return res.status(404).json({ error: 'User not found' });
+    const active = user.isPro || (user.proUntil ? new Date(user.proUntil).getTime() > Date.now() : false);
     const updated = await prisma.user.update({
       where: { id: req.params.id },
-      data: { isPro: !user.isPro },
-      select: { id: true, isPro: true },
+      data: active ? { isPro: false, proUntil: null } : { isPro: true },
+      select: { id: true, isPro: true, proUntil: true },
     });
     res.json(updated);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
