@@ -339,3 +339,18 @@ input[type='range'].price-thumb::-moz-range-thumb {
     color: black;
   }
 }
+
+/* ── Legal documents (LegalDocsModal — rendered from /public/legal/*.html) ── */
+.legal-prose { color: #cbd5e1; font-size: 0.875rem; line-height: 1.65; }
+.legal-prose > *:first-child { margin-top: 0; }
+.legal-prose h2 { color: #fff; font-size: 1.05rem; font-weight: 700; margin: 1.3rem 0 0.5rem; }
+.legal-prose h3 { color: #e2e8f0; font-size: 0.95rem; font-weight: 600; margin: 1.05rem 0 0.4rem; }
+.legal-prose h4 { color: #e2e8f0; font-size: 0.9rem; font-weight: 600; margin: 0.85rem 0 0.3rem; }
+.legal-prose p { margin: 0.5rem 0; }
+.legal-prose strong { color: #f1f5f9; font-weight: 600; }
+.legal-prose ul { margin: 0.5rem 0; padding-left: 1.25rem; list-style: disc; }
+.legal-prose li { margin: 0.25rem 0; }
+.legal-prose a { color: #818cf8; text-decoration: underline; word-break: break-word; }
+.legal-prose table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.8rem; }
+.legal-prose th, .legal-prose td { border: 1px solid #334155; padding: 0.4rem 0.5rem; text-align: left; vertical-align: top; }
+.legal-prose th { background: #1e293b; color: #f1f5f9; font-weight: 600; }
