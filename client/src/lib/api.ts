@@ -74,6 +74,7 @@ export const authAPI = {
 export const userAPI = {
   getMe: () => api.get('/users/me'),
   updateMe: (data: any) => api.put('/users/me', data),
+  givePublicConsent: () => api.post('/users/me/public-consent'),
   updateServices: (services: Array<{
     professionId: string;
     serviceId: string;

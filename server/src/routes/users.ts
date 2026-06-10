@@ -100,6 +100,8 @@ const userSelect = {
   contactsVisibility: true,
   lastSeenAt: true,
   termsAgreedAt: true,
+  publicConsentAt: true,
+  publicConsentVersion: true,
   onboardingCompletedAt: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
@@ -286,6 +288,28 @@ router.get('/me', authenticate, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user' });
+  }
+});
+
+// Record consent to processing personal data allowed for public distribution
+// (152-ФЗ ст. 10.1). One-time: keeps the original timestamp if already given.
+const PUBLIC_CONSENT_VERSION = '2026-05-31';
+router.post('/me/public-consent', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const me = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { publicConsentAt: true },
+    });
+    if (!me?.publicConsentAt) {
+      await prisma.user.update({
+        where: { id: req.userId },
+        data: { publicConsentAt: new Date(), publicConsentVersion: PUBLIC_CONSENT_VERSION },
+      });
+    }
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Public consent error:', error);
+    res.status(500).json({ error: 'Failed to record consent' });
   }
 });
 

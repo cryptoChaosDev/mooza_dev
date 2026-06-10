@@ -613,6 +613,11 @@ model User {
   contactsVisible       Boolean   @default(true)
   contactsVisibility    ContactsVisibility @default(ALL)
 
+  // Consent to processing PD allowed for public distribution (152-ФЗ ст.10.1).
+  // Obtained once, at the first public action (service/portfolio/public contacts).
+  publicConsentAt       DateTime?
+  publicConsentVersion  String?
+
   // Release / Clip participation
   releaseParticipations ReleaseParticipant[]
   clipParticipations    ClipParticipant[]

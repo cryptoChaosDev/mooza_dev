@@ -25,6 +25,7 @@ import JoinArtistModal from '../components/JoinArtistModal';
 import ReviewsBlock from '../components/ReviewsBlock';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
 import ProfileProgressBar from '../components/ProfileProgressBar';
+import PublicConsentGate from '../components/PublicConsentGate';
 
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -759,19 +760,22 @@ export default function ProfilePage() {
   );
 
 
-  const handlePortfolioUpload = async (files: FileList | null) => {
+  const handlePortfolioUpload = (files: FileList | null) => {
     if (!files) return;
-    for (const file of Array.from(files)) {
-      if (portfolioFiles.length >= proLimits.portfolioFiles) break;
-      // Reflect the server's effective per-file size cap before uploading.
-      if (file.size > proLimits.portfolioFileMB * 1024 * 1024) continue;
-      const fd = new FormData();
-      fd.append('file', file);
-      setIsUploadingPortfolio(true);
-      try { const { data } = await userAPI.uploadPortfolio(fd); setPortfolioFiles(prev => [...prev, data]); }
-      catch { /* ignore */ }
-      finally { setIsUploadingPortfolio(false); }
-    }
+    // Publishing portfolio is a public action — gate on first-time consent.
+    ensurePublicConsent(async () => {
+      for (const file of Array.from(files)) {
+        if (portfolioFiles.length >= proLimits.portfolioFiles) break;
+        // Reflect the server's effective per-file size cap before uploading.
+        if (file.size > proLimits.portfolioFileMB * 1024 * 1024) continue;
+        const fd = new FormData();
+        fd.append('file', file);
+        setIsUploadingPortfolio(true);
+        try { const { data } = await userAPI.uploadPortfolio(fd); setPortfolioFiles(prev => [...prev, data]); }
+        catch { /* ignore */ }
+        finally { setIsUploadingPortfolio(false); }
+      }
+    });
   };
 
   const handlePortfolioDelete = async (fileId: string) => {
@@ -782,6 +786,25 @@ export default function ProfilePage() {
   const handleDeleteLink = async (linkId: string) => {
     await userAPI.deletePortfolioLink(linkId);
     setPortfolioLinks(prev => prev.filter((l: any) => l.id !== linkId));
+  };
+
+  // ── Consent to public distribution of PD (152-ФЗ ст. 10.1) ──────────────────
+  // One-time gate before the first public action (publish service / upload
+  // portfolio / set contacts to «Все»). Recorded server-side via givePublicConsent.
+  const [consentAction, setConsentAction] = useState<(() => void) | null>(null);
+  const [locallyConsented, setLocallyConsented] = useState(false);
+  const hasPublicConsent = !!(profile as any)?.publicConsentAt || locallyConsented;
+  const ensurePublicConsent = (action: () => void) => {
+    if (hasPublicConsent) { action(); return; }
+    setConsentAction(() => action);
+  };
+  const handleConsentAccept = async () => {
+    try { await userAPI.givePublicConsent(); } catch { /* recorded best-effort */ }
+    setLocallyConsented(true);
+    queryClient.invalidateQueries({ queryKey: ['profile'] });
+    const action = consentAction;
+    setConsentAction(null);
+    action?.();
   };
 
 
@@ -1034,7 +1057,7 @@ export default function ProfilePage() {
             В черновики
           </button>
           <button
-            onClick={() => commitServiceForm('publish')}
+            onClick={() => ensurePublicConsent(() => commitServiceForm('publish'))}
             disabled={!canSave || updateServicesMutation.isPending}
             className="flex-1 min-w-[8rem] py-2 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
           >
@@ -1938,15 +1961,19 @@ export default function ProfilePage() {
                       key={opt.value}
                       type="button"
                       onClick={() => {
-                        const next = {
-                          ...formData,
-                          contactsVisibility: opt.value,
-                          contactsVisible: opt.value === 'ALL',
+                        const apply = () => {
+                          const next = {
+                            ...formData,
+                            contactsVisibility: opt.value,
+                            contactsVisible: opt.value === 'ALL',
+                          };
+                          setFormData(next);
+                          updateMutation.mutate({ contactsVisibility: opt.value } as any, {
+                            onSettled: () => queryClient.invalidateQueries({ queryKey: ['profile'] }),
+                          });
                         };
-                        setFormData(next);
-                        updateMutation.mutate({ contactsVisibility: opt.value } as any, {
-                          onSettled: () => queryClient.invalidateQueries({ queryKey: ['profile'] }),
-                        });
+                        // «Все» = public distribution of contacts → gate on consent.
+                        if (opt.value === 'ALL') ensurePublicConsent(apply); else apply();
                       }}
                       className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border text-sm text-left transition-colors ${active ? 'border-primary-500 bg-primary-500/10 text-white' : 'border-slate-700/60 bg-slate-800/40 text-slate-300 hover:border-slate-600'}`}
                     >
@@ -2046,6 +2073,10 @@ export default function ProfilePage() {
       onConfirm={() => { if (confirmDeleteLinkId) handleDeleteLink(confirmDeleteLinkId); }}
       onCancel={() => setConfirmDeleteLinkId(null)}
     />
+
+    {consentAction && (
+      <PublicConsentGate onAccept={handleConsentAccept} onClose={() => setConsentAction(null)} />
+    )}
 
     {/* Publish-to-Поток dialog — after a NEW service is saved. */}
     {publishDialog && createPortal(
