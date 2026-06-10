@@ -1077,7 +1077,7 @@ function BindingBadges({ bindings }: { bindings: { sphere: string | null; direct
 
 // ─── Services tab ────────────────────────────────────────────────────────────
 
-interface ServiceItem { id: string; name: string; sortOrder: number; directions: { id: string; name: string; fieldOfActivity: { id: string; name: string } | null }[] }
+interface ServiceItem { id: string; name: string; sortOrder: number; section: { id: string; name: string } | null }
 
 function ServicesTab() {
   const qc = useQueryClient();
@@ -1141,10 +1141,6 @@ function ServicesTab() {
           </div>
         )}
         {filtered.map((svc, idx) => {
-          const bindings = svc.directions.map(d => ({
-            sphere: d.fieldOfActivity?.name ?? null,
-            direction: d.name,
-          }));
           return (
             <div key={svc.id} className="flex items-start gap-2 px-4 py-2 hover:bg-slate-800/30 group">
               <span className="text-xs text-slate-600 w-5 text-right flex-shrink-0 mt-1">{idx + 1}</span>
@@ -1156,7 +1152,9 @@ function ServicesTab() {
                 <>
                   <div className="flex-1 min-w-0">
                     <span className="text-sm text-slate-200">{svc.name}</span>
-                    <BindingBadges bindings={bindings} />
+                    {svc.section?.name && (
+                      <span className="ml-2 text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded align-middle">{svc.section.name}</span>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5 flex-shrink-0">
                     <button onClick={() => { setEditId(svc.id); setEditName(svc.name); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
