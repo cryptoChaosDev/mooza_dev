@@ -5,9 +5,10 @@ import { motion, AnimatePresence, type Transition } from 'framer-motion';
 import {
   Search, MessageCircle, Briefcase, Users, ArrowRight,
   Star, Zap, Shield, Music2, Mic2, Headphones, Drum,
-  Guitar, Radio, BarChart3, CheckCircle2,
+  Guitar, Radio, BarChart3, CheckCircle2, FileText,
 } from 'lucide-react';
 import { siteSettingsAPI, referenceAPI } from '../lib/api';
+import LegalDocsModal from '../components/LegalDocsModal';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const fadeUp = (delay = 0) => ({
@@ -103,6 +104,7 @@ function Counter({ to, suffix = '' }: { to: number; suffix?: string }) {
 export default function LandingPage() {
   const navigate = useNavigate();
   const [activeFeature, setActiveFeature] = useState(0);
+  const [legalOpen, setLegalOpen] = useState(false);
 
   useEffect(() => { document.title = 'Moooza — Музыкальная социальная сеть'; }, []);
 
@@ -442,16 +444,30 @@ export default function LandingPage() {
 
       {/* ── FOOTER ───────────────────────────────────────────────────────── */}
       <footer className="border-t border-slate-800/60 py-8 px-4">
-        <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <img src="/logo.png" alt="Moooza" className="h-7 w-auto" />
-          <div className="flex items-center gap-5 flex-wrap justify-center">
-            <a href="/terms" className="text-slate-500 hover:text-slate-300 text-xs transition-colors">Соглашение</a>
-            <a href="/privacy" className="text-slate-500 hover:text-slate-300 text-xs transition-colors">Конфиденциальность</a>
-            <a href="mailto:support@moooza.ru" className="text-slate-500 hover:text-slate-300 text-xs transition-colors">Поддержка</a>
-            <p className="text-slate-700 text-xs">&copy; {new Date().getFullYear()} Moooza</p>
+        <div className="max-w-5xl mx-auto flex flex-col gap-5">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <img src="/logo.png" alt="Moooza" className="h-7 w-auto" />
+            <div className="flex items-center gap-5 flex-wrap justify-center">
+              <button
+                onClick={() => setLegalOpen(true)}
+                className="flex items-center gap-1.5 text-slate-400 hover:text-white text-xs font-medium transition-colors"
+              >
+                <FileText size={13} /> Документы
+              </button>
+              <a href="mailto:support@moooza.ru" className="text-slate-500 hover:text-slate-300 text-xs transition-colors">Поддержка</a>
+            </div>
+          </div>
+          {/* Реквизиты общества */}
+          <div className="border-t border-slate-800/40 pt-4 text-center sm:text-left text-[11px] leading-relaxed text-slate-600 space-y-0.5">
+            <p>ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ «МУЗА»</p>
+            <p>ОГРН 320631300056254 · ИНН 6312224590 · КПП 631201001</p>
+            <p>Юридический адрес: Самарская область, г. Самара, линия 11-я, д. 67</p>
+            <p>© 2026 MOOOZA</p>
           </div>
         </div>
       </footer>
+
+      {legalOpen && <LegalDocsModal onClose={() => setLegalOpen(false)} />}
     </div>
   );
 }
