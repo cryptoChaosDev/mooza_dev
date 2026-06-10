@@ -1194,12 +1194,15 @@ router.post('/me/portfolio', authenticate, uploadPortfolio.single('file'), async
       return res.status(400).json({ error: `Достигнут лимит файлов портфолио (${limits.portfolioFiles})` });
     }
 
-    // File SIZE cap (multer's fileSize is raised to the Pro MAX; enforce the
-    // effective per-user limit here and delete the just-saved file if over).
-    const maxBytes = limits.portfolioFileMB * 1024 * 1024;
+    // File SIZE cap — photos & documents are capped at 10 MB; audio keeps the
+    // Pro-gated limit (Free 20 / Pro 50). multer's fileSize is the Pro MAX, so
+    // enforce the effective per-type limit here and delete the file if over.
+    const isAudioFile = req.file.mimetype.startsWith('audio/');
+    const maxMb = isAudioFile ? limits.portfolioFileMB : 10;
+    const maxBytes = maxMb * 1024 * 1024;
     if (req.file.size > maxBytes) {
       removeSaved();
-      return res.status(400).json({ error: `Файл превышает лимит ${limits.portfolioFileMB} МБ` });
+      return res.status(400).json({ error: `Файл превышает лимит ${maxMb} МБ` });
     }
 
     const fileUrl = `/uploads/portfolio/${req.file.filename}`;

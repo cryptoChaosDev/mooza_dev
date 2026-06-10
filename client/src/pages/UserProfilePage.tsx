@@ -1,13 +1,13 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, MessageCircle,
   Crown, BadgeCheck, Ban, X, Zap,
-  Headphones, FileText, Briefcase,
+  Headphones, FileText, FileSpreadsheet, FileArchive, Download, Briefcase,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
-  Globe, Play, Pause, ChevronRight, Flag, Phone, Calendar,
+  Globe, ChevronRight, Flag, Phone, Calendar,
   MoreHorizontal, Share2, Check,
 } from 'lucide-react';
 import { userAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
@@ -15,6 +15,7 @@ import ComplaintModal from '../components/ComplaintModal';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { SocialIconRow, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
+import AudioPlayer from '../components/AudioPlayer';
 import BadgeTooltip from '../components/BadgeTooltip';
 import ConnectionRequestModal from '../components/ConnectionRequestModal';
 import ConnectionViewModal from '../components/ConnectionViewModal';
@@ -28,33 +29,31 @@ import { getApiError } from '../lib/apiError';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
-function getFileExt(name: string) {
-  return (name.split('.').pop() ?? '').toUpperCase().slice(0, 4);
+function formatBytes(n?: number): string {
+  if (!n) return '';
+  if (n < 1024) return `${n} Б`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} КБ`;
+  return `${(n / 1024 / 1024).toFixed(1)} МБ`;
 }
 
-function AudioTile({ url, title }: { url: string; title?: string }) {
-  const [playing, setPlaying] = useState(false);
-  const ref = useRef<HTMLAudioElement>(null);
-  const toggle = () => {
-    if (!ref.current) return;
-    if (playing) { ref.current.pause(); setPlaying(false); }
-    else { ref.current.play(); setPlaying(true); }
-  };
-  return (
-    <div className="flex flex-col gap-1 flex-shrink-0" style={{ width: 'calc((100% - 24px) / 3.5)' }}>
-      <button
-        onClick={toggle}
-        className="w-full aspect-square rounded-xl bg-gradient-to-br from-primary-900/80 to-slate-800/80 border border-primary-700/30 flex flex-col items-center justify-center gap-2 hover:border-primary-500/50 transition-colors group"
-      >
-        <Music2 size={16} className="text-primary-400" />
-        <div className="w-7 h-7 rounded-full bg-primary-600/80 flex items-center justify-center group-hover:bg-primary-500 transition-colors">
-          {playing ? <Pause size={12} className="text-white" /> : <Play size={12} className="text-white ml-0.5" />}
-        </div>
-      </button>
-      {title && <p className="text-[9px] text-slate-400 text-center leading-tight line-clamp-2">{title}</p>}
-      <audio ref={ref} src={url} onEnded={() => setPlaying(false)} preload="none" />
-    </div>
-  );
+// File-type icon + colour (OS-like) for the portfolio "other" tab.
+function fileTypeMeta(name: string): { Icon: typeof FileText; color: string; bg: string; label: string } {
+  const ext = (name.split('.').pop() ?? '').toLowerCase();
+  switch (ext) {
+    case 'pdf':  return { Icon: FileText, color: 'text-red-400', bg: 'bg-red-500/15', label: 'PDF' };
+    case 'doc':
+    case 'docx': return { Icon: FileText, color: 'text-blue-400', bg: 'bg-blue-500/15', label: ext.toUpperCase() };
+    case 'xls':
+    case 'xlsx':
+    case 'csv':  return { Icon: FileSpreadsheet, color: 'text-emerald-400', bg: 'bg-emerald-500/15', label: ext.toUpperCase() };
+    case 'ppt':
+    case 'pptx': return { Icon: FileText, color: 'text-orange-400', bg: 'bg-orange-500/15', label: ext.toUpperCase() };
+    case 'zip':
+    case 'rar':
+    case '7z':   return { Icon: FileArchive, color: 'text-amber-400', bg: 'bg-amber-500/15', label: ext.toUpperCase() };
+    case 'txt':  return { Icon: FileText, color: 'text-slate-300', bg: 'bg-slate-600/30', label: 'TXT' };
+    default:     return { Icon: FileText, color: 'text-slate-400', bg: 'bg-slate-600/30', label: (ext || 'файл').toUpperCase() };
+  }
 }
 
 export default function UserProfilePage() {
@@ -589,23 +588,22 @@ export default function UserProfilePage() {
                   {portfolioTab === 'audio' && (
                     allAudio.length === 0
                       ? <p className="text-sm text-slate-600 italic text-center py-2">Нет аудио</p>
-                      : <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-                          {audioFiles.map((f: any) => <AudioTile key={f.id} url={`${API_URL}${f.url}`} title={f.originalName} />)}
-                          {audioLinks.map((l: any) => <AudioTile key={l.id} url={l.url} title={l.title} />)}
+                      : <div className="space-y-1">
+                          {audioFiles.map((f: any) => <AudioPlayer key={f.id} src={`${API_URL}${f.url}`} name={f.originalName} />)}
+                          {audioLinks.map((l: any) => <AudioPlayer key={l.id} src={l.url} name={l.title || l.url} />)}
                         </div>
                   )}
                   {portfolioTab === 'images' && (
                     imageFiles.length === 0
                       ? <p className="text-sm text-slate-600 italic text-center py-2">Нет изображений</p>
-                      : <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                      : <div className="grid grid-cols-3 gap-2">
                           {imageFiles.map((f: any) => (
                             <button
                               key={f.id}
                               onClick={() => setImageFullscreen(`${API_URL}${f.url}`)}
-                              className="flex-shrink-0 rounded-xl overflow-hidden border border-slate-700/40 hover:border-primary-500/40 transition-colors"
-                              style={{ width: 'calc((100% - 24px) / 3.5)' }}
+                              className="aspect-square rounded-xl overflow-hidden border border-slate-700/40 hover:border-primary-500/40 transition-colors"
                             >
-                              <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full aspect-square object-cover" />
+                              <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
                             </button>
                           ))}
                         </div>
@@ -613,21 +611,23 @@ export default function UserProfilePage() {
                   {portfolioTab === 'other' && (
                     otherFiles.length === 0
                       ? <p className="text-sm text-slate-600 italic text-center py-2">Нет документов</p>
-                      : <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-                          {otherFiles.map((f: any) => (
-                            <button
-                              key={f.id}
-                              onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.originalName })}
-                              className="flex flex-col gap-1 flex-shrink-0"
-                              style={{ width: 'calc((100% - 24px) / 3.5)' }}
-                            >
-                              <div className="w-full aspect-square rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-primary-500/40 flex flex-col items-center justify-center gap-1 transition-colors">
-                                <span className="text-sm font-black text-primary-400">{getFileExt(f.originalName)}</span>
-                                <FileText size={13} className="text-slate-500" />
+                      : <div className="space-y-1.5">
+                          {otherFiles.map((f: any) => {
+                            const meta = fileTypeMeta(f.originalName);
+                            const Icon = meta.Icon;
+                            return (
+                              <div key={f.id} className="flex items-center gap-3 px-2.5 py-2 bg-slate-800/40 border border-slate-700/40 rounded-xl">
+                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
+                                  <Icon size={18} className={meta.color} />
+                                </div>
+                                <button onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.originalName })} className="flex-1 min-w-0 text-left">
+                                  <p className="text-sm text-slate-200 truncate">{f.originalName}</p>
+                                  <p className="text-[11px] text-slate-500">{meta.label}{f.size ? ` · ${formatBytes(f.size)}` : ''}</p>
+                                </button>
+                                <a href={`${API_URL}${f.url}`} download target="_blank" rel="noopener noreferrer" title="Скачать" className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0"><Download size={15} /></a>
                               </div>
-                              <p className="text-[9px] text-slate-400 text-center leading-tight line-clamp-2">{f.originalName}</p>
-                            </button>
-                          ))}
+                            );
+                          })}
                         </div>
                   )}
                 </div>

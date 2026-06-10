@@ -4,12 +4,13 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userAPI, referenceAPI, connectionAPI, groupAPI, dealAPI, authAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import AudioPlayer from '../components/AudioPlayer';
 import {
   Camera, Save, Check, X, MapPin, Briefcase, Star, LogOut,
   Globe, Calendar,
   Headphones, Edit3, Plus,
-  FileText, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
-  Music2, Play, Pause, HandshakeIcon, Eye, Phone, Shield, ChevronDown,
+  FileText, FileSpreadsheet, FileArchive, Download, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
+  Music2, HandshakeIcon, Eye, Phone, Shield, ChevronDown,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConnectionCard from '../components/ConnectionCard';
@@ -33,31 +34,31 @@ import { getApiError } from '../lib/apiError';
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
 
-function getFileExt(name: string) {
-  return (name.split('.').pop() ?? '').toUpperCase().slice(0, 4);
+function formatBytes(n?: number): string {
+  if (!n) return '';
+  if (n < 1024) return `${n} Б`;
+  if (n < 1024 * 1024) return `${Math.round(n / 1024)} КБ`;
+  return `${(n / 1024 / 1024).toFixed(1)} МБ`;
 }
 
-function AudioTile({ url, title, onDelete }: { url: string; title?: string; onDelete?: () => void }) {
-  const [playing, setPlaying] = useState(false);
-  const ref = useRef<HTMLAudioElement>(null);
-  const toggle = () => {
-    if (!ref.current) return;
-    if (playing) { ref.current.pause(); setPlaying(false); }
-    else { ref.current.play(); setPlaying(true); }
-  };
-  return (
-    <div className="flex flex-col gap-1 flex-shrink-0 relative w-16">
-      <button onClick={toggle} className="w-16 h-16 rounded-xl bg-gradient-to-br from-primary-900/80 to-slate-800/80 border border-primary-700/30 flex flex-col items-center justify-center gap-1 hover:border-primary-500/50 transition-colors group">
-        <Music2 size={14} className="text-primary-400" />
-        <div className="w-6 h-6 rounded-full bg-primary-600/80 flex items-center justify-center group-hover:bg-primary-500 transition-colors">
-          {playing ? <Pause size={10} className="text-white" /> : <Play size={10} className="text-white ml-0.5" />}
-        </div>
-      </button>
-      {title && <p className="text-[9px] text-slate-400 text-center leading-tight line-clamp-2 w-full">{title}</p>}
-      {onDelete && <button onClick={onDelete} className="absolute -top-1 -right-1 p-0.5 rounded-md bg-slate-900 border border-slate-700 text-slate-400 hover:text-red-400 transition-colors"><X size={9} /></button>}
-      <audio ref={ref} src={url} onEnded={() => setPlaying(false)} preload="none" />
-    </div>
-  );
+// File-type icon + colour (OS-like) for the portfolio "other" tab.
+function fileTypeMeta(name: string): { Icon: typeof FileText; color: string; bg: string; label: string } {
+  const ext = (name.split('.').pop() ?? '').toLowerCase();
+  switch (ext) {
+    case 'pdf':  return { Icon: FileText, color: 'text-red-400', bg: 'bg-red-500/15', label: 'PDF' };
+    case 'doc':
+    case 'docx': return { Icon: FileText, color: 'text-blue-400', bg: 'bg-blue-500/15', label: ext.toUpperCase() };
+    case 'xls':
+    case 'xlsx':
+    case 'csv':  return { Icon: FileSpreadsheet, color: 'text-emerald-400', bg: 'bg-emerald-500/15', label: ext.toUpperCase() };
+    case 'ppt':
+    case 'pptx': return { Icon: FileText, color: 'text-orange-400', bg: 'bg-orange-500/15', label: ext.toUpperCase() };
+    case 'zip':
+    case 'rar':
+    case '7z':   return { Icon: FileArchive, color: 'text-amber-400', bg: 'bg-amber-500/15', label: ext.toUpperCase() };
+    case 'txt':  return { Icon: FileText, color: 'text-slate-300', bg: 'bg-slate-600/30', label: 'TXT' };
+    default:     return { Icon: FileText, color: 'text-slate-400', bg: 'bg-slate-600/30', label: (ext || 'файл').toUpperCase() };
+  }
 }
 
 
@@ -827,8 +828,12 @@ export default function ProfilePage() {
     ensurePublicConsent(async () => {
       for (const file of Array.from(files)) {
         if (portfolioFiles.length >= proLimits.portfolioFiles) break;
-        // Reflect the server's effective per-file size cap before uploading.
-        if (file.size > proLimits.portfolioFileMB * 1024 * 1024) continue;
+        // Photos & documents are capped at 10 MB; audio keeps the Pro-gated limit.
+        const maxMb = file.type.startsWith('audio/') ? proLimits.portfolioFileMB : 10;
+        if (file.size > maxMb * 1024 * 1024) {
+          toast.error(`«${file.name}» больше ${maxMb} МБ — не загружен`);
+          continue;
+        }
         const fd = new FormData();
         fd.append('file', file);
         setIsUploadingPortfolio(true);
@@ -1835,8 +1840,8 @@ export default function ProfilePage() {
               {/* Hint */}
               <div className="px-4 pt-2 pb-0">
                 {portfolioTab === 'audio' && <p className="text-[10px] text-slate-600">до {proLimits.portfolioFileMB} МБ · mp3, wav, flac, ogg</p>}
-                {portfolioTab === 'images' && <p className="text-[10px] text-slate-600">до {proLimits.portfolioFileMB} МБ · jpg, png, gif, webp</p>}
-                {portfolioTab === 'other' && <p className="text-[10px] text-slate-600">до {proLimits.portfolioFileMB} МБ · pdf, doc, xls</p>}
+                {portfolioTab === 'images' && <p className="text-[10px] text-slate-600">до 10 МБ · jpg, png, gif, webp</p>}
+                {portfolioTab === 'other' && <p className="text-[10px] text-slate-600">до 10 МБ · pdf, doc, xls</p>}
                 {portfolioFiles.length >= proLimits.portfolioFiles && (
                   <p className="text-[10px] text-amber-400/80 mt-0.5">
                     Достигнут лимит файлов ({proLimits.portfolioFiles}){!isPro && ' · больше — в Pro'}
@@ -1847,67 +1852,83 @@ export default function ProfilePage() {
               <div className="px-4 py-3">
                 {portfolioTab === 'audio' && (
                   <div className="space-y-3">
-                  <div className="px-3 py-2.5 bg-amber-500/8 border border-amber-500/20 rounded-xl">
-                    <p className="text-xs font-semibold text-amber-400 mb-0.5">⚠️ Важно</p>
-                    <p className="text-[11px] text-slate-400 leading-relaxed">Загружая файл, ты подтверждаешь, что у тебя есть права на его использование. Не заливай чужой контент без разрешения — можем удалить и ограничить доступ.</p>
-                  </div>
-                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                    <label className={`flex flex-col gap-1 flex-shrink-0 group w-16 ${portfolioFull ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
-                      <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
-                        {isUploadingPortfolio ? <Loader2 size={14} className="text-slate-500 animate-spin" /> : <Plus size={16} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
-                      </div>
-                      <span className="text-[9px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
+                    <div className="px-3 py-2.5 bg-amber-500/8 border border-amber-500/20 rounded-xl">
+                      <p className="text-xs font-semibold text-amber-400 mb-0.5">⚠️ Важно</p>
+                      <p className="text-[11px] text-slate-400 leading-relaxed">Загружая файл, ты подтверждаешь, что у тебя есть права на его использование. Не заливай чужой контент без разрешения — можем удалить и ограничить доступ.</p>
+                    </div>
+                    <label className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-slate-700 transition-all ${portfolioFull ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-primary-500/50 hover:bg-primary-500/5'}`}>
+                      {isUploadingPortfolio ? <Loader2 size={15} className="text-slate-500 animate-spin" /> : <Plus size={16} className="text-slate-500" />}
+                      <span className="text-xs text-slate-400">Добавить аудио</span>
                       <input type="file" accept=".mp3,.wav,.ogg,.flac,.aac,.m4a,audio/mpeg,audio/mp3,audio/wav,audio/ogg,audio/flac,audio/aac,audio/x-m4a,audio/mp4" multiple className="hidden" disabled={isUploadingPortfolio || portfolioFull} onChange={e => handlePortfolioUpload(e.target.files)} />
                     </label>
-                    {audioFiles.map((f: any) => (
-                      <AudioTile key={f.id} url={`${API_URL}${f.url}`} title={f.originalName} onDelete={() => handlePortfolioDelete(f.id)} />
-                    ))}
-                    {audioLinks.map((l: any) => (
-                      <AudioTile key={l.id} url={l.url} title={l.title || l.url} onDelete={() => setConfirmDeleteLinkId(l.id)} />
-                    ))}
-                  </div>
+                    {audioFiles.length + audioLinks.length === 0 ? (
+                      <p className="text-xs text-slate-600 text-center py-1">Пока нет аудио</p>
+                    ) : (
+                      <div className="space-y-1">
+                        {audioFiles.map((f: any) => (
+                          <div key={f.id} className="flex items-center gap-1">
+                            <div className="flex-1 min-w-0"><AudioPlayer src={`${API_URL}${f.url}`} name={f.originalName} /></div>
+                            <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="p-2 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
+                          </div>
+                        ))}
+                        {audioLinks.map((l: any) => (
+                          <div key={l.id} className="flex items-center gap-1">
+                            <div className="flex-1 min-w-0"><AudioPlayer src={l.url} name={l.title || l.url} /></div>
+                            <button onClick={() => setConfirmDeleteLinkId(l.id)} title="Удалить" className="p-2 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
                 {portfolioTab === 'images' && (
-                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                    <label className={`flex flex-col gap-1 flex-shrink-0 group w-16 ${portfolioFull ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
-                      <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
-                        {isUploadingPortfolio ? <Loader2 size={14} className="text-slate-500 animate-spin" /> : <Plus size={16} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
-                      </div>
-                      <span className="text-[9px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className={`aspect-square rounded-xl border-2 border-dashed border-slate-700 flex flex-col items-center justify-center gap-1 transition-all ${portfolioFull ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-primary-500/50 hover:bg-primary-500/5'}`}>
+                      {isUploadingPortfolio ? <Loader2 size={16} className="text-slate-500 animate-spin" /> : <Plus size={18} className="text-slate-500" />}
+                      <span className="text-[10px] text-slate-500">Добавить</span>
                       <input type="file" accept="image/*" multiple className="hidden" disabled={isUploadingPortfolio || portfolioFull} onChange={e => handlePortfolioUpload(e.target.files)} />
                     </label>
                     {imageFiles.map((f: any) => (
-                      <div key={f.id} className="flex flex-col gap-1 flex-shrink-0 relative w-16">
+                      <div key={f.id} className="relative group aspect-square">
                         <button onClick={() => setImageFullscreen(`${API_URL}${f.url}`)}
-                          className="w-16 h-16 rounded-xl overflow-hidden border border-slate-700/40 hover:border-primary-500/40 transition-colors">
+                          className="w-full h-full rounded-xl overflow-hidden border border-slate-700/40 hover:border-primary-500/40 transition-colors">
                           <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
                         </button>
-                        <button onClick={() => handlePortfolioDelete(f.id)} className="absolute -top-1 -right-1 p-0.5 rounded-md bg-slate-900 border border-slate-700 text-slate-400 hover:text-red-400 transition-colors"><X size={9} /></button>
+                        <button onClick={() => handlePortfolioDelete(f.id)} className="absolute top-1 right-1 p-1 rounded-md bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"><X size={11} /></button>
                       </div>
                     ))}
                   </div>
                 )}
                 {portfolioTab === 'other' && (
-                  <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                    <label className={`flex flex-col gap-1 flex-shrink-0 group w-16 ${portfolioFull ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'}`}>
-                      <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
-                        {isUploadingPortfolio ? <Loader2 size={14} className="text-slate-500 animate-spin" /> : <Plus size={16} className="text-slate-500 group-hover:text-primary-400 transition-colors" />}
-                      </div>
-                      <span className="text-[9px] text-slate-500 group-hover:text-slate-400 text-center leading-tight">Добавить</span>
+                  <div className="space-y-2">
+                    <label className={`flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 border-dashed border-slate-700 transition-all ${portfolioFull ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-primary-500/50 hover:bg-primary-500/5'}`}>
+                      {isUploadingPortfolio ? <Loader2 size={15} className="text-slate-500 animate-spin" /> : <Plus size={16} className="text-slate-500" />}
+                      <span className="text-xs text-slate-400">Добавить документ</span>
                       <input type="file" accept=".pdf,.doc,.docx,.xls,.xlsx" multiple className="hidden" disabled={isUploadingPortfolio || portfolioFull} onChange={e => handlePortfolioUpload(e.target.files)} />
                     </label>
-                    {otherFiles.map((f: any) => (
-                      <div key={f.id} className="flex flex-col gap-1 flex-shrink-0 relative w-16">
-                        <button onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.originalName })}
-                          className="w-16 h-16 rounded-xl bg-slate-800/60 border border-slate-700/40 hover:border-primary-500/40 flex flex-col items-center justify-center gap-1 transition-colors">
-                          <span className="text-sm font-black text-primary-400">{getFileExt(f.originalName)}</span>
-                          <FileText size={13} className="text-slate-500" />
-                        </button>
-                        <p className="text-[9px] text-slate-400 text-center leading-tight line-clamp-2 w-full">{f.originalName}</p>
-                        <button onClick={() => handlePortfolioDelete(f.id)} className="absolute -top-1 -right-1 p-0.5 rounded-md bg-slate-900 border border-slate-700 text-slate-400 hover:text-red-400 transition-colors"><X size={9} /></button>
+                    {otherFiles.length === 0 ? (
+                      <p className="text-xs text-slate-600 text-center py-1">Пока нет документов</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {otherFiles.map((f: any) => {
+                          const meta = fileTypeMeta(f.originalName);
+                          const Icon = meta.Icon;
+                          return (
+                            <div key={f.id} className="flex items-center gap-3 px-2.5 py-2 bg-slate-800/40 border border-slate-700/40 rounded-xl">
+                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
+                                <Icon size={18} className={meta.color} />
+                              </div>
+                              <button onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.originalName })} className="flex-1 min-w-0 text-left">
+                                <p className="text-sm text-slate-200 truncate">{f.originalName}</p>
+                                <p className="text-[11px] text-slate-500">{meta.label}{f.size ? ` · ${formatBytes(f.size)}` : ''}</p>
+                              </button>
+                              <a href={`${API_URL}${f.url}`} download target="_blank" rel="noopener noreferrer" title="Скачать" className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0"><Download size={15} /></a>
+                              <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="p-1.5 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
+                            </div>
+                          );
+                        })}
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
               </div>
