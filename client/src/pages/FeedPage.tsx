@@ -19,6 +19,8 @@ import { DEALS_ENABLED } from '../lib/features';
 import OnboardingPrompt from '../components/OnboardingPrompt';
 import AvatarComponent from '../components/Avatar';
 import AudioPlayer from '../components/AudioPlayer';
+import PostContent from '../components/PostContent';
+import RichTextEditor from '../components/RichTextEditor';
 import { ReactionBar, DoubleTapReactWrapper } from '../components/ReactionBar';
 import { loadFilters, DEFAULT_FILTERS, FlowFilters, FLOW_FILTERS_KEY } from './FlowSettingsPage';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -245,7 +247,6 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   );
   const [editUploading, setEditUploading] = useState(false);
   const editImageRef = useRef<HTMLInputElement>(null);
-  const editTextareaRef = useRef<HTMLTextAreaElement>(null);
   const commentInputRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -258,14 +259,6 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  useEffect(() => {
-    if (editing && editTextareaRef.current) {
-      const el = editTextareaRef.current;
-      el.style.height = 'auto';
-      el.style.height = `${el.scrollHeight}px`;
-      el.focus();
-    }
-  }, [editing]);
 
   const likeMut = useMutation({ mutationFn: () => post.isLiked ? postAPI.unlikePost(post.id) : postAPI.likePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }) });
   const commentMut = useMutation({ mutationFn: (content: string) => postAPI.commentPost(post.id, content), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setCommentText(''); } });
@@ -356,13 +349,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
       <div className="mb-3 ml-[52px]">
         {editing ? (
           <div className="space-y-2">
-            <textarea
-              ref={editTextareaRef}
-              value={editContent}
-              onChange={e => { setEditContent(e.target.value); const el = e.target; el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }}
-              className="w-full bg-slate-800/60 border border-slate-700 focus:border-primary-500 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none resize-none transition-colors"
-              rows={1}
-            />
+            <RichTextEditor value={editContent} onChange={setEditContent} autoFocus minHeight={80} />
             {editImagePreview && (
               <div className="relative inline-block">
                 <img src={editImagePreview.url} alt="preview" className="max-h-48 rounded-xl object-cover border border-slate-700" />
@@ -390,9 +377,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
               {isRepost && (
                 <>
                   {(post.repostComment || (post.content && original)) && (
-                    <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words mb-2">
-                      {post.repostComment || post.content}
-                    </p>
+                    <PostContent content={post.repostComment || post.content} className="text-sm text-slate-200 mb-2" />
                   )}
                   {post.repostDeleted ? (
                     <div className="rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-5 text-center">
@@ -412,7 +397,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                         <span className="text-xs text-slate-500 flex-shrink-0">{original.createdAt ? timeAgo(original.createdAt) : ''}</span>
                       </div>
                       {original.content && (
-                        <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words line-clamp-6">{original.content}</p>
+                        <PostContent content={original.content} className="text-sm text-slate-300 line-clamp-6" />
                       )}
                       {(() => {
                         const firstImg = (Array.isArray(original.images) && original.images[0]) || original.imageUrl;
@@ -492,7 +477,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                         </span>
                       </div>
                       {post.content && (
-                        <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">{post.content}</p>
+                        <PostContent content={post.content} className="text-sm text-slate-200" />
                       )}
                       <div className="flex flex-wrap gap-2 pt-1">
                         <button
@@ -525,9 +510,10 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                 );
               })()}
               {!isRepost && !svc && post.content && (
-                <p className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap break-words">
-                  {isLongContent && !expanded ? post.content.slice(0, 280) + '…' : post.content}
-                </p>
+                <PostContent
+                  content={post.content}
+                  className={`text-sm text-slate-200 ${isLongContent && !expanded ? 'line-clamp-6' : ''}`}
+                />
               )}
               {!isRepost && !svc && isLongContent && <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>}
               {!isRepost && !svc && (Array.isArray(post.images) && post.images.length > 1 ? (

@@ -354,3 +354,21 @@ input[type='range'].price-thumb::-moz-range-thumb {
 .legal-prose table { width: 100%; border-collapse: collapse; margin: 0.8rem 0; font-size: 0.8rem; }
 .legal-prose th, .legal-prose td { border: 1px solid #334155; padding: 0.4rem 0.5rem; text-align: left; vertical-align: top; }
 .legal-prose th { background: #1e293b; color: #f1f5f9; font-weight: 600; }
+
+/* ── Rich text post editor (TipTap) + rendered post content ───────────────── */
+.rte-editor .ProseMirror { outline: none; min-height: inherit; }
+.rte-editor .ProseMirror p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #64748b; float: left; height: 0; pointer-events: none;
+}
+.rte-content, .post-prose { line-height: 1.55; }
+.rte-content p, .post-prose p { margin: 0 0 0.5rem; }
+.rte-content p:last-child, .post-prose p:last-child { margin-bottom: 0; }
+.rte-content strong, .post-prose strong { font-weight: 700; }
+.rte-content em, .post-prose em { font-style: italic; }
+.rte-content s, .post-prose s { text-decoration: line-through; }
+.rte-content ul, .post-prose ul { list-style: disc; padding-left: 1.25rem; margin: 0.35rem 0; }
+.rte-content ol, .post-prose ol { list-style: decimal; padding-left: 1.25rem; margin: 0.35rem 0; }
+.rte-content li, .post-prose li { margin: 0.15rem 0; }
+.rte-content blockquote, .post-prose blockquote { border-left: 3px solid #475569; padding-left: 0.75rem; margin: 0.4rem 0; color: #cbd5e1; }
+.rte-content a, .post-prose a { color: #818cf8; text-decoration: underline; word-break: break-word; }

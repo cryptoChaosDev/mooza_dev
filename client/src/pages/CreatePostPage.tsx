@@ -10,6 +10,8 @@ import { postAPI, referenceAPI, userAPI } from '../lib/api';
 import { yoIncludes } from '../lib/search';
 import { useAuthStore } from '../stores/authStore';
 import AvatarComponent from '../components/Avatar';
+import RichTextEditor from '../components/RichTextEditor';
+import { type Editor } from '@tiptap/react';
 import EmojiPicker from '../components/EmojiPicker';
 import ServicePicker, { PickedService } from '../components/ServicePicker';
 import CityPicker from '../components/CityPicker';
@@ -37,9 +39,6 @@ const QUESTION_CATEGORIES = [
 ];
 
 const MAX_IMAGES = 10;
-
-interface MentionEntry { id: string; type: string; name: string }
-interface UserSuggestion { id: string; firstName: string; lastName: string; nickname?: string; avatar?: string }
 
 export default function CreatePostPage() {
   const navigate = useNavigate();
@@ -81,12 +80,6 @@ export default function CreatePostPage() {
   const [extraCity, setExtraCity] = useState('');
   const [linksInput, setLinksInput] = useState('');
 
-  // @-mentions
-  const [mentions, setMentions] = useState<MentionEntry[]>([]);
-  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
-  const [mentionResults, setMentionResults] = useState<UserSuggestion[]>([]);
-  const mentionAnchor = useRef<number>(0); // index of '@' in content
-  const mentionTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: authorsData } = useQuery({
     queryKey: ['my-authors'],
@@ -115,7 +108,7 @@ export default function CreatePostPage() {
     ? genresData.map((g: any) => (typeof g === 'string' ? g : g.name)).filter(Boolean)
     : FALLBACK_GENRES;
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<Editor | null>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
   // Autosave draft
   useEffect(() => {
@@ -126,32 +119,10 @@ export default function CreatePostPage() {
     return () => clearTimeout(timer);
   }, [content, DRAFT_KEY]);
 
-  // Auto-resize textarea
-  const autoResize = () => {
-    const el = textareaRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${el.scrollHeight}px`;
-  };
-
-  useEffect(() => {
-    setTimeout(() => {
-      textareaRef.current?.focus();
-      autoResize();
-    }, 100);
-  }, []);
-
   const insertEmoji = useCallback((emoji: string) => {
-    const el = textareaRef.current;
-    if (!el) { setContent(c => c + emoji); return; }
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    setContent(c => c.slice(0, start) + emoji + c.slice(end));
-    setTimeout(() => {
-      el.selectionStart = el.selectionEnd = start + emoji.length;
-      el.focus();
-      autoResize();
-    }, 0);
+    const ed = editorRef.current;
+    if (ed) { ed.chain().focus().insertContent(emoji).run(); return; }
+    setContent(c => c + emoji);
   }, []);
 
   const uploadFiles = async (files: File[]) => {
@@ -192,63 +163,6 @@ export default function CreatePostPage() {
   const toggleGenre = (g: string) => {
     setGenres(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
     setGenreSearch('');
-  };
-
-  // ── Mentions (@) — search users while typing @word in the textarea ─────────
-  const handleContentChange = (value: string, caret: number) => {
-    setContent(value);
-    autoResize();
-    // Find an @token ending at the caret
-    const upto = value.slice(0, caret);
-    const m = upto.match(/(^|\s)@([\p{L}\p{N}_]*)$/u);
-    if (m) {
-      mentionAnchor.current = caret - m[2].length - 1; // position of '@'
-      setMentionQuery(m[2]);
-    } else {
-      setMentionQuery(null);
-      setMentionResults([]);
-    }
-  };
-
-  useEffect(() => {
-    if (mentionQuery === null) return;
-    const q = mentionQuery.trim();
-    if (mentionTimer.current) clearTimeout(mentionTimer.current);
-    if (q.length < 1) { setMentionResults([]); return; }
-    mentionTimer.current = setTimeout(async () => {
-      try {
-        const { data } = await userAPI.search({ query: q, limit: 6 });
-        const list: UserSuggestion[] = Array.isArray(data) ? data : (data?.results || data?.users || []);
-        setMentionResults(list.map((u: any) => ({
-          id: u.id ?? u.user?.id,
-          firstName: u.firstName ?? u.user?.firstName ?? '',
-          lastName: u.lastName ?? u.user?.lastName ?? '',
-          nickname: u.nickname ?? u.user?.nickname,
-          avatar: u.avatar ?? u.user?.avatar,
-        })).filter(u => u.id));
-      } catch { setMentionResults([]); }
-    }, 300);
-    return () => { if (mentionTimer.current) clearTimeout(mentionTimer.current); };
-  }, [mentionQuery]);
-
-  const pickMention = (u: UserSuggestion) => {
-    const name = `${u.firstName} ${u.lastName}`.trim() || u.nickname || 'user';
-    const el = textareaRef.current;
-    const start = mentionAnchor.current;
-    const end = el ? el.selectionStart : start + (mentionQuery?.length ?? 0) + 1;
-    const before = content.slice(0, start);
-    const after = content.slice(end);
-    const inserted = `@${name} `;
-    const next = before + inserted + after;
-    setContent(next);
-    setMentions(prev => prev.some(m => m.id === u.id) ? prev : [...prev, { id: u.id, type: 'user', name }]);
-    setMentionQuery(null);
-    setMentionResults([]);
-    setTimeout(() => {
-      const pos = start + inserted.length;
-      if (el) { el.focus(); el.selectionStart = el.selectionEnd = pos; }
-      autoResize();
-    }, 0);
   };
 
   const createMut = useMutation({
@@ -319,7 +233,6 @@ export default function CreatePostPage() {
       ...(genres.length > 0 ? { genres } : {}),
       ...(links.length > 0 ? { links } : {}),
       ...(extraCity ? { city: extraCity } : {}),
-      ...(mentions.length > 0 ? { mentions } : {}),
       ...(isQuestion ? { title: questionTitle.trim(), category: questionCategory } : {}),
       ...(isEmployment && employmentStatus ? { employmentStatus } : {}),
       ...(isPoll ? {
@@ -654,38 +567,18 @@ export default function CreatePostPage() {
           )}
 
           {!isStructuredService && (
-          <div className="relative">
-            <textarea
-              ref={textareaRef}
+            <RichTextEditor
               value={content}
-              onChange={e => handleContentChange(e.target.value, e.target.selectionStart)}
-              onKeyUp={e => handleContentChange((e.target as HTMLTextAreaElement).value, (e.target as HTMLTextAreaElement).selectionStart)}
+              onChange={setContent}
+              onReady={(e) => { editorRef.current = e; }}
+              autoFocus
+              minHeight={isFreeformService && pickedServices.length > 0 ? 80 : 140}
               placeholder={
                 isQuestion ? 'Опишите ваш вопрос подробнее...'
                 : isFreeformService && pickedServices.length > 0 ? 'Опишите подробнее — цены, условия, опыт...'
                 : meta.placeholder
               }
-              className="w-full bg-transparent text-base text-white placeholder-slate-500 focus:outline-none resize-none min-h-[100px] leading-relaxed"
-              rows={isFreeformService && pickedServices.length > 0 ? 3 : 6}
             />
-
-            {/* Mention dropdown */}
-            {mentionQuery !== null && mentionResults.length > 0 && (
-              <div className="absolute left-0 right-0 z-50 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl max-h-56 overflow-y-auto">
-                {mentionResults.map(u => (
-                  <button key={u.id} type="button"
-                    onMouseDown={e => { e.preventDefault(); pickMention(u); }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-slate-700/50 transition-colors text-left">
-                    <AvatarComponent src={u.avatar} name={`${u.firstName} ${u.lastName}`} size={28} />
-                    <div className="min-w-0">
-                      <p className="text-sm text-white truncate">{u.firstName} {u.lastName}</p>
-                      {u.nickname && <p className="text-xs text-slate-500 truncate">@{u.nickname}</p>}
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
           )}
 
           {/* Image thumbnails (multi, up to 10) */}
