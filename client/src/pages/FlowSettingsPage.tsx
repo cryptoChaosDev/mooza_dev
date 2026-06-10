@@ -8,6 +8,7 @@ import { isProActive, limitsFor } from '../lib/proLimits';
 export interface FlowFilters {
   postType: string;
   authorKind: string;
+  sort: string;        // new | popular | discussed
   period: string;
   cities: string[];
   // Contextual filters (E4)
@@ -21,6 +22,7 @@ export const FLOW_FILTERS_KEY = 'mooza_flow_filters';
 export const DEFAULT_FILTERS: FlowFilters = {
   postType: 'all',
   authorKind: 'all',
+  sort: 'new',
   period: 'all',
   cities: [],
   employment: 'all',
@@ -415,6 +417,18 @@ export default function FlowSettingsPage() {
           <Section title="Тип поста">
             {POST_TYPES.map(t => (
               <Chip key={t.id} label={t.label} active={filters.postType === t.id} onClick={() => set('postType', t.id)} />
+            ))}
+          </Section>
+
+          <Section title="Автор">
+            {[
+              { id: 'all', label: 'Все' },
+              { id: 'resident', label: 'Резидент' },
+              { id: 'channel', label: 'Канал' },
+              { id: 'artist', label: 'Артист' },
+              { id: 'mine', label: 'Мои' },
+            ].map(t => (
+              <Chip key={t.id} label={t.label} active={filters.authorKind === t.id} onClick={() => set('authorKind', t.id)} />
             ))}
           </Section>
 

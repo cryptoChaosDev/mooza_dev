@@ -8,6 +8,7 @@ import {
   Plus, FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench,
   Zap, BarChart3, Star, WifiOff, RefreshCw, HelpCircle, Repeat2,
   ExternalLink, MessageSquare, HandshakeIcon, Loader2 as Spinner,
+  ArrowUpDown, ChevronDown,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import ShareButton from '../components/ShareButton';
@@ -709,14 +710,6 @@ const TYPE_CHIPS = [
   { id: 'employment', label: 'Апдейт занятости' },
 ];
 
-const AUTHOR_CHIPS = [
-  { id: 'all',      label: 'Все' },
-  { id: 'resident', label: 'Резидент' },
-  { id: 'channel',  label: 'Канал' },
-  { id: 'artist',   label: 'Артист' },
-  { id: 'mine',     label: 'Мои' },
-];
-
 function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
     <button
@@ -727,6 +720,50 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
     >
       {label}
     </button>
+  );
+}
+
+const SORT_OPTIONS = [
+  { id: 'new', label: 'Новые' },
+  { id: 'popular', label: 'Популярные' },
+  { id: 'discussed', label: 'Обсуждаемые' },
+];
+
+// Quick-sort dropdown for the feed header.
+function SortDropdown({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const h = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+  const current = SORT_OPTIONS.find(o => o.id === value) ?? SORT_OPTIONS[0];
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm text-slate-300 hover:text-white hover:bg-slate-800 transition-colors"
+        title="Сортировка"
+      >
+        <ArrowUpDown size={15} />
+        <span>{current.label}</span>
+        <ChevronDown size={14} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="absolute right-0 mt-1 w-44 bg-slate-800 border border-slate-700 rounded-2xl shadow-xl overflow-hidden z-30">
+          {SORT_OPTIONS.map(o => (
+            <button
+              key={o.id}
+              onClick={() => { onChange(o.id); setOpen(false); }}
+              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${o.id === value ? 'text-primary-300 bg-primary-500/10' : 'text-slate-300 hover:bg-slate-700/60'}`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -800,12 +837,13 @@ export default function FeedPage() {
   const employmentFilter = filters.employment !== 'all' ? filters.employment : undefined;
   const artistTypeFilter = filters.artistType !== 'all' ? filters.artistType : undefined;
   const genreFilter = filters.genre !== 'all' ? filters.genre : undefined;
+  const sortParam = filters.sort && filters.sort !== 'new' ? filters.sort : undefined;
 
-  // ── Main feed — infinite scroll (chronological only) ──────────────────────
+  // ── Main feed — infinite scroll ───────────────────────────────────────────
   const feed = useInfiniteQuery({
-    queryKey: ['feed', typeFilter, authorKindFilter, periodFilter, cityFilter, employmentFilter, artistTypeFilter, genreFilter],
+    queryKey: ['feed', typeFilter, authorKindFilter, periodFilter, cityFilter, employmentFilter, artistTypeFilter, genreFilter, sortParam],
     queryFn: async ({ pageParam = 0 }) => {
-      const { data } = await postAPI.getFeed({ type: typeFilter, authorKind: authorKindFilter, period: periodFilter, city: cityFilter, employment: employmentFilter, artistType: artistTypeFilter, genre: genreFilter, offset: pageParam, limit: PAGE_SIZE });
+      const { data } = await postAPI.getFeed({ type: typeFilter, authorKind: authorKindFilter, period: periodFilter, city: cityFilter, employment: employmentFilter, artistType: artistTypeFilter, genre: genreFilter, sort: sortParam, offset: pageParam, limit: PAGE_SIZE });
       return data as any[];
     },
     initialPageParam: 0,
@@ -857,25 +895,26 @@ export default function FeedPage() {
 
         {/* Header */}
         <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
-          <div className="px-4 py-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Zap size={20} className="text-primary-400" />
+          <div className="px-4 py-3.5 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Zap size={20} className="text-primary-400 flex-shrink-0" />
               <h2 className="text-lg font-bold text-white">Поток</h2>
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5 flex-shrink-0">
               <button
                 onClick={() => setShowSavedOnly(s => !s)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm transition-colors ${showSavedOnly ? 'text-amber-300 bg-amber-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                className={`flex items-center px-2.5 py-1.5 rounded-xl text-sm transition-colors ${showSavedOnly ? 'text-amber-300 bg-amber-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
                 title="Сохранённые"
               >
                 <Star size={16} fill={showSavedOnly ? 'currentColor' : 'none'} />
               </button>
+              {!showSavedOnly && <SortDropdown value={filters.sort} onChange={(v) => updateFilters({ sort: v })} />}
               <button
                 onClick={() => navigate('/flow-settings')}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors relative"
+                className="relative flex items-center px-2.5 py-1.5 rounded-xl text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                title="Фильтры"
               >
                 <SlidersHorizontal size={16} />
-                <span>Настроить</span>
                 {activeFilterCount > 0 && (
                   <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center">
                     {activeFilterCount}
@@ -885,21 +924,12 @@ export default function FeedPage() {
             </div>
           </div>
 
-          {/* Chip rows — hidden in saved view */}
+          {/* Quick post-type chips — hidden in saved view */}
           {!showSavedOnly && (
-            <div className="pb-2 space-y-1.5">
-              {/* Row 1 — post type */}
-              <div className="px-4 flex gap-2 overflow-x-auto scrollbar-none">
-                {TYPE_CHIPS.map(c => (
-                  <FilterChip key={c.id} label={c.label} active={filters.postType === c.id} onClick={() => updateFilters({ postType: c.id })} />
-                ))}
-              </div>
-              {/* Row 2 — author kind */}
-              <div className="px-4 flex gap-2 overflow-x-auto scrollbar-none">
-                {AUTHOR_CHIPS.map(c => (
-                  <FilterChip key={c.id} label={c.label} active={filters.authorKind === c.id} onClick={() => updateFilters({ authorKind: c.id })} />
-                ))}
-              </div>
+            <div className="pb-2 px-4 flex gap-2 overflow-x-auto scrollbar-none">
+              {TYPE_CHIPS.map(c => (
+                <FilterChip key={c.id} label={c.label} active={filters.postType === c.id} onClick={() => updateFilters({ postType: c.id })} />
+              ))}
             </div>
           )}
         </div>

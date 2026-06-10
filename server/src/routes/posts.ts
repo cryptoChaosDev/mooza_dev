@@ -122,14 +122,14 @@ const buildFeedInclude = (userId: string | undefined) => {
 // See server/prisma/seeds/welcome-posts.ts
 const TEAM_EMAIL = 'team@moooza.ru';
 
-// Get feed (all posts from the social network)
-// Chronological only (newest first). Supports:
+// Get feed (all posts from the social network). Supports:
 //   type       — post type (blog | question | poll | service | employment | …)
 //   authorKind — all | resident (profile) | channel | artist | mine
+//   sort       — new (default) | popular (by reactions) | discussed (by comments)
 //   limit/offset — pagination for infinite scroll
 router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
   try {
-    const { limit = 20, offset = 0, type, authorKind, period, city, employment, artistType, genre } = req.query;
+    const { limit = 20, offset = 0, type, authorKind, period, city, employment, artistType, genre, sort } = req.query;
     const offsetNum = Number(offset);
     const limitNum = Number(limit);
     const kind = authorKind ? String(authorKind) : 'all';
@@ -202,10 +202,17 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
       where.artist = { ...(where.artist || {}), genres: { some: { genre: { name: String(genre) } } } };
     }
 
+    // Sort order — newest by default, or by engagement (reactions / comments)
+    // with a chronological tie-breaker.
+    const orderBy: any =
+      sort === 'popular' ? [{ reactions: { _count: 'desc' } }, { createdAt: 'desc' }]
+      : sort === 'discussed' ? [{ comments: { _count: 'desc' } }, { createdAt: 'desc' }]
+      : [{ createdAt: 'desc' }];
+
     const posts = await prisma.post.findMany({
       where,
       include,
-      orderBy: { createdAt: 'desc' },
+      orderBy,
       take: limitNum,
       skip: offsetNum,
     });
