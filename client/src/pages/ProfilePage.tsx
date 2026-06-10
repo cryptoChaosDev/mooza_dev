@@ -2,10 +2,10 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { userAPI, referenceAPI, connectionAPI, groupAPI, dealAPI } from '../lib/api';
+import { userAPI, referenceAPI, connectionAPI, groupAPI, dealAPI, authAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import {
-  Camera, Save, X, MapPin, Briefcase, Star, LogOut,
+  Camera, Save, Check, X, MapPin, Briefcase, Star, LogOut,
   Globe, Calendar,
   Headphones, Edit3, Plus,
   FileText, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
@@ -188,6 +188,14 @@ export default function ProfilePage() {
   const [editingServices, setEditingServices] = useState(false);
   const [editingContacts, setEditingContacts] = useState(false);
   const [editingSocials, setEditingSocials] = useState(false);
+
+  // Live nickname-uniqueness check (mirrors the registration flow). The user's
+  // own current nickname always counts as free. (The checking effect lives
+  // after the profile query below, since it reads profile.nickname.)
+  const [nickTaken, setNickTaken] = useState(false);
+  const [nickChecking, setNickChecking] = useState(false);
+  const nickTakenRef = useRef(false);
+  useEffect(() => { nickTakenRef.current = nickTaken; }, [nickTaken]);
 
   // Autosave when formData changes while any section is open
   useEffect(() => {
@@ -374,6 +382,23 @@ export default function ProfilePage() {
     },
   });
 
+  // Live nickname-uniqueness check while editing the hero section.
+  useEffect(() => {
+    const norm = (s: string) => s.trim().toLowerCase().replace(/ё/g, 'е');
+    const nk = formData.nickname.trim();
+    if (!editingHero || nk.length < 2 || norm(nk) === norm(profile?.nickname || '')) {
+      setNickTaken(false); setNickChecking(false); return;
+    }
+    setNickChecking(true);
+    const t = setTimeout(async () => {
+      try { const { data } = await authAPI.checkNickname(nk); setNickTaken(!data.available); }
+      catch { setNickTaken(false); }
+      finally { setNickChecking(false); }
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.nickname, editingHero, profile?.nickname]);
+
   const { data: myConnectionsRaw = [] } = useQuery({
     queryKey: ['connections-all'],
     queryFn: async () => { const { data } = await connectionAPI.getAll(); return data as any[]; },
@@ -433,6 +458,7 @@ export default function ProfilePage() {
   const triggerAutoSave = useCallback((data: typeof formData) => {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(async () => {
+      if (nickTakenRef.current) return; // never autosave a taken nickname
       try {
         await userAPI.updateMe(stripProfessions(data));
         setAutoSaved(true);
@@ -473,13 +499,19 @@ export default function ProfilePage() {
     const birthDateISO = bd.length === 10
       ? `${bd.slice(6)}-${bd.slice(3, 5)}-${bd.slice(0, 2)}`
       : undefined;
-    try { await updateMutation.mutateAsync({ ...stripProfessions(formData), birthDate: birthDateISO ?? null }); }
-    finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingHero(false); }
+    try {
+      await updateMutation.mutateAsync({ ...stripProfessions(formData), birthDate: birthDateISO ?? null });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      setEditingHero(false);
+    } catch { /* error shown via updateMutation.onError toast; keep the editor open */ }
   };
 
   const handleSaveBio = async () => {
-    try { await updateMutation.mutateAsync(stripProfessions(formData)); }
-    finally { queryClient.invalidateQueries({ queryKey: ['profile'] }); setEditingBio(false); }
+    try {
+      await updateMutation.mutateAsync(stripProfessions(formData));
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      setEditingBio(false);
+    } catch { /* error shown via updateMutation.onError toast; keep the editor open */ }
   };
 
   // Open the contacts editor, pre-filling phone/email from the registration data
@@ -1227,7 +1259,16 @@ export default function ProfilePage() {
               </div>
               <div>
                 <label className={labelCls}>Никнейм</label>
-                <input type="text" maxLength={20} value={formData.nickname} onChange={e => setFormData({ ...formData, nickname: e.target.value })} placeholder="@nickname" className={inputCls} />
+                <div className="relative">
+                  <input type="text" maxLength={20} value={formData.nickname} onChange={e => setFormData({ ...formData, nickname: e.target.value })} placeholder="@nickname"
+                    className={`${inputCls} ${nickTaken ? 'ring-1 ring-red-500/60 border-red-500/60' : ''}`} />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {nickChecking && formData.nickname.trim().length >= 2 && <Loader2 size={15} className="animate-spin text-slate-500" />}
+                    {!nickChecking && nickTaken && <X size={15} className="text-red-400" />}
+                    {!nickChecking && !nickTaken && formData.nickname.trim().length >= 2 && <Check size={15} className="text-emerald-400" />}
+                  </span>
+                </div>
+                {nickTaken && <p className="text-xs text-red-400 mt-1">Никнейм занят, введите другой</p>}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -1288,7 +1329,7 @@ export default function ProfilePage() {
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setEditingHero(false)} className="flex-1 py-2.5 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
-                <button onClick={handleSaveHero} disabled={updateMutation.isPending} className="flex-1 py-2.5 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                <button onClick={handleSaveHero} disabled={updateMutation.isPending || nickTaken} className="flex-1 py-2.5 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
                   {updateMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}Сохранить
                 </button>
               </div>
