@@ -459,6 +459,7 @@ export default function ProfilePage() {
     if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
     autoSaveTimer.current = setTimeout(async () => {
       if (nickTakenRef.current) return; // never autosave a taken nickname
+      if (!data.firstName.trim() || !data.lastName.trim()) return; // name & surname are required
       try {
         await userAPI.updateMe(stripProfessions(data));
         setAutoSaved(true);
@@ -1250,13 +1251,16 @@ export default function ProfilePage() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>Имя</label>
-                  <input type="text" maxLength={20} value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} className={inputCls} placeholder="Имя" />
+                  <input type="text" maxLength={20} value={formData.firstName} onChange={e => setFormData({ ...formData, firstName: e.target.value })} className={`${inputCls} ${!formData.firstName.trim() ? 'ring-1 ring-red-500/60 border-red-500/60' : ''}`} placeholder="Имя" />
                 </div>
                 <div>
                   <label className={labelCls}>Фамилия</label>
-                  <input type="text" maxLength={30} value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} className={inputCls} placeholder="Фамилия" />
+                  <input type="text" maxLength={30} value={formData.lastName} onChange={e => setFormData({ ...formData, lastName: e.target.value })} className={`${inputCls} ${!formData.lastName.trim() ? 'ring-1 ring-red-500/60 border-red-500/60' : ''}`} placeholder="Фамилия" />
                 </div>
               </div>
+              {(!formData.firstName.trim() || !formData.lastName.trim()) && (
+                <p className="text-xs text-red-400 -mt-1">Имя и фамилия обязательны</p>
+              )}
               <div>
                 <label className={labelCls}>Никнейм</label>
                 <div className="relative">
@@ -1329,7 +1333,7 @@ export default function ProfilePage() {
               </div>
               <div className="flex gap-2 pt-1">
                 <button onClick={() => setEditingHero(false)} className="flex-1 py-2.5 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
-                <button onClick={handleSaveHero} disabled={updateMutation.isPending || nickTaken} className="flex-1 py-2.5 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                <button onClick={handleSaveHero} disabled={updateMutation.isPending || nickTaken || !formData.firstName.trim() || !formData.lastName.trim()} className="flex-1 py-2.5 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
                   {updateMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}Сохранить
                 </button>
               </div>

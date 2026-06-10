@@ -603,7 +603,7 @@ export default function SearchPage() {
           {/* Tabs */}
           <div className="flex gap-1 p-1 bg-slate-900 rounded-xl border border-slate-800">
             {[
-              { id: 'services' as const, label: 'Каталог' },
+              { id: 'services' as const, label: 'Услуги' },
               { id: 'artists' as const, label: 'Артисты' },
               { id: 'people' as const, label: 'Люди' },
             ].map(tab => (

@@ -525,6 +525,19 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                 />
               )}
               {!isRepost && !svc && isLongContent && <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>}
+              {!isRepost && Array.isArray(post.links) && post.links.length > 0 && (
+                <div className="mt-2 flex flex-col gap-1">
+                  {post.links.map((url: string, i: number) => {
+                    const href = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+                    return (
+                      <a key={i} href={href} target="_blank" rel="noopener noreferrer nofollow" onClick={(e) => e.stopPropagation()}
+                        className="inline-flex items-center gap-1.5 text-sm text-primary-400 hover:text-primary-300 break-all">
+                        <ExternalLink size={13} className="flex-shrink-0" />{url}
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
               {!isRepost && !svc && (Array.isArray(post.images) && post.images.length > 1 ? (
                 <div className="mt-2 flex gap-2 overflow-x-auto scrollbar-none snap-x">
                   {post.images.map((url: string, i: number) => (

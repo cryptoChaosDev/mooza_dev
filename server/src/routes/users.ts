@@ -433,16 +433,22 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     // Update basic fields
     const updateData: any = {};
     if (firstName !== undefined) {
-      if (typeof firstName === 'string' && firstName.length > 20) {
+      if (typeof firstName !== 'string' || !firstName.trim()) {
+        return res.status(400).json({ error: 'Имя не может быть пустым' });
+      }
+      if (firstName.length > 20) {
         return res.status(400).json({ error: 'Имя — не более 20 символов' });
       }
-      updateData.firstName = firstName;
+      updateData.firstName = firstName.trim();
     }
     if (lastName !== undefined) {
-      if (typeof lastName === 'string' && lastName.length > 30) {
+      if (typeof lastName !== 'string' || !lastName.trim()) {
+        return res.status(400).json({ error: 'Фамилия не может быть пустой' });
+      }
+      if (lastName.length > 30) {
         return res.status(400).json({ error: 'Фамилия — не более 30 символов' });
       }
-      updateData.lastName = lastName;
+      updateData.lastName = lastName.trim();
     }
     if (nickname !== undefined) {
       if (typeof nickname === 'string' && nickname.length > 20) {
