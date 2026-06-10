@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Mail, FileText, Shield, MessageCircle, Music2, BookOpen } from 'lucide-react';
+import { X, Mail, FileText, Shield, MessageCircle, Music2, BookOpen, ChevronRight, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { APP_VERSION } from '../lib/changelog';
+import ChangelogModal from './ChangelogModal';
 
 interface Props {
   onClose: () => void;
@@ -8,6 +11,7 @@ interface Props {
 
 export default function InfoModal({ onClose }: Props) {
   const navigate = useNavigate();
+  const [showChangelog, setShowChangelog] = useState(false);
   return createPortal(
     <>
       <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm" onClick={onClose} />
@@ -25,11 +29,18 @@ export default function InfoModal({ onClose }: Props) {
         </div>
 
         <div className="px-5 space-y-3 pb-4">
-          {/* Version */}
-          <div className="flex items-center justify-between bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3.5">
-            <span className="text-sm text-slate-300">Версия</span>
-            <span className="text-sm text-slate-500">1.0</span>
-          </div>
+          {/* Version → changelog */}
+          <button
+            onClick={() => setShowChangelog(true)}
+            className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3.5 hover:bg-slate-800 transition-colors text-left"
+          >
+            <Sparkles size={17} className="text-primary-400 flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm text-slate-300">Версия {APP_VERSION}</p>
+              <p className="text-xs text-slate-500">Что нового — нажмите</p>
+            </div>
+            <ChevronRight size={16} className="text-slate-500 flex-shrink-0" />
+          </button>
 
           {/* Links */}
           {[
@@ -86,6 +97,7 @@ export default function InfoModal({ onClose }: Props) {
           </p>
         </div>
       </div>
+      {showChangelog && <ChangelogModal onClose={() => setShowChangelog(false)} />}
     </>,
     document.body
   );

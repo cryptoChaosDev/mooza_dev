@@ -1,6 +1,7 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, X, Info, LifeBuoy } from 'lucide-react';
+import { APP_VERSION } from '../lib/changelog';
 import BottomNav from './BottomNav';
 import NotificationBell from './NotificationBell';
 import InfoModal from './InfoModal';
@@ -173,7 +174,7 @@ export default function Layout({ children }: LayoutProps) {
 
         <div className="p-4 border-t border-slate-800/50">
           <div className="bg-slate-900 rounded-xl p-4 border border-slate-800">
-            <p className="text-sm text-slate-300 mb-2">Moooza v1.0</p>
+            <p className="text-sm text-slate-300 mb-2">Moooza v{APP_VERSION}</p>
             <p className="text-xs text-slate-500">Социальная сеть для музыкантов</p>
           </div>
         </div>
