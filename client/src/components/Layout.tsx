@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, X, Info, LifeBuoy } from 'lucide-react';
+import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, X, Info, LifeBuoy, Gift } from 'lucide-react';
 import { APP_VERSION } from '../lib/changelog';
 import BottomNav from './BottomNav';
 import NotificationBell from './NotificationBell';
@@ -100,7 +100,6 @@ export default function Layout({ children }: LayoutProps) {
             >
               <Info size={20} strokeWidth={2} />
             </button>
-            {/* Referral entry temporarily hidden — restore this button to bring it back.
             <button
               onClick={() => navigate('/invite')}
               className="text-slate-500 hover:text-slate-300 transition-colors"
@@ -108,7 +107,6 @@ export default function Layout({ children }: LayoutProps) {
             >
               <Gift size={20} strokeWidth={2} />
             </button>
-            */}
           </div>
           {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
         </header>
