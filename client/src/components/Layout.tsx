@@ -120,8 +120,22 @@ export default function Layout({ children }: LayoutProps) {
               <img src="/logo.png" alt="Moooza" className="h-14 w-auto" />
               <span className="text-[10px] font-bold tracking-wider text-primary-400 bg-primary-500/15 border border-primary-500/30 rounded px-1.5 py-0.5 leading-none">BETA</span>
             </Link>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5">
               <NotificationBell />
+              <button
+                onClick={() => setShowInfo(true)}
+                aria-label="Информация"
+                className="text-slate-500 hover:text-slate-300 transition-colors p-1"
+              >
+                <Info size={18} strokeWidth={2} />
+              </button>
+              <button
+                onClick={() => navigate('/invite')}
+                aria-label="Реферальная программа"
+                className="text-slate-500 hover:text-slate-300 transition-colors p-1"
+              >
+                <Gift size={18} strokeWidth={2} />
+              </button>
             </div>
           </div>
           {/* Blinking help link — visible on every page */}
