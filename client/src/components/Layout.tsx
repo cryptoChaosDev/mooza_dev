@@ -115,14 +115,18 @@ export default function Layout({ children }: LayoutProps) {
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex fixed left-0 top-0 bottom-0 w-64 flex-col bg-slate-950 border-r border-slate-800/50 z-40">
         <div className="p-6 border-b border-slate-800/50">
-          <div className="flex items-center justify-between">
-            <Link to="/" className="flex items-center gap-1.5">
-              <img src="/logo.png" alt="Moooza" className="h-14 w-auto" />
-              <span className="text-[10px] font-bold tracking-wider text-primary-400 bg-primary-500/15 border border-primary-500/30 rounded px-1.5 py-0.5 leading-none">BETA</span>
-            </Link>
-            <div className="flex items-center gap-1">
-              <NotificationBell />
-            </div>
+          <Link to="/" className="flex items-center gap-1.5">
+            <img src="/logo.png" alt="Moooza" className="h-14 w-auto" />
+            <span className="text-[10px] font-bold tracking-wider text-primary-400 bg-primary-500/15 border border-primary-500/30 rounded px-1.5 py-0.5 leading-none">BETA</span>
+          </Link>
+          <div className="flex items-center gap-0.5 mt-4">
+            <NotificationBell />
+            <button onClick={() => setShowInfo(true)} aria-label="Информация" className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors">
+              <Info size={20} strokeWidth={2} />
+            </button>
+            <button onClick={() => navigate('/invite')} aria-label="Реферальная программа" className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors">
+              <Gift size={20} strokeWidth={2} />
+            </button>
           </div>
           {/* Blinking help link — visible on every page */}
           <a
@@ -155,17 +159,6 @@ export default function Layout({ children }: LayoutProps) {
               </Link>
             );
           })}
-          <button
-            onClick={() => navigate('/invite')}
-            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-              isActive('/invite')
-                ? 'bg-primary-500/10 text-primary-400 shadow-glow'
-                : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
-            }`}
-          >
-            <Gift size={22} strokeWidth={isActive('/invite') ? 2.5 : 2} />
-            <span className="font-medium">Рефералы</span>
-          </button>
           {user?.isAdmin && (
             <Link
               to="/admin"
@@ -182,13 +175,10 @@ export default function Layout({ children }: LayoutProps) {
         </nav>
 
         <div className="p-4 border-t border-slate-800/50">
-          <button
-            onClick={() => setShowInfo(true)}
-            className="w-full text-left bg-slate-900 rounded-xl p-4 border border-slate-800 hover:border-slate-700 transition-colors"
-          >
-            <p className="text-sm text-slate-300 mb-2 flex items-center gap-1.5"><Info size={14} className="text-slate-500" />Moooza v{APP_VERSION}</p>
-            <p className="text-xs text-slate-500">Социальная сеть для музыкантов · О приложении</p>
-          </button>
+          <div className="bg-slate-900 rounded-xl p-4 border border-slate-800">
+            <p className="text-sm text-slate-300 mb-2">Moooza v{APP_VERSION}</p>
+            <p className="text-xs text-slate-500">Социальная сеть для музыкантов</p>
+          </div>
         </div>
       </aside>
 
