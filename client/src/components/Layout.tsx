@@ -119,12 +119,12 @@ export default function Layout({ children }: LayoutProps) {
             <img src="/logo.png" alt="Moooza" className="h-14 w-auto" />
             <span className="text-[10px] font-bold tracking-wider text-primary-400 bg-primary-500/15 border border-primary-500/30 rounded px-1.5 py-0.5 leading-none">BETA</span>
           </Link>
-          <div className="flex items-center gap-0.5 mt-4">
+          <div className="flex items-center justify-around mt-4">
             <NotificationBell />
-            <button onClick={() => setShowInfo(true)} aria-label="Информация" className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors">
+            <button onClick={() => setShowInfo(true)} aria-label="Информация" className="text-slate-500 hover:text-slate-300 transition-colors">
               <Info size={20} strokeWidth={2} />
             </button>
-            <button onClick={() => navigate('/invite')} aria-label="Реферальная программа" className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/50 transition-colors">
+            <button onClick={() => navigate('/invite')} aria-label="Реферальная программа" className="text-slate-500 hover:text-slate-300 transition-colors">
               <Gift size={20} strokeWidth={2} />
             </button>
           </div>
