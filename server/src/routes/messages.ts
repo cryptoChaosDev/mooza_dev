@@ -5,7 +5,7 @@ import { emitToUser, notifyUser, isUserOnline } from '../socket';
 import { uploadChatAttachment } from '../middleware/upload';
 import { messageLimiter } from '../middleware/rateLimiter';
 import { yoNorm } from '../utils/search';
-import { tgLog, tgEvent } from '../utils/telegram';
+import { tgLog, tgEvent, escTg } from '../utils/telegram';
 import { notify } from '../utils/notify';
 
 const router = Router();
@@ -60,7 +60,7 @@ async function findOrCreateDM(userAId: string, userBId: string): Promise<{ conv:
     include: { members: { include: MEMBER_USER } },
   });
   const names = conv.members.map((m: any) => `${m.user.firstName} ${m.user.lastName}`).join(' ↔ ');
-  tgLog(`💬 <b>Новый диалог</b>\n${names}`);
+  tgLog(`💬 <b>Новый диалог</b>\n${escTg(names)}`);
   return { conv };
 }
 
@@ -69,25 +69,20 @@ router.get('/unread/count', authenticate, async (req: AuthRequest, res) => {
   try {
     const userId = req.userId!;
 
-    const memberships = await db.conversationMember.findMany({
-      where: { userId, deletedAt: null },
-      select: { conversationId: true, lastReadAt: true },
-    });
-
-    let total = 0;
-    for (const m of memberships) {
-      const count = await db.message.count({
-        where: {
-          conversationId: m.conversationId,
-          senderId: { not: userId },
-          deletedAt: null,
-          ...(m.lastReadAt ? { createdAt: { gt: m.lastReadAt } } : {}),
-        },
-      });
-      total += count;
-    }
-
-    res.json({ count: total });
+    // Single aggregate query (was N+1: one count() per conversation in a loop).
+    // The per-member lastReadAt threshold is applied inside the JOIN, so all
+    // conversations are summed in one round-trip. Parameterized → injection-safe.
+    const rows = await prisma.$queryRaw<{ count: number }[]>`
+      SELECT COUNT(*)::int AS count
+      FROM "Message" m
+      JOIN "ConversationMember" cm
+        ON cm."conversationId" = m."conversationId" AND cm."userId" = ${userId}
+      WHERE cm."deletedAt" IS NULL
+        AND m."senderId" <> ${userId}
+        AND m."deletedAt" IS NULL
+        AND (cm."lastReadAt" IS NULL OR m."createdAt" > cm."lastReadAt")
+    `;
+    res.json({ count: Number(rows[0]?.count ?? 0) });
   } catch (error) {
     console.error('Get unread count error:', error);
     res.status(500).json({ error: 'Failed to get unread count' });
@@ -117,20 +112,27 @@ router.get('/conversations', authenticate, async (req: AuthRequest, res) => {
       orderBy: { conversation: { updatedAt: 'desc' } },
     });
 
-    const withUnread = await Promise.all(
-      memberships.map(async (m: any) => {
+    // Unread counts for ALL of the user's conversations in ONE grouped query
+    // (was N+1: a count() per conversation inside Promise.all). Parameterized.
+    const unreadRows = await prisma.$queryRaw<{ conversationId: string; count: number }[]>`
+      SELECT m."conversationId" AS "conversationId", COUNT(*)::int AS count
+      FROM "Message" m
+      JOIN "ConversationMember" cm
+        ON cm."conversationId" = m."conversationId" AND cm."userId" = ${userId}
+      WHERE cm."deletedAt" IS NULL
+        AND m."senderId" <> ${userId}
+        AND m."deletedAt" IS NULL
+        AND (cm."lastReadAt" IS NULL OR m."createdAt" > cm."lastReadAt")
+      GROUP BY m."conversationId"
+    `;
+    const unreadMap = new Map(unreadRows.map((r) => [r.conversationId, Number(r.count)]));
+
+    const withUnread = memberships.map((m: any) => {
         const conv = m.conversation;
         const lastMsg = conv.messages[0] ?? null;
         const others = conv.members.filter((mem: any) => mem.userId !== userId);
 
-        const unreadCount = await db.message.count({
-          where: {
-            conversationId: conv.id,
-            senderId: { not: userId },
-            deletedAt: null,
-            ...(m.lastReadAt ? { createdAt: { gt: m.lastReadAt } } : {}),
-          },
-        });
+        const unreadCount = unreadMap.get(conv.id) ?? 0;
 
         return {
           id: conv.id,
@@ -155,8 +157,7 @@ router.get('/conversations', authenticate, async (req: AuthRequest, res) => {
           isArchived: m.isArchived,
           type: conv.isGroup ? 'group' : (m.type ?? 'personal'),
         };
-      })
-    );
+    });
 
     res.json(withUnread);
   } catch (error) {

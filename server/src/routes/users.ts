@@ -605,7 +605,16 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     });
 
     res.json(user);
-  } catch (error) {
+  } catch (error: any) {
+    // A concurrent nickname change can slip past the findFirst pre-check and hit
+    // the DB unique index (TOCTOU). Surface that as a clean 409 instead of a 500.
+    if (error?.code === 'P2002') {
+      const target = String(error?.meta?.target ?? '');
+      if (target.toLowerCase().includes('nickname')) {
+        return res.status(409).json({ error: 'Этот никнейм уже занят' });
+      }
+      return res.status(409).json({ error: 'Значение уже занято' });
+    }
     console.error('Update user error:', error);
     res.status(500).json({ error: 'Failed to update user' });
   }

@@ -84,15 +84,38 @@ export const registerLimiter = rateLimit({
   },
 });
 
-// Strict limiter for code verification — 10 attempts per 15 min per IP
+// Strict limiter for code verification — 10 attempts per 15 min.
+// Keyed by EMAIL (not just IP): a 6/8-digit code lives against a single email,
+// so a distributed attack from many IPs against one address must still share
+// one bucket. Falls back to the IPv6-safe IP key when no email is present.
 export const codeLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 10,
   standardHeaders: true,
   legacyHeaders: false,
   skip: isE2ETestEmail, // @moooza.test addresses bypass — RFC-2606 reserved, used by E2E suite
+  keyGenerator: (req: any) => {
+    const email = String(req.body?.email || '').toLowerCase().trim();
+    return email ? `code:${email}` : ipKeyGenerator(req.ip);
+  },
   handler: (_req, res) => {
     res.status(429).json({ error: 'Слишком много попыток. Подождите 15 минут.' });
+  },
+});
+
+/**
+ * Limiter for existence-check endpoints (check-email / check-nickname).
+ * These leak whether an account exists, so cap enumeration: 60 lookups/min/IP
+ * is far above any human signup flow (a person checks a handful) but turns a
+ * full-DB sweep from minutes into days. Generous enough for shared/NAT IPs.
+ */
+export const lookupLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ error: 'Слишком много запросов. Подождите минуту.' });
   },
 });
 

@@ -77,7 +77,11 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
+      // No 'unsafe-inline' for scripts: the API only ever serves JSON and the OG
+      // HTML page (which contains no inline <script>). Removing it means even a
+      // future HTML-injection on an API response cannot execute inline JS.
+      scriptSrc: ["'self'"],
+      // styleSrc keeps 'unsafe-inline' — harmless here and avoids churn.
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "https:", "data:"],
       connectSrc: ["'self'"].concat(
@@ -128,8 +132,18 @@ app.use(express.urlencoded({ limit: '1mb', extended: true }));
 // HTTP request logging через Morgan + Winston
 app.use(morgan('combined', { stream: morganStream }));
 
-// Serve static files (avatars)
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
+// Serve static files (avatars, portfolio, post media, …).
+// Security headers: `nosniff` stops a file with mismatched content (e.g. an
+// HTML/SVG payload uploaded as .png) from being sniffed and rendered as markup,
+// and the strict CSP + `sandbox` neutralise any active content (scripts inside
+// SVG/HTML) if such a file is opened directly. Neither header affects normal
+// <img>/<audio> embedding from the SPA.
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), {
+  setHeaders: (res) => {
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox");
+  },
+}));
 
 // Health check (без rate limiting)
 app.get(['/health', '/api/health'], (req, res) => {
@@ -166,6 +180,18 @@ app.use('/api/pro', proRoutes);
 app.use('/api/feed-presets', feedPresetRoutes);
 
 // ── OG tags for social bots ────────────────────────────────────────────────
+// HTML-entity-encode every interpolated value: firstName/lastName/bio/city are
+// user-controlled and must never reach raw HTML (otherwise `bio` like
+// `"><script>…` would inject markup / spoof OG tags). encodeURI keeps the URL
+// usable while neutralising quotes/angle brackets.
+const escapeHtml = (s: string): string =>
+  String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
 app.get('/api/og/profile/:userId', async (req: express.Request, res: express.Response) => {
   try {
     const user = await prisma.user.findUnique({
@@ -173,12 +199,15 @@ app.get('/api/og/profile/:userId', async (req: express.Request, res: express.Res
       select: { firstName: true, lastName: true, avatar: true, bio: true, city: true },
     });
     if (!user) return res.status(404).send('Not found');
-    const name = `${user.firstName} ${user.lastName}`.trim();
-    const desc = user.bio || `${user.city ? user.city + ' · ' : ''}Музыкант на Moooza`;
+    const name = escapeHtml(`${user.firstName} ${user.lastName}`.trim());
+    const desc = escapeHtml(user.bio || `${user.city ? user.city + ' · ' : ''}Музыкант на Moooza`);
+    // Avatar filename comes from our own upload pipeline; still encode for the
+    // attribute context. The full URL is percent-encoded so stray quotes/spaces
+    // cannot break out of the attribute.
     const img = user.avatar
-      ? `https://moooza.ru/uploads/${user.avatar}`
+      ? escapeHtml(`https://moooza.ru/uploads/${encodeURI(user.avatar)}`)
       : 'https://moooza.ru/logo.png';
-    const url = `https://moooza.ru/profile/${req.params.userId}`;
+    const url = escapeHtml(`https://moooza.ru/profile/${encodeURIComponent(req.params.userId)}`);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(`<!DOCTYPE html><html><head>
       <meta charset="utf-8">
@@ -192,7 +221,6 @@ app.get('/api/og/profile/:userId', async (req: express.Request, res: express.Res
       <meta name="twitter:card" content="summary">
       <meta name="twitter:title" content="${name} — Moooza">
       <meta name="twitter:description" content="${desc}">
-      <meta name="twitter:image" content="${img}">
       <meta http-equiv="refresh" content="0; url=${url}">
     </head><body><a href="${url}">${name}</a></body></html>`);
   } catch { res.status(500).send('Error'); }

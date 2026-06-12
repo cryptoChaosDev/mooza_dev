@@ -703,7 +703,16 @@ router.patch('/users/:id', async (req, res) => {
       },
     });
     res.json(user);
-  } catch (e: any) { res.status(400).json({ error: e.message }); }
+  } catch (e: any) {
+    // TOCTOU on nickname: a concurrent change can pass the pre-check and trip the
+    // DB unique index — return a clean 409 rather than leaking the raw DB error.
+    if (e?.code === 'P2002') {
+      const target = String(e?.meta?.target ?? '');
+      if (target.toLowerCase().includes('nickname')) return res.status(409).json({ error: 'Этот никнейм уже занят' });
+      return res.status(409).json({ error: 'Значение уже занято' });
+    }
+    res.status(400).json({ error: e.message });
+  }
 });
 
 router.get('/users', async (req, res) => {

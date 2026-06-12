@@ -39,6 +39,37 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     if (targetId === req.userId) return res.status(400).json({ error: 'Cannot review yourself' });
     if (rating < 1 || rating > 10) return res.status(400).json({ error: 'Rating must be 1-10' });
 
+    // A review must be backed by a real interaction between the two users —
+    // otherwise anyone could spin up accounts and mass-post fake reviews to tank
+    // a competitor's rating. Validate the relationship server-side (UI gating is
+    // not a security control).
+    if (type === 'deal') {
+      const deal = await prisma.deal.findFirst({
+        where: {
+          status: 'COMPLETED',
+          OR: [
+            { customerId: req.userId!, executorId: targetId },
+            { customerId: targetId, executorId: req.userId! },
+          ],
+        },
+        select: { id: true },
+      });
+      if (!deal) return res.status(403).json({ error: 'Отзыв можно оставить только по завершённой сделке' });
+    } else {
+      // Default 'connection' type — requires an established (or breaking) connection.
+      const conn = await prisma.connection.findFirst({
+        where: {
+          status: { in: ['ACCEPTED', 'BREAK_REQUESTED'] },
+          OR: [
+            { requesterId: req.userId!, receiverId: targetId },
+            { requesterId: targetId, receiverId: req.userId! },
+          ],
+        },
+        select: { id: true },
+      });
+      if (!conn) return res.status(403).json({ error: 'Отзыв можно оставить только при установленной связи' });
+    }
+
     const review = await prisma.review.upsert({
       where: { authorId_targetId_type: { authorId: req.userId!, targetId, type } },
       create: {

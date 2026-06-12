@@ -123,7 +123,11 @@ router.patch('/:id/accept', authenticate, async (req: AuthRequest, res) => {
     const deal = await prisma.deal.findUnique({ where: { id: req.params.id } });
     if (!deal || deal.executorId !== meId) return res.status(403).json({ error: 'Forbidden' });
     if (deal.status !== 'PENDING') return res.status(400).json({ error: 'Invalid status' });
-    const updated = await prisma.deal.update({ where: { id: deal.id }, data: { status: 'AWAITING_PAYMENT' }, include: DEAL_INCLUDE });
+    // Atomic transition: the status guard in WHERE prevents a concurrent
+    // accept/reject/cancel from both committing (count===0 ⇒ already changed).
+    const tr = await prisma.deal.updateMany({ where: { id: deal.id, status: 'PENDING' }, data: { status: 'AWAITING_PAYMENT' } });
+    if (tr.count === 0) return res.status(409).json({ error: 'Статус сделки уже изменился' });
+    const updated = await prisma.deal.findUnique({ where: { id: deal.id }, include: DEAL_INCLUDE });
     const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
     await notify(deal.customerId, meId, 'deal_accepted',
       `${me?.firstName} ${me?.lastName} принял(а) сделку`,
@@ -141,7 +145,9 @@ router.patch('/:id/reject', authenticate, async (req: AuthRequest, res) => {
     if (!deal || deal.executorId !== meId) return res.status(403).json({ error: 'Forbidden' });
     if (deal.status !== 'PENDING') return res.status(400).json({ error: 'Invalid status' });
     const { reason } = req.body;
-    const updated = await prisma.deal.update({ where: { id: deal.id }, data: { status: 'CANCELLED', cancelReason: reason || null }, include: DEAL_INCLUDE });
+    const tr = await prisma.deal.updateMany({ where: { id: deal.id, status: 'PENDING' }, data: { status: 'CANCELLED', cancelReason: reason || null } });
+    if (tr.count === 0) return res.status(409).json({ error: 'Статус сделки уже изменился' });
+    const updated = await prisma.deal.findUnique({ where: { id: deal.id }, include: DEAL_INCLUDE });
     const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
     await notify(deal.customerId, meId, 'deal_rejected',
       `${me?.firstName} ${me?.lastName} отклонил(а) сделку`,
@@ -160,7 +166,9 @@ router.patch('/:id/cancel', authenticate, async (req: AuthRequest, res) => {
     if (deal.customerId !== meId && deal.executorId !== meId) return res.status(403).json({ error: 'Forbidden' });
     if (['COMPLETED', 'CANCELLED'].includes(deal.status)) return res.status(400).json({ error: 'Cannot cancel' });
     const { reason } = req.body;
-    const updated = await prisma.deal.update({ where: { id: deal.id }, data: { status: 'CANCELLED', cancelReason: reason || null }, include: DEAL_INCLUDE });
+    const tr = await prisma.deal.updateMany({ where: { id: deal.id, status: { notIn: ['COMPLETED', 'CANCELLED'] } }, data: { status: 'CANCELLED', cancelReason: reason || null } });
+    if (tr.count === 0) return res.status(409).json({ error: 'Статус сделки уже изменился' });
+    const updated = await prisma.deal.findUnique({ where: { id: deal.id }, include: DEAL_INCLUDE });
     const otherId = meId === deal.customerId ? deal.executorId : deal.customerId;
     const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
     await notify(otherId, meId, 'deal_cancelled',
@@ -179,7 +187,9 @@ router.patch('/:id/pay', authenticate, async (req: AuthRequest, res) => {
     if (!deal || deal.customerId !== meId) return res.status(403).json({ error: 'Forbidden' });
     if (deal.status !== 'AWAITING_PAYMENT') return res.status(400).json({ error: 'Invalid status' });
     const newStatus = deal.dealType === 'event' ? 'AWAITING_EVENT' : 'IN_PROGRESS';
-    const updated = await prisma.deal.update({ where: { id: deal.id }, data: { status: newStatus }, include: DEAL_INCLUDE });
+    const tr = await prisma.deal.updateMany({ where: { id: deal.id, status: 'AWAITING_PAYMENT' }, data: { status: newStatus } });
+    if (tr.count === 0) return res.status(409).json({ error: 'Статус сделки уже изменился' });
+    const updated = await prisma.deal.findUnique({ where: { id: deal.id }, include: DEAL_INCLUDE });
 
     // Auto-create/find DM and set type='business' for both parties
     try {
@@ -218,7 +228,9 @@ router.patch('/:id/submit', authenticate, async (req: AuthRequest, res) => {
     const deal = await prisma.deal.findUnique({ where: { id: req.params.id } });
     if (!deal || deal.executorId !== meId) return res.status(403).json({ error: 'Forbidden' });
     if (!['IN_PROGRESS', 'REVISION'].includes(deal.status)) return res.status(400).json({ error: 'Invalid status' });
-    const updated = await prisma.deal.update({ where: { id: deal.id }, data: { status: 'REVIEW' }, include: DEAL_INCLUDE });
+    const tr = await prisma.deal.updateMany({ where: { id: deal.id, status: { in: ['IN_PROGRESS', 'REVISION'] } }, data: { status: 'REVIEW' } });
+    if (tr.count === 0) return res.status(409).json({ error: 'Статус сделки уже изменился' });
+    const updated = await prisma.deal.findUnique({ where: { id: deal.id }, include: DEAL_INCLUDE });
     const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
     await notify(deal.customerId, meId, 'deal_submitted',
       `${me?.firstName} ${me?.lastName} сдал(а) работу`,
@@ -236,7 +248,9 @@ router.patch('/:id/approve', authenticate, async (req: AuthRequest, res) => {
     if (!deal || deal.customerId !== meId) return res.status(403).json({ error: 'Forbidden' });
     if (deal.status !== 'REVIEW') return res.status(400).json({ error: 'Invalid status' });
 
-    const updated = await prisma.deal.update({ where: { id: deal.id }, data: { status: 'COMPLETED' }, include: DEAL_INCLUDE });
+    const tr = await prisma.deal.updateMany({ where: { id: deal.id, status: 'REVIEW' }, data: { status: 'COMPLETED' } });
+    if (tr.count === 0) return res.status(409).json({ error: 'Статус сделки уже изменился' });
+    const updated = await prisma.deal.findUnique({ where: { id: deal.id }, include: DEAL_INCLUDE });
 
     // Auto-create connection (CUSTOMER ↔ EXECUTOR) if doesn't exist
     const existing = await prisma.connection.findFirst({
@@ -274,11 +288,14 @@ router.patch('/:id/revision', authenticate, async (req: AuthRequest, res) => {
     if (deal.status !== 'REVIEW') return res.status(400).json({ error: 'Invalid status' });
     if (deal.revisionsUsed >= deal.revisionCount) return res.status(400).json({ error: 'Revision limit reached' });
     const { comment } = req.body;
-    const updated = await prisma.deal.update({
-      where: { id: deal.id },
-      data: { status: 'REVISION', revisionsUsed: deal.revisionsUsed + 1 },
-      include: DEAL_INCLUDE,
+    // Atomic: guard on both status and the revision limit, increment in-place so
+    // two concurrent revision requests can't double-spend the revision budget.
+    const tr = await prisma.deal.updateMany({
+      where: { id: deal.id, status: 'REVIEW', revisionsUsed: { lt: deal.revisionCount } },
+      data: { status: 'REVISION', revisionsUsed: { increment: 1 } },
     });
+    if (tr.count === 0) return res.status(409).json({ error: 'Статус сделки уже изменился' });
+    const updated = await prisma.deal.findUnique({ where: { id: deal.id }, include: DEAL_INCLUDE });
     const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
     await notify(deal.executorId, meId, 'deal_revision',
       `${me?.firstName} ${me?.lastName} отправил(а) на доработку`,

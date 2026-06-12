@@ -3,10 +3,10 @@ import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import { prisma } from '../index';
 import { z } from 'zod';
-import { authLimiter, registerLimiter, codeLimiter } from '../middleware/rateLimiter';
+import { authLimiter, registerLimiter, codeLimiter, lookupLimiter } from '../middleware/rateLimiter';
 import { generateToken } from '../utils/jwt';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail } from '../utils/mailer';
-import { tgLog, tgEvent } from '../utils/telegram';
+import { tgLog, tgEvent, escTg } from '../utils/telegram';
 import { applyReferralProGrants } from '../utils/pro';
 import { yoNorm } from '../utils/search';
 
@@ -131,7 +131,7 @@ const loginSchema = z.object({
 });
 
 // Check nickname uniqueness
-router.get('/check-nickname', async (req, res) => {
+router.get('/check-nickname', lookupLimiter, async (req, res) => {
   const { nickname } = req.query as { nickname: string };
   if (!nickname || nickname.trim().length < 2) return res.json({ available: false });
   res.json({ available: !(await nicknameTaken(nickname.trim())) });
@@ -140,7 +140,7 @@ router.get('/check-nickname', async (req, res) => {
 // Check email availability (so the «уже занят» hint appears on the email step,
 // not only at the end of registration). A pending, unverified registration also
 // counts as taken so two people can't race the same address.
-router.get('/check-email', async (req, res) => {
+router.get('/check-email', lookupLimiter, async (req, res) => {
   const email = (req.query.email as string | undefined)?.trim().toLowerCase() || '';
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.json({ available: false, valid: false });
@@ -219,8 +219,9 @@ router.post('/register', registerLimiter, async (req, res) => {
     // Hash password
     const hashedPassword = await bcrypt.hash(data.password, 10);
 
-    // Generate 6-digit verification code (cryptographically secure)
-    const verificationCode = String(crypto.randomInt(100000, 1000000));
+    // Generate 8-digit verification code (cryptographically secure). 8 digits
+    // (~26.6 bits) keeps brute-force infeasible alongside the per-email rate limit.
+    const verificationCode = String(crypto.randomInt(10000000, 100000000));
     const expires = new Date(Date.now() + 15 * 60 * 1000);
 
     // IMPORTANT: do NOT create a User (or any related record) here. The account
@@ -313,30 +314,52 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
         if (link && !link.usedById) refLink = { id: link.id, ownerId: link.ownerId };
       }
 
-      // Create the real account — only now, with email already verified.
-      const user = await prisma.user.create({
-        data: {
-          email: normalizedEmail,
-          password: pending.passwordHash,
-          firstName: p.firstName,
-          lastName: p.lastName,
-          nickname: p.nickname,
-          phone: p.phone,
-          country: p.country,
-          city: p.city,
-          birthDate: p.birthDate ? new Date(p.birthDate) : undefined,
-          fieldOfActivityId: p.fieldOfActivityId || undefined,
-          referrerId: refLink?.ownerId || p.referrerId || undefined,
-          referralLinkUsed: refLink ? p.referralCode : undefined,
-          emailVerified: true,
-          userProfessions: p.userProfessions && p.userProfessions.length > 0
-            ? { create: p.userProfessions.map((up: any) => ({ professionId: up.professionId, features: up.features || [] })) }
-            : undefined,
-          userArtists: p.artistIds && p.artistIds.length > 0
-            ? { create: p.artistIds.map((artistId: string) => ({ artistId })) }
-            : undefined,
-        },
-        include: userInclude,
+      // Create the real account AND burn the single-use referral link atomically
+      // (one $transaction): either both commit or neither does, so one link can
+      // never be credited to two accounts and a failed burn can't leave a
+      // dangling user. Email is already verified at this point.
+      const user = await prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({
+          data: {
+            email: normalizedEmail,
+            password: pending.passwordHash,
+            firstName: p.firstName,
+            lastName: p.lastName,
+            nickname: p.nickname,
+            phone: p.phone,
+            country: p.country,
+            city: p.city,
+            birthDate: p.birthDate ? new Date(p.birthDate) : undefined,
+            fieldOfActivityId: p.fieldOfActivityId || undefined,
+            referrerId: refLink?.ownerId || p.referrerId || undefined,
+            referralLinkUsed: refLink ? p.referralCode : undefined,
+            emailVerified: true,
+            userProfessions: p.userProfessions && p.userProfessions.length > 0
+              ? { create: p.userProfessions.map((up: any) => ({ professionId: up.professionId, features: up.features || [] })) }
+              : undefined,
+            userArtists: p.artistIds && p.artistIds.length > 0
+              ? { create: p.artistIds.map((artistId: string) => ({ artistId })) }
+              : undefined,
+          },
+          include: userInclude,
+        });
+        // `usedById: null` guard makes the claim atomic against a concurrent
+        // signup; if the link was already taken we keep the account but strip
+        // the referral credit so a single-use link is never double-counted.
+        if (refLink) {
+          const burned = await tx.referralLink.updateMany({
+            where: { id: refLink.id, usedById: null },
+            data: { usedById: created.id, usedAt: new Date() },
+          });
+          if (burned.count === 0) {
+            return tx.user.update({
+              where: { id: created.id },
+              data: { referrerId: p.referrerId || null, referralLinkUsed: null },
+              include: userInclude,
+            });
+          }
+        }
+        return created;
       });
 
       // Consume a role-bound artist invite link, if one was provided at signup.
@@ -375,19 +398,7 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
         }
       }
 
-      // Burn the single-use referral link — atomic guard against double-use.
-      if (refLink) {
-        const burned = await prisma.referralLink.updateMany({
-          where: { id: refLink.id, usedById: null },
-          data: { usedById: user.id, usedAt: new Date() },
-        }).catch(() => ({ count: 0 }));
-        if (burned.count === 0) {
-          await prisma.user.update({
-            where: { id: user.id },
-            data: { referrerId: p.referrerId || null, referralLinkUsed: null },
-          }).catch(() => {});
-        }
-      }
+      // (Referral link burn now happens inside the $transaction above.)
 
       // Referral → Pro reward: every 10 referred signups grants the referrer
       // 1 month of Pro. Fire-and-forget; guarded so it can never break signup.
@@ -401,7 +412,7 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
       // Registration complete — drop the pending entry.
       await prisma.pendingRegistration.delete({ where: { email: normalizedEmail } }).catch(() => {});
 
-      tgLog(`🆕 <b>Новый пользователь</b>\n👤 ${user.firstName} ${user.lastName}\n📧 ${normalizedEmail}\n🌍 ${user.city || '—'}`);
+      tgLog(`🆕 <b>Новый пользователь</b>\n👤 ${escTg(`${user.firstName} ${user.lastName}`)}\n📧 ${escTg(normalizedEmail)}\n🌍 ${escTg(user.city || '—')}`);
 
       const token = generateToken({ userId: user.id });
       const { password: _, ...safe } = user as any;
@@ -456,7 +467,7 @@ router.post('/resend-verification', registerLimiter, async (req, res) => {
     if (!email) return res.status(400).json({ error: 'email обязателен' });
     const normalizedEmail = email.toLowerCase();
 
-    const code = String(crypto.randomInt(100000, 1000000));
+    const code = String(crypto.randomInt(10000000, 100000000));
     const expires = new Date(Date.now() + 15 * 60 * 1000);
 
     // ── New flow: resend code for a pending registration ──
@@ -549,7 +560,7 @@ router.post('/login', authLimiter, async (req, res) => {
 
     const { password: _, ...userWithoutPassword } = user;
 
-    tgLog(`🔑 <b>Вход в аккаунт</b>\n👤 ${user.firstName} ${user.lastName}\n📧 ${user.email}`);
+    tgLog(`🔑 <b>Вход в аккаунт</b>\n👤 ${escTg(`${user.firstName} ${user.lastName}`)}\n📧 ${escTg(user.email)}`);
     res.json({ user: userWithoutPassword, token });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -1039,7 +1050,7 @@ router.post('/forgot-password', authLimiter, async (req, res) => {
       return res.json({ ok: true }); // silent — still prevent enumeration
     }
 
-    const code = String(crypto.randomInt(100000, 1000000));
+    const code = String(crypto.randomInt(10000000, 100000000));
     const expires = new Date(Date.now() + 15 * 60 * 1000);
 
     await prisma.user.update({
@@ -1068,9 +1079,9 @@ router.post('/reset-password', codeLimiter, authLimiter, async (req, res) => {
     if (password.length < 8) return res.status(400).json({ error: 'Пароль минимум 8 символов' });
 
     const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
-    if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
-
-    if (!user.passwordResetCode || user.passwordResetCode !== code) {
+    // Uniform response for «no such user» and «wrong code» so the endpoint
+    // can't be used to tell which emails are registered (account enumeration).
+    if (!user || !user.passwordResetCode || user.passwordResetCode !== code) {
       return res.status(400).json({ error: 'Неверный код' });
     }
     if (user.passwordResetExpires && user.passwordResetExpires < new Date()) {
