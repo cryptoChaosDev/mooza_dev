@@ -62,6 +62,35 @@ async function safeNickname(candidate: string | null | undefined): Promise<strin
   return (await nicknameTaken(v)) ? null : v;
 }
 
+// True if the referral identifier points to a real, usable referral (an unused
+// single-use ReferralLink code, a legacy bare-userId code, or a real referrerId).
+async function isValidReferral(referralCode?: string | null, referrerId?: string | null): Promise<boolean> {
+  const code = (referralCode ?? '').trim();
+  if (code) {
+    const link = await prisma.referralLink.findUnique({ where: { code }, select: { usedById: true } });
+    if (link) return !link.usedById;
+    const owner = await prisma.user.findUnique({ where: { id: code }, select: { id: true } });
+    if (owner) return true;
+  }
+  const rid = (referrerId ?? '').trim();
+  if (rid) {
+    const owner = await prisma.user.findUnique({ where: { id: rid }, select: { id: true } });
+    if (owner) return true;
+  }
+  return false;
+}
+
+// Registration gate. Open (default) → always allowed. Closed → allowed only when
+// referral-only mode is on AND the signup carries a valid referral link.
+async function registrationAllowed(referralValid = false): Promise<boolean> {
+  const [reg, refReg] = await Promise.all([
+    prisma.siteSetting.findUnique({ where: { key: 'registrationEnabled' } }),
+    prisma.siteSetting.findUnique({ where: { key: 'referralRegistrationEnabled' } }),
+  ]);
+  if (reg?.value !== 'false') return true;
+  return refReg?.value === 'true' && referralValid;
+}
+
 const registerSchema = z.object({
   // Step 1: Location
   country: z.string().optional(),
@@ -126,13 +155,18 @@ router.get('/check-email', async (req, res) => {
 // Register
 router.post('/register', registerLimiter, async (req, res) => {
   try {
-    // Honor the site-wide registration switch.
-    const regSetting = await prisma.siteSetting.findUnique({ where: { key: 'registrationEnabled' } });
-    if (regSetting?.value === 'false') {
-      return res.status(403).json({ error: 'Регистрация временно закрыта' });
-    }
-
     const data = registerSchema.parse(req.body);
+
+    // Registration switch — closed to the public, but a valid referral link OR
+    // an artist invite (referral-only mode) still lets people sign up.
+    let invited = await isValidReferral(data.referralCode, data.referrerId);
+    if (!invited && data.artistInviteToken) {
+      const inv = await prisma.artistInvite.findUnique({ where: { token: data.artistInviteToken }, select: { id: true } });
+      invited = !!inv;
+    }
+    if (!(await registrationAllowed(invited))) {
+      return res.status(403).json({ error: 'Регистрация сейчас доступна только по приглашению' });
+    }
 
     // Normalize email
     const normalizedEmail = data.email.trim().toLowerCase();
@@ -544,6 +578,9 @@ router.get('/telegram/poll/:token', authLimiter, async (req, res) => {
   try {
     let user = await prisma.user.findUnique({ where: { telegramId: entry.telegramId } });
     if (!user) {
+      if (!(await registrationAllowed())) {
+        return res.status(403).json({ error: 'Регистрация сейчас доступна только по приглашению' });
+      }
       user = await prisma.user.create({
         data: {
           telegramId: entry.telegramId,
@@ -649,6 +686,9 @@ router.post('/telegram/miniapp', authLimiter, async (req, res) => {
     // Find or create user
     let user = await prisma.user.findUnique({ where: { telegramId } });
     if (!user) {
+      if (!(await registrationAllowed())) {
+        return res.status(403).json({ error: 'Регистрация сейчас доступна только по приглашению' });
+      }
       user = await prisma.user.create({
         data: {
           telegramId,
@@ -748,6 +788,9 @@ router.get('/vk/callback', async (req, res) => {
     }
     let isNew = false;
     if (!user) {
+      if (!(await registrationAllowed())) {
+        return res.status(403).json({ error: 'Регистрация сейчас доступна только по приглашению' });
+      }
       user = await prisma.user.create({
         data: {
           vkId,
@@ -796,6 +839,9 @@ router.post('/vk/token', authLimiter, async (req, res) => {
     if (!user && email) user = await prisma.user.findFirst({ where: { email } }) || null;
     let isNew = false;
     if (!user) {
+      if (!(await registrationAllowed())) {
+        return res.status(403).json({ error: 'Регистрация сейчас доступна только по приглашению' });
+      }
       user = await prisma.user.create({
         data: {
           vkId,
@@ -883,6 +929,9 @@ router.post('/vk/exchange', authLimiter, async (req, res) => {
     }
     let isNew = false;
     if (!user) {
+      if (!(await registrationAllowed())) {
+        return res.status(403).json({ error: 'Регистрация сейчас доступна только по приглашению' });
+      }
       user = await prisma.user.create({
         data: {
           vkId,
@@ -942,6 +991,9 @@ router.post('/telegram', authLimiter, async (req, res) => {
     let user = await prisma.user.findUnique({ where: { telegramId } });
 
     if (!user) {
+      if (!(await registrationAllowed())) {
+        return res.status(403).json({ error: 'Регистрация сейчас доступна только по приглашению' });
+      }
       user = await prisma.user.create({
         data: {
           telegramId,

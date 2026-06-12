@@ -6,6 +6,8 @@ const router = Router();
 const DEFAULTS: Record<string, string> = {
   loginEnabled: 'true',
   registrationEnabled: 'true',
+  // When registration is closed, still allow sign-ups via a valid referral link.
+  referralRegistrationEnabled: 'false',
 };
 
 // Ensure defaults exist, return as plain object

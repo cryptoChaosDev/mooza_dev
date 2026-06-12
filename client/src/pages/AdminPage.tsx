@@ -2134,18 +2134,21 @@ function SiteSettingsTab() {
 
   const loginEnabled = settings?.loginEnabled !== 'false';
   const registrationEnabled = settings?.registrationEnabled !== 'false';
+  const referralRegistrationEnabled = settings?.referralRegistrationEnabled === 'true';
 
   if (isLoading) return <div className="text-slate-500 text-sm">Загрузка...</div>;
 
   const rows = [
-    { key: 'loginEnabled',        label: 'Кнопка «Войти» на лендинге',              value: loginEnabled },
-    { key: 'registrationEnabled', label: 'Кнопка «Зарегистрироваться» на лендинге', value: registrationEnabled },
+    { key: 'loginEnabled',                label: 'Кнопка «Войти» на лендинге',                         value: loginEnabled },
+    { key: 'registrationEnabled',         label: 'Открытая регистрация (для всех)',                    value: registrationEnabled },
+    { key: 'referralRegistrationEnabled', label: 'Регистрация по реф-ссылкам (когда открытая выкл.)',   value: referralRegistrationEnabled },
   ];
 
   return (
     <div className="space-y-3">
       <p className="text-xs text-slate-500 mb-4">
-        Прямые ссылки /login и /register остаются рабочими вне зависимости от этих настроек.
+        «Открытая регистрация» — приём регистраций от всех. Если её выключить, но включить
+        «по реф-ссылкам», зарегистрироваться можно только по валидной реферальной ссылке или приглашению.
       </p>
       {rows.map(({ key, label, value }) => (
         <div key={key} className="flex items-center justify-between bg-slate-900/60 border border-slate-800 rounded-2xl px-5 py-4">

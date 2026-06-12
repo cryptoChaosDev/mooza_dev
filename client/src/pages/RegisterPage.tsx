@@ -167,29 +167,40 @@ export default function RegisterPage() {
 
   useEffect(() => { document.title = 'Регистрация — Moooza'; }, []);
 
-  // Registration may be closed site-wide — bounce to login.
-  useEffect(() => {
-    siteSettingsAPI.get()
-      .then(({ data }) => {
-        if ((data as Record<string, string>)?.registrationEnabled === 'false') {
-          navigate('/login', { replace: true });
-        }
-      })
-      .catch(() => {});
-  }, [navigate]);
-
   // Resolve the ref code (single-use link code OR legacy userId) → owner id.
   const [referrerId, setReferrerId] = useState<string | undefined>(undefined);
   const [refUsed, setRefUsed] = useState(false);
+
+  // Registration may be closed site-wide. In referral-only mode a valid referral
+  // link (or an artist invite) still lets people register; otherwise → login.
   useEffect(() => {
-    if (!refCode) return;
-    referralAPI.resolve(refCode)
-      .then(({ data }) => {
-        if (data?.used) setRefUsed(true);
-        else if (data?.ownerId) setReferrerId(data.ownerId);
-      })
-      .catch(() => {});
-  }, [refCode]);
+    let cancelled = false;
+    (async () => {
+      let ownerId: string | null = null;
+      let used = false;
+      if (refCode) {
+        try {
+          const { data } = await referralAPI.resolve(refCode);
+          used = !!data?.used;
+          ownerId = data?.ownerId ?? null;
+          if (!cancelled) {
+            if (used) setRefUsed(true);
+            else if (ownerId) setReferrerId(ownerId);
+          }
+        } catch { /* ignore */ }
+      }
+      try {
+        const { data } = await siteSettingsAPI.get();
+        const s = data as Record<string, string>;
+        if (s?.registrationEnabled === 'false') {
+          const invited = (s?.referralRegistrationEnabled === 'true' && !!ownerId && !used) || !!artistInvite;
+          if (!invited && !cancelled) navigate('/login', { replace: true });
+        }
+      } catch { /* on error, don't hard-block */ }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refCode, artistInvite, navigate]);
 
   // Resolve the artist-invite token → preview (artist name + roles) for the banner.
   const [artistInvitePreview, setArtistInvitePreview] = useState<{ artist: { name: string }; roles: { id: string; name: string }[] } | null>(null);
