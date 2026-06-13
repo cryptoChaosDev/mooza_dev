@@ -454,7 +454,7 @@ export default function RegisterPage() {
   };
 
   const handleVerify = async () => {
-    if (!pendingEmail || verifyCode.length < 6) return;
+    if (!pendingEmail || verifyCode.length < 8) return;
     setLoading(true);
     setVerifyError('');
     try {
@@ -544,23 +544,23 @@ export default function RegisterPage() {
             <div className="text-5xl mb-4">📬</div>
             <h2 className="text-2xl font-bold text-white mb-2">Проверьте почту</h2>
             <p className="text-slate-400 text-sm leading-relaxed">
-              Мы отправили 6-значный код на<br />
+              Мы отправили 8-значный код на<br />
               <span className="text-white font-medium">{pendingEmail}</span>
             </p>
           </div>
           <input
-            type="text" inputMode="numeric" maxLength={6}
+            type="text" inputMode="numeric" maxLength={8}
             value={verifyCode}
             onChange={e => setVerifyCode(e.target.value.replace(/\D/g, ''))}
-            placeholder="000000" autoFocus
-            className="w-full text-center text-4xl font-bold tracking-[18px] bg-slate-800 border border-slate-700 rounded-2xl px-4 py-5 text-white placeholder-slate-700 focus:outline-none focus:border-primary-500 mb-4"
+            placeholder="00000000" autoFocus
+            className="w-full text-center text-3xl font-bold tracking-[8px] bg-slate-800 border border-slate-700 rounded-2xl px-4 py-5 text-white placeholder-slate-700 focus:outline-none focus:border-primary-500 mb-4"
           />
           {verifyError && (
             <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-red-400 text-sm">
               <AlertCircle size={15} className="flex-shrink-0" />{verifyError}
             </div>
           )}
-          <button onClick={handleVerify} disabled={loading || verifyCode.length < 6}
+          <button onClick={handleVerify} disabled={loading || verifyCode.length < 8}
             className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-40 text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base mb-3">
             {loading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
             Подтвердить

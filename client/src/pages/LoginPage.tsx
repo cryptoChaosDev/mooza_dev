@@ -143,7 +143,7 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
   };
 
   const handleVerify = async () => {
-    if (!pendingEmail || verifyCode.length < 6) return;
+    if (!pendingEmail || verifyCode.length < 8) return;
     setLoading(true);
     setVerifyError('');
     try {
@@ -188,7 +188,7 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
             </div>
             <h2 className="text-xl font-bold text-white mb-2">Подтвердите email</h2>
             <p className="text-slate-400 text-sm">
-              Мы отправили 6-значный код на<br />
+              Мы отправили 8-значный код на<br />
               <span className="text-white font-medium">{pendingEmail}</span>
             </p>
           </div>
@@ -196,11 +196,11 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
             <input
               type="text"
               inputMode="numeric"
-              maxLength={6}
+              maxLength={8}
               value={verifyCode}
               onChange={e => setVerifyCode(e.target.value.replace(/\D/g, ''))}
-              placeholder="000000"
-              className="w-full text-center text-3xl font-bold tracking-[16px] bg-slate-800 border border-slate-700 rounded-xl px-4 py-4 text-white placeholder-slate-600 focus:outline-none focus:border-primary-500"
+              placeholder="00000000"
+              className="w-full text-center text-3xl font-bold tracking-[8px] bg-slate-800 border border-slate-700 rounded-xl px-4 py-4 text-white placeholder-slate-600 focus:outline-none focus:border-primary-500"
               autoFocus
             />
           </div>
@@ -212,7 +212,7 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
           )}
           <button
             onClick={handleVerify}
-            disabled={loading || verifyCode.length < 6}
+            disabled={loading || verifyCode.length < 8}
             className="w-full py-3 rounded-xl bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-2 transition-colors mb-3"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}

@@ -118,20 +118,20 @@ export default function ForgotPasswordPage() {
               <div className="text-4xl mb-3">📬</div>
               <h1 className="text-2xl font-bold text-white mb-2">Введите код</h1>
               <p className="text-slate-400 text-sm leading-relaxed">
-                Мы отправили 6-значный код на<br />
+                Мы отправили 8-значный код на<br />
                 <span className="text-white font-medium">{email}</span>
               </p>
             </div>
 
             <div className="space-y-4">
               <input
-                type="text" inputMode="numeric" maxLength={6}
+                type="text" inputMode="numeric" maxLength={8}
                 value={code}
                 onChange={e => { setCode(e.target.value.replace(/\D/g, '')); setError(''); }}
-                onKeyDown={e => e.key === 'Enter' && code.length === 6 && setStage('password')}
-                placeholder="000000"
+                onKeyDown={e => e.key === 'Enter' && code.length === 8 && setStage('password')}
+                placeholder="00000000"
                 autoFocus
-                className="w-full text-center text-4xl font-bold tracking-[18px] bg-slate-800 border border-slate-700 rounded-2xl px-4 py-5 text-white placeholder-slate-700 focus:outline-none focus:border-primary-500"
+                className="w-full text-center text-3xl font-bold tracking-[8px] bg-slate-800 border border-slate-700 rounded-2xl px-4 py-5 text-white placeholder-slate-700 focus:outline-none focus:border-primary-500"
               />
 
               {error && (
@@ -142,7 +142,7 @@ export default function ForgotPasswordPage() {
 
               <button
                 onClick={() => { setError(''); setStage('password'); }}
-                disabled={code.length < 6}
+                disabled={code.length < 8}
                 className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-40 text-white font-semibold flex items-center justify-center gap-2 transition-colors"
               >
                 Продолжить
