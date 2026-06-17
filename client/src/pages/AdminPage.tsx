@@ -2720,6 +2720,93 @@ function DonationsTab() {
   );
 }
 
+// ─── Waitlist (landing sign-ups) ──────────────────────────────────────────────
+const WAITLIST_TYPE_LABEL: Record<string, string> = {
+  resident_waitlist: 'Резидент (ожидание)',
+  listener: 'Слушатель / фанат',
+  customer: 'Заказчик',
+  company: 'Компания / лейбл',
+};
+
+interface WaitlistRow {
+  id: string; email: string; type: string;
+  consentPd: boolean; consentMarketing: boolean;
+  createdAt: string; updatedAt: string;
+}
+
+function WaitlistTab() {
+  const [filter, setFilter] = useState<string>('');
+  const { data: rows = [], isLoading } = useQuery<WaitlistRow[]>({
+    queryKey: ['admin-waitlist', filter],
+    queryFn: () => adminAPI.waitlist.list(filter || undefined).then((r: any) => r.data),
+  });
+  const TYPES = ['', 'resident_waitlist', 'listener', 'customer', 'company'];
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-sm font-semibold text-white">Waitlist — заявки с лендинга ({rows.length})</h2>
+        <button
+          onClick={() => exportToExcel(rows.map((r, i) => ({
+            '№': i + 1,
+            'Email': r.email,
+            'Тип': WAITLIST_TYPE_LABEL[r.type] || r.type,
+            'Согласие ПДн': r.consentPd ? 'да' : 'нет',
+            'Согласие реклама': r.consentMarketing ? 'да' : 'нет',
+            'Дата': new Date(r.createdAt).toLocaleString('ru-RU'),
+          })), 'waitlist')}
+          className="flex items-center gap-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2.5 py-1.5 rounded-lg transition-colors"
+        >
+          <Download size={13} /> Excel
+        </button>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5">
+        {TYPES.map(t => (
+          <button
+            key={t || 'all'}
+            onClick={() => setFilter(t)}
+            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+              filter === t ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+            }`}
+          >
+            {t === '' ? 'Все' : WAITLIST_TYPE_LABEL[t]}
+          </button>
+        ))}
+      </div>
+
+      {isLoading ? (
+        <div className="text-slate-500 text-sm py-8 text-center">Загрузка…</div>
+      ) : rows.length === 0 ? (
+        <div className="text-slate-500 text-sm py-8 text-center">Заявок пока нет</div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-slate-800">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-900 text-slate-400 text-xs">
+              <tr>
+                <th className="text-left px-3 py-2">Email</th>
+                <th className="text-left px-3 py-2">Тип</th>
+                <th className="text-left px-3 py-2 whitespace-nowrap">Согласия</th>
+                <th className="text-left px-3 py-2 whitespace-nowrap">Дата</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(r => (
+                <tr key={r.id} className="border-t border-slate-800 text-slate-300">
+                  <td className="px-3 py-2 break-all">{r.email}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{WAITLIST_TYPE_LABEL[r.type] || r.type}</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-xs">{r.consentPd ? '✓' : '✗'} ПДн · {r.consentMarketing ? '✓' : '✗'} рекл.</td>
+                  <td className="px-3 py-2 whitespace-nowrap text-slate-500">{new Date(r.createdAt).toLocaleDateString('ru-RU')}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const TABS = [
   { id: 'structure',   label: 'Структура' },
   { id: 'spheres',     label: 'Сферы' },
@@ -2731,6 +2818,7 @@ const TABS = [
   { id: 'users',       label: 'Пользователи' },
   { id: 'donations',   label: 'Донаты Pro' },
   { id: 'moderation',  label: 'Модерация' },
+  { id: 'waitlist',    label: 'Waitlist' },
   { id: 'settings',    label: 'Настройки' },
 ] as const;
 
@@ -2835,6 +2923,8 @@ export default function AdminPage() {
             <ArtistModerationTab />
           </div>
         )}
+
+        {tab === 'waitlist' && <WaitlistTab />}
 
         {tab === 'settings' && <SiteSettingsTab />}
       </div>

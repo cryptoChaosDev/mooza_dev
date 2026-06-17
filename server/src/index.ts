@@ -44,6 +44,7 @@ import releaseRoutes from './routes/releases';
 import clipRoutes from './routes/clips';
 import proRoutes from './routes/pro';
 import feedPresetRoutes from './routes/feedPresets';
+import waitlistRoutes from './routes/waitlist';
 
 // Load environment variables
 dotenv.config();
@@ -178,6 +179,7 @@ app.use('/api/releases', releaseRoutes);
 app.use('/api/clips', clipRoutes);
 app.use('/api/pro', proRoutes);
 app.use('/api/feed-presets', feedPresetRoutes);
+app.use('/api/waitlist', waitlistRoutes);
 
 // ── OG tags for social bots ────────────────────────────────────────────────
 // HTML-entity-encode every interpolated value: firstName/lastName/bio/city are

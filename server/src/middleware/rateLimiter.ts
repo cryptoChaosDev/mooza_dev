@@ -119,6 +119,20 @@ export const lookupLimiter = rateLimit({
   },
 });
 
+/**
+ * Limiter for the public landing waitlist form. A real person submits it once or
+ * twice; 10/hour/IP leaves room for shared/NAT IPs while capping spam/abuse.
+ */
+export const waitlistLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ error: 'Слишком много заявок. Попробуйте позже.' });
+  },
+});
+
 export const messageLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 минута
   max: 120, // 120 сообщений в минуту с одного IP (несколько активных чатов за NAT)

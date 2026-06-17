@@ -19,6 +19,20 @@ const requireAdmin = async (req: AuthRequest, res: Response, next: any) => {
 
 router.use(authenticate, requireAdmin);
 
+// ─── Waitlist (landing sign-ups) ─────────────────────────────────────────────
+router.get('/waitlist', async (req, res) => {
+  try {
+    const { type } = req.query as { type?: string };
+    const items = await prisma.waitlistEntry.findMany({
+      where: type ? { type } : {},
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(items);
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── FieldOfActivity ───────────────────────────────────────────────────────
 router.get('/fields-of-activity', async (_req, res) => {
   const items = await prisma.fieldOfActivity.findMany({ orderBy: { createdAt: 'asc' } });

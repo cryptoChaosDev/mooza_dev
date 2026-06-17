@@ -533,6 +533,9 @@ export const adminAPI = {
   geographies: crudFor('geographies'),
   priceRanges: crudFor('price-ranges'),
   artists: crudFor('artists'),
+  waitlist: {
+    list: (type?: string) => api.get(`${adminBase}/waitlist`, { params: type ? { type } : undefined }),
+  },
   artistModeration: {
     verification: () => api.get(`${adminBase}/artists/verification`),
     reject: (id: string, reason?: string) => api.patch(`${adminBase}/artists/${id}/reject`, { reason }),
