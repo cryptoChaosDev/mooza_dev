@@ -159,6 +159,7 @@ export default function ProfilePage() {
   const [serviceFormOpen, setServiceFormOpen] = useState<'add' | number | null>(null);
   // Order ADD form (customer-posted «Заказ») — open/closed.
   const [orderFormOpen, setOrderFormOpen] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
   const [sections, setSections] = useState<any[]>([]);
   const [catalogSearch, setCatalogSearch] = useState('');
@@ -2059,7 +2060,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Logout */}
-            <button onClick={() => logout()} className="w-full flex items-center justify-center gap-2 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/8 border border-red-500/20 hover:border-red-500/40 rounded-xl text-sm font-medium transition-all">
+            <button onClick={() => setConfirmLogout(true)} className="w-full flex items-center justify-center gap-2 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/8 border border-red-500/20 hover:border-red-500/40 rounded-xl text-sm font-medium transition-all">
               <LogOut size={16} />Выйти из профиля
             </button>
 
@@ -2229,6 +2230,13 @@ export default function ProfilePage() {
       message="Удалить ссылку из портфолио?"
       onConfirm={() => { if (confirmDeleteLinkId) handleDeleteLink(confirmDeleteLinkId); }}
       onCancel={() => setConfirmDeleteLinkId(null)}
+    />
+    <ConfirmDialog
+      open={confirmLogout}
+      message="Выйти из профиля?"
+      confirmLabel="Выйти"
+      onConfirm={() => logout()}
+      onCancel={() => setConfirmLogout(false)}
     />
 
     {consentAction && (
