@@ -566,13 +566,15 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                         >
                           <ExternalLink size={15} /> Посмотреть детали
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/messages/${post.author.id}`)}
-                          className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors"
-                        >
-                          <MessageSquare size={15} /> Написать
-                        </button>
+                        {!isOwner && (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/messages/${post.author.id}`)}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors"
+                          >
+                            <MessageSquare size={15} /> Написать
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -741,6 +743,7 @@ const POST_TYPE_OPTIONS = [
   { type: 'blog',       label: 'Блог',              icon: FileText,    desc: 'Свободная форма',     inDev: false },
   { type: 'question',   label: 'Вопрос',            icon: HelpCircle,  desc: 'Вопрос и обсуждение', inDev: false },
   { type: 'service',    label: 'Услуга',             icon: Wrench,      desc: 'Свободная форма',     inDev: false },
+  { type: 'order',      label: 'Заказ',              icon: Briefcase,   desc: 'Заявка на услугу',    inDev: false },
   { type: 'employment', label: 'Апдейт занятости',  icon: Zap,         desc: 'Обновить статус',     inDev: false },
   { type: 'poll',       label: 'Опрос',              icon: BarChart3,   desc: 'Голосование',         inDev: false },
 ];
@@ -762,7 +765,7 @@ function PostTypePicker({ onClose }: { onClose: () => void }) {
             <button
               key={type}
               disabled={inDev}
-              onClick={() => { onClose(); navigate(`/create-post?type=${type}`); }}
+              onClick={() => { onClose(); navigate(type === 'order' ? '/profile?createOrder=1' : `/create-post?type=${type}`); }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors text-left ${inDev ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-800'}`}
             >
               <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${inDev ? 'bg-slate-800' : 'bg-primary-600/20'}`}>

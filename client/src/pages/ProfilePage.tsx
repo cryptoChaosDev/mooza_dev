@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userAPI, referenceAPI, connectionAPI, groupAPI, dealAPI, authAPI, orderAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
@@ -660,6 +660,17 @@ export default function ProfilePage() {
   const [serviceFormOpen, setServiceFormOpen] = useState<'add' | number | null>(null);
   // Order ADD form (customer-posted «Заказ») — open/closed.
   const [orderFormOpen, setOrderFormOpen] = useState(false);
+  // Entry from the Поток «Создать пост → Заказ» — open the same order form, then
+  // strip the query param so a refresh / back doesn't re-open it.
+  const [orderSearchParams, setOrderSearchParams] = useSearchParams();
+  useEffect(() => {
+    if (orderSearchParams.get('createOrder')) {
+      setOrderFormOpen(true);
+      orderSearchParams.delete('createOrder');
+      setOrderSearchParams(orderSearchParams, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
   const [sections, setSections] = useState<any[]>([]);
   const [catalogSearch, setCatalogSearch] = useState('');
