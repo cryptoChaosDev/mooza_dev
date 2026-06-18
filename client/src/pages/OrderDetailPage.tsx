@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Briefcase, DollarSign, Calendar, MessageCircle,
   Archive, Loader2, Send, Link2, Users, Sparkles, HandshakeIcon, Share2,
@@ -47,10 +47,23 @@ export default function OrderDetailPage() {
 
   const isOwner = !!order?.isOwner;
 
-  // «Подходящие исполнители» (author only)
-  const { data: matches } = useQuery({
+  // «Подходящие исполнители» (author only) — page of 5, «Показать больше» loads next.
+  const {
+    data: matchesData,
+    fetchNextPage: fetchMoreMatches,
+    hasNextPage: hasMoreMatches,
+    isFetchingNextPage: loadingMoreMatches,
+  } = useInfiniteQuery({
     queryKey: ['order-matches', orderId],
-    queryFn: async () => { const { data } = await orderAPI.getMatches(orderId!); return data as any; },
+    queryFn: async ({ pageParam = 1 }) => {
+      const { data } = await orderAPI.getMatches(orderId!, { page: pageParam, limit: 5 });
+      return data as any;
+    },
+    initialPageParam: 1,
+    getNextPageParam: (lastPage: any) => {
+      const p = lastPage?.pagination;
+      return p && p.page < p.totalPages ? p.page + 1 : undefined;
+    },
     enabled: !!orderId && isOwner,
   });
 
@@ -117,8 +130,8 @@ export default function OrderDetailPage() {
 
   const budget = formatBudget(order.budgetFrom, order.budgetTo);
   const sectionName = order.service?.section?.name ?? null;
-  const matchResults: any[] = matches?.results ?? [];
-  const matchesEmpty = matches?.fallbackLevel === 'empty';
+  const matchResults: any[] = matchesData?.pages.flatMap((pg: any) => pg.results ?? []) ?? [];
+  const matchesEmpty = (matchesData?.pages?.[0] as any)?.fallbackLevel === 'empty';
 
   // Grouped custom filters (mirror ServicePage)
   const customFilterValues: { filterName: string; values: string[] }[] = [];
@@ -362,6 +375,15 @@ export default function OrderDetailPage() {
                       </div>
                     );
                   })}
+                  {hasMoreMatches && (
+                    <button
+                      onClick={() => fetchMoreMatches()}
+                      disabled={loadingMoreMatches}
+                      className="w-full py-2 text-xs font-semibold text-primary-400 hover:text-primary-300 transition-colors disabled:opacity-50"
+                    >
+                      {loadingMoreMatches ? 'Загрузка…' : 'Показать больше'}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
