@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Briefcase, DollarSign, Calendar, MessageCircle,
   Archive, Loader2, Send, Link2, Users, Sparkles, HandshakeIcon, Share2,
+  Pencil, FileText,
 } from 'lucide-react';
 import { orderAPI } from '../lib/api';
 import { avatarUrl } from '../lib/avatar';
@@ -11,6 +12,7 @@ import { DEALS_ENABLED } from '../lib/features';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import AvatarComponent from '../components/Avatar';
+import OrderForm from '../components/OrderForm';
 
 // Budget «от X ₽ до Y ₽» / «По договорённости»
 function formatBudget(from?: number | null, to?: number | null): string {
@@ -35,6 +37,7 @@ export default function OrderDetailPage() {
   const [showRespond, setShowRespond] = useState(false);
   const [respondPrice, setRespondPrice] = useState('');
   const [respondComment, setRespondComment] = useState('');
+  const [editing, setEditing] = useState(false);
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['order', orderId],
@@ -58,13 +61,13 @@ export default function OrderDetailPage() {
     enabled: !!orderId && isOwner,
   });
 
-  const archiveMut = useMutation({
-    mutationFn: () => orderAPI.setStatus(orderId!, 'archived'),
+  const statusMut = useMutation({
+    mutationFn: (status: string) => orderAPI.setStatus(orderId!, status),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['order', orderId] });
       qc.invalidateQueries({ queryKey: ['orders', 'mine'] });
     },
-    onError: (e: any) => toast.error(getApiError(e, 'Не удалось убрать заказ в архив')),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось изменить статус заказа')),
   });
 
   const offerMut = useMutation({
@@ -239,16 +242,67 @@ export default function OrderDetailPage() {
         {/* ── OWNER ── */}
         {isOwner ? (
           <>
-            {/* Archive */}
+            {/* Status actions */}
             {order.status === 'active' && (
-              <button
-                onClick={() => archiveMut.mutate()}
-                disabled={archiveMut.isPending}
-                className="w-full py-3 flex items-center justify-center gap-2 text-sm font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 rounded-2xl transition-colors disabled:opacity-50"
-              >
-                {archiveMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Archive size={15} />}
-                В архив
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => statusMut.mutate('draft')}
+                  disabled={statusMut.isPending}
+                  className="flex-1 py-3 flex items-center justify-center gap-2 text-sm font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 rounded-2xl transition-colors disabled:opacity-50"
+                >
+                  {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />}
+                  В черновик
+                </button>
+                <button
+                  onClick={() => statusMut.mutate('archived')}
+                  disabled={statusMut.isPending}
+                  className="flex-1 py-3 flex items-center justify-center gap-2 text-sm font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 rounded-2xl transition-colors disabled:opacity-50"
+                >
+                  {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Archive size={15} />}
+                  В архив
+                </button>
+              </div>
+            )}
+
+            {order.status === 'draft' && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setEditing(true)}
+                  className="flex-1 py-3 flex items-center justify-center gap-2 text-sm font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 rounded-2xl transition-colors disabled:opacity-50"
+                >
+                  <Pencil size={15} />
+                  Редактировать
+                </button>
+                <button
+                  onClick={() => statusMut.mutate('active')}
+                  disabled={statusMut.isPending}
+                  className="flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-2xl transition-colors disabled:opacity-50"
+                >
+                  {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                  Опубликовать
+                </button>
+              </div>
+            )}
+
+            {order.status === 'archived' && (
+              <div className="flex gap-2">
+                <button
+                  onClick={() => statusMut.mutate('active')}
+                  disabled={statusMut.isPending}
+                  className="flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-2xl transition-colors disabled:opacity-50"
+                >
+                  {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
+                  Опубликовать
+                </button>
+                <button
+                  onClick={() => statusMut.mutate('draft')}
+                  disabled={statusMut.isPending}
+                  className="flex-1 py-3 flex items-center justify-center gap-2 text-sm font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 rounded-2xl transition-colors disabled:opacity-50"
+                >
+                  {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />}
+                  В черновик
+                </button>
+              </div>
             )}
 
             {/* Matches */}
@@ -417,6 +471,16 @@ export default function OrderDetailPage() {
           </div>
         )}
       </div>
+
+      {isOwner && editing && (
+        <OrderForm
+          order={order}
+          onClose={() => {
+            setEditing(false);
+            qc.invalidateQueries({ queryKey: ['order', orderId] });
+          }}
+        />
+      )}
     </div>
   );
 }

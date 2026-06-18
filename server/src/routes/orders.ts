@@ -117,6 +117,11 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res) => {
     const order = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!order || order.authorId !== meId) return res.status(404).json({ error: 'Not found' });
 
+    // Editing is allowed only for drafts; active/archived must first be moved to draft.
+    if (order.status !== 'draft') {
+      return res.status(409).json({ error: 'Редактировать можно только черновик. Сначала переведите заказ в черновик.' });
+    }
+
     const {
       title, serviceId, budgetFrom, budgetTo, deadline, description,
       customFilterValueIds, status, referenceLinks,
@@ -175,6 +180,9 @@ router.patch('/:id/status', authenticate, async (req: AuthRequest, res) => {
     // draft/archived → active = «Опубликовать»: create the feed post if missing.
     if (status === 'active') {
       await syncOrderPost(updated.id, updated.authorId, updated.title, updated.description);
+    } else {
+      // Leaving active = снятие с публикации: remove the linked feed post so the order is no longer visible.
+      await prisma.post.deleteMany({ where: { orderId: updated.id, type: 'order' } });
     }
 
     res.json(updated);

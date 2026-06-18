@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Briefcase, Calendar, Loader2, Archive, Send, Pencil } from 'lucide-react';
+import { ArrowLeft, Briefcase, Calendar, Loader2, Archive, Send, Pencil, FileText } from 'lucide-react';
 import { orderAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import OrderForm from '../components/OrderForm';
 
 type Tab = 'active' | 'archived' | 'draft';
 
@@ -28,6 +29,20 @@ export default function OrdersPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('active');
+  const [editingOrder, setEditingOrder] = useState<any>(null);
+  const [editLoadingId, setEditLoadingId] = useState<string | null>(null);
+
+  const openEdit = async (id: string) => {
+    setEditLoadingId(id);
+    try {
+      const { data } = await orderAPI.getOne(id);
+      setEditingOrder(data);
+    } catch (e: any) {
+      toast.error(getApiError(e, 'Не удалось открыть заказ для редактирования'));
+    } finally {
+      setEditLoadingId(null);
+    }
+  };
 
   const { data: orders = [], isLoading } = useQuery<any[]>({
     queryKey: ['orders', 'mine', tab],
@@ -93,36 +108,83 @@ export default function OrdersPage() {
               </button>
 
               <div className="flex gap-2">
-                <button
-                  onClick={() => navigate(`/orders/${order.id}`)}
-                  className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium border border-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors"
-                >
-                  <Pencil size={13} />Редактировать
-                </button>
-                {tab === 'active' ? (
-                  <button
-                    onClick={() => statusMut.mutate({ id: order.id, status: 'archived' })}
-                    disabled={statusMut.isPending}
-                    className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium border border-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {statusMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Archive size={13} />}
-                    В архив
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => statusMut.mutate({ id: order.id, status: 'active' })}
-                    disabled={statusMut.isPending}
-                    className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors disabled:opacity-50"
-                  >
-                    {statusMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-                    Опубликовать
-                  </button>
+                {tab === 'active' && (
+                  <>
+                    <button
+                      onClick={() => statusMut.mutate({ id: order.id, status: 'draft' })}
+                      disabled={statusMut.isPending}
+                      className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium border border-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {statusMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+                      В черновик
+                    </button>
+                    <button
+                      onClick={() => statusMut.mutate({ id: order.id, status: 'archived' })}
+                      disabled={statusMut.isPending}
+                      className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium border border-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {statusMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Archive size={13} />}
+                      В архив
+                    </button>
+                  </>
+                )}
+
+                {tab === 'draft' && (
+                  <>
+                    <button
+                      onClick={() => openEdit(order.id)}
+                      disabled={editLoadingId === order.id}
+                      className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium border border-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {editLoadingId === order.id ? <Loader2 size={13} className="animate-spin" /> : <Pencil size={13} />}
+                      Редактировать
+                    </button>
+                    <button
+                      onClick={() => statusMut.mutate({ id: order.id, status: 'active' })}
+                      disabled={statusMut.isPending}
+                      className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {statusMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                      Опубликовать
+                    </button>
+                  </>
+                )}
+
+                {tab === 'archived' && (
+                  <>
+                    <button
+                      onClick={() => statusMut.mutate({ id: order.id, status: 'active' })}
+                      disabled={statusMut.isPending}
+                      className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {statusMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
+                      Опубликовать
+                    </button>
+                    <button
+                      onClick={() => statusMut.mutate({ id: order.id, status: 'draft' })}
+                      disabled={statusMut.isPending}
+                      className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium border border-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors disabled:opacity-50"
+                    >
+                      {statusMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
+                      В черновик
+                    </button>
+                  </>
                 )}
               </div>
             </div>
           );
         })}
       </div>
+
+      {editingOrder && (
+        <OrderForm
+          order={editingOrder}
+          onClose={() => {
+            setEditingOrder(null);
+            qc.invalidateQueries({ queryKey: ['orders', 'mine'] });
+          }}
+        />
+      )}
     </div>
   );
 }

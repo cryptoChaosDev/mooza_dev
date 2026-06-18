@@ -34,7 +34,8 @@ const ORDER_LINK_SOURCES: { id: string; label: string }[] = [
 
 const ORDER_MAX_REF_BYTES = 20 * 1024 * 1024; // 20 МБ суммарно
 
-export default function OrderForm({ onClose }: { onClose: () => void }) {
+export default function OrderForm({ onClose, order }: { onClose: () => void; order?: any }) {
+  const isEdit = !!order;
   const queryClient = useQueryClient();
   const inputCls = "w-full px-3.5 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white placeholder-slate-500";
   const labelCls = "block text-xs font-semibold mb-1 text-slate-400";
@@ -58,6 +59,7 @@ export default function OrderForm({ onClose }: { onClose: () => void }) {
   const [description, setDescription] = useState('');
   const [refLinks, setRefLinks] = useState<OrderRefLink[]>([]);
   const [refFiles, setRefFiles] = useState<File[]>([]);
+  const [existingFiles, setExistingFiles] = useState<any[]>([]); // server-side reference files (edit mode)
   const [submitting, setSubmitting] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -199,6 +201,55 @@ export default function OrderForm({ onClose }: { onClose: () => void }) {
   const payloadRef = useRef<(s: 'active' | 'draft') => any>(() => ({}));
   useEffect(() => { stateRef.current = hasMeaningfulData; payloadRef.current = buildPayload; });
 
+  // Edit mode — prefill all fields once from the passed order.
+  useEffect(() => {
+    if (!isEdit) return;
+    // Never silently autosave a draft on unmount in edit mode (would clone the order).
+    discardedRef.current = true;
+
+    setTitle(order.title || '');
+    setServiceId(order.service?.id || order.serviceId || '');
+    setServiceName(order.service?.name || '');
+    setSectionName(order.service?.section?.name || '');
+    setBudgetFrom(order.budgetFrom != null ? String(order.budgetFrom) : '');
+    setBudgetTo(order.budgetTo != null ? String(order.budgetTo) : '');
+    if (order.deadline) {
+      setDeadlineEnabled(true);
+      setDeadlineDate(String(order.deadline).slice(0, 10)); // ISO → YYYY-MM-DD
+    }
+    setDescription(order.description ?? '');
+    setRefLinks((order.referenceLinks || []).map((l: any) => ({ url: l.url, title: l.title, source: l.source })));
+    setExistingFiles(order.referenceFiles || []);
+
+    // Pull the selected service's filter options + group the picked values into filterSel.
+    const sid = order.service?.id || order.serviceId;
+    if (sid) {
+      setLoadingDetail(true);
+      referenceAPI.getServiceDetail(sid)
+        .then(({ data }: any) => {
+          setFilters(data.filters || []);
+          const sel: Record<string, string[]> = {};
+          for (const v of (order.selectedCustomFilterValues || [])) {
+            (sel[v.filter.id] = sel[v.filter.id] || []).push(v.id);
+          }
+          setFilterSel(sel);
+        })
+        .catch(() => {})
+        .finally(() => setLoadingDetail(false));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Delete a server-side reference file (edit mode).
+  const removeExistingFile = async (f: any) => {
+    try {
+      await orderAPI.deleteReference(order.id, f.id);
+      setExistingFiles(prev => prev.filter(x => x.id !== f.id));
+    } catch (e: any) {
+      toast.error(getApiError(e, 'Не удалось удалить файл'));
+    }
+  };
+
   // Upload selected reference files to a freshly-created order.
   const uploadRefs = async (orderId: string) => {
     if (refFiles.length === 0) return;
@@ -214,9 +265,13 @@ export default function OrderForm({ onClose }: { onClose: () => void }) {
     autosaveDoneRef.current = true;
     setSubmitting(true);
     try {
-      const { data } = await orderAPI.create(buildPayload('active'));
-      await uploadRefs(data.id);
+      const saved = isEdit
+        ? await orderAPI.update(order.id, buildPayload('active'))
+        : await orderAPI.create(buildPayload('active'));
+      const newId = isEdit ? order.id : saved.data.id;
+      await uploadRefs(newId);
       queryClient.invalidateQueries({ queryKey: ['orders', 'mine'] });
+      if (isEdit) queryClient.invalidateQueries({ queryKey: ['order', order.id] });
       toast.success('Заказ опубликован');
       onClose();
     } catch (e: any) {
@@ -234,9 +289,13 @@ export default function OrderForm({ onClose }: { onClose: () => void }) {
     autosaveDoneRef.current = true;
     setSubmitting(true);
     try {
-      const { data } = await orderAPI.create(buildPayload('draft'));
-      await uploadRefs(data.id);
+      const saved = isEdit
+        ? await orderAPI.update(order.id, buildPayload('draft'))
+        : await orderAPI.create(buildPayload('draft'));
+      const newId = isEdit ? order.id : saved.data.id;
+      await uploadRefs(newId);
       queryClient.invalidateQueries({ queryKey: ['orders', 'mine'] });
+      if (isEdit) queryClient.invalidateQueries({ queryKey: ['order', order.id] });
       onClose();
     } catch (e: any) {
       handledRef.current = false;
@@ -262,7 +321,7 @@ export default function OrderForm({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3 space-y-3">
-      <p className="text-sm font-semibold text-white">Новый заказ</p>
+      <p className="text-sm font-semibold text-white">{isEdit ? 'Редактирование заказа' : 'Новый заказ'}</p>
 
       {/* 1 — Название заказа */}
       <div>
@@ -434,6 +493,22 @@ export default function OrderForm({ onClose }: { onClose: () => void }) {
         <label className={labelCls}>Референсы (изображения и аудио, до 20 МБ суммарно)</label>
         <input ref={fileInputRef} type="file" accept="image/*,audio/*" multiple className="hidden"
           onChange={e => { handleRefUpload(e.target.files); e.target.value = ''; }} />
+        {existingFiles.length > 0 && (
+          <div className="space-y-1.5 mb-2">
+            {existingFiles.map((f: any) => (
+              <div key={f.id} className="flex items-center gap-2 px-3 py-2 bg-slate-800/60 border border-slate-700/50 rounded-xl">
+                {String(f.mimeType || '').startsWith('audio/')
+                  ? <Music2 size={14} className="text-primary-400 flex-shrink-0" />
+                  : <ImageIcon size={14} className="text-primary-400 flex-shrink-0" />}
+                <span className="flex-1 min-w-0 text-xs text-white truncate">{f.originalName}</span>
+                <span className="text-[10px] text-slate-500 flex-shrink-0">{formatBytes(f.size)}</span>
+                <button type="button" onClick={() => removeExistingFile(f)} className="text-slate-500 hover:text-red-400 transition-colors flex-shrink-0">
+                  <X size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         {refFiles.length > 0 && (
           <div className="space-y-1.5 mb-2">
             {refFiles.map((f, i) => (
@@ -503,7 +578,7 @@ export default function OrderForm({ onClose }: { onClose: () => void }) {
           onClick={saveDraft}
           disabled={!serviceOk || !titleOk || submitting}
           className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 text-sm font-medium transition-colors flex-shrink-0">
-          В черновики
+          {isEdit ? 'Сохранить черновик' : 'В черновики'}
         </button>
         <button
           onClick={publish}
