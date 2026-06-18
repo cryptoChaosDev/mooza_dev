@@ -20,6 +20,7 @@ import { useAuthGate } from '../components/AuthGateModal';
 import DealCreateModal from '../components/DealCreateModal';
 import { DEALS_ENABLED } from '../lib/features';
 import OnboardingPrompt from '../components/OnboardingPrompt';
+import OrderForm from '../components/OrderForm';
 import AvatarComponent from '../components/Avatar';
 import AudioPlayer from '../components/AudioPlayer';
 import PostContent from '../components/PostContent';
@@ -748,7 +749,7 @@ const POST_TYPE_OPTIONS = [
   { type: 'poll',       label: 'Опрос',              icon: BarChart3,   desc: 'Голосование',         inDev: false },
 ];
 
-function PostTypePicker({ onClose }: { onClose: () => void }) {
+function PostTypePicker({ onClose, onPickOrder }: { onClose: () => void; onPickOrder?: () => void }) {
   const navigate = useNavigate();
 
   return createPortal(
@@ -765,7 +766,11 @@ function PostTypePicker({ onClose }: { onClose: () => void }) {
             <button
               key={type}
               disabled={inDev}
-              onClick={() => { onClose(); navigate(type === 'order' ? '/profile?createOrder=1' : `/create-post?type=${type}`); }}
+              onClick={() => {
+                onClose();
+                if (type === 'order') onPickOrder?.();
+                else navigate(`/create-post?type=${type}`);
+              }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors text-left ${inDev ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-800'}`}
             >
               <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${inDev ? 'bg-slate-800' : 'bg-primary-600/20'}`}>
@@ -897,6 +902,7 @@ export default function FeedPage() {
   const [searchParams] = useSearchParams();
   const targetPostId = searchParams.get('post');
   const [showPostTypePicker, setShowPostTypePicker] = useState(false);
+  const [showOrderForm, setShowOrderForm] = useState(false);
   const [filters, setFilters] = useState<FlowFilters>(loadFilters);
   const [showSavedOnly, setShowSavedOnly] = useState(false);
 
@@ -1076,7 +1082,27 @@ export default function FeedPage() {
           <Plus size={26} />
         </button>
 
-        {showPostTypePicker && <PostTypePicker onClose={() => setShowPostTypePicker(false)} />}
+        {showPostTypePicker && (
+          <PostTypePicker
+            onClose={() => setShowPostTypePicker(false)}
+            onPickOrder={() => setShowOrderForm(true)}
+          />
+        )}
+
+        {/* Order create form — opened modally straight from the Поток composer. */}
+        {showOrderForm && createPortal(
+          <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setShowOrderForm(false)}>
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div
+              className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+              <OrderForm onClose={() => setShowOrderForm(false)} />
+            </div>
+          </div>,
+          document.body
+        )}
       </div>
     </div>
   );
