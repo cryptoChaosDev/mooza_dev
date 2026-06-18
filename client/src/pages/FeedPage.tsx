@@ -235,6 +235,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const [showDeal, setShowDeal] = useState(false);
   const [contacting, setContacting] = useState(false);
   const svc = post.type === 'service' && post.service ? post.service : null;
+  const order = post.type === 'order' && post.order ? post.order : null;
   const openServiceChat = () => {
     if (!svc || contacting) return;
     setContacting(true);
@@ -518,13 +519,72 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                   </div>
                 );
               })()}
-              {!isRepost && !svc && post.content && (
+              {/* Structured «Заказ» card — customer-posted order. */}
+              {!isRepost && order && (() => {
+                const orderTitle = post.title || order.title || 'Заказ';
+                const sectionName = order.service?.section?.name || '';
+                const budget = (order.budgetFrom != null || order.budgetTo != null)
+                  ? [
+                      order.budgetFrom != null ? `от ${order.budgetFrom} ₽` : null,
+                      order.budgetTo != null ? `до ${order.budgetTo} ₽` : null,
+                    ].filter(Boolean).join(' ')
+                  : 'По договорённости';
+                const deadline = order.deadline
+                  ? new Date(order.deadline).toLocaleDateString('ru-RU')
+                  : 'Срок не ограничен';
+                return (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden">
+                    <div className="p-3.5 space-y-2.5">
+                      <p className="text-base font-bold text-white leading-snug">{orderTitle}</p>
+                      <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+                        {sectionName && (
+                          <span className="text-xs text-slate-400">
+                            Раздел: <span className="text-slate-200">{sectionName}</span>
+                          </span>
+                        )}
+                        <span className="text-xs text-slate-400">
+                          Бюджет: <span className="text-rose-300 font-semibold">{budget}</span>
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          Срок: <span className="text-slate-200">{deadline}</span>
+                        </span>
+                      </div>
+                      {post.content && (
+                        <PostContent
+                          content={post.content}
+                          className={`text-sm text-slate-200 ${post.content.length > 280 && !expanded ? 'line-clamp-6' : ''}`}
+                        />
+                      )}
+                      {post.content && post.content.length > 280 && (
+                        <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>
+                      )}
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/orders/${order.id}`)}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors"
+                        >
+                          <ExternalLink size={15} /> Посмотреть детали
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/messages/${post.author.id}`)}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors"
+                        >
+                          <MessageSquare size={15} /> Написать
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+              {!isRepost && !svc && !order && post.content && (
                 <PostContent
                   content={post.content}
                   className={`text-sm text-slate-200 ${isLongContent && !expanded ? 'line-clamp-6' : ''}`}
                 />
               )}
-              {!isRepost && !svc && isLongContent && <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>}
+              {!isRepost && !svc && !order && isLongContent && <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>}
               {!isRepost && Array.isArray(post.links) && post.links.length > 0 && (
                 <div className="mt-2 flex flex-col gap-1">
                   {post.links.map((url: string, i: number) => {
@@ -666,6 +726,7 @@ const POST_TYPE_META: Record<string, { label: string; icon: any; accent: string;
   blog:       { label: 'Блог',              icon: FileText,    accent: '',                                           badge: '' },
   question:   { label: 'Вопрос',            icon: HelpCircle,  accent: 'border-l-2 border-blue-500/60',              badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
   service:    { label: 'Услуга',            icon: Wrench,      accent: 'border-l-2 border-primary-500/60',           badge: 'bg-primary-500/10 text-primary-400 border-primary-500/20' },
+  order:      { label: 'Заказ',             icon: Briefcase,   accent: 'border-l-2 border-rose-500/60',              badge: 'bg-rose-500/10 text-rose-400 border-rose-500/20' },
   vacancy:    { label: 'Вакансия',          icon: Briefcase,   accent: 'border-l-2 border-amber-500/60',             badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
   event:      { label: 'Мероприятие',       icon: Calendar,    accent: 'border-l-2 border-purple-500/60',            badge: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
   task:       { label: 'Задача',            icon: CheckSquare, accent: 'border-l-2 border-emerald-500/60',           badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },

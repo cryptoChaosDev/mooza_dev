@@ -44,6 +44,8 @@ const ConnectionRequestsPage   = lazy(() => import('./pages/ConnectionRequestsPa
 const ConnectionPage           = lazy(() => import('./pages/ConnectionPage'));
 const DealPage                 = lazy(() => import('./pages/DealPage'));
 const DealsPage                = lazy(() => import('./pages/DealsPage'));
+const OrdersPage               = lazy(() => import('./pages/OrdersPage'));
+const OrderDetailPage          = lazy(() => import('./pages/OrderDetailPage'));
 const OnboardingPage     = lazy(() => import('./pages/OnboardingPage'));
 const VkSetupPage        = lazy(() => import('./pages/VkSetupPage'));
 
@@ -182,6 +184,8 @@ function AppRoutes() {
             <Route path="/connection/:partnerId" element={<ConnectionPage />} />
             <Route path="/deals" element={<DealsPage />} />
             <Route path="/deals/:dealId" element={<DealPage />} />
+            <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/orders/:orderId" element={<OrderDetailPage />} />
             <Route path="/privacy"          element={<PrivacyPolicyPage />} />
             <Route path="/terms"            element={<TermsPage />} />
             {user?.isAdmin && <Route path="/admin" element={<AdminPage />} />}

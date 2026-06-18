@@ -73,6 +73,17 @@ const buildFeedInclude = (userId: string | undefined) => {
       user: { select: { id: true, firstName: true, lastName: true } },
     },
   },
+  // Structured «Заказ» post — the linked customer brief, for the «Посмотреть детали» button.
+  order: {
+    select: {
+      id: true,
+      title: true,
+      budgetFrom: true,
+      budgetTo: true,
+      deadline: true,
+      service: { select: { name: true, section: { select: { name: true } } } },
+    },
+  },
   repostOf: {
     include: {
       author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, isPremium: true, isVerified: true } }
@@ -688,6 +699,16 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
             priceItems: true,
             service: { select: { name: true, section: { select: { name: true } } } },
             user: { select: { id: true, firstName: true, lastName: true } },
+          },
+        },
+        order: {
+          select: {
+            id: true,
+            title: true,
+            budgetFrom: true,
+            budgetTo: true,
+            deadline: true,
+            service: { select: { name: true, section: { select: { name: true } } } },
           },
         },
         _count: {

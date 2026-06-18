@@ -144,6 +144,28 @@ export async function processDealTimeouts() {
   }
 }
 
+// Auto-archive orders whose deadline has passed. Idempotent: only active orders
+// with a non-null deadline strictly before now are touched (after archiving the
+// WHERE no longer matches), and the author is notified once per transition.
+export async function processOrderDeadlines() {
+  const now = new Date();
+  const expired = await prisma.order.findMany({
+    where: { status: 'active', deadline: { lt: now, not: null } },
+    select: { id: true, authorId: true, title: true },
+  });
+  for (const order of expired) {
+    await prisma.order.update({
+      where: { id: order.id },
+      data: { status: 'archived' },
+    });
+    await notify(order.authorId, 'order_auto_archived',
+      'Срок выполнения заказа истёк',
+      `Срок выполнения заказа «${order.title}» истёк. Заказ перемещён в архив.`,
+      `/orders/${order.id}`);
+    logger.info(`[scheduler] Auto-archived order ${order.id} (deadline expired)`);
+  }
+}
+
 // Process expired temporary user blocks: unblock when blockedUntil < now
 export async function processUserUnblocks() {
   const now = new Date();
@@ -166,6 +188,7 @@ export function startScheduler() {
   const run = async () => {
     try {
       await processDealTimeouts();
+      await processOrderDeadlines();
       await processUserUnblocks();
     } catch (e: any) {
       logger.error(`[scheduler] Error: ${e.message}`);

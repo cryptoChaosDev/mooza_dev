@@ -603,6 +603,22 @@ export const dealAPI = {
   rejectEdit: (reqId: string) => api.patch(`/deals/edit-request/${reqId}/reject`),
 };
 
+export const orderAPI = {
+  getMine: (params?: { status?: string }) => api.get('/orders/mine', { params }),
+  getOne: (id: string) => api.get(`/orders/${id}`),
+  create: (data: any) => api.post('/orders', data),
+  update: (id: string, data: any) => api.patch(`/orders/${id}`, data),
+  setStatus: (id: string, status: string) => api.patch(`/orders/${id}/status`, { status }),
+  remove: (id: string) => api.delete(`/orders/${id}`),
+  getMatches: (id: string, params?: { page?: number; limit?: number }) => api.get(`/orders/${id}/matches`, { params }),
+  respond: (id: string, data: { price: number; comment?: string }) => api.post(`/orders/${id}/responses`, data),
+  getResponses: (id: string) => api.get(`/orders/${id}/responses`),
+  offer: (id: string, executorId: string) => api.post(`/orders/${id}/offer`, { executorId }),
+  createDeal: (id: string, responseId: string) => api.post(`/orders/${id}/responses/${responseId}/deal`, {}),
+  uploadReferences: (id: string, formData: FormData) => api.post(`/orders/${id}/references`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  deleteReference: (id: string, fileId: string) => api.delete(`/orders/${id}/references/${fileId}`),
+};
+
 export const referralAPI = {
   getStats: () => api.get('/referrals/stats'),
   getLinks: () => api.get('/referrals/links'),
