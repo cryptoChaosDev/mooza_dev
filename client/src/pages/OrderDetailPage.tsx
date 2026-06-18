@@ -150,7 +150,7 @@ export default function OrderDetailPage() {
             <p className="text-[10px] text-slate-600 uppercase tracking-wider">{sectionName}</p>
           )}
 
-          <h2 className="text-xl font-bold text-white leading-tight">{order.title}</h2>
+          <h2 className="text-xl font-bold text-white leading-tight break-words [overflow-wrap:anywhere]">{order.title}</h2>
 
           {/* Filters */}
           {customFilterValues.length > 0 && (
@@ -184,7 +184,7 @@ export default function OrderDetailPage() {
           {order.description && (
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Описание</p>
-              <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{order.description}</p>
+              <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{order.description}</p>
             </div>
           )}
 
@@ -341,7 +341,7 @@ export default function OrderDetailPage() {
                           </button>
                         </div>
                         {r.comment && (
-                          <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{r.comment}</p>
+                          <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{r.comment}</p>
                         )}
                         <div className="flex gap-2">
                           <button
