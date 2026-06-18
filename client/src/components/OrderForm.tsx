@@ -151,12 +151,12 @@ export default function OrderForm({ onClose }: { onClose: () => void }) {
     setRefLinks(prev => prev.map((l, idx) => idx === i ? { ...l, ...patch } : l));
   const removeRefLink = (i: number) => setRefLinks(prev => prev.filter((_, idx) => idx !== i));
 
-  // ДД.ММ.ГГГГ → ISO midnight UTC (or null).
+  // YYYY-MM-DD (native date input) → ISO midnight UTC (or null).
   const parseDeadline = (): string | null => {
-    if (!deadlineEnabled) return null;
-    const m = deadlineDate.trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (!deadlineEnabled || !deadlineDate) return null;
+    const m = deadlineDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (!m) return null;
-    const [, d, mo, y] = m;
+    const [, y, mo, d] = m;
     const iso = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
     return isNaN(iso.getTime()) ? null : iso.toISOString();
   };
@@ -407,11 +407,11 @@ export default function OrderForm({ onClose }: { onClose: () => void }) {
           <div className="relative">
             <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
-              type="text"
-              inputMode="numeric"
+              type="date"
               value={deadlineDate}
+              min={new Date().toISOString().slice(0, 10)}
               onChange={e => setDeadlineDate(e.target.value)}
-              placeholder="ДД.ММ.ГГГГ"
+              style={{ colorScheme: 'dark' }}
               className={`w-full pl-8 pr-3 py-2.5 bg-slate-800/60 border rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 transition ${deadlineInvalid ? 'border-red-500/60' : 'border-slate-700/50'}`}
             />
             {deadlineInvalid && <p className="text-[11px] text-red-400 mt-1">Введите дату в формате ДД.ММ.ГГГГ</p>}
