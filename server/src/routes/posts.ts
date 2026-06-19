@@ -186,6 +186,11 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
     else if (kind === 'mine') where.authorId = req.userId;
     else if (teamUserId) where.authorId = { not: teamUserId }; // exclude team from default/other views
 
+    // Hide «Услуга» posts whose offering is no longer active (archived/draft) — an
+    // archived/unpublished service must not show in the feed. Non-service posts and
+    // legacy service posts with no linked offering (serviceId null) are unaffected.
+    where.NOT = { type: 'service', service: { status: { not: 'active' } } };
+
     // period — date lower bound on createdAt (server-computed)
     const periodStr = period ? String(period) : 'all';
     if (periodStr && periodStr !== 'all') {
