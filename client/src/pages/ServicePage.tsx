@@ -320,7 +320,7 @@ export default function ServicePage() {
             )}
             {status === 'archived' && (
               <button
-                onClick={() => statusMut.mutate('pending_review')}
+                onClick={() => statusMut.mutate('active')}
                 disabled={statusMut.isPending}
                 className="w-full py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-2xl transition-colors disabled:opacity-50"
               >
