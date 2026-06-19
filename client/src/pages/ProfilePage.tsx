@@ -1702,14 +1702,24 @@ export default function ProfilePage() {
                 <Briefcase size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Услуги</span>
                 {servicesFlat.length > 0 && <span className="text-xs text-slate-500">{servicesFlat.length}</span>}
-                {servicesFlat.length > 0 && (
-                  <button
-                    onClick={() => { setEditingServices(v => !v); closeServiceForm(); }}
-                    className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
-                  >
-                    {editingServices ? 'Готово' : 'Изменить'}
-                  </button>
-                )}
+                <div className="ml-auto flex items-center gap-3">
+                  {profile?.id && (
+                    <button
+                      onClick={() => navigate(`/profile/${profile.id}/services`)}
+                      className="text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                    >
+                      Смотреть все
+                    </button>
+                  )}
+                  {servicesFlat.length > 0 && (
+                    <button
+                      onClick={() => { setEditingServices(v => !v); closeServiceForm(); }}
+                      className="text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                    >
+                      {editingServices ? 'Готово' : 'Изменить'}
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="p-3 space-y-3">
