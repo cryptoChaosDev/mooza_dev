@@ -233,7 +233,7 @@ export default function ArtistCreatePage() {
 
             {/* Название */}
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Название *</label>
+              <label className="block text-xs text-slate-500 mb-1">Название <span className="text-red-400">*</span></label>
               <input
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
                 value={form.name}
