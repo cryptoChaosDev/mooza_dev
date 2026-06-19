@@ -263,6 +263,15 @@ export const getSocialService = (key: SocialKey) =>
 
 export function buildUrl(service: SocialService, slug: string): string {
   if (!slug) return '';
+  // Telegram: accept @username, t.me/username, a full URL, or a bare username and
+  // always normalise to https://t.me/<username> — no leading «@» (contact format).
+  if (service.baseUrl.includes('t.me/')) {
+    const u = slug.trim()
+      .replace(/^https?:\/\//i, '')
+      .replace(/^t\.me\//i, '')
+      .replace(/^@+/, '');
+    return u ? 'https://t.me/' + u : '';
+  }
   // If user pasted a full URL, return as-is
   if (slug.startsWith('http://') || slug.startsWith('https://')) return slug;
   return service.baseUrl + slug;
