@@ -274,16 +274,24 @@ export function buildUrl(service: SocialService, slug: string): string {
   }
   // If user pasted a full URL, return as-is
   if (slug.startsWith('http://') || slug.startsWith('https://')) return slug;
-  return service.baseUrl + slug;
+  // Collapse any repeated base prefix and add exactly one. Stored contact values
+  // already carry the prefix ('tel:+7…', 'mailto:you@…'), and some were even saved
+  // doubled ('tel:tel:…') — re-prepending here produced 'tel:tel:' / 'mailto:mailto:'.
+  let s = slug;
+  while (s.startsWith(service.baseUrl)) s = s.slice(service.baseUrl.length);
+  return s ? service.baseUrl + s : '';
 }
 
 export function extractSlug(service: SocialService, fullUrl: string): string {
   if (!fullUrl) return '';
-  // Strip base URL prefix if present
+  // Strip the base prefix — repeatedly, so legacy doubled values like
+  // 'tel:tel:+7…' / 'mailto:mailto:…' collapse to the bare slug in the editor.
+  let s = fullUrl;
   for (const base of [service.baseUrl, service.baseUrl.replace('https://', 'http://')]) {
-    if (base && fullUrl.startsWith(base)) return fullUrl.slice(base.length);
+    if (!base) continue;
+    while (s.startsWith(base)) s = s.slice(base.length);
   }
-  return fullUrl;
+  return s;
 }
 
 // ─── View: clickable icon row ─────────────────────────────────────────────────
