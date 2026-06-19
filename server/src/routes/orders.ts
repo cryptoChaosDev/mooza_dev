@@ -180,8 +180,9 @@ router.patch('/:id/status', authenticate, async (req: AuthRequest, res) => {
     // draft/archived → active = «Опубликовать»: create the feed post if missing.
     if (status === 'active') {
       await syncOrderPost(updated.id, updated.authorId, updated.title, updated.description);
-    } else {
-      // Leaving active = снятие с публикации: remove the linked feed post so the order is no longer visible.
+    } else if (status === 'draft') {
+      // Back to draft = снятие с публикации (для редактирования): remove the feed post.
+      // Archived orders KEEP their feed post — they stay visible with an «В архиве» badge.
       await prisma.post.deleteMany({ where: { orderId: updated.id, type: 'order' } });
     }
 

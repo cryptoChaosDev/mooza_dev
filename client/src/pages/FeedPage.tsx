@@ -536,7 +536,14 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                 return (
                   <div className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden">
                     <div className="p-3.5 space-y-2.5">
-                      <p className="text-base font-bold text-white leading-snug">{orderTitle}</p>
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-base font-bold text-white leading-snug">{orderTitle}</p>
+                        {order.status === 'archived' && (
+                          <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-700/70 text-slate-300 border border-slate-600/60">
+                            В архиве
+                          </span>
+                        )}
+                      </div>
                       <div className="flex flex-wrap gap-x-5 gap-y-1.5">
                         {sectionName && (
                           <span className="text-xs text-slate-400">
