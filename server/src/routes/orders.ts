@@ -273,7 +273,7 @@ router.get('/:id/matches', optionalAuthenticate, async (req: AuthRequest, res) =
   try {
     const order = await prisma.order.findUnique({
       where: { id: req.params.id },
-      include: { selectedCustomFilterValues: { select: { id: true } } },
+      include: { selectedCustomFilterValues: { select: { id: true, filterId: true, filter: { select: { name: true } } } } },
     });
     if (!order) return res.status(404).json({ error: 'Not found' });
 
@@ -281,7 +281,21 @@ router.get('/:id/matches', optionalAuthenticate, async (req: AuthRequest, res) =
     const limitNum = parseInt(String(req.query.limit ?? '20'), 10) || 20;
     const skip = (pageNum - 1) * limitNum;
 
-    const cfvIds = order.selectedCustomFilterValues.map((v) => v.id);
+    // Group the order's selected filter values by their parent filter so we match
+    // AND-between-filters / OR-within-a-filter (e.g. instrument=арфа AND genre∈{…}),
+    // instead of a flat OR over all values — which matched anyone sharing a single
+    // common value like «Уровень: средний» and surfaced the whole section.
+    // «Уровень» is treated as a soft (relaxable) filter; everything else is key.
+    const groupsMap = new Map<string, { ids: string[]; soft: boolean }>();
+    for (const v of order.selectedCustomFilterValues as any[]) {
+      const soft = String(v.filter?.name ?? '').trim().toLowerCase() === 'уровень';
+      const g = groupsMap.get(v.filterId) ?? { ids: [], soft };
+      g.ids.push(v.id);
+      groupsMap.set(v.filterId, g);
+    }
+    const allGroups = [...groupsMap.values()];
+    const keyGroups = allGroups.filter((g) => !g.soft);
+    const softGroups = allGroups.filter((g) => g.soft);
     const serviceId = order.serviceId;
     // Budget → executor price: the offering's [priceFrom, priceTo] should overlap
     // the order's budget window (mirrors references service-search price logic).
@@ -310,17 +324,20 @@ router.get('/:id/matches', optionalAuthenticate, async (req: AuthRequest, res) =
       },
     } as const;
 
-    // Build a UserService filter for a given fallback level.
-    const buildUserWhere = (opts: { useCfv: boolean; usePrice: boolean; useService: boolean }) => {
-      const usWhere: any = {};
-      if (opts.useService) usWhere.serviceId = serviceId;
-      if (opts.useCfv && cfvIds.length) usWhere.selectedCustomFilterValues = { some: { id: { in: cfvIds } } };
-      if (opts.usePrice && priceMin != null) usWhere.priceTo = { gte: priceMin };
-      if (opts.usePrice && priceMax != null) usWhere.priceFrom = { lte: priceMax };
-      const userWhere: any = { id: { not: order.authorId } };
-      if (Object.keys(usWhere).length > 0) userWhere.userServices = { some: usWhere };
-      return userWhere;
+    // One `some` clause per filter group → AND between filters, OR within a filter.
+    const groupClauses = (gs: { ids: string[] }[]) =>
+      gs.map((g) => ({ selectedCustomFilterValues: { some: { id: { in: g.ids } } } }));
+    const priceClause = () => {
+      const c: any = {};
+      if (priceMin != null) c.priceTo = { gte: priceMin };
+      if (priceMax != null) c.priceFrom = { lte: priceMax };
+      return c;
     };
+    // A user matches if they have an offering for this service satisfying `extra`.
+    const userWhere = (extra: any) => ({
+      id: { not: order.authorId },
+      userServices: { some: { serviceId, ...extra } },
+    });
 
     const dedup = <T extends { id: string }>(arr: T[]) =>
       [...new Map(arr.map((x) => [x.id, x])).values()];
@@ -344,16 +361,29 @@ router.get('/:id/matches', optionalAuthenticate, async (req: AuthRequest, res) =
         };
       });
 
-    // Fallback cascade: progressively drop constraints until something matches.
-    const levels: Array<{ level: string; opts: { useCfv: boolean; usePrice: boolean; useService: boolean } }> = [
-      { level: 'full', opts: { useCfv: true, usePrice: true, useService: true } },
-      { level: 'no_filters', opts: { useCfv: false, usePrice: true, useService: true } },
-      { level: 'no_price', opts: { useCfv: false, usePrice: false, useService: true } },
-      { level: 'no_service', opts: { useCfv: false, usePrice: false, useService: false } },
-    ];
+    // Fallback cascade. When the order specifies filters, the KEY filters are
+    // REQUIRED (AND between filters); we relax only price and the soft «Уровень»
+    // filter — never down to «everyone offering the service», so suggestions stay
+    // relevant («запись арфы» won't list every session-recording user). When the
+    // order has no filters at all, the service is the only available signal.
+    const levels: Array<{ level: string; where: any }> = [];
+    if (allGroups.length > 0) {
+      levels.push({ level: 'full',     where: userWhere({ AND: groupClauses(allGroups), ...priceClause() }) });
+      levels.push({ level: 'no_price', where: userWhere({ AND: groupClauses(allGroups) }) });
+      if (keyGroups.length > 0 && softGroups.length > 0) {
+        levels.push({ level: 'no_soft', where: userWhere({ AND: groupClauses(keyGroups) }) });
+      }
+      if (keyGroups.length === 0) {
+        // Only soft filters were chosen → service becomes the strongest signal.
+        levels.push({ level: 'service_price', where: userWhere({ ...priceClause() }) });
+        levels.push({ level: 'service',       where: userWhere({}) });
+      }
+    } else {
+      levels.push({ level: 'full',     where: userWhere({ ...priceClause() }) });
+      levels.push({ level: 'no_price', where: userWhere({}) });
+    }
 
-    for (const { level, opts } of levels) {
-      const where = buildUserWhere(opts);
+    for (const { level, where } of levels) {
       const totalCount = await prisma.user.count({ where });
       if (totalCount === 0) continue;
       const users = await prisma.user.findMany({
