@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Megaphone, MapPin, Briefcase, DollarSign, Clock, MessageCircle,
@@ -58,7 +59,7 @@ export default function VacancyDetailPage() {
   const [offeringId, setOfferingId] = useState<string | null>(null);
 
   // Lock body scroll while the inline cooperation-offer modal is open (iOS jump fix).
-  useScrollLock(!!coopResponseId);
+  useScrollLock(!!coopResponseId || editing);
 
   const { data: vacancy, isLoading } = useQuery({
     queryKey: ['vacancy', vacancyId],
@@ -862,15 +863,22 @@ export default function VacancyDetailPage() {
         onCancel={() => setConfirmDelete(false)}
       />
 
-      {isOwner && editing && (
-        <VacancyForm
-          vacancy={vacancy}
-          artistId={vacancy.artistId}
-          onClose={() => {
-            setEditing(false);
-            qc.invalidateQueries({ queryKey: ['vacancy', vacancyId] });
-          }}
-        />
+      {isOwner && editing && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setEditing(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+            <VacancyForm
+              vacancy={vacancy}
+              artistId={vacancy.artistId}
+              onClose={() => {
+                setEditing(false);
+                qc.invalidateQueries({ queryKey: ['vacancy', vacancyId] });
+              }}
+            />
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Megaphone, Briefcase, Loader2, Archive, Send, Pencil, Trash2 } from 'lucide-react';
@@ -6,6 +7,7 @@ import { vacancyAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import VacancyForm from '../components/VacancyForm';
+import { useScrollLock } from '../lib/scrollLock';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { workFormatLabel } from '../lib/vacancyOptions';
 
@@ -29,6 +31,7 @@ export default function VacanciesPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('active');
   const [editingVacancy, setEditingVacancy] = useState<any>(null);
+  useScrollLock(!!editingVacancy);
   const [editLoadingId, setEditLoadingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -190,15 +193,22 @@ export default function VacanciesPage() {
         })}
       </div>
 
-      {editingVacancy && (
-        <VacancyForm
-          vacancy={editingVacancy}
-          artistId={artistId}
-          onClose={() => {
-            setEditingVacancy(null);
-            qc.invalidateQueries({ queryKey: ['vacancies', 'mine'] });
-          }}
-        />
+      {editingVacancy && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setEditingVacancy(null)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+            <VacancyForm
+              vacancy={editingVacancy}
+              artistId={artistId}
+              onClose={() => {
+                setEditingVacancy(null);
+                qc.invalidateQueries({ queryKey: ['vacancies', 'mine'] });
+              }}
+            />
+          </div>
+        </div>,
+        document.body
       )}
 
       <ConfirmDialog
