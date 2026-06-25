@@ -204,8 +204,9 @@ export default function VacancyForm({
   const titleOk = title.trim().length > 0 && title.length <= 100;
   const professionOk = !!professionId;
   const selectsOk = !!workFormat && !!geography && !!employmentType && !!paymentType;
+  const descriptionOk = description.trim().length > 0;
   const artistOk = !!artistId;
-  const canSave = titleOk && professionOk && selectsOk && artistOk;
+  const canSave = titleOk && professionOk && selectsOk && descriptionOk && artistOk;
 
   // True when the form holds something worth keeping as a draft.
   const hasMeaningfulData = () =>
@@ -503,7 +504,7 @@ export default function VacancyForm({
 
       {/* 6 — Описание */}
       <div>
-        <label className={labelCls}>Описание</label>
+        <label className={labelCls}>Описание <span className="text-red-400">*</span></label>
         <textarea value={description} rows={4}
           onChange={e => setDescription(e.target.value)}
           placeholder="Расскажите, кого вы ищете и на каких условиях…" className={`${inputCls} resize-none`} />

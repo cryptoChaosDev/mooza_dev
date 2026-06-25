@@ -629,7 +629,7 @@ export const vacancyAPI = {
   setStatus: (id: string, status: string) => api.patch(`/vacancies/${id}/status`, { status }),
   remove: (id: string) => api.delete(`/vacancies/${id}`),
   getMatches: (id: string, params?: { page?: number; limit?: number }) => api.get(`/vacancies/${id}/matches`, { params }),
-  respond: (id: string, data: { comment?: string; portfolioLinks?: { url: string; title: string; source: string }[] }) =>
+  respond: (id: string, data: { comment?: string; portfolioLinks?: { url: string; title: string; source: string }[]; hasPortfolioFiles?: boolean }) =>
     api.post(`/vacancies/${id}/responses`, data),
   uploadPortfolio: (id: string, responseId: string, formData: FormData) =>
     api.post(`/vacancies/${id}/responses/${responseId}/portfolio`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),

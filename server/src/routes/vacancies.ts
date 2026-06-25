@@ -119,7 +119,7 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     if (employmentType && !VALID_EMPLOYMENT.has(employmentType)) return res.status(400).json({ error: 'Invalid employmentType' });
     if (paymentType && !VALID_PAYMENT.has(paymentType)) return res.status(400).json({ error: 'Invalid paymentType' });
     // Publishing requires every mandatory field.
-    if (st === 'active' && (!title || !String(title).trim()
+    if (st === 'active' && (!title || !String(title).trim() || !description || !String(description).trim()
       || !VALID_WORK_FORMAT.has(workFormat) || !VALID_GEOGRAPHY.has(geography)
       || !VALID_EMPLOYMENT.has(employmentType) || !VALID_PAYMENT.has(paymentType))) {
       return res.status(400).json({ error: 'Заполните все обязательные поля для публикации' });
@@ -500,7 +500,10 @@ router.post('/:id/responses', authenticate, async (req: AuthRequest, res) => {
         where: { vacancyId_applicantId: { vacancyId: vacancy.id, applicantId: meId } },
         select: { _count: { select: { portfolioFiles: true } } },
       });
-      const hasFiles = (existing?._count.portfolioFiles ?? 0) > 0;
+      // Files are uploaded by a separate follow-up request, so trust the client's
+      // hasPortfolioFiles flag (set when the applicant attached files) in addition
+      // to already-stored files and incoming links.
+      const hasFiles = (existing?._count.portfolioFiles ?? 0) > 0 || req.body.hasPortfolioFiles === true;
       const hasLinks = links.filter((l) => l && l.url).length > 0;
       if (!hasFiles && !hasLinks) {
         return res.status(400).json({ error: 'Портфолио обязательно' });

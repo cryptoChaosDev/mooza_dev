@@ -79,11 +79,16 @@ export default function VacancyDetailPage() {
       return p && p.page < p.totalPages ? p.page + 1 : undefined;
     },
     enabled: !!vacancyId && isOwner,
+    // ТЗ 14 — живой список кандидатов автообновляется по мере появления резидентов.
+    refetchInterval: 45000,
+    refetchOnWindowFocus: true,
   });
 
-  // «Отклики» (owner only)
+  // «Отклики» (owner only) — auto-refresh so accepted offers surface the archive prompt.
   const { data: responses = [] } = useQuery<any[]>({
     queryKey: ['vacancy-responses', vacancyId],
+    refetchInterval: 45000,
+    refetchOnWindowFocus: true,
     queryFn: async () => { const { data } = await vacancyAPI.getResponses(vacancyId!); return data as any[]; },
     enabled: !!vacancyId && isOwner,
   });
@@ -121,6 +126,7 @@ export default function VacancyDetailPage() {
       const { data } = await vacancyAPI.respond(vacancyId!, {
         comment: respondComment.trim() || undefined,
         portfolioLinks: links,
+        hasPortfolioFiles: respondFiles.length > 0,
       });
       const responseId = (data as any)?.id ?? (data as any)?.response?.id;
       if (responseId && respondFiles.length > 0) {
