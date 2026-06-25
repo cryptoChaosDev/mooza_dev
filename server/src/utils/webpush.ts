@@ -23,6 +23,44 @@ export interface PushPayload {
   link?: string;
 }
 
+// ── Delivery stats (in-memory; resets on restart) ────────────────────────────
+// Counts what happened to each send, grouped by push service, so push reliability
+// can be measured at a glance via GET /api/push/stats (admin).
+type Bucket = { sent: number; expired: number; failed: number };
+const emptyBucket = (): Bucket => ({ sent: 0, expired: 0, failed: 0 });
+const pushStats = {
+  since: new Date().toISOString(),
+  fcm: emptyBucket(),
+  apple: emptyBucket(),
+  mozilla: emptyBucket(),
+  other: emptyBucket(),
+};
+function svcKey(endpoint: string): 'fcm' | 'apple' | 'mozilla' | 'other' {
+  try {
+    const h = new URL(endpoint).host;
+    if (h.includes('googleapis.com')) return 'fcm';
+    if (h.includes('push.apple.com')) return 'apple';
+    if (h.includes('mozilla.com')) return 'mozilla';
+  } catch { /* ignore */ }
+  return 'other';
+}
+function bumpStat(endpoint: string, result: keyof Bucket) {
+  pushStats[svcKey(endpoint)][result]++;
+}
+/** Snapshot of push delivery counters since the last restart (for admin/monitoring). */
+export function getPushStats() {
+  const total = (b: Bucket) => b.sent + b.expired + b.failed;
+  const pct = (b: Bucket) => (total(b) ? +((b.sent / total(b)) * 100).toFixed(1) : null);
+  const view = (b: Bucket) => ({ ...b, total: total(b), deliveredPct: pct(b) });
+  return {
+    since: pushStats.since,
+    fcm: view(pushStats.fcm),
+    apple: view(pushStats.apple),
+    mozilla: view(pushStats.mozilla),
+    other: view(pushStats.other),
+  };
+}
+
 // Send options: `urgency: high` wakes dozing Android devices (FCM Doze) and gives
 // Apple/Mozilla high delivery priority; `TTL` lets the push service queue the
 // message for a few days if the device is offline at send time.
@@ -40,10 +78,12 @@ async function sendOne(
       data,
       SEND_OPTIONS,
     );
+    bumpStat(sub.endpoint, 'sent');
   } catch (err: any) {
     const code: number | undefined = err?.statusCode;
     // 410 Gone / 404 = subscription expired or revoked — drop it.
     if (code === 410 || code === 404) {
+      bumpStat(sub.endpoint, 'expired');
       await prisma.pushSubscription.delete({ where: { id: sub.id } }).catch(() => {});
       return;
     }
@@ -54,6 +94,7 @@ async function sendOne(
       await new Promise((r) => setTimeout(r, 500 * attempt));
       return sendOne(sub, data, attempt + 1);
     }
+    bumpStat(sub.endpoint, 'failed');
     logger.warn(`Push send failed for sub ${sub.id} (status ${code ?? 'net'}, attempt ${attempt}): ${err?.message}`);
   }
 }
