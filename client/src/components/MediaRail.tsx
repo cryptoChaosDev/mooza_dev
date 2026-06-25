@@ -15,10 +15,12 @@ interface Props {
   /** Show the «Добавить» tile as the first item (admin edit mode). */
   showAdd?: boolean;
   onAdd?: () => void;
+  /** Optional route for a «Смотреть все» link in the header (e.g. vacancies tabs). */
+  seeAllTo?: string;
 }
 
 /** Horizontal slider of cover tiles for releases / clips on the artist page. */
-export default function MediaRail({ title, items, to, showAdd = false, onAdd }: Props) {
+export default function MediaRail({ title, items, to, showAdd = false, onAdd, seeAllTo }: Props) {
   const navigate = useNavigate();
 
   return (
@@ -26,6 +28,14 @@ export default function MediaRail({ title, items, to, showAdd = false, onAdd }: 
       <div className="flex items-center gap-2 mb-3">
         <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{title}</span>
         <div className="flex-1 h-px bg-slate-800" />
+        {seeAllTo && (
+          <button
+            onClick={() => navigate(seeAllTo)}
+            className="flex-shrink-0 text-[11px] font-medium text-primary-400 hover:text-primary-300 transition-colors"
+          >
+            Смотреть все
+          </button>
+        )}
       </div>
 
       <div className="flex gap-3 overflow-x-auto pb-1 -mx-4 px-4 scrollbar-hide">
