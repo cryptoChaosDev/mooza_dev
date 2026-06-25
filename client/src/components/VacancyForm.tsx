@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   X, Briefcase, Loader2, Search, Music2, Plus, Save, Users,
-  Image as ImageIcon,
+  Image as ImageIcon, ChevronDown,
 } from 'lucide-react';
 import { vacancyAPI, referenceAPI, postAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
@@ -87,6 +87,9 @@ export default function VacancyForm({
   const [professionName, setProfessionName] = useState('');
   const [filters, setFilters] = useState<VacancyFilter[]>([]);
   const [filterSel, setFilterSel] = useState<Record<string, string[]>>({});
+  // Per-filter dropdown open state (each profession filter is a collapsible section,
+  // mirroring the professions block in the profile).
+  const [openFilters, setOpenFilters] = useState<Set<string>>(new Set());
 
   // ── Scalar fields ──────────────────────────────────────────────────────────
   const [title, setTitle] = useState('');
@@ -153,12 +156,13 @@ export default function VacancyForm({
     setProfSearch('');
     setProfResults([]);
     setFilterSel({});
+    setOpenFilters(new Set());
     await loadFilters(p.id);
   };
 
   const clearProfession = () => {
     setProfessionId(''); setProfessionName('');
-    setFilters([]); setFilterSel({});
+    setFilters([]); setFilterSel({}); setOpenFilters(new Set());
   };
 
   // Profession filters are multi-select (no single-select «Уровень» special-case here).
@@ -167,6 +171,13 @@ export default function VacancyForm({
       const cur = prev[filterId] || [];
       const next = cur.includes(valueId) ? cur.filter(v => v !== valueId) : [...cur, valueId];
       return { ...prev, [filterId]: next };
+    });
+  };
+  const toggleFilterOpen = (filterId: string) => {
+    setOpenFilters(prev => {
+      const next = new Set(prev);
+      if (next.has(filterId)) next.delete(filterId); else next.add(filterId);
+      return next;
     });
   };
 
@@ -471,29 +482,43 @@ export default function VacancyForm({
         )}
       </div>
 
-      {/* 3 — Фильтры профессии (multi-select chips) */}
-      {filters.map(filter => (
-        <div key={filter.id}>
-          <label className={labelCls}>{filter.name}</label>
-          <div className="flex flex-wrap gap-1.5">
-            {filter.values.map(v => {
-              const isSelected = (filterSel[filter.id] || []).includes(v.id);
-              return (
-                <button key={v.id} type="button"
-                  onClick={() => toggleFilter(filter.id, v.id)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-all ${
-                    isSelected
-                      ? 'bg-primary-600 border-primary-500 text-white'
-                      : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:border-primary-500/40'
-                  }`}
-                >
-                  {v.value}
+      {/* 3 — Фильтры профессии: каждый раздел — свой выпадающий список (как в профиле) */}
+      {filters.length > 0 && (
+        <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 px-3">
+          {filters.map(filter => {
+            const sel = filterSel[filter.id] || [];
+            const selCount = filter.values.filter(v => sel.includes(v.id)).length;
+            const open = openFilters.has(filter.id);
+            return (
+              <div key={filter.id} className="border-b border-slate-800/60 last:border-0">
+                <button type="button"
+                  onClick={() => toggleFilterOpen(filter.id)}
+                  className="w-full flex items-center gap-1.5 py-2 text-left">
+                  <span className="text-xs text-slate-300 flex-1">{filter.name}</span>
+                  {selCount > 0 && <span className="text-[10px] bg-primary-600/80 text-white px-1.5 py-0.5 rounded-full">{selCount}</span>}
+                  <ChevronDown size={14} className={`text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
                 </button>
-              );
-            })}
-          </div>
+                {open && (
+                  <div className="flex flex-wrap gap-1.5 pb-2.5">
+                    {filter.values.map(v => {
+                      const isSelected = sel.includes(v.id);
+                      return (
+                        <button key={v.id} type="button"
+                          onClick={() => toggleFilter(filter.id, v.id)}
+                          className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
+                            isSelected ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                          }`}>
+                          {v.value}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
-      ))}
+      )}
 
       {/* 4 — 4 single-select каталога (из vacancyOptions) */}
       <SingleSelect label="Формат работы" options={WORK_FORMAT_OPTIONS} value={workFormat} onChange={setWorkFormat} labelCls={labelCls} />
