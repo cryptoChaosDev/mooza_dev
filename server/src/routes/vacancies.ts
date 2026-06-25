@@ -109,14 +109,21 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     if (!artistId) return res.status(400).json({ error: 'artistId required' });
     if (!(await assertArtistOwner(meId, artistId))) return res.status(403).json({ error: 'Forbidden' });
 
-    if (!title || !String(title).trim()) return res.status(400).json({ error: 'title required' });
     if (!professionId) return res.status(400).json({ error: 'professionId required' });
-    if (!VALID_WORK_FORMAT.has(workFormat)) return res.status(400).json({ error: 'Invalid workFormat' });
-    if (!VALID_GEOGRAPHY.has(geography)) return res.status(400).json({ error: 'Invalid geography' });
-    if (!VALID_EMPLOYMENT.has(employmentType)) return res.status(400).json({ error: 'Invalid employmentType' });
-    if (!VALID_PAYMENT.has(paymentType)) return res.status(400).json({ error: 'Invalid paymentType' });
 
     const st = VALID_STATUS.has(status) ? status : 'draft';
+    // Format-validate single-selects only when provided (reject garbage values).
+    // A draft may be saved incomplete (ТЗ: тихое автосохранение незавершённой формы).
+    if (workFormat && !VALID_WORK_FORMAT.has(workFormat)) return res.status(400).json({ error: 'Invalid workFormat' });
+    if (geography && !VALID_GEOGRAPHY.has(geography)) return res.status(400).json({ error: 'Invalid geography' });
+    if (employmentType && !VALID_EMPLOYMENT.has(employmentType)) return res.status(400).json({ error: 'Invalid employmentType' });
+    if (paymentType && !VALID_PAYMENT.has(paymentType)) return res.status(400).json({ error: 'Invalid paymentType' });
+    // Publishing requires every mandatory field.
+    if (st === 'active' && (!title || !String(title).trim()
+      || !VALID_WORK_FORMAT.has(workFormat) || !VALID_GEOGRAPHY.has(geography)
+      || !VALID_EMPLOYMENT.has(employmentType) || !VALID_PAYMENT.has(paymentType))) {
+      return res.status(400).json({ error: 'Заполните все обязательные поля для публикации' });
+    }
     const cfvIds: string[] = Array.isArray(customFilterValueIds) ? customFilterValueIds : [];
     const links: Array<{ url: string; title?: string; source: string }> = Array.isArray(referenceLinks) ? referenceLinks : [];
     // Compensation is only meaningful for percent/rate; null otherwise.
@@ -128,11 +135,11 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         artistId,
         authorId: meId,
         professionId,
-        title: String(title).slice(0, 100),
-        workFormat,
-        geography,
-        employmentType,
-        paymentType,
+        title: String(title || '').slice(0, 100),
+        workFormat: workFormat || '',
+        geography: geography || '',
+        employmentType: employmentType || '',
+        paymentType: paymentType || '',
         compensation: comp,
         description: description || null,
         requireComment: !!requireComment,
@@ -176,21 +183,23 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res) => {
     const data: any = {};
     if (title !== undefined) data.title = String(title).slice(0, 100);
     if (professionId !== undefined) data.professionId = professionId;
+    // Single-selects: validate format only when a non-empty value is provided
+    // (drafts may be saved incomplete); store '' to clear.
     if (workFormat !== undefined) {
-      if (!VALID_WORK_FORMAT.has(workFormat)) return res.status(400).json({ error: 'Invalid workFormat' });
-      data.workFormat = workFormat;
+      if (workFormat && !VALID_WORK_FORMAT.has(workFormat)) return res.status(400).json({ error: 'Invalid workFormat' });
+      data.workFormat = workFormat || '';
     }
     if (geography !== undefined) {
-      if (!VALID_GEOGRAPHY.has(geography)) return res.status(400).json({ error: 'Invalid geography' });
-      data.geography = geography;
+      if (geography && !VALID_GEOGRAPHY.has(geography)) return res.status(400).json({ error: 'Invalid geography' });
+      data.geography = geography || '';
     }
     if (employmentType !== undefined) {
-      if (!VALID_EMPLOYMENT.has(employmentType)) return res.status(400).json({ error: 'Invalid employmentType' });
-      data.employmentType = employmentType;
+      if (employmentType && !VALID_EMPLOYMENT.has(employmentType)) return res.status(400).json({ error: 'Invalid employmentType' });
+      data.employmentType = employmentType || '';
     }
     if (paymentType !== undefined) {
-      if (!VALID_PAYMENT.has(paymentType)) return res.status(400).json({ error: 'Invalid paymentType' });
-      data.paymentType = paymentType;
+      if (paymentType && !VALID_PAYMENT.has(paymentType)) return res.status(400).json({ error: 'Invalid paymentType' });
+      data.paymentType = paymentType || '';
     }
     if (description !== undefined) data.description = description || null;
     if (requireComment !== undefined) data.requireComment = !!requireComment;
