@@ -9,6 +9,7 @@ import { DEALS_ENABLED } from '../lib/features';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { useScrollLock } from '../lib/scrollLock';
 
 interface ConvItem {
   id: string;
@@ -47,6 +48,8 @@ export default function MessagesPage() {
   const navigate = useNavigate();
   const convLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const convLongPressMoved = useRef(false);
+
+  useScrollLock(showNewGroup);
 
   const loadConversations = useCallback(async () => {
     try {

@@ -13,6 +13,7 @@ import { getApiError } from '../lib/apiError';
 import AvatarComponent from '../components/Avatar';
 import ConfirmDialog from '../components/ConfirmDialog';
 import VacancyForm from '../components/VacancyForm';
+import { useScrollLock } from '../lib/scrollLock';
 import {
   workFormatLabel, geographyLabel, employmentLabel, paymentLabel,
   PAYMENT_WITH_COMPENSATION, occupancyLabel, occupancyBadgeClass,
@@ -54,6 +55,9 @@ export default function VacancyDetailPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [offeredIds, setOfferedIds] = useState<Set<string>>(new Set());
   const [offeringId, setOfferingId] = useState<string | null>(null);
+
+  // Lock body scroll while the inline cooperation-offer modal is open (iOS jump fix).
+  useScrollLock(!!coopResponseId);
 
   const { data: vacancy, isLoading } = useQuery({
     queryKey: ['vacancy', vacancyId],

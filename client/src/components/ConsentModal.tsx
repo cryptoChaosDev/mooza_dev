@@ -3,10 +3,13 @@ import { ShieldCheck, FileText, Loader2 } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { userAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import { useScrollLock } from "../lib/scrollLock";
 
 export default function ConsentModal() {
   const [checked, setChecked] = useState(false);
   const { setUser } = useAuthStore();
+
+  useScrollLock(true);
 
   const agreeMut = useMutation({
     mutationFn: () => userAPI.agreeToTerms(),

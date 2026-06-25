@@ -6,6 +6,7 @@ import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, Shi
 import AvatarComponent from '../components/Avatar';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { useScrollLock } from '../lib/scrollLock';
 import * as XLSX from 'xlsx';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -1253,6 +1254,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const set = (k: keyof UserForm, v: string | boolean) => setForm(f => ({ ...f, [k]: v }));
   const qc = useQueryClient();
+  useScrollLock(true);
 
   const saveMut = useMutation({
     mutationFn: () => api.patch(`/admin/users/${user.id}`, form),
@@ -1485,6 +1487,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
 function CreateUserModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [form, setForm] = useState<UserForm>(emptyUserForm());
   const set = (k: keyof UserForm, v: string | boolean) => setForm(f => ({ ...f, [k]: v }));
+  useScrollLock(true);
 
   const createMut = useMutation({
     mutationFn: () => api.post('/admin/users', form),
