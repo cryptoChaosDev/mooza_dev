@@ -223,7 +223,7 @@ router.post('/:id/invite', authenticate, async (req: AuthRequest, res: Response)
           type: 'group_invite',
           title: `${me?.firstName} ${me?.lastName} приглашает в группу «${group.name}»`,
           body: `Роль: ${membership.profession?.name ?? '—'}`,
-          link: `/groups/invites`,
+          link: `/artist/${group.id}`,
         },
       });
     } catch {}
