@@ -8,6 +8,7 @@ import { useAuthStore } from '../stores/authStore';
 import { DEALS_ENABLED } from '../lib/features';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { useScrollLock } from '../lib/scrollLock';
 
 interface DuplicateValues {
   title?: string;
@@ -28,6 +29,7 @@ interface Props {
 
 export default function DealCreateModal({ executorId, executorName, serviceId, userServiceId, serviceName, initialValues, onClose }: Props) {
   const queryClient = useQueryClient();
+  useScrollLock(true);
   const navigate = useNavigate();
   const { user } = useAuthStore();
 

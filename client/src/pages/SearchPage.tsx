@@ -16,6 +16,7 @@ import DealCreateModal from '../components/DealCreateModal';
 import { DEALS_ENABLED } from '../lib/features';
 import { useAuthGate } from '../components/AuthGateModal';
 import { plural } from '../lib/plural';
+import { useScrollLock } from '../lib/scrollLock';
 
 // ─── Tile gradients ──────────────────────────────────────────────────────────
 const TILE_GRADIENTS = [
@@ -371,6 +372,9 @@ export default function SearchPage() {
     { value: 'considering', label: 'Рассматриваю предложения' },
     { value: 'closed', label: 'Занят' },
   ];
+
+  // Lock body scroll while any full-screen filter modal is open (iOS jump fix).
+  useScrollLock(filtersOpen || artistFilterOpen || peopleFilterOpen);
 
   // Single-select type ('' clears to «Все»; selecting the active type clears it).
   function selectType(value: string) {

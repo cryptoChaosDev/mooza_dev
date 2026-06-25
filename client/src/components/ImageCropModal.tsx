@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Cropper, { type Area } from 'react-easy-crop';
 import { Loader2, X, Check, ZoomIn } from 'lucide-react';
+import { useScrollLock } from "../lib/scrollLock";
 
 type Props = {
   file: File;
@@ -69,6 +70,8 @@ export default function ImageCropModal({ file, aspect, cropShape = 'rect', title
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useScrollLock(true);
 
   useEffect(() => {
     let cancelled = false;

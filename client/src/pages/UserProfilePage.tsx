@@ -22,6 +22,7 @@ import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ReviewsBlock from '../components/ReviewsBlock';
 import { useAuthStore } from '../stores/authStore';
+import { useScrollLock } from '../lib/scrollLock';
 import { formatLastSeen } from '../lib/lastSeen';
 import { usePresenceStore } from '../stores/presenceStore';
 import { toast } from '../stores/toastStore';
@@ -73,6 +74,7 @@ export default function UserProfilePage() {
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
   const [selectedProfession, setSelectedProfession] = useState<any>(null);
   const [confirmRemoveFriend, setConfirmRemoveFriend] = useState(false);
+  useScrollLock(!!imageFullscreen || !!docFullscreen || !!selectedProfession);
   const { data: user, isLoading } = useQuery({
     queryKey: ['user', userId],
     queryFn: async () => { const { data } = await userAPI.getUser(userId!); return data; },

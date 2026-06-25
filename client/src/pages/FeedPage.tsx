@@ -30,6 +30,7 @@ import RichTextEditor from '../components/RichTextEditor';
 import { ReactionBar, DoubleTapReactWrapper } from '../components/ReactionBar';
 import { loadFilters, DEFAULT_FILTERS, FlowFilters, FLOW_FILTERS_KEY } from './FlowSettingsPage';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { useScrollLock } from '../lib/scrollLock';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -232,6 +233,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showRepost, setShowRepost] = useState(false);
   const [repostComment, setRepostComment] = useState('');
+  useScrollLock(showRepost);
 
   // Structured «Услуга» card — guest gating + «Написать» / «Оформить сделку».
   const { ensureAuth, authGateModal } = useAuthGate();
@@ -980,6 +982,7 @@ export default function FeedPage() {
   const [showVacancyForm, setShowVacancyForm] = useState(false);
   const [filters, setFilters] = useState<FlowFilters>(loadFilters);
   const [showSavedOnly, setShowSavedOnly] = useState(false);
+  useScrollLock(showPostTypePicker || showOrderForm || showVacancyForm);
 
   // Persist filters between sessions (localStorage).
   const updateFilters = useCallback((patch: Partial<FlowFilters>) => {

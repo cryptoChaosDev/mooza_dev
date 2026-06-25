@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { X, Sparkles, Plus, RefreshCw, Minus } from 'lucide-react';
 import { CHANGELOG, type ChangelogEntry } from '../lib/changelog';
+import { useScrollLock } from "../lib/scrollLock";
 
 interface Props { onClose: () => void; }
 
@@ -11,6 +12,7 @@ const SECTIONS: { key: keyof Pick<ChangelogEntry, 'added' | 'changed' | 'removed
 ];
 
 export default function ChangelogModal({ onClose }: Props) {
+  useScrollLock(true);
   return createPortal(
     <>
       <div className="fixed inset-0 z-[62] bg-black/50 backdrop-blur-sm" onClick={onClose} />

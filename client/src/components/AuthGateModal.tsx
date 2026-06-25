@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { LogIn, UserPlus } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
+import { useScrollLock } from '../lib/scrollLock';
 
 const DEFAULT_TEXT = 'Это действие доступно только авторизованным пользователям';
 
@@ -21,6 +22,7 @@ export function AuthGateModal({
   text?: string;
 }) {
   const navigate = useNavigate();
+  useScrollLock(open);
   if (!open) return null;
 
   return createPortal(

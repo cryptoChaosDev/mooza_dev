@@ -9,6 +9,7 @@ import AvatarComponent from './Avatar';
 import { useNavigate } from 'react-router-dom';
 import DealCreateModal from './DealCreateModal';
 import { DEALS_ENABLED } from '../lib/features';
+import { useScrollLock } from '../lib/scrollLock';
 
 interface Connection {
   id: string;
@@ -57,6 +58,7 @@ function RoleBadge({ role, label }: { role?: string | null; label: string }) {
 
 export default function ConnectionViewModal({ connection, onClose }: Props) {
   const queryClient = useQueryClient();
+  useScrollLock(true);
   const navigate = useNavigate();
   const { partner, services, profession, status, iAmRequester, myRole, partnerRole, needsDeal, breakRequestedBy, breakReasonRequester } = connection;
 

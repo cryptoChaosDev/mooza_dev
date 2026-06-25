@@ -5,6 +5,7 @@ import AvatarComponent from './Avatar';
 import ConnectionViewModal from './ConnectionViewModal';
 import { type ConnectionData } from './ConnectionCard';
 import { useNavigate } from 'react-router-dom';
+import { useScrollLock } from "../lib/scrollLock";
 
 const ROLE_LABEL: Record<string, string> = {
   CUSTOMER: 'Заказчик',
@@ -39,6 +40,7 @@ interface Props {
 
 export default function PartnerConnectionsModal({ partner, connections, onClose, onConnectionUpdated }: Props) {
   const navigate = useNavigate();
+  useScrollLock(true);
   const [viewConn, setViewConn] = useState<ConnectionData | null>(null);
   const name = `${partner.firstName} ${partner.lastName}`.trim();
 

@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { X, Search, ChevronRight, ArrowLeft, Loader2, Check } from 'lucide-react';
 import { referenceAPI } from '../lib/api';
 import { yoIncludes } from '../lib/search';
+import { useScrollLock } from '../lib/scrollLock';
 
 export interface PickedService {
   sectionId: string;
@@ -31,6 +32,7 @@ export default function ServicePicker({ onSelect, onClose, excludeServiceIds = [
   const [level, setLevel] = useState<Level>('section');
   const [search, setSearch] = useState('');
   const [section, setSection] = useState<Section | null>(null);
+  useScrollLock(true);
 
   const { data: sections = [], isLoading } = useQuery({
     queryKey: ['ref-sections'],

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Check, Loader2 } from 'lucide-react';
 import { roleAPI } from '../lib/api';
+import { useScrollLock } from '../lib/scrollLock';
 
 interface RoleItem { id: string; name: string }
 interface RoleCategory { category: string; roles: RoleItem[] }
@@ -23,6 +24,8 @@ export default function RolePicker({ context, value, onSave, onClose, title }: R
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(value));
+
+  useScrollLock(true);
 
   useEffect(() => {
     let alive = true;

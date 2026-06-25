@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, FileText, ChevronLeft, Loader2 } from 'lucide-react';
+import { useScrollLock } from "../lib/scrollLock";
 
 // Legal documents are pre-converted to HTML in /public/legal (see manifest.json).
 const DOCS: { slug: string; title: string }[] = [
@@ -15,6 +16,7 @@ const DOCS: { slug: string; title: string }[] = [
 ];
 
 export default function LegalDocsModal({ onClose }: { onClose: () => void }) {
+  useScrollLock(true);
   const [active, setActive] = useState<{ slug: string; title: string } | null>(null);
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);

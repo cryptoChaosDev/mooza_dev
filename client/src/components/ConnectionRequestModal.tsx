@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { connectionAPI, referenceAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { useScrollLock } from '../lib/scrollLock';
 import AvatarComponent from './Avatar';
 
 interface Props {
@@ -31,6 +32,7 @@ const REL_OPTIONS: { type: RelType; myRole: string; partnerRole: string; needsDe
 
 export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
   const queryClient = useQueryClient();
+  useScrollLock(true);
   const fullName = `${targetUser.firstName} ${targetUser.lastName}`.trim();
 
   // Check for existing connection

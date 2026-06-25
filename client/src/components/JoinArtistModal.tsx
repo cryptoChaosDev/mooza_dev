@@ -5,12 +5,14 @@ import { X, Search, Plus, Check, Loader2, Music2 } from 'lucide-react';
 import { artistAPI, roleAPI } from '../lib/api';
 import { useNavigate } from 'react-router-dom';
 import RolePicker from './RolePicker';
+import { useScrollLock } from "../lib/scrollLock";
 
 interface Props {
   onClose: () => void;
 }
 
 export default function JoinArtistModal({ onClose }: Props) {
+  useScrollLock(true);
   const navigate = useNavigate();
 
   const [artistQuery, setArtistQuery] = useState('');

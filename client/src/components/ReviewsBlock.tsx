@@ -8,6 +8,7 @@ import { useAuthStore } from '../stores/authStore';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { useScrollLock } from '../lib/scrollLock';
 
 interface Review {
   id: string;
@@ -46,6 +47,8 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
   const [selected, setSelected] = useState<Review | null>(null);
   const [replyText, setReplyText] = useState('');
   const [savingReply, setSavingReply] = useState(false);
+
+  useScrollLock(!!selected);
 
   const { data: reviews = [] } = useQuery<Review[]>({
     queryKey: ['reviews', userId],

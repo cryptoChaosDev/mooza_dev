@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Search, Plus, Check } from 'lucide-react';
 import { SORTED_PROFESSIONS } from '../constants/professions';
 import { yoNorm } from '../lib/search';
+import { useScrollLock } from "../lib/scrollLock";
 
 interface ProfessionSelectorProps {
   isOpen: boolean;
@@ -18,6 +19,8 @@ export default function ProfessionSelector({
   onUpdate,
 }: ProfessionSelectorProps) {
   const [searchQuery, setSearchQuery] = useState('');
+
+  useScrollLock(isOpen);
 
   const filteredProfessions = useMemo(() => {
     if (!searchQuery.trim()) return SORTED_PROFESSIONS;

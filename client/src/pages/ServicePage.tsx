@@ -15,6 +15,7 @@ import { DEALS_ENABLED } from '../lib/features';
 import { useAuthGate } from '../components/AuthGateModal';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { useScrollLock } from '../lib/scrollLock';
 
 const STATUS_LABEL: Record<string, string> = {
   active: 'Действующая',
@@ -52,6 +53,8 @@ export default function ServicePage() {
   const [editDescription, setEditDescription] = useState('');
   const [editPriceItems, setEditPriceItems] = useState<Array<{name: string; price: string}>>([]);
   const [postDialogOpen, setPostDialogOpen] = useState(false);
+
+  useScrollLock(showTemplates || showEdit || postDialogOpen);
 
   const { data: us, isLoading } = useQuery({
     queryKey: ['user-service', serviceId],
