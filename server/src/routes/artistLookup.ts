@@ -10,7 +10,6 @@ import { yoNorm } from '../utils/search';
 
 const router = Router();
 
-const MB_UA = 'Moooza/1.0 ( https://moooza.ru )';
 // Image hosts the avatar proxy is allowed to fetch (SSRF guard).
 const AVATAR_HOSTS = new Set([
   'cdn-images.dzcdn.net', 'e-cdns-images.dzcdn.net',
@@ -59,10 +58,11 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     if (hit && Date.now() - hit.at < TTL) return res.json(hit.data);
 
     const enc = encodeURIComponent(q);
-    const [dz, it, mb, genreRows] = await Promise.all([
+    // MusicBrainz is intentionally omitted — it is unroutable from the RU host
+    // (connection times out). Deezer + iTunes cover name/photo/genre/links.
+    const [dz, it, genreRows] = await Promise.all([
       safeJson(`https://api.deezer.com/search/artist?q=${enc}&limit=8`),
       safeJson(`https://itunes.apple.com/search?term=${enc}&entity=musicArtist&limit=8&country=RU`),
-      safeJson(`https://musicbrainz.org/ws/2/artist/?query=${enc}&fmt=json&limit=8`, { 'User-Agent': MB_UA, Accept: 'application/json' }),
       prisma.genre.findMany({ select: { id: true, name: true } }),
     ]);
 
@@ -104,7 +104,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const byName = new Map<string, any>();
     const ensure = (name: string) => {
       const k = norm(name);
-      if (!byName.has(k)) byName.set(k, { name, type: null as string | null, imageUrl: null as string | null, genres: [] as string[], links: {} as any, sources: [] as string[], popularity: 0, disambiguation: undefined as string | undefined, _mbid: null as string | null });
+      if (!byName.has(k)) byName.set(k, { name, type: null as string | null, imageUrl: null as string | null, genres: [] as string[], links: {} as any, sources: [] as string[], popularity: 0, disambiguation: undefined as string | undefined });
       return byName.get(k);
     };
 
@@ -122,36 +122,9 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       if (a.artistLinkUrl) c.links.appleMusic = a.artistLinkUrl;
       if (!c.sources.includes('apple')) c.sources.push('apple');
     }
-    for (const a of (mb?.artists || [])) {
-      const c = ensure(a.name);
-      if (!c.type && a.type) {
-        c.type = (a.type === 'Group' || a.type === 'Choir' || a.type === 'Orchestra') ? 'GROUP'
-          : (a.type === 'Person' ? 'SOLO' : null);
-      }
-      if (a.disambiguation && !c.disambiguation) c.disambiguation = a.disambiguation;
-      for (const t of (a.tags || [])) if (t?.name) c.genres.push(t.name);
-      if (!c._mbid) c._mbid = a.id;
-      if (!c.sources.includes('musicbrainz')) c.sources.push('musicbrainz');
-    }
-
-    // For the strongest MusicBrainz matches, pull cross-platform links (Яндекс.Музыка,
-    // Spotify, VK, SoundCloud, official site). Capped to respect MB's 1 req/s limit.
-    const withMb = [...byName.values()].filter((c) => c._mbid).slice(0, 2);
-    for (const c of withMb) {
-      const rel = await safeJson(`https://musicbrainz.org/ws/2/artist/${c._mbid}?inc=url-rels&fmt=json`, { 'User-Agent': MB_UA, Accept: 'application/json' });
-      for (const r of (rel?.relations || [])) {
-        const url = r?.url?.resource; if (!url) continue;
-        if (/music\.yandex\./i.test(url)) c.links.yandexMusic = url;
-        else if (/spotify\.com/i.test(url)) c.links.spotify = url;
-        else if (/vk\.com/i.test(url)) c.links.vk = url;
-        else if (/soundcloud\.com/i.test(url)) c.links.soundcloud = url;
-        else if (r.type === 'official homepage') c.links.website = url;
-      }
-    }
-
     const candidates = [...byName.values()].map((c) => {
       const { ids, raw } = mapGenres(c.genres);
-      const { _mbid, genres, ...rest } = c;
+      const { genres, ...rest } = c;
       return { ...rest, genreIds: ids, genres: raw };
     });
     candidates.sort((a, b) =>
