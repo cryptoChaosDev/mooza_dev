@@ -81,7 +81,7 @@ const userSelect = {
     },
   },
   userArtists: {
-    include: { artist: { select: { id: true, name: true } } },
+    include: { artist: { select: { id: true, name: true, avatar: true } } },
   },
   socialLinks: true,
   channel: {
@@ -148,7 +148,7 @@ const publicUserSelect = {
     },
   },
   userArtists: {
-    include: { artist: { select: { id: true, name: true } } },
+    include: { artist: { select: { id: true, name: true, avatar: true } } },
   },
   socialLinks: true,
   lastSeenAt: true,
