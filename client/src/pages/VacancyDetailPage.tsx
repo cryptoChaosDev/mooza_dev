@@ -4,7 +4,7 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tansta
 import {
   ArrowLeft, Megaphone, MapPin, Briefcase, DollarSign, Clock, MessageCircle,
   Archive, Loader2, Send, Link2, Users, Sparkles, HandshakeIcon, Share2,
-  Pencil, Check, X,
+  Pencil, Check, X, Trash2,
 } from 'lucide-react';
 import { vacancyAPI } from '../lib/api';
 import { avatarUrl } from '../lib/avatar';
@@ -51,6 +51,7 @@ export default function VacancyDetailPage() {
 
   // Archive prompt dismissal (client-side)
   const [archiveDismissed, setArchiveDismissed] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const { data: vacancy, isLoading } = useQuery({
     queryKey: ['vacancy', vacancyId],
@@ -94,6 +95,16 @@ export default function VacancyDetailPage() {
       qc.invalidateQueries({ queryKey: ['vacancies', 'mine'] });
     },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось изменить статус вакансии')),
+  });
+
+  const removeMut = useMutation({
+    mutationFn: () => vacancyAPI.remove(vacancyId!),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['vacancies', 'mine'] });
+      toast.success('Черновик удалён');
+      navigate(-1);
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить черновик')),
   });
 
   const offerMut = useMutation({
@@ -439,6 +450,14 @@ export default function VacancyDetailPage() {
                 >
                   {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                   Опубликовать
+                </button>
+                <button
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={removeMut.isPending}
+                  className="flex-shrink-0 px-3 py-3 flex items-center justify-center text-slate-500 hover:text-red-400 border border-slate-700 hover:border-red-500/40 rounded-2xl transition-colors disabled:opacity-50"
+                  title="Удалить черновик"
+                >
+                  {removeMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
                 </button>
               </div>
             )}
@@ -800,6 +819,14 @@ export default function VacancyDetailPage() {
         confirmLabel="Архивировать"
         onConfirm={() => statusMut.mutate('archived')}
         onCancel={() => setArchiveDismissed(true)}
+      />
+
+      <ConfirmDialog
+        open={confirmDelete}
+        message="Удалить черновик вакансии безвозвратно?"
+        confirmLabel="Удалить"
+        onConfirm={() => removeMut.mutate()}
+        onCancel={() => setConfirmDelete(false)}
       />
 
       {isOwner && editing && (

@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Megaphone, Briefcase, Loader2, Archive, Send, Pencil } from 'lucide-react';
+import { ArrowLeft, Megaphone, Briefcase, Loader2, Archive, Send, Pencil, Trash2 } from 'lucide-react';
 import { vacancyAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import VacancyForm from '../components/VacancyForm';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { workFormatLabel } from '../lib/vacancyOptions';
 
 type Tab = 'active' | 'archived' | 'draft';
@@ -29,6 +30,7 @@ export default function VacanciesPage() {
   const [tab, setTab] = useState<Tab>('active');
   const [editingVacancy, setEditingVacancy] = useState<any>(null);
   const [editLoadingId, setEditLoadingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const openEdit = async (id: string) => {
     setEditLoadingId(id);
@@ -54,6 +56,12 @@ export default function VacanciesPage() {
       qc.invalidateQueries({ queryKey: ['vacancies', 'mine'] });
     },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось изменить статус вакансии')),
+  });
+
+  const removeMut = useMutation({
+    mutationFn: (id: string) => vacancyAPI.remove(id),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['vacancies', 'mine'] }); setConfirmDeleteId(null); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить черновик')),
   });
 
   return (
@@ -146,6 +154,13 @@ export default function VacanciesPage() {
                       {statusMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
                       Опубликовать
                     </button>
+                    <button
+                      onClick={() => setConfirmDeleteId(vacancy.id)}
+                      className="flex-shrink-0 px-2.5 py-2 flex items-center justify-center text-slate-500 hover:text-red-400 border border-slate-700 hover:border-red-500/40 rounded-lg transition-colors"
+                      title="Удалить черновик"
+                    >
+                      <Trash2 size={13} />
+                    </button>
                   </>
                 )}
 
@@ -185,6 +200,14 @@ export default function VacanciesPage() {
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        message="Удалить черновик вакансии безвозвратно?"
+        confirmLabel="Удалить"
+        onConfirm={() => { if (confirmDeleteId) removeMut.mutate(confirmDeleteId); }}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }
