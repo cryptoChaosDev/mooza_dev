@@ -58,10 +58,14 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
 router.get('/my', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
+    // The profile «Артисты» rail shows EVERY artist the user created or is an
+    // accepted member of — regardless of type (SOLO/GROUP/COVER_GROUP/…).
     const groups = await prisma.artist.findMany({
       where: {
-        type: { in: ['GROUP', 'COVER_GROUP'] },
-        userArtists: { some: { userId: meId, inviteStatus: 'ACCEPTED' } },
+        OR: [
+          { submittedById: meId },
+          { userArtists: { some: { userId: meId, inviteStatus: 'ACCEPTED' } } },
+        ],
       },
       include: GROUP_INCLUDE,
       orderBy: { updatedAt: 'desc' },
