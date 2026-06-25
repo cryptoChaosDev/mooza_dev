@@ -191,8 +191,11 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
       const mine = userArtists.find(
         (ua: any) => ua.userId === currentUserId && ua.inviteStatus === 'ACCEPTED',
       );
-      viewerIsOwner = !!mine?.isOwner;
-      viewerIsAdmin = !!mine?.isAdmin;
+      // The artist's creator (submittedById) is always its owner — even if the
+      // UserArtist owner row is missing (legacy / alternate creation paths).
+      const isCreator = (artist as any).submittedById === currentUserId;
+      viewerIsOwner = !!mine?.isOwner || isCreator;
+      viewerIsAdmin = !!mine?.isAdmin || isCreator;
       if (!viewerIsAdmin) {
         const sys = await prisma.user.findUnique({
           where: { id: currentUserId },

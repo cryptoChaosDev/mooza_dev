@@ -61,6 +61,10 @@ async function artistName(artistId: string): Promise<string> {
 // manage its vacancies. Returns true when allowed.
 async function assertArtistOwner(userId: string, artistId: string): Promise<boolean> {
   if (!artistId) return false;
+  // The creator (Artist.submittedById) is always an owner, even without a
+  // UserArtist owner row (matches the artist page's ownership semantics).
+  const artist = await prisma.artist.findUnique({ where: { id: artistId }, select: { submittedById: true } });
+  if (artist?.submittedById === userId) return true;
   const link = await prisma.userArtist.findFirst({
     where: { userId, artistId, isOwner: true, inviteStatus: 'ACCEPTED' },
     select: { id: true },
