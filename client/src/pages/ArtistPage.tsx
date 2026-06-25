@@ -503,7 +503,10 @@ export default function ArtistPage() {
   const pendingMembers5b: any[] = artist.pendingMembers ?? [];
   const activeMembers = confirmedMembers.filter((m) => m.participationStatus === 'ACTIVE_MEMBER');
   const formerMembers = confirmedMembers.filter((m) => m.participationStatus === 'FORMER_MEMBER');
-  const ownerMember = confirmedMembers.find((m) => m.isOwner) ?? null;
+  // Owner = the member flagged isOwner, else the artist's creator (submittedById)
+  // — legacy/alternate-created artists often have no isOwner flag on any member.
+  const ownerMember = confirmedMembers.find((m) => m.isOwner)
+    ?? confirmedMembers.find((m) => m.user?.id === artist.submittedById) ?? null;
   const adminMembers = confirmedMembers.filter((m) => m.isAdmin);
   // Viewer is an active confirmed member (used to gate the gear button)
   const viewerIsActiveMember = !!currentUser && confirmedMembers.some(
@@ -523,8 +526,8 @@ export default function ArtistPage() {
       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/profile/${m.user.id}`)}>
         <p className="text-sm font-medium text-white truncate flex items-center gap-1.5">
           {memberName(m)}
-          {m.isOwner && <Crown size={12} className="text-amber-400 flex-shrink-0" />}
-          {m.isAdmin && !m.isOwner && <Shield size={11} className="text-sky-400 flex-shrink-0" />}
+          {(m.isOwner || m.user?.id === artist.submittedById) && <Crown size={12} className="text-amber-400 flex-shrink-0" />}
+          {m.isAdmin && !m.isOwner && m.user?.id !== artist.submittedById && <Shield size={11} className="text-sky-400 flex-shrink-0" />}
         </p>
         <p className="text-xs text-slate-500 truncate">{roleText(m) || '—'}</p>
       </div>
