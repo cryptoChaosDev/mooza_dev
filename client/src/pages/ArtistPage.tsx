@@ -7,8 +7,12 @@ import {
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
   UserPlus, Trash2, Search,
   Settings, Link2, Share2, Tag, Crown, Shield, UserCog, UserCheck, UserX, Star,
+  Plus, Megaphone,
 } from 'lucide-react';
-import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI, releaseAPI, clipAPI } from '../lib/api';
+import { createPortal } from 'react-dom';
+import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI, releaseAPI, clipAPI, vacancyAPI } from '../lib/api';
+import VacancyForm from '../components/VacancyForm';
+import { workFormatLabel } from '../lib/vacancyOptions';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
 import { yoNorm } from '../lib/search';
@@ -149,6 +153,8 @@ export default function ArtistPage() {
   // ── Phase 6b: releases & clips create-form modals ──────────────────────────
   const [showReleaseForm, setShowReleaseForm] = useState(false);
   const [showClipForm, setShowClipForm] = useState(false);
+  // ── Vacancies create-form modal ────────────────────────────────────────────
+  const [showVacancyForm, setShowVacancyForm] = useState(false);
 
   const { data: artist, isLoading, isError } = useQuery({
     queryKey: ['artist', id],
@@ -186,6 +192,19 @@ export default function ArtistPage() {
     },
     enabled: !!id,
   });
+
+  // ── Vacancies owned by this artist (owner/admin-visible) ───────────────────
+  // getMine is owner-scoped on the server (assertArtistOwner → 403 otherwise),
+  // so only fetch once we know the viewer is an admin/owner of this artist.
+  const { data: myVacancies = [] } = useQuery<any[]>({
+    queryKey: ['vacancies', 'mine', id],
+    queryFn: async () => {
+      const { data } = await vacancyAPI.getMine({ artistId: id! });
+      return data as any[];
+    },
+    enabled: !!id && !!(artist as any)?.viewerIsAdmin,
+  });
+  const activeVacanciesCount = myVacancies.filter((v: any) => v.status === 'active').length;
 
   const isOwner = !!currentUser && (
     artist?.submittedById === currentUser.id ||
@@ -1191,6 +1210,62 @@ export default function ArtistPage() {
           />
         )}
 
+        {/* ── Vacancies card — tile slider (owner/admin only) ── */}
+        {viewerIsAdmin && (
+          <div className="mb-4 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+              <Megaphone size={14} className="text-amber-400" />
+              <span className="text-sm font-semibold text-white">Мои вакансии</span>
+              {activeVacanciesCount > 0 && <span className="text-xs text-slate-500">{activeVacanciesCount}</span>}
+              {myVacancies.length > 0 && (
+                <button onClick={() => navigate(`/artists/${id}/vacancies`)} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
+                  Посмотреть все
+                </button>
+              )}
+            </div>
+
+            <div className="p-3 space-y-3">
+              <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                {/* Add tile — always first, owner-only */}
+                {viewerIsOwner && (
+                  <button
+                    onClick={() => setShowVacancyForm(true)}
+                    className="flex flex-col gap-2 flex-shrink-0 group"
+                    style={{ width: 'calc((100% - 24px) / 3.5)' }}
+                  >
+                    <div className="w-full aspect-square rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-amber-500/50 group-hover:bg-amber-500/5 transition-all">
+                      <Plus size={16} className="text-slate-500 group-hover:text-amber-400 transition-colors" />
+                    </div>
+                    <span className="text-[10px] text-slate-500 group-hover:text-slate-400 transition-colors text-center leading-tight">Добавить</span>
+                  </button>
+                )}
+
+                {myVacancies.map((v: any) => {
+                  const vProfession = v.profession?.name || '';
+                  const vFormat = v.workFormat ? workFormatLabel(v.workFormat) : '';
+                  return (
+                    <button
+                      key={v.id}
+                      onClick={() => navigate(`/vacancies/${v.id}`)}
+                      className="flex flex-col gap-0 flex-shrink-0 group text-left"
+                      style={{ width: 'calc((100% - 24px) / 3.5)' }}
+                    >
+                      <div className="w-full aspect-square rounded-xl bg-gradient-to-br from-amber-900/60 to-slate-800/80 border border-amber-700/30 flex items-center justify-center p-2 group-hover:border-amber-500/50 transition-colors overflow-hidden">
+                        <Megaphone size={16} className="text-amber-400 flex-shrink-0" />
+                      </div>
+                      <div className="w-full mt-1.5">
+                        <p className="text-[10px] font-semibold text-white leading-tight line-clamp-2">{v.title}</p>
+                        {vProfession && <p className="text-[9px] text-slate-500 leading-tight mt-0.5 truncate">{vProfession}</p>}
+                        {vFormat && <p className="text-[9px] text-amber-400/90 leading-tight mt-0.5 truncate">{vFormat}</p>}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ── Admin block (gear) ── */}
         {canSeeGear && showAdminBlock && (
           <div className="mb-4 p-3 rounded-xl bg-slate-900/70 border border-slate-800 space-y-4">
@@ -1737,6 +1812,21 @@ export default function ArtistPage() {
           artistId={id}
           onClose={() => setShowClipForm(false)}
         />
+      )}
+
+      {/* ── Create vacancy form (scoped to this artist) ── */}
+      {showVacancyForm && id && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setShowVacancyForm(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+            <VacancyForm artistId={id} onClose={() => setShowVacancyForm(false)} />
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Phase 7: avatar / banner cropping ── */}

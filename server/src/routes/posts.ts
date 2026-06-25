@@ -85,6 +85,19 @@ const buildFeedInclude = (userId: string | undefined) => {
       service: { select: { name: true, section: { select: { name: true } } } },
     },
   },
+  // Structured «Вакансия» post — the linked artist hiring post, for the «Посмотреть детали» button.
+  vacancy: {
+    select: {
+      id: true,
+      title: true,
+      workFormat: true,
+      geography: true,
+      paymentType: true,
+      compensation: true,
+      status: true,
+      profession: { select: { name: true } },
+    },
+  },
   repostOf: {
     include: {
       author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, isPremium: true, isVerified: true } }
@@ -716,6 +729,18 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
             deadline: true,
             status: true,
             service: { select: { name: true, section: { select: { name: true } } } },
+          },
+        },
+        vacancy: {
+          select: {
+            id: true,
+            title: true,
+            workFormat: true,
+            geography: true,
+            paymentType: true,
+            compensation: true,
+            status: true,
+            profession: { select: { name: true } },
           },
         },
         _count: {

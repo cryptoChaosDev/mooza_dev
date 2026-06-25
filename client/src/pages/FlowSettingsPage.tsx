@@ -69,6 +69,7 @@ const POST_TYPES = [
   { id: 'blog', label: 'Блог' },
   { id: 'service', label: 'Услуга' },
   { id: 'order', label: 'Заказ' },
+  { id: 'vacancy', label: 'Вакансия' },
 ];
 
 const PERIODS = [

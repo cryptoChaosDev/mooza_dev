@@ -8,7 +8,7 @@ import {
   Plus, FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench,
   Zap, BarChart3, Star, WifiOff, RefreshCw, HelpCircle, Repeat2,
   ExternalLink, MessageSquare, HandshakeIcon, Loader2 as Spinner,
-  ArrowUpDown, ChevronDown,
+  ArrowUpDown, ChevronDown, Megaphone,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import ShareButton from '../components/ShareButton';
@@ -21,6 +21,8 @@ import DealCreateModal from '../components/DealCreateModal';
 import { DEALS_ENABLED } from '../lib/features';
 import OnboardingPrompt from '../components/OnboardingPrompt';
 import OrderForm from '../components/OrderForm';
+import VacancyForm from '../components/VacancyForm';
+import { workFormatLabel, geographyLabel, paymentLabel } from '../lib/vacancyOptions';
 import AvatarComponent from '../components/Avatar';
 import AudioPlayer from '../components/AudioPlayer';
 import PostContent from '../components/PostContent';
@@ -237,6 +239,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const [contacting, setContacting] = useState(false);
   const svc = post.type === 'service' && post.service ? post.service : null;
   const order = post.type === 'order' && post.order ? post.order : null;
+  const vacancy = post.type === 'vacancy' && post.vacancy ? post.vacancy : null;
   const openServiceChat = () => {
     if (!svc || contacting) return;
     setContacting(true);
@@ -588,13 +591,75 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                   </div>
                 );
               })()}
-              {!isRepost && !svc && !order && post.content && (
+              {/* Structured «Вакансия» card — artist-posted vacancy. */}
+              {!isRepost && vacancy && (() => {
+                const vacancyTitle = post.title || vacancy.title || 'Вакансия';
+                const professionName = vacancy.profession?.name || '';
+                const formatLabel = vacancy.workFormat ? workFormatLabel(vacancy.workFormat) : '';
+                const paymentLbl = vacancy.paymentType ? paymentLabel(vacancy.paymentType) : '';
+                const geoLabel = vacancy.geography ? geographyLabel(vacancy.geography) : '';
+                return (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden">
+                    <div className="p-3.5 space-y-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-base font-bold text-white leading-snug">{vacancyTitle}</p>
+                        {vacancy.status === 'archived' && (
+                          <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-700/70 text-slate-300 border border-slate-600/60">
+                            В архиве
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+                        {professionName && (
+                          <span className="text-xs text-slate-400">
+                            Профессия: <span className="text-slate-200">{professionName}</span>
+                          </span>
+                        )}
+                        {formatLabel && (
+                          <span className="text-xs text-slate-400">
+                            Формат: <span className="text-slate-200">{formatLabel}</span>
+                          </span>
+                        )}
+                        {paymentLbl && (
+                          <span className="text-xs text-slate-400">
+                            Оплата: <span className="text-amber-300 font-semibold">{paymentLbl}</span>
+                          </span>
+                        )}
+                        {geoLabel && (
+                          <span className="text-xs text-slate-400">
+                            Гео: <span className="text-slate-200">{geoLabel}</span>
+                          </span>
+                        )}
+                      </div>
+                      {post.content && (
+                        <PostContent
+                          content={post.content}
+                          className={`text-sm text-slate-200 ${post.content.length > 280 && !expanded ? 'line-clamp-6' : ''}`}
+                        />
+                      )}
+                      {post.content && post.content.length > 280 && (
+                        <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>
+                      )}
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/vacancies/${vacancy.id}`)}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors"
+                        >
+                          <ExternalLink size={15} /> Посмотреть детали
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+              {!isRepost && !svc && !order && !vacancy && post.content && (
                 <PostContent
                   content={post.content}
                   className={`text-sm text-slate-200 ${isLongContent && !expanded ? 'line-clamp-6' : ''}`}
                 />
               )}
-              {!isRepost && !svc && !order && isLongContent && <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>}
+              {!isRepost && !svc && !order && !vacancy && isLongContent && <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>}
               {!isRepost && Array.isArray(post.links) && post.links.length > 0 && (
                 <div className="mt-2 flex flex-col gap-1">
                   {post.links.map((url: string, i: number) => {
@@ -737,7 +802,7 @@ const POST_TYPE_META: Record<string, { label: string; icon: any; accent: string;
   question:   { label: 'Вопрос',            icon: HelpCircle,  accent: 'border-l-2 border-blue-500/60',              badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
   service:    { label: 'Услуга',            icon: Wrench,      accent: 'border-l-2 border-primary-500/60',           badge: 'bg-primary-500/10 text-primary-400 border-primary-500/20' },
   order:      { label: 'Заказ',             icon: Briefcase,   accent: 'border-l-2 border-rose-500/60',              badge: 'bg-rose-500/10 text-rose-400 border-rose-500/20' },
-  vacancy:    { label: 'Вакансия',          icon: Briefcase,   accent: 'border-l-2 border-amber-500/60',             badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  vacancy:    { label: 'Вакансия',          icon: Megaphone,   accent: 'border-l-2 border-amber-500/60',             badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
   event:      { label: 'Мероприятие',       icon: Calendar,    accent: 'border-l-2 border-purple-500/60',            badge: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
   task:       { label: 'Задача',            icon: CheckSquare, accent: 'border-l-2 border-emerald-500/60',           badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
   offer:      { label: 'Предложение',       icon: Lightbulb,   accent: 'border-l-2 border-orange-500/60',            badge: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
@@ -752,11 +817,12 @@ const POST_TYPE_OPTIONS = [
   { type: 'question',   label: 'Вопрос',            icon: HelpCircle,  desc: 'Вопрос и обсуждение', inDev: false },
   { type: 'service',    label: 'Услуга',             icon: Wrench,      desc: 'Свободная форма',     inDev: false },
   { type: 'order',      label: 'Заказ',              icon: Briefcase,   desc: 'Заявка на услугу',    inDev: false },
+  { type: 'vacancy',    label: 'Вакансия',           icon: Megaphone,   desc: 'Поиск в команду',     inDev: false },
   { type: 'employment', label: 'Апдейт занятости',  icon: Zap,         desc: 'Обновить статус',     inDev: false },
   { type: 'poll',       label: 'Опрос',              icon: BarChart3,   desc: 'Голосование',         inDev: false },
 ];
 
-function PostTypePicker({ onClose, onPickOrder }: { onClose: () => void; onPickOrder?: () => void }) {
+function PostTypePicker({ onClose, onPickOrder, onPickVacancy }: { onClose: () => void; onPickOrder?: () => void; onPickVacancy?: () => void }) {
   const navigate = useNavigate();
 
   return createPortal(
@@ -776,6 +842,7 @@ function PostTypePicker({ onClose, onPickOrder }: { onClose: () => void; onPickO
               onClick={() => {
                 onClose();
                 if (type === 'order') onPickOrder?.();
+                else if (type === 'vacancy') onPickVacancy?.();
                 else navigate(`/create-post?type=${type}`);
               }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors text-left ${inDev ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-800'}`}
@@ -910,6 +977,7 @@ export default function FeedPage() {
   const targetPostId = searchParams.get('post');
   const [showPostTypePicker, setShowPostTypePicker] = useState(false);
   const [showOrderForm, setShowOrderForm] = useState(false);
+  const [showVacancyForm, setShowVacancyForm] = useState(false);
   const [filters, setFilters] = useState<FlowFilters>(loadFilters);
   const [showSavedOnly, setShowSavedOnly] = useState(false);
 
@@ -1093,6 +1161,7 @@ export default function FeedPage() {
           <PostTypePicker
             onClose={() => setShowPostTypePicker(false)}
             onPickOrder={() => setShowOrderForm(true)}
+            onPickVacancy={() => setShowVacancyForm(true)}
           />
         )}
 
@@ -1106,6 +1175,21 @@ export default function FeedPage() {
             >
               <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
               <OrderForm onClose={() => setShowOrderForm(false)} />
+            </div>
+          </div>,
+          document.body
+        )}
+
+        {/* Vacancy create form — opened modally from the Поток composer (no artistId — form asks). */}
+        {showVacancyForm && createPortal(
+          <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setShowVacancyForm(false)}>
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div
+              className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+              <VacancyForm onClose={() => setShowVacancyForm(false)} />
             </div>
           </div>,
           document.body

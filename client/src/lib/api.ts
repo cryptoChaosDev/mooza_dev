@@ -619,6 +619,32 @@ export const orderAPI = {
   deleteReference: (id: string, fileId: string) => api.delete(`/orders/${id}/references/${fileId}`),
 };
 
+// Vacancy API — artist-posted «Вакансия» (plan §5). Mirrors orderAPI but author is
+// an Artist, the catalog is professions, and offers/responses replace deals.
+export const vacancyAPI = {
+  getMine: (params: { artistId: string; status?: string }) => api.get('/vacancies/mine', { params }),
+  getOne: (id: string) => api.get(`/vacancies/${id}`),
+  create: (data: any) => api.post('/vacancies', data),
+  update: (id: string, data: any) => api.patch(`/vacancies/${id}`, data),
+  setStatus: (id: string, status: string) => api.patch(`/vacancies/${id}/status`, { status }),
+  remove: (id: string) => api.delete(`/vacancies/${id}`),
+  getMatches: (id: string, params?: { page?: number; limit?: number }) => api.get(`/vacancies/${id}/matches`, { params }),
+  respond: (id: string, data: { comment?: string; portfolioLinks?: { url: string; title: string; source: string }[] }) =>
+    api.post(`/vacancies/${id}/responses`, data),
+  uploadPortfolio: (id: string, responseId: string, formData: FormData) =>
+    api.post(`/vacancies/${id}/responses/${responseId}/portfolio`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  deletePortfolio: (id: string, responseId: string, fileId: string) =>
+    api.delete(`/vacancies/${id}/responses/${responseId}/portfolio/${fileId}`),
+  getResponses: (id: string) => api.get(`/vacancies/${id}/responses`),
+  offerCandidate: (id: string, candidateId: string) => api.post(`/vacancies/${id}/offer`, { candidateId }),
+  makeCooperation: (id: string, responseId: string, data: { startDate: string; conditions: string; compensation: string; extraDetails?: string }) =>
+    api.post(`/vacancies/${id}/responses/${responseId}/cooperation`, data),
+  acceptOffer: (offerId: string) => api.post(`/vacancies/offers/${offerId}/accept`),
+  rejectOffer: (offerId: string) => api.post(`/vacancies/offers/${offerId}/reject`),
+  uploadReferences: (id: string, formData: FormData) => api.post(`/vacancies/${id}/references`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  deleteReference: (id: string, fileId: string) => api.delete(`/vacancies/${id}/references/${fileId}`),
+};
+
 export const referralAPI = {
   getStats: () => api.get('/referrals/stats'),
   getLinks: () => api.get('/referrals/links'),
