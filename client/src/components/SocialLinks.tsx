@@ -25,6 +25,9 @@ export type SocialKey =
   | 'dzen'         // Яндекс Дзен
   | 'soundcloud'   // SoundCloud
   | 'bandlink'     // Bandlink
+  | 'spotify'      // Spotify
+  | 'apple_music'  // Apple Music
+  | 'deezer'       // Deezer
   | 'website';     // Официальный сайт
 
 // Contact keys vs social keys — used to split the profile "Contacts" card
@@ -39,6 +42,9 @@ export const SOCIAL_KEYS: SocialKey[] = [
   'dzen',
   'soundcloud',
   'bandlink',
+  'spotify',
+  'apple_music',
+  'deezer',
   'website',
 ];
 
@@ -239,6 +245,33 @@ export const SOCIAL_SERVICES: SocialService[] = [
     color: 'purple',
     iconBg: '#7C3AED',
     icon: <LinkIcon />,
+  },
+  {
+    key: 'spotify',
+    label: 'Spotify',
+    baseUrl: 'https://open.spotify.com/',
+    placeholder: 'artist/…',
+    color: 'emerald',
+    iconBg: '#1DB954',
+    icon: <MusicNoteIcon />,
+  },
+  {
+    key: 'apple_music',
+    label: 'Apple Music',
+    baseUrl: 'https://music.apple.com/',
+    placeholder: 'ru/artist/…',
+    color: 'rose',
+    iconBg: '#FA243C',
+    icon: <MusicNoteIcon />,
+  },
+  {
+    key: 'deezer',
+    label: 'Deezer',
+    baseUrl: 'https://www.deezer.com/',
+    placeholder: 'artist/…',
+    color: 'purple',
+    iconBg: '#A238FF',
+    icon: <MusicNoteIcon />,
   },
   {
     key: 'website',

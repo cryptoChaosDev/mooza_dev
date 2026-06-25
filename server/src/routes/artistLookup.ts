@@ -21,7 +21,20 @@ const AVATAR_HOSTS = new Set([
 const cache = new Map<string, { at: number; data: any }>();
 const TTL = 10 * 60 * 1000;
 
-const norm = (s: any) => yoNorm(String(s || '')).toLowerCase().replace(/[!?.,'"«»()\-\s]+/g, '');
+const norm = (s: any) => yoNorm(String(s || '')).toLowerCase().replace(/[!?.,'"«»()\-\s&]+/g, '');
+
+// External-genre keyword (normalized) → a catalog token, for fuzzy genre mapping.
+const GENRE_SYNONYMS: Record<string, string> = {
+  alternative: 'rock', альтернатива: 'rock', alternativerock: 'rock', altrock: 'rock', indierock: 'инди',
+  metalcore: 'метал', deathmetal: 'метал', heavymetal: 'метал', numetal: 'метал', metal: 'метал', djent: 'метал',
+  hardcore: 'панк', posthardcore: 'панк', postpunk: 'панк', emo: 'панк', хардкор: 'панк', grunge: 'rock',
+  rap: 'рэп', trap: 'рэп', трэп: 'рэп', hiphop: 'рэп', хипхоп: 'рэп',
+  house: 'electronic', techno: 'electronic', edm: 'electronic', dubstep: 'electronic', dnb: 'electronic',
+  drumandbass: 'electronic', electronica: 'electronic', dance: 'electronic', trance: 'electronic', электроника: 'electronic',
+  rnb: 'rb', randb: 'rb', soul: 'соул', funk: 'фанк',
+  classical: 'классическаямузыка', opera: 'классическаямузыка', опера: 'классическаямузыка',
+  worldmusic: 'world', этно: 'этно', folk: 'фолк',
+};
 
 async function safeJson(url: string, headers?: Record<string, string>): Promise<any> {
   try {
@@ -49,13 +62,36 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     ]);
 
     const genreByNorm = new Map<string, string>(genreRows.map((g: any) => [norm(g.name), g.id]));
+    // Token index — split each catalog genre name («Хип-хоп / Рэп, Hip-Hop / Rap»)
+    // by «,» / «/» into normalized tokens so a partial external genre can match.
+    const tokenToId = new Map<string, string>();
+    for (const g of genreRows as any[]) {
+      for (const part of String(g.name).split(/[,/]+/)) {
+        const tok = norm(part);
+        if (tok.length >= 2 && !tokenToId.has(tok)) tokenToId.set(tok, g.id);
+      }
+    }
+    const matchGenreId = (name: string): string | null => {
+      const n = norm(name);
+      if (!n) return null;
+      const exact = genreByNorm.get(n);
+      if (exact) return exact;
+      for (const [tok, id] of tokenToId) if (tok.length >= 3 && (n.includes(tok) || tok.includes(n))) return id;
+      for (const k of Object.keys(GENRE_SYNONYMS)) {
+        if (n === k || n.includes(k)) {
+          const id = tokenToId.get(GENRE_SYNONYMS[k]) ?? genreByNorm.get(GENRE_SYNONYMS[k]);
+          if (id) return id;
+        }
+      }
+      return null;
+    };
     const mapGenres = (names: string[]) => {
       const ids: string[] = []; const raw: string[] = [];
-      for (const n of names) {
-        if (!n) continue;
-        const id = genreByNorm.get(norm(n));
+      for (const nm of names) {
+        if (!nm) continue;
+        if (!raw.some((r) => norm(r) === norm(nm))) raw.push(nm);
+        const id = matchGenreId(nm);
         if (id && !ids.includes(id)) ids.push(id);
-        if (!raw.some((r) => norm(r) === norm(n))) raw.push(n);
       }
       return { ids, raw };
     };

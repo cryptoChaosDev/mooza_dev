@@ -91,6 +91,9 @@ export default function ArtistCreatePage() {
         socialLinks: {
           ...f.socialLinks,
           ...(c.links?.yandexMusic ? { yandex_music: c.links.yandexMusic } : {}),
+          ...(c.links?.spotify ? { spotify: c.links.spotify } : {}),
+          ...(c.links?.appleMusic ? { apple_music: c.links.appleMusic } : {}),
+          ...(c.links?.deezer ? { deezer: c.links.deezer } : {}),
           ...(c.links?.vk ? { vk: c.links.vk } : {}),
           ...(c.links?.soundcloud ? { soundcloud: c.links.soundcloud } : {}),
           ...(c.links?.website ? { website: c.links.website } : {}),
