@@ -5,7 +5,7 @@ import {
   ArrowLeft, MapPin, ExternalLink,
   Camera, Navigation, Edit3, X, Save, Loader2,
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
-  UserPlus, Trash2, Search,
+  UserPlus, Trash2, Search, Plus, Check,
   Settings, Link2, Share2, Tag, Crown, Shield, UserCog, UserCheck, UserX, Star,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
@@ -93,6 +93,9 @@ export default function ArtistPage() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [applyingLookup, setApplyingLookup] = useState(false);
+  const [foundReleases, setFoundReleases] = useState<any[]>([]);
+  const [selectedReleaseUrls, setSelectedReleaseUrls] = useState<Set<string>>(new Set());
+  const [importingReleases, setImportingReleases] = useState(false);
 
   // Image cropping (avatar / banner) before upload
   const [cropAvatarFile, setCropAvatarFile] = useState<File | null>(null);
@@ -350,10 +353,45 @@ export default function ArtistPage() {
           uploadAvatarMut.mutate(new File([blob], 'avatar.jpg', { type: (blob as any)?.type || 'image/jpeg' }));
         } catch { /* avatar best-effort */ }
       }
+      // Pull the artist's Apple Music releases for optional import (skip ones already added).
+      if (c.itunesId) {
+        try {
+          const { data } = await artistAPI.lookupReleases({ itunesId: c.itunesId, deezerId: c.deezerId });
+          const existing = new Set((releases || []).map((r: any) => String(r.url || '').split('?')[0]));
+          const fresh = (data.releases || []).filter((r: any) => !existing.has(String(r.url || '').split('?')[0]));
+          setFoundReleases(fresh);
+          setSelectedReleaseUrls(new Set(fresh.map((r: any) => r.url)));
+        } catch { /* releases are best-effort */ }
+      }
       toast.success('Данные подставлены — проверьте и сохраните');
     } finally {
       setApplyingLookup(false);
     }
+  };
+
+  const toggleReleaseSel = (url: string) => setSelectedReleaseUrls(prev => {
+    const n = new Set(prev); if (n.has(url)) n.delete(url); else n.add(url); return n;
+  });
+  const importReleases = async () => {
+    const toImport = foundReleases.filter(r => selectedReleaseUrls.has(r.url));
+    if (toImport.length === 0) return;
+    setImportingReleases(true);
+    let ok = 0;
+    for (const r of toImport) {
+      try {
+        await releaseAPI.create({
+          artistId: id!, platform: 'APPLE_MUSIC', url: r.url, title: r.title,
+          coverUrl: r.coverUrl || undefined, releaseDate: r.releaseDate || undefined, participants: [],
+        });
+        ok++;
+      } catch { /* skip a failed one */ }
+    }
+    setImportingReleases(false);
+    setFoundReleases([]);
+    setSelectedReleaseUrls(new Set());
+    queryClient.invalidateQueries({ queryKey: ['releases', 'artist', id] });
+    if (ok > 0) toast.success(`Импортировано релизов: ${ok}`);
+    else toast.error('Не удалось импортировать релизы');
   };
 
   const inviteMut = useMutation({
@@ -650,6 +688,40 @@ export default function ArtistPage() {
           <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
 
             <ArtistLookup onApply={applyLookupCandidate} applying={applyingLookup} />
+
+            {foundReleases.length > 0 && (
+              <div className="rounded-xl border border-dashed border-emerald-500/40 bg-emerald-500/5 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-emerald-300">Релизы на Apple Music ({foundReleases.length})</p>
+                  <button type="button" onClick={() => setFoundReleases([])} className="text-slate-500 hover:text-white"><X size={14} /></button>
+                </div>
+                <div className="max-h-52 overflow-y-auto space-y-1">
+                  {foundReleases.map((r: any) => {
+                    const sel = selectedReleaseUrls.has(r.url);
+                    return (
+                      <button key={r.url} type="button" onClick={() => toggleReleaseSel(r.url)}
+                        className={`w-full flex items-center gap-2.5 p-1.5 rounded-lg text-left transition-colors ${sel ? 'bg-emerald-600/20' : 'bg-slate-800/40 hover:bg-slate-800'}`}>
+                        {r.coverUrl
+                          ? <img src={r.coverUrl} alt="" className="w-9 h-9 rounded object-cover flex-shrink-0" />
+                          : <div className="w-9 h-9 rounded bg-slate-700 flex-shrink-0" />}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-white truncate">{r.title}</p>
+                          {r.releaseDate && <p className="text-[10px] text-slate-500">{new Date(r.releaseDate).getFullYear()}</p>}
+                        </div>
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${sel ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'}`}>
+                          {sel && <Check size={12} className="text-white" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <button type="button" onClick={importReleases} disabled={importingReleases || selectedReleaseUrls.size === 0}
+                  className="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center justify-center gap-1.5">
+                  {importingReleases ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                  Импортировать выбранные ({selectedReleaseUrls.size})
+                </button>
+              </div>
+            )}
 
             {/* Название */}
             <div>

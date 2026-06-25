@@ -333,6 +333,7 @@ export const artistAPI = {
   checkName: (name: string) => api.get('/artists/check-name', { params: { name } }),
   lookup: (q: string) => api.get('/artist-lookup', { params: { q } }),
   lookupAvatar: (url: string) => api.get('/artist-lookup/avatar', { params: { url }, responseType: 'blob' }),
+  lookupReleases: (params: { itunesId?: number | null; deezerId?: number | null }) => api.get('/artist-lookup/releases', { params }),
   requestVerification: (id: string, verificationUrl: string) =>
     api.patch(`/artists/${id}/request-verification`, { verificationUrl }),
   withdrawVerification: (id: string) => api.patch(`/artists/${id}/withdraw`),

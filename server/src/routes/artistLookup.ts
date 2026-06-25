@@ -104,12 +104,13 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const byName = new Map<string, any>();
     const ensure = (name: string) => {
       const k = norm(name);
-      if (!byName.has(k)) byName.set(k, { name, type: null as string | null, imageUrl: null as string | null, genres: [] as string[], links: {} as any, sources: [] as string[], popularity: 0, disambiguation: undefined as string | undefined });
+      if (!byName.has(k)) byName.set(k, { name, type: null as string | null, imageUrl: null as string | null, genres: [] as string[], links: {} as any, deezerId: null as number | null, itunesId: null as number | null, sources: [] as string[], popularity: 0, disambiguation: undefined as string | undefined });
       return byName.get(k);
     };
 
     for (const a of (dz?.data || [])) {
       const c = ensure(a.name);
+      if (!c.deezerId && a.id) c.deezerId = a.id;
       c.imageUrl = c.imageUrl || a.picture_xl || a.picture_big || a.picture_medium || null;
       if (a.link) c.links.deezer = a.link;
       c.popularity = Math.max(c.popularity, a.nb_fan || 0);
@@ -118,6 +119,7 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     }
     for (const a of (it?.results || [])) {
       const c = ensure(a.artistName);
+      if (!c.itunesId && a.artistId) c.itunesId = a.artistId;
       if (a.primaryGenreName) c.genres.push(a.primaryGenreName);
       if (a.artistLinkUrl) c.links.appleMusic = a.artistLinkUrl;
       if (!c.sources.includes('apple')) c.sources.push('apple');
@@ -135,6 +137,36 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     res.json(out);
   } catch (e: any) {
     console.error('[artist-lookup] GET /', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/artist-lookup/releases?itunesId= — the artist's albums from Apple Music
+// (iTunes) for import as Release cards (Apple Music is a supported Release platform).
+router.get('/releases', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const itunesId = String(req.query.itunesId || '').replace(/\D/g, '');
+    if (!itunesId) return res.json({ releases: [] });
+    const data = await safeJson(`https://itunes.apple.com/lookup?id=${itunesId}&entity=album&limit=80&country=RU`);
+    const seen = new Set<string>();
+    const releases: any[] = [];
+    for (const a of (data?.results || [])) {
+      if (a.wrapperType !== 'collection' || !a.collectionViewUrl || !a.collectionName) continue;
+      const k = norm(a.collectionName);
+      if (seen.has(k)) continue;
+      seen.add(k);
+      releases.push({
+        title: a.collectionName,
+        coverUrl: (a.artworkUrl100 || '').replace('100x100', '600x600') || a.artworkUrl60 || null,
+        releaseDate: a.releaseDate || null,
+        platform: 'APPLE_MUSIC',
+        url: String(a.collectionViewUrl).split('?')[0],
+      });
+    }
+    releases.sort((x, y) => String(y.releaseDate || '').localeCompare(String(x.releaseDate || '')));
+    res.json({ releases });
+  } catch (e: any) {
+    console.error('[artist-lookup] GET /releases', e);
     res.status(500).json({ error: e.message });
   }
 });
