@@ -900,6 +900,18 @@ export default function ArtistPage() {
           )}
         </div>
 
+        {/* Creator — explicit, visible to everyone */}
+        {ownerMember && (
+          <button
+            onClick={() => navigate(`/profile/${ownerMember.user.id}`)}
+            className="flex items-center gap-1.5 text-sm mb-1 group/creator"
+          >
+            <Crown size={12} className="text-amber-400 flex-shrink-0" />
+            <span className="text-slate-500">Создатель:</span>
+            <span className="text-slate-300 group-hover/creator:text-white transition-colors">{memberName(ownerMember)}</span>
+          </button>
+        )}
+
         {/* Status description (owner/admin) — what the current status means + next step. */}
         {isAdminOfArtist && ARTIST_STATUS_DESC[artist.status] && (
           <p className="text-xs text-slate-400 leading-relaxed mb-1.5">
