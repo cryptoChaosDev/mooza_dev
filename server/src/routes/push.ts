@@ -11,6 +11,38 @@ router.get('/vapid-public-key', (_req, res) => {
   res.json({ key });
 });
 
+// POST /api/push/resubscribe — SW-driven re-subscription after the browser rotates
+// the subscription (pushsubscriptionchange). No auth: the user is identified by the
+// OLD endpoint (only the device that held it knows it). Keeps push alive for users
+// who don't reopen the app — exactly the ones at risk of churning.
+router.post('/resubscribe', async (req: AuthRequest, res) => {
+  try {
+    const { oldEndpoint, subscription } = req.body;
+    const endpoint = subscription?.endpoint;
+    const p256dh = subscription?.keys?.p256dh;
+    const auth = subscription?.keys?.auth;
+    if (!endpoint || !p256dh || !auth) {
+      return res.status(400).json({ error: 'Invalid subscription data' });
+    }
+    const old = oldEndpoint
+      ? await prisma.pushSubscription.findUnique({ where: { endpoint: oldEndpoint } })
+      : null;
+    if (!old) return res.json({ ok: false }); // can't map to a user — ignore quietly
+
+    await prisma.pushSubscription.upsert({
+      where: { endpoint },
+      update: { userId: old.userId, p256dh, auth },
+      create: { userId: old.userId, endpoint, p256dh, auth },
+    });
+    if (oldEndpoint && oldEndpoint !== endpoint) {
+      await prisma.pushSubscription.deleteMany({ where: { endpoint: oldEndpoint } }).catch(() => {});
+    }
+    res.json({ ok: true });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.use(authenticate);
 
 // POST /api/push/subscribe — save push subscription
