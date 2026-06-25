@@ -29,6 +29,42 @@ self.addEventListener('push', (event) => {
   );
 });
 
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(base64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+// The browser rotated the push subscription — re-subscribe and tell the server so
+// push keeps working even for users who don't reopen the app (identified by the old
+// endpoint via the no-auth /resubscribe route).
+self.addEventListener('pushsubscriptionchange' as any, (event: any) => {
+  event.waitUntil(
+    (async () => {
+      try {
+        const oldEndpoint: string | undefined = event.oldSubscription?.endpoint;
+        const keyRes = await fetch('/api/push/vapid-public-key');
+        if (!keyRes.ok) return;
+        const { key } = await keyRes.json();
+        const sub = await self.registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(key) as unknown as ArrayBuffer,
+        });
+        await fetch('/api/push/resubscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ oldEndpoint, subscription: sub.toJSON() }),
+        });
+      } catch {
+        // best-effort
+      }
+    })(),
+  );
+});
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
 
