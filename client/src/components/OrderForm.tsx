@@ -271,6 +271,7 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
       const newId = isEdit ? order.id : saved.data.id;
       await uploadRefs(newId);
       queryClient.invalidateQueries({ queryKey: ['orders', 'mine'] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
       if (isEdit) queryClient.invalidateQueries({ queryKey: ['order', order.id] });
       toast.success('Заказ опубликован');
       onClose();
@@ -295,6 +296,7 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
       const newId = isEdit ? order.id : saved.data.id;
       await uploadRefs(newId);
       queryClient.invalidateQueries({ queryKey: ['orders', 'mine'] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
       if (isEdit) queryClient.invalidateQueries({ queryKey: ['order', order.id] });
       onClose();
     } catch (e: any) {

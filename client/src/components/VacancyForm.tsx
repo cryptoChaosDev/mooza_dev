@@ -302,6 +302,9 @@ export default function VacancyForm({
 
   const invalidate = (id: string) => {
     queryClient.invalidateQueries({ queryKey: ['vacancies', 'mine', artistId] });
+    // Refresh the Поток so a just-published vacancy post appears (or an
+    // unpublished one disappears) without a manual page reload.
+    queryClient.invalidateQueries({ queryKey: ['feed'] });
     if (isEdit) queryClient.invalidateQueries({ queryKey: ['vacancy', id] });
   };
 
