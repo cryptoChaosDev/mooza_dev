@@ -11,7 +11,7 @@ import {
   WORK_FORMAT_OPTIONS, GEOGRAPHY_OPTIONS, EMPLOYMENT_OPTIONS, PAYMENT_OPTIONS,
   PAYMENT_WITH_COMPENSATION, type Option,
 } from '../lib/vacancyOptions';
-import { matchesLinkSource, LINK_SOURCE_LABELS } from '../lib/materialLinks';
+import { isAllowedLinkUrl, detectLinkSource } from '../lib/materialLinks';
 
 function formatBytes(n?: number): string {
   if (!n) return '';
@@ -31,12 +31,6 @@ type VacancyFilter = { id: string; name: string; values: { id: string; value: st
 type VacancyRefLink = { url: string; title: string; source: string };
 type OwnerArtist = { id: string; name: string; avatar?: string };
 
-const VACANCY_LINK_SOURCES: { id: string; label: string }[] = [
-  { id: 'yandex_disk', label: 'Яндекс.Диск' },
-  { id: 'google_docs', label: 'Google Docs' },
-  { id: 'dropbox',     label: 'Dropbox' },
-  { id: 'youtube',     label: 'YouTube' },
-];
 
 const VACANCY_MAX_REF_BYTES = 20 * 1024 * 1024; // 20 МБ суммарно
 
@@ -196,7 +190,7 @@ export default function VacancyForm({
   };
   const removeRefFile = (i: number) => setRefFiles(prev => prev.filter((_, idx) => idx !== i));
 
-  const addRefLink = () => setRefLinks(prev => [...prev, { url: '', title: '', source: 'yandex_disk' }]);
+  const addRefLink = () => setRefLinks(prev => [...prev, { url: '', title: '', source: 'other' }]);
   const updateRefLink = (i: number, patch: Partial<VacancyRefLink>) =>
     setRefLinks(prev => prev.map((l, idx) => idx === i ? { ...l, ...patch } : l));
   const removeRefLink = (i: number) => setRefLinks(prev => prev.filter((_, idx) => idx !== i));
@@ -231,7 +225,7 @@ export default function VacancyForm({
     requirePortfolio,
     referenceLinks: refLinks
       .filter(l => l.url.trim().length > 0)
-      .map(l => ({ url: l.url.trim(), title: l.title.trim(), source: l.source })),
+      .map(l => ({ url: l.url.trim(), title: l.title.trim(), source: detectLinkSource(l.url) || 'other' })),
     status,
   });
 
@@ -311,9 +305,9 @@ export default function VacancyForm({
 
   // «Материалы»: каждая непустая ссылка должна соответствовать выбранному источнику.
   const refLinksValid = (): boolean => {
-    const bad = refLinks.find(l => l.url.trim() && !matchesLinkSource(l.source, l.url));
+    const bad = refLinks.find(l => l.url.trim() && !isAllowedLinkUrl(l.url));
     if (bad) {
-      toast.error(`Ссылка не похожа на ${LINK_SOURCE_LABELS[bad.source] || 'выбранный источник'}. В «Материалах» допустимы только Яндекс.Диск, Google Docs, Dropbox, YouTube.`);
+      toast.error('Ссылки в «Материалах» допустимы только с Яндекс.Диск, Google Docs, Dropbox, YouTube.');
       return false;
     }
     return true;
@@ -579,21 +573,15 @@ export default function VacancyForm({
           {refLinks.map((link, i) => (
             <div key={i} className="space-y-1.5 p-2 rounded-xl border border-slate-700/50 bg-slate-800/40">
               <div className="flex gap-2">
-                <select
-                  value={link.source}
-                  onChange={e => updateRefLink(i, { source: e.target.value })}
-                  className="px-2 py-2 bg-slate-800/60 border border-slate-700/50 rounded-lg text-xs text-white focus:outline-none focus:ring-2 focus:ring-primary-500 transition flex-shrink-0"
-                >
-                  {VACANCY_LINK_SOURCES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                </select>
+                <input type="url" value={link.url}
+                  onChange={e => updateRefLink(i, { url: e.target.value })}
+                  placeholder="Ссылка: Яндекс.Диск, Google Docs, Dropbox, YouTube"
+                  className={`${inputCls} flex-1 min-w-0`} />
                 <button type="button" onClick={() => removeRefLink(i)}
                   className="p-2 rounded-lg border border-slate-700/50 text-slate-500 hover:text-red-400 hover:border-red-500/40 transition-colors flex-shrink-0">
                   <X size={14} />
                 </button>
               </div>
-              <input type="url" value={link.url}
-                onChange={e => updateRefLink(i, { url: e.target.value })}
-                placeholder="https://..." className={inputCls} />
               <input type="text" value={link.title} maxLength={100}
                 onChange={e => updateRefLink(i, { title: e.target.value })}
                 placeholder="Название (необязательно)" className={inputCls} />
@@ -603,6 +591,7 @@ export default function VacancyForm({
             className="w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-xs">
             <Plus size={13} />Добавить ссылку
           </button>
+          <p className="text-[11px] text-slate-500">Принимаются только ссылки с Яндекс.Диск, Google Docs, Dropbox, YouTube.</p>
         </div>
       </div>
 
