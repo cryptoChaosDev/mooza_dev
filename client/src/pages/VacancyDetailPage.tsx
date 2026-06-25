@@ -60,6 +60,9 @@ export default function VacancyDetailPage() {
 
   // Lock body scroll while the inline cooperation-offer modal is open (iOS jump fix).
   useScrollLock(!!coopResponseId || editing);
+  // Local «today» (YYYY-MM-DD) — cooperation start date cannot be earlier than this.
+  const _td = new Date();
+  const todayStr = `${_td.getFullYear()}-${String(_td.getMonth() + 1).padStart(2, '0')}-${String(_td.getDate()).padStart(2, '0')}`;
 
   const { data: vacancy, isLoading } = useQuery({
     queryKey: ['vacancy', vacancyId],
@@ -638,12 +641,21 @@ export default function VacancyDetailPage() {
                           >
                             <MessageCircle size={13} />Написать
                           </button>
-                          <button
-                            onClick={() => { setCoopResponseId(r.id); setCoopStartDate(''); setCoopConditions(''); setCoopCompensation(''); setCoopExtra(''); }}
-                            className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors"
-                          >
-                            <HandshakeIcon size={13} />Выбрать кандидата
-                          </button>
+                          {(() => {
+                            // Disable once a (non-rejected) cooperation offer was already sent to this candidate.
+                            const offered = offers.some((o: any) => o.status !== 'rejected');
+                            return (
+                              <button
+                                disabled={offered}
+                                onClick={() => { if (offered) return; setCoopResponseId(r.id); setCoopStartDate(''); setCoopConditions(''); setCoopCompensation(''); setCoopExtra(''); }}
+                                className={`flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                                  offered ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-primary-600 hover:bg-primary-500 text-white'
+                                }`}
+                              >
+                                <HandshakeIcon size={13} />{offered ? 'Оффер отправлен' : 'Выбрать кандидата'}
+                              </button>
+                            );
+                          })()}
                         </div>
                       </div>
                     );
@@ -792,8 +804,9 @@ export default function VacancyDetailPage() {
               <input
                 type="date"
                 value={coopStartDate}
+                min={todayStr}
                 onChange={e => setCoopStartDate(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full min-w-0 appearance-none px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </div>
             <div>
@@ -831,6 +844,7 @@ export default function VacancyDetailPage() {
               <button
                 onClick={() => {
                   if (!coopStartDate) { toast.error('Укажите дату начала'); return; }
+                  if (coopStartDate < todayStr) { toast.error('Дата начала не может быть раньше сегодня'); return; }
                   if (!coopConditions.trim()) { toast.error('Опишите условия'); return; }
                   if (!coopCompensation.trim()) { toast.error('Укажите вознаграждение'); return; }
                   coopMut.mutate(coopResponseId);
