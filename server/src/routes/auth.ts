@@ -108,6 +108,7 @@ const registerSchema = z.object({
   userProfessions: z.array(z.object({
     professionId: z.string(),
     features: z.array(z.string()).optional(),
+    selectedCustomFilterValueIds: z.array(z.string()).optional(),
   })).optional(),
   // Step 6: Artist/Group + Employer
   artistIds: z.array(z.string()).optional(),
@@ -335,7 +336,15 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
             referralLinkUsed: refLink ? p.referralCode : undefined,
             emailVerified: true,
             userProfessions: p.userProfessions && p.userProfessions.length > 0
-              ? { create: p.userProfessions.map((up: any) => ({ professionId: up.professionId, features: up.features || [] })) }
+              ? { create: p.userProfessions.map((up: any) => ({
+                  professionId: up.professionId,
+                  features: up.features || [],
+                  // Carry the profession filters chosen during registration into the
+                  // profile, so the user doesn't have to re-select them.
+                  selectedCustomFilterValues: {
+                    connect: (up.selectedCustomFilterValueIds || []).map((id: string) => ({ id })),
+                  },
+                })) }
               : undefined,
             userArtists: p.artistIds && p.artistIds.length > 0
               ? { create: p.artistIds.map((artistId: string) => ({ artistId })) }
