@@ -617,6 +617,7 @@ model User {
   vacancies        Vacancy[]         @relation("VacancyAuthor")
   vacancyResponses VacancyResponse[] @relation("VacancyApplicant")
   vacancyOffers    VacancyOffer[]    @relation("VacancyOfferApplicant")
+  vacancyCandidateOffers VacancyCandidateOffer[] @relation("VacancyCandidateOffer")
 
   occupancyStatus  String?  // 'closed' | 'considering' | 'open'
 
@@ -1521,11 +1522,25 @@ model Vacancy {
   referenceLinks VacancyReferenceLink[]
   responses      VacancyResponse[]
   offers         VacancyOffer[]
+  candidateOffers VacancyCandidateOffer[]
   posts          Post[]
   @@index([artistId])
   @@index([authorId])
   @@index([professionId])
   @@index([status])
+}
+
+// «Предложить вакансию» — a persisted nudge to a matched candidate (no formal
+// offer record; just marks that the owner already invited this candidate).
+model VacancyCandidateOffer {
+  id          String   @id @default(uuid())
+  vacancyId   String
+  candidateId String
+  createdAt   DateTime @default(now())
+  vacancy   Vacancy @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  candidate User    @relation("VacancyCandidateOffer", fields: [candidateId], references: [id], onDelete: Cascade)
+  @@unique([vacancyId, candidateId])
+  @@index([vacancyId])
 }
 
 model VacancyResponse {

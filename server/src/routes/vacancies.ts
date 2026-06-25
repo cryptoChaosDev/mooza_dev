@@ -355,12 +355,17 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
     const myResponse = !isOwner && meId
       ? (responses.find((r) => r.applicantId === meId) ?? null)
       : undefined;
+    // Candidates the owner already nudged via «Предложить вакансию» (persisted).
+    const offeredCandidateIds = isOwner
+      ? (await prisma.vacancyCandidateOffer.findMany({ where: { vacancyId: vacancy.id }, select: { candidateId: true } })).map((o) => o.candidateId)
+      : undefined;
 
     res.json({
       ...rest,
       isOwner,
       responses: isOwner ? responses : undefined,
       myResponse,
+      offeredCandidateIds,
     });
   } catch (e: any) {
     console.error('[vacancies] GET /:id', e);
@@ -654,15 +659,24 @@ router.post('/:id/offer', authenticate, async (req: AuthRequest, res) => {
     if (!(await assertArtistOwner(meId, vacancy.artistId))) return res.status(403).json({ error: 'Forbidden' });
     if (candidateId === meId) return res.status(400).json({ error: 'Cannot offer to yourself' });
 
-    const aName = await artistName(vacancy.artistId);
-    await notify({
-      userId: candidateId,
-      actorId: meId,
-      type: 'vacancy_offered',
-      title: 'Вам предложили вакансию',
-      body: `${aName} предлагает вакансию «${vacancy.title}»`,
-      link: `/vacancies/${vacancy.id}`,
+    // Persist the nudge (idempotent) so «Предложено» survives reloads; notify the
+    // candidate only the first time they are offered this vacancy.
+    const existing = await prisma.vacancyCandidateOffer.findUnique({
+      where: { vacancyId_candidateId: { vacancyId: vacancy.id, candidateId } },
+      select: { id: true },
     });
+    if (!existing) {
+      await prisma.vacancyCandidateOffer.create({ data: { vacancyId: vacancy.id, candidateId } });
+      const aName = await artistName(vacancy.artistId);
+      await notify({
+        userId: candidateId,
+        actorId: meId,
+        type: 'vacancy_offered',
+        title: 'Вам предложили вакансию',
+        body: `${aName} предлагает вакансию «${vacancy.title}»`,
+        link: `/vacancies/${vacancy.id}`,
+      });
+    }
 
     res.json({ ok: true });
   } catch (e: any) {

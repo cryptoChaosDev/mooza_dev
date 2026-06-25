@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -60,6 +60,11 @@ export default function VacancyDetailPage() {
     queryFn: async () => { const { data } = await vacancyAPI.getOne(vacancyId!); return data as any; },
     enabled: !!vacancyId,
   });
+
+  // Seed «Предложено» marks from the persisted offers (owner view).
+  useEffect(() => {
+    if (vacancy?.offeredCandidateIds) setOfferedIds(new Set(vacancy.offeredCandidateIds));
+  }, [vacancy?.offeredCandidateIds]);
 
   const isOwner = !!vacancy?.isOwner;
 
