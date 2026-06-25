@@ -24,6 +24,7 @@ import RolePicker from '../components/RolePicker';
 import ConfirmDialog from '../components/ConfirmDialog';
 import MediaRail from '../components/MediaRail';
 import MediaItemForm from '../components/MediaItemForm';
+import ArtistLookup from '../components/ArtistLookup';
 import { useAuthStore } from '../stores/authStore';
 import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
@@ -91,6 +92,7 @@ export default function ArtistPage() {
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
   const [isEditing, setIsEditing] = useState(false);
+  const [applyingLookup, setApplyingLookup] = useState(false);
 
   // Image cropping (avatar / banner) before upload
   const [cropAvatarFile, setCropAvatarFile] = useState<File | null>(null);
@@ -321,6 +323,38 @@ export default function ArtistPage() {
     },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
+
+  // «Найти артиста» — autofill the edit form from Deezer/Apple Music (same as create).
+  const applyLookupCandidate = async (c: any) => {
+    setApplyingLookup(true);
+    try {
+      setForm(f => ({
+        ...f,
+        name: c.name || f.name,
+        type: c.type || f.type,
+        genreIds: c.genreIds?.length ? c.genreIds : f.genreIds,
+        socialLinks: {
+          ...f.socialLinks,
+          ...(c.links?.yandexMusic ? { yandex_music: c.links.yandexMusic } : {}),
+          ...(c.links?.spotify ? { spotify: c.links.spotify } : {}),
+          ...(c.links?.appleMusic ? { apple_music: c.links.appleMusic } : {}),
+          ...(c.links?.deezer ? { deezer: c.links.deezer } : {}),
+          ...(c.links?.vk ? { vk: c.links.vk } : {}),
+          ...(c.links?.soundcloud ? { soundcloud: c.links.soundcloud } : {}),
+          ...(c.links?.website ? { website: c.links.website } : {}),
+        },
+      }));
+      if (c.imageUrl) {
+        try {
+          const { data: blob } = await artistAPI.lookupAvatar(c.imageUrl);
+          uploadAvatarMut.mutate(new File([blob], 'avatar.jpg', { type: (blob as any)?.type || 'image/jpeg' }));
+        } catch { /* avatar best-effort */ }
+      }
+      toast.success('Данные подставлены — проверьте и сохраните');
+    } finally {
+      setApplyingLookup(false);
+    }
+  };
 
   const inviteMut = useMutation({
     mutationFn: () => groupAPI.invite(id!, inviteFriendId, inviteProfessionId),
@@ -614,6 +648,8 @@ export default function ArtistPage() {
 
           {/* Scrollable body */}
           <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+
+            <ArtistLookup onApply={applyLookupCandidate} applying={applyingLookup} />
 
             {/* Название */}
             <div>
