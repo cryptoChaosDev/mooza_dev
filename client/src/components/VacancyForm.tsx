@@ -11,7 +11,6 @@ import {
   WORK_FORMAT_OPTIONS, GEOGRAPHY_OPTIONS, EMPLOYMENT_OPTIONS, PAYMENT_OPTIONS,
   PAYMENT_WITH_COMPENSATION, type Option,
 } from '../lib/vacancyOptions';
-import { useScrollLock } from '../lib/scrollLock';
 
 function formatBytes(n?: number): string {
   if (!n) return '';
@@ -73,7 +72,6 @@ export default function VacancyForm({
 }: { onClose: () => void; vacancy?: any; artistId?: string }) {
   const isEdit = !!vacancy;
   const queryClient = useQueryClient();
-  useScrollLock(true); // lock body scroll while mounted so the iOS background doesn't «jump»
   const inputCls = "w-full px-3.5 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white placeholder-slate-500";
   const labelCls = "block text-xs font-semibold mb-1 text-slate-400";
 

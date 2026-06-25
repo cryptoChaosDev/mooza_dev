@@ -12,7 +12,7 @@ import { createPortal } from 'react-dom';
 import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI, releaseAPI, clipAPI, vacancyAPI } from '../lib/api';
 import VacancyForm from '../components/VacancyForm';
 import { workFormatLabel } from '../lib/vacancyOptions';
-import { lockScroll, unlockScroll } from '../lib/scrollLock';
+import { lockScroll, unlockScroll, useScrollLock } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
 import { yoNorm } from '../lib/search';
 import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
@@ -154,6 +154,9 @@ export default function ArtistPage() {
   const [showClipForm, setShowClipForm] = useState(false);
   // ── Vacancies create-form modal ────────────────────────────────────────────
   const [showVacancyForm, setShowVacancyForm] = useState(false);
+  // VacancyForm is inline in list/detail pages but a fixed overlay here — lock
+  // body scroll for this overlay (the form no longer self-locks).
+  useScrollLock(showVacancyForm);
 
   const { data: artist, isLoading, isError } = useQuery({
     queryKey: ['artist', id],

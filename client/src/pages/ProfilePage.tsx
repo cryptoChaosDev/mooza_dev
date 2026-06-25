@@ -4,7 +4,6 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userAPI, referenceAPI, connectionAPI, groupAPI, dealAPI, authAPI, orderAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
-import { useScrollLock } from '../lib/scrollLock';
 import AudioPlayer from '../components/AudioPlayer';
 import {
   Camera, Save, Check, X, MapPin, Briefcase, Star, LogOut,
@@ -160,9 +159,6 @@ export default function ProfilePage() {
   const [serviceFormOpen, setServiceFormOpen] = useState<'add' | number | null>(null);
   // Order ADD form (customer-posted «Заказ») — open/closed.
   const [orderFormOpen, setOrderFormOpen] = useState(false);
-  // Lock body scroll while the inline ServiceForm modal is open (iOS «jump» fix).
-  // OrderForm/VacancyForm lock themselves; this covers the ServiceForm render-fn.
-  useScrollLock(serviceFormOpen !== null);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
   const [sections, setSections] = useState<any[]>([]);
