@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Loader2, Camera, Copy, Check, ShieldCheck, Image as ImageIcon, Search } from 'lucide-react';
-import { artistAPI, referenceAPI, roleAPI } from '../lib/api';
+import { ArrowLeft, Loader2, Camera, Copy, Check, ShieldCheck, Image as ImageIcon, Search, Plus } from 'lucide-react';
+import { artistAPI, referenceAPI, roleAPI, releaseAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { avatarUrl } from '../lib/avatar';
 import SelectSheet from '../components/SelectSheet';
@@ -64,6 +64,9 @@ export default function ArtistCreatePage() {
   const [lookupResults, setLookupResults] = useState<any[]>([]);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [applying, setApplying] = useState(false);
+  const [foundReleases, setFoundReleases] = useState<any[]>([]);
+  const [selectedReleaseUrls, setSelectedReleaseUrls] = useState<Set<string>>(new Set());
+  const [importingReleases, setImportingReleases] = useState(false);
 
   const set = (key: keyof Form, value: any) => setForm(f => ({ ...f, [key]: value }));
 
@@ -106,10 +109,41 @@ export default function ArtistCreatePage() {
           setAvatarPreview(URL.createObjectURL(blob));
         } catch { /* avatar is best-effort */ }
       }
+      if (c.itunesId) {
+        try {
+          const { data } = await artistAPI.lookupReleases({ itunesId: c.itunesId, deezerId: c.deezerId });
+          setFoundReleases(data.releases || []);
+          setSelectedReleaseUrls(new Set((data.releases || []).map((r: any) => r.url)));
+        } catch { /* releases are best-effort */ }
+      }
       setLookupResults([]);
       setLookupQuery('');
       toast.success('Данные подставлены — проверьте и при необходимости поправьте');
     } finally { setApplying(false); }
+  };
+
+  const toggleReleaseSel = (url: string) => setSelectedReleaseUrls(prev => {
+    const n = new Set(prev); if (n.has(url)) n.delete(url); else n.add(url); return n;
+  });
+  const importReleases = async () => {
+    if (!created) return;
+    const toImport = foundReleases.filter(r => selectedReleaseUrls.has(r.url));
+    if (toImport.length === 0) return;
+    setImportingReleases(true);
+    let ok = 0;
+    for (const r of toImport) {
+      try {
+        await releaseAPI.create({
+          artistId: created.id, platform: 'APPLE_MUSIC', url: r.url, title: r.title,
+          coverUrl: r.coverUrl || undefined, releaseDate: r.releaseDate || undefined, participants: [],
+        });
+        ok++;
+      } catch { /* skip a failed one */ }
+    }
+    setImportingReleases(false);
+    setFoundReleases([]);
+    if (ok > 0) toast.success(`Импортировано релизов: ${ok}`);
+    else toast.error('Не удалось импортировать релизы');
   };
 
   const { data: genreOptions = [] } = useQuery({
@@ -453,6 +487,37 @@ export default function ArtistCreatePage() {
                 </button>
               </div>
             </div>
+
+            {foundReleases.length > 0 && (
+              <div className="p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/5 space-y-2">
+                <p className="text-xs font-semibold text-emerald-300">Импортировать релизы с Apple Music ({foundReleases.length})</p>
+                <div className="max-h-52 overflow-y-auto space-y-1">
+                  {foundReleases.map((r: any) => {
+                    const sel = selectedReleaseUrls.has(r.url);
+                    return (
+                      <button key={r.url} type="button" onClick={() => toggleReleaseSel(r.url)}
+                        className={`w-full flex items-center gap-2.5 p-1.5 rounded-lg text-left transition-colors ${sel ? 'bg-emerald-600/20' : 'bg-slate-800/40 hover:bg-slate-800'}`}>
+                        {r.coverUrl
+                          ? <img src={r.coverUrl} alt="" className="w-9 h-9 rounded object-cover flex-shrink-0" />
+                          : <div className="w-9 h-9 rounded bg-slate-700 flex-shrink-0" />}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs text-white truncate">{r.title}</p>
+                          {r.releaseDate && <p className="text-[10px] text-slate-500">{new Date(r.releaseDate).getFullYear()}</p>}
+                        </div>
+                        <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${sel ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'}`}>
+                          {sel && <Check size={12} className="text-white" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <button type="button" onClick={importReleases} disabled={importingReleases || selectedReleaseUrls.size === 0}
+                  className="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center justify-center gap-1.5">
+                  {importingReleases ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
+                  Импортировать выбранные ({selectedReleaseUrls.size})
+                </button>
+              </div>
+            )}
 
             <div className="p-3 rounded-xl bg-primary-500/5 border border-primary-500/20">
               <p className="text-xs text-slate-300 leading-relaxed mb-3">
