@@ -501,20 +501,29 @@ export default function UserProfilePage() {
                   <Briefcase size={14} className="text-primary-400" />
                   <span className="text-sm font-semibold text-white">Профессии</span>
                 </div>
-                <div className="px-4 pt-3 pb-3">
-                  <p className="text-sm leading-relaxed">
-                    {user.userProfessions.map((up: any, i: number) => (
-                      <span key={up.professionId ?? i}>
+                <div className="px-4 pt-3 pb-3 space-y-3">
+                  {user.userProfessions.map((up: any, i: number) => {
+                    const cfvs: any[] = up.selectedCustomFilterValues || [];
+                    return (
+                      <div key={up.professionId ?? i}>
                         <button
                           onClick={() => setSelectedProfession(up)}
-                          className="text-primary-400 hover:text-primary-300 font-medium underline underline-offset-2 decoration-primary-500/40 hover:decoration-primary-400 transition-colors"
+                          className="text-primary-400 hover:text-primary-300 font-medium underline underline-offset-2 decoration-primary-500/40 hover:decoration-primary-400 transition-colors text-sm"
                         >
                           {up.profession?.name}
                         </button>
-                        {i < user.userProfessions.length - 1 && <span className="text-slate-500">, </span>}
-                      </span>
-                    ))}
-                  </p>
+                        {cfvs.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {cfvs.map((cfv: any) => (
+                              <span key={cfv.id} className="text-[10px] bg-slate-700/50 text-slate-400 px-2 py-0.5 rounded-full">
+                                {cfv.value}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
