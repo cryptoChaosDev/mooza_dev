@@ -37,11 +37,16 @@ const GENRE_SYNONYMS: Record<string, string> = {
 };
 
 async function safeJson(url: string, headers?: Record<string, string>): Promise<any> {
+  // Short timeout so an unreachable source (e.g. MusicBrainz is unroutable from the
+  // RU host) can't stall the whole lookup — we just drop that source.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 4000);
   try {
-    const r = await fetch(url, { headers });
+    const r = await fetch(url, { headers, signal: ctrl.signal });
     if (!r.ok) return null;
     return await r.json();
   } catch { return null; }
+  finally { clearTimeout(timer); }
 }
 
 // GET /api/artist-lookup?q= — candidate artists from external catalogs
