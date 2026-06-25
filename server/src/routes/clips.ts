@@ -11,15 +11,14 @@ const PLATFORMS: ClipPlatform[] = ['VK_VIDEO', 'RUTUBE', 'YOUTUBE'];
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-// Artist admin = confirmed UserArtist with isAdmin true, OR a system admin.
+// Artist admin = confirmed UserArtist with isAdmin true. System admins do NOT get
+// edit rights on artists they don't belong to.
 async function isArtistAdmin(artistId: string, userId: string): Promise<boolean> {
   const ua = await prisma.userArtist.findFirst({
     where: { artistId, userId, isAdmin: true, inviteStatus: 'ACCEPTED' },
     select: { id: true },
   });
-  if (ua) return true;
-  const me = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
-  return !!me?.isAdmin;
+  return !!ua;
 }
 
 async function actorName(userId: string): Promise<string> {
