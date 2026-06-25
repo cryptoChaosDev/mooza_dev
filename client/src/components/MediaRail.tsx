@@ -5,6 +5,8 @@ export interface RailItem {
   id: string;
   title: string;
   coverUrl?: string | null;
+  /** Optional second line under the title (e.g. «Профессия · Формат» for vacancies). */
+  subtitle?: string;
 }
 
 interface Props {
@@ -17,16 +19,19 @@ interface Props {
   onAdd?: () => void;
   /** Optional route for a «Смотреть все» link in the header (e.g. vacancies tabs). */
   seeAllTo?: string;
+  /** Optional count shown next to the title (e.g. active vacancies). */
+  count?: number;
 }
 
 /** Horizontal slider of cover tiles for releases / clips on the artist page. */
-export default function MediaRail({ title, items, to, showAdd = false, onAdd, seeAllTo }: Props) {
+export default function MediaRail({ title, items, to, showAdd = false, onAdd, seeAllTo, count }: Props) {
   const navigate = useNavigate();
 
   return (
     <div className="mb-4">
       <div className="flex items-center gap-2 mb-3">
         <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">{title}</span>
+        {typeof count === 'number' && count > 0 && <span className="text-[11px] text-slate-500">{count}</span>}
         <div className="flex-1 h-px bg-slate-800" />
         {seeAllTo && (
           <button
@@ -65,6 +70,7 @@ export default function MediaRail({ title, items, to, showAdd = false, onAdd, se
               )}
             </div>
             <span className="mt-1.5 text-xs text-slate-300 text-center line-clamp-2 w-full">{it.title}</span>
+            {it.subtitle && <span className="text-[10px] text-slate-500 text-center line-clamp-1 w-full">{it.subtitle}</span>}
           </button>
         ))}
       </div>

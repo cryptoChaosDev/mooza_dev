@@ -11,6 +11,7 @@ import {
 import { createPortal } from 'react-dom';
 import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI, releaseAPI, clipAPI, vacancyAPI } from '../lib/api';
 import VacancyForm from '../components/VacancyForm';
+import { workFormatLabel } from '../lib/vacancyOptions';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
 import { yoNorm } from '../lib/search';
@@ -1211,7 +1212,13 @@ export default function ArtistPage() {
         {viewerIsAdmin && (
           <MediaRail
             title="Мои вакансии"
-            items={myVacancies.map((v: any) => ({ id: v.id, title: v.title }))}
+            items={myVacancies.map((v: any) => ({
+              id: v.id,
+              title: v.title,
+              subtitle: [v.profession?.name, v.workFormat ? workFormatLabel(v.workFormat) : '']
+                .filter(Boolean).join(' · '),
+            }))}
+            count={myVacancies.filter((v: any) => v.status === 'active').length}
             to="/vacancies"
             showAdd={viewerIsOwner}
             onAdd={() => setShowVacancyForm(true)}
