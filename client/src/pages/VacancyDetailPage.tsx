@@ -52,6 +52,8 @@ export default function VacancyDetailPage() {
   // Archive prompt dismissal (client-side)
   const [archiveDismissed, setArchiveDismissed] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [offeredIds, setOfferedIds] = useState<Set<string>>(new Set());
+  const [offeringId, setOfferingId] = useState<string | null>(null);
 
   const { data: vacancy, isLoading } = useQuery({
     queryKey: ['vacancy', vacancyId],
@@ -114,8 +116,13 @@ export default function VacancyDetailPage() {
 
   const offerMut = useMutation({
     mutationFn: (candidateId: string) => vacancyAPI.offerCandidate(vacancyId!, candidateId),
-    onSuccess: () => toast.success('Вакансия предложена кандидату'),
+    onMutate: (candidateId: string) => setOfferingId(candidateId),
+    onSuccess: (_data, candidateId) => {
+      setOfferedIds(prev => { const n = new Set(prev); n.add(candidateId); return n; });
+      toast.success('Вакансия предложена кандидату');
+    },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось предложить вакансию')),
+    onSettled: () => setOfferingId(null),
   });
 
   const respondMut = useMutation({
@@ -539,13 +546,20 @@ export default function VacancyDetailPage() {
                             </span>
                           </div>
                         </button>
-                        <button
-                          onClick={() => offerMut.mutate(u.id)}
-                          disabled={offerMut.isPending}
-                          className="flex-shrink-0 px-3 py-1.5 text-xs font-medium bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors disabled:opacity-50"
-                        >
-                          Предложить вакансию
-                        </button>
+                        {offeredIds.has(u.id) ? (
+                          <span className="flex-shrink-0 px-3 py-1.5 text-xs font-medium text-green-400 flex items-center gap-1">
+                            <Check size={13} /> Предложено
+                          </span>
+                        ) : (
+                          <button
+                            onClick={() => offerMut.mutate(u.id)}
+                            disabled={offeringId === u.id}
+                            className="flex-shrink-0 px-3 py-1.5 text-xs font-medium bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors disabled:opacity-50 flex items-center gap-1"
+                          >
+                            {offeringId === u.id && <Loader2 size={13} className="animate-spin" />}
+                            Предложить вакансию
+                          </button>
+                        )}
                       </div>
                     );
                   })}
