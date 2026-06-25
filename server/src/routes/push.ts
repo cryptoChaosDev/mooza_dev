@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { getPushStats } from '../utils/webpush';
 
 const router = Router();
 
@@ -44,6 +45,13 @@ router.post('/resubscribe', async (req: AuthRequest, res) => {
 });
 
 router.use(authenticate);
+
+// GET /api/push/stats — push delivery counters since last restart (admin only).
+router.get('/stats', async (req: AuthRequest, res) => {
+  const me = await prisma.user.findUnique({ where: { id: req.userId! }, select: { isAdmin: true } });
+  if (!me?.isAdmin) return res.status(403).json({ error: 'Forbidden' });
+  res.json(getPushStats());
+});
 
 // POST /api/push/subscribe — save push subscription
 router.post('/subscribe', async (req: AuthRequest, res) => {
