@@ -144,16 +144,20 @@ export function emitToUser(userId: string, event: string, data: unknown) {
   }
 }
 
-// Emit or push notification if offline
+// Emit to the user's live sockets AND send a push. The push is sent even when the
+// user is "online" by socket — an online socket only means a tab/PWA is connected,
+// and it may be backgrounded, where the in-app socket update is invisible and only a
+// push actually reaches them (this was why chat messages silently produced no push).
+// The service worker suppresses the banner when a window is focused, so an actively
+// viewing user doesn't get a redundant banner.
 export async function notifyUser(
   userId: string,
   event: string,
   data: unknown,
   push?: PushPayload
 ) {
-  if (isUserOnline(userId)) {
-    emitToUser(userId, event, data);
-  } else if (push) {
+  emitToUser(userId, event, data);
+  if (push) {
     try {
       await sendPushToUser(userId, push);
     } catch {}

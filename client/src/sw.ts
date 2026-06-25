@@ -20,12 +20,20 @@ self.addEventListener('push', (event) => {
   }
 
   event.waitUntil(
-    self.registration.showNotification(payload.title, {
-      body: payload.body,
-      icon: payload.icon || '/pwa-192x192.png',
-      badge: '/pwa-192x192.png',
-      data: { link: payload.link || '/' },
-    }),
+    (async () => {
+      // If a window is focused/visible, the user is actively in the app and the live
+      // socket update already surfaces this — skip the redundant banner. Backgrounded
+      // and offline users (no visible window) still get the push.
+      const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const active = wins.some((c) => (c as WindowClient).focused || c.visibilityState === 'visible');
+      if (active) return;
+      await self.registration.showNotification(payload.title, {
+        body: payload.body,
+        icon: payload.icon || '/pwa-192x192.png',
+        badge: '/pwa-192x192.png',
+        data: { link: payload.link || '/' },
+      });
+    })(),
   );
 });
 
