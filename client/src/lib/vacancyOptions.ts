@@ -27,7 +27,6 @@ export const EMPLOYMENT_OPTIONS: Option[] = [
 
 export const PAYMENT_OPTIONS: Option[] = [
   { id: 'free', label: 'Бесплатно' },
-  { id: 'respect', label: 'За респект' },
   { id: 'barter', label: 'Бартер' },
   { id: 'percent', label: 'Процент' },
   { id: 'rate', label: 'Ставка' },

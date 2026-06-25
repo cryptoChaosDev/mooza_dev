@@ -13,7 +13,7 @@ const VALID_STATUS = new Set(['active', 'draft', 'archived']);
 const VALID_WORK_FORMAT = new Set(['online', 'offline', 'hybrid']);
 const VALID_GEOGRAPHY = new Set(['city', 'region', 'country', 'international']);
 const VALID_EMPLOYMENT = new Set(['permanent', 'partial', 'project', 'intern', 'volunteer']);
-const VALID_PAYMENT = new Set(['free', 'respect', 'barter', 'percent', 'rate']);
+const VALID_PAYMENT = new Set(['free', 'barter', 'percent', 'rate']);
 
 // Full vacancy shape returned to the owner / single-vacancy view.
 const VACANCY_INCLUDE = {
