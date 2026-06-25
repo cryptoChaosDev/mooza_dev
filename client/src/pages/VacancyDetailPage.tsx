@@ -14,6 +14,7 @@ import AvatarComponent from '../components/Avatar';
 import ConfirmDialog from '../components/ConfirmDialog';
 import VacancyForm from '../components/VacancyForm';
 import { useScrollLock } from '../lib/scrollLock';
+import { detectLinkSource, isAllowedLinkUrl } from '../lib/materialLinks';
 import {
   workFormatLabel, geographyLabel, employmentLabel, paymentLabel,
   PAYMENT_WITH_COMPENSATION, occupancyLabel, occupancyBadgeClass,
@@ -138,7 +139,7 @@ export default function VacancyDetailPage() {
     mutationFn: async () => {
       const links = respondLinks
         .filter(l => l.url.trim().length > 0)
-        .map(l => ({ url: l.url.trim(), title: l.title.trim(), source: l.source }));
+        .map(l => ({ url: l.url.trim(), title: l.title.trim(), source: detectLinkSource(l.url) || 'other' }));
       const { data } = await vacancyAPI.respond(vacancyId!, {
         comment: respondComment.trim() || undefined,
         portfolioLinks: links,
@@ -730,7 +731,7 @@ export default function VacancyDetailPage() {
                         type="url"
                         value={link.url}
                         onChange={e => setRespondLinks(prev => prev.map((l, j) => j === i ? { ...l, url: e.target.value } : l))}
-                        placeholder="Ссылка на работу"
+                        placeholder="Ссылка: Яндекс.Диск, Google Docs, Dropbox, YouTube"
                         className="flex-1 min-w-0 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                       />
                       <button type="button" onClick={() => setRespondLinks(prev => prev.filter((_, j) => j !== i))} className="text-slate-500 hover:text-rose-400 flex-shrink-0">
@@ -745,6 +746,7 @@ export default function VacancyDetailPage() {
                   >
                     + Добавить ссылку
                   </button>
+                  <p className="text-[11px] text-slate-500">Только Яндекс.Диск, Google Docs, Dropbox, YouTube.</p>
                 </div>
 
                 <div className="flex gap-2">
@@ -752,6 +754,8 @@ export default function VacancyDetailPage() {
                   <button
                     onClick={() => {
                       if (vacancy.requireComment && !respondComment.trim()) { toast.error('Комментарий обязателен для отклика'); return; }
+                      const badLink = respondLinks.find(l => l.url.trim() && !isAllowedLinkUrl(l.url));
+                      if (badLink) { toast.error('Ссылки в портфолио допустимы только с Яндекс.Диск, Google Docs, Dropbox, YouTube'); return; }
                       const hasPortfolio = respondFiles.length > 0 || respondLinks.some(l => l.url.trim().length > 0);
                       if (vacancy.requirePortfolio && !hasPortfolio) { toast.error('Портфолио обязательно для отклика'); return; }
                       respondMut.mutate();

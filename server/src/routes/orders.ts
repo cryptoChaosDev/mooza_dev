@@ -5,6 +5,7 @@ import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { notify } from '../utils/notify';
 import { uploadOrderMedia } from '../middleware/upload';
+import { matchesLinkSource } from '../lib/materialLinks';
 
 const router = Router();
 
@@ -84,8 +85,8 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         selectedCustomFilterValues: { connect: cfvIds.map((id) => ({ id })) },
         referenceLinks: {
           create: links
-            .filter((l) => l && l.url)
-            .map((l) => ({ url: l.url, title: l.title || '', source: l.source || 'youtube' })),
+            .filter((l) => l && l.url && matchesLinkSource(l.source, l.url))
+            .map((l) => ({ url: l.url, title: l.title || '', source: l.source })),
         },
       },
     });
@@ -143,8 +144,8 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res) => {
       data.referenceLinks = {
         deleteMany: {},
         create: referenceLinks
-          .filter((l: any) => l && l.url)
-          .map((l: any) => ({ url: l.url, title: l.title || '', source: l.source || 'youtube' })),
+          .filter((l: any) => l && l.url && matchesLinkSource(l.source, l.url))
+          .map((l: any) => ({ url: l.url, title: l.title || '', source: l.source })),
       };
     }
 

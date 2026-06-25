@@ -8,6 +8,7 @@ import { orderAPI, referenceAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { yoNorm } from '../lib/search';
+import { matchesLinkSource, LINK_SOURCE_LABELS } from '../lib/materialLinks';
 
 function formatBytes(n?: number): string {
   if (!n) return '';
@@ -259,8 +260,19 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
     catch (e: any) { toast.error(getApiError(e, 'Не удалось загрузить часть референсов')); }
   };
 
+  // «Материалы»: каждая непустая ссылка должна соответствовать выбранному источнику.
+  const refLinksValid = (): boolean => {
+    const bad = refLinks.find(l => l.url.trim() && !matchesLinkSource(l.source, l.url));
+    if (bad) {
+      toast.error(`Ссылка не похожа на ${LINK_SOURCE_LABELS[bad.source] || 'выбранный источник'}. В «Материалах» допустимы только Яндекс.Диск, Google Docs, Dropbox, YouTube.`);
+      return false;
+    }
+    return true;
+  };
+
   const publish = async () => {
     if (!canSave || submitting) return;
+    if (!refLinksValid()) return;
     handledRef.current = true;
     autosaveDoneRef.current = true;
     setSubmitting(true);
@@ -286,6 +298,7 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
 
   const saveDraft = async () => {
     if (submitting) return;
+    if (!refLinksValid()) return;
     handledRef.current = true;
     autosaveDoneRef.current = true;
     setSubmitting(true);

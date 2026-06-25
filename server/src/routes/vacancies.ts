@@ -5,6 +5,7 @@ import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { notify } from '../utils/notify';
 import { uploadVacancyMedia } from '../middleware/upload';
+import { matchesLinkSource, detectLinkSource, isAllowedLinkUrl } from '../lib/materialLinks';
 
 const router = Router();
 
@@ -148,8 +149,8 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         selectedCustomFilterValues: { connect: cfvIds.map((id) => ({ id })) },
         referenceLinks: {
           create: links
-            .filter((l) => l && l.url)
-            .map((l) => ({ url: l.url, title: l.title || '', source: l.source || 'youtube' })),
+            .filter((l) => l && l.url && matchesLinkSource(l.source, l.url))
+            .map((l) => ({ url: l.url, title: l.title || '', source: l.source })),
         },
       },
     });
@@ -221,8 +222,8 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res) => {
       data.referenceLinks = {
         deleteMany: {},
         create: referenceLinks
-          .filter((l: any) => l && l.url)
-          .map((l: any) => ({ url: l.url, title: l.title || '', source: l.source || 'youtube' })),
+          .filter((l: any) => l && l.url && matchesLinkSource(l.source, l.url))
+          .map((l: any) => ({ url: l.url, title: l.title || '', source: l.source })),
       };
     }
 
@@ -509,7 +510,7 @@ router.post('/:id/responses', authenticate, async (req: AuthRequest, res) => {
       // hasPortfolioFiles flag (set when the applicant attached files) in addition
       // to already-stored files and incoming links.
       const hasFiles = (existing?._count.portfolioFiles ?? 0) > 0 || req.body.hasPortfolioFiles === true;
-      const hasLinks = links.filter((l) => l && l.url).length > 0;
+      const hasLinks = links.filter((l) => l && l.url && isAllowedLinkUrl(l.url)).length > 0;
       if (!hasFiles && !hasLinks) {
         return res.status(400).json({ error: 'Портфолио обязательно' });
       }
@@ -523,8 +524,8 @@ router.post('/:id/responses', authenticate, async (req: AuthRequest, res) => {
         comment: comment || null,
         portfolioLinks: {
           create: links
-            .filter((l) => l && l.url)
-            .map((l) => ({ url: l.url, title: l.title || '', source: l.source || 'youtube' })),
+            .filter((l) => l && l.url && isAllowedLinkUrl(l.url))
+            .map((l) => ({ url: l.url, title: l.title || '', source: detectLinkSource(l.url) || l.source })),
         },
       },
       update: {
@@ -532,8 +533,8 @@ router.post('/:id/responses', authenticate, async (req: AuthRequest, res) => {
         portfolioLinks: {
           deleteMany: {},
           create: links
-            .filter((l) => l && l.url)
-            .map((l) => ({ url: l.url, title: l.title || '', source: l.source || 'youtube' })),
+            .filter((l) => l && l.url && isAllowedLinkUrl(l.url))
+            .map((l) => ({ url: l.url, title: l.title || '', source: detectLinkSource(l.url) || l.source })),
         },
       },
       include: RESPONSE_INCLUDE,

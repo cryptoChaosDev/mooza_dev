@@ -11,6 +11,7 @@ import {
   WORK_FORMAT_OPTIONS, GEOGRAPHY_OPTIONS, EMPLOYMENT_OPTIONS, PAYMENT_OPTIONS,
   PAYMENT_WITH_COMPENSATION, type Option,
 } from '../lib/vacancyOptions';
+import { matchesLinkSource, LINK_SOURCE_LABELS } from '../lib/materialLinks';
 
 function formatBytes(n?: number): string {
   if (!n) return '';
@@ -308,8 +309,19 @@ export default function VacancyForm({
     if (isEdit) queryClient.invalidateQueries({ queryKey: ['vacancy', id] });
   };
 
+  // «Материалы»: каждая непустая ссылка должна соответствовать выбранному источнику.
+  const refLinksValid = (): boolean => {
+    const bad = refLinks.find(l => l.url.trim() && !matchesLinkSource(l.source, l.url));
+    if (bad) {
+      toast.error(`Ссылка не похожа на ${LINK_SOURCE_LABELS[bad.source] || 'выбранный источник'}. В «Материалах» допустимы только Яндекс.Диск, Google Docs, Dropbox, YouTube.`);
+      return false;
+    }
+    return true;
+  };
+
   const publish = async () => {
     if (!canSave || submitting) return;
+    if (!refLinksValid()) return;
     handledRef.current = true;
     autosaveDoneRef.current = true;
     setSubmitting(true);
@@ -333,6 +345,7 @@ export default function VacancyForm({
 
   const saveDraft = async () => {
     if (submitting) return;
+    if (!refLinksValid()) return;
     handledRef.current = true;
     autosaveDoneRef.current = true;
     setSubmitting(true);
