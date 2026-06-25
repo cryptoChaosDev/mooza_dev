@@ -34,30 +34,38 @@ type OwnerArtist = { id: string; name: string; avatar?: string };
 
 const VACANCY_MAX_REF_BYTES = 20 * 1024 * 1024; // 20 МБ суммарно
 
-// One reusable single-select chip row (mirrors OrderForm's «Уровень» filter UI).
+// One reusable required single-select, rendered as a collapsed dropdown (matches the
+// profession-filter dropdowns). Header shows the label, required «*» and the chosen
+// value; picking an option collapses it.
 function SingleSelect({
-  label, options, value, onChange, labelCls,
-}: { label: string; options: Option[]; value: string; onChange: (id: string) => void; labelCls: string }) {
+  label, options, value, onChange,
+}: { label: string; options: Option[]; value: string; onChange: (id: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find(o => o.id === value);
   return (
-    <div>
-      <label className={labelCls}>{label} <span className="text-red-400">*</span></label>
-      <div className="flex flex-wrap gap-1.5">
-        {options.map(o => {
-          const isSelected = value === o.id;
-          return (
-            <button key={o.id} type="button"
-              onClick={() => onChange(o.id)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-all ${
-                isSelected
-                  ? 'bg-primary-600 border-primary-500 text-white'
-                  : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:border-primary-500/40'
-              }`}
-            >
-              {o.label}
-            </button>
-          );
-        })}
-      </div>
+    <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 px-3">
+      <button type="button" onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center gap-1.5 py-2 text-left">
+        <span className="text-xs font-semibold text-slate-400 flex-1">{label} <span className="text-red-400">*</span></span>
+        {selected && <span className="text-[11px] text-primary-300 truncate max-w-[45%]">{selected.label}</span>}
+        <ChevronDown size={14} className={`text-slate-500 transition-transform flex-shrink-0 ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="flex flex-wrap gap-1.5 pb-2.5">
+          {options.map(o => {
+            const isSelected = value === o.id;
+            return (
+              <button key={o.id} type="button"
+                onClick={() => { onChange(o.id); setOpen(false); }}
+                className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
+                  isSelected ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                }`}>
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -521,10 +529,10 @@ export default function VacancyForm({
       )}
 
       {/* 4 — 4 single-select каталога (из vacancyOptions) */}
-      <SingleSelect label="Формат работы" options={WORK_FORMAT_OPTIONS} value={workFormat} onChange={setWorkFormat} labelCls={labelCls} />
-      <SingleSelect label="География" options={GEOGRAPHY_OPTIONS} value={geography} onChange={setGeography} labelCls={labelCls} />
-      <SingleSelect label="Тип занятости" options={EMPLOYMENT_OPTIONS} value={employmentType} onChange={setEmploymentType} labelCls={labelCls} />
-      <SingleSelect label="Тип оплаты" options={PAYMENT_OPTIONS} value={paymentType} onChange={setPaymentType} labelCls={labelCls} />
+      <SingleSelect label="Формат работы" options={WORK_FORMAT_OPTIONS} value={workFormat} onChange={setWorkFormat} />
+      <SingleSelect label="География" options={GEOGRAPHY_OPTIONS} value={geography} onChange={setGeography} />
+      <SingleSelect label="Тип занятости" options={EMPLOYMENT_OPTIONS} value={employmentType} onChange={setEmploymentType} />
+      <SingleSelect label="Тип оплаты" options={PAYMENT_OPTIONS} value={paymentType} onChange={setPaymentType} />
 
       {/* 5 — Размер вознаграждения (только percent|rate) */}
       {showCompensation && (
