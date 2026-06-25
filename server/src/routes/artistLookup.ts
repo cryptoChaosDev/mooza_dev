@@ -146,25 +146,49 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 router.get('/releases', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const itunesId = String(req.query.itunesId || '').replace(/\D/g, '');
-    if (!itunesId) return res.json({ releases: [] });
-    const data = await safeJson(`https://itunes.apple.com/lookup?id=${itunesId}&entity=album&limit=80&country=RU`);
-    const seen = new Set<string>();
+    if (!itunesId) return res.json({ releases: [], clips: [] });
+    const [albums, videos] = await Promise.all([
+      safeJson(`https://itunes.apple.com/lookup?id=${itunesId}&entity=album&limit=80&country=RU`),
+      safeJson(`https://itunes.apple.com/lookup?id=${itunesId}&entity=musicVideo&limit=50&country=RU`),
+    ]);
+    const big = (u: any) => (String(u || '').replace('100x100', '600x600') || null);
+    const byDate = (x: any, y: any) => String(y.releaseDate || '').localeCompare(String(x.releaseDate || ''));
+
+    const relSeen = new Set<string>();
     const releases: any[] = [];
-    for (const a of (data?.results || [])) {
+    for (const a of (albums?.results || [])) {
       if (a.wrapperType !== 'collection' || !a.collectionViewUrl || !a.collectionName) continue;
       const k = norm(a.collectionName);
-      if (seen.has(k)) continue;
-      seen.add(k);
+      if (relSeen.has(k)) continue;
+      relSeen.add(k);
       releases.push({
         title: a.collectionName,
-        coverUrl: (a.artworkUrl100 || '').replace('100x100', '600x600') || a.artworkUrl60 || null,
+        coverUrl: big(a.artworkUrl100) || a.artworkUrl60 || null,
         releaseDate: a.releaseDate || null,
         platform: 'APPLE_MUSIC',
         url: String(a.collectionViewUrl).split('?')[0],
       });
     }
-    releases.sort((x, y) => String(y.releaseDate || '').localeCompare(String(x.releaseDate || '')));
-    res.json({ releases });
+    releases.sort(byDate);
+
+    const clipSeen = new Set<string>();
+    const clips: any[] = [];
+    for (const a of (videos?.results || [])) {
+      if (a.kind !== 'music-video' || !a.trackViewUrl || !a.trackName) continue;
+      const k = norm(a.trackName);
+      if (clipSeen.has(k)) continue;
+      clipSeen.add(k);
+      clips.push({
+        title: a.trackName,
+        coverUrl: big(a.artworkUrl100) || a.artworkUrl60 || null,
+        releaseDate: a.releaseDate || null,
+        platform: 'APPLE_MUSIC',
+        url: String(a.trackViewUrl).split('?')[0],
+      });
+    }
+    clips.sort(byDate);
+
+    res.json({ releases, clips });
   } catch (e: any) {
     console.error('[artist-lookup] GET /releases', e);
     res.status(500).json({ error: e.message });

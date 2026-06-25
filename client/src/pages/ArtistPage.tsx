@@ -5,7 +5,7 @@ import {
   ArrowLeft, MapPin, ExternalLink,
   Camera, Navigation, Edit3, X, Save, Loader2,
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
-  UserPlus, Trash2, Search, Plus, Check,
+  UserPlus, Trash2, Search,
   Settings, Link2, Share2, Tag, Crown, Shield, UserCog, UserCheck, UserX, Star,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
@@ -25,6 +25,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import MediaRail from '../components/MediaRail';
 import MediaItemForm from '../components/MediaItemForm';
 import ArtistLookup from '../components/ArtistLookup';
+import MediaImportList from '../components/MediaImportList';
 import { useAuthStore } from '../stores/authStore';
 import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
@@ -94,8 +95,7 @@ export default function ArtistPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [applyingLookup, setApplyingLookup] = useState(false);
   const [foundReleases, setFoundReleases] = useState<any[]>([]);
-  const [selectedReleaseUrls, setSelectedReleaseUrls] = useState<Set<string>>(new Set());
-  const [importingReleases, setImportingReleases] = useState(false);
+  const [foundClips, setFoundClips] = useState<any[]>([]);
 
   // Image cropping (avatar / banner) before upload
   const [cropAvatarFile, setCropAvatarFile] = useState<File | null>(null);
@@ -353,15 +353,16 @@ export default function ArtistPage() {
           uploadAvatarMut.mutate(new File([blob], 'avatar.jpg', { type: (blob as any)?.type || 'image/jpeg' }));
         } catch { /* avatar best-effort */ }
       }
-      // Pull the artist's Apple Music releases for optional import (skip ones already added).
+      // Pull the artist's Apple Music releases + clips for optional import (skip already-added).
       if (c.itunesId) {
         try {
           const { data } = await artistAPI.lookupReleases({ itunesId: c.itunesId, deezerId: c.deezerId });
-          const existing = new Set((releases || []).map((r: any) => String(r.url || '').split('?')[0]));
-          const fresh = (data.releases || []).filter((r: any) => !existing.has(String(r.url || '').split('?')[0]));
-          setFoundReleases(fresh);
-          setSelectedReleaseUrls(new Set(fresh.map((r: any) => r.url)));
-        } catch { /* releases are best-effort */ }
+          const key = (u: any) => String(u || '').split('?')[0];
+          const haveRel = new Set((releases || []).map((r: any) => key(r.url)));
+          const haveClip = new Set((clips || []).map((r: any) => key(r.url)));
+          setFoundReleases((data.releases || []).filter((r: any) => !haveRel.has(key(r.url))));
+          setFoundClips((data.clips || []).filter((r: any) => !haveClip.has(key(r.url))));
+        } catch { /* best-effort */ }
       }
       toast.success('Данные подставлены — проверьте и сохраните');
     } finally {
@@ -369,15 +370,9 @@ export default function ArtistPage() {
     }
   };
 
-  const toggleReleaseSel = (url: string) => setSelectedReleaseUrls(prev => {
-    const n = new Set(prev); if (n.has(url)) n.delete(url); else n.add(url); return n;
-  });
-  const importReleases = async () => {
-    const toImport = foundReleases.filter(r => selectedReleaseUrls.has(r.url));
-    if (toImport.length === 0) return;
-    setImportingReleases(true);
+  const importReleases = async (selected: any[]) => {
     let ok = 0;
-    for (const r of toImport) {
+    for (const r of selected) {
       try {
         await releaseAPI.create({
           artistId: id!, platform: 'APPLE_MUSIC', url: r.url, title: r.title,
@@ -386,12 +381,24 @@ export default function ArtistPage() {
         ok++;
       } catch { /* skip a failed one */ }
     }
-    setImportingReleases(false);
     setFoundReleases([]);
-    setSelectedReleaseUrls(new Set());
     queryClient.invalidateQueries({ queryKey: ['releases', 'artist', id] });
-    if (ok > 0) toast.success(`Импортировано релизов: ${ok}`);
-    else toast.error('Не удалось импортировать релизы');
+    if (ok > 0) toast.success(`Импортировано релизов: ${ok}`); else toast.error('Не удалось импортировать релизы');
+  };
+  const importClips = async (selected: any[]) => {
+    let ok = 0;
+    for (const r of selected) {
+      try {
+        await clipAPI.create({
+          artistId: id!, platform: 'APPLE_MUSIC', url: r.url, title: r.title,
+          coverUrl: r.coverUrl || undefined, participants: [],
+        });
+        ok++;
+      } catch { /* skip a failed one */ }
+    }
+    setFoundClips([]);
+    queryClient.invalidateQueries({ queryKey: ['clips', 'artist', id] });
+    if (ok > 0) toast.success(`Импортировано клипов: ${ok}`); else toast.error('Не удалось импортировать клипы');
   };
 
   const inviteMut = useMutation({
@@ -689,39 +696,8 @@ export default function ArtistPage() {
 
             <ArtistLookup onApply={applyLookupCandidate} applying={applyingLookup} />
 
-            {foundReleases.length > 0 && (
-              <div className="rounded-xl border border-dashed border-emerald-500/40 bg-emerald-500/5 p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-semibold text-emerald-300">Релизы на Apple Music ({foundReleases.length})</p>
-                  <button type="button" onClick={() => setFoundReleases([])} className="text-slate-500 hover:text-white"><X size={14} /></button>
-                </div>
-                <div className="max-h-52 overflow-y-auto space-y-1">
-                  {foundReleases.map((r: any) => {
-                    const sel = selectedReleaseUrls.has(r.url);
-                    return (
-                      <button key={r.url} type="button" onClick={() => toggleReleaseSel(r.url)}
-                        className={`w-full flex items-center gap-2.5 p-1.5 rounded-lg text-left transition-colors ${sel ? 'bg-emerald-600/20' : 'bg-slate-800/40 hover:bg-slate-800'}`}>
-                        {r.coverUrl
-                          ? <img src={r.coverUrl} alt="" className="w-9 h-9 rounded object-cover flex-shrink-0" />
-                          : <div className="w-9 h-9 rounded bg-slate-700 flex-shrink-0" />}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs text-white truncate">{r.title}</p>
-                          {r.releaseDate && <p className="text-[10px] text-slate-500">{new Date(r.releaseDate).getFullYear()}</p>}
-                        </div>
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${sel ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'}`}>
-                          {sel && <Check size={12} className="text-white" />}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                <button type="button" onClick={importReleases} disabled={importingReleases || selectedReleaseUrls.size === 0}
-                  className="w-full py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold flex items-center justify-center gap-1.5">
-                  {importingReleases ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}
-                  Импортировать выбранные ({selectedReleaseUrls.size})
-                </button>
-              </div>
-            )}
+            <MediaImportList title="Релизы на Apple Music" items={foundReleases} onImport={importReleases} />
+            <MediaImportList title="Клипы на Apple Music" items={foundClips} onImport={importClips} />
 
             {/* Название */}
             <div>

@@ -7,7 +7,7 @@ import { notify } from '../utils/notify';
 
 const router = Router();
 
-const PLATFORMS: ClipPlatform[] = ['VK_VIDEO', 'RUTUBE', 'YOUTUBE'];
+const PLATFORMS: ClipPlatform[] = ['VK_VIDEO', 'RUTUBE', 'YOUTUBE', 'APPLE_MUSIC'];
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 

@@ -426,7 +426,7 @@ export const clipAPI = {
     api.post('/clips/metadata', { platform, url }),
   create: (data: {
     artistId: string;
-    platform: 'VK_VIDEO' | 'RUTUBE' | 'YOUTUBE';
+    platform: 'VK_VIDEO' | 'RUTUBE' | 'YOUTUBE' | 'APPLE_MUSIC';
     url: string;
     title: string;
     coverUrl?: string;
@@ -440,7 +440,7 @@ export const clipAPI = {
       title?: string;
       coverUrl?: string | null;
       url?: string;
-      platform?: 'VK_VIDEO' | 'RUTUBE' | 'YOUTUBE';
+      platform?: 'VK_VIDEO' | 'RUTUBE' | 'YOUTUBE' | 'APPLE_MUSIC';
       participants?: { userId: string; roleIds: string[] }[];
     },
   ) => api.patch(`/clips/${id}`, data),

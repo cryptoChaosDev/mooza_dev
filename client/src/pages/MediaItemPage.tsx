@@ -20,6 +20,7 @@ const CLIP_PLATFORM_LABELS: Record<string, string> = {
   VK_VIDEO: 'ВКонтакте Видео',
   RUTUBE: 'Rutube',
   YOUTUBE: 'YouTube',
+  APPLE_MUSIC: 'Apple Music',
 };
 
 interface ItemDetail extends MediaItemInitial {

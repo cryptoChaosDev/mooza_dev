@@ -355,6 +355,7 @@ enum ClipPlatform {
   VK_VIDEO
   RUTUBE
   YOUTUBE
+  APPLE_MUSIC
 }
 
 enum ContactsVisibility {
