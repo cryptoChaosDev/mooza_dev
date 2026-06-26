@@ -1319,8 +1319,13 @@ export default function ArtistPage() {
               title: v.title,
               subtitle: [v.profession?.name, v.workFormat ? workFormatLabel(v.workFormat) : '']
                 .filter(Boolean).join(' · '),
+              badge: v.status === 'active'
+                ? { label: 'Активна', className: 'bg-emerald-600 text-white' }
+                : v.status === 'archived'
+                ? { label: 'Архив', className: 'bg-slate-600 text-white' }
+                : { label: 'Черновик', className: 'bg-amber-600 text-white' },
             }))}
-            count={myVacancies.filter((v: any) => v.status === 'active').length}
+            count={myVacancies.length}
             to="/vacancies"
             showAdd={viewerIsOwner}
             onAdd={() => setShowVacancyForm(true)}

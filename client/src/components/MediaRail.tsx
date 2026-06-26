@@ -7,6 +7,8 @@ export interface RailItem {
   coverUrl?: string | null;
   /** Optional second line under the title (e.g. «Профессия · Формат» for vacancies). */
   subtitle?: string;
+  /** Optional status chip shown on the tile (e.g. vacancy draft/active/archived). */
+  badge?: { label: string; className: string };
 }
 
 interface Props {
@@ -62,11 +64,16 @@ export default function MediaRail({ title, items, to, showAdd = false, onAdd, se
             onClick={() => navigate(`${to}/${it.id}`)}
             className="flex-shrink-0 w-28 flex flex-col items-center"
           >
-            <div className="w-28 h-28 rounded-xl overflow-hidden bg-slate-800 border border-slate-700 flex items-center justify-center">
+            <div className="relative w-28 h-28 rounded-xl overflow-hidden bg-slate-800 border border-slate-700 flex items-center justify-center">
               {it.coverUrl ? (
                 <img src={it.coverUrl} alt={it.title} className="w-full h-full object-cover" />
               ) : (
                 <span className="text-slate-600 text-2xl font-bold">{it.title?.[0]?.toUpperCase()}</span>
+              )}
+              {it.badge && (
+                <span className={`absolute top-1 left-1 px-1.5 py-0.5 rounded text-[9px] font-semibold leading-none ${it.badge.className}`}>
+                  {it.badge.label}
+                </span>
               )}
             </div>
             <span className="mt-1.5 text-xs text-slate-300 text-center line-clamp-2 w-full">{it.title}</span>
