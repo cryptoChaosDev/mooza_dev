@@ -463,14 +463,14 @@ export default function ServicePage() {
                     placeholder="От ₽"
                     value={editPriceFrom}
                     onChange={e => setEditPriceFrom(e.target.value)}
-                    className="flex-1 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="flex-1 min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   />
                   <input
                     type="number"
                     placeholder="До ₽"
                     value={editPriceTo}
                     onChange={e => setEditPriceTo(e.target.value)}
-                    className="flex-1 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="flex-1 min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   />
                 </div>
               </div>
@@ -478,9 +478,9 @@ export default function ServicePage() {
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2 block">Срок исполнения (дней)</label>
                 <div className="flex gap-2">
                   <input type="number" placeholder="От" value={editDeadlineFrom} onChange={e => setEditDeadlineFrom(e.target.value)}
-                    className="flex-1 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                    className="flex-1 min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
                   <input type="number" placeholder="До" value={editDeadlineTo} onChange={e => setEditDeadlineTo(e.target.value)}
-                    className="flex-1 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
+                    className="flex-1 min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
                 </div>
               </div>
               <div>
