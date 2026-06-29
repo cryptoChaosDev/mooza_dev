@@ -1459,12 +1459,6 @@ export default function ChatPage() {
               ref={inputRef}
               value={newMessage}
               onChange={e => setNewMessage(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                  e.preventDefault();
-                  e.currentTarget.form?.requestSubmit();
-                }
-              }}
               placeholder={editingId ? 'Редактировать...' : 'Сообщение...'}
               className="flex-1 bg-transparent text-sm text-white px-3 py-2.5 focus:outline-none placeholder-slate-500 resize-none overflow-y-auto"
               style={{ height: '40px', maxHeight: '160px', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
