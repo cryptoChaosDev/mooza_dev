@@ -175,7 +175,9 @@ export default function UserProfilePage() {
     );
   }
 
-  const servicesFlat: any[] = user.userServices ?? [];
+  // Other users only see ACTIVE services (drafts/archived stay private) — mirrors
+  // the «смотреть все» list (ServicesPage) which filters non-owners to status active.
+  const servicesFlat: any[] = (user.userServices ?? []).filter((us: any) => (us.status ?? 'active') === 'active');
   const portfolioFiles: any[] = user.portfolioFiles ?? [];
   const portfolioLinks: any[] = user.portfolioLinks ?? [];
   const audioLinks = portfolioLinks.filter((l: any) => l.type === 'audio');
@@ -756,7 +758,7 @@ export default function UserProfilePage() {
           </div>
           <div className="px-5 py-4">
             {(() => {
-              const related = (user.userServices ?? []).filter(
+              const related = servicesFlat.filter(
                 (us: any) => us.professionId === selectedProfession.professionId
               );
               if (related.length === 0) {
