@@ -291,7 +291,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
 
               {/* URL + fetch */}
               <div>
-                <label className="block text-xs text-slate-500 mb-1">Ссылка</label>
+                <label className="block text-xs text-slate-500 mb-1">Ссылка <span className="text-red-400">*</span></label>
                 <div className="flex gap-2">
                   <input
                     className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
@@ -314,7 +314,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
 
               {/* Title */}
               <div>
-                <label className="block text-xs text-slate-500 mb-1">Название *</label>
+                <label className="block text-xs text-slate-500 mb-1">Название <span className="text-red-400">*</span></label>
                 <input
                   className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
                   value={title}
