@@ -2,8 +2,9 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Star, X, MessageSquare, Trash2, Loader2 } from 'lucide-react';
+import { Star, X, MessageSquare, Trash2, Loader2, Flag } from 'lucide-react';
 import { reviewAPI } from '../lib/api';
+import ComplaintModal from './ComplaintModal';
 import { useAuthStore } from '../stores/authStore';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { toast } from '../stores/toastStore';
@@ -47,6 +48,7 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
   const [selected, setSelected] = useState<Review | null>(null);
   const [replyText, setReplyText] = useState('');
   const [savingReply, setSavingReply] = useState(false);
+  const [reporting, setReporting] = useState(false);
 
   useScrollLock(!!selected);
 
@@ -175,7 +177,7 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
                     {new Date(selected.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>
                 </div>
-                {user?.id === selected.authorId && (
+                {user?.id === selected.authorId ? (
                   <button
                     onClick={() => deleteMutation.mutate(selected.id)}
                     disabled={deleteMutation.isPending}
@@ -183,7 +185,15 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
                   >
                     {deleteMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                   </button>
-                )}
+                ) : user ? (
+                  <button
+                    onClick={() => setReporting(true)}
+                    title="Пожаловаться на отзыв"
+                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded-xl transition-colors"
+                  >
+                    <Flag size={16} />
+                  </button>
+                ) : null}
               </div>
 
               {selected.text && (
@@ -223,6 +233,10 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
           </div>
         </>,
         document.body
+      )}
+
+      {reporting && selected && (
+        <ComplaintModal targetType="review" targetId={selected.id} onClose={() => setReporting(false)} />
       )}
     </div>
   );
