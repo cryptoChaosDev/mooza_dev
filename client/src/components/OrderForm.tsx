@@ -148,12 +148,12 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
     setRefLinks(prev => prev.map((l, idx) => idx === i ? { ...l, ...patch } : l));
   const removeRefLink = (i: number) => setRefLinks(prev => prev.filter((_, idx) => idx !== i));
 
-  // YYYY-MM-DD (native date input) → ISO midnight UTC (or null).
+  // ДД.ММ.ГГГГ (masked text input, like the profile birth date) → ISO midnight UTC.
   const parseDeadline = (): string | null => {
     if (!deadlineEnabled || !deadlineDate) return null;
-    const m = deadlineDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    const m = deadlineDate.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
     if (!m) return null;
-    const [, y, mo, d] = m;
+    const [, d, mo, y] = m;
     const iso = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
     return isNaN(iso.getTime()) ? null : iso.toISOString();
   };
@@ -210,7 +210,8 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
     setBudgetTo(order.budgetTo != null ? String(order.budgetTo) : '');
     if (order.deadline) {
       setDeadlineEnabled(true);
-      setDeadlineDate(String(order.deadline).slice(0, 10)); // ISO → YYYY-MM-DD
+      const iso = String(order.deadline).slice(0, 10); // YYYY-MM-DD
+      setDeadlineDate(`${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`); // → ДД.ММ.ГГГГ
     }
     setDescription(order.description ?? '');
     setRefLinks((order.referenceLinks || []).map((l: any) => ({ url: l.url, title: l.title, source: l.source })));
@@ -475,11 +476,17 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
           <div className="relative">
             <Calendar size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
-              type="date"
+              type="text"
+              inputMode="numeric"
               value={deadlineDate}
-              min={new Date().toISOString().slice(0, 10)}
-              onChange={e => setDeadlineDate(e.target.value)}
-              style={{ colorScheme: 'dark' }}
+              placeholder="ДД.ММ.ГГГГ"
+              maxLength={10}
+              onChange={e => {
+                let v = e.target.value.replace(/\D/g, '');
+                if (v.length >= 3) v = v.slice(0, 2) + '.' + v.slice(2);
+                if (v.length >= 6) v = v.slice(0, 5) + '.' + v.slice(5);
+                setDeadlineDate(v.slice(0, 10));
+              }}
               className={`w-full pl-8 pr-3 py-2.5 bg-slate-800/60 border rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 transition ${deadlineInvalid ? 'border-red-500/60' : 'border-slate-700/50'}`}
             />
             {deadlineInvalid && <p className="text-[11px] text-red-400 mt-1">Введите дату в формате ДД.ММ.ГГГГ</p>}
