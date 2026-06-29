@@ -515,14 +515,16 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                         >
                           <ExternalLink size={15} /> Детали услуги
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => ensureAuth(openServiceChat)}
-                          disabled={contacting}
-                          className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-colors"
-                        >
-                          {contacting ? <Spinner size={15} className="animate-spin" /> : <MessageSquare size={15} />} Написать
-                        </button>
+                        {!isOwner && svc.user?.id !== currentUserId && (
+                          <button
+                            type="button"
+                            onClick={() => ensureAuth(openServiceChat)}
+                            disabled={contacting}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-colors"
+                          >
+                            {contacting ? <Spinner size={15} className="animate-spin" /> : <MessageSquare size={15} />} Написать
+                          </button>
+                        )}
                         {DEALS_ENABLED && (
                           <button
                             type="button"

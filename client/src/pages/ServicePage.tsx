@@ -4,7 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Briefcase, DollarSign, MapPin, MessageCircle,
-  Archive, ArchiveRestore, Trash2, Loader2, HandshakeIcon, Send, Pencil, X, Plus, Check,
+  Archive, ArchiveRestore, Trash2, Loader2, HandshakeIcon, Send, Pencil, X, Check,
 } from 'lucide-react';
 import { userAPI, messageAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
@@ -44,39 +44,14 @@ export default function ServicePage() {
   const [showTemplates, setShowTemplates] = useState(false);
   const [customText, setCustomText] = useState('');
   const [showDeal, setShowDeal] = useState(false);
-  const [showEdit, setShowEdit] = useState(false);
-  const [editName, setEditName] = useState('');
-  const [editPriceFrom, setEditPriceFrom] = useState('');
-  const [editPriceTo, setEditPriceTo] = useState('');
-  const [editDeadlineFrom, setEditDeadlineFrom] = useState('');
-  const [editDeadlineTo, setEditDeadlineTo] = useState('');
-  const [editDescription, setEditDescription] = useState('');
-  const [editPriceItems, setEditPriceItems] = useState<Array<{name: string; price: string}>>([]);
   const [postDialogOpen, setPostDialogOpen] = useState(false);
 
-  useScrollLock(showTemplates || showEdit || postDialogOpen);
+  useScrollLock(showTemplates || postDialogOpen);
 
   const { data: us, isLoading } = useQuery({
     queryKey: ['user-service', serviceId],
     queryFn: async () => { const { data } = await userAPI.getUserService(serviceId!); return data as any; },
     enabled: !!serviceId,
-  });
-
-  const editMut = useMutation({
-    mutationFn: () => userAPI.patchUserService(serviceId!, {
-      name: editName || undefined,
-      priceFrom: editPriceFrom !== '' ? Number(editPriceFrom) : null,
-      priceTo: editPriceTo !== '' ? Number(editPriceTo) : null,
-      deadlineFrom: editDeadlineFrom !== '' ? Number(editDeadlineFrom) : null,
-      deadlineTo: editDeadlineTo !== '' ? Number(editDeadlineTo) : null,
-      description: editDescription || undefined,
-      priceItems: editPriceItems.filter(x => x.name.trim()),
-    }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-service', serviceId] });
-      setShowEdit(false);
-    },
-    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
 
   const statusMut = useMutation({
@@ -197,14 +172,10 @@ export default function ServicePage() {
               </span>
               <button
                 onClick={() => {
-                  setEditName(us.name ?? '');
-                  setEditPriceFrom(us.priceFrom != null ? String(us.priceFrom) : '');
-                  setEditPriceTo(us.priceTo != null ? String(us.priceTo) : '');
-                  setEditDeadlineFrom(us.deadlineFrom != null ? String(us.deadlineFrom) : '');
-                  setEditDeadlineTo(us.deadlineTo != null ? String(us.deadlineTo) : '');
-                  setEditDescription(us.description ?? '');
-                  setEditPriceItems(us.priceItems ? JSON.parse(JSON.stringify(us.priceItems)) : []);
-                  setShowEdit(true);
+                  // Edit via the full profile ServiceForm (the only place that can
+                  // change the catalog section + custom filters). Deep-link by the
+                  // catalog serviceId — ProfilePage keys its services by it.
+                  navigate(`/profile?editService=${us.serviceId}`);
                 }}
                 className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
                 title="Редактировать"
@@ -432,119 +403,6 @@ export default function ServicePage() {
         onConfirm={() => deleteMut.mutate()}
         onCancel={() => setConfirmDelete(false)}
       />
-
-      {/* Edit modal */}
-      {showEdit && createPortal(
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowEdit(false)} />
-          <div className="relative w-full sm:max-w-sm bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800">
-              <h3 className="text-base font-semibold text-white">Редактировать услугу</h3>
-              <button onClick={() => setShowEdit(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="px-5 py-4 space-y-4">
-              <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2 block">Своё название (необязательно)</label>
-                <input
-                  type="text" maxLength={50}
-                  placeholder={us.service?.name ?? 'Название...'}
-                  value={editName}
-                  onChange={e => setEditName(e.target.value)}
-                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2 block">Стоимость (₽)</label>
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    placeholder="От ₽"
-                    value={editPriceFrom}
-                    onChange={e => setEditPriceFrom(e.target.value)}
-                    className="flex-1 min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  />
-                  <input
-                    type="number"
-                    placeholder="До ₽"
-                    value={editPriceTo}
-                    onChange={e => setEditPriceTo(e.target.value)}
-                    className="flex-1 min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2 block">Срок исполнения (дней)</label>
-                <div className="flex gap-2">
-                  <input type="number" placeholder="От" value={editDeadlineFrom} onChange={e => setEditDeadlineFrom(e.target.value)}
-                    className="flex-1 min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-                  <input type="number" placeholder="До" value={editDeadlineTo} onChange={e => setEditDeadlineTo(e.target.value)}
-                    className="flex-1 min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500" />
-                </div>
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2 block">Описание</label>
-                <textarea
-                  value={editDescription}
-                  onChange={e => setEditDescription(e.target.value)}
-                  placeholder="Расскажите подробнее об услуге..."
-                  rows={4}
-                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1 block">Прайс-лист (необязательно)</label>
-                <p className="text-[10px] text-slate-600 mb-2">Детализация стоимости по позициям.</p>
-                <div className="space-y-2">
-                  {editPriceItems.map((item, idx) => (
-                    <div key={idx} className="flex gap-2 items-center">
-                      <input
-                        type="text" maxLength={100}
-                        placeholder="Название позиции"
-                        value={item.name}
-                        onChange={e => setEditPriceItems(prev => prev.map((x, i) => i === idx ? { ...x, name: e.target.value } : x))}
-                        className="flex-1 min-w-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      />
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        placeholder="Цена ₽"
-                        value={item.price}
-                        onChange={e => setEditPriceItems(prev => prev.map((x, i) => i === idx ? { ...x, price: e.target.value.replace(/[^\d]/g, '') } : x))}
-                        className="w-24 flex-shrink-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                      />
-                      <button type="button" onClick={() => setEditPriceItems(prev => prev.filter((_, i) => i !== idx))}
-                        className="text-slate-500 hover:text-red-400 transition-colors flex-shrink-0">
-                        <X size={14} />
-                      </button>
-                    </div>
-                  ))}
-                  <button type="button"
-                    onClick={() => setEditPriceItems(prev => [...prev, { name: '', price: '' }])}
-                    className="flex items-center gap-1.5 text-xs text-primary-400 hover:text-primary-300 transition-colors">
-                    <Plus size={12} />Добавить позицию
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="px-5 pb-5 flex gap-2.5">
-              <button onClick={() => setShowEdit(false)} className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors">
-                Отмена
-              </button>
-              <button
-                onClick={() => editMut.mutate()}
-                disabled={editMut.isPending}
-                className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {editMut.isPending ? <Loader2 size={14} className="animate-spin" /> : null}
-                Сохранить
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
       {postDialogOpen && createPortal(
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">

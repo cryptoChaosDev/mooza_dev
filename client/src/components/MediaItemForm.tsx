@@ -4,6 +4,7 @@ import { X, Save, Loader2, Search, Tag, Trash2, RefreshCw } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { releaseAPI, clipAPI, userAPI, roleAPI } from '../lib/api';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
+import { toast } from '../stores/toastStore';
 import AvatarComponent from './Avatar';
 import RolePicker from './RolePicker';
 
@@ -59,6 +60,10 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
   const platforms = isRelease ? RELEASE_PLATFORMS : CLIP_PLATFORMS;
   const roleContext = isRelease ? 'release' : 'clip';
   const editing = !!initial;
+
+  // Local «today» (YYYY-MM-DD) — a release date cannot be in the future.
+  const _td = new Date();
+  const todayStr = `${_td.getFullYear()}-${String(_td.getMonth() + 1).padStart(2, '0')}-${String(_td.getDate()).padStart(2, '0')}`;
 
   const [platform, setPlatform] = useState<string>(initial?.platform ?? platforms[0].id);
   const [url, setUrl] = useState(initial?.url ?? '');
@@ -242,7 +247,14 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
                 {editing ? `Редактировать ${titleLabel}` : `Добавить ${titleLabel}`}
               </span>
               <button
-                onClick={() => { setSaveError(''); saveMut.mutate(); }}
+                onClick={() => {
+                  if (isRelease && releaseDate && releaseDate > todayStr) {
+                    toast.error('Дата релиза не может быть позже сегодняшнего дня');
+                    return;
+                  }
+                  setSaveError('');
+                  saveMut.mutate();
+                }}
                 disabled={saveMut.isPending || !title.trim() || !url.trim()}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-600 text-white text-sm font-semibold disabled:opacity-50"
               >
@@ -336,6 +348,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
                   <label className="block text-xs text-slate-500 mb-1">Дата релиза</label>
                   <input
                     type="date"
+                    max={todayStr}
                     className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
                     value={releaseDate}
                     onChange={(e) => setReleaseDate(e.target.value)}

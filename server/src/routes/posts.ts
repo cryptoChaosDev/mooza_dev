@@ -201,9 +201,14 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
     else if (teamUserId) where.authorId = { not: teamUserId }; // exclude team from default/other views
 
     // Hide «Услуга» posts whose offering is no longer active (archived/draft) — an
-    // archived/unpublished service must not show in the feed. Non-service posts and
-    // legacy service posts with no linked offering (serviceId null) are unaffected.
-    where.NOT = { type: 'service', service: { status: { not: 'active' } } };
+    // archived/unpublished service must not show in the feed. Also hide degenerate
+    // structured service posts whose linked offering was deleted (serviceId null):
+    // those would render as an empty «Услуга» card with no data. Non-service posts
+    // are unaffected.
+    where.NOT = [
+      { type: 'service', service: { status: { not: 'active' } } },
+      { type: 'service', serviceId: null },
+    ];
 
     // period — date lower bound on createdAt (server-computed)
     const periodStr = period ? String(period) : 'all';

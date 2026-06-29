@@ -776,6 +776,10 @@ router.delete('/me/services/:serviceId', authenticate, async (req: AuthRequest, 
   try {
     const us = await prisma.userService.findUnique({ where: { id: req.params.serviceId } });
     if (!us || us.userId !== req.userId) return res.status(404).json({ error: 'Not found' });
+    // Also remove any feed «Услуга» posts linked to this offering — otherwise the
+    // Post.serviceId is nulled (onDelete: SetNull) and the post lingers as an empty
+    // service card with no data.
+    await prisma.post.deleteMany({ where: { serviceId: req.params.serviceId } });
     await prisma.userService.delete({ where: { id: req.params.serviceId } });
     return res.json({ ok: true });
   } catch (err) {

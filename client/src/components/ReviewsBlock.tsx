@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Star, X, MessageSquare, Trash2, Loader2, Flag } from 'lucide-react';
 import { reviewAPI } from '../lib/api';
 import ComplaintModal from './ComplaintModal';
+import ConfirmDialog from './ConfirmDialog';
 import { useAuthStore } from '../stores/authStore';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { toast } from '../stores/toastStore';
@@ -49,6 +50,7 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
   const [replyText, setReplyText] = useState('');
   const [savingReply, setSavingReply] = useState(false);
   const [reportReviewId, setReportReviewId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useScrollLock(!!selected);
 
@@ -179,7 +181,7 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
                 </div>
                 {user?.id === selected.authorId ? (
                   <button
-                    onClick={() => deleteMutation.mutate(selected.id)}
+                    onClick={() => setConfirmDeleteId(selected.id)}
                     disabled={deleteMutation.isPending}
                     className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded-xl transition-colors"
                   >
@@ -238,6 +240,14 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
       {reportReviewId && (
         <ComplaintModal targetType="review" targetId={reportReviewId} onClose={() => setReportReviewId(null)} />
       )}
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        message="Удалить этот отзыв?"
+        confirmLabel="Удалить"
+        onConfirm={() => { if (confirmDeleteId) deleteMutation.mutate(confirmDeleteId); }}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }

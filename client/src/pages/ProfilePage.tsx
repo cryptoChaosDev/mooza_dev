@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userAPI, referenceAPI, connectionAPI, groupAPI, dealAPI, authAPI, orderAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
@@ -118,6 +118,7 @@ function stripProfessions<T extends { userProfessions?: unknown }>(data: T): Omi
 
 export default function ProfilePage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { logout, user } = useAuthStore();
   const isPro = isProActive(user);
   const proLimits = limitsFor(isPro);
@@ -792,6 +793,27 @@ export default function ProfilePage() {
     await updateServicesMutation.mutateAsync(newServices);
     queryClient.invalidateQueries({ queryKey: ['profile'] });
   };
+
+  // Deep-link from the service page «Редактировать»: ?editService=<catalogServiceId>.
+  // The limited ServicePage modal can't change the section/custom filters, so the
+  // owner is sent here to the full ServiceForm. Wait until userServices is
+  // hydrated, then open that entry's editor, scroll to it, and drop the param.
+  const editServiceDeepLinkRef = useRef<string | null>(null);
+  useEffect(() => {
+    const target = searchParams.get('editService');
+    if (!target) return;
+    if (editServiceDeepLinkRef.current === target) return; // handled already
+    const idx = userServices.findIndex(s => s.serviceId === target);
+    if (idx < 0) return; // not hydrated yet (or no longer exists) — retry next render
+    editServiceDeepLinkRef.current = target;
+    setEditingServices(true);
+    openEditServiceForm(idx);
+    requestAnimationFrame(() => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    const next = new URLSearchParams(searchParams);
+    next.delete('editService');
+    setSearchParams(next, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, userServices]);
 
   // ── Consent to public distribution of PD (152-ФЗ ст. 10.1) ──────────────────
   // One-time gate before the first public action (publish service / upload
