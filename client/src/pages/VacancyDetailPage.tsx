@@ -806,7 +806,7 @@ export default function VacancyDetailPage() {
                 value={coopStartDate}
                 min={todayStr}
                 onChange={e => setCoopStartDate(e.target.value)}
-                className="w-full min-w-0 appearance-none px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                className="w-full min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </div>
             <div>
