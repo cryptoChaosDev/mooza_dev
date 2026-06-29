@@ -1227,8 +1227,8 @@ export default function ProfilePage() {
 
         <div className="px-4">
           {/* Avatar + action buttons */}
-          <div className="flex items-end justify-between flex-wrap gap-y-3 -mt-14 mb-4">
-            <div className="relative z-10">
+          <div className="flex items-end justify-between -mt-14 mb-4">
+            <div className="relative z-10 flex-shrink-0">
               <div
                 className="rounded-full p-[3px]"
                 title={`Профиль заполнен на ${completionPct}%`}
@@ -1263,24 +1263,26 @@ export default function ProfilePage() {
                   e.target.value = '';
                 }} />
             </div>
-            <div className="flex items-center gap-2 mb-1">
+            {/* Actions — compact round icon buttons, single row (matches Artist hero) */}
+            <div className="flex items-center gap-2 pb-1">
               <ShareButton
                 url={`/profile/${profile?.id}`}
                 title={`${profile?.firstName} ${profile?.lastName} — Moooza`}
                 text={profile?.bio?.slice(0, proLimits.bioChars)}
-                className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
+                className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
                 iconSize={16}
               />
               <button
                 onClick={() => setEditingHero(v => !v)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${editingHero ? 'bg-primary-600 border-primary-500 text-white' : 'bg-primary-600/20 hover:bg-primary-600/30 border-primary-500/40 text-primary-300 hover:text-primary-200'}`}
+                title={editingHero ? 'Закрыть' : 'Редактировать'}
+                className={`w-9 h-9 rounded-full flex items-center justify-center border transition-colors ${editingHero ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800 border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white'}`}
               >
-                <Edit3 size={15} />{editingHero ? 'Закрыть' : 'Редактировать'}
+                {editingHero ? <X size={16} /> : <Edit3 size={16} />}
               </button>
               {profile?.id && (
                 <button
                   onClick={() => navigate(`/profile/${profile.id}`)}
-                  className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
+                  className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
                   title="Превью — как видят другие"
                 >
                   <Eye size={16} />
@@ -1288,13 +1290,13 @@ export default function ProfilePage() {
               )}
               <button
                 onClick={() => setShowPrivacy(true)}
-                className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
+                className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
                 title="Приватность"
               >
                 <Shield size={16} />
               </button>
               {autoSaved && (
-                <span className="text-xs text-emerald-400 font-medium animate-pulse">✓ Сохранено</span>
+                <span className="text-xs text-emerald-400 font-medium animate-pulse whitespace-nowrap">✓</span>
               )}
             </div>
           </div>
