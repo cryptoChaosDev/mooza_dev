@@ -20,6 +20,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import BadgeTooltip from '../components/BadgeTooltip';
 import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
+import { useScrollLock } from '../lib/scrollLock';
 import { limitsFor, isProActive } from '../lib/proLimits';
 import { yoNorm } from '../lib/search';
 import ShareButton from '../components/ShareButton';
@@ -271,6 +272,8 @@ export default function ProfilePage() {
   const [profSearchResults, setProfSearchResults] = useState<any[]>([]);
   const [profSearching, setProfSearching] = useState(false);
   const [savingProfessions, setSavingProfessions] = useState(false);
+  // Профессии / Услуги / Заказы открываются модалками (как Вакансии) — блокируем фон.
+  useScrollLock(editingProfessions || serviceFormOpen !== null || orderFormOpen);
   const [profFiltersData, setProfFiltersData] = useState<Record<string, any[]>>({});
   const [profFilterSelections, setProfFilterSelections] = useState<Record<string, string[]>>({});
   // Per-profession filter accordions are collapsed by default (profId → open filterIds).
@@ -1545,8 +1548,13 @@ export default function ProfilePage() {
                 </button>
               </div>
 
-              {editingProfessions ? (
-                <div className="p-3 space-y-3">
+              {editingProfessions && createPortal(
+                <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => { setEditingProfessions(false); setProfAddOpen(false); setProfSearch(''); }}>
+                  <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                  <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
+                    <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+                    <p className="text-sm font-semibold text-white mb-3">Профессии</p>
+                    <div className="space-y-3">
                   {/* Existing professions */}
                   {myStandaloneProfessions.length > 0 && (
                     <div className="space-y-2">
@@ -1693,8 +1701,12 @@ export default function ProfilePage() {
                       {savingProfessions ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
                     </button>
                   </div>
-                </div>
-              ) : myStandaloneProfessions.length > 0 ? (
+                    </div>
+                  </div>
+                </div>,
+                document.body
+              )}
+              {myStandaloneProfessions.length > 0 ? (
                 <div className="px-4 pt-3 pb-2 space-y-2">
                   {myStandaloneProfessions.map((p) => {
                     const profData = profile?.userProfessions?.find((up: any) => up.professionId === p.professionId);
@@ -1799,7 +1811,16 @@ export default function ProfilePage() {
                   })}
                 </div>
 
-                {ServiceForm()}
+                {serviceFormOpen !== null && createPortal(
+                  <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => { serviceFormDiscardedRef.current = true; closeServiceForm(); }}>
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                    <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
+                      <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+                      {ServiceForm()}
+                    </div>
+                  </div>,
+                  document.body
+                )}
               </div>
             </div>
 
@@ -1853,7 +1874,16 @@ export default function ProfilePage() {
                   })}
                 </div>
 
-                {orderFormOpen && <OrderForm onClose={() => setOrderFormOpen(false)} />}
+                {orderFormOpen && createPortal(
+                  <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setOrderFormOpen(false)}>
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                    <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
+                      <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+                      <OrderForm onClose={() => setOrderFormOpen(false)} />
+                    </div>
+                  </div>,
+                  document.body
+                )}
               </div>
             </div>
 
