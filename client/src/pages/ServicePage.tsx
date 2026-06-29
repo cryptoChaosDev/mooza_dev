@@ -508,9 +508,10 @@ export default function ServicePage() {
                       />
                       <input
                         type="text"
+                        inputMode="numeric"
                         placeholder="Цена ₽"
                         value={item.price}
-                        onChange={e => setEditPriceItems(prev => prev.map((x, i) => i === idx ? { ...x, price: e.target.value } : x))}
+                        onChange={e => setEditPriceItems(prev => prev.map((x, i) => i === idx ? { ...x, price: e.target.value.replace(/[^\d]/g, '') } : x))}
                         className="w-24 flex-shrink-0 px-2.5 py-2 bg-slate-700/50 border border-slate-600/50 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                       />
                       <button type="button" onClick={() => setEditPriceItems(prev => prev.filter((_, i) => i !== idx))}
