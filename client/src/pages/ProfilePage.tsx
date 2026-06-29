@@ -1765,7 +1765,7 @@ export default function ProfilePage() {
                         {editingServices && stateIdx >= 0 && (
                           <button
                             onClick={() => setConfirmDeleteServiceIdx(stateIdx)}
-                            className="absolute -top-1 -right-1 p-0.5 rounded-md bg-slate-900 border border-slate-700 text-slate-400 hover:text-red-400 transition-colors z-10"
+                            className="absolute top-1 right-1 p-1 rounded-full bg-slate-900/90 border border-slate-700 text-slate-300 hover:text-red-400 transition-colors z-10"
                           >
                             <X size={10} />
                           </button>
@@ -1986,7 +1986,7 @@ export default function ProfilePage() {
                           className="w-full h-full rounded-xl overflow-hidden border border-slate-700/40 hover:border-primary-500/40 transition-colors">
                           <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
                         </button>
-                        <button onClick={() => handlePortfolioDelete(f.id)} className="absolute top-1 right-1 p-1 rounded-md bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"><X size={11} /></button>
+                        <button onClick={() => handlePortfolioDelete(f.id)} className="absolute top-1 right-1 p-1 rounded-full bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-red-400 transition-all"><X size={11} /></button>
                       </div>
                     ))}
                   </div>
