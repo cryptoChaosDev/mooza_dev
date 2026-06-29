@@ -127,7 +127,7 @@ export default function ReviewsPage() {
                 }
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-white">{r.author.firstName} {r.author.lastName}</span>
+                    <span className="text-sm font-semibold text-white min-w-0 break-words [overflow-wrap:anywhere]">{r.author.firstName} {r.author.lastName}</span>
                     <Stars rating={r.rating} />
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -155,14 +155,14 @@ export default function ReviewsPage() {
                 )}
               </div>
 
-              {r.text && <p className="text-sm text-slate-300 leading-relaxed">{r.text}</p>}
+              {r.text && <p className="text-sm text-slate-300 leading-relaxed break-words [overflow-wrap:anywhere]">{r.text}</p>}
 
               {r.reply ? (
                 <div className="bg-slate-800/50 border border-slate-700/40 rounded-xl p-3 space-y-1 ml-4">
                   <p className="text-xs font-semibold text-primary-400 flex items-center gap-1">
                     <MessageSquare size={11} />Ответ
                   </p>
-                  <p className="text-sm text-slate-300">{r.reply}</p>
+                  <p className="text-sm text-slate-300 break-words [overflow-wrap:anywhere]">{r.reply}</p>
                 </div>
               ) : isOwner && replyingId !== r.id ? (
                 <button

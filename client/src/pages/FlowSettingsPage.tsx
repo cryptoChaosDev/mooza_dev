@@ -194,7 +194,7 @@ function CityMultiSelect({ selected, onAdd, onRemove }: { selected: string[]; on
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(query.trim()); } }}
             placeholder="Начните вводить город..."
-            className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+            className="flex-1 min-w-0 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
           />
           {query && (
             <button type="button" onClick={() => { setQuery(''); setResults([]); setOpen(false); }} className="text-slate-500 hover:text-white transition-colors">
@@ -327,7 +327,7 @@ export default function FlowSettingsPage() {
       <div className="max-w-2xl mx-auto">
 
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-4 flex items-center justify-between">
+        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-4 flex items-center justify-between" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
           <div className="flex items-center gap-3">
             <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors">
               <ArrowLeft size={20} />

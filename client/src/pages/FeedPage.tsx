@@ -190,7 +190,7 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
                 onChange={e => setReplyText(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Escape') setShowReplyInput(false); }}
                 placeholder={`Ответить ${comment.author.firstName}...`}
-                className="flex-1 bg-slate-800/60 border border-slate-700/60 focus:border-primary-500/60 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none transition-colors"
+                className="flex-1 min-w-0 bg-slate-800/60 border border-slate-700/60 focus:border-primary-500/60 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none transition-colors"
               />
               <button type="submit" disabled={!replyText.trim() || replyMut.isPending} className="p-1.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white rounded-lg transition-colors flex-shrink-0">
                 {replyMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
@@ -313,7 +313,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
       {isRepost && (
         <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-2 ml-1">
           <Repeat2 size={13} className="flex-shrink-0" />
-          <span className="truncate">«{post.author.firstName} {post.author.lastName} поделился(ась)»</span>
+          <span className="truncate min-w-0">«{post.author.firstName} {post.author.lastName} поделился(ась)»</span>
         </div>
       )}
       <div className="flex items-start justify-between gap-2 mb-3">
@@ -407,7 +407,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                     >
                       <div className="flex items-center gap-2 mb-2">
                         {original.author && <Avatar user={original.author} size={7} />}
-                        <span className="text-sm font-semibold text-white truncate">
+                        <span className="text-sm font-semibold text-white truncate min-w-0">
                           {original.author ? `${original.author.firstName} ${original.author.lastName}` : 'Автор'}
                         </span>
                         <span className="text-xs text-slate-500 flex-shrink-0">{original.createdAt ? timeAgo(original.createdAt) : ''}</span>
@@ -744,7 +744,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
           )}
           <form onSubmit={e => { e.preventDefault(); if (commentText.trim()) requireAuth(() => commentMut.mutate(commentText.trim())); }} className="flex gap-2 items-center">
             <input ref={commentInputRef} type="text" value={commentText} onChange={e => setCommentText(e.target.value)} placeholder="Написать комментарий..."
-              className="flex-1 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors" />
+              className="flex-1 min-w-0 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors" />
             <button type="submit" disabled={!commentText.trim() || commentMut.isPending} className="p-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl transition-colors flex-shrink-0">
               {commentMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
             </button>
@@ -1084,7 +1084,7 @@ export default function FeedPage() {
   const activeFilterCount = countActiveFilters(filters);
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950">
       <div className="max-w-2xl mx-auto">
 
         {/* Header */}

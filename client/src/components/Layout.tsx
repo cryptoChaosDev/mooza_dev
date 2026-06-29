@@ -46,7 +46,7 @@ export default function Layout({ children }: LayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950">
       {/* Mobile Header (sticky — stays in document flow so content flows naturally below it) */}
       <div className="lg:hidden sticky top-0 z-40 bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/50" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         {/* Notification permission banner */}
@@ -183,7 +183,7 @@ export default function Layout({ children }: LayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="lg:ml-64 min-h-screen">
+      <main className="lg:ml-64 min-h-screen min-h-[100dvh]">
         <div className="max-w-7xl mx-auto">
           {children}
         </div>

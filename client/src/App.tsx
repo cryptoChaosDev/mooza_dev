@@ -64,7 +64,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 function PageLoader() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900">
+    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-slate-900">
       <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent" />
     </div>
   );
@@ -214,14 +214,14 @@ function TelegramAutoLogin({ onDone }: { onDone: () => void }) {
   }, []);
 
   if (error) return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 px-6 text-center">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center gap-4 px-6 text-center">
       <p className="text-red-400 text-sm">{error}</p>
       <button onClick={onDone} className="text-primary-400 text-sm underline">Открыть в браузере</button>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
       <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent" />
     </div>
   );

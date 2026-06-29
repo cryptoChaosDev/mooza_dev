@@ -338,7 +338,7 @@ export default function GroupPage() {
                   {filteredFriends.map((f: any) => (
                     <button key={f.id} onClick={() => setInviteFriendId(f.id)} className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-colors text-left ${inviteFriendId === f.id ? 'bg-primary-500/10 border-primary-500/40' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
                       <AvatarComponent src={f.avatar} name={`${f.firstName} ${f.lastName}`} size={36} />
-                      <span className="text-sm text-white flex-1">{f.firstName} {f.lastName}</span>
+                      <span className="text-sm text-white flex-1 min-w-0 truncate">{f.firstName} {f.lastName}</span>
                       {inviteFriendId === f.id && <CheckCircle2 size={16} className="text-primary-400 flex-shrink-0" />}
                     </button>
                   ))}
@@ -357,7 +357,7 @@ export default function GroupPage() {
                   <p className="text-xs text-slate-600 italic py-2">Роли не найдены</p>
                 ) : filteredProfessions.map((p: any) => (
                   <button key={p.id} onClick={() => setInviteProfessionId(p.id)} className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors text-left ${inviteProfessionId === p.id ? 'bg-primary-500/10 border-primary-500/40' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
-                    <span className="text-sm text-white">{p.name}</span>
+                    <span className="text-sm text-white min-w-0 truncate">{p.name}</span>
                     {inviteProfessionId === p.id && <CheckCircle2 size={16} className="text-primary-400 flex-shrink-0" />}
                   </button>
                 ))}
@@ -447,7 +447,7 @@ export default function GroupPage() {
 
           {/* Name + badges */}
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <h1 className="text-2xl font-bold text-white leading-tight">{group.name}</h1>
+            <h1 className="text-2xl font-bold text-white leading-tight break-words [overflow-wrap:anywhere] min-w-0">{group.name}</h1>
             {group.type && TYPE_LABELS[group.type] && (
               <span className="px-2.5 py-1 bg-primary-500/10 border border-primary-500/25 text-primary-300 rounded-lg text-xs font-medium">
                 {TYPE_LABELS[group.type]}
@@ -519,7 +519,7 @@ export default function GroupPage() {
                 <p className="text-xs text-sky-300 font-medium mb-1">Одобрено — верифицируйте группу</p>
                 <p className="text-xs text-slate-400 mb-3">Опубликуйте этот код в официальных соцсетях группы и пришлите ссылку:</p>
                 <div className="flex items-center gap-2 mb-3 p-2.5 bg-slate-900 rounded-xl">
-                  <code className="text-sm font-mono font-bold text-primary-400 tracking-wider flex-1">{group.verificationCode}</code>
+                  <code className="text-sm font-mono font-bold text-primary-400 tracking-wider flex-1 min-w-0 break-all">{group.verificationCode}</code>
                   <button onClick={() => navigator.clipboard.writeText(group.verificationCode)} className="text-slate-500 hover:text-white text-xs px-2 py-0.5 bg-slate-800 rounded-lg transition-colors">
                     Копировать
                   </button>
@@ -528,7 +528,7 @@ export default function GroupPage() {
                   <p className="text-xs text-slate-400">Ссылка отправлена. Ожидайте подтверждения.</p>
                 ) : (
                   <div className="flex gap-2">
-                    <input value={proofUrl} onChange={e => setProofUrl(e.target.value)} placeholder="Ссылка на публикацию..." className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary-500" />
+                    <input value={proofUrl} onChange={e => setProofUrl(e.target.value)} placeholder="Ссылка на публикацию..." className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-2.5 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary-500" />
                     <button onClick={() => submitProofMut.mutate()} disabled={!proofUrl.trim() || submitProofMut.isPending} className="px-3 py-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-xs font-medium rounded-xl transition-colors">
                       {submitProofMut.isPending ? <Loader2 size={13} className="animate-spin" /> : 'Отправить'}
                     </button>
@@ -541,7 +541,7 @@ export default function GroupPage() {
             {group.description && (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
                 <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">О группе</p>
-                <p className="text-slate-300 text-sm leading-relaxed">{group.description}</p>
+                <p className="text-slate-300 text-sm leading-relaxed break-words [overflow-wrap:anywhere]">{group.description}</p>
               </div>
             )}
 
@@ -570,9 +570,9 @@ export default function GroupPage() {
                   <span className="text-sm font-semibold text-white">Контакты</span>
                 </div>
                 {group.bandLink && (
-                  <a href={group.bandLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary-400 text-sm hover:text-primary-300 transition-colors mb-3">
+                  <a href={group.bandLink} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-primary-400 text-sm hover:text-primary-300 transition-colors mb-3 min-w-0">
                     <ExternalLink size={14} className="flex-shrink-0" />
-                    <span className="truncate">{group.bandLink}</span>
+                    <span className="truncate min-w-0">{group.bandLink}</span>
                   </a>
                 )}
                 {hasSocialLinks && <SocialIconRow links={(group.socialLinks as Record<string, string>) || {}} />}

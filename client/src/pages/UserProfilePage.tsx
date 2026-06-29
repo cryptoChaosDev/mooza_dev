@@ -239,7 +239,7 @@ export default function UserProfilePage() {
 
           {/* ── Name + badges ── */}
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <h1 className="text-2xl font-bold text-white leading-tight">{user.firstName} {user.lastName}</h1>
+            <h1 className="text-2xl font-bold text-white leading-tight min-w-0 break-words [overflow-wrap:anywhere]">{user.firstName} {user.lastName}</h1>
             {user.isPro && <BadgeTooltip label="PRO аккаунт"><Zap size={18} className="text-violet-400" /></BadgeTooltip>}
             {user.isPremium && <BadgeTooltip label="Premium"><Crown size={18} className="text-amber-400" /></BadgeTooltip>}
             {user.isVerified && <BadgeTooltip label="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></BadgeTooltip>}
@@ -732,7 +732,7 @@ export default function UserProfilePage() {
     {docFullscreen && (
       <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
-          <span className="text-sm text-slate-300 truncate">{docFullscreen.name}</span>
+          <span className="text-sm text-slate-300 truncate min-w-0">{docFullscreen.name}</span>
           <button onClick={() => setDocFullscreen(null)} className="p-2 rounded-full bg-slate-800 text-white flex-shrink-0">
             <X size={20} />
           </button>

@@ -97,7 +97,10 @@ export default function ImageCropModal({ file, aspect, cropShape = 'rect', title
   return createPortal(
     <div className="fixed inset-0 z-[100] flex flex-col bg-slate-950/95 backdrop-blur-sm">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
+      <div
+        className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0"
+        style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}
+      >
         <button onClick={onCancel} className="p-2 -ml-2 text-slate-400 hover:text-white transition-colors">
           <X size={20} />
         </button>
@@ -134,7 +137,10 @@ export default function ImageCropModal({ file, aspect, cropShape = 'rect', title
       </div>
 
       {/* Zoom slider */}
-      <div className="flex items-center gap-3 px-5 py-4 border-t border-slate-800 flex-shrink-0">
+      <div
+        className="flex items-center gap-3 px-5 py-4 border-t border-slate-800 flex-shrink-0"
+        style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+      >
         <ZoomIn size={16} className="text-slate-400 flex-shrink-0" />
         <input
           type="range"

@@ -146,7 +146,7 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
         </div>
 
         {/* Title */}
-        <h1 className="text-2xl font-bold text-white text-center mb-1">{item.title}</h1>
+        <h1 className="text-2xl font-bold text-white text-center mb-1 break-words [overflow-wrap:anywhere]">{item.title}</h1>
 
         {/* Release date */}
         {isRelease && item.releaseDate && (

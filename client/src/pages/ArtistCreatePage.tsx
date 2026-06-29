@@ -482,7 +482,7 @@ export default function ArtistCreatePage() {
                 Разместите этот код в посте или описании профиля артиста в соцсетях:
               </p>
               <div className="flex items-center gap-2 p-2 bg-slate-900 rounded-lg">
-                <code className="text-base font-mono font-bold text-primary-400 tracking-wider flex-1">
+                <code className="text-base font-mono font-bold text-primary-400 tracking-wider flex-1 min-w-0 break-all">
                   {created.verificationCode}
                 </code>
                 <button

@@ -174,7 +174,7 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
                   : <div className="w-9 h-9 rounded-full bg-primary-800 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">{selected.author.firstName[0]}</div>
                 }
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white">{selected.author.firstName} {selected.author.lastName}</p>
+                  <p className="text-sm font-semibold text-white break-words [overflow-wrap:anywhere]">{selected.author.firstName} {selected.author.lastName}</p>
                   <p className="text-[11px] text-slate-500">
                     {new Date(selected.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>
@@ -199,7 +199,7 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
               </div>
 
               {selected.text && (
-                <p className="text-sm text-slate-300 leading-relaxed">{selected.text}</p>
+                <p className="text-sm text-slate-300 leading-relaxed break-words [overflow-wrap:anywhere]">{selected.text}</p>
               )}
 
               {selected.reply ? (
@@ -207,7 +207,7 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
                   <p className="text-xs font-semibold text-primary-400 flex items-center gap-1">
                     <MessageSquare size={11} />Ответ
                   </p>
-                  <p className="text-sm text-slate-300">{selected.reply}</p>
+                  <p className="text-sm text-slate-300 break-words [overflow-wrap:anywhere]">{selected.reply}</p>
                 </div>
               ) : isOwner ? (
                 <div className="space-y-2">

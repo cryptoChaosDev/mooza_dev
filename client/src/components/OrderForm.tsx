@@ -446,17 +446,17 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
       {/* 5 — Бюджет */}
       <div>
         <div className="grid grid-cols-2 gap-3">
-          <div>
+          <div className="min-w-0">
             <label className={labelCls}>Бюджет «от», ₽</label>
             <input type="number" inputMode="numeric" min={0} max={budgetTo || undefined} value={budgetFrom}
               onChange={e => setBudgetFrom(onlyDigits(e.target.value))}
-              placeholder="0" className={`${inputCls} ${budgetInvalid ? '!border-red-500/60' : ''}`} />
+              placeholder="0" className={`${inputCls} min-w-0 ${budgetInvalid ? '!border-red-500/60' : ''}`} />
           </div>
-          <div>
+          <div className="min-w-0">
             <label className={labelCls}>Бюджет «до», ₽</label>
             <input type="number" inputMode="numeric" min={budgetFrom || 0} value={budgetTo}
               onChange={e => setBudgetTo(onlyDigits(e.target.value))}
-              placeholder="0" className={`${inputCls} ${budgetInvalid ? '!border-red-500/60' : ''}`} />
+              placeholder="0" className={`${inputCls} min-w-0 ${budgetInvalid ? '!border-red-500/60' : ''}`} />
           </div>
         </div>
         {budgetInvalid && <p className="text-[11px] text-red-400 mt-1">«Бюджет от» не может быть больше «Бюджет до»</p>}

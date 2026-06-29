@@ -91,7 +91,7 @@ export default function CityPicker({ city, country: _country, onChange }: Props)
             }}
             onFocus={() => setOpen(true)}
             placeholder="Начните вводить город..."
-            className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+            className="flex-1 min-w-0 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
           />
           {query && (
             <button type="button" onClick={clear} className="text-slate-500 hover:text-white transition-colors">
@@ -110,8 +110,8 @@ export default function CityPicker({ city, country: _country, onChange }: Props)
                 className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-700/50 transition-colors text-left"
               >
                 <MapPin size={14} className="text-slate-500 flex-shrink-0" />
-                <span className="text-sm text-white font-medium">{c.name}</span>
-                <span className="text-xs text-slate-500 ml-auto">{c.country}</span>
+                <span className="text-sm text-white font-medium min-w-0 truncate">{c.name}</span>
+                <span className="text-xs text-slate-500 ml-auto flex-shrink-0">{c.country}</span>
               </button>
             )) : (
               <p className="px-4 py-3 text-xs text-slate-500">Город не найден в каталоге</p>

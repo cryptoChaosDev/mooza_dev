@@ -45,7 +45,8 @@ export default function FriendRequestsPage() {
 
   return (
     <div className="min-h-screen bg-slate-950">
-      <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+      <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800"
+        style={{ paddingTop: 'max(0px, env(safe-area-inset-top))' }}>
         <div className="px-4 pt-4 pb-3 max-w-2xl mx-auto">
           <div className="flex items-center gap-3 mb-3">
             <button onClick={() => navigate(-1)} className="p-1.5 -ml-1 text-slate-400 hover:text-white transition-colors">

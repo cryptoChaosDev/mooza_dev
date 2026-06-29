@@ -77,7 +77,7 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
         {/* Info — click navigates to profile. Surname first per spec. */}
         <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onNavigate(user.id)}>
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm font-semibold text-white">
+            <span className="text-sm font-semibold text-white min-w-0 break-words [overflow-wrap:anywhere]">
               {user.lastName} {user.firstName}
             </span>
             {user.isVerified && <span title="Верифицирован"><BadgeCheck size={12} className="text-sky-400 flex-shrink-0" /></span>}
@@ -113,7 +113,7 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
           {user.bio?.trim() ? (
             <div>
               <p className="text-[11px] text-slate-500 mb-1 font-medium uppercase tracking-wider">О себе</p>
-              <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">{user.bio}</p>
+              <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere]">{user.bio}</p>
             </div>
           ) : (
             <p className="text-xs text-slate-600 italic">Описание не добавлено</p>
@@ -222,7 +222,7 @@ function ServiceCardItem({ card, currentUserId, onNavigate, onMessage, onDeal, e
 
       {/* Service title (free-form name) */}
       <button onClick={() => onNavigate(card)} className="block w-full text-left mt-3">
-        <p className="text-sm font-semibold text-white leading-snug">{title}</p>
+        <p className="text-sm font-semibold text-white leading-snug break-words [overflow-wrap:anywhere]">{title}</p>
         {card.service?.name && title !== card.service.name && (
           <p className="text-[11px] text-slate-500 mt-0.5">{card.service.name}</p>
         )}
@@ -235,7 +235,7 @@ function ServiceCardItem({ card, currentUserId, onNavigate, onMessage, onDeal, e
           <div className="mt-1.5 space-y-1">
             {priceItems.slice(0, 3).map((it, i) => (
               <div key={i} className="flex items-center justify-between gap-3 text-xs">
-                <span className="text-slate-400 truncate">{it.name}</span>
+                <span className="text-slate-400 truncate min-w-0">{it.name}</span>
                 <span className="text-slate-300 flex-shrink-0">{it.price ? `${it.price} ₽` : '—'}</span>
               </div>
             ))}
@@ -586,7 +586,7 @@ export default function SearchPage() {
     : [];
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950">
 
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">

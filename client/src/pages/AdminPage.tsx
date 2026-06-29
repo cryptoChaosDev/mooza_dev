@@ -137,7 +137,7 @@ function SimpleTable({
               value={form.name ?? ''}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
               placeholder="Название"
-              className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500"
+              className="flex-1 min-w-0 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500"
             />
             {extraFields?.map(ef => (
               <input
@@ -162,7 +162,7 @@ function SimpleTable({
                   autoFocus
                   value={form.name ?? ''}
                   onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                  className="flex-1 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500"
+                  className="flex-1 min-w-0 bg-slate-700 text-white text-sm px-2 py-1 rounded outline-none border border-slate-600 focus:border-primary-500"
                 />
                 {extraFields?.map(ef => (
                   <input
@@ -1292,7 +1292,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
     <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4" onClick={onClose}>
       <div
         className="bg-slate-900 rounded-2xl w-full max-w-md shadow-2xl flex flex-col"
-        style={{ maxHeight: 'calc(100vh - 2rem)' }}
+        style={{ maxHeight: 'calc(100dvh - 2rem)' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -1588,8 +1588,8 @@ function UsersTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1">
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
           <input
             value={search}

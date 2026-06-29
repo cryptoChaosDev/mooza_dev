@@ -155,12 +155,12 @@ export default function SelectSheet({
                   )}
 
                   {/* Text */}
-                  <div className="flex-1 text-left">
-                    <div className={`font-medium ${selected ? 'text-white' : 'text-slate-200'}`}>
+                  <div className="flex-1 min-w-0 text-left">
+                    <div className={`font-medium break-words [overflow-wrap:anywhere] ${selected ? 'text-white' : 'text-slate-200'}`}>
                       {option.name}
                     </div>
                     {option.subtitle && (
-                      <div className="text-sm text-slate-400 mt-0.5">{option.subtitle}</div>
+                      <div className="text-sm text-slate-400 mt-0.5 break-words [overflow-wrap:anywhere]">{option.subtitle}</div>
                     )}
                   </div>
                 </button>

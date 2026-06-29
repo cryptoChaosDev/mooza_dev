@@ -776,7 +776,7 @@ export default function ArtistPage() {
               <label className="block text-xs text-slate-500 mb-1">Слушателей в месяц</label>
               <input
                 type="number"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
+                className="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
                 value={form.listeners}
                 onChange={(e) => set('listeners', e.target.value)}
                 placeholder="0"
@@ -861,7 +861,8 @@ export default function ArtistPage() {
         {/* Back button — fixed so it stays visible on scroll */}
         <button
           onClick={() => navigate(-1)}
-          className="fixed top-[72px] left-4 z-30 w-9 h-9 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center shadow-lg"
+          className="fixed left-4 z-30 w-9 h-9 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center shadow-lg"
+          style={{ top: 'calc(72px + env(safe-area-inset-top, 0px))' }}
         >
           <ArrowLeft size={18} className="text-white" />
         </button>
@@ -1105,7 +1106,7 @@ export default function ArtistPage() {
 
         {/* Description */}
         {artist.description && (
-          <p className="text-slate-300 text-sm leading-relaxed mb-4 border-l-2 border-primary-500/40 pl-3">
+          <p className="text-slate-300 text-sm leading-relaxed mb-4 border-l-2 border-primary-500/40 pl-3 break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
             {artist.description}
           </p>
         )}
@@ -1142,7 +1143,7 @@ export default function ArtistPage() {
                 className="flex items-center gap-2 text-primary-400 text-sm hover:underline mb-2"
               >
                 <ExternalLink size={14} className="flex-shrink-0" />
-                <span className="truncate">{artist.bandLink}</span>
+                <span className="truncate min-w-0">{artist.bandLink}</span>
               </a>
             )}
             {hasSocialLinks && <SocialIconRow links={(artist.socialLinks as Record<string, string>) || {}} labeled />}
@@ -1712,7 +1713,7 @@ export default function ArtistPage() {
                 <>
                   <p className="text-xs text-slate-400">Ссылка-приглашение готова. Она привязана к выбранным ролям и не имеет срока действия.</p>
                   <div className="flex items-center gap-2 p-2 bg-slate-800 rounded-lg">
-                    <code className="text-xs text-primary-300 truncate flex-1">{generatedLink}</code>
+                    <code className="text-xs text-primary-300 truncate flex-1 min-w-0">{generatedLink}</code>
                   </div>
                   <button
                     onClick={async () => {

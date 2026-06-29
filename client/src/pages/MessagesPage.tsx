@@ -187,7 +187,7 @@ export default function MessagesPage() {
   ).length;
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950">
       <div className="max-w-2xl mx-auto">
 
         {/* Header */}
@@ -461,7 +461,7 @@ export default function MessagesPage() {
                     }`}
                   >
                     <AvatarComponent src={f.avatar} name={`${f.firstName} ${f.lastName}`} size={32} />
-                    <span className="text-white text-sm flex-1">{f.firstName} {f.lastName}</span>
+                    <span className="text-white text-sm flex-1 min-w-0 truncate">{f.firstName} {f.lastName}</span>
                     {selectedIds.includes(f.id) && <Check size={16} className="text-primary-400 flex-shrink-0" />}
                   </button>
                 ))}

@@ -541,7 +541,7 @@ export default function VacancyForm({
           <input type="number" inputMode="numeric" min={0} value={compensation}
             onChange={e => setCompensation(onlyDigits(e.target.value))}
             placeholder={paymentType === 'percent' ? 'Например: 30 (%)' : 'Например: 5000 (₽)'}
-            className={inputCls} />
+            className={`${inputCls} min-w-0`} />
         </div>
       )}
 

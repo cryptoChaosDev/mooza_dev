@@ -537,7 +537,7 @@ export default function CreatePostPage() {
                       placeholder={`Вариант ${idx + 1}`}
                       value={opt}
                       onChange={e => setPollOptions(prev => prev.map((x, i) => i === idx ? e.target.value : x))}
-                      className="flex-1 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      className="flex-1 min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                     />
                     {pollOptions.length > 2 && (
                       <button type="button" onClick={() => setPollOptions(prev => prev.filter((_, i) => i !== idx))}
@@ -678,7 +678,7 @@ export default function CreatePostPage() {
                         value={genreSearch}
                         onChange={e => setGenreSearch(e.target.value)}
                         placeholder="Поиск жанра..."
-                        className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+                        className="flex-1 min-w-0 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
                       />
                     </div>
                     {genreSearch.trim() && filteredGenres.length > 0 && (

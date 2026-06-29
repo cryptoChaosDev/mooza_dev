@@ -68,7 +68,7 @@ export default function ProfessionSelector({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Поиск профессии..."
-            className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+            className="flex-1 min-w-0 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
           />
           {searchQuery && (
             <button onClick={() => setSearchQuery('')} className="text-slate-500 hover:text-white transition-colors">
@@ -112,7 +112,7 @@ export default function ProfessionSelector({
                       : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 border border-slate-700/40'
                   }`}
                 >
-                  <span className="truncate">{profession}</span>
+                  <span className="truncate min-w-0">{profession}</span>
                   {isSelected
                     ? <Check size={16} className="text-primary-400 flex-shrink-0 ml-2" />
                     : <Plus size={16} className="text-slate-500 flex-shrink-0 ml-2" />

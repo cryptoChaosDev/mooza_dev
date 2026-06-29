@@ -204,7 +204,7 @@ export default function ServicePage() {
             <div className="w-10 h-10 rounded-xl bg-primary-900/60 border border-primary-700/30 flex items-center justify-center flex-shrink-0 mt-0.5">
               <Briefcase size={18} className="text-primary-400" />
             </div>
-            <h1 className="text-xl font-bold text-white leading-tight">{us.service?.name}</h1>
+            <h1 className="text-xl font-bold text-white leading-tight min-w-0 break-words [overflow-wrap:anywhere]">{us.service?.name}</h1>
           </div>
 
           {/* Filters */}
@@ -252,7 +252,7 @@ export default function ServicePage() {
               <div className="space-y-1.5">
                 {(us.priceItems as any[]).map((item: any, i: number) => (
                   <div key={i} className="flex items-center justify-between gap-3">
-                    <span className="text-sm text-slate-300 flex-1">{item.name}</span>
+                    <span className="text-sm text-slate-300 flex-1 min-w-0 break-words [overflow-wrap:anywhere]">{item.name}</span>
                     <span className="text-sm font-medium text-primary-400 flex-shrink-0">{item.price}</span>
                   </div>
                 ))}

@@ -70,7 +70,8 @@ export default function ServicesPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 pb-24">
-      <div className="sticky top-0 z-20 bg-slate-950/90 backdrop-blur border-b border-slate-800/60">
+      <div className="sticky top-0 z-20 bg-slate-950/90 backdrop-blur border-b border-slate-800/60"
+        style={{ paddingTop: 'max(0px, env(safe-area-inset-top))' }}>
         <div className="px-4 py-3 flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all">
             <ArrowLeft size={20} />

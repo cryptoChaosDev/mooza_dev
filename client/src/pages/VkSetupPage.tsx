@@ -397,7 +397,7 @@ export default function VkSetupPage() {
               onChange={e => setProfSearch(e.target.value)}
               onFocus={() => profSearch.trim() && setShowDropdown(true)}
               placeholder="Начните вводить и выберите из списка"
-              className="flex-1 bg-transparent text-white text-sm placeholder-slate-500 focus:outline-none"
+              className="flex-1 min-w-0 bg-transparent text-white text-sm placeholder-slate-500 focus:outline-none"
               autoFocus
             />
             {profSearch && <button onClick={() => { setProfSearch(''); setShowDropdown(false); }}><X size={14} className="text-slate-500" /></button>}

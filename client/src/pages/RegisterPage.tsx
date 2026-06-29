@@ -710,7 +710,7 @@ export default function RegisterPage() {
             value={birthDate}
             onChange={e => setBirthDate(e.target.value)}
             max={new Date(Date.now() - 16 * 365.25 * 24 * 3600 * 1000).toISOString().split('T')[0]}
-            className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-2xl text-white focus:outline-none focus:border-primary-500 [color-scheme:dark]"
+            className="w-full min-w-0 px-4 py-3 bg-slate-800 border border-slate-700 rounded-2xl text-white focus:outline-none focus:border-primary-500 [color-scheme:dark]"
           />
         </Field>
       </div>
@@ -729,7 +729,7 @@ export default function RegisterPage() {
               onChange={e => setProfSearch(e.target.value)}
               onFocus={() => profSearch.trim() && setShowProfDropdown(true)}
               placeholder="Начните вводить и выберите из списка"
-              className="flex-1 bg-transparent text-white text-sm placeholder-slate-500 focus:outline-none"
+              className="flex-1 min-w-0 bg-transparent text-white text-sm placeholder-slate-500 focus:outline-none"
               autoFocus
             />
             {profSearch && <button onClick={() => { setProfSearch(''); setShowProfDropdown(false); }} className="text-slate-500 hover:text-white"><X size={14} /></button>}

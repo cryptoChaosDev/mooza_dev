@@ -294,7 +294,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
                 <label className="block text-xs text-slate-500 mb-1">Ссылка</label>
                 <div className="flex gap-2">
                   <input
-                    className="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
+                    className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
                     placeholder="https://..."
@@ -349,7 +349,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
                   <input
                     type="date"
                     max={todayStr}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
+                    className="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
                     value={releaseDate}
                     onChange={(e) => setReleaseDate(e.target.value)}
                   />

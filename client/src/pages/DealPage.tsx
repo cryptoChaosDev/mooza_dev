@@ -218,7 +218,7 @@ export default function DealPage() {
           {deal.result && (
             <div>
               <p className="text-xs text-slate-400 mb-1">Ожидаемый результат</p>
-              <p className="text-sm text-slate-300">{deal.result}</p>
+              <p className="text-sm text-slate-300 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{deal.result}</p>
             </div>
           )}
         </div>
@@ -226,7 +226,7 @@ export default function DealPage() {
         {deal.cancelReason && (
           <div className="p-3 bg-red-500/5 border border-red-500/20 rounded-xl">
             <p className="text-[11px] font-semibold text-red-400/70 uppercase tracking-wide mb-1">Причина отмены</p>
-            <p className="text-sm text-slate-300">{deal.cancelReason}</p>
+            <p className="text-sm text-slate-300 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{deal.cancelReason}</p>
           </div>
         )}
 
@@ -392,13 +392,13 @@ export default function DealPage() {
                   <div>
                     <label className="text-xs text-slate-400 mb-1 block">Новый срок сдачи</label>
                     <input type="date" value={editDeadline} onChange={e => setEditDeadline(e.target.value)}
-                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white" />
+                      className="w-full min-w-0 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white" />
                   </div>
                   <div>
                     <label className="text-xs text-slate-400 mb-1 block">Новое количество правок</label>
                     <input type="number" value={editRevisions} onChange={e => setEditRevisions(e.target.value)}
                       placeholder={String(deal.revisionCount)}
-                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white" />
+                      className="w-full min-w-0 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white" />
                   </div>
                   <div className="flex gap-2 pt-1">
                     <button onClick={() => setShowEditForm(false)} className="flex-1 py-2 text-sm text-slate-400 border border-slate-700 rounded-xl hover:text-white transition-colors">Отмена</button>

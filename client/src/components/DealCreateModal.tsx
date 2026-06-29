@@ -132,13 +132,13 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
 
           <div>
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Исполнитель</label>
-            <p className="px-3 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm text-white">{executorName}</p>
+            <p className="px-3 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm text-white break-words [overflow-wrap:anywhere]">{executorName}</p>
           </div>
 
           {serviceName && (
             <div>
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Услуга</label>
-              <p className="px-3 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm text-primary-300">{serviceName}</p>
+              <p className="px-3 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm text-primary-300 break-words [overflow-wrap:anywhere]">{serviceName}</p>
             </div>
           )}
 
@@ -150,29 +150,29 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
               onChange={e => setPrice(e.target.value)}
               placeholder="По договорённости"
               min={0}
-              className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+              className="w-full min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
             />
           </div>
 
           {dealType === 'process' ? (
             <>
               <div className="grid grid-cols-2 gap-3">
-                <div>
+                <div className="min-w-0">
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Срок сдачи</label>
                   <input
                     type="date"
                     value={deadline}
                     onChange={e => setDeadline(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Срок приёмки</label>
                   <input
                     type="date"
                     value={acceptDeadline}
                     onChange={e => setAcceptDeadline(e.target.value)}
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
                   />
                 </div>
               </div>
@@ -184,7 +184,7 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
                   onChange={e => setRevisionCount(e.target.value)}
                   min={0}
                   max={20}
-                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
             </>
@@ -197,7 +197,7 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
                   value={eventDate}
                   onChange={e => setEventDate(e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
-                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
               </div>
               <div>
@@ -208,7 +208,7 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
                   onChange={e => setDeposit(e.target.value)}
                   min={0}
                   placeholder="0"
-                  className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  className="w-full min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
                 <p className="text-[10px] text-slate-600 mt-1">Сумма, которая не возвращается при отмене после оплаты</p>
               </div>

@@ -1177,7 +1177,7 @@ export default function ChatPage() {
                                 ) : (
                                   <a href={`${API_URL}${msg.attachmentUrl}`} target="_blank" rel="noreferrer" download={msg.attachmentName || true} className={`flex items-center gap-2 mb-1 px-3 py-2 rounded-lg ${isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-slate-600/50 hover:bg-slate-600'} transition-colors`}>
                                     <FileText size={16} className="flex-shrink-0" />
-                                    <span className="text-xs truncate flex-1">{msg.attachmentName || 'Файл'}</span>
+                                    <span className="text-xs truncate flex-1 min-w-0">{msg.attachmentName || 'Файл'}</span>
                                     <Download size={14} className="flex-shrink-0 opacity-60" />
                                   </a>
                                 );
@@ -1196,7 +1196,7 @@ export default function ChatPage() {
                                   </span>
                                 );
                                 return msg.content ? (
-                                  <p className="text-sm leading-relaxed break-words whitespace-pre-wrap overflow-hidden">
+                                  <p className="text-sm leading-relaxed break-words [overflow-wrap:anywhere] whitespace-pre-wrap overflow-hidden">
                                     {timeMeta}{msg.content}
                                   </p>
                                 ) : (
@@ -1454,13 +1454,13 @@ export default function ChatPage() {
           )}
 
           {/* Input bubble — emoji inside right */}
-          <div className="flex-1 flex items-end bg-slate-800 border border-slate-700 rounded-2xl focus-within:border-primary-500/50 transition-colors overflow-hidden">
+          <div className="flex-1 min-w-0 flex items-end bg-slate-800 border border-slate-700 rounded-2xl focus-within:border-primary-500/50 transition-colors overflow-hidden">
             <textarea
               ref={inputRef}
               value={newMessage}
               onChange={e => setNewMessage(e.target.value)}
               placeholder={editingId ? 'Редактировать...' : 'Сообщение...'}
-              className="flex-1 bg-transparent text-sm text-white px-3 py-2.5 focus:outline-none placeholder-slate-500 resize-none overflow-y-auto"
+              className="flex-1 min-w-0 bg-transparent text-sm text-white px-3 py-2.5 focus:outline-none placeholder-slate-500 resize-none overflow-y-auto"
               style={{ height: '40px', maxHeight: '160px', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
             />
             <button type="button" onClick={() => setShowEmoji(p => !p)}

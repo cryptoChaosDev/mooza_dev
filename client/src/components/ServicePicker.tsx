@@ -121,7 +121,7 @@ export default function ServicePicker({ onSelect, onClose, excludeServiceIds = [
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Поиск..."
-            className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+            className="flex-1 min-w-0 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
           />
           {search && <button onClick={() => setSearch('')} className="text-slate-500 hover:text-white transition-colors"><X size={14} /></button>}
         </div>
@@ -140,12 +140,12 @@ export default function ServicePicker({ onSelect, onClose, excludeServiceIds = [
             <button
               key={item.id}
               onClick={() => handleSelect(item)}
-              className="w-full flex items-center justify-between px-4 py-3.5 rounded-2xl hover:bg-slate-800 transition-colors text-left group"
+              className="w-full flex items-center justify-between gap-2 px-4 py-3.5 rounded-2xl hover:bg-slate-800 transition-colors text-left group"
             >
-              <span className="text-sm text-slate-200 group-hover:text-white transition-colors">{item.name}</span>
+              <span className="text-sm text-slate-200 group-hover:text-white transition-colors min-w-0 break-words [overflow-wrap:anywhere]">{item.name}</span>
               {level === 'service'
-                ? <Check size={16} className="text-primary-400 opacity-0 group-hover:opacity-100 transition-opacity" />
-                : <ChevronRight size={16} className="text-slate-600 group-hover:text-slate-400 transition-colors" />
+                ? <Check size={16} className="text-primary-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                : <ChevronRight size={16} className="text-slate-600 group-hover:text-slate-400 transition-colors flex-shrink-0" />
               }
             </button>
           ))

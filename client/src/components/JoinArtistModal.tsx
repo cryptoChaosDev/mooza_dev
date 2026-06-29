@@ -113,8 +113,8 @@ export default function JoinArtistModal({ onClose }: Props) {
                       : <Music2 size={14} className="text-primary-400" />
                     }
                   </div>
-                  <span className="flex-1 text-sm font-semibold text-white">{selectedArtist.name}</span>
-                  <button onClick={() => { setSelectedArtist(null); setArtistQuery(''); setNotFound(false); }}>
+                  <span className="flex-1 min-w-0 truncate text-sm font-semibold text-white">{selectedArtist.name}</span>
+                  <button className="flex-shrink-0" onClick={() => { setSelectedArtist(null); setArtistQuery(''); setNotFound(false); }}>
                     <X size={15} className="text-slate-400 hover:text-white" />
                   </button>
                 </div>
@@ -142,7 +142,7 @@ export default function JoinArtistModal({ onClose }: Props) {
                       <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center overflow-hidden flex-shrink-0">
                         {s.thumb ? <img src={s.thumb} alt={s.name} className="w-full h-full object-cover" /> : <Music2 size={14} className="text-slate-400" />}
                       </div>
-                      <span className="text-sm text-white">{s.name}</span>
+                      <span className="text-sm text-white min-w-0 truncate">{s.name}</span>
                     </button>
                   ))}
                 </div>

@@ -457,7 +457,7 @@ export default function OrderDetailPage() {
                     value={respondPrice}
                     onChange={e => setRespondPrice(e.target.value)}
                     placeholder="Ваша цена ₽"
-                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    className="w-full min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                   />
                 </div>
                 <div>

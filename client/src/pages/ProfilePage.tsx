@@ -846,7 +846,7 @@ export default function ProfilePage() {
     );
   }
 
-  const inputCls = "w-full px-3.5 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white placeholder-slate-500";
+  const inputCls = "w-full min-w-0 px-3.5 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white placeholder-slate-500";
   const labelCls = "block text-xs font-semibold mb-1 text-slate-400";
 
   // My services regrouped by SECTION (sections now own the catalog; services no
@@ -2141,7 +2141,7 @@ export default function ProfilePage() {
             </div>
             <button onClick={() => setShowPrivacy(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
           </div>
-          <div className="px-5 py-3">
+          <div className="px-5 py-3" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
             {/* Contacts visibility — 3-level selector */}
             <div className="py-3 border-b border-slate-800/60">
               <p className="text-sm font-medium text-white">Кто видит контакты</p>
