@@ -70,7 +70,8 @@ const buildFeedInclude = (userId: string | undefined) => {
       priceTo: true,
       priceItems: true,
       service: { select: { name: true, section: { select: { name: true } } } },
-      user: { select: { id: true, firstName: true, lastName: true } },
+      profession: { select: { name: true } },
+      user: { select: { id: true, firstName: true, lastName: true, city: true } },
     },
   },
   // Structured «Заказ» post — the linked customer brief, for the «Посмотреть детали» button.

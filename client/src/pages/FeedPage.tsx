@@ -468,6 +468,8 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
               {!isRepost && svc && (() => {
                 const serviceTitle = post.title || svc.name || svc.service?.name || 'Услуга';
                 const sectionName = svc.service?.section?.name || '';
+                const professionName = svc.profession?.name || '';
+                const city = svc.user?.city || '';
                 const price = (svc.priceFrom != null || svc.priceTo != null)
                   ? [
                       svc.priceFrom != null ? `от ${svc.priceFrom} ₽` : null,
@@ -486,6 +488,16 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                         {sectionName && (
                           <span className="text-xs text-slate-400">
                             Раздел: <span className="text-slate-200">{sectionName}</span>
+                          </span>
+                        )}
+                        {professionName && (
+                          <span className="text-xs text-slate-400">
+                            Профессия: <span className="text-slate-200">{professionName}</span>
+                          </span>
+                        )}
+                        {city && (
+                          <span className="text-xs text-slate-400">
+                            Город: <span className="text-slate-200">{city}</span>
                           </span>
                         )}
                         <span className="text-xs text-slate-400">
