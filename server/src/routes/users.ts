@@ -499,6 +499,14 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     if (socialLinks !== undefined) updateData.socialLinks = socialLinks;
     if (fieldOfActivityId !== undefined) updateData.fieldOfActivityId = fieldOfActivityId || null;
     const parsedBirthDate = parseBirthDate();
+    if (parsedBirthDate instanceof Date) {
+      const now = new Date();
+      const age = now.getFullYear() - parsedBirthDate.getFullYear()
+        - (now < new Date(now.getFullYear(), parsedBirthDate.getMonth(), parsedBirthDate.getDate()) ? 1 : 0);
+      if (age < 16) {
+        return res.status(400).json({ error: 'AGE_TOO_YOUNG', message: 'Для использования платформы необходимо быть старше 16 лет' });
+      }
+    }
     if (parsedBirthDate !== undefined) updateData.birthDate = parsedBirthDate;
     if (birthDateVisible !== undefined) updateData.birthDateVisible = !!birthDateVisible;
     // 3-level contacts visibility (preferred). Keep legacy boolean in sync:

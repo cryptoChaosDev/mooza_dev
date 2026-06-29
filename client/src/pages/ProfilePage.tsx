@@ -513,6 +513,13 @@ export default function ProfilePage() {
     const birthDateISO = bd.length === 10
       ? `${bd.slice(6)}-${bd.slice(3, 5)}-${bd.slice(0, 2)}`
       : undefined;
+    if (birthDateISO) {
+      const birth = new Date(birthDateISO);
+      const now = new Date();
+      const age = now.getFullYear() - birth.getFullYear()
+        - (now < new Date(now.getFullYear(), birth.getMonth(), birth.getDate()) ? 1 : 0);
+      if (age < 16) { toast.error('Для использования платформы необходимо быть старше 16 лет'); return; }
+    }
     try {
       await updateMutation.mutateAsync({ ...stripProfessions(formData), birthDate: birthDateISO ?? null });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
