@@ -643,22 +643,26 @@ export default function VacancyForm({
       </div>
 
       {/* Actions */}
-      <div className="flex flex-wrap gap-2 pt-1">
-        <button
-          onClick={() => { discardedRef.current = true; onClose(); }}
-          className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors flex-shrink-0">
-          Отмена
-        </button>
-        <button
-          onClick={saveDraft}
-          disabled={!professionOk || !titleOk || !artistOk || submitting}
-          className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 text-sm font-medium transition-colors flex-shrink-0">
-          {isEdit ? 'Сохранить черновик' : 'В черновики'}
-        </button>
+      {/* Footer — deterministic on every width: small row (Отмена / В черновики)
+          on top, full-width primary button at the very bottom. */}
+      <div className="flex flex-col gap-2 pt-1">
+        <div className="flex gap-2">
+          <button
+            onClick={() => { discardedRef.current = true; onClose(); }}
+            className="flex-1 py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors">
+            Отмена
+          </button>
+          <button
+            onClick={saveDraft}
+            disabled={!professionOk || !titleOk || !artistOk || submitting}
+            className="flex-1 py-2 px-3 rounded-lg border border-slate-600/50 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 text-sm font-medium transition-colors">
+            {isEdit ? 'Сохранить черновик' : 'В черновики'}
+          </button>
+        </div>
         <button
           onClick={publish}
           disabled={!canSave || submitting}
-          className="flex-1 min-w-[8rem] py-2 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
+          className="w-full py-2.5 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
         >
           {submitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
           Опубликовать

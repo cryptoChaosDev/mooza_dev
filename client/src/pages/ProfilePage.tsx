@@ -1143,22 +1143,26 @@ export default function ProfilePage() {
             placeholder="Опишите услугу..." className={`${inputCls} resize-none`} />
         </div>
 
-        <div className="flex flex-wrap gap-2 pt-1">
-          <button
-            onClick={() => { serviceFormDiscardedRef.current = true; closeServiceForm(); }}
-            className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors flex-shrink-0">
-            Отмена
-          </button>
-          <button
-            onClick={() => commitServiceForm('draft')}
-            disabled={!canSave || updateServicesMutation.isPending}
-            className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 text-sm font-medium transition-colors flex-shrink-0">
-            В черновики
-          </button>
+        {/* Footer — deterministic on every width: small row (Отмена / В черновики)
+            on top, full-width primary button at the very bottom. */}
+        <div className="flex flex-col gap-2 pt-1">
+          <div className="flex gap-2">
+            <button
+              onClick={() => { serviceFormDiscardedRef.current = true; closeServiceForm(); }}
+              className="flex-1 py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors">
+              Отмена
+            </button>
+            <button
+              onClick={() => commitServiceForm('draft')}
+              disabled={!canSave || updateServicesMutation.isPending}
+              className="flex-1 py-2 px-3 rounded-lg border border-slate-600/50 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 text-sm font-medium transition-colors">
+              В черновики
+            </button>
+          </div>
           <button
             onClick={() => ensurePublicConsent(() => commitServiceForm('publish'))}
             disabled={!canSave || updateServicesMutation.isPending}
-            className="flex-1 min-w-[8rem] py-2 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
+            className="w-full py-2.5 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
           >
             {updateServicesMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             {isEdit ? 'Сохранить изменения' : 'Добавить услугу'}
