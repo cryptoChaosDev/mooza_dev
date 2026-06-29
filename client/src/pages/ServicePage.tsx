@@ -270,7 +270,7 @@ export default function ServicePage() {
           {us.description && (
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Описание</p>
-              <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">{us.description}</p>
+              <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{us.description}</p>
             </div>
           )}
 
