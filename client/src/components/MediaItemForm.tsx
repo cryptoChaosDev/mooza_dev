@@ -1,25 +1,13 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Save, Loader2, Search, Tag, Trash2, RefreshCw } from 'lucide-react';
+import { X, Save, Loader2, Search, Tag, Trash2, RefreshCw, Check } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { releaseAPI, clipAPI, userAPI, roleAPI } from '../lib/api';
+import { detectMediaPlatform, MEDIA_PLATFORM_LABELS, allowedPlatformLabels } from '../lib/mediaPlatforms';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { toast } from '../stores/toastStore';
 import AvatarComponent from './Avatar';
 import RolePicker from './RolePicker';
-
-// ── Platform option labels ─────────────────────────────────────────────────
-const RELEASE_PLATFORMS: { id: string; name: string }[] = [
-  { id: 'VK', name: 'ВКонтакте' },
-  { id: 'SPOTIFY', name: 'Spotify' },
-  { id: 'YANDEX_MUSIC', name: 'Яндекс Музыка' },
-  { id: 'APPLE_MUSIC', name: 'Apple Music' },
-];
-const CLIP_PLATFORMS: { id: string; name: string }[] = [
-  { id: 'VK_VIDEO', name: 'ВКонтакте Видео' },
-  { id: 'RUTUBE', name: 'Rutube' },
-  { id: 'YOUTUBE', name: 'YouTube' },
-];
 
 export interface MediaItemInitial {
   id: string;
@@ -57,7 +45,6 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
   const queryClient = useQueryClient();
   const isRelease = kind === 'release';
   const api = isRelease ? releaseAPI : clipAPI;
-  const platforms = isRelease ? RELEASE_PLATFORMS : CLIP_PLATFORMS;
   const roleContext = isRelease ? 'release' : 'clip';
   const editing = !!initial;
 
@@ -65,13 +52,20 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
   const _td = new Date();
   const todayStr = `${_td.getFullYear()}-${String(_td.getMonth() + 1).padStart(2, '0')}-${String(_td.getDate()).padStart(2, '0')}`;
 
-  const [platform, setPlatform] = useState<string>(initial?.platform ?? platforms[0].id);
   const [url, setUrl] = useState(initial?.url ?? '');
   const [title, setTitle] = useState(initial?.title ?? '');
   const [coverUrl, setCoverUrl] = useState(initial?.coverUrl ?? '');
   const [releaseDate, setReleaseDate] = useState(
     initial?.releaseDate ? initial.releaseDate.slice(0, 10) : '',
   );
+
+  // Platform is no longer picked by hand — it's derived from the pasted link.
+  // null → the link isn't a real URL to one of the allowed streaming services.
+  const detectedPlatform = useMemo(
+    () => (url.trim() ? detectMediaPlatform(kind, url.trim()) : null),
+    [kind, url],
+  );
+  const urlInvalid = url.trim().length > 0 && !detectedPlatform;
 
   const [participants, setParticipants] = useState<DraftParticipant[]>(
     (initial?.participants ?? []).map((p) => ({
@@ -147,7 +141,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
 
   // ── Metadata prefill ──────────────────────────────────────────────────────
   const metaMut = useMutation({
-    mutationFn: () => api.fetchMetadata(platform, url.trim()),
+    mutationFn: () => api.fetchMetadata(detectedPlatform ?? '', url.trim()),
     onSuccess: (res: any) => {
       const data = res?.data ?? {};
       if (data.title) setTitle(data.title);
@@ -168,7 +162,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
       const participantsPayload = participants.map((p) => ({ userId: p.userId, roleIds: p.roleIds }));
       if (editing) {
         return api.update(initial!.id, {
-          platform: platform as any,
+          platform: detectedPlatform as any,
           url: url.trim(),
           title: title.trim(),
           coverUrl: coverUrl.trim() ? coverUrl.trim() : null,
@@ -178,7 +172,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
       }
       return api.create({
         artistId,
-        platform: platform as any,
+        platform: detectedPlatform as any,
         url: url.trim(),
         title: title.trim(),
         ...(coverUrl.trim() ? { coverUrl: coverUrl.trim() } : {}),
@@ -248,6 +242,10 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
               </span>
               <button
                 onClick={() => {
+                  if (!detectedPlatform) {
+                    toast.error('Вставьте ссылку на поддерживаемый сервис');
+                    return;
+                  }
                   if (isRelease && releaseDate && releaseDate > todayStr) {
                     toast.error('Дата релиза не может быть позже сегодняшнего дня');
                     return;
@@ -255,7 +253,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
                   setSaveError('');
                   saveMut.mutate();
                 }}
-                disabled={saveMut.isPending || !title.trim() || !url.trim()}
+                disabled={saveMut.isPending || !title.trim() || !detectedPlatform}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-600 text-white text-sm font-semibold disabled:opacity-50"
               >
                 {saveMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
@@ -268,28 +266,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
               className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4"
               style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
             >
-              {/* Platform */}
-              <div>
-                <label className="block text-xs text-slate-500 mb-1.5">Платформа</label>
-                <div className="flex flex-wrap gap-2">
-                  {platforms.map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setPlatform(p.id)}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-colors ${
-                        platform === p.id
-                          ? 'bg-primary-500/10 border-primary-500/40 text-primary-300'
-                          : 'bg-slate-800 border-slate-700 text-slate-400'
-                      }`}
-                    >
-                      {p.name}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* URL + fetch */}
+              {/* URL + fetch — platform is auto-detected from the link */}
               <div>
                 <label className="block text-xs text-slate-500 mb-1">Ссылка <span className="text-red-400">*</span></label>
                 <div className="flex gap-2">
@@ -302,13 +279,28 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
                   <button
                     type="button"
                     onClick={() => { setFetchError(''); metaMut.mutate(); }}
-                    disabled={metaMut.isPending || !url.trim()}
+                    disabled={metaMut.isPending || !detectedPlatform}
                     className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium disabled:opacity-50 whitespace-nowrap"
                   >
                     {metaMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
                     Подтянуть
                   </button>
                 </div>
+                {/* Auto-detected platform / invalid-link hint */}
+                {detectedPlatform ? (
+                  <p className="flex items-center gap-1.5 text-xs text-emerald-400 mt-1.5">
+                    <Check size={12} className="flex-shrink-0" />
+                    Платформа: {MEDIA_PLATFORM_LABELS[detectedPlatform] ?? detectedPlatform}
+                  </p>
+                ) : urlInvalid ? (
+                  <p className="text-xs text-red-400 mt-1.5 leading-snug">
+                    Ссылка должна вести на поддерживаемый сервис: {allowedPlatformLabels(kind).join(', ')}
+                  </p>
+                ) : (
+                  <p className="text-[11px] text-slate-500 mt-1.5 leading-snug">
+                    Платформа определится автоматически. Поддерживаются: {allowedPlatformLabels(kind).join(', ')}
+                  </p>
+                )}
                 {fetchError && <p className="text-xs text-amber-400 mt-1">{fetchError}</p>}
               </div>
 

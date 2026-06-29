@@ -2,12 +2,12 @@ import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { ClipPlatform } from '@prisma/client';
+import { detectClipPlatform } from '../lib/mediaPlatforms';
 import { fetchStreamMetadata } from '../utils/streamMetadata';
 import { notify } from '../utils/notify';
 
 const router = Router();
 
-const PLATFORMS: ClipPlatform[] = ['VK_VIDEO', 'RUTUBE', 'YOUTUBE', 'APPLE_MUSIC'];
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -76,9 +76,8 @@ router.post('/metadata', authenticate, async (req: AuthRequest, res: Response) =
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
-    const { artistId, platform, url, title, coverUrl, participants } = req.body as {
+    const { artistId, url, title, coverUrl, participants } = req.body as {
       artistId?: string;
-      platform?: string;
       url?: string;
       title?: string; // название трека
       coverUrl?: string;
@@ -88,8 +87,10 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     if (!artistId) return res.status(400).json({ error: 'artistId обязателен' });
     if (!title || !title.trim()) return res.status(400).json({ error: 'Название трека обязательно' });
     if (!url || !url.trim()) return res.status(400).json({ error: 'Ссылка обязательна' });
-    if (!platform || !PLATFORMS.includes(platform as ClipPlatform)) {
-      return res.status(400).json({ error: 'Неверная платформа' });
+    // Platform is derived from the link itself — reject fake / non-platform links.
+    const detectedPlatform = detectClipPlatform(url);
+    if (!detectedPlatform) {
+      return res.status(400).json({ error: 'Ссылка должна вести на поддерживаемый сервис (ВКонтакте Видео, Rutube, YouTube, Apple Music)' });
     }
 
     if (!(await isArtistAdmin(artistId, meId))) {
@@ -108,7 +109,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         artistId,
         title: title.trim(),
         coverUrl: coverUrl?.trim() || null,
-        platform: platform as ClipPlatform,
+        platform: detectedPlatform as ClipPlatform,
         url: url.trim(),
         participants: {
           create: cleanParticipants.map((p) => ({
@@ -203,11 +204,10 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
 router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
-    const { title, coverUrl, url, platform, participants } = req.body as {
+    const { title, coverUrl, url, participants } = req.body as {
       title?: string;
       coverUrl?: string | null;
       url?: string;
-      platform?: string;
       participants?: { userId: string; roleIds?: string[] }[];
     };
 
@@ -221,15 +221,18 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Нет прав' });
     }
 
-    if (platform !== undefined && !PLATFORMS.includes(platform as ClipPlatform)) {
-      return res.status(400).json({ error: 'Неверная платформа' });
-    }
-
     const data: any = {};
     if (title !== undefined) data.title = title.trim();
     if (coverUrl !== undefined) data.coverUrl = coverUrl ? coverUrl.trim() : null;
-    if (url !== undefined) data.url = url.trim();
-    if (platform !== undefined) data.platform = platform as ClipPlatform;
+    // Changing the link re-derives the platform; reject non-platform / fake links.
+    if (url !== undefined) {
+      const detectedPlatform = detectClipPlatform(url);
+      if (!detectedPlatform) {
+        return res.status(400).json({ error: 'Ссылка должна вести на поддерживаемый сервис (ВКонтакте Видео, Rutube, YouTube, Apple Music)' });
+      }
+      data.url = url.trim();
+      data.platform = detectedPlatform as ClipPlatform;
+    }
 
     await prisma.clip.update({ where: { id: clip.id }, data });
 
