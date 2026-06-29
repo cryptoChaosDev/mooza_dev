@@ -52,9 +52,9 @@ export default function Layout({ children }: LayoutProps) {
         {/* Notification permission banner */}
         {notifPending && (
           <div className="bg-primary-600/90 px-4 py-2 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm text-white">
-              <Bell size={16} />
-              <span>Разрешите уведомления, чтобы получать сообщения и события</span>
+            <div className="flex items-center gap-2 text-sm text-white min-w-0 flex-1">
+              <Bell size={16} className="flex-shrink-0" />
+              <span className="min-w-0">Разрешите уведомления, чтобы получать сообщения и события</span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button onClick={requestNotifications} className="text-xs bg-white text-primary-700 font-semibold px-3 py-1 rounded-full hover:bg-primary-50 transition-colors">

@@ -18,6 +18,10 @@ html {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   color-scheme: dark;
+  /* iOS: overflow-x:hidden on <body> alone doesn't stop the document scrolling
+     sideways — guard the root element too so nothing pushes the UI off-screen. */
+  overflow-x: hidden;
+  width: 100%;
 }
 
 /* Yandex Browser's "smart"/auto dark theme re-tints elements it thinks are
@@ -38,12 +42,15 @@ body {
   background: #020617;
   color: #f1f5f9;
   overflow-x: hidden;
+  max-width: 100%;
 }
 
 #root {
   /* dvh = dynamic viewport height — correctly excludes browser chrome on iOS */
   min-height: 100dvh;
   min-height: 100vh; /* fallback for older browsers */
+  width: 100%;
+  max-width: 100%;
   display: flex;
   flex-direction: column;
 }
