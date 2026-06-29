@@ -48,7 +48,7 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
   const [selected, setSelected] = useState<Review | null>(null);
   const [replyText, setReplyText] = useState('');
   const [savingReply, setSavingReply] = useState(false);
-  const [reporting, setReporting] = useState(false);
+  const [reportReviewId, setReportReviewId] = useState<string | null>(null);
 
   useScrollLock(!!selected);
 
@@ -187,7 +187,7 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
                   </button>
                 ) : user ? (
                   <button
-                    onClick={() => setReporting(true)}
+                    onClick={() => { setReportReviewId(selected.id); setSelected(null); }}
                     title="Пожаловаться на отзыв"
                     className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded-xl transition-colors"
                   >
@@ -235,8 +235,8 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
         document.body
       )}
 
-      {reporting && selected && (
-        <ComplaintModal targetType="review" targetId={selected.id} onClose={() => setReporting(false)} />
+      {reportReviewId && (
+        <ComplaintModal targetType="review" targetId={reportReviewId} onClose={() => setReportReviewId(null)} />
       )}
     </div>
   );
