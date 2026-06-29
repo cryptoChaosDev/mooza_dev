@@ -1227,7 +1227,7 @@ export default function ProfilePage() {
 
         <div className="px-4">
           {/* Avatar + action buttons */}
-          <div className="flex items-end justify-between -mt-14 mb-4">
+          <div className="flex items-end justify-between flex-wrap gap-y-3 -mt-14 mb-4">
             <div className="relative z-10">
               <div
                 className="rounded-full p-[3px]"
