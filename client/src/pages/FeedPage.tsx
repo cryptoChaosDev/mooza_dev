@@ -237,7 +237,6 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const [commentImage, setCommentImage] = useState<{ url: string; serverUrl: string } | null>(null);
   const [commentUploading, setCommentUploading] = useState(false);
   const [newCommentId, setNewCommentId] = useState<string | null>(null);
-  const [highlightId, setHighlightId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -293,10 +292,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
     const el = document.getElementById(`comment-${newCommentId}`);
     if (!el) return; // ещё не отрендерился — сработает при следующем обновлении post.comments
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    setHighlightId(newCommentId);
     setNewCommentId(null);
-    const t = setTimeout(() => setHighlightId(null), 1800);
-    return () => clearTimeout(t);
   }, [post.comments, newCommentId]);
 
 
@@ -790,7 +786,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
               {post.comments && post.comments.length > 0 ? (
                 post.comments.map((comment: any) => (
-                  <div key={comment.id} id={`comment-${comment.id}`} className={`rounded-xl transition-all duration-500 ${highlightId === comment.id ? 'ring-2 ring-primary-500/60 bg-primary-500/5' : ''}`}>
+                  <div key={comment.id} id={`comment-${comment.id}`}>
                     <CommentItem comment={comment} postId={post.id} postAuthorId={post.author.id} currentUserId={currentUserId} feedQueryKey={feedQueryKey} />
                   </div>
                 ))
