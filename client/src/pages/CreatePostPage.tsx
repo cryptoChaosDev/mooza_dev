@@ -299,8 +299,9 @@ export default function CreatePostPage() {
           </button>
         </div>
 
-        {/* Editor */}
-        <div className="flex-1 px-4 pt-4">
+        {/* Editor. pb-32: clears the fixed BottomNav so the last «Дополнительно»
+            field (Ссылки) is reachable and can scroll above the keyboard. */}
+        <div className="flex-1 px-4 pt-4 pb-32">
           {currentUser && (
             <div className="flex gap-3 mb-3">
               <AvatarComponent
