@@ -136,6 +136,8 @@ export const userAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   deletePortfolioFile: (fileId: string) => api.delete(`/users/me/portfolio/${fileId}`),
+  renamePortfolioFile: (fileId: string, title: string) => api.patch(`/users/me/portfolio/${fileId}`, { title }),
+  reorderPortfolio: (orderedIds: string[]) => api.patch('/users/me/portfolio/reorder', { orderedIds }),
   addPortfolioLink: (data: { type: string; url: string; title?: string }) => api.post('/users/me/portfolio/links', data),
   deletePortfolioLink: (linkId: string) => api.delete(`/users/me/portfolio/links/${linkId}`),
   agreeToTerms: () => api.post('/users/me/agree-terms'),

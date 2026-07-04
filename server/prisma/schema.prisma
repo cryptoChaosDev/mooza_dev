@@ -446,8 +446,10 @@ model PortfolioFile {
   userId       String
   url          String
   originalName String
+  title        String? // custom display name; falls back to originalName when null
   size         Int
   mimeType     String?
+  sortOrder    Int     @default(0) // manual ordering within the owner's portfolio
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 

@@ -625,7 +625,7 @@ export default function UserProfilePage() {
                     allAudio.length === 0
                       ? <p className="text-sm text-slate-600 italic text-center py-2">Нет аудио</p>
                       : <div className="space-y-1">
-                          {audioFiles.map((f: any) => <AudioPlayer key={f.id} src={`${API_URL}${f.url}`} name={f.originalName} />)}
+                          {audioFiles.map((f: any) => <AudioPlayer key={f.id} src={`${API_URL}${f.url}`} name={f.title || f.originalName} />)}
                           {audioLinks.map((l: any) => <AudioPlayer key={l.id} src={l.url} name={l.title || l.url} />)}
                         </div>
                   )}
@@ -639,7 +639,7 @@ export default function UserProfilePage() {
                               onClick={() => setImageFullscreen(`${API_URL}${f.url}`)}
                               className="aspect-square rounded-xl overflow-hidden border border-slate-700/40 hover:border-primary-500/40 transition-colors"
                             >
-                              <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
+                              <img src={`${API_URL}${f.url}`} alt={f.title || f.originalName} className="w-full h-full object-cover" />
                             </button>
                           ))}
                         </div>
@@ -656,8 +656,8 @@ export default function UserProfilePage() {
                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
                                   <Icon size={18} className={meta.color} />
                                 </div>
-                                <button onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.originalName })} className="flex-1 min-w-0 text-left">
-                                  <p className="text-sm text-slate-200 truncate">{f.originalName}</p>
+                                <button onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.title || f.originalName })} className="flex-1 min-w-0 text-left">
+                                  <p className="text-sm text-slate-200 truncate">{f.title || f.originalName}</p>
                                   <p className="text-[11px] text-slate-500">{meta.label}{f.size ? ` · ${formatBytes(f.size)}` : ''}</p>
                                 </button>
                                 <a href={`${API_URL}${f.url}`} download target="_blank" rel="noopener noreferrer" title="Скачать" className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0"><Download size={15} /></a>

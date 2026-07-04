@@ -104,7 +104,7 @@ const userSelect = {
   publicConsentVersion: true,
   onboardingCompletedAt: true,
   createdAt: true,
-  portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
+  portfolioFiles: { select: { id: true, url: true, originalName: true, title: true, size: true, mimeType: true, sortOrder: true, createdAt: true }, orderBy: { sortOrder: 'asc' as const } },
   portfolioLinks: { select: { id: true, type: true, url: true, title: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
   _count: {
     select: {
@@ -167,7 +167,7 @@ const publicUserSelect = {
   contactsVisible: true,
   contactsVisibility: true,
   createdAt: true,
-  portfolioFiles: { select: { id: true, url: true, originalName: true, size: true, mimeType: true, createdAt: true } },
+  portfolioFiles: { select: { id: true, url: true, originalName: true, title: true, size: true, mimeType: true, sortOrder: true, createdAt: true }, orderBy: { sortOrder: 'asc' as const } },
   portfolioLinks: { select: { id: true, type: true, url: true, title: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
   _count: {
     select: {
@@ -1228,7 +1228,7 @@ router.post('/me/portfolio', authenticate, uploadPortfolio.single('file'), async
 
     const fileUrl = `/uploads/portfolio/${req.file.filename}`;
     const pf = await prisma.portfolioFile.create({
-      data: { userId: req.userId!, url: fileUrl, originalName: Buffer.from(req.file.originalname, 'latin1').toString('utf8'), size: req.file.size, mimeType: req.file.mimetype },
+      data: { userId: req.userId!, url: fileUrl, originalName: Buffer.from(req.file.originalname, 'latin1').toString('utf8'), size: req.file.size, mimeType: req.file.mimetype, sortOrder: count },
     });
     res.json(pf);
   } catch (error) {
@@ -1249,6 +1249,40 @@ router.delete('/me/portfolio/:fileId', authenticate, async (req: AuthRequest, re
   } catch (error) {
     console.error('Portfolio delete error:', error);
     res.status(500).json({ error: 'Failed to delete portfolio file' });
+  }
+});
+
+// Reorder portfolio files. Registered BEFORE PATCH /:fileId so «reorder» isn't
+// captured as a fileId. Body: { orderedIds: string[] } — the caller's files in
+// the desired order; sortOrder is set to each id's index.
+router.patch('/me/portfolio/reorder', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { orderedIds } = req.body as { orderedIds?: string[] };
+    if (!Array.isArray(orderedIds) || orderedIds.some((id) => typeof id !== 'string')) {
+      return res.status(400).json({ error: 'orderedIds required' });
+    }
+    const own = await prisma.portfolioFile.findMany({ where: { userId: req.userId! }, select: { id: true } });
+    const ownIds = new Set(own.map((f) => f.id));
+    const ids = orderedIds.filter((id) => ownIds.has(id));
+    await prisma.$transaction(ids.map((id, i) => prisma.portfolioFile.update({ where: { id }, data: { sortOrder: i } })));
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Portfolio reorder error:', error);
+    res.status(500).json({ error: 'Failed to reorder portfolio' });
+  }
+});
+
+// Rename a portfolio file (custom display title; empty → falls back to originalName).
+router.patch('/me/portfolio/:fileId', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const pf = await prisma.portfolioFile.findFirst({ where: { id: req.params.fileId, userId: req.userId } });
+    if (!pf) return res.status(404).json({ error: 'File not found' });
+    const raw = typeof req.body?.title === 'string' ? req.body.title.trim().slice(0, 100) : '';
+    const updated = await prisma.portfolioFile.update({ where: { id: pf.id }, data: { title: raw || null } });
+    res.json(updated);
+  } catch (error) {
+    console.error('Portfolio rename error:', error);
+    res.status(500).json({ error: 'Failed to rename portfolio file' });
   }
 });
 

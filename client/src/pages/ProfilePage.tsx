@@ -10,7 +10,7 @@ import {
   Globe, Calendar,
   Headphones, Edit3, Plus,
   FileText, FileSpreadsheet, FileArchive, Download, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
-  Music2, HandshakeIcon, Eye, Phone, Shield, ChevronDown,
+  Music2, HandshakeIcon, Eye, Phone, Shield, ChevronDown, ChevronUp,
   ClipboardList,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
@@ -155,6 +155,8 @@ export default function ProfilePage() {
   const [imageFullscreen, setImageFullscreen] = useState<string | null>(null);
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
   const [portfolioTab, setPortfolioTab] = useState<'audio' | 'images' | 'other'>('audio');
+  const [editingPortfolio, setEditingPortfolio] = useState(false);
+  const [renamingFile, setRenamingFile] = useState<{ id: string; value: string } | null>(null);
   // Service add/edit form (single comprehensive form).
   // serviceFormOpen: 'add' to create a new entry, or the index of an existing
   // entry being edited. null = closed.
@@ -894,6 +896,40 @@ export default function ProfilePage() {
       setPortfolioFiles(prev => prev.filter((f: any) => f.id !== fileId));
     } catch (e: any) {
       toast.error(getApiError(e, 'Не удалось удалить файл'));
+    }
+  };
+
+  // Portfolio order/rename. sortOrder is global; reordering swaps a file with its
+  // neighbour of the SAME type (tab) inside the full list, then persists the order.
+  const portfolioTypeOf = (f: any): 'audio' | 'image' | 'other' =>
+    f.mimeType?.startsWith('audio/') ? 'audio' : f.mimeType?.startsWith('image/') ? 'image' : 'other';
+
+  const movePortfolioFile = async (file: any, dir: 'up' | 'down') => {
+    const t = portfolioTypeOf(file);
+    const siblings = portfolioFiles.filter((f: any) => portfolioTypeOf(f) === t);
+    const sIdx = siblings.findIndex((f: any) => f.id === file.id);
+    const target = siblings[sIdx + (dir === 'up' ? -1 : 1)];
+    if (!target) return;
+    const prev = portfolioFiles;
+    const full = [...portfolioFiles];
+    const i = full.findIndex((f: any) => f.id === file.id);
+    const j = full.findIndex((f: any) => f.id === target.id);
+    [full[i], full[j]] = [full[j], full[i]];
+    setPortfolioFiles(full);
+    try { await userAPI.reorderPortfolio(full.map((f: any) => f.id)); }
+    catch (e: any) { setPortfolioFiles(prev); toast.error(getApiError(e, 'Не удалось изменить порядок')); }
+  };
+
+  const commitPortfolioRename = async () => {
+    if (!renamingFile) return;
+    const { id, value } = renamingFile;
+    const title = value.trim();
+    try {
+      await userAPI.renamePortfolioFile(id, title);
+      setPortfolioFiles(prev => prev.map((f: any) => f.id === id ? { ...f, title: title || null } : f));
+      setRenamingFile(null);
+    } catch (e: any) {
+      toast.error(getApiError(e, 'Не удалось переименовать файл'));
     }
   };
 
@@ -1971,6 +2007,12 @@ export default function ProfilePage() {
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <Headphones size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Портфолио</span>
+                {portfolioFiles.length > 0 && (
+                  <button onClick={() => { setEditingPortfolio(v => !v); setRenamingFile(null); }}
+                    className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
+                    {editingPortfolio ? 'Готово' : 'Изменить'}
+                  </button>
+                )}
               </div>
               {/* Tabs */}
               <div className="flex border-b border-slate-800/60">
@@ -2014,16 +2056,25 @@ export default function ProfilePage() {
                       <p className="text-xs text-slate-600 text-center py-1">Пока нет аудио</p>
                     ) : (
                       <div className="space-y-1">
-                        {audioFiles.map((f: any) => (
+                        {audioFiles.map((f: any, i: number) => (
                           <div key={f.id} className="flex items-center gap-1">
-                            <div className="flex-1 min-w-0"><AudioPlayer src={`${API_URL}${f.url}`} name={f.originalName} /></div>
-                            <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="p-2 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
+                            <div className="flex-1 min-w-0"><AudioPlayer src={`${API_URL}${f.url}`} name={f.title || f.originalName} /></div>
+                            {editingPortfolio && (
+                              <>
+                                <button onClick={() => movePortfolioFile(f, 'up')} disabled={i === 0} title="Выше" className="p-1.5 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors flex-shrink-0"><ChevronUp size={15} /></button>
+                                <button onClick={() => movePortfolioFile(f, 'down')} disabled={i === audioFiles.length - 1} title="Ниже" className="p-1.5 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors flex-shrink-0"><ChevronDown size={15} /></button>
+                                <button onClick={() => setRenamingFile({ id: f.id, value: f.title || f.originalName })} title="Переименовать" className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0"><Edit3 size={14} /></button>
+                                <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="p-1.5 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
+                              </>
+                            )}
                           </div>
                         ))}
                         {audioLinks.map((l: any) => (
                           <div key={l.id} className="flex items-center gap-1">
                             <div className="flex-1 min-w-0"><AudioPlayer src={l.url} name={l.title || l.url} /></div>
-                            <button onClick={() => setConfirmDeleteLinkId(l.id)} title="Удалить" className="p-2 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
+                            {editingPortfolio && (
+                              <button onClick={() => setConfirmDeleteLinkId(l.id)} title="Удалить" className="p-1.5 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -2037,13 +2088,22 @@ export default function ProfilePage() {
                       <span className="text-[10px] text-slate-500">Добавить</span>
                       <input type="file" accept="image/*" multiple className="hidden" disabled={isUploadingPortfolio || portfolioFull} onChange={e => handlePortfolioUpload(e.target.files)} />
                     </label>
-                    {imageFiles.map((f: any) => (
+                    {imageFiles.map((f: any, i: number) => (
                       <div key={f.id} className="relative group aspect-square">
                         <button onClick={() => setImageFullscreen(`${API_URL}${f.url}`)}
                           className="w-full h-full rounded-xl overflow-hidden border border-slate-700/40 hover:border-primary-500/40 transition-colors">
-                          <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
+                          <img src={`${API_URL}${f.url}`} alt={f.title || f.originalName} className="w-full h-full object-cover" />
                         </button>
-                        <button onClick={() => handlePortfolioDelete(f.id)} className="absolute top-1 right-1 p-1 rounded-full bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-red-400 transition-all"><X size={11} /></button>
+                        {editingPortfolio && (
+                          <>
+                            <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="absolute top-1 right-1 p-1 rounded-full bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-red-400 transition-all"><X size={11} /></button>
+                            <button onClick={() => setRenamingFile({ id: f.id, value: f.title || f.originalName })} title="Переименовать" className="absolute top-1 left-1 p-1 rounded-full bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-primary-400 transition-all"><Edit3 size={10} /></button>
+                            <div className="absolute bottom-1 inset-x-1 flex justify-center gap-1">
+                              <button onClick={() => movePortfolioFile(f, 'up')} disabled={i === 0} title="Раньше" className="p-1 rounded-full bg-slate-900/85 border border-slate-700 text-slate-300 hover:text-primary-400 disabled:opacity-30 transition-all"><ChevronUp size={11} /></button>
+                              <button onClick={() => movePortfolioFile(f, 'down')} disabled={i === imageFiles.length - 1} title="Позже" className="p-1 rounded-full bg-slate-900/85 border border-slate-700 text-slate-300 hover:text-primary-400 disabled:opacity-30 transition-all"><ChevronDown size={11} /></button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -2059,7 +2119,7 @@ export default function ProfilePage() {
                       <p className="text-xs text-slate-600 text-center py-1">Пока нет документов</p>
                     ) : (
                       <div className="space-y-1.5">
-                        {otherFiles.map((f: any) => {
+                        {otherFiles.map((f: any, i: number) => {
                           const meta = fileTypeMeta(f.originalName);
                           const Icon = meta.Icon;
                           return (
@@ -2067,12 +2127,20 @@ export default function ProfilePage() {
                               <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
                                 <Icon size={18} className={meta.color} />
                               </div>
-                              <button onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.originalName })} className="flex-1 min-w-0 text-left">
-                                <p className="text-sm text-slate-200 truncate">{f.originalName}</p>
+                              <button onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.title || f.originalName })} className="flex-1 min-w-0 text-left">
+                                <p className="text-sm text-slate-200 truncate">{f.title || f.originalName}</p>
                                 <p className="text-[11px] text-slate-500">{meta.label}{f.size ? ` · ${formatBytes(f.size)}` : ''}</p>
                               </button>
-                              <a href={`${API_URL}${f.url}`} download target="_blank" rel="noopener noreferrer" title="Скачать" className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0"><Download size={15} /></a>
-                              <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="p-1.5 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
+                              {editingPortfolio ? (
+                                <>
+                                  <button onClick={() => movePortfolioFile(f, 'up')} disabled={i === 0} title="Выше" className="p-1 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors flex-shrink-0"><ChevronUp size={15} /></button>
+                                  <button onClick={() => movePortfolioFile(f, 'down')} disabled={i === otherFiles.length - 1} title="Ниже" className="p-1 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors flex-shrink-0"><ChevronDown size={15} /></button>
+                                  <button onClick={() => setRenamingFile({ id: f.id, value: f.title || f.originalName })} title="Переименовать" className="p-1 text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0"><Edit3 size={14} /></button>
+                                  <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="p-1 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
+                                </>
+                              ) : (
+                                <a href={`${API_URL}${f.url}`} download target="_blank" rel="noopener noreferrer" title="Скачать" className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0"><Download size={15} /></a>
+                              )}
                             </div>
                           );
                         })}
@@ -2142,6 +2210,32 @@ export default function ProfilePage() {
         </div>
       </div>
     </div>
+
+    {/* Portfolio file rename */}
+    {renamingFile && createPortal(
+      <div className="fixed inset-0 z-[80] flex items-center justify-center px-4" onClick={() => setRenamingFile(null)}>
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        <div className="relative w-full max-w-xs bg-slate-900 border border-slate-700 rounded-2xl p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+          <p className="text-sm font-semibold text-white mb-3">Название файла</p>
+          <input
+            autoFocus
+            type="text"
+            maxLength={100}
+            value={renamingFile.value}
+            onChange={e => setRenamingFile(rf => rf ? { ...rf, value: e.target.value } : rf)}
+            onKeyDown={e => { if (e.key === 'Enter') commitPortfolioRename(); if (e.key === 'Escape') setRenamingFile(null); }}
+            placeholder="Введите название"
+            className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          />
+          <p className="text-[11px] text-slate-600 mt-1.5">Пусто — вернётся исходное имя файла</p>
+          <div className="flex gap-2 mt-3">
+            <button onClick={() => setRenamingFile(null)} className="flex-1 py-2 text-sm text-slate-400 border border-slate-700 rounded-xl hover:text-white transition-colors">Отмена</button>
+            <button onClick={commitPortfolioRename} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 text-white font-semibold rounded-xl transition-colors">Сохранить</button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
 
     {/* Image fullscreen */}
     {imageFullscreen && (
