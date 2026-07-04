@@ -253,6 +253,9 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const svc = post.type === 'service' && post.service ? post.service : null;
   const order = post.type === 'order' && post.order ? post.order : null;
   const vacancy = post.type === 'vacancy' && post.vacancy ? post.vacancy : null;
+  // Вакансию в потоке показываем ОТ ИМЕНИ АРТИСТА: артист — крупно и кликабельно (→ страница артиста),
+  // владелец (создатель) — вторичной кликабельной строкой (наоборот к обычной шапке).
+  const vacancyArtist = post.type === 'vacancy' && post.artist ? post.artist : null;
   const openServiceChat = () => {
     if (!svc || contacting) return;
     setContacting(true);
@@ -353,15 +356,17 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
       )}
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-3 min-w-0">
-          <Link to={`/profile/${post.author.id}`} className="flex-shrink-0"><Avatar user={post.author} size={10} /></Link>
+          <Link to={vacancyArtist ? `/artist/${vacancyArtist.id}` : `/profile/${post.author.id}`} className="flex-shrink-0">
+            <Avatar user={vacancyArtist ? { firstName: vacancyArtist.name, lastName: '', avatar: vacancyArtist.avatar } : post.author} size={10} />
+          </Link>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <Link to={`/profile/${post.author.id}`} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate">
-                {post.author.firstName} {post.author.lastName}
+              <Link to={vacancyArtist ? `/artist/${vacancyArtist.id}` : `/profile/${post.author.id}`} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate">
+                {vacancyArtist ? vacancyArtist.name : `${post.author.firstName} ${post.author.lastName}`}
               </Link>
-              {post.author.isPremium && <span title="Premium"><Crown size={13} className="text-amber-400 flex-shrink-0" /></span>}
-              {post.author.isVerified && <span title="Верифицирован"><BadgeCheck size={13} className="text-sky-400 flex-shrink-0" /></span>}
-              {post.author.isBlocked && <span title="Заблокирован"><Ban size={13} className="text-red-500 flex-shrink-0" /></span>}
+              {!vacancyArtist && post.author.isPremium && <span title="Premium"><Crown size={13} className="text-amber-400 flex-shrink-0" /></span>}
+              {!vacancyArtist && post.author.isVerified && <span title="Верифицирован"><BadgeCheck size={13} className="text-sky-400 flex-shrink-0" /></span>}
+              {!vacancyArtist && post.author.isBlocked && <span title="Заблокирован"><Ban size={13} className="text-red-500 flex-shrink-0" /></span>}
               {showTypeBadge && (
                 <span className={`flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${typeMeta.badge}`}>
                   <TypeIcon size={10} />
@@ -369,7 +374,11 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                 </span>
               )}
             </div>
-            {post.channel ? (
+            {vacancyArtist ? (
+              <Link to={`/profile/${post.author.id}`} className="text-xs text-slate-500 hover:text-primary-400 transition-colors truncate block">
+                👤 {post.author.firstName} {post.author.lastName}
+              </Link>
+            ) : post.channel ? (
               <p className="text-xs text-slate-500 truncate">📢 {post.channel.name}</p>
             ) : post.artist ? (
               <p className="text-xs text-slate-500 truncate">🎵 {post.artist.name}</p>
