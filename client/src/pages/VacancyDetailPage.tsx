@@ -47,7 +47,8 @@ export default function VacancyDetailPage() {
 
   // Cooperation offer modal (owner → response)
   const [coopResponseId, setCoopResponseId] = useState<string | null>(null);
-  const [coopStartDate, setCoopStartDate] = useState('');
+  const [coopStartDate, setCoopStartDate] = useState('');        // ISO YYYY-MM-DD (for API/validation)
+  const [coopStartDateInput, setCoopStartDateInput] = useState(''); // masked ДД.ММ.ГГГГ (display)
   const [coopConditions, setCoopConditions] = useState('');
   const [coopCompensation, setCoopCompensation] = useState('');
   const [coopExtra, setCoopExtra] = useState('');
@@ -177,6 +178,7 @@ export default function VacancyDetailPage() {
     onSuccess: () => {
       setCoopResponseId(null);
       setCoopStartDate('');
+      setCoopStartDateInput('');
       setCoopConditions('');
       setCoopCompensation('');
       setCoopExtra('');
@@ -647,7 +649,7 @@ export default function VacancyDetailPage() {
                             return (
                               <button
                                 disabled={offered}
-                                onClick={() => { if (offered) return; setCoopResponseId(r.id); setCoopStartDate(''); setCoopConditions(''); setCoopCompensation(''); setCoopExtra(''); }}
+                                onClick={() => { if (offered) return; setCoopResponseId(r.id); setCoopStartDate(''); setCoopStartDateInput(''); setCoopConditions(''); setCoopCompensation(''); setCoopExtra(''); }}
                                 className={`flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-semibold rounded-lg transition-colors ${
                                   offered ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-primary-600 hover:bg-primary-500 text-white'
                                 }`}
@@ -802,11 +804,21 @@ export default function VacancyDetailPage() {
             <div>
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Дата начала <span className="text-rose-400">*</span></label>
               <input
-                type="date"
-                value={coopStartDate}
-                min={todayStr}
-                onChange={e => setCoopStartDate(e.target.value)}
-                className="w-full min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                type="text"
+                inputMode="numeric"
+                placeholder="ДД.ММ.ГГГГ"
+                maxLength={10}
+                value={coopStartDateInput}
+                onChange={e => {
+                  let v = e.target.value.replace(/\D/g, '');
+                  if (v.length >= 3) v = v.slice(0, 2) + '.' + v.slice(2);
+                  if (v.length >= 6) v = v.slice(0, 5) + '.' + v.slice(5);
+                  v = v.slice(0, 10);
+                  setCoopStartDateInput(v);
+                  // Store ISO only once the full ДД.ММ.ГГГГ is entered.
+                  setCoopStartDate(v.length === 10 ? `${v.slice(6)}-${v.slice(3, 5)}-${v.slice(0, 2)}` : '');
+                }}
+                className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
             </div>
             <div>
@@ -843,7 +855,8 @@ export default function VacancyDetailPage() {
               <button onClick={() => setCoopResponseId(null)} className="flex-1 py-2.5 text-sm text-slate-400 border border-slate-700 rounded-xl hover:text-white transition-colors">Отмена</button>
               <button
                 onClick={() => {
-                  if (!coopStartDate) { toast.error('Укажите дату начала'); return; }
+                  if (!coopStartDate) { toast.error('Укажите дату начала в формате ДД.ММ.ГГГГ'); return; }
+                  if (isNaN(new Date(coopStartDate).getTime())) { toast.error('Некорректная дата начала'); return; }
                   if (coopStartDate < todayStr) { toast.error('Дата начала не может быть раньше сегодня'); return; }
                   if (!coopConditions.trim()) { toast.error('Опишите условия'); return; }
                   if (!coopCompensation.trim()) { toast.error('Укажите вознаграждение'); return; }
