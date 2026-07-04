@@ -2007,7 +2007,7 @@ export default function ProfilePage() {
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <Headphones size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Портфолио</span>
-                {portfolioFiles.length > 0 && (
+                {(portfolioFiles.length + portfolioLinks.length) > 0 && (
                   <button onClick={() => { setEditingPortfolio(v => !v); setRenamingFile(null); }}
                     className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
                     {editingPortfolio ? 'Готово' : 'Изменить'}
