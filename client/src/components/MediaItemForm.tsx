@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Loader2, Search, Tag, Trash2, RefreshCw, Check } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -139,14 +139,25 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
     };
   }, [search]);
 
+  // Snapshot of what «Подтянуть» filled + the platform it came from. Lets us drop
+  // that prefill if the link is later switched to a different service (so we never
+  // save one service's cover/title/date under another service's link).
+  const metaRef = useRef<{ platform: string | null; title: string; coverUrl: string; releaseDate: string }>(
+    { platform: null, title: '', coverUrl: '', releaseDate: '' },
+  );
+
   // ── Metadata prefill ──────────────────────────────────────────────────────
   const metaMut = useMutation({
     mutationFn: () => api.fetchMetadata(detectedPlatform ?? '', url.trim()),
     onSuccess: (res: any) => {
       const data = res?.data ?? {};
-      if (data.title) setTitle(data.title);
-      if (data.coverUrl) setCoverUrl(data.coverUrl);
-      if (isRelease && data.releaseDate) setReleaseDate(String(data.releaseDate).slice(0, 10));
+      const filledTitle = data.title ?? '';
+      const filledCover = data.coverUrl ?? '';
+      const filledDate = isRelease && data.releaseDate ? String(data.releaseDate).slice(0, 10) : '';
+      if (filledTitle) setTitle(filledTitle);
+      if (filledCover) setCoverUrl(filledCover);
+      if (filledDate) setReleaseDate(filledDate);
+      metaRef.current = { platform: detectedPlatform, title: filledTitle, coverUrl: filledCover, releaseDate: filledDate };
       if (!data.title && !data.coverUrl) {
         setFetchError('Не удалось подтянуть данные — заполните вручную.');
       } else {
@@ -155,6 +166,18 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
     },
     onError: () => setFetchError('Не удалось подтянуть данные — заполните вручную.'),
   });
+
+  // If the link is changed to a DIFFERENT platform after a prefill, wipe the fields
+  // that still hold the previous service's fetched values (untouched ones only —
+  // anything the user edited by hand is kept).
+  useEffect(() => {
+    const m = metaRef.current;
+    if (!m.platform || !detectedPlatform || detectedPlatform === m.platform) return;
+    setTitle((t) => (t === m.title ? '' : t));
+    setCoverUrl((c) => (c === m.coverUrl ? '' : c));
+    if (isRelease) setReleaseDate((d) => (d === m.releaseDate ? '' : d));
+    metaRef.current = { platform: null, title: '', coverUrl: '', releaseDate: '' };
+  }, [detectedPlatform, isRelease]);
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const saveMut = useMutation({
