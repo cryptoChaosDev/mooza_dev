@@ -236,6 +236,8 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const [showEmoji, setShowEmoji] = useState(false);
   const [commentImage, setCommentImage] = useState<{ url: string; serverUrl: string } | null>(null);
   const [commentUploading, setCommentUploading] = useState(false);
+  const [newCommentId, setNewCommentId] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -285,9 +287,21 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // После публикации коммента — проскроллить к нему и подсветить (лента уже перезапросилась)
+  useEffect(() => {
+    if (!newCommentId) return;
+    const el = document.getElementById(`comment-${newCommentId}`);
+    if (!el) return; // ещё не отрендерился — сработает при следующем обновлении post.comments
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightId(newCommentId);
+    setNewCommentId(null);
+    const t = setTimeout(() => setHighlightId(null), 1800);
+    return () => clearTimeout(t);
+  }, [post.comments, newCommentId]);
+
 
   const likeMut = useMutation({ mutationFn: () => post.isLiked ? postAPI.unlikePost(post.id) : postAPI.likePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось поставить лайк')) });
-  const commentMut = useMutation({ mutationFn: () => postAPI.commentPost(post.id, commentText.trim(), undefined, commentImage?.serverUrl), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setCommentText(''); setCommentImage(null); setShowEmoji(false); }, onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить комментарий')) });
+  const commentMut = useMutation({ mutationFn: () => postAPI.commentPost(post.id, commentText.trim(), undefined, commentImage?.serverUrl), onSuccess: (res: any) => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setCommentText(''); setCommentImage(null); setShowEmoji(false); if (res?.data?.id) setNewCommentId(res.data.id); }, onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить комментарий')) });
   const editMut = useMutation({ mutationFn: () => postAPI.editPost(post.id, { content: editContent, imageUrl: editImagePreview?.serverUrl ?? null, audioUrl: null, audioName: null }), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setEditing(false); }, onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')) });
   const deleteMut = useMutation({ mutationFn: () => postAPI.deletePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить пост')) });
   const reactMut = useMutation({ mutationFn: (emoji: string) => postAPI.reactPost(post.id, emoji), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось поставить реакцию')) });
@@ -776,7 +790,9 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
               {post.comments && post.comments.length > 0 ? (
                 post.comments.map((comment: any) => (
-                  <CommentItem key={comment.id} comment={comment} postId={post.id} postAuthorId={post.author.id} currentUserId={currentUserId} feedQueryKey={feedQueryKey} />
+                  <div key={comment.id} id={`comment-${comment.id}`} className={`rounded-xl transition-all duration-500 ${highlightId === comment.id ? 'ring-2 ring-primary-500/60 bg-primary-500/5' : ''}`}>
+                    <CommentItem comment={comment} postId={post.id} postAuthorId={post.author.id} currentUserId={currentUserId} feedQueryKey={feedQueryKey} />
+                  </div>
                 ))
               ) : (
                 <p className="text-center text-sm text-slate-500 py-10">Пока нет комментариев.<br />Будьте первым!</p>
