@@ -30,6 +30,7 @@ import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
 import ProfileProgressBar, { profileCompletion } from '../components/ProfileProgressBar';
 import PublicConsentGate from '../components/PublicConsentGate';
 import OrderForm from '../components/OrderForm';
+import ProfessionNotFound from '../components/ProfessionNotFound';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 
@@ -1708,7 +1709,7 @@ export default function ProfilePage() {
                         {profSearching && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
                       </div>
                       {profSearch.trim() && profSearchResults.length === 0 && !profSearching && (
-                        <p className="text-xs text-slate-500 text-center py-1">Ничего не найдено</p>
+                        <ProfessionNotFound initialQuery={profSearch} compact />
                       )}
                       {profSearchResults.length > 0 && (
                         <div className="max-h-52 overflow-y-auto flex flex-wrap gap-1.5">
