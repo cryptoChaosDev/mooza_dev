@@ -237,20 +237,22 @@ export default function NotificationBell() {
   const groups = groupNotifications(notifications);
 
   const panel = open ? createPortal(
-    <>
+    <div
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center"
+      onClick={() => setOpen(false)}
+    >
       {/* Backdrop */}
-      <div
-        className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm"
-        onClick={() => setOpen(false)}
-      />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
 
-      {/* Panel — full-screen below app header, above bottom nav */}
+      {/* Panel — bottom-sheet, consistent with the app's other modals */}
       <div
-        className="fixed inset-x-0 top-16 z-[61] flex flex-col bg-slate-950 border-t border-slate-800"
-        style={{ bottom: 'calc(3.5rem + env(safe-area-inset-bottom, 0px))' } as React.CSSProperties}
+        className="relative w-full sm:max-w-md max-h-[85dvh] flex flex-col bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 shadow-2xl overflow-hidden"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' } as React.CSSProperties}
+        onClick={e => e.stopPropagation()}
       >
+        <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1 sm:hidden flex-shrink-0" />
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0 bg-slate-950/95 backdrop-blur-sm">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
           <div className="flex items-center gap-2">
             <Bell size={15} className="text-primary-400" />
             <span className="font-semibold text-white text-sm">Уведомления</span>
@@ -281,11 +283,11 @@ export default function NotificationBell() {
 
         {/* List */}
         <div
-          className="flex-1 overflow-y-auto divide-y divide-slate-800/60"
+          className="flex-1 min-h-0 overflow-y-auto divide-y divide-slate-800/60"
           style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
         >
           {groups.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full gap-3 text-slate-500">
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-500">
               <div className="p-5 bg-slate-800/40 rounded-2xl">
                 <Bell size={32} className="opacity-30" />
               </div>
@@ -311,7 +313,7 @@ export default function NotificationBell() {
           )}
         </div>
       </div>
-    </>,
+    </div>,
     document.body
   ) : null;
 
