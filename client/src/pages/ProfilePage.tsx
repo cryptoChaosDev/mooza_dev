@@ -275,7 +275,11 @@ export default function ProfilePage() {
   const [profSearching, setProfSearching] = useState(false);
   const [savingProfessions, setSavingProfessions] = useState(false);
   // Профессии / Услуги / Заказы открываются модалками (как Вакансии) — блокируем фон.
-  useScrollLock(editingProfessions || serviceFormOpen !== null || orderFormOpen);
+  useScrollLock(
+    editingProfessions || serviceFormOpen !== null || orderFormOpen ||
+    showPrivacy || !!renamingFile || !!selectedProfession ||
+    !!publishDialog || !!updateDialog || !!imageFullscreen || !!docFullscreen,
+  );
   const [profFiltersData, setProfFiltersData] = useState<Record<string, any[]>>({});
   const [profFilterSelections, setProfFilterSelections] = useState<Record<string, string[]>>({});
   // Per-profession filter accordions are collapsed by default (profId → open filterIds).
@@ -2349,15 +2353,15 @@ export default function ProfilePage() {
     {selectedProfession && createPortal(
       <>
         <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm" onClick={() => setSelectedProfession(null)} />
-        <div className="fixed inset-x-0 bottom-0 z-[71] bg-slate-900 border-t border-slate-800 rounded-t-3xl" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
-          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1" />
-          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800">
-            <h3 className="text-base font-bold text-white">{selectedProfession.professionName}</h3>
-            <button onClick={() => setSelectedProfession(null)} className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors">
+        <div className="fixed inset-x-0 bottom-0 z-[71] max-h-[85dvh] flex flex-col bg-slate-900 border-t border-slate-800 rounded-t-3xl" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
+          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1 flex-shrink-0" />
+          <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-slate-800 flex-shrink-0">
+            <h3 className="text-base font-bold text-white min-w-0 truncate">{selectedProfession.professionName}</h3>
+            <button onClick={() => setSelectedProfession(null)} className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors flex-shrink-0">
               <X size={18} className="text-slate-400" />
             </button>
           </div>
-          <div className="px-5 py-4">
+          <div className="px-5 py-4 flex-1 overflow-y-auto min-h-0">
             {(() => {
               const relatedServices = (profile?.userServices ?? []).filter(
                 (us: any) => us.profession?.id === selectedProfession.professionId

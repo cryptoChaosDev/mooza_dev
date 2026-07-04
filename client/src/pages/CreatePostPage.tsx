@@ -280,14 +280,19 @@ export default function CreatePostPage() {
           >
             {uploading ? <Loader2 size={18} className="animate-spin" /> : <Image size={18} />}
           </button>
-          <button
-            type="button"
-            onClick={() => setShowEmoji(e => !e)}
-            title="Эмодзи"
-            className={`p-2 rounded-xl transition-colors flex-shrink-0 ${showEmoji ? 'text-primary-400 bg-slate-800' : 'text-slate-400 hover:text-primary-400 hover:bg-slate-800'}`}
-          >
-            <Smile size={18} />
-          </button>
+          <div className="relative flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowEmoji(e => !e)}
+              title="Эмодзи"
+              className={`p-2 rounded-xl transition-colors ${showEmoji ? 'text-primary-400 bg-slate-800' : 'text-slate-400 hover:text-primary-400 hover:bg-slate-800'}`}
+            >
+              <Smile size={18} />
+            </button>
+            {showEmoji && (
+              <EmojiPicker position="down" onSelect={emoji => insertEmoji(emoji)} onClose={() => setShowEmoji(false)} />
+            )}
+          </div>
 
           <button
             onClick={handlePublish}
@@ -727,15 +732,6 @@ export default function CreatePostPage() {
 
         </div>
 
-        {/* Emoji picker (portal, opened from header) */}
-        {showEmoji && (
-          <div className="relative">
-            <EmojiPicker
-              onSelect={emoji => insertEmoji(emoji)}
-              onClose={() => setShowEmoji(false)}
-            />
-          </div>
-        )}
       </div>
 
       {showServicePicker && (

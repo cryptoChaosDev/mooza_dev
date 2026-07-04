@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -13,6 +14,7 @@ import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import AvatarComponent from '../components/Avatar';
 import OrderForm from '../components/OrderForm';
+import { useScrollLock } from '../lib/scrollLock';
 
 // Budget «от X ₽ до Y ₽» / «По договорённости»
 function formatBudget(from?: number | null, to?: number | null): string {
@@ -38,6 +40,7 @@ export default function OrderDetailPage() {
   const [respondPrice, setRespondPrice] = useState('');
   const [respondComment, setRespondComment] = useState('');
   const [editing, setEditing] = useState(false);
+  useScrollLock(editing);
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['order', orderId],
@@ -497,14 +500,21 @@ export default function OrderDetailPage() {
         )}
       </div>
 
-      {isOwner && editing && (
-        <OrderForm
-          order={order}
-          onClose={() => {
-            setEditing(false);
-            qc.invalidateQueries({ queryKey: ['order', orderId] });
-          }}
-        />
+      {isOwner && editing && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setEditing(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
+            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+            <OrderForm
+              order={order}
+              onClose={() => {
+                setEditing(false);
+                qc.invalidateQueries({ queryKey: ['order', orderId] });
+              }}
+            />
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );
