@@ -96,13 +96,18 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
           </div>
         </div>
 
-        {/* Expand toggle (down arrow indicates expandable) */}
+        {/* Expand toggle — a visible bordered pill (a bare chevron read as non-clickable) */}
         <button
           onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
-          className="p-2 text-slate-500 hover:text-primary-400 hover:bg-primary-500/10 rounded-xl transition-all flex-shrink-0"
-          title={expanded ? 'Свернуть' : 'Раскрыть'}
+          className={`flex items-center gap-1 pl-2.5 pr-1.5 py-1.5 rounded-full border text-[11px] font-medium transition-all flex-shrink-0 ${
+            expanded
+              ? 'bg-primary-500/15 border-primary-500/40 text-primary-300'
+              : 'bg-slate-800 border-slate-600 text-slate-300 hover:text-primary-300 hover:border-primary-500/40'
+          }`}
+          title={expanded ? 'Свернуть' : 'Раскрыть превью профиля'}
         >
-          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          {expanded ? 'Свернуть' : 'Превью'}
+          {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </button>
       </div>
 
