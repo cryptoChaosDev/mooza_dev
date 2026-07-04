@@ -1199,9 +1199,15 @@ export default function FeedPage() {
                 <Star size={16} fill={showSavedOnly ? 'currentColor' : 'none'} />
               </button>
               {!showSavedOnly && <SortDropdown value={filters.sort} onChange={(v) => updateFilters({ sort: v })} />}
+            </div>
+          </div>
+
+          {/* Кнопка общих фильтров + быстрые чипсы — на одном уровне; скрыто в «Сохранённых» */}
+          {!showSavedOnly && (
+            <div className="pb-2 px-4 flex items-center gap-2">
               <button
                 onClick={() => navigate('/flow-settings')}
-                className="relative flex items-center px-2.5 py-1.5 rounded-xl text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className="relative flex items-center flex-shrink-0 px-2.5 py-1.5 rounded-xl text-sm text-slate-400 hover:text-white bg-slate-800/60 hover:bg-slate-800 transition-colors"
                 title="Фильтры"
               >
                 <SlidersHorizontal size={16} />
@@ -1211,16 +1217,12 @@ export default function FeedPage() {
                   </span>
                 )}
               </button>
-            </div>
-          </div>
-
-          {/* Quick post-type chips — hidden in saved view */}
-          {!showSavedOnly && (
-            <div className="pb-2 px-4 flex gap-2 overflow-x-auto scrollbar-none">
-              <FilterChip label="Все" active={filters.postType.length === 0} onClick={() => updateFilters({ postType: [] })} />
-              {TYPE_CHIPS.map(c => (
-                <FilterChip key={c.id} label={c.label} active={filters.postType.includes(c.id)} onClick={() => updateFilters({ postType: toggleInArray(filters.postType, c.id) })} />
-              ))}
+              <div className="flex gap-2 overflow-x-auto scrollbar-none min-w-0">
+                <FilterChip label="Все" active={filters.postType.length === 0} onClick={() => updateFilters({ postType: [] })} />
+                {TYPE_CHIPS.map(c => (
+                  <FilterChip key={c.id} label={c.label} active={filters.postType.includes(c.id)} onClick={() => updateFilters({ postType: toggleInArray(filters.postType, c.id) })} />
+                ))}
+              </div>
             </div>
           )}
         </div>
