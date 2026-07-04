@@ -960,14 +960,17 @@ function PostTypePicker({ onClose, onPickOrder, onPickVacancy }: { onClose: () =
 
 // ─── Filter chips ──────────────────────────────────────────────────────────────
 
+// Быстрые чипсы — самые важные для функциональной работы типы (имена как в «Добавить пост»).
+// Полный список типов — в общих фильтрах (FlowSettingsPage).
 const TYPE_CHIPS = [
-  { id: 'all',        label: 'Все' },
-  { id: 'blog',       label: 'Свободный блог' },
-  { id: 'question',   label: 'Вопрос' },
-  { id: 'poll',       label: 'Опрос' },
-  { id: 'service',    label: 'Апдейт услуги' },
-  { id: 'employment', label: 'Апдейт занятости' },
+  { id: 'service',  label: 'Услуга' },
+  { id: 'order',    label: 'Заказ' },
+  { id: 'vacancy',  label: 'Вакансия' },
+  { id: 'question', label: 'Вопрос' },
 ];
+
+const toggleInArray = (arr: string[], id: string) =>
+  arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id];
 
 function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
@@ -1031,7 +1034,7 @@ function SortDropdown({ value, onChange }: { value: string; onChange: (v: string
 
 function countActiveFilters(f: FlowFilters): number {
   return [
-    f.postType !== 'all',
+    f.postType.length > 0,
     f.authorKind !== 'all',
     f.period !== 'all',
     f.cities.length > 0,
@@ -1093,7 +1096,7 @@ export default function FeedPage() {
     return () => window.removeEventListener('focus', onFocus);
   }, []);
 
-  const typeFilter = filters.postType !== 'all' ? filters.postType : undefined;
+  const typeFilter = filters.postType.length > 0 ? filters.postType.join(',') : undefined;
   const authorKindFilter = filters.authorKind !== 'all' ? filters.authorKind : undefined;
   const periodFilter = filters.period !== 'all' ? filters.period : undefined;
   const cityFilter = filters.cities.length > 0 ? filters.cities.join(',') : undefined;
@@ -1205,8 +1208,9 @@ export default function FeedPage() {
           {/* Quick post-type chips — hidden in saved view */}
           {!showSavedOnly && (
             <div className="pb-2 px-4 flex gap-2 overflow-x-auto scrollbar-none">
+              <FilterChip label="Все" active={filters.postType.length === 0} onClick={() => updateFilters({ postType: [] })} />
               {TYPE_CHIPS.map(c => (
-                <FilterChip key={c.id} label={c.label} active={filters.postType === c.id} onClick={() => updateFilters({ postType: c.id })} />
+                <FilterChip key={c.id} label={c.label} active={filters.postType.includes(c.id)} onClick={() => updateFilters({ postType: toggleInArray(filters.postType, c.id) })} />
               ))}
             </div>
           )}

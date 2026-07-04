@@ -198,7 +198,10 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
 
     // Build the where clause from filters.
     const where: any = {};
-    if (type && type !== 'all') where.type = String(type);
+    if (type && type !== 'all') {
+      const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
+      if (types.length) where.type = types.length > 1 ? { in: types } : types[0];
+    }
     if (kind === 'resident') { where.channelId = null; where.artistId = null; }
     else if (kind === 'channel') where.channelId = { not: null };
     else if (kind === 'artist') where.artistId = { not: null };
@@ -338,7 +341,10 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
         if (teamUserId && kind === 'all') {
           const newUser = vid ? (await prisma.post.count({ where: { authorId: vid } })) === 0 : false;
           const teamWhere: any = { authorId: teamUserId };
-          if (type && type !== 'all') teamWhere.type = String(type);
+          if (type && type !== 'all') {
+            const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
+            if (types.length) teamWhere.type = types.length > 1 ? { in: types } : types[0];
+          }
           if (where.createdAt) teamWhere.createdAt = where.createdAt;
           if (where.city) teamWhere.city = where.city;
           const teamPosts = await prisma.post.findMany({ where: teamWhere, select: { id: true }, orderBy: { createdAt: newUser ? 'asc' : 'desc' }, take: 25 });
