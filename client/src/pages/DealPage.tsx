@@ -92,12 +92,12 @@ export default function DealPage() {
   });
 
   if (isLoading) return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
       <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent" />
     </div>
   );
   if (!deal) return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
       <p className="text-slate-400">Сделка не найдена</p>
     </div>
   );

@@ -846,7 +846,7 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent mx-auto shadow-lg shadow-primary-500/30" />
           <p className="text-slate-400 mt-3 text-sm">Загрузка профиля...</p>
@@ -1423,10 +1423,8 @@ export default function ProfilePage() {
                     if (v.length >= 3) v = v.slice(0, 2) + '.' + v.slice(2);
                     if (v.length >= 6) v = v.slice(0, 5) + '.' + v.slice(5);
                     v = v.slice(0, 10);
-                    const iso = v.length === 10
-                      ? `${v.slice(6)}-${v.slice(3, 5)}-${v.slice(0, 2)}`
-                      : '';
-                    setFormData({ ...formData, birthDate: v, ...(iso ? { _birthDateISO: iso } as any : {}) });
+                    // handleSaveHero re-derives the ISO from formData.birthDate on save.
+                    setFormData({ ...formData, birthDate: v });
                   }}
                   className={inputCls}
                 />
@@ -1594,7 +1592,7 @@ export default function ProfilePage() {
               {editingProfessions && createPortal(
                 <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => { setEditingProfessions(false); setProfAddOpen(false); setProfSearch(''); }}>
                   <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-                  <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
+                  <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
                     <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
                     <p className="text-sm font-semibold text-white mb-3">Профессии</p>
                     <div className="space-y-3">
@@ -1857,7 +1855,7 @@ export default function ProfilePage() {
                 {serviceFormOpen !== null && createPortal(
                   <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => { serviceFormDiscardedRef.current = true; closeServiceForm(); }}>
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-                    <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
+                    <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
                       <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
                       {ServiceForm()}
                     </div>
@@ -1920,7 +1918,7 @@ export default function ProfilePage() {
                 {orderFormOpen && createPortal(
                   <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setOrderFormOpen(false)}>
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-                    <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
+                    <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
                       <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
                       <OrderForm onClose={() => setOrderFormOpen(false)} />
                     </div>

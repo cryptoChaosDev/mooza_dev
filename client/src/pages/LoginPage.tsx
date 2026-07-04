@@ -180,7 +180,7 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
 
   if (pendingEmail) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4 py-8">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center px-4 py-8">
         <div className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-2xl p-8 shadow-2xl">
           <div className="flex flex-col items-center text-center mb-6">
             <div className="w-14 h-14 rounded-2xl bg-primary-600/20 flex items-center justify-center mb-4">
@@ -237,7 +237,7 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center p-4">
       <div className="fixed inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full bg-primary-600/10 blur-[120px]" />
         <div className="absolute -bottom-60 -right-40 w-[500px] h-[500px] rounded-full bg-purple-600/10 blur-[100px]" />

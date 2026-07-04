@@ -117,7 +117,7 @@ export default function OrderDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent" />
       </div>
     );
@@ -125,7 +125,7 @@ export default function OrderDetailPage() {
 
   if (!order) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <p className="text-slate-400">Заказ не найден</p>
       </div>
     );
@@ -503,7 +503,7 @@ export default function OrderDetailPage() {
       {isOwner && editing && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setEditing(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
+          <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
             <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
             <OrderForm
               order={order}

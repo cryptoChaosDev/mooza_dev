@@ -197,7 +197,7 @@ export default function VacanciesPage() {
       {editingVacancy && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setEditingVacancy(null)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
             <VacancyForm
               vacancy={editingVacancy}

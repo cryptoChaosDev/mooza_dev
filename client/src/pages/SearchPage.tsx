@@ -113,7 +113,7 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
 
       {/* ── Expanded preview (max ~half the screen, scroll inside) ── */}
       {expanded && (
-        <div className="px-4 pb-4 bg-slate-900/40 max-h-[50vh] overflow-y-auto space-y-3">
+        <div className="px-4 pb-4 bg-slate-900/40 max-h-[50dvh] overflow-y-auto space-y-3">
           {/* О себе */}
           {user.bio?.trim() ? (
             <div>

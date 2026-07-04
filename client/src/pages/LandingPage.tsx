@@ -169,7 +169,7 @@ export default function LandingPage() {
     <div className="min-h-screen bg-slate-950 text-slate-100 overflow-x-hidden">
 
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
-      <section className="relative flex flex-col items-center justify-center min-h-screen px-4 text-center">
+      <section className="relative flex flex-col items-center justify-center min-h-screen min-h-[100dvh] px-4 text-center">
         {/* ambient */}
         <div className="pointer-events-none absolute inset-0 overflow-hidden">
           <div className="absolute top-[-15%] left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full bg-primary-700/15 blur-[160px]" />

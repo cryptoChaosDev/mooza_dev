@@ -83,7 +83,7 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent" />
       </div>
     );
@@ -91,7 +91,7 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
 
   if (isError || !item) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 px-4">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center gap-4 px-4">
         <p className="text-slate-400">{isRelease ? 'Релиз не найден' : 'Клип не найден'}</p>
         <button onClick={() => navigate(-1)} className="text-primary-400 text-sm">Назад</button>
       </div>

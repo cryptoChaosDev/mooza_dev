@@ -200,7 +200,7 @@ export default function VacancyDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent" />
       </div>
     );
@@ -208,7 +208,7 @@ export default function VacancyDetailPage() {
 
   if (!vacancy) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <p className="text-slate-400">Вакансия не найдена</p>
       </div>
     );
@@ -799,7 +799,7 @@ export default function VacancyDetailPage() {
       {coopResponseId && (
         <>
           <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm" onClick={() => setCoopResponseId(null)} />
-          <div className="fixed inset-x-4 bottom-8 z-[81] max-w-sm mx-auto bg-slate-900 border border-slate-700 rounded-2xl p-5 shadow-2xl space-y-3 max-h-[80vh] overflow-y-auto">
+          <div className="fixed inset-x-4 bottom-8 z-[81] max-w-sm mx-auto bg-slate-900 border border-slate-700 rounded-2xl p-5 shadow-2xl space-y-3 max-h-[80dvh] overflow-y-auto">
             <p className="text-sm font-bold text-white">Предложение о сотрудничестве</p>
             <div>
               <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Дата начала <span className="text-rose-400">*</span></label>
@@ -893,7 +893,7 @@ export default function VacancyDetailPage() {
       {isOwner && editing && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setEditing(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+          <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
             <VacancyForm
               vacancy={vacancy}

@@ -157,7 +157,7 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
           </button>
         </div>
 
-        <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="px-5 py-4 space-y-4 max-h-[70dvh] overflow-y-auto">
           {/* Partner card */}
           <button
             onClick={() => { navigate(`/profile/${partner.id}`); onClose(); }}

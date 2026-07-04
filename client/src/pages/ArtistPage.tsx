@@ -548,7 +548,7 @@ export default function ArtistPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent" />
       </div>
     );
@@ -556,7 +556,7 @@ export default function ArtistPage() {
 
   if (isError || !artist) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 px-4">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center gap-4 px-4">
         <p className="text-slate-400">Артист не найден</p>
         <button onClick={() => navigate(-1)} className="text-primary-400 text-sm">Назад</button>
       </div>
@@ -667,7 +667,7 @@ export default function ArtistPage() {
       >
         <div
           className="absolute bottom-0 left-0 right-0 bg-slate-900 rounded-t-3xl flex flex-col"
-          style={{ maxHeight: '92vh', paddingBottom: 'env(safe-area-inset-bottom, 0px)', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+          style={{ maxHeight: '92dvh', paddingBottom: 'env(safe-area-inset-bottom, 0px)', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Drag handle */}
@@ -1887,7 +1887,7 @@ export default function ArtistPage() {
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setShowVacancyForm(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
-            className="relative w-full max-w-lg max-h-[90vh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl"
+            className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
             <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />

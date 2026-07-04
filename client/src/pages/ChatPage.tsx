@@ -716,7 +716,7 @@ export default function ChatPage() {
   // ── Loading state ──────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <Loader2 size={48} className="text-primary-500 animate-spin" />
       </div>
     );
@@ -724,7 +724,7 @@ export default function ChatPage() {
 
   if (!conversation) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <p className="text-slate-400 text-sm mb-3">Диалог не найден</p>
           <button onClick={() => navigate('/messages')} className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg text-sm">

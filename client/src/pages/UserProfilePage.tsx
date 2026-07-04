@@ -171,7 +171,7 @@ export default function UserProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent mx-auto" />
           <p className="text-slate-400 mt-3 text-sm">Загрузка профиля...</p>
@@ -182,7 +182,7 @@ export default function UserProfilePage() {
 
   if (!user) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 gap-3">
+      <div className="flex flex-col items-center justify-center min-h-screen min-h-[100dvh] bg-slate-950 gap-3">
         <p className="text-slate-400 text-sm">Пользователь не найден</p>
         <button onClick={() => navigate(-1)} className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-xl text-sm">Назад</button>
       </div>

@@ -503,7 +503,7 @@ export default function RegisterPage() {
   // ── Logged-in visitor opened an artist invite link → confirm & join ─────────
   if (isAuthed && artistInvite) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center px-6">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center px-6">
         <div className="w-full max-w-sm text-center">
           <div className="text-5xl mb-4">🎤</div>
           <h2 className="text-2xl font-bold text-white mb-2">Приглашение в артиста</h2>
@@ -540,7 +540,7 @@ export default function RegisterPage() {
   // ── Email verification screen ─────────────────────────────────────────────
   if (pendingEmail) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center px-6">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center px-6">
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
             <div className="text-5xl mb-4">📬</div>

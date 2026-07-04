@@ -206,7 +206,7 @@ export default function GroupPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent mx-auto shadow-lg shadow-primary-500/30" />
           <p className="text-slate-400 mt-3 text-sm">Загрузка...</p>
@@ -217,7 +217,7 @@ export default function GroupPage() {
 
   if (isError || !group) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 px-4">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center gap-4 px-4">
         <p className="text-slate-400">Группа не найдена</p>
         <button onClick={() => navigate(-1)} className="text-primary-400 text-sm">Назад</button>
       </div>
@@ -238,7 +238,7 @@ export default function GroupPage() {
           <div className="fixed inset-0 z-50 bg-black/70" onClick={() => setIsEditing(false)}>
             <div
               className="absolute bottom-0 left-0 right-0 bg-slate-900 rounded-t-3xl flex flex-col"
-              style={{ maxHeight: '92vh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' } as React.CSSProperties}
+              style={{ maxHeight: '92dvh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' } as React.CSSProperties}
               onClick={e => e.stopPropagation()}
             >
               <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
