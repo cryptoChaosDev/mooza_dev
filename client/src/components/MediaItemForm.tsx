@@ -258,7 +258,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
           <div
             className="absolute bottom-0 left-0 right-0 bg-slate-900 rounded-t-3xl flex flex-col"
             style={{
-              maxHeight: '92vh',
+              maxHeight: '92dvh',
               paddingBottom: 'env(safe-area-inset-bottom, 0px)',
               WebkitOverflowScrolling: 'touch',
             } as React.CSSProperties}

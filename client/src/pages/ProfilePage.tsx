@@ -2255,8 +2255,8 @@ export default function ProfilePage() {
     {/* Document fullscreen */}
     {docFullscreen && (
       <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
-          <span className="text-sm text-slate-300 truncate">{docFullscreen.name}</span>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
+          <span className="text-sm text-slate-300 truncate min-w-0">{docFullscreen.name}</span>
           <button onClick={() => setDocFullscreen(null)} className="p-2 rounded-full bg-slate-800 text-white hover:bg-slate-700 transition-colors flex-shrink-0"><X size={20} /></button>
         </div>
         <iframe src={docFullscreen.url} className="flex-1 w-full border-0" title={docFullscreen.name} />

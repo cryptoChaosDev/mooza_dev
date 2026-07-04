@@ -85,9 +85,9 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
           </div>
 
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            {location && <span className="text-xs text-slate-500 truncate">{location}</span>}
+            {location && <span className="text-xs text-slate-500 min-w-0 break-words [overflow-wrap:anywhere]">{location}</span>}
             {professions.length > 0 && (
-              <span className="text-xs text-slate-400 truncate">{location ? '· ' : ''}{professions.slice(0, 2).join(', ')}</span>
+              <span className="text-xs text-slate-400 min-w-0 break-words [overflow-wrap:anywhere]">{location ? '· ' : ''}{professions.slice(0, 2).join(', ')}</span>
             )}
             <span className="flex items-center gap-0.5 text-xs text-slate-500">
               <Link2 size={10} />
@@ -934,7 +934,7 @@ export default function SearchPage() {
               return (
                 <div className="mb-5">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Жанры</p>
-                  <div className="flex flex-wrap gap-2" style={{ maxHeight: showAllGenres ? undefined : '4.5rem', overflow: showAllGenres ? undefined : 'hidden' }}>
+                  <div className="flex flex-wrap gap-2" style={{ maxHeight: showAllGenres ? undefined : '4.5rem', overflow: showAllGenres ? undefined : 'hidden', maskImage: showAllGenres ? undefined : 'linear-gradient(to bottom, #000 68%, transparent)', WebkitMaskImage: showAllGenres ? undefined : 'linear-gradient(to bottom, #000 68%, transparent)' }}>
                     <button
                       onClick={() => setArtistGenreFilter([])}
                       className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${
@@ -1170,7 +1170,7 @@ export default function SearchPage() {
       {filtersOpen && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setFiltersOpen(false)} />
-          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85dvh] flex flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal size={16} className="text-primary-400" />
@@ -1314,7 +1314,7 @@ export default function SearchPage() {
       {artistFilterOpen && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setArtistFilterOpen(false)} />
-          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85dvh] flex flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal size={16} className="text-primary-400" />
@@ -1373,7 +1373,7 @@ export default function SearchPage() {
       {peopleFilterOpen && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setPeopleFilterOpen(false)} />
-          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85dvh] flex flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal size={16} className="text-primary-400" />

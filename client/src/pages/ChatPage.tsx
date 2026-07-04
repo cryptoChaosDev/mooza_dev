@@ -1134,7 +1134,7 @@ export default function ChatPage() {
                         </div>
                       )}
 
-                      <div className="max-w-xs md:max-w-md lg:max-w-lg relative group/msg">
+                      <div className="max-w-[80%] sm:max-w-md lg:max-w-lg relative group/msg">
                         {/* Sender name (group) */}
                         {showSender && senderInGroup && (
                           <p className="text-xs text-slate-400 mb-1 ml-1">

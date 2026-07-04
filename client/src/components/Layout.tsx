@@ -18,7 +18,10 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
-  const notifPending = 'Notification' in window && Notification.permission === 'default' && !notifDismissed;
+  // The open chat thread is a fixed-overlay whose top is pinned to the plain header
+  // height — the notification banner would grow the header and overlap the chat.
+  const isChatThread = /^\/(messages|chat)\/[^/]+/.test(location.pathname);
+  const notifPending = 'Notification' in window && Notification.permission === 'default' && !notifDismissed && !isChatThread;
 
   function requestNotifications() {
     Notification.requestPermission().then(() => setNotifDismissed(true));

@@ -243,8 +243,8 @@ export default function OrderDetailPage() {
                         <audio controls src={url} className="w-full" />
                       ) : (
                         <a href={url} target="_blank" rel="noreferrer"
-                          className="flex items-center gap-2 text-sm text-primary-400 hover:text-primary-300 transition-colors">
-                          <Link2 size={14} />{file.originalName}
+                          className="flex items-center gap-2 text-sm text-primary-400 hover:text-primary-300 transition-colors min-w-0">
+                          <Link2 size={14} className="flex-shrink-0" /><span className="min-w-0 break-all">{file.originalName}</span>
                         </a>
                       )}
                     </div>
