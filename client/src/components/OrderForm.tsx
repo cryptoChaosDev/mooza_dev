@@ -316,10 +316,37 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
     }
   };
 
+  // Edit mode: save changes while keeping the order's current status — editing no
+  // longer routes through a draft, so there's no «move to draft» here.
+  const saveEdit = async () => {
+    if (!canSave || submitting) return;
+    if (!refLinksValid()) return;
+    handledRef.current = true;
+    autosaveDoneRef.current = true;
+    setSubmitting(true);
+    try {
+      await orderAPI.update(order.id, buildPayload(order?.status ?? 'active'));
+      await uploadRefs(order.id);
+      queryClient.invalidateQueries({ queryKey: ['orders', 'mine'] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ['order', order.id] });
+      toast.success('Заказ обновлён');
+      onClose();
+    } catch (e: any) {
+      handledRef.current = false;
+      autosaveDoneRef.current = false;
+      toast.error(getApiError(e, 'Не удалось сохранить изменения'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   // Unmount-only silent draft (skips reference files — multipart needs a live form).
+  // Only for NEW orders — editing must never spawn a phantom draft copy.
   useEffect(() => {
     return () => {
       try {
+        if (isEdit) return;
         if (discardedRef.current || handledRef.current || autosaveDoneRef.current) return;
         if (!stateRef.current()) return;
         autosaveDoneRef.current = true;
@@ -579,31 +606,49 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
         </div>
       </div>
 
-      {/* Footer — deterministic on every width: small row (Отмена / В черновики)
-          on top, full-width primary button at the very bottom. */}
-      <div className="flex flex-col gap-2 pt-1">
-        <div className="flex gap-2">
+      {/* Footer. Edit mode: just save (keeping status) — no draft moves. Create mode:
+          Отмена / В черновики on top, full-width «Опубликовать» at the bottom. */}
+      {isEdit ? (
+        <div className="flex gap-2 pt-1">
           <button
             onClick={() => { discardedRef.current = true; onClose(); }}
-            className="flex-1 py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors">
+            className="flex-1 py-2.5 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors">
             Отмена
           </button>
           <button
-            onClick={saveDraft}
-            disabled={!serviceOk || !titleOk || submitting}
-            className="flex-1 py-2 px-3 rounded-lg border border-slate-600/50 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 text-sm font-medium transition-colors">
-            {isEdit ? 'Сохранить черновик' : 'В черновики'}
+            onClick={saveEdit}
+            disabled={!canSave || submitting}
+            className="flex-[2] py-2.5 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
+          >
+            {submitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            Сохранить
           </button>
         </div>
-        <button
-          onClick={publish}
-          disabled={!canSave || submitting}
-          className="w-full py-2.5 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
-        >
-          {submitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-          Опубликовать
-        </button>
-      </div>
+      ) : (
+        <div className="flex flex-col gap-2 pt-1">
+          <div className="flex gap-2">
+            <button
+              onClick={() => { discardedRef.current = true; onClose(); }}
+              className="flex-1 py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors">
+              Отмена
+            </button>
+            <button
+              onClick={saveDraft}
+              disabled={!serviceOk || !titleOk || submitting}
+              className="flex-1 py-2 px-3 rounded-lg border border-slate-600/50 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 text-sm font-medium transition-colors">
+              В черновики
+            </button>
+          </div>
+          <button
+            onClick={publish}
+            disabled={!canSave || submitting}
+            className="w-full py-2.5 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
+          >
+            {submitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            Опубликовать
+          </button>
+        </div>
+      )}
     </div>
   );
 }

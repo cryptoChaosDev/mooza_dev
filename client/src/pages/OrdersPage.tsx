@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Briefcase, Calendar, Loader2, Archive, Send, Pencil, FileText } from 'lucide-react';
+import { ArrowLeft, Briefcase, Calendar, Loader2, Archive, Send, Pencil } from 'lucide-react';
 import { orderAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
@@ -94,6 +94,23 @@ export default function OrdersPage() {
           </div>
         ) : orders.map((order: any) => {
           const sectionName = order.service?.section?.name ?? '';
+          const hasResponses = (order._count?.responses ?? 0) > 0;
+          // Editing is disabled once the order has responses (server-enforced too).
+          const editBtn = (
+            <button
+              onClick={() => hasResponses
+                ? toast.error('Заказ нельзя редактировать — на него уже есть отклики')
+                : openEdit(order.id)}
+              disabled={editLoadingId === order.id}
+              className={`flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium border rounded-lg transition-colors disabled:opacity-50 ${
+                hasResponses ? 'border-slate-800 text-slate-500' : 'border-slate-700 text-slate-300 hover:text-white'
+              }`}
+              title={hasResponses ? 'Есть отклики — редактирование недоступно' : 'Редактировать'}
+            >
+              {editLoadingId === order.id ? <Loader2 size={13} className="animate-spin" /> : <Pencil size={13} />}
+              Редактировать
+            </button>
+          );
           return (
             <div key={order.id} className="p-4 bg-slate-900/60 border border-slate-800/60 rounded-2xl space-y-3">
               <button onClick={() => navigate(`/orders/${order.id}`)} className="w-full text-left">
@@ -111,14 +128,7 @@ export default function OrdersPage() {
               <div className="flex gap-2">
                 {tab === 'active' && (
                   <>
-                    <button
-                      onClick={() => statusMut.mutate({ id: order.id, status: 'draft' })}
-                      disabled={statusMut.isPending}
-                      className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium border border-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      {statusMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
-                      В черновик
-                    </button>
+                    {editBtn}
                     <button
                       onClick={() => statusMut.mutate({ id: order.id, status: 'archived' })}
                       disabled={statusMut.isPending}
@@ -161,14 +171,7 @@ export default function OrdersPage() {
                       {statusMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
                       Опубликовать
                     </button>
-                    <button
-                      onClick={() => statusMut.mutate({ id: order.id, status: 'draft' })}
-                      disabled={statusMut.isPending}
-                      className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium border border-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors disabled:opacity-50"
-                    >
-                      {statusMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <FileText size={13} />}
-                      В черновик
-                    </button>
+                    {editBtn}
                   </>
                 )}
               </div>

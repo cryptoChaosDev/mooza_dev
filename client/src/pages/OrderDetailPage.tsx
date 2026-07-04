@@ -4,7 +4,7 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tansta
 import {
   ArrowLeft, Briefcase, DollarSign, Calendar, MessageCircle,
   Archive, Loader2, Send, Link2, Users, Sparkles, HandshakeIcon, Share2,
-  Pencil, FileText,
+  Pencil,
 } from 'lucide-react';
 import { orderAPI } from '../lib/api';
 import { avatarUrl } from '../lib/avatar';
@@ -145,6 +145,23 @@ export default function OrderDetailPage() {
     customFilterValues.push(...Object.values(grouped));
   }
 
+  // Editing is disabled once the order has responses (server-enforced too).
+  const hasResponses = responses.length > 0;
+  const editBtn = (
+    <button
+      onClick={() => hasResponses
+        ? toast.error('Заказ нельзя редактировать — на него уже есть отклики')
+        : setEditing(true)}
+      className={`flex-1 py-3 flex items-center justify-center gap-2 text-sm font-medium border rounded-2xl transition-colors ${
+        hasResponses ? 'border-slate-800 text-slate-500' : 'border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
+      }`}
+      title={hasResponses ? 'Есть отклики — редактирование недоступно' : 'Редактировать'}
+    >
+      <Pencil size={15} />
+      Редактировать
+    </button>
+  );
+
   return (
     <div className="min-h-screen bg-slate-950 pb-32">
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
@@ -258,14 +275,7 @@ export default function OrderDetailPage() {
             {/* Status actions */}
             {order.status === 'active' && (
               <div className="flex gap-2">
-                <button
-                  onClick={() => statusMut.mutate('draft')}
-                  disabled={statusMut.isPending}
-                  className="flex-1 py-3 flex items-center justify-center gap-2 text-sm font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 rounded-2xl transition-colors disabled:opacity-50"
-                >
-                  {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />}
-                  В черновик
-                </button>
+                {editBtn}
                 <button
                   onClick={() => statusMut.mutate('archived')}
                   disabled={statusMut.isPending}
@@ -307,14 +317,7 @@ export default function OrderDetailPage() {
                   {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                   Опубликовать
                 </button>
-                <button
-                  onClick={() => statusMut.mutate('draft')}
-                  disabled={statusMut.isPending}
-                  className="flex-1 py-3 flex items-center justify-center gap-2 text-sm font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 rounded-2xl transition-colors disabled:opacity-50"
-                >
-                  {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <FileText size={15} />}
-                  В черновик
-                </button>
+                {editBtn}
               </div>
             )}
 

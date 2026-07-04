@@ -118,9 +118,12 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res) => {
     const order = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!order || order.authorId !== meId) return res.status(404).json({ error: 'Not found' });
 
-    // Editing is allowed only for drafts; active/archived must first be moved to draft.
-    if (order.status !== 'draft') {
-      return res.status(409).json({ error: 'Редактировать можно только черновик. Сначала переведите заказ в черновик.' });
+    // Editing is blocked once the order has any response — you can't change the terms
+    // out from under people who already replied. Any status is otherwise editable
+    // directly (no more «move to draft first»).
+    const respCount = await prisma.orderResponse.count({ where: { orderId: order.id } });
+    if (respCount > 0) {
+      return res.status(409).json({ error: 'Нельзя редактировать заказ — на него уже есть отклики.' });
     }
 
     const {
