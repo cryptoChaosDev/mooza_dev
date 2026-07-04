@@ -176,7 +176,7 @@ export default function ProPage() {
                 <div className="grid grid-cols-[1fr_auto_auto] gap-x-3 px-4 py-3 border-b border-slate-800 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
                   <span>Преимущество</span>
                   <span className="text-center w-16">Бесплатно</span>
-                  <span className="text-center w-16">Pro</span>
+                  <span className="text-center w-24">Pro</span>
                 </div>
                 {COMPARISON.map((row, i) => (
                   <div
@@ -189,7 +189,7 @@ export default function ProPage() {
                     <span className="text-center w-16 text-sm text-slate-500">
                       {row.free === '✗' ? <X size={15} className="inline text-slate-600" /> : row.free}
                     </span>
-                    <span className="text-center w-16 text-sm font-medium text-violet-300">
+                    <span className="text-center w-24 text-sm font-medium text-violet-300 leading-tight break-words [overflow-wrap:anywhere]">
                       {row.pro === '✓'
                         ? <Check size={15} className="inline text-violet-400" />
                         : row.pro === '✗'
