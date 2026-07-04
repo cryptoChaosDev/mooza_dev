@@ -963,10 +963,10 @@ function PostTypePicker({ onClose, onPickOrder, onPickVacancy }: { onClose: () =
 // Быстрые чипсы — самые важные для функциональной работы типы (имена как в «Добавить пост»).
 // Полный список типов — в общих фильтрах (FlowSettingsPage).
 const TYPE_CHIPS = [
-  { id: 'service',  label: 'Услуга' },
-  { id: 'order',    label: 'Заказ' },
-  { id: 'vacancy',  label: 'Вакансия' },
-  { id: 'question', label: 'Вопрос' },
+  { id: 'blog',    label: 'Блог' },
+  { id: 'service', label: 'Услуга' },
+  { id: 'order',   label: 'Заказ' },
+  { id: 'vacancy', label: 'Вакансия' },
 ];
 
 const toggleInArray = (arr: string[], id: string) =>
