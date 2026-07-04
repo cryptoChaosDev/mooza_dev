@@ -242,6 +242,34 @@ router.get('/mine', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
+// ── GET /api/orders/responses/incoming — responses to orders I authored ───────
+router.get('/responses/incoming', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const meId = req.userId!;
+    const responses = await prisma.orderResponse.findMany({
+      where: { order: { authorId: meId } },
+      include: {
+        order: { select: { id: true, title: true } },
+        executor: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    res.json(
+      responses.map((r) => ({
+        id: r.id,
+        order: r.order,
+        executor: r.executor,
+        price: r.price,
+        comment: r.comment,
+        createdAt: r.createdAt,
+      })),
+    );
+  } catch (e: any) {
+    console.error('[orders] GET /responses/incoming', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── GET /api/orders/:id — full order ──────────────────────────────────────────
 router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
   try {

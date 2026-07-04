@@ -328,6 +328,76 @@ router.get('/mine', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
+// ── GET /api/vacancies/my-offers — cooperation offers sent TO me ──────────────
+router.get('/my-offers', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const meId = req.userId!;
+    const offers = await prisma.vacancyOffer.findMany({
+      where: { applicantId: meId, status: 'pending' },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        vacancy: { select: { id: true, title: true, artist: { select: { id: true, name: true, avatar: true } } } },
+      },
+    });
+    res.json(offers.map((o) => ({
+      id: o.id,
+      vacancy: {
+        id: o.vacancy.id,
+        title: o.vacancy.title,
+        artist: {
+          id: o.vacancy.artist.id,
+          name: o.vacancy.artist.name,
+          avatar: o.vacancy.artist.avatar,
+        },
+      },
+      startDate: o.startDate,
+      conditions: o.conditions,
+      compensation: o.compensation,
+      extraDetails: o.extraDetails,
+      createdAt: o.createdAt,
+    })));
+  } catch (e: any) {
+    console.error('[vacancies] GET /my-offers', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── GET /api/vacancies/responses/incoming — responses to vacancies I OWN ───────
+router.get('/responses/incoming', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const meId = req.userId!;
+    // Vacancies I own = those whose artist has an owner UserArtist membership = me.
+    const owned = await prisma.vacancy.findMany({
+      where: { artist: { userArtists: { some: { userId: meId, isOwner: true } } } },
+      select: { id: true },
+    });
+    const vacancyIds = owned.map((v) => v.id);
+    const responses = await prisma.vacancyResponse.findMany({
+      where: { vacancyId: { in: vacancyIds } },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        vacancy: { select: { id: true, title: true } },
+        applicant: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+      },
+    });
+    res.json(responses.map((r) => ({
+      id: r.id,
+      vacancy: { id: r.vacancy.id, title: r.vacancy.title },
+      applicant: {
+        id: r.applicant.id,
+        firstName: r.applicant.firstName,
+        lastName: r.applicant.lastName,
+        avatar: r.applicant.avatar,
+      },
+      comment: r.comment,
+      createdAt: r.createdAt,
+    })));
+  } catch (e: any) {
+    console.error('[vacancies] GET /responses/incoming', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── GET /api/vacancies/:id — full vacancy ──────────────────────────────────────
 router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
   try {

@@ -151,6 +151,90 @@ router.get('/check-name', optionalAuthenticate, async (req: AuthRequest, res: Re
   }
 });
 
+// ── GET /api/artists/my-invites ──────────────────────────────────────────────
+// Invitations sent TO the current user (invitedById != null), still pending.
+router.get('/my-invites', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+
+    const memberships = await prisma.userArtist.findMany({
+      where: {
+        userId,
+        inviteStatus: 'PENDING',
+        invitedById: { not: null },
+      },
+      include: {
+        artist: { select: { id: true, name: true, avatar: true } },
+        profession: { select: { name: true } },
+        roles: { include: { role: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return res.json(
+      memberships.map((m) => ({
+        id: m.id,
+        artist: { id: m.artist.id, name: m.artist.name, avatar: m.artist.avatar },
+        roleNames: m.roles.map((r) => r.role.name),
+        professionName: m.profession?.name ?? null,
+        createdAt: m.createdAt,
+      })),
+    );
+  } catch (e) {
+    console.error('[artists] GET /my-invites', e);
+    return res.status(500).json({ error: 'Failed to fetch invites' });
+  }
+});
+
+// ── GET /api/artists/join-requests ───────────────────────────────────────────
+// Pending join requests (invitedById = null) for artists the current user OWNS.
+router.get('/join-requests', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+
+    const ownedRows = await prisma.userArtist.findMany({
+      where: { userId, isOwner: true },
+      select: { artistId: true },
+    });
+    const artistIds = ownedRows.map((r) => r.artistId);
+    if (artistIds.length === 0) return res.json([]);
+
+    const requests = await prisma.userArtist.findMany({
+      where: {
+        artistId: { in: artistIds },
+        inviteStatus: 'PENDING',
+        invitedById: null,
+      },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+        artist: { select: { id: true, name: true } },
+        profession: { select: { name: true } },
+        roles: { include: { role: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return res.json(
+      requests.map((r) => ({
+        id: r.id,
+        artist: { id: r.artist.id, name: r.artist.name },
+        user: {
+          id: r.user.id,
+          firstName: r.user.firstName,
+          lastName: r.user.lastName,
+          avatar: r.user.avatar,
+        },
+        roleNames: r.roles.map((rr) => rr.role.name),
+        professionName: r.profession?.name ?? null,
+        createdAt: r.createdAt,
+      })),
+    );
+  } catch (e) {
+    console.error('[artists] GET /join-requests', e);
+    return res.status(500).json({ error: 'Failed to fetch join requests' });
+  }
+});
+
 // ── GET /api/artists/:id ─────────────────────────────────────────────────────
 router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response) => {
   try {

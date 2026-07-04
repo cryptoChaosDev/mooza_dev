@@ -352,6 +352,9 @@ export const artistAPI = {
   pendingMemberships: (artistId: string) => api.get(`/artists/${artistId}/memberships/pending`),
   approveMembership: (id: string) => api.patch(`/artists/memberships/${id}/approve`),
   rejectMembership: (id: string) => api.patch(`/artists/memberships/${id}/reject`),
+  // «Запросы» inboxes: invitations sent to me + join requests to artists I own.
+  getMyInvites: () => api.get('/artists/my-invites'),
+  getJoinRequests: () => api.get('/artists/join-requests'),
 
   // Phase 5a — members / admins / ownership / invite links
   addMember: (
@@ -419,6 +422,7 @@ export const releaseAPI = {
     api.patch(`/releases/participants/${participantId}/confirm`),
   declineParticipant: (participantId: string) =>
     api.patch(`/releases/participants/${participantId}/decline`),
+  getPendingParticipations: () => api.get('/releases/participations/pending'),
   remove: (id: string) => api.delete(`/releases/${id}`),
 };
 
@@ -450,6 +454,7 @@ export const clipAPI = {
     api.patch(`/clips/participants/${participantId}/confirm`),
   declineParticipant: (participantId: string) =>
     api.patch(`/clips/participants/${participantId}/decline`),
+  getPendingParticipations: () => api.get('/clips/participations/pending'),
   remove: (id: string) => api.delete(`/clips/${id}`),
 };
 
@@ -618,6 +623,7 @@ export const orderAPI = {
   getMatches: (id: string, params?: { page?: number; limit?: number }) => api.get(`/orders/${id}/matches`, { params }),
   respond: (id: string, data: { price: number; comment?: string }) => api.post(`/orders/${id}/responses`, data),
   getResponses: (id: string) => api.get(`/orders/${id}/responses`),
+  getIncomingResponses: () => api.get('/orders/responses/incoming'),
   offer: (id: string, executorId: string) => api.post(`/orders/${id}/offer`, { executorId }),
   createDeal: (id: string, responseId: string) => api.post(`/orders/${id}/responses/${responseId}/deal`, {}),
   uploadReferences: (id: string, formData: FormData) => api.post(`/orders/${id}/references`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
@@ -641,6 +647,8 @@ export const vacancyAPI = {
   deletePortfolio: (id: string, responseId: string, fileId: string) =>
     api.delete(`/vacancies/${id}/responses/${responseId}/portfolio/${fileId}`),
   getResponses: (id: string) => api.get(`/vacancies/${id}/responses`),
+  getMyOffers: () => api.get('/vacancies/my-offers'),
+  getIncomingResponses: () => api.get('/vacancies/responses/incoming'),
   offerCandidate: (id: string, candidateId: string) => api.post(`/vacancies/${id}/offer`, { candidateId }),
   makeCooperation: (id: string, responseId: string, data: { startDate: string; conditions: string; compensation: string; extraDetails?: string }) =>
     api.post(`/vacancies/${id}/responses/${responseId}/cooperation`, data),

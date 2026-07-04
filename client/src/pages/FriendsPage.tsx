@@ -14,10 +14,11 @@ import { yoNorm } from '../lib/search';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 
 import ConfirmDialog from '../components/ConfirmDialog';
+import RequestsSection from '../components/RequestsSection';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 
-type Tab = 'friends' | 'connections' | 'favorites';
+type Tab = 'friends' | 'connections' | 'favorites' | 'requests';
 
 
 function SectionHeader({ label, danger }: { label: string; count?: number; danger?: boolean }) {
@@ -41,7 +42,7 @@ export default function FriendsPage() {
 
   useEffect(() => {
     const tab = searchParams.get('tab') as Tab | null;
-    if (tab && ['friends', 'connections', 'favorites'].includes(tab)) {
+    if (tab && ['friends', 'connections', 'favorites', 'requests'].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -159,6 +160,7 @@ const { data: myBreakRequests = [] } = useQuery({
   const TABS: { id: Tab; label: string; badge: number }[] = [
     { id: 'friends',     label: 'Друзья',   badge: friendsBadge },
     { id: 'connections', label: 'Связи',    badge: connBadge },
+    { id: 'requests',    label: 'Запросы',  badge: 0 },
     { id: 'favorites',   label: 'Избранное', badge: 0 },
   ];
 
@@ -589,6 +591,13 @@ const { data: myBreakRequests = [] } = useQuery({
                   </div>
                 )
               )}
+            </div>
+          )}
+
+          {/* ══ REQUESTS TAB ══ */}
+          {activeTab === 'requests' && (
+            <div className="px-4 py-3">
+              <RequestsSection />
             </div>
           )}
         </div>

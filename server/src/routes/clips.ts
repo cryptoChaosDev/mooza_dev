@@ -59,6 +59,51 @@ const participantInclude = {
   roles: { include: { role: { select: { id: true, name: true } } } },
 } as const;
 
+// ── GET /api/clips/participations/pending — my pending participation inbox ────
+// MUST be registered before '/:id' so Express doesn't capture the literal path.
+router.get('/participations/pending', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const participants = await prisma.clipParticipant.findMany({
+      where: { userId: meId, confirmStatus: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        clip: {
+          select: {
+            id: true,
+            title: true,
+            coverUrl: true,
+            artist: { select: { id: true, name: true, avatar: true } },
+          },
+        },
+        roles: { include: { role: { select: { name: true } } } },
+      },
+    });
+
+    return res.json(
+      participants.map((p) => ({
+        id: p.id,
+        kind: 'clip' as const,
+        clip: {
+          id: p.clip.id,
+          title: p.clip.title,
+          coverUrl: p.clip.coverUrl,
+          artist: {
+            id: p.clip.artist.id,
+            name: p.clip.artist.name,
+            avatar: p.clip.artist.avatar,
+          },
+        },
+        roleNames: p.roles.map((r) => r.role.name),
+        createdAt: p.createdAt,
+      })),
+    );
+  } catch (err) {
+    console.error('[clips] GET /participations/pending', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 // ── POST /api/clips/metadata — best-effort prefill (auth) ─────────────────────
 router.post('/metadata', authenticate, async (req: AuthRequest, res: Response) => {
   try {
