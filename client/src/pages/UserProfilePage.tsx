@@ -157,7 +157,8 @@ export default function UserProfilePage() {
     const fullUrl = `${window.location.origin}/profile/${userId}`;
     const title = user ? `${user.firstName} ${user.lastName} — Moooza` : 'Профиль — Moooza';
     if (navigator.share) {
-      try { await navigator.share({ title, text: user?.bio?.slice(0, 100), url: fullUrl }); } catch { /* cancelled */ }
+      // Share only the title + link — never the bio, so «copy» yields just the URL.
+      try { await navigator.share({ title, url: fullUrl }); } catch { /* cancelled */ }
     } else {
       try {
         await navigator.clipboard.writeText(fullUrl);

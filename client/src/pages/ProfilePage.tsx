@@ -1275,7 +1275,6 @@ export default function ProfilePage() {
               <ShareButton
                 url={`/profile/${profile?.id}`}
                 title={`${profile?.firstName} ${profile?.lastName} — Moooza`}
-                text={profile?.bio?.slice(0, proLimits.bioChars)}
                 className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
                 iconSize={16}
               />
