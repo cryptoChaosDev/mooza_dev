@@ -259,14 +259,13 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
     if (!order) return res.status(404).json({ error: 'Not found' });
 
     const isOwner = !!meId && order.authorId === meId;
-    if (!isOwner) {
-      // Non-authors may only view an order that has a published feed post.
-      const post = await prisma.post.findFirst({ where: { orderId: order.id, type: 'order' }, select: { id: true } });
-      if (!post) return res.status(404).json({ error: 'Not found' });
-    }
+    // Resolve the linked feed post: gates the non-owner view AND is surfaced as
+    // `postId` so the client can deep-link «Посмотреть в Потоке» straight to it.
+    const post = await prisma.post.findFirst({ where: { orderId: order.id, type: 'order' }, select: { id: true } });
+    if (!isOwner && !post) return res.status(404).json({ error: 'Not found' });
 
     const { responses, ...rest } = order;
-    res.json({ ...rest, isOwner, responses: isOwner ? responses : undefined });
+    res.json({ ...rest, isOwner, postId: post?.id ?? null, responses: isOwner ? responses : undefined });
   } catch (e: any) {
     console.error('[orders] GET /:id', e);
     res.status(500).json({ error: e.message });

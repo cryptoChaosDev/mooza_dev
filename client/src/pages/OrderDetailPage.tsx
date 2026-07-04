@@ -336,7 +336,7 @@ export default function OrderDetailPage() {
                     Пока нет точных совпадений по фильтрам, но ваш заказ опубликован в Потоке — его увидят подходящие специалисты и смогут откликнуться.
                   </p>
                   <div className="flex flex-col gap-2">
-                    <button onClick={() => navigate('/')}
+                    <button onClick={() => navigate(order.postId ? `/?post=${order.postId}` : '/')}
                       className="text-xs text-primary-400 hover:text-primary-300 transition-colors">
                       Посмотреть заказ в Потоке
                     </button>

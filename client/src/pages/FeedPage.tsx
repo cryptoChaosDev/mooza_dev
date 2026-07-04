@@ -1069,7 +1069,12 @@ export default function FeedPage() {
   useEffect(() => {
     if (!targetPostId || posts.length === 0) return;
     if (scrolledPostRef.current === targetPostId) return;
-    if (!document.getElementById(`post-${targetPostId}`)) return; // wait until the post is in a loaded page
+    if (!document.getElementById(`post-${targetPostId}`)) {
+      // Not in a loaded page yet (deep-linked to an older post) — keep pulling pages
+      // until it appears or the feed runs out, then this effect re-runs and centres it.
+      if (feed.hasNextPage && !feed.isFetchingNextPage) feed.fetchNextPage();
+      return;
+    }
     scrolledPostRef.current = targetPostId;
     // Centre the post in the viewport. Re-centre a few times: lazy-loaded images above
     // it shift the layout after the first scroll, otherwise leaving it near the bottom.
@@ -1079,7 +1084,7 @@ export default function FeedPage() {
     const t1 = setTimeout(center, 350);
     const t2 = setTimeout(center, 800);
     return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [targetPostId, posts]);
+  }, [targetPostId, posts, feed.hasNextPage, feed.isFetchingNextPage, feed.fetchNextPage]);
 
   const activeFilterCount = countActiveFilters(filters);
 
