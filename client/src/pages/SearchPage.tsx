@@ -1074,10 +1074,12 @@ export default function SearchPage() {
                 <button
                   type="button"
                   onClick={() => setPeopleSortOpen(v => !v)}
-                  className="p-1.5 text-slate-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
                   title="Сортировка"
                 >
                   <ArrowDownUp size={14} />
+                  {PEOPLE_SORT_OPTIONS.find(o => o.value === peopleSort)?.label}
+                  <ChevronDown size={13} className={`transition-transform ${peopleSortOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {peopleSortOpen && (
                   <>
