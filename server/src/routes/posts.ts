@@ -838,10 +838,10 @@ router.delete('/:id/like', authenticate, async (req: AuthRequest, res) => {
 // Comment on post
 router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { content, parentCommentId } = req.body;
+    const { content, parentCommentId, imageUrl } = req.body;
 
-    if (!content) {
-      return res.status(400).json({ error: 'Content is required' });
+    if (!content && !imageUrl) {
+      return res.status(400).json({ error: 'Нужен текст или картинка' });
     }
 
     const post = await prisma.post.findUnique({
@@ -851,7 +851,8 @@ router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
 
     const comment = await (prisma.comment as any).create({
       data: {
-        content,
+        content: content || '',
+        imageUrl: imageUrl || null,
         authorId: req.userId!,
         postId: req.params.id,
         ...(parentCommentId ? { parentCommentId } : {}),

@@ -233,8 +233,8 @@ export const postAPI = {
     api.post('/posts/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   likePost: (postId: string) => api.post(`/posts/${postId}/like`),
   unlikePost: (postId: string) => api.delete(`/posts/${postId}/like`),
-  commentPost: (postId: string, content: string, parentCommentId?: string) =>
-    api.post(`/posts/${postId}/comments`, { content, ...(parentCommentId ? { parentCommentId } : {}) }),
+  commentPost: (postId: string, content: string, parentCommentId?: string, imageUrl?: string) =>
+    api.post(`/posts/${postId}/comments`, { content, ...(parentCommentId ? { parentCommentId } : {}), ...(imageUrl ? { imageUrl } : {}) }),
   editPost: (postId: string, data: { content?: string; imageUrl?: string | null; audioUrl?: string | null; audioName?: string | null }) =>
     api.put(`/posts/${postId}`, data),
   deletePost: (postId: string) => api.delete(`/posts/${postId}`),

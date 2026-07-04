@@ -3,7 +3,7 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tansta
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Send, Heart, MessageCircle, Trash2, Loader2, X,
-  MoreHorizontal, Image, Pencil, Check,
+  MoreHorizontal, Image, Pencil, Check, Smile,
   Crown, BadgeCheck, Ban, SlidersHorizontal,
   Plus, FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench,
   Zap, BarChart3, Star, WifiOff, RefreshCw, HelpCircle, Repeat2,
@@ -28,6 +28,7 @@ import AudioPlayer from '../components/AudioPlayer';
 import PostContent from '../components/PostContent';
 import RichTextEditor from '../components/RichTextEditor';
 import { ReactionBar, DoubleTapReactWrapper } from '../components/ReactionBar';
+import EmojiPicker from '../components/EmojiPicker';
 import { loadFilters, DEFAULT_FILTERS, FlowFilters, FLOW_FILTERS_KEY } from './FlowSettingsPage';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useScrollLock } from '../lib/scrollLock';
@@ -157,7 +158,12 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
                   </div>
                 </div>
               ) : (
-                <p className="text-xs text-slate-300 leading-relaxed mt-0.5 break-words">{comment.content}</p>
+                <>
+                  {comment.content && <p className="text-xs text-slate-300 leading-relaxed mt-0.5 break-words">{comment.content}</p>}
+                  {comment.imageUrl && (
+                    <img src={comment.imageUrl} alt="" loading="lazy" className="mt-1.5 max-h-56 rounded-lg border border-slate-700 object-cover" />
+                  )}
+                </>
               )}
             </div>
           </DoubleTapReactWrapper>
@@ -227,6 +233,9 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const navigate = useNavigate();
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [commentImage, setCommentImage] = useState<{ url: string; serverUrl: string } | null>(null);
+  const [commentUploading, setCommentUploading] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -234,6 +243,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const [showRepost, setShowRepost] = useState(false);
   const [repostComment, setRepostComment] = useState('');
   useScrollLock(showRepost);
+  useScrollLock(showComments);
 
   // Structured «Услуга» card — guest gating + «Написать» / «Оформить сделку».
   const { ensureAuth, authGateModal } = useAuthGate();
@@ -262,7 +272,8 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   );
   const [editUploading, setEditUploading] = useState(false);
   const editImageRef = useRef<HTMLInputElement>(null);
-  const commentInputRef = useRef<HTMLInputElement>(null);
+  const commentInputRef = useRef<HTMLTextAreaElement>(null);
+  const commentImageRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isOwner = post.author.id === currentUserId;
@@ -276,7 +287,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
 
 
   const likeMut = useMutation({ mutationFn: () => post.isLiked ? postAPI.unlikePost(post.id) : postAPI.likePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось поставить лайк')) });
-  const commentMut = useMutation({ mutationFn: (content: string) => postAPI.commentPost(post.id, content), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setCommentText(''); }, onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить комментарий')) });
+  const commentMut = useMutation({ mutationFn: () => postAPI.commentPost(post.id, commentText.trim(), undefined, commentImage?.serverUrl), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setCommentText(''); setCommentImage(null); setShowEmoji(false); }, onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить комментарий')) });
   const editMut = useMutation({ mutationFn: () => postAPI.editPost(post.id, { content: editContent, imageUrl: editImagePreview?.serverUrl ?? null, audioUrl: null, audioName: null }), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setEditing(false); }, onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')) });
   const deleteMut = useMutation({ mutationFn: () => postAPI.deletePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить пост')) });
   const reactMut = useMutation({ mutationFn: (emoji: string) => postAPI.reactPost(post.id, emoji), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось поставить реакцию')) });
@@ -299,6 +310,20 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
     } catch {
       alert('Не удалось загрузить файл. Проверьте формат и размер (до 20 МБ).');
     } finally { setEditUploading(false); }
+  };
+
+  const uploadCommentFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) { toast.error('Можно приложить только картинку'); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error('Картинка больше 5 МБ'); return; }
+    setCommentUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const { data } = await postAPI.uploadMedia(fd);
+      setCommentImage({ url: URL.createObjectURL(file), serverUrl: data.url });
+    } catch (e: any) {
+      toast.error(getApiError(e, 'Не удалось загрузить картинку'));
+    } finally { setCommentUploading(false); }
   };
 
   const typeMeta = POST_TYPE_META[post.type] ?? POST_TYPE_META.blog;
@@ -720,7 +745,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
           <Heart size={15} className={post.isLiked ? 'fill-red-400 text-red-400' : ''} />
           {!!post._count?.likes && <span className="text-xs font-medium">{post._count.likes}</span>}
         </button>
-        <button onClick={() => requireAuth(() => { setShowComments(true); setTimeout(() => commentInputRef.current?.focus(), 50); })} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all">
+        <button onClick={() => requireAuth(() => setShowComments(true))} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all">
           <MessageCircle size={15} />
           {!!post._count?.comments && <span className="text-xs font-medium">{post._count.comments}</span>}
         </button>
@@ -737,23 +762,59 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
         </button>
       </div>
 
-      {showComments && (
-        <div className="mt-3 ml-[52px] space-y-3">
-          {post.comments && post.comments.length > 0 && (
-            <div className="space-y-2">
-              {post.comments.map((comment: any) => (
-                <CommentItem key={comment.id} comment={comment} postId={post.id} postAuthorId={post.author.id} currentUserId={currentUserId} feedQueryKey={feedQueryKey} />
-              ))}
+      {showComments && createPortal(
+        <div className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center" onClick={() => { setShowComments(false); setShowEmoji(false); }}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[85dvh]" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="relative flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
+              <div className="w-10 h-1 bg-slate-700 rounded-full absolute left-1/2 -translate-x-1/2 top-1.5 sm:hidden" />
+              <h3 className="text-base font-bold text-white">Комментарии{!!post._count?.comments && ` · ${post._count.comments}`}</h3>
+              <button onClick={() => setShowComments(false)} className="p-2 -mr-2 text-slate-400 hover:text-white rounded-lg transition-colors"><X size={18} /></button>
             </div>
-          )}
-          <form onSubmit={e => { e.preventDefault(); if (commentText.trim()) requireAuth(() => commentMut.mutate(commentText.trim())); }} className="flex gap-2 items-center">
-            <input ref={commentInputRef} type="text" value={commentText} onChange={e => setCommentText(e.target.value)} placeholder="Написать комментарий..."
-              className="flex-1 min-w-0 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors" />
-            <button type="submit" disabled={!commentText.trim() || commentMut.isPending} className="p-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl transition-colors flex-shrink-0">
-              {commentMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-            </button>
-          </form>
-        </div>
+            {/* Список: самый верхний комментарий сверху, скролл до последнего */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+              {post.comments && post.comments.length > 0 ? (
+                post.comments.map((comment: any) => (
+                  <CommentItem key={comment.id} comment={comment} postId={post.id} postAuthorId={post.author.id} currentUserId={currentUserId} feedQueryKey={feedQueryKey} />
+                ))
+              ) : (
+                <p className="text-center text-sm text-slate-500 py-10">Пока нет комментариев.<br />Будьте первым!</p>
+              )}
+            </div>
+            {/* Форма ввода — закреплена внизу */}
+            <div className="flex-shrink-0 border-t border-slate-800 px-3 pt-2.5" style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom, 0px))' }}>
+              {commentImage && (
+                <div className="relative inline-block mb-2">
+                  <img src={commentImage.url} alt="" className="max-h-32 rounded-lg border border-slate-700" />
+                  <button type="button" onClick={() => setCommentImage(null)} className="absolute top-1 right-1 p-1 bg-slate-900/80 hover:bg-slate-900 rounded-full text-white"><X size={12} /></button>
+                </div>
+              )}
+              <div className="flex items-end gap-1.5">
+                <div className="relative flex-shrink-0">
+                  <button type="button" onClick={() => setShowEmoji(v => !v)} className="p-2 text-slate-400 hover:text-primary-400 rounded-lg transition-colors" title="Эмодзи"><Smile size={19} /></button>
+                  {showEmoji && <EmojiPicker position="up" onSelect={(em) => setCommentText(t => t + em)} onClose={() => setShowEmoji(false)} />}
+                </div>
+                <input ref={commentImageRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadCommentFile(f); e.target.value = ''; }} />
+                <button type="button" onClick={() => commentImageRef.current?.click()} disabled={commentUploading || !!commentImage} className="p-2 text-slate-400 hover:text-primary-400 rounded-lg transition-colors disabled:opacity-40 flex-shrink-0" title="Картинка (до 5 МБ)">
+                  {commentUploading ? <Loader2 size={19} className="animate-spin" /> : <Image size={19} />}
+                </button>
+                <textarea
+                  ref={commentInputRef}
+                  value={commentText}
+                  onChange={e => { setCommentText(e.target.value); const el = e.target; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 120)}px`; }}
+                  placeholder="Написать комментарий..."
+                  rows={1}
+                  className="flex-1 min-w-0 resize-none max-h-[120px] bg-slate-800/60 border border-slate-700 rounded-2xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
+                />
+                <button type="button" onClick={() => requireAuth(() => { if (commentText.trim() || commentImage) commentMut.mutate(); })} disabled={(!commentText.trim() && !commentImage) || commentMut.isPending || commentUploading} className="p-2.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-full transition-colors flex-shrink-0">
+                  {commentMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       <ConfirmDialog
