@@ -139,6 +139,19 @@ export default function UserProfilePage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить из друзей')),
   });
+  // A second tap on the connection icon while my own request is still pending cancels
+  // it and deletes the sent proposal — same behaviour as the friendship toggle.
+  const cancelConnMut = useMutation({
+    mutationFn: () => {
+      if (!conn?.id) throw new Error('No connection id');
+      return connectionAPI.cancel(conn.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['connection-with', userId] });
+      queryClient.invalidateQueries({ queryKey: ['user-connections', userId] });
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отменить запрос')),
+  });
 
   const handleShareProfile = async () => {
     const fullUrl = `${window.location.origin}/profile/${userId}`;
@@ -317,6 +330,15 @@ export default function UserProfilePage() {
                   title="Входящий запрос на связь — ответить"
                 >
                   <Link2 size={18} />
+                </button>
+              ) : conn?.status === 'PENDING' && conn.iAmRequester ? (
+                <button
+                  onClick={() => cancelConnMut.mutate()}
+                  disabled={cancelConnMut.isPending}
+                  className="flex items-center justify-center px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/60 text-slate-500 rounded-xl transition-all disabled:opacity-50"
+                  title="Запрос на связь отправлен — нажмите, чтобы отменить"
+                >
+                  <Clock size={18} />
                 </button>
               ) : (
                 <button
