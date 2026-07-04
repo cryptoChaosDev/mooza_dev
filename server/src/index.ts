@@ -48,6 +48,7 @@ import waitlistRoutes from './routes/waitlist';
 import orderRoutes from './routes/orders';
 import vacancyRoutes from './routes/vacancies';
 import artistLookupRoutes from './routes/artistLookup';
+import supportRoutes from './routes/support';
 
 // Load environment variables
 dotenv.config();
@@ -186,6 +187,7 @@ app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/vacancies', vacancyRoutes);
 app.use('/api/artist-lookup', artistLookupRoutes);
+app.use('/api/support', supportRoutes);
 
 // ── OG tags for social bots ────────────────────────────────────────────────
 // HTML-entity-encode every interpolated value: firstName/lastName/bio/city are

@@ -133,6 +133,21 @@ export const waitlistLimiter = rateLimit({
   },
 });
 
+/**
+ * Limiter for the support "add a missing profession" request form. A real user
+ * submits it rarely; 15/hour (per-user when authed) caps spam while staying generous.
+ */
+export const supportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => req.userId || ipKeyGenerator(req.ip),
+  handler: (_req, res) => {
+    res.status(429).json({ error: 'Слишком много запросов. Попробуйте позже.' });
+  },
+});
+
 export const messageLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 минута
   max: 120, // 120 сообщений в минуту с одного IP (несколько активных чатов за NAT)

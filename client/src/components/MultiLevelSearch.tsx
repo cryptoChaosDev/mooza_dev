@@ -10,6 +10,7 @@ import { useSearchStore,
   useSkillLevels,
   useAvailabilities,
   useSearchResults, } from '../stores/searchStore';
+import ProfessionNotFound from './ProfessionNotFound';
 
 // Level labels in Russian
 const LEVEL_LABELS = {
@@ -263,7 +264,9 @@ export default function MultiLevelSearch({ compact = false, onSearch }: MultiLev
       <div className="space-y-3">
         {filterComponents.map((filter) => {
           const isExpanded = expandedLevels.has(filter.key);
-          const isDisabled = filter.dependsOn && !filter.dependsOn;
+          // disabled, когда уровень зависит от апстрима (dependsOn задан в конфиге),
+          // а значение апстрима ещё не выбрано (было `filter.dependsOn && !filter.dependsOn` — всегда false)
+          const isDisabled = 'dependsOn' in filter && !filter.dependsOn;
           const selectedInfo = getSelectedValue(filter.value, filter.items);
 
           if (compact && !filter.value && !isExpanded) {
@@ -351,6 +354,11 @@ export default function MultiLevelSearch({ compact = false, onSearch }: MultiLev
                       )}
                     </button>
                   ))}
+                  {filter.key === 'profession' && filter.items.length === 0 && !filter.loading && fieldId && (
+                    <div className="border-t border-slate-600/50 px-2 py-1">
+                      <ProfessionNotFound compact />
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -4,6 +4,7 @@ import { X, Search, Plus, Check } from 'lucide-react';
 import { SORTED_PROFESSIONS } from '../constants/professions';
 import { yoNorm } from '../lib/search';
 import { useScrollLock } from "../lib/scrollLock";
+import ProfessionNotFound from './ProfessionNotFound';
 
 interface ProfessionSelectorProps {
   isOpen: boolean;
@@ -122,7 +123,7 @@ export default function ProfessionSelector({
             })}
           </div>
         ) : (
-          <div className="text-center py-16 text-slate-500 text-sm">Профессии не найдены</div>
+          <ProfessionNotFound initialQuery={searchQuery} />
         )}
       </div>
 

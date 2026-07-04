@@ -692,6 +692,12 @@ export const complaintAPI = {
   stats: () => api.get('/complaints/stats'),
 };
 
+export const supportAPI = {
+  // Запрос на добавление профессии/услуги, которой нет в каталоге → в поддержку
+  requestProfession: (data: { profession: string; comment?: string }) =>
+    api.post('/support/profession-request', data),
+};
+
 // Search Filters Type
 export interface SearchFilters {
   fieldId?: string;
