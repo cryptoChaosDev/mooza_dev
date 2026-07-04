@@ -718,18 +718,22 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
         <button onClick={() => requireAuth(() => { if (!isOwner) likeMut.mutate(); })} disabled={likeMut.isPending || (!!currentUserId && isOwner)} title={currentUserId && isOwner ? 'Нельзя лайкать свой пост' : undefined}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${currentUserId && isOwner ? 'cursor-default text-slate-600' : post.isLiked ? 'text-red-400 hover:bg-red-400/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}>
           <Heart size={15} className={post.isLiked ? 'fill-red-400 text-red-400' : ''} />
+          {!!post._count?.likes && <span className="text-xs font-medium">{post._count.likes}</span>}
         </button>
         <button onClick={() => requireAuth(() => { setShowComments(true); setTimeout(() => commentInputRef.current?.focus(), 50); })} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all">
           <MessageCircle size={15} />
+          {!!post._count?.comments && <span className="text-xs font-medium">{post._count.comments}</span>}
         </button>
         <button onClick={() => requireAuth(() => setShowRepost(true))} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all" title="Поделиться в ленте">
           <Repeat2 size={15} />
+          {!!post._count?.reposts && <span className="text-xs font-medium">{post._count.reposts}</span>}
         </button>
         <ShareButton url={`/post/${post.id}`} title={`Пост от ${post.author.firstName} ${post.author.lastName}`} text={post.content?.slice(0, 100)} iconSize={15} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all" />
         <button onClick={() => requireAuth(() => saveMut.mutate())} disabled={saveMut.isPending}
           className={`ml-auto flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-all ${post.isSaved ? 'text-amber-400 hover:bg-amber-400/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
           title={post.isSaved ? 'Убрать из сохранённого' : 'Сохранить'}>
           <Star size={15} fill={post.isSaved ? 'currentColor' : 'none'} />
+          {!!post._count?.savedBy && <span className="text-xs font-medium">{post._count.savedBy}</span>}
         </button>
       </div>
 

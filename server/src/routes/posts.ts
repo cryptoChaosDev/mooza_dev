@@ -139,7 +139,12 @@ const buildFeedInclude = (userId: string | undefined) => {
     select: { id: true, emoji: true, userId: true }
   },
   _count: {
-    select: { likes: true, comments: true }
+    select: {
+      likes: true,
+      comments: true,
+      savedBy: true,
+      reposts: { where: { repostDeleted: false } },
+    }
   }
   };
 };
