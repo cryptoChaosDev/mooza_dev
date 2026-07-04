@@ -2057,23 +2057,25 @@ export default function ProfilePage() {
                     ) : (
                       <div className="space-y-1">
                         {audioFiles.map((f: any, i: number) => (
-                          <div key={f.id} className="flex items-center gap-1">
-                            <div className="flex-1 min-w-0"><AudioPlayer src={`${API_URL}${f.url}`} name={f.title || f.originalName} /></div>
+                          <div key={f.id}>
+                            <AudioPlayer src={`${API_URL}${f.url}`} name={f.title || f.originalName} />
                             {editingPortfolio && (
-                              <>
-                                <button onClick={() => movePortfolioFile(f, 'up')} disabled={i === 0} title="Выше" className="p-1.5 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors flex-shrink-0"><ChevronUp size={15} /></button>
-                                <button onClick={() => movePortfolioFile(f, 'down')} disabled={i === audioFiles.length - 1} title="Ниже" className="p-1.5 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors flex-shrink-0"><ChevronDown size={15} /></button>
-                                <button onClick={() => setRenamingFile({ id: f.id, value: f.title || f.originalName })} title="Переименовать" className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0"><Edit3 size={14} /></button>
-                                <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="p-1.5 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
-                              </>
+                              <div className="flex items-center justify-end gap-1 mt-1">
+                                <button onClick={() => movePortfolioFile(f, 'up')} disabled={i === 0} title="Выше" className="p-1.5 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors"><ChevronUp size={16} /></button>
+                                <button onClick={() => movePortfolioFile(f, 'down')} disabled={i === audioFiles.length - 1} title="Ниже" className="p-1.5 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors"><ChevronDown size={16} /></button>
+                                <button onClick={() => setRenamingFile({ id: f.id, value: f.title || f.originalName })} title="Переименовать" className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors"><Edit3 size={15} /></button>
+                                <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"><Trash2 size={15} /></button>
+                              </div>
                             )}
                           </div>
                         ))}
                         {audioLinks.map((l: any) => (
-                          <div key={l.id} className="flex items-center gap-1">
-                            <div className="flex-1 min-w-0"><AudioPlayer src={l.url} name={l.title || l.url} /></div>
+                          <div key={l.id}>
+                            <AudioPlayer src={l.url} name={l.title || l.url} />
                             {editingPortfolio && (
-                              <button onClick={() => setConfirmDeleteLinkId(l.id)} title="Удалить" className="p-1.5 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
+                              <div className="flex items-center justify-end mt-1">
+                                <button onClick={() => setConfirmDeleteLinkId(l.id)} title="Удалить" className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"><Trash2 size={15} /></button>
+                              </div>
                             )}
                           </div>
                         ))}
@@ -2123,23 +2125,24 @@ export default function ProfilePage() {
                           const meta = fileTypeMeta(f.originalName);
                           const Icon = meta.Icon;
                           return (
-                            <div key={f.id} className="flex items-center gap-3 px-2.5 py-2 bg-slate-800/40 border border-slate-700/40 rounded-xl">
-                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
-                                <Icon size={18} className={meta.color} />
-                              </div>
-                              <button onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.title || f.originalName })} className="flex-1 min-w-0 text-left">
-                                <p className="text-sm text-slate-200 truncate">{f.title || f.originalName}</p>
-                                <p className="text-[11px] text-slate-500">{meta.label}{f.size ? ` · ${formatBytes(f.size)}` : ''}</p>
-                              </button>
-                              {editingPortfolio ? (
-                                <>
-                                  <button onClick={() => movePortfolioFile(f, 'up')} disabled={i === 0} title="Выше" className="p-1 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors flex-shrink-0"><ChevronUp size={15} /></button>
-                                  <button onClick={() => movePortfolioFile(f, 'down')} disabled={i === otherFiles.length - 1} title="Ниже" className="p-1 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors flex-shrink-0"><ChevronDown size={15} /></button>
-                                  <button onClick={() => setRenamingFile({ id: f.id, value: f.title || f.originalName })} title="Переименовать" className="p-1 text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0"><Edit3 size={14} /></button>
-                                  <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="p-1 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
-                                </>
-                              ) : (
+                            <div key={f.id}>
+                              <div className="flex items-center gap-3 px-2.5 py-2 bg-slate-800/40 border border-slate-700/40 rounded-xl">
+                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
+                                  <Icon size={18} className={meta.color} />
+                                </div>
+                                <button onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.title || f.originalName })} className="flex-1 min-w-0 text-left">
+                                  <p className="text-sm text-slate-200 truncate">{f.title || f.originalName}</p>
+                                  <p className="text-[11px] text-slate-500">{meta.label}{f.size ? ` · ${formatBytes(f.size)}` : ''}</p>
+                                </button>
                                 <a href={`${API_URL}${f.url}`} download target="_blank" rel="noopener noreferrer" title="Скачать" className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0"><Download size={15} /></a>
+                              </div>
+                              {editingPortfolio && (
+                                <div className="flex items-center justify-end gap-1 mt-1">
+                                  <button onClick={() => movePortfolioFile(f, 'up')} disabled={i === 0} title="Выше" className="p-1.5 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors"><ChevronUp size={16} /></button>
+                                  <button onClick={() => movePortfolioFile(f, 'down')} disabled={i === otherFiles.length - 1} title="Ниже" className="p-1.5 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors"><ChevronDown size={16} /></button>
+                                  <button onClick={() => setRenamingFile({ id: f.id, value: f.title || f.originalName })} title="Переименовать" className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors"><Edit3 size={15} /></button>
+                                  <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"><Trash2 size={15} /></button>
+                                </div>
                               )}
                             </div>
                           );
