@@ -41,6 +41,12 @@ interface Props {
   onSaved?: (id: string) => void;
 }
 
+// ISO (YYYY-MM-DD) → masked ДД.ММ.ГГГГ for the date field's display value.
+function isoToMasked(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : '';
+}
+
 export default function MediaItemForm({ kind, artistId, initial, onClose, onSaved }: Props) {
   const queryClient = useQueryClient();
   const isRelease = kind === 'release';
@@ -57,6 +63,11 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
   const [coverUrl, setCoverUrl] = useState(initial?.coverUrl ?? '');
   const [releaseDate, setReleaseDate] = useState(
     initial?.releaseDate ? initial.releaseDate.slice(0, 10) : '',
+  );
+  // Masked ДД.ММ.ГГГГ display (native <input type=date> rendered its border wider
+  // than the sibling text fields on iOS — same masked pattern as the other forms).
+  const [releaseDateInput, setReleaseDateInput] = useState(
+    initial?.releaseDate ? isoToMasked(initial.releaseDate.slice(0, 10)) : '',
   );
 
   // Platform is no longer picked by hand — it's derived from the pasted link.
@@ -156,7 +167,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
       const filledDate = isRelease && data.releaseDate ? String(data.releaseDate).slice(0, 10) : '';
       if (filledTitle) setTitle(filledTitle);
       if (filledCover) setCoverUrl(filledCover);
-      if (filledDate) setReleaseDate(filledDate);
+      if (filledDate) { setReleaseDate(filledDate); setReleaseDateInput(isoToMasked(filledDate)); }
       metaRef.current = { platform: detectedPlatform, title: filledTitle, coverUrl: filledCover, releaseDate: filledDate };
       if (!data.title && !data.coverUrl) {
         setFetchError('Не удалось подтянуть данные — заполните вручную.');
@@ -175,7 +186,10 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
     if (!m.platform || !detectedPlatform || detectedPlatform === m.platform) return;
     setTitle((t) => (t === m.title ? '' : t));
     setCoverUrl((c) => (c === m.coverUrl ? '' : c));
-    if (isRelease) setReleaseDate((d) => (d === m.releaseDate ? '' : d));
+    if (isRelease) {
+      setReleaseDate((d) => (d === m.releaseDate ? '' : d));
+      setReleaseDateInput((di) => (di === (m.releaseDate ? isoToMasked(m.releaseDate) : '') ? '' : di));
+    }
     metaRef.current = { platform: null, title: '', coverUrl: '', releaseDate: '' };
   }, [detectedPlatform, isRelease]);
 
@@ -267,6 +281,14 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
                 onClick={() => {
                   if (!detectedPlatform) {
                     toast.error('Вставьте ссылку на поддерживаемый сервис');
+                    return;
+                  }
+                  if (isRelease && releaseDateInput.trim() && !releaseDate) {
+                    toast.error('Дата релиза — в формате ДД.ММ.ГГГГ');
+                    return;
+                  }
+                  if (isRelease && releaseDate && isNaN(new Date(releaseDate).getTime())) {
+                    toast.error('Некорректная дата релиза');
                     return;
                   }
                   if (isRelease && releaseDate && releaseDate > todayStr) {
@@ -362,11 +384,20 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
                 <div>
                   <label className="block text-xs text-slate-500 mb-1">Дата релиза</label>
                   <input
-                    type="date"
-                    max={todayStr}
-                    className="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
-                    value={releaseDate}
-                    onChange={(e) => setReleaseDate(e.target.value)}
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="ДД.ММ.ГГГГ"
+                    maxLength={10}
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-primary-500"
+                    value={releaseDateInput}
+                    onChange={(e) => {
+                      let v = e.target.value.replace(/\D/g, '');
+                      if (v.length >= 3) v = v.slice(0, 2) + '.' + v.slice(2);
+                      if (v.length >= 6) v = v.slice(0, 5) + '.' + v.slice(5);
+                      v = v.slice(0, 10);
+                      setReleaseDateInput(v);
+                      setReleaseDate(v.length === 10 ? `${v.slice(6)}-${v.slice(3, 5)}-${v.slice(0, 2)}` : '');
+                    }}
                   />
                 </div>
               )}
