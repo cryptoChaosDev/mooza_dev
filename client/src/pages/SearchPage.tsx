@@ -10,7 +10,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
-import { referenceAPI, userAPI } from '../lib/api';
+import { referenceAPI, userAPI, artistAPI, favoriteAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import DealCreateModal from '../components/DealCreateModal';
 import { DEALS_ENABLED } from '../lib/features';
@@ -283,6 +283,8 @@ export default function SearchPage() {
   const { ensureAuth, authGateModal } = useAuthGate();
 
   const [activeTab, setActiveTab] = useState<CatalogTab>('services');
+  // Звёздочка «Избранное» — на вкладках «Артисты»/«Люди» показывает избранные (подписки/favorites)
+  const [showFavorites, setShowFavorites] = useState(false);
   const [dealCard, setDealCard] = useState<any>(null);
 
   // ── Услуги tab state ───────────────────────────────────────────────────────
@@ -542,6 +544,30 @@ export default function SearchPage() {
     enabled: activeTab === 'artists',
   });
 
+  // ── Избранное: подписки на артистов + избранные пользователи ────────────────
+  const { data: favArtists, isLoading: favArtistsLoading } = useQuery({
+    queryKey: ['catalog-fav-artists'],
+    queryFn: async () => {
+      const { data } = await artistAPI.getFollowing();
+      return data as any[];
+    },
+    enabled: showFavorites && activeTab === 'artists' && !!currentUser,
+  });
+  const { data: favPeople, isLoading: favPeopleLoading } = useQuery({
+    queryKey: ['catalog-fav-people'],
+    queryFn: async () => {
+      const { data } = await favoriteAPI.list();
+      return (data as any[]).map((f) => f.user).filter(Boolean);
+    },
+    enabled: showFavorites && activeTab === 'people' && !!currentUser,
+  });
+
+  // Источник для вкладок с учётом звёздочки «Избранное»
+  const displayArtists = showFavorites ? (favArtists ?? []) : (artists ?? []);
+  const displayArtistsLoading = showFavorites ? favArtistsLoading : artistsLoading;
+  const displayPeople = showFavorites ? (favPeople ?? []) : (peopleUsers ?? []);
+  const displayPeopleLoading = showFavorites ? favPeopleLoading : peopleLoading;
+
   // ── Navigation helpers ─────────────────────────────────────────────────────
   // Open a section to reveal its services.
   const handleSectionClick = (section: any) => {
@@ -604,9 +630,20 @@ export default function SearchPage() {
                 <ChevronLeft size={20} />
               </button>
             )}
+            <Search size={20} className="text-primary-400 flex-shrink-0" />
             <h2 className="text-lg font-bold text-white">
               {canGoBack && activeTab === 'services' ? selectedSection!.name : 'Каталог'}
             </h2>
+            {activeTab !== 'services' && (
+              <button
+                onClick={() => setShowFavorites((s) => !s)}
+                className={`ml-auto flex items-center px-2.5 py-1.5 rounded-xl transition-colors ${showFavorites ? 'text-amber-300 bg-amber-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                title={showFavorites ? 'Показаны избранные' : 'Избранное'}
+                aria-label="Избранное"
+              >
+                <Star size={18} fill={showFavorites ? 'currentColor' : 'none'} />
+              </button>
+            )}
           </div>
 
           {/* Tabs */}
@@ -977,10 +1014,10 @@ export default function SearchPage() {
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   {artistSort === 'alpha' ? 'Все артисты · от А до Я' : 'Все артисты · сначала новые'}
                 </p>
-                {artistsLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
+                {displayArtistsLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
               </div>
 
-              {artistsLoading ? (
+              {displayArtistsLoading ? (
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
                   {Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-slate-800/50 animate-pulse last:border-0">
@@ -992,9 +1029,9 @@ export default function SearchPage() {
                     </div>
                   ))}
                 </div>
-              ) : artists && artists.length > 0 ? (
+              ) : displayArtists.length > 0 ? (
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden divide-y divide-slate-800/50">
-                  {artists.map((artist: any) => {
+                  {displayArtists.map((artist: any) => {
                     const genreNames = artist.genres?.map((g: any) => g.genre?.name).filter(Boolean).slice(0, 3) ?? [];
                     const typeLabel = artist.type === 'SOLO' ? 'Соло' : artist.type === 'GROUP' ? 'Группа' : artist.type === 'COVER_GROUP' ? 'Кавербэнд' : '';
                     return (
@@ -1117,10 +1154,10 @@ export default function SearchPage() {
                   </>
                 )}
               </div>
-              {peopleLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
+              {displayPeopleLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
             </div>
 
-            {peopleLoading ? (
+            {displayPeopleLoading ? (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-slate-800/50 animate-pulse last:border-0">
@@ -1132,9 +1169,9 @@ export default function SearchPage() {
                   </div>
                 ))}
               </div>
-            ) : peopleUsers && peopleUsers.length > 0 ? (
+            ) : displayPeople.length > 0 ? (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                {peopleUsers.map((user: any) => (
+                {displayPeople.map((user: any) => (
                   <ExpandableUserRow
                     key={user.id}
                     user={user}
