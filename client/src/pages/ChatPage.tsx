@@ -1461,7 +1461,7 @@ export default function ChatPage() {
               onChange={e => setNewMessage(e.target.value)}
               placeholder={editingId ? 'Редактировать...' : 'Сообщение...'}
               className="flex-1 min-w-0 bg-transparent text-sm text-white px-3 py-2.5 focus:outline-none placeholder-slate-500 resize-none overflow-y-auto"
-              style={{ height: '40px', maxHeight: '160px', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+              style={{ height: '40px', maxHeight: '160px' } as React.CSSProperties}
             />
             <button type="button" onClick={() => setShowEmoji(p => !p)}
               className={`p-2.5 transition-colors flex-shrink-0 ${showEmoji ? 'text-primary-400' : 'text-slate-500 hover:text-slate-300'}`}>

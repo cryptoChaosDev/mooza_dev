@@ -98,7 +98,7 @@ export default function ProfessionSelector({
       )}
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto px-2 py-2" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+      <div className="flex-1 overflow-y-auto px-2 py-2">
         {filteredProfessions.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 px-2">
             {filteredProfessions.map((profession) => {

@@ -128,7 +128,7 @@ export default function ServicePicker({ onSelect, onClose, excludeServiceIds = [
       </div>
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto px-2 py-2" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+      <div className="flex-1 overflow-y-auto px-2 py-2">
         {isLoading ? (
           <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-primary-400" /></div>
         ) : currentItems.length === 0 ? (

@@ -260,7 +260,6 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
             style={{
               maxHeight: '92dvh',
               paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-              WebkitOverflowScrolling: 'touch',
             } as React.CSSProperties}
             onClick={(e) => e.stopPropagation()}
           >
@@ -309,7 +308,6 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
             {/* Body */}
             <div
               className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4"
-              style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
             >
               {/* URL + fetch — platform is auto-detected from the link */}
               <div>

@@ -118,12 +118,13 @@ body.modal-open {
   width: 100%;
 }
 
-/* iOS momentum scrolling + contain overscroll so a scroll region can't rubber-band
-   the page or a fixed bottom-sheet overlay (iOS «тянешь модалку вниз → застреваешь») */
+/* Contain overscroll so a scroll region can't rubber-band the page or a fixed
+   bottom-sheet overlay (iOS «тянешь модалку вниз → застреваешь»).
+   ВАЖНО: `-webkit-overflow-scrolling: touch` НЕ ставим — его отдельный momentum-слой
+   на iOS вызывает «скролл залипает, размораживается только после повторного тапа». */
 .overflow-y-auto,
 .overflow-y-scroll,
 .overflow-auto {
-  -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
 }
 

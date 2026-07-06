@@ -284,7 +284,6 @@ export default function NotificationBell() {
         {/* List */}
         <div
           className="flex-1 min-h-0 overflow-y-auto divide-y divide-slate-800/60"
-          style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
         >
           {groups.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-slate-500">

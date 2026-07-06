@@ -667,7 +667,7 @@ export default function ArtistPage() {
       >
         <div
           className="absolute bottom-0 left-0 right-0 bg-slate-900 rounded-t-3xl flex flex-col"
-          style={{ maxHeight: '92dvh', paddingBottom: 'env(safe-area-inset-bottom, 0px)', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+          style={{ maxHeight: '92dvh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' } as React.CSSProperties}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Drag handle */}
@@ -692,7 +692,7 @@ export default function ArtistPage() {
           </div>
 
           {/* Scrollable body */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
 
             <ArtistLookup onApply={applyLookupCandidate} applying={applyingLookup} />
 

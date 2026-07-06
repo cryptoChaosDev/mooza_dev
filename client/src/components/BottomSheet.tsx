@@ -45,7 +45,6 @@ export default function BottomSheet({ isOpen, onClose, title, children, height =
       {/* Content */}
       <div
         className="flex-1 min-h-0 overflow-y-auto"
-        style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
       >
         {children}
       </div>
@@ -76,7 +75,6 @@ export default function BottomSheet({ isOpen, onClose, title, children, height =
         {/* Content */}
         <div
           className="flex-1 min-h-0 overflow-y-auto"
-          style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
         >
           {children}
         </div>
