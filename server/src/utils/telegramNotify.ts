@@ -51,10 +51,22 @@ export function createNotifySubscribeToken(userId: string): string {
 /** Webhook получил /start notify_<token>. Привязывает telegramId и включает флаг. */
 export async function resolveNotifySubscribe(
   token: string, telegramId: string, username?: string,
-): Promise<{ ok: boolean; reason?: 'expired' | 'conflict' }> {
+): Promise<{ ok: boolean; reason?: 'expired' | 'conflict'; ownerName?: string }> {
   const entry = pending.get(token);
   if (!entry) return { ok: false, reason: 'expired' };
   pending.delete(token);
+
+  // Этот Telegram уже привязан к другому аккаунту? Если это тот же аккаунт — просто включим флаг.
+  const owner = await prisma.user.findUnique({
+    where: { telegramId },
+    select: { id: true, firstName: true, lastName: true, nickname: true },
+  });
+  if (owner && owner.id !== entry.userId) {
+    // ownerName уходит в bot-сообщение с parse_mode=HTML — экранируем (имя задаёт пользователь)
+    const ownerName = escTg(`${owner.firstName} ${owner.lastName || ''}`.trim() + (owner.nickname ? ` (@${owner.nickname})` : ''));
+    return { ok: false, reason: 'conflict', ownerName };
+  }
+
   try {
     await prisma.user.update({
       where: { id: entry.userId },
@@ -66,7 +78,7 @@ export async function resolveNotifySubscribe(
     });
     return { ok: true };
   } catch (e: any) {
-    if (e?.code === 'P2002') return { ok: false, reason: 'conflict' }; // telegramId занят другим аккаунтом
+    if (e?.code === 'P2002') return { ok: false, reason: 'conflict' }; // гонка: привязали между проверкой и апдейтом
     console.error('[tgNotify] resolve error:', e?.message);
     return { ok: false, reason: 'expired' };
   }

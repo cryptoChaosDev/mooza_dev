@@ -658,7 +658,7 @@ router.post('/telegram/webhook', async (req, res) => {
         console.log(`[Telegram] Webhook: notifications enabled for tg ${from.id}`);
       } else if (r.reason === 'conflict') {
         await sendBotMessage(chatId,
-          '⚠️ Этот Telegram уже привязан к другому аккаунту Moooza. Отвяжите его там или войдите в тот аккаунт.');
+          `⚠️ Этот Telegram уже привязан к аккаунту Moooza${r.ownerName ? ` <b>${r.ownerName}</b>` : ''}. Войдите в него и подпишитесь там — или продолжайте с текущего аккаунта, привязав другой Telegram.`);
       } else {
         await sendBotMessage(chatId,
           '⏳ Ссылка устарела. Откройте колокольчик в Moooza и нажмите «Подписаться» ещё раз.');
