@@ -1707,6 +1707,104 @@ function UsersTab() {
   );
 }
 
+// ─── Profession Requests Tab (запросы «добавьте профессию» из поддержки) ─────
+
+const PROF_REQ_TABS = [
+  { id: 'pending',  label: 'Ожидают' },
+  { id: 'done',     label: 'Добавлены' },
+  { id: 'rejected', label: 'Отклонены' },
+] as const;
+
+function ProfessionRequestsTab() {
+  const qc = useQueryClient();
+  const [status, setStatus] = useState<string>('pending');
+
+  const { data: requests = [], isLoading } = useQuery<any[]>({
+    queryKey: ['admin-profession-requests', status],
+    queryFn: () => adminAPI.professionRequests.list(status).then((r: any) => r.data),
+    refetchInterval: 30000,
+  });
+  // Счётчик ожидающих для бейджа (независимо от выбранного фильтра)
+  const { data: pendingList = [] } = useQuery<any[]>({
+    queryKey: ['admin-profession-requests', 'pending'],
+    queryFn: () => adminAPI.professionRequests.list('pending').then((r: any) => r.data),
+    refetchInterval: 30000,
+  });
+
+  const resolveMut = useMutation({
+    mutationFn: ({ id, st, add }: { id: string; st: 'done' | 'rejected'; add?: boolean }) =>
+      adminAPI.professionRequests.resolve(id, st, add),
+    onSuccess: (_r, v) => {
+      qc.invalidateQueries({ queryKey: ['admin-profession-requests'] });
+      toast.success(v.st === 'done' ? (v.add ? 'Профессия добавлена в каталог' : 'Запрос закрыт') : 'Запрос отклонён');
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось обновить запрос')),
+  });
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2 mb-3">
+        <Plus size={15} className="text-primary-400" />
+        <h2 className="text-sm font-semibold text-white">Запросы на добавление профессии</h2>
+        {pendingList.length > 0 && (
+          <span className="px-1.5 py-0.5 bg-primary-500/20 text-primary-400 text-[11px] rounded-full font-semibold">{pendingList.length}</span>
+        )}
+      </div>
+      <div className="flex gap-1.5 flex-wrap">
+        {PROF_REQ_TABS.map(t => (
+          <button key={t.id} onClick={() => setStatus(t.id)}
+            className={`px-3 py-1 rounded-lg text-xs font-medium transition-colors ${status === t.id ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      {isLoading ? (
+        <div className="text-sm text-slate-500 py-4 text-center">Загрузка...</div>
+      ) : requests.length === 0 ? (
+        <div className="text-sm text-slate-500 py-4 text-center bg-slate-900 rounded-xl border border-slate-800">Очередь пуста</div>
+      ) : requests.map((r: any) => (
+        <div key={r.id} className="bg-slate-900 rounded-xl border border-slate-800 p-4">
+          <div className="flex items-start gap-3">
+            <AvatarComponent src={r.user?.avatar} name={`${r.user?.firstName} ${r.user?.lastName}`} size={40} />
+            <div className="flex-1 min-w-0">
+              <p className="font-semibold text-white text-sm break-words">«{r.profession}»</p>
+              {r.comment && <p className="text-xs text-slate-400 mt-0.5 break-words">{r.comment}</p>}
+              <p className="text-xs text-slate-500 mt-1">
+                {r.user?.firstName} {r.user?.lastName}{r.user?.nickname ? ` (@${r.user.nickname})` : ''}
+                {' · '}{new Date(r.createdAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+              </p>
+            </div>
+          </div>
+          {r.status === 'pending' && (
+            <div className="flex gap-2 mt-3">
+              <button
+                onClick={() => resolveMut.mutate({ id: r.id, st: 'done', add: true })}
+                disabled={resolveMut.isPending}
+                className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-emerald-600/80 hover:bg-emerald-600 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors">
+                <Plus size={13} /> Добавить в каталог
+              </button>
+              <button
+                onClick={() => resolveMut.mutate({ id: r.id, st: 'done' })}
+                disabled={resolveMut.isPending}
+                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 text-xs font-medium rounded-lg transition-colors"
+                title="Закрыть без добавления (например, уже есть в каталоге)">
+                <Check size={13} />
+              </button>
+              <button
+                onClick={() => resolveMut.mutate({ id: r.id, st: 'rejected' })}
+                disabled={resolveMut.isPending}
+                className="px-3 py-2 bg-slate-800 hover:bg-red-600/70 disabled:opacity-50 text-slate-300 hover:text-white text-xs font-medium rounded-lg transition-colors"
+                title="Отклонить">
+                <X size={13} />
+              </button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Service Moderation Tab ─────────────────────────────────────────────────
 
 function ServiceModerationTab() {
@@ -2924,6 +3022,7 @@ export default function AdminPage() {
             <ComplaintsTab />
             <ServiceModerationTab />
             <ArtistModerationTab />
+            <ProfessionRequestsTab />
           </div>
         )}
 

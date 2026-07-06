@@ -556,6 +556,11 @@ export const adminAPI = {
     approve: (id: string) => api.patch(`${adminBase}/user-services/${id}/approve`),
     reject: (id: string, reason?: string) => api.patch(`${adminBase}/user-services/${id}/reject`, { reason }),
   },
+  professionRequests: {
+    list: (status?: string) => api.get(`${adminBase}/profession-requests`, { params: status ? { status } : undefined }),
+    resolve: (id: string, status: 'done' | 'rejected' | 'pending', addToCatalog?: boolean) =>
+      api.patch(`${adminBase}/profession-requests/${id}`, { status, addToCatalog }),
+  },
   customFilters: {
     list: () => api.get(`${adminBase}/custom-filters`),
     create: (data: { name: string; values: string[] }) => api.post(`${adminBase}/custom-filters`, data),

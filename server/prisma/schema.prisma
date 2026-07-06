@@ -608,6 +608,7 @@ model User {
   reviewsReceived Review[] @relation("ReviewTarget")
 
   complaintsFiled Complaint[] @relation("ComplaintReporter")
+  professionRequests ProfessionRequest[] @relation("ProfessionRequester")
 
   dealsAsCustomer Deal[] @relation("DealCustomer")
   dealsAsExecutor Deal[] @relation("DealExecutor")
@@ -696,6 +697,22 @@ model Complaint {
   updatedAt DateTime @updatedAt
 
   @@index([targetType, targetId])
+  @@index([status])
+}
+
+// Запрос пользователя на добавление профессии в каталог («не нашёл профессию → в поддержку»)
+model ProfessionRequest {
+  id         String    @id @default(uuid())
+  userId     String
+  profession String
+  comment    String?
+  status     String    @default("pending") // pending | done | rejected
+  resolvedAt DateTime?
+
+  user User @relation("ProfessionRequester", fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
   @@index([status])
 }
 

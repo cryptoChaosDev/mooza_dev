@@ -33,6 +33,62 @@ router.get('/waitlist', async (req, res) => {
   }
 });
 
+// ─── Запросы на добавление профессии (Модерация) ─────────────────────────────
+router.get('/profession-requests', async (req, res) => {
+  try {
+    const { status } = req.query as { status?: string };
+    const items = await (prisma as any).professionRequest.findMany({
+      where: status ? { status } : {},
+      include: { user: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+    res.json(items);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// PATCH { status: 'done' | 'rejected', addToCatalog?: boolean }
+// addToCatalog=true — сразу создать профессию в справочнике (если её ещё нет)
+router.patch('/profession-requests/:id', async (req, res) => {
+  try {
+    const { status, addToCatalog } = req.body as { status?: string; addToCatalog?: boolean };
+    if (!status || !['done', 'rejected', 'pending'].includes(status)) {
+      return res.status(400).json({ error: 'status: done | rejected | pending' });
+    }
+    const reqRow = await (prisma as any).professionRequest.findUnique({ where: { id: req.params.id } });
+    if (!reqRow) return res.status(404).json({ error: 'Not found' });
+
+    let createdProfession: any = null;
+    if (status === 'done' && addToCatalog) {
+      const name = reqRow.profession.trim();
+      const exists = await prisma.profession.findFirst({ where: { name: { equals: name, mode: 'insensitive' } } });
+      if (!exists) createdProfession = await prisma.profession.create({ data: { name } });
+    }
+
+    const updated = await (prisma as any).professionRequest.update({
+      where: { id: req.params.id },
+      data: { status, resolvedAt: status === 'pending' ? null : new Date() },
+    });
+
+    // Сообщим автору запроса о результате
+    if (status !== 'pending') {
+      await prisma.notification.create({
+        data: {
+          userId: reqRow.userId,
+          type: 'support',
+          title: status === 'done' ? '✅ Профессия добавлена' : 'Запрос по профессии рассмотрен',
+          body: status === 'done'
+            ? `«${reqRow.profession}» появилась в каталоге — можно добавить её в профиль.`
+            : `«${reqRow.profession}» пока не добавили. Спасибо за предложение!`,
+          link: '/profile',
+        },
+      });
+    }
+
+    res.json({ ...updated, createdProfession });
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
 // ─── FieldOfActivity ───────────────────────────────────────────────────────
 router.get('/fields-of-activity', async (_req, res) => {
   const items = await prisma.fieldOfActivity.findMany({ orderBy: { createdAt: 'asc' } });

@@ -27,6 +27,11 @@ router.post('/profession-request', authenticate, supportLimiter, async (req: Aut
     });
     const userName = `${me?.firstName || ''} ${me?.lastName || ''}`.trim() || 'Пользователь';
 
+    // Постоянная запись — очередь «Модерация → Запросы профессий» в админке
+    await (prisma as any).professionRequest.create({
+      data: { userId: meId, profession, comment: comment || null },
+    });
+
     // In-app уведомление админам (fallback-иконка + title/body рендерятся корректно)
     const admins = await prisma.user.findMany({ where: { isAdmin: true }, select: { id: true } });
     await Promise.all(admins.map(admin =>
