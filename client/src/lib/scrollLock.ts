@@ -20,6 +20,9 @@ export function lockScroll() {
   body.style.top = `-${_scrollY}px`;
   body.style.left = '0';
   body.style.right = '0';
+  // iOS: убрать rubber-band страницы, пока открыта модалка — иначе протяжка вниз
+  // по короткому bottom-sheet «утаскивает» фиксированный оверлей и он застревает.
+  document.documentElement.style.overscrollBehavior = 'none';
 }
 
 export function unlockScroll() {
@@ -32,6 +35,7 @@ export function unlockScroll() {
   body.style.top = '';
   body.style.left = '';
   body.style.right = '';
+  document.documentElement.style.overscrollBehavior = '';
   window.scrollTo({ top: _scrollY, behavior: 'instant' as ScrollBehavior });
 }
 

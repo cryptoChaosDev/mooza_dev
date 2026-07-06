@@ -118,10 +118,13 @@ body.modal-open {
   width: 100%;
 }
 
-/* iOS momentum scrolling for scroll containers */
+/* iOS momentum scrolling + contain overscroll so a scroll region can't rubber-band
+   the page or a fixed bottom-sheet overlay (iOS «тянешь модалку вниз → застреваешь») */
 .overflow-y-auto,
-.overflow-y-scroll {
+.overflow-y-scroll,
+.overflow-auto {
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 /* Modal overlay — prevent scroll bleed-through on iOS */
