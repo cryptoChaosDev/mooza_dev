@@ -108,6 +108,7 @@ const registerSchema = z.object({
   userProfessions: z.array(z.object({
     professionId: z.string(),
     features: z.array(z.string()).optional(),
+    selectedCustomFilterValueIds: z.array(z.string()).optional(),
   })).optional(),
   // Step 6: Artist/Group + Employer
   artistIds: z.array(z.string()).optional(),
@@ -335,7 +336,15 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
             referralLinkUsed: refLink ? p.referralCode : undefined,
             emailVerified: true,
             userProfessions: p.userProfessions && p.userProfessions.length > 0
-              ? { create: p.userProfessions.map((up: any) => ({ professionId: up.professionId, features: up.features || [] })) }
+              ? { create: p.userProfessions.map((up: any) => ({
+                  professionId: up.professionId,
+                  features: up.features || [],
+                  // Carry the profession filters chosen during registration into the
+                  // profile, so the user doesn't have to re-select them.
+                  selectedCustomFilterValues: {
+                    connect: (up.selectedCustomFilterValueIds || []).map((id: string) => ({ id })),
+                  },
+                })) }
               : undefined,
             userArtists: p.artistIds && p.artistIds.length > 0
               ? { create: p.artistIds.map((artistId: string) => ({ artistId })) }
@@ -635,6 +644,36 @@ router.post('/telegram/webhook', async (req, res) => {
     const from = msg?.from;
     if (!from || !text) return;
 
+    const { resolveNotifySubscribe, disableNotifyByTelegramId, sendBotMessage } = await import('../utils/telegramNotify');
+    const chatId = String(msg.chat?.id ?? from.id);
+
+    // Подписка на дублирование уведомлений: t.me/<bot>?start=notify_<token>
+    // (проверяем ДО auth-ветки — иначе notify_-токен уйдёт в tgPending и потеряется)
+    if (text.startsWith('/start notify_')) {
+      const token = text.slice('/start notify_'.length).trim();
+      const r = await resolveNotifySubscribe(token, String(from.id), from.username);
+      if (r.ok) {
+        await sendBotMessage(chatId,
+          '🔔 <b>Уведомления Moooza подключены!</b>\nВсе уведомления из колокольчика будут дублироваться сюда.\n\nОтписаться: команда /stop или кнопка «Отписаться» в самом колокольчике.');
+        console.log(`[Telegram] Webhook: notifications enabled for tg ${from.id}`);
+      } else if (r.reason === 'conflict') {
+        await sendBotMessage(chatId,
+          `⚠️ Этот Telegram уже привязан к аккаунту Moooza${r.ownerName ? ` <b>${r.ownerName}</b>` : ''}. Войдите в него и подпишитесь там — или продолжайте с текущего аккаунта, привязав другой Telegram.`);
+      } else {
+        await sendBotMessage(chatId,
+          '⏳ Ссылка устарела. Откройте колокольчик в Moooza и нажмите «Подписаться» ещё раз.');
+      }
+      return;
+    }
+
+    if (text === '/stop') {
+      const disabled = await disableNotifyByTelegramId(String(from.id));
+      await sendBotMessage(chatId, disabled
+        ? '🔕 Уведомления отключены. Включить снова можно в колокольчике Moooza.'
+        : 'Уведомления и так не были подключены. Подписаться можно в колокольчике Moooza.');
+      return;
+    }
+
     if (text.startsWith('/start ')) {
       const token = text.slice(7).trim();
       const entry = tgPending.get(token);
@@ -649,6 +688,13 @@ router.post('/telegram/webhook', async (req, res) => {
         resolvedAt: Date.now(),
       });
       console.log(`[Telegram] Webhook: auth confirmed for user ${from.id}`);
+      return;
+    }
+
+    // Любое другое сообщение боту — короткая справка
+    if (text === '/start' || text === '/help') {
+      await sendBotMessage(chatId,
+        '👋 Это бот Moooza. Он присылает ваши уведомления с платформы.\nПодключение — через кнопку «Подписаться на уведомления в Telegram» в колокольчике на moooza.ru.\nОтключить: /stop');
     }
   } catch (e) {
     console.error('[Telegram] Webhook error:', e);

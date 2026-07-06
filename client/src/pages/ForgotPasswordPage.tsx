@@ -60,7 +60,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center px-5">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center px-5">
       <div className="w-full max-w-sm">
 
         {/* Back */}

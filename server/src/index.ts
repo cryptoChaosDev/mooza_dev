@@ -44,6 +44,11 @@ import releaseRoutes from './routes/releases';
 import clipRoutes from './routes/clips';
 import proRoutes from './routes/pro';
 import feedPresetRoutes from './routes/feedPresets';
+import waitlistRoutes from './routes/waitlist';
+import orderRoutes from './routes/orders';
+import vacancyRoutes from './routes/vacancies';
+import artistLookupRoutes from './routes/artistLookup';
+import supportRoutes from './routes/support';
 
 // Load environment variables
 dotenv.config();
@@ -62,6 +67,19 @@ try {
 
 const app = express();
 export const prisma = new PrismaClient();
+
+// Дублирование уведомлений в Telegram-бот: notification.create разбросан по ~20 местам,
+// поэтому единственный надёжный hook — Prisma-middleware. Fire-and-forget (не тормозит ответ).
+// Ленивая загрузка утилиты — она импортирует prisma из этого модуля (циклический импорт).
+prisma.$use(async (params, next) => {
+  const result = await next(params);
+  if (params.model === 'Notification' && params.action === 'create' && result) {
+    import('./utils/telegramNotify')
+      .then(m => m.tgNotifyFromRow(result))
+      .catch(() => { /* best-effort */ });
+  }
+  return result;
+});
 
 const PORT = process.env.PORT || 4000;
 
@@ -178,6 +196,11 @@ app.use('/api/releases', releaseRoutes);
 app.use('/api/clips', clipRoutes);
 app.use('/api/pro', proRoutes);
 app.use('/api/feed-presets', feedPresetRoutes);
+app.use('/api/waitlist', waitlistRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/vacancies', vacancyRoutes);
+app.use('/api/artist-lookup', artistLookupRoutes);
+app.use('/api/support', supportRoutes);
 
 // ── OG tags for social bots ────────────────────────────────────────────────
 // HTML-entity-encode every interpolated value: firstName/lastName/bio/city are

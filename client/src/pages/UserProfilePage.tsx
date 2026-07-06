@@ -22,6 +22,7 @@ import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConfirmDialog from '../components/ConfirmDialog';
 import ReviewsBlock from '../components/ReviewsBlock';
 import { useAuthStore } from '../stores/authStore';
+import { useScrollLock } from '../lib/scrollLock';
 import { formatLastSeen } from '../lib/lastSeen';
 import { usePresenceStore } from '../stores/presenceStore';
 import { toast } from '../stores/toastStore';
@@ -73,6 +74,7 @@ export default function UserProfilePage() {
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
   const [selectedProfession, setSelectedProfession] = useState<any>(null);
   const [confirmRemoveFriend, setConfirmRemoveFriend] = useState(false);
+  useScrollLock(!!imageFullscreen || !!docFullscreen || !!selectedProfession);
   const { data: user, isLoading } = useQuery({
     queryKey: ['user', userId],
     queryFn: async () => { const { data } = await userAPI.getUser(userId!); return data; },
@@ -137,12 +139,26 @@ export default function UserProfilePage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['user', userId] }),
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить из друзей')),
   });
+  // A second tap on the connection icon while my own request is still pending cancels
+  // it and deletes the sent proposal — same behaviour as the friendship toggle.
+  const cancelConnMut = useMutation({
+    mutationFn: () => {
+      if (!conn?.id) throw new Error('No connection id');
+      return connectionAPI.cancel(conn.id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['connection-with', userId] });
+      queryClient.invalidateQueries({ queryKey: ['user-connections', userId] });
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отменить запрос')),
+  });
 
   const handleShareProfile = async () => {
     const fullUrl = `${window.location.origin}/profile/${userId}`;
     const title = user ? `${user.firstName} ${user.lastName} — Moooza` : 'Профиль — Moooza';
     if (navigator.share) {
-      try { await navigator.share({ title, text: user?.bio?.slice(0, 100), url: fullUrl }); } catch { /* cancelled */ }
+      // Share only the title + link — never the bio, so «copy» yields just the URL.
+      try { await navigator.share({ title, url: fullUrl }); } catch { /* cancelled */ }
     } else {
       try {
         await navigator.clipboard.writeText(fullUrl);
@@ -155,7 +171,7 @@ export default function UserProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent mx-auto" />
           <p className="text-slate-400 mt-3 text-sm">Загрузка профиля...</p>
@@ -166,14 +182,16 @@ export default function UserProfilePage() {
 
   if (!user) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-950 gap-3">
+      <div className="flex flex-col items-center justify-center min-h-screen min-h-[100dvh] bg-slate-950 gap-3">
         <p className="text-slate-400 text-sm">Пользователь не найден</p>
         <button onClick={() => navigate(-1)} className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-xl text-sm">Назад</button>
       </div>
     );
   }
 
-  const servicesFlat: any[] = user.userServices ?? [];
+  // Other users only see ACTIVE services (drafts/archived stay private) — mirrors
+  // the «смотреть все» list (ServicesPage) which filters non-owners to status active.
+  const servicesFlat: any[] = (user.userServices ?? []).filter((us: any) => (us.status ?? 'active') === 'active');
   const portfolioFiles: any[] = user.portfolioFiles ?? [];
   const portfolioLinks: any[] = user.portfolioLinks ?? [];
   const audioLinks = portfolioLinks.filter((l: any) => l.type === 'audio');
@@ -235,7 +253,7 @@ export default function UserProfilePage() {
 
           {/* ── Name + badges ── */}
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <h1 className="text-2xl font-bold text-white leading-tight">{user.firstName} {user.lastName}</h1>
+            <h1 className="text-2xl font-bold text-white leading-tight min-w-0 break-words [overflow-wrap:anywhere]">{user.firstName} {user.lastName}</h1>
             {user.isPro && <BadgeTooltip label="PRO аккаунт"><Zap size={18} className="text-violet-400" /></BadgeTooltip>}
             {user.isPremium && <BadgeTooltip label="Premium"><Crown size={18} className="text-amber-400" /></BadgeTooltip>}
             {user.isVerified && <BadgeTooltip label="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></BadgeTooltip>}
@@ -313,6 +331,15 @@ export default function UserProfilePage() {
                   title="Входящий запрос на связь — ответить"
                 >
                   <Link2 size={18} />
+                </button>
+              ) : conn?.status === 'PENDING' && conn.iAmRequester ? (
+                <button
+                  onClick={() => cancelConnMut.mutate()}
+                  disabled={cancelConnMut.isPending}
+                  className="flex items-center justify-center px-3.5 py-2.5 bg-slate-800/80 border border-slate-700/60 text-slate-500 rounded-xl transition-all disabled:opacity-50"
+                  title="Запрос на связь отправлен — нажмите, чтобы отменить"
+                >
+                  <Clock size={18} />
                 </button>
               ) : (
                 <button
@@ -501,20 +528,29 @@ export default function UserProfilePage() {
                   <Briefcase size={14} className="text-primary-400" />
                   <span className="text-sm font-semibold text-white">Профессии</span>
                 </div>
-                <div className="px-4 pt-3 pb-3">
-                  <p className="text-sm leading-relaxed">
-                    {user.userProfessions.map((up: any, i: number) => (
-                      <span key={up.professionId ?? i}>
+                <div className="px-4 pt-3 pb-3 space-y-3">
+                  {user.userProfessions.map((up: any, i: number) => {
+                    const cfvs: any[] = up.selectedCustomFilterValues || [];
+                    return (
+                      <div key={up.professionId ?? i}>
                         <button
                           onClick={() => setSelectedProfession(up)}
-                          className="text-primary-400 hover:text-primary-300 font-medium underline underline-offset-2 decoration-primary-500/40 hover:decoration-primary-400 transition-colors"
+                          className="text-primary-400 hover:text-primary-300 font-medium underline underline-offset-2 decoration-primary-500/40 hover:decoration-primary-400 transition-colors text-sm"
                         >
                           {up.profession?.name}
                         </button>
-                        {i < user.userProfessions.length - 1 && <span className="text-slate-500">, </span>}
-                      </span>
-                    ))}
-                  </p>
+                        {cfvs.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {cfvs.map((cfv: any) => (
+                              <span key={cfv.id} className="text-[10px] bg-slate-700/50 text-slate-400 px-2 py-0.5 rounded-full">
+                                {cfv.value}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -589,7 +625,7 @@ export default function UserProfilePage() {
                     allAudio.length === 0
                       ? <p className="text-sm text-slate-600 italic text-center py-2">Нет аудио</p>
                       : <div className="space-y-1">
-                          {audioFiles.map((f: any) => <AudioPlayer key={f.id} src={`${API_URL}${f.url}`} name={f.originalName} />)}
+                          {audioFiles.map((f: any) => <AudioPlayer key={f.id} src={`${API_URL}${f.url}`} name={f.title || f.originalName} />)}
                           {audioLinks.map((l: any) => <AudioPlayer key={l.id} src={l.url} name={l.title || l.url} />)}
                         </div>
                   )}
@@ -603,7 +639,7 @@ export default function UserProfilePage() {
                               onClick={() => setImageFullscreen(`${API_URL}${f.url}`)}
                               className="aspect-square rounded-xl overflow-hidden border border-slate-700/40 hover:border-primary-500/40 transition-colors"
                             >
-                              <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
+                              <img src={`${API_URL}${f.url}`} alt={f.title || f.originalName} className="w-full h-full object-cover" />
                             </button>
                           ))}
                         </div>
@@ -620,8 +656,8 @@ export default function UserProfilePage() {
                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
                                   <Icon size={18} className={meta.color} />
                                 </div>
-                                <button onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.originalName })} className="flex-1 min-w-0 text-left">
-                                  <p className="text-sm text-slate-200 truncate">{f.originalName}</p>
+                                <button onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.title || f.originalName })} className="flex-1 min-w-0 text-left">
+                                  <p className="text-sm text-slate-200 truncate">{f.title || f.originalName}</p>
                                   <p className="text-[11px] text-slate-500">{meta.label}{f.size ? ` · ${formatBytes(f.size)}` : ''}</p>
                                 </button>
                                 <a href={`${API_URL}${f.url}`} download target="_blank" rel="noopener noreferrer" title="Скачать" className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0"><Download size={15} /></a>
@@ -718,8 +754,8 @@ export default function UserProfilePage() {
     {/* ── Document fullscreen ── */}
     {docFullscreen && (
       <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
-          <span className="text-sm text-slate-300 truncate">{docFullscreen.name}</span>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
+          <span className="text-sm text-slate-300 truncate min-w-0">{docFullscreen.name}</span>
           <button onClick={() => setDocFullscreen(null)} className="p-2 rounded-full bg-slate-800 text-white flex-shrink-0">
             <X size={20} />
           </button>
@@ -733,19 +769,19 @@ export default function UserProfilePage() {
       <>
         <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm" onClick={() => setSelectedProfession(null)} />
         <div
-          className="fixed inset-x-0 bottom-0 z-[71] bg-slate-900 border-t border-slate-800 rounded-t-3xl"
+          className="fixed inset-x-0 bottom-0 z-[71] max-h-[85dvh] flex flex-col bg-slate-900 border-t border-slate-800 rounded-t-3xl"
           style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
         >
-          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1" />
-          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800">
-            <h3 className="text-base font-bold text-white">{selectedProfession.profession?.name}</h3>
-            <button onClick={() => setSelectedProfession(null)} className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors">
+          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1 flex-shrink-0" />
+          <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-slate-800 flex-shrink-0">
+            <h3 className="text-base font-bold text-white min-w-0 truncate">{selectedProfession.profession?.name}</h3>
+            <button onClick={() => setSelectedProfession(null)} className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors flex-shrink-0">
               <X size={18} className="text-slate-400" />
             </button>
           </div>
-          <div className="px-5 py-4">
+          <div className="px-5 py-4 flex-1 overflow-y-auto min-h-0">
             {(() => {
-              const related = (user.userServices ?? []).filter(
+              const related = servicesFlat.filter(
                 (us: any) => us.professionId === selectedProfession.professionId
               );
               if (related.length === 0) {

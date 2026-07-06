@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2, ShieldCheck } from 'lucide-react';
+import { useScrollLock } from '../lib/scrollLock';
 
 interface Props {
   // Records the consent on the server and runs the gated action.
@@ -13,6 +14,7 @@ interface Props {
 export default function PublicConsentGate({ onAccept, onClose }: Props) {
   const [checked, setChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  useScrollLock(true);
 
   const confirm = async () => {
     if (!checked || submitting) return;

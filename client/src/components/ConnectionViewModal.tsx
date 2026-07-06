@@ -9,6 +9,7 @@ import AvatarComponent from './Avatar';
 import { useNavigate } from 'react-router-dom';
 import DealCreateModal from './DealCreateModal';
 import { DEALS_ENABLED } from '../lib/features';
+import { useScrollLock } from '../lib/scrollLock';
 
 interface Connection {
   id: string;
@@ -51,12 +52,13 @@ const ROLE_COLOR: Record<string, string> = {
 function RoleBadge({ role, label }: { role?: string | null; label: string }) {
   const color = ROLE_COLOR[role ?? ''] ?? 'bg-slate-700/40 text-slate-400 border-slate-700';
   return (
-    <span className={`text-xs rounded-xl px-3 py-1 border font-medium ${color}`}>{label}</span>
+    <span className={`text-xs rounded-xl px-3 py-1 border font-medium break-words [overflow-wrap:anywhere] ${color}`}>{label}</span>
   );
 }
 
 export default function ConnectionViewModal({ connection, onClose }: Props) {
   const queryClient = useQueryClient();
+  useScrollLock(true);
   const navigate = useNavigate();
   const { partner, services, profession, status, iAmRequester, myRole, partnerRole, needsDeal, breakRequestedBy, breakReasonRequester } = connection;
 
@@ -155,7 +157,7 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
           </button>
         </div>
 
-        <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+        <div className="px-5 py-4 space-y-4 max-h-[70dvh] overflow-y-auto">
           {/* Partner card */}
           <button
             onClick={() => { navigate(`/profile/${partner.id}`); onClose(); }}
@@ -266,14 +268,17 @@ export default function ConnectionViewModal({ connection, onClose }: Props) {
           {status === 'BREAK_REQUESTED' && breakRequestedBy === partner.id && breakReasonRequester && (
             <div className="p-3 bg-red-500/5 border border-red-500/20 rounded-xl">
               <p className="text-[11px] font-semibold text-red-400/70 uppercase tracking-wide mb-1">Причина разрыва</p>
-              <p className="text-sm text-slate-300">{breakReasonRequester}</p>
+              <p className="text-sm text-slate-300 break-words [overflow-wrap:anywhere]">{breakReasonRequester}</p>
             </div>
           )}
 
         </div>
 
         {/* Actions */}
-        <div className="px-5 pb-5 flex gap-2.5 border-t border-slate-800 pt-4">
+        <div
+          className="px-5 pb-5 flex gap-2.5 border-t border-slate-800 pt-4"
+          style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+        >
           {/* PENDING incoming → Accept + Reject */}
           {status === 'PENDING' && !iAmRequester && (
             <>

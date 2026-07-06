@@ -35,6 +35,9 @@ export const ALLOWED_PLATFORMS: AllowedPlatform[] = [
   { key: 'dzen', label: 'Яндекс Дзен', type: 'social', domains: ['dzen.ru', 'zen.yandex.ru'] },
   { key: 'soundcloud', label: 'SoundCloud', type: 'music', domains: ['soundcloud.com'] },
   { key: 'bandlink', label: 'Bandlink', type: 'music', domains: ['band.link', 'bandlink.ru'] },
+  { key: 'spotify', label: 'Spotify', type: 'music', domains: ['open.spotify.com', 'spotify.com'] },
+  { key: 'apple_music', label: 'Apple Music', type: 'music', domains: ['music.apple.com'] },
+  { key: 'deezer', label: 'Deezer', type: 'music', domains: ['deezer.com'] },
   // 'website' is the catch-all: any other valid http(s) URL is treated as the
   // user's official site. Its `domains` is intentionally empty (see classifyUrl).
   { key: 'website', label: 'Официальный сайт', type: 'website', domains: [] },

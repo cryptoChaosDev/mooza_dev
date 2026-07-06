@@ -1,8 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Loader2, Camera, Copy, Check, ShieldCheck, Image as ImageIcon } from 'lucide-react';
-import { artistAPI, referenceAPI, roleAPI } from '../lib/api';
+import { ArrowLeft, Loader2, Camera, Copy, Check, ShieldCheck, Image as ImageIcon, Search } from 'lucide-react';
+import { artistAPI, referenceAPI, roleAPI, releaseAPI, clipAPI } from '../lib/api';
+import MediaImportList from '../components/MediaImportList';
+import { toast } from '../stores/toastStore';
 import { avatarUrl } from '../lib/avatar';
 import SelectSheet from '../components/SelectSheet';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
@@ -59,8 +61,97 @@ export default function ArtistCreatePage() {
   // Post-create state
   const [created, setCreated] = useState<any | null>(null);
   const [copied, setCopied] = useState(false);
+  const [lookupQuery, setLookupQuery] = useState('');
+  const [lookupResults, setLookupResults] = useState<any[]>([]);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [foundReleases, setFoundReleases] = useState<any[]>([]);
+  const [foundClips, setFoundClips] = useState<any[]>([]);
 
   const set = (key: keyof Form, value: any) => setForm(f => ({ ...f, [key]: value }));
+
+  // ── «Найти артиста» — autofill from external catalogs (Deezer/Apple/MusicBrainz) ──
+  useEffect(() => {
+    const q = lookupQuery.trim();
+    if (q.length < 2) { setLookupResults([]); return; }
+    setLookupLoading(true);
+    const t = setTimeout(async () => {
+      try { const { data } = await artistAPI.lookup(q); setLookupResults(data.candidates || []); }
+      catch { setLookupResults([]); }
+      finally { setLookupLoading(false); }
+    }, 450);
+    return () => clearTimeout(t);
+  }, [lookupQuery]);
+
+  const applyCandidate = async (c: any) => {
+    setApplying(true);
+    try {
+      setForm(f => ({
+        ...f,
+        name: c.name || f.name,
+        type: c.type || f.type,
+        genreIds: c.genreIds?.length ? c.genreIds : f.genreIds,
+        socialLinks: {
+          ...f.socialLinks,
+          ...(c.links?.yandexMusic ? { yandex_music: c.links.yandexMusic } : {}),
+          ...(c.links?.spotify ? { spotify: c.links.spotify } : {}),
+          ...(c.links?.appleMusic ? { apple_music: c.links.appleMusic } : {}),
+          ...(c.links?.deezer ? { deezer: c.links.deezer } : {}),
+          ...(c.links?.vk ? { vk: c.links.vk } : {}),
+          ...(c.links?.soundcloud ? { soundcloud: c.links.soundcloud } : {}),
+          ...(c.links?.website ? { website: c.links.website } : {}),
+        },
+      }));
+      if (c.imageUrl) {
+        try {
+          const { data: blob } = await artistAPI.lookupAvatar(c.imageUrl);
+          setAvatarFile(new File([blob], 'avatar.jpg', { type: (blob as any)?.type || 'image/jpeg' }));
+          setAvatarPreview(URL.createObjectURL(blob));
+        } catch { /* avatar is best-effort */ }
+      }
+      if (c.itunesId) {
+        try {
+          const { data } = await artistAPI.lookupReleases({ itunesId: c.itunesId, deezerId: c.deezerId });
+          setFoundReleases(data.releases || []);
+          setFoundClips(data.clips || []);
+        } catch { /* best-effort */ }
+      }
+      setLookupResults([]);
+      setLookupQuery('');
+      toast.success('Данные подставлены — проверьте и при необходимости поправьте');
+    } finally { setApplying(false); }
+  };
+
+  const importReleases = async (selected: any[]) => {
+    if (!created) return;
+    let ok = 0;
+    for (const r of selected) {
+      try {
+        await releaseAPI.create({
+          artistId: created.id, platform: 'APPLE_MUSIC', url: r.url, title: r.title,
+          coverUrl: r.coverUrl || undefined, releaseDate: r.releaseDate || undefined, participants: [],
+        });
+        ok++;
+      } catch { /* skip a failed one */ }
+    }
+    setFoundReleases([]);
+    if (ok > 0) toast.success(`Импортировано релизов: ${ok}`); else toast.error('Не удалось импортировать релизы');
+  };
+  const importClips = async (selected: any[]) => {
+    if (!created) return;
+    let ok = 0;
+    for (const r of selected) {
+      try {
+        await clipAPI.create({
+          artistId: created.id, platform: 'APPLE_MUSIC', url: r.url, title: r.title,
+          coverUrl: r.coverUrl || undefined, participants: [],
+        });
+        ok++;
+      } catch { /* skip a failed one */ }
+    }
+    setFoundClips([]);
+    if (ok > 0) toast.success(`Импортировано клипов: ${ok}`); else toast.error('Не удалось импортировать клипы');
+  };
 
   const { data: genreOptions = [] } = useQuery({
     queryKey: ['genres'],
@@ -207,6 +298,48 @@ export default function ArtistCreatePage() {
               />
             </div>
 
+            {/* ── Найти артиста: автозаполнение из площадок ── */}
+            <div className="rounded-2xl border border-primary-700/30 bg-primary-900/10 p-3">
+              <label className="text-xs font-semibold text-primary-300 mb-1.5 flex items-center gap-1.5">
+                <Search size={13} /> Найти артиста (автозаполнение)
+              </label>
+              <input
+                value={lookupQuery}
+                onChange={e => setLookupQuery(e.target.value)}
+                placeholder="Название на Deezer / Apple Music / MusicBrainz…"
+                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
+              />
+              {lookupLoading && <p className="text-[11px] text-slate-500 mt-1.5">Поиск…</p>}
+              {lookupResults.length > 0 && (
+                <div className="mt-2 space-y-1.5 max-h-72 overflow-y-auto">
+                  {lookupResults.map((c: any, i: number) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => applyCandidate(c)}
+                      disabled={applying}
+                      className="w-full flex items-center gap-2.5 p-2 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:border-primary-500/50 text-left transition-colors disabled:opacity-50"
+                    >
+                      <div className="w-10 h-10 rounded-lg bg-slate-700 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                        {c.imageUrl ? <img src={c.imageUrl} alt="" className="w-full h-full object-cover" /> : <Camera size={16} className="text-slate-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate">
+                          {c.name}
+                          {c.type && <span className="text-[10px] text-slate-500 ml-1.5">{c.type === 'GROUP' ? 'группа' : 'соло'}</span>}
+                        </p>
+                        <p className="text-[10px] text-slate-500 truncate">
+                          {[c.disambiguation, (c.genres || []).slice(0, 2).join(', ')].filter(Boolean).join(' · ') || (c.sources || []).join(' · ')}
+                        </p>
+                      </div>
+                      <span className="text-[10px] text-primary-400 flex-shrink-0">{applying ? '…' : 'Заполнить'}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <p className="text-[10px] text-slate-500 mt-1.5">Подставит название, тип, жанры, фото и ссылки — всё можно отредактировать.</p>
+            </div>
+
             {/* Avatar */}
             <div>
               <label className="block text-xs text-slate-500 mb-2">Аватар <span className="text-red-400">*</span></label>
@@ -233,7 +366,7 @@ export default function ArtistCreatePage() {
 
             {/* Название */}
             <div>
-              <label className="block text-xs text-slate-500 mb-1">Название *</label>
+              <label className="block text-xs text-slate-500 mb-1">Название <span className="text-red-400">*</span></label>
               <input
                 className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
                 value={form.name}
@@ -349,7 +482,7 @@ export default function ArtistCreatePage() {
                 Разместите этот код в посте или описании профиля артиста в соцсетях:
               </p>
               <div className="flex items-center gap-2 p-2 bg-slate-900 rounded-lg">
-                <code className="text-base font-mono font-bold text-primary-400 tracking-wider flex-1">
+                <code className="text-base font-mono font-bold text-primary-400 tracking-wider flex-1 min-w-0 break-all">
                   {created.verificationCode}
                 </code>
                 <button
@@ -361,6 +494,9 @@ export default function ArtistCreatePage() {
                 </button>
               </div>
             </div>
+
+            <MediaImportList title="Релизы на Apple Music" items={foundReleases} onImport={importReleases} />
+            <MediaImportList title="Клипы на Apple Music" items={foundClips} onImport={importClips} />
 
             <div className="p-3 rounded-xl bg-primary-500/5 border border-primary-500/20">
               <p className="text-xs text-slate-300 leading-relaxed mb-3">

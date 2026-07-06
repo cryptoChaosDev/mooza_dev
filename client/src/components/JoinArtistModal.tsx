@@ -5,12 +5,14 @@ import { X, Search, Plus, Check, Loader2, Music2 } from 'lucide-react';
 import { artistAPI, roleAPI } from '../lib/api';
 import { useNavigate } from 'react-router-dom';
 import RolePicker from './RolePicker';
+import { useScrollLock } from "../lib/scrollLock";
 
 interface Props {
   onClose: () => void;
 }
 
 export default function JoinArtistModal({ onClose }: Props) {
+  useScrollLock(true);
   const navigate = useNavigate();
 
   const [artistQuery, setArtistQuery] = useState('');
@@ -65,7 +67,7 @@ export default function JoinArtistModal({ onClose }: Props) {
     <>
       <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="fixed inset-x-0 bottom-0 z-[71] bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[90vh] flex flex-col"
+        className="fixed inset-x-0 bottom-0 z-[71] bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[90dvh] flex flex-col"
         style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
       >
         <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1 flex-shrink-0" />
@@ -111,8 +113,8 @@ export default function JoinArtistModal({ onClose }: Props) {
                       : <Music2 size={14} className="text-primary-400" />
                     }
                   </div>
-                  <span className="flex-1 text-sm font-semibold text-white">{selectedArtist.name}</span>
-                  <button onClick={() => { setSelectedArtist(null); setArtistQuery(''); setNotFound(false); }}>
+                  <span className="flex-1 min-w-0 truncate text-sm font-semibold text-white">{selectedArtist.name}</span>
+                  <button className="flex-shrink-0" onClick={() => { setSelectedArtist(null); setArtistQuery(''); setNotFound(false); }}>
                     <X size={15} className="text-slate-400 hover:text-white" />
                   </button>
                 </div>
@@ -140,7 +142,7 @@ export default function JoinArtistModal({ onClose }: Props) {
                       <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center overflow-hidden flex-shrink-0">
                         {s.thumb ? <img src={s.thumb} alt={s.name} className="w-full h-full object-cover" /> : <Music2 size={14} className="text-slate-400" />}
                       </div>
-                      <span className="text-sm text-white">{s.name}</span>
+                      <span className="text-sm text-white min-w-0 truncate">{s.name}</span>
                     </button>
                   ))}
                 </div>

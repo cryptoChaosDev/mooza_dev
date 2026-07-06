@@ -82,4 +82,8 @@ export const tgEvent = {
     tgLog(`🚨 <b>Жалоба</b> (риск ${risk}/100)\n${e(reporter)} → ${e(targetType)}\n📋 ${e(category)}`),
   block: (admin: string, target: string, until: string) =>
     tgLog(`🚫 <b>Блокировка</b>\nАдмин: ${e(admin)}\nКого: ${e(target)}\nДо: ${e(until)}`),
+  waitlist: (email: string, type: string) =>
+    tgLog(`📋 <b>Заявка (waitlist)</b>\n📧 ${e(email)}\n📌 ${e(type)}`),
+  professionRequest: (user: string, profession: string, comment?: string) =>
+    tgLog(`➕ <b>Запрос на добавление профессии</b>\n👤 ${e(user)}\n🧩 «${e(profession)}»${comment ? `\n💬 ${e(comment)}` : ''}`),
 };

@@ -3,12 +3,12 @@ import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tansta
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Send, Heart, MessageCircle, Trash2, Loader2, X,
-  MoreHorizontal, Image, Pencil, Check,
+  MoreHorizontal, Image, Pencil, Check, Smile,
   Crown, BadgeCheck, Ban, SlidersHorizontal,
   Plus, FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench,
   Zap, BarChart3, Star, WifiOff, RefreshCw, HelpCircle, Repeat2,
   ExternalLink, MessageSquare, HandshakeIcon, Loader2 as Spinner,
-  ArrowUpDown, ChevronDown,
+  ArrowUpDown, ChevronDown, Megaphone,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import ShareButton from '../components/ShareButton';
@@ -20,13 +20,18 @@ import { useAuthGate } from '../components/AuthGateModal';
 import DealCreateModal from '../components/DealCreateModal';
 import { DEALS_ENABLED } from '../lib/features';
 import OnboardingPrompt from '../components/OnboardingPrompt';
+import OrderForm from '../components/OrderForm';
+import VacancyForm from '../components/VacancyForm';
+import { workFormatLabel, geographyLabel, paymentLabel } from '../lib/vacancyOptions';
 import AvatarComponent from '../components/Avatar';
 import AudioPlayer from '../components/AudioPlayer';
 import PostContent from '../components/PostContent';
 import RichTextEditor from '../components/RichTextEditor';
 import { ReactionBar, DoubleTapReactWrapper } from '../components/ReactionBar';
+import EmojiPicker from '../components/EmojiPicker';
 import { loadFilters, DEFAULT_FILTERS, FlowFilters, FLOW_FILTERS_KEY } from './FlowSettingsPage';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { useScrollLock } from '../lib/scrollLock';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -153,7 +158,12 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
                   </div>
                 </div>
               ) : (
-                <p className="text-xs text-slate-300 leading-relaxed mt-0.5 break-words">{comment.content}</p>
+                <>
+                  {comment.content && <p className="text-xs text-slate-300 leading-relaxed mt-0.5 break-words">{comment.content}</p>}
+                  {comment.imageUrl && (
+                    <img src={comment.imageUrl} alt="" loading="lazy" className="mt-1.5 max-h-56 rounded-lg border border-slate-700 object-cover" />
+                  )}
+                </>
               )}
             </div>
           </DoubleTapReactWrapper>
@@ -186,7 +196,7 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
                 onChange={e => setReplyText(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Escape') setShowReplyInput(false); }}
                 placeholder={`Ответить ${comment.author.firstName}...`}
-                className="flex-1 bg-slate-800/60 border border-slate-700/60 focus:border-primary-500/60 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none transition-colors"
+                className="flex-1 min-w-0 bg-slate-800/60 border border-slate-700/60 focus:border-primary-500/60 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none transition-colors"
               />
               <button type="submit" disabled={!replyText.trim() || replyMut.isPending} className="p-1.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white rounded-lg transition-colors flex-shrink-0">
                 {replyMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
@@ -223,18 +233,29 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const navigate = useNavigate();
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState('');
+  const [showEmoji, setShowEmoji] = useState(false);
+  const [commentImage, setCommentImage] = useState<{ url: string; serverUrl: string } | null>(null);
+  const [commentUploading, setCommentUploading] = useState(false);
+  const [newCommentId, setNewCommentId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showRepost, setShowRepost] = useState(false);
   const [repostComment, setRepostComment] = useState('');
+  useScrollLock(showRepost);
+  useScrollLock(showComments);
 
   // Structured «Услуга» card — guest gating + «Написать» / «Оформить сделку».
   const { ensureAuth, authGateModal } = useAuthGate();
   const [showDeal, setShowDeal] = useState(false);
   const [contacting, setContacting] = useState(false);
   const svc = post.type === 'service' && post.service ? post.service : null;
+  const order = post.type === 'order' && post.order ? post.order : null;
+  const vacancy = post.type === 'vacancy' && post.vacancy ? post.vacancy : null;
+  // Вакансию в потоке показываем ОТ ИМЕНИ АРТИСТА: артист — крупно и кликабельно (→ страница артиста),
+  // владелец (создатель) — вторичной кликабельной строкой (наоборот к обычной шапке).
+  const vacancyArtist = post.type === 'vacancy' && post.artist ? post.artist : null;
   const openServiceChat = () => {
     if (!svc || contacting) return;
     setContacting(true);
@@ -255,7 +276,8 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   );
   const [editUploading, setEditUploading] = useState(false);
   const editImageRef = useRef<HTMLInputElement>(null);
-  const commentInputRef = useRef<HTMLInputElement>(null);
+  const commentInputRef = useRef<HTMLTextAreaElement>(null);
+  const commentImageRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isOwner = post.author.id === currentUserId;
@@ -267,9 +289,18 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // После публикации коммента — проскроллить к нему и подсветить (лента уже перезапросилась)
+  useEffect(() => {
+    if (!newCommentId) return;
+    const el = document.getElementById(`comment-${newCommentId}`);
+    if (!el) return; // ещё не отрендерился — сработает при следующем обновлении post.comments
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setNewCommentId(null);
+  }, [post.comments, newCommentId]);
+
 
   const likeMut = useMutation({ mutationFn: () => post.isLiked ? postAPI.unlikePost(post.id) : postAPI.likePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось поставить лайк')) });
-  const commentMut = useMutation({ mutationFn: (content: string) => postAPI.commentPost(post.id, content), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setCommentText(''); }, onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить комментарий')) });
+  const commentMut = useMutation({ mutationFn: () => postAPI.commentPost(post.id, commentText.trim(), undefined, commentImage?.serverUrl), onSuccess: (res: any) => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setCommentText(''); setCommentImage(null); setShowEmoji(false); if (res?.data?.id) setNewCommentId(res.data.id); }, onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить комментарий')) });
   const editMut = useMutation({ mutationFn: () => postAPI.editPost(post.id, { content: editContent, imageUrl: editImagePreview?.serverUrl ?? null, audioUrl: null, audioName: null }), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setEditing(false); }, onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')) });
   const deleteMut = useMutation({ mutationFn: () => postAPI.deletePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить пост')) });
   const reactMut = useMutation({ mutationFn: (emoji: string) => postAPI.reactPost(post.id, emoji), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось поставить реакцию')) });
@@ -294,6 +325,20 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
     } finally { setEditUploading(false); }
   };
 
+  const uploadCommentFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) { toast.error('Можно приложить только картинку'); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error('Картинка больше 5 МБ'); return; }
+    setCommentUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const { data } = await postAPI.uploadMedia(fd);
+      setCommentImage({ url: URL.createObjectURL(file), serverUrl: data.url });
+    } catch (e: any) {
+      toast.error(getApiError(e, 'Не удалось загрузить картинку'));
+    } finally { setCommentUploading(false); }
+  };
+
   const typeMeta = POST_TYPE_META[post.type] ?? POST_TYPE_META.blog;
   const TypeIcon = typeMeta.icon;
   const showTypeBadge = post.type && post.type !== 'blog';
@@ -306,20 +351,22 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
       {isRepost && (
         <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-2 ml-1">
           <Repeat2 size={13} className="flex-shrink-0" />
-          <span className="truncate">«{post.author.firstName} {post.author.lastName} поделился(ась)»</span>
+          <span className="truncate min-w-0">«{post.author.firstName} {post.author.lastName} поделился(ась)»</span>
         </div>
       )}
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-3 min-w-0">
-          <Link to={`/profile/${post.author.id}`} className="flex-shrink-0"><Avatar user={post.author} size={10} /></Link>
+          <Link to={vacancyArtist ? `/artist/${vacancyArtist.id}` : `/profile/${post.author.id}`} className="flex-shrink-0">
+            <Avatar user={vacancyArtist ? { firstName: vacancyArtist.name, lastName: '', avatar: vacancyArtist.avatar } : post.author} size={10} />
+          </Link>
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <Link to={`/profile/${post.author.id}`} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate">
-                {post.author.firstName} {post.author.lastName}
+              <Link to={vacancyArtist ? `/artist/${vacancyArtist.id}` : `/profile/${post.author.id}`} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate">
+                {vacancyArtist ? vacancyArtist.name : `${post.author.firstName} ${post.author.lastName}`}
               </Link>
-              {post.author.isPremium && <span title="Premium"><Crown size={13} className="text-amber-400 flex-shrink-0" /></span>}
-              {post.author.isVerified && <span title="Верифицирован"><BadgeCheck size={13} className="text-sky-400 flex-shrink-0" /></span>}
-              {post.author.isBlocked && <span title="Заблокирован"><Ban size={13} className="text-red-500 flex-shrink-0" /></span>}
+              {!vacancyArtist && post.author.isPremium && <span title="Premium"><Crown size={13} className="text-amber-400 flex-shrink-0" /></span>}
+              {!vacancyArtist && post.author.isVerified && <span title="Верифицирован"><BadgeCheck size={13} className="text-sky-400 flex-shrink-0" /></span>}
+              {!vacancyArtist && post.author.isBlocked && <span title="Заблокирован"><Ban size={13} className="text-red-500 flex-shrink-0" /></span>}
               {showTypeBadge && (
                 <span className={`flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${typeMeta.badge}`}>
                   <TypeIcon size={10} />
@@ -327,7 +374,11 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                 </span>
               )}
             </div>
-            {post.channel ? (
+            {vacancyArtist ? (
+              <Link to={`/profile/${post.author.id}`} className="text-xs text-slate-500 hover:text-primary-400 transition-colors truncate block">
+                👤 {post.author.firstName} {post.author.lastName}
+              </Link>
+            ) : post.channel ? (
               <p className="text-xs text-slate-500 truncate">📢 {post.channel.name}</p>
             ) : post.artist ? (
               <p className="text-xs text-slate-500 truncate">🎵 {post.artist.name}</p>
@@ -400,7 +451,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                     >
                       <div className="flex items-center gap-2 mb-2">
                         {original.author && <Avatar user={original.author} size={7} />}
-                        <span className="text-sm font-semibold text-white truncate">
+                        <span className="text-sm font-semibold text-white truncate min-w-0">
                           {original.author ? `${original.author.firstName} ${original.author.lastName}` : 'Автор'}
                         </span>
                         <span className="text-xs text-slate-500 flex-shrink-0">{original.createdAt ? timeAgo(original.createdAt) : ''}</span>
@@ -441,8 +492,8 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                           className="w-full relative overflow-hidden bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/50 rounded-xl px-3 py-2 text-left transition-all disabled:cursor-default disabled:opacity-80">
                           <div className="absolute inset-0 bg-cyan-500/15" style={{ width: `${pct}%` }} />
                           <div className="relative flex items-center justify-between gap-3">
-                            <span className="text-sm text-white font-medium flex items-center gap-2">
-                              {isMyVote && <Check size={12} className="text-cyan-400" />}
+                            <span className="text-sm text-white font-medium flex items-center gap-2 min-w-0 break-words [overflow-wrap:anywhere]">
+                              {isMyVote && <Check size={12} className="text-cyan-400 flex-shrink-0" />}
                               {opt.text}
                             </span>
                             <span className="text-xs text-slate-400 flex-shrink-0">{pct}% · {opt.votes}</span>
@@ -461,6 +512,8 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
               {!isRepost && svc && (() => {
                 const serviceTitle = post.title || svc.name || svc.service?.name || 'Услуга';
                 const sectionName = svc.service?.section?.name || '';
+                const professionName = svc.profession?.name || '';
+                const city = svc.user?.city || '';
                 const price = (svc.priceFrom != null || svc.priceTo != null)
                   ? [
                       svc.priceFrom != null ? `от ${svc.priceFrom} ₽` : null,
@@ -474,11 +527,21 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                       <img src={`${API_URL}${preview}`} alt={serviceTitle} className="w-full max-h-72 object-cover" loading="lazy" />
                     )}
                     <div className="p-3.5 space-y-2.5">
-                      <p className="text-base font-bold text-white leading-snug">{serviceTitle}</p>
+                      <p className="text-base font-bold text-white leading-snug min-w-0 break-words [overflow-wrap:anywhere]">{serviceTitle}</p>
                       <div className="flex flex-wrap gap-x-5 gap-y-1.5">
                         {sectionName && (
                           <span className="text-xs text-slate-400">
                             Раздел: <span className="text-slate-200">{sectionName}</span>
+                          </span>
+                        )}
+                        {professionName && (
+                          <span className="text-xs text-slate-400">
+                            Профессия: <span className="text-slate-200">{professionName}</span>
+                          </span>
+                        )}
+                        {city && (
+                          <span className="text-xs text-slate-400">
+                            Город: <span className="text-slate-200">{city}</span>
                           </span>
                         )}
                         <span className="text-xs text-slate-400">
@@ -496,14 +559,16 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                         >
                           <ExternalLink size={15} /> Детали услуги
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => ensureAuth(openServiceChat)}
-                          disabled={contacting}
-                          className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-colors"
-                        >
-                          {contacting ? <Spinner size={15} className="animate-spin" /> : <MessageSquare size={15} />} Написать
-                        </button>
+                        {!isOwner && svc.user?.id !== currentUserId && (
+                          <button
+                            type="button"
+                            onClick={() => ensureAuth(openServiceChat)}
+                            disabled={contacting}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-colors"
+                          >
+                            {contacting ? <Spinner size={15} className="animate-spin" /> : <MessageSquare size={15} />} Написать
+                          </button>
+                        )}
                         {DEALS_ENABLED && (
                           <button
                             type="button"
@@ -518,13 +583,143 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                   </div>
                 );
               })()}
-              {!isRepost && !svc && post.content && (
+              {/* Structured «Заказ» card — customer-posted order. */}
+              {!isRepost && order && (() => {
+                const orderTitle = post.title || order.title || 'Заказ';
+                const sectionName = order.service?.section?.name || '';
+                const budget = (order.budgetFrom != null || order.budgetTo != null)
+                  ? [
+                      order.budgetFrom != null ? `от ${order.budgetFrom} ₽` : null,
+                      order.budgetTo != null ? `до ${order.budgetTo} ₽` : null,
+                    ].filter(Boolean).join(' ')
+                  : 'По договорённости';
+                const deadline = order.deadline
+                  ? new Date(order.deadline).toLocaleDateString('ru-RU')
+                  : 'Срок не ограничен';
+                return (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden">
+                    <div className="p-3.5 space-y-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-base font-bold text-white leading-snug min-w-0 break-words [overflow-wrap:anywhere]">{orderTitle}</p>
+                        {order.status === 'archived' && (
+                          <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-700/70 text-slate-300 border border-slate-600/60">
+                            В архиве
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+                        {sectionName && (
+                          <span className="text-xs text-slate-400">
+                            Раздел: <span className="text-slate-200">{sectionName}</span>
+                          </span>
+                        )}
+                        <span className="text-xs text-slate-400">
+                          Бюджет: <span className="text-rose-300 font-semibold">{budget}</span>
+                        </span>
+                        <span className="text-xs text-slate-400">
+                          Срок: <span className="text-slate-200">{deadline}</span>
+                        </span>
+                      </div>
+                      {post.content && (
+                        <PostContent
+                          content={post.content}
+                          className={`text-sm text-slate-200 ${post.content.length > 280 && !expanded ? 'line-clamp-6' : ''}`}
+                        />
+                      )}
+                      {post.content && post.content.length > 280 && (
+                        <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>
+                      )}
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/orders/${order.id}`)}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors"
+                        >
+                          <ExternalLink size={15} /> Посмотреть детали
+                        </button>
+                        {!isOwner && (
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/messages/${post.author.id}`)}
+                            className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors"
+                          >
+                            <MessageSquare size={15} /> Написать
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+              {/* Structured «Вакансия» card — artist-posted vacancy. */}
+              {!isRepost && vacancy && (() => {
+                const vacancyTitle = post.title || vacancy.title || 'Вакансия';
+                const professionName = vacancy.profession?.name || '';
+                const formatLabel = vacancy.workFormat ? workFormatLabel(vacancy.workFormat) : '';
+                const paymentLbl = vacancy.paymentType ? paymentLabel(vacancy.paymentType) : '';
+                const geoLabel = vacancy.geography ? geographyLabel(vacancy.geography) : '';
+                return (
+                  <div className="rounded-2xl border border-slate-800 bg-slate-900/40 overflow-hidden">
+                    <div className="p-3.5 space-y-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-base font-bold text-white leading-snug min-w-0 break-words [overflow-wrap:anywhere]">{vacancyTitle}</p>
+                        {vacancy.status === 'archived' && (
+                          <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-700/70 text-slate-300 border border-slate-600/60">
+                            В архиве
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+                        {professionName && (
+                          <span className="text-xs text-slate-400">
+                            Профессия: <span className="text-slate-200">{professionName}</span>
+                          </span>
+                        )}
+                        {formatLabel && (
+                          <span className="text-xs text-slate-400">
+                            Формат: <span className="text-slate-200">{formatLabel}</span>
+                          </span>
+                        )}
+                        {paymentLbl && (
+                          <span className="text-xs text-slate-400">
+                            Оплата: <span className="text-amber-300 font-semibold">{paymentLbl}</span>
+                          </span>
+                        )}
+                        {geoLabel && (
+                          <span className="text-xs text-slate-400">
+                            Гео: <span className="text-slate-200">{geoLabel}</span>
+                          </span>
+                        )}
+                      </div>
+                      {post.content && (
+                        <PostContent
+                          content={post.content}
+                          className={`text-sm text-slate-200 ${post.content.length > 280 && !expanded ? 'line-clamp-6' : ''}`}
+                        />
+                      )}
+                      {post.content && post.content.length > 280 && (
+                        <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>
+                      )}
+                      <div className="flex flex-wrap gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/vacancies/${vacancy.id}`)}
+                          className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors"
+                        >
+                          <ExternalLink size={15} /> Посмотреть детали
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+              {!isRepost && !svc && !order && !vacancy && post.content && (
                 <PostContent
                   content={post.content}
                   className={`text-sm text-slate-200 ${isLongContent && !expanded ? 'line-clamp-6' : ''}`}
                 />
               )}
-              {!isRepost && !svc && isLongContent && <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>}
+              {!isRepost && !svc && !order && !vacancy && isLongContent && <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 mt-1 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>}
               {!isRepost && Array.isArray(post.links) && post.links.length > 0 && (
                 <div className="mt-2 flex flex-col gap-1">
                   {post.links.map((url: string, i: number) => {
@@ -567,38 +762,80 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
         <button onClick={() => requireAuth(() => { if (!isOwner) likeMut.mutate(); })} disabled={likeMut.isPending || (!!currentUserId && isOwner)} title={currentUserId && isOwner ? 'Нельзя лайкать свой пост' : undefined}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${currentUserId && isOwner ? 'cursor-default text-slate-600' : post.isLiked ? 'text-red-400 hover:bg-red-400/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}>
           <Heart size={15} className={post.isLiked ? 'fill-red-400 text-red-400' : ''} />
+          {!!post._count?.likes && <span className="text-xs font-medium">{post._count.likes}</span>}
         </button>
-        <button onClick={() => requireAuth(() => { setShowComments(true); setTimeout(() => commentInputRef.current?.focus(), 50); })} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all">
+        <button onClick={() => requireAuth(() => setShowComments(true))} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all">
           <MessageCircle size={15} />
+          {!!post._count?.comments && <span className="text-xs font-medium">{post._count.comments}</span>}
         </button>
         <button onClick={() => requireAuth(() => setShowRepost(true))} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all" title="Поделиться в ленте">
           <Repeat2 size={15} />
+          {!!post._count?.reposts && <span className="text-xs font-medium">{post._count.reposts}</span>}
         </button>
         <ShareButton url={`/post/${post.id}`} title={`Пост от ${post.author.firstName} ${post.author.lastName}`} text={post.content?.slice(0, 100)} iconSize={15} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all" />
         <button onClick={() => requireAuth(() => saveMut.mutate())} disabled={saveMut.isPending}
           className={`ml-auto flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-all ${post.isSaved ? 'text-amber-400 hover:bg-amber-400/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
           title={post.isSaved ? 'Убрать из сохранённого' : 'Сохранить'}>
           <Star size={15} fill={post.isSaved ? 'currentColor' : 'none'} />
+          {!!post._count?.savedBy && <span className="text-xs font-medium">{post._count.savedBy}</span>}
         </button>
       </div>
 
-      {showComments && (
-        <div className="mt-3 ml-[52px] space-y-3">
-          {post.comments && post.comments.length > 0 && (
-            <div className="space-y-2">
-              {post.comments.map((comment: any) => (
-                <CommentItem key={comment.id} comment={comment} postId={post.id} postAuthorId={post.author.id} currentUserId={currentUserId} feedQueryKey={feedQueryKey} />
-              ))}
+      {showComments && createPortal(
+        <div className="fixed inset-0 z-[65] flex items-end sm:items-center justify-center" onClick={() => { setShowComments(false); setShowEmoji(false); }}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-3xl shadow-2xl flex flex-col max-h-[85dvh]" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="relative flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
+              <div className="w-10 h-1 bg-slate-700 rounded-full absolute left-1/2 -translate-x-1/2 top-1.5 sm:hidden" />
+              <h3 className="text-base font-bold text-white">Комментарии{!!post._count?.comments && ` · ${post._count.comments}`}</h3>
+              <button onClick={() => setShowComments(false)} className="p-2 -mr-2 text-slate-400 hover:text-white rounded-lg transition-colors"><X size={18} /></button>
             </div>
-          )}
-          <form onSubmit={e => { e.preventDefault(); if (commentText.trim()) requireAuth(() => commentMut.mutate(commentText.trim())); }} className="flex gap-2 items-center">
-            <input ref={commentInputRef} type="text" value={commentText} onChange={e => setCommentText(e.target.value)} placeholder="Написать комментарий..."
-              className="flex-1 bg-slate-800/60 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors" />
-            <button type="submit" disabled={!commentText.trim() || commentMut.isPending} className="p-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl transition-colors flex-shrink-0">
-              {commentMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-            </button>
-          </form>
-        </div>
+            {/* Список: самый верхний комментарий сверху, скролл до последнего */}
+            <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+              {post.comments && post.comments.length > 0 ? (
+                post.comments.map((comment: any) => (
+                  <div key={comment.id} id={`comment-${comment.id}`}>
+                    <CommentItem comment={comment} postId={post.id} postAuthorId={post.author.id} currentUserId={currentUserId} feedQueryKey={feedQueryKey} />
+                  </div>
+                ))
+              ) : (
+                <p className="text-center text-sm text-slate-500 py-10">Пока нет комментариев.<br />Будьте первым!</p>
+              )}
+            </div>
+            {/* Форма ввода — закреплена внизу */}
+            <div className="flex-shrink-0 border-t border-slate-800 px-3 pt-2.5" style={{ paddingBottom: 'max(0.625rem, env(safe-area-inset-bottom, 0px))' }}>
+              {commentImage && (
+                <div className="relative inline-block mb-2">
+                  <img src={commentImage.url} alt="" className="max-h-32 rounded-lg border border-slate-700" />
+                  <button type="button" onClick={() => setCommentImage(null)} className="absolute top-1 right-1 p-1 bg-slate-900/80 hover:bg-slate-900 rounded-full text-white"><X size={12} /></button>
+                </div>
+              )}
+              <div className="flex items-end gap-1.5">
+                <div className="relative flex-shrink-0">
+                  <button type="button" onClick={() => setShowEmoji(v => !v)} className="p-2 text-slate-400 hover:text-primary-400 rounded-lg transition-colors" title="Эмодзи"><Smile size={19} /></button>
+                  {showEmoji && <EmojiPicker position="up" onSelect={(em) => setCommentText(t => t + em)} onClose={() => setShowEmoji(false)} />}
+                </div>
+                <input ref={commentImageRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadCommentFile(f); e.target.value = ''; }} />
+                <button type="button" onClick={() => commentImageRef.current?.click()} disabled={commentUploading || !!commentImage} className="p-2 text-slate-400 hover:text-primary-400 rounded-lg transition-colors disabled:opacity-40 flex-shrink-0" title="Картинка (до 5 МБ)">
+                  {commentUploading ? <Loader2 size={19} className="animate-spin" /> : <Image size={19} />}
+                </button>
+                <textarea
+                  ref={commentInputRef}
+                  value={commentText}
+                  onChange={e => { setCommentText(e.target.value); const el = e.target; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 120)}px`; }}
+                  placeholder="Написать комментарий..."
+                  rows={1}
+                  className="flex-1 min-w-0 resize-none max-h-[120px] bg-slate-800/60 border border-slate-700 rounded-2xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
+                />
+                <button type="button" onClick={() => requireAuth(() => { if (commentText.trim() || commentImage) commentMut.mutate(); })} disabled={(!commentText.trim() && !commentImage) || commentMut.isPending || commentUploading} className="p-2.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-full transition-colors flex-shrink-0">
+                  {commentMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       <ConfirmDialog
@@ -614,6 +851,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
             className="relative w-full max-w-lg bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-5 pb-8 shadow-2xl"
+            style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}
             onClick={e => e.stopPropagation()}
           >
             <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
@@ -666,7 +904,8 @@ const POST_TYPE_META: Record<string, { label: string; icon: any; accent: string;
   blog:       { label: 'Блог',              icon: FileText,    accent: '',                                           badge: '' },
   question:   { label: 'Вопрос',            icon: HelpCircle,  accent: 'border-l-2 border-blue-500/60',              badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
   service:    { label: 'Услуга',            icon: Wrench,      accent: 'border-l-2 border-primary-500/60',           badge: 'bg-primary-500/10 text-primary-400 border-primary-500/20' },
-  vacancy:    { label: 'Вакансия',          icon: Briefcase,   accent: 'border-l-2 border-amber-500/60',             badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  order:      { label: 'Заказ',             icon: Briefcase,   accent: 'border-l-2 border-rose-500/60',              badge: 'bg-rose-500/10 text-rose-400 border-rose-500/20' },
+  vacancy:    { label: 'Вакансия',          icon: Megaphone,   accent: 'border-l-2 border-amber-500/60',             badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
   event:      { label: 'Мероприятие',       icon: Calendar,    accent: 'border-l-2 border-purple-500/60',            badge: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
   task:       { label: 'Задача',            icon: CheckSquare, accent: 'border-l-2 border-emerald-500/60',           badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
   offer:      { label: 'Предложение',       icon: Lightbulb,   accent: 'border-l-2 border-orange-500/60',            badge: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
@@ -680,11 +919,13 @@ const POST_TYPE_OPTIONS = [
   { type: 'blog',       label: 'Блог',              icon: FileText,    desc: 'Свободная форма',     inDev: false },
   { type: 'question',   label: 'Вопрос',            icon: HelpCircle,  desc: 'Вопрос и обсуждение', inDev: false },
   { type: 'service',    label: 'Услуга',             icon: Wrench,      desc: 'Свободная форма',     inDev: false },
+  { type: 'order',      label: 'Заказ',              icon: Briefcase,   desc: 'Заявка на услугу',    inDev: false },
+  { type: 'vacancy',    label: 'Вакансия',           icon: Megaphone,   desc: 'Поиск в команду',     inDev: false },
   { type: 'employment', label: 'Апдейт занятости',  icon: Zap,         desc: 'Обновить статус',     inDev: false },
   { type: 'poll',       label: 'Опрос',              icon: BarChart3,   desc: 'Голосование',         inDev: false },
 ];
 
-function PostTypePicker({ onClose }: { onClose: () => void }) {
+function PostTypePicker({ onClose, onPickOrder, onPickVacancy }: { onClose: () => void; onPickOrder?: () => void; onPickVacancy?: () => void }) {
   const navigate = useNavigate();
 
   return createPortal(
@@ -692,6 +933,7 @@ function PostTypePicker({ onClose }: { onClose: () => void }) {
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
         className="relative w-full max-w-lg bg-slate-900 rounded-t-3xl border-t border-slate-800 p-2 pb-8 shadow-2xl"
+        style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}
         onClick={e => e.stopPropagation()}
       >
         <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 mt-2" />
@@ -701,7 +943,12 @@ function PostTypePicker({ onClose }: { onClose: () => void }) {
             <button
               key={type}
               disabled={inDev}
-              onClick={() => { onClose(); navigate(`/create-post?type=${type}`); }}
+              onClick={() => {
+                onClose();
+                if (type === 'order') onPickOrder?.();
+                else if (type === 'vacancy') onPickVacancy?.();
+                else navigate(`/create-post?type=${type}`);
+              }}
               className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl transition-colors text-left ${inDev ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-800'}`}
             >
               <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${inDev ? 'bg-slate-800' : 'bg-primary-600/20'}`}>
@@ -722,14 +969,17 @@ function PostTypePicker({ onClose }: { onClose: () => void }) {
 
 // ─── Filter chips ──────────────────────────────────────────────────────────────
 
+// Быстрые чипсы — самые важные для функциональной работы типы (имена как в «Добавить пост»).
+// Полный список типов — в общих фильтрах (FlowSettingsPage).
 const TYPE_CHIPS = [
-  { id: 'all',        label: 'Все' },
-  { id: 'blog',       label: 'Свободный блог' },
-  { id: 'question',   label: 'Вопрос' },
-  { id: 'poll',       label: 'Опрос' },
-  { id: 'service',    label: 'Апдейт услуги' },
-  { id: 'employment', label: 'Апдейт занятости' },
+  { id: 'blog',    label: 'Блог' },
+  { id: 'service', label: 'Услуга' },
+  { id: 'order',   label: 'Заказ' },
+  { id: 'vacancy', label: 'Вакансия' },
 ];
+
+const toggleInArray = (arr: string[], id: string) =>
+  arr.includes(id) ? arr.filter(x => x !== id) : [...arr, id];
 
 function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
   return (
@@ -793,7 +1043,7 @@ function SortDropdown({ value, onChange }: { value: string; onChange: (v: string
 
 function countActiveFilters(f: FlowFilters): number {
   return [
-    f.postType !== 'all',
+    f.postType.length > 0,
     f.authorKind !== 'all',
     f.period !== 'all',
     f.cities.length > 0,
@@ -833,8 +1083,11 @@ export default function FeedPage() {
   const [searchParams] = useSearchParams();
   const targetPostId = searchParams.get('post');
   const [showPostTypePicker, setShowPostTypePicker] = useState(false);
+  const [showOrderForm, setShowOrderForm] = useState(false);
+  const [showVacancyForm, setShowVacancyForm] = useState(false);
   const [filters, setFilters] = useState<FlowFilters>(loadFilters);
   const [showSavedOnly, setShowSavedOnly] = useState(false);
+  useScrollLock(showPostTypePicker || showOrderForm || showVacancyForm);
 
   // Persist filters between sessions (localStorage).
   const updateFilters = useCallback((patch: Partial<FlowFilters>) => {
@@ -852,7 +1105,7 @@ export default function FeedPage() {
     return () => window.removeEventListener('focus', onFocus);
   }, []);
 
-  const typeFilter = filters.postType !== 'all' ? filters.postType : undefined;
+  const typeFilter = filters.postType.length > 0 ? filters.postType.join(',') : undefined;
   const authorKindFilter = filters.authorKind !== 'all' ? filters.authorKind : undefined;
   const periodFilter = filters.period !== 'all' ? filters.period : undefined;
   const cityFilter = filters.cities.length > 0 ? filters.cities.join(',') : undefined;
@@ -903,16 +1156,31 @@ export default function FeedPage() {
     return () => io.disconnect();
   }, [showSavedOnly, feed.hasNextPage, feed.isFetchingNextPage, feed.fetchNextPage]);
 
+  const scrolledPostRef = useRef<string | null>(null);
   useEffect(() => {
     if (!targetPostId || posts.length === 0) return;
-    const el = document.getElementById(`post-${targetPostId}`);
-    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [targetPostId, posts]);
+    if (scrolledPostRef.current === targetPostId) return;
+    if (!document.getElementById(`post-${targetPostId}`)) {
+      // Not in a loaded page yet (deep-linked to an older post) — keep pulling pages
+      // until it appears or the feed runs out, then this effect re-runs and centres it.
+      if (feed.hasNextPage && !feed.isFetchingNextPage) feed.fetchNextPage();
+      return;
+    }
+    scrolledPostRef.current = targetPostId;
+    // Centre the post in the viewport. Re-centre a few times: lazy-loaded images above
+    // it shift the layout after the first scroll, otherwise leaving it near the bottom.
+    const center = () => document.getElementById(`post-${targetPostId}`)
+      ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    center();
+    const t1 = setTimeout(center, 350);
+    const t2 = setTimeout(center, 800);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [targetPostId, posts, feed.hasNextPage, feed.isFetchingNextPage, feed.fetchNextPage]);
 
   const activeFilterCount = countActiveFilters(filters);
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950">
       <div className="max-w-2xl mx-auto">
 
         {/* Header */}
@@ -931,9 +1199,15 @@ export default function FeedPage() {
                 <Star size={16} fill={showSavedOnly ? 'currentColor' : 'none'} />
               </button>
               {!showSavedOnly && <SortDropdown value={filters.sort} onChange={(v) => updateFilters({ sort: v })} />}
+            </div>
+          </div>
+
+          {/* Кнопка общих фильтров + быстрые чипсы — на одном уровне; скрыто в «Сохранённых» */}
+          {!showSavedOnly && (
+            <div className="pb-2 px-4 flex items-center gap-2">
               <button
                 onClick={() => navigate('/flow-settings')}
-                className="relative flex items-center px-2.5 py-1.5 rounded-xl text-sm text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                className="relative flex items-center flex-shrink-0 px-2.5 py-1.5 rounded-xl text-sm text-slate-400 hover:text-white bg-slate-800/60 hover:bg-slate-800 transition-colors"
                 title="Фильтры"
               >
                 <SlidersHorizontal size={16} />
@@ -943,15 +1217,12 @@ export default function FeedPage() {
                   </span>
                 )}
               </button>
-            </div>
-          </div>
-
-          {/* Quick post-type chips — hidden in saved view */}
-          {!showSavedOnly && (
-            <div className="pb-2 px-4 flex gap-2 overflow-x-auto scrollbar-none">
-              {TYPE_CHIPS.map(c => (
-                <FilterChip key={c.id} label={c.label} active={filters.postType === c.id} onClick={() => updateFilters({ postType: c.id })} />
-              ))}
+              <div className="flex gap-2 overflow-x-auto scrollbar-none min-w-0">
+                <FilterChip label="Все" active={filters.postType.length === 0} onClick={() => updateFilters({ postType: [] })} />
+                {TYPE_CHIPS.map(c => (
+                  <FilterChip key={c.id} label={c.label} active={filters.postType.includes(c.id)} onClick={() => updateFilters({ postType: toggleInArray(filters.postType, c.id) })} />
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -1012,7 +1283,45 @@ export default function FeedPage() {
           <Plus size={26} />
         </button>
 
-        {showPostTypePicker && <PostTypePicker onClose={() => setShowPostTypePicker(false)} />}
+        {showPostTypePicker && (
+          <PostTypePicker
+            onClose={() => setShowPostTypePicker(false)}
+            onPickOrder={() => setShowOrderForm(true)}
+            onPickVacancy={() => setShowVacancyForm(true)}
+          />
+        )}
+
+        {/* Order create form — opened modally straight from the Поток composer. */}
+        {showOrderForm && createPortal(
+          <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setShowOrderForm(false)}>
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div
+              className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl"
+              style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+              <OrderForm onClose={() => setShowOrderForm(false)} />
+            </div>
+          </div>,
+          document.body
+        )}
+
+        {/* Vacancy create form — opened modally from the Поток composer (no artistId — form asks). */}
+        {showVacancyForm && createPortal(
+          <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setShowVacancyForm(false)}>
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div
+              className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl"
+              style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+              <VacancyForm onClose={() => setShowVacancyForm(false)} />
+            </div>
+          </div>,
+          document.body
+        )}
       </div>
     </div>
   );

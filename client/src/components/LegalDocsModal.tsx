@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { X, FileText, ChevronLeft, Loader2 } from 'lucide-react';
+import { useScrollLock } from "../lib/scrollLock";
 
 // Legal documents are pre-converted to HTML in /public/legal (see manifest.json).
 const DOCS: { slug: string; title: string }[] = [
@@ -15,6 +16,7 @@ const DOCS: { slug: string; title: string }[] = [
 ];
 
 export default function LegalDocsModal({ onClose }: { onClose: () => void }) {
+  useScrollLock(true);
   const [active, setActive] = useState<{ slug: string; title: string } | null>(null);
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
@@ -39,7 +41,7 @@ export default function LegalDocsModal({ onClose }: { onClose: () => void }) {
   return createPortal(
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full sm:max-w-2xl max-h-[92vh] sm:max-h-[88vh] flex flex-col bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative w-full sm:max-w-2xl max-h-[92dvh] sm:max-h-[88dvh] flex flex-col bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-800 flex-shrink-0">
           {active ? (

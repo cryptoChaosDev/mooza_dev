@@ -171,6 +171,76 @@ export const uploadPostMedia = multer({
   limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
 });
 
+// ── Order reference upload (images, gifs, audio) ──────────────────────────────
+
+const orderMediaDir = path.join(process.cwd(), 'uploads', 'orders');
+if (!fs.existsSync(orderMediaDir)) {
+  fs.mkdirSync(orderMediaDir, { recursive: true });
+}
+
+const orderMediaStorage = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, orderMediaDir); },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `order-${uniqueSuffix}${ext}`);
+  },
+});
+
+const orderMediaFilter = (req: any, file: any, cb: any) => {
+  const allowedTypes = [
+    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+    'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav',
+    'audio/ogg', 'audio/flac', 'audio/mp4', 'audio/x-m4a', 'audio/aac',
+  ];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Unsupported file type'), false);
+  }
+};
+
+export const uploadOrderMedia = multer({
+  storage: orderMediaStorage,
+  fileFilter: orderMediaFilter,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB per file; set total enforced in route
+});
+
+// ── Vacancy reference / portfolio upload (images, gifs, audio) ────────────────
+
+const vacancyMediaDir = path.join(process.cwd(), 'uploads', 'vacancies');
+if (!fs.existsSync(vacancyMediaDir)) {
+  fs.mkdirSync(vacancyMediaDir, { recursive: true });
+}
+
+const vacancyMediaStorage = multer.diskStorage({
+  destination: (req, file, cb) => { cb(null, vacancyMediaDir); },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    const ext = path.extname(file.originalname);
+    cb(null, `vacancy-${uniqueSuffix}${ext}`);
+  },
+});
+
+const vacancyMediaFilter = (req: any, file: any, cb: any) => {
+  const allowedTypes = [
+    'image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp',
+    'audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/x-wav',
+    'audio/ogg', 'audio/flac', 'audio/mp4', 'audio/x-m4a', 'audio/aac',
+  ];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error('Unsupported file type'), false);
+  }
+};
+
+export const uploadVacancyMedia = multer({
+  storage: vacancyMediaStorage,
+  fileFilter: vacancyMediaFilter,
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB per file; total enforced in route
+});
+
 // ── Chat attachment upload ─────────────────────────────────────────────────────
 
 const chatDir = path.join(process.cwd(), 'uploads', 'chat');

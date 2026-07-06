@@ -10,6 +10,7 @@ import { useSearchStore,
   useSkillLevels,
   useAvailabilities,
   useSearchResults, } from '../stores/searchStore';
+import ProfessionNotFound from './ProfessionNotFound';
 
 // Level labels in Russian
 const LEVEL_LABELS = {
@@ -263,7 +264,9 @@ export default function MultiLevelSearch({ compact = false, onSearch }: MultiLev
       <div className="space-y-3">
         {filterComponents.map((filter) => {
           const isExpanded = expandedLevels.has(filter.key);
-          const isDisabled = filter.dependsOn && !filter.dependsOn;
+          // disabled, когда уровень зависит от апстрима (dependsOn задан в конфиге),
+          // а значение апстрима ещё не выбрано (было `filter.dependsOn && !filter.dependsOn` — всегда false)
+          const isDisabled = 'dependsOn' in filter && !filter.dependsOn;
           const selectedInfo = getSelectedValue(filter.value, filter.items);
 
           if (compact && !filter.value && !isExpanded) {
@@ -280,9 +283,9 @@ export default function MultiLevelSearch({ compact = false, onSearch }: MultiLev
                   isDisabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-slate-600/50'
                 } ${filter.value ? 'border-primary-500/50' : ''}`}
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-slate-400 text-sm">{filter.label}:</span>
-                  <span className="text-white font-medium">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-slate-400 text-sm shrink-0">{filter.label}:</span>
+                  <span className="text-white font-medium min-w-0 truncate">
                     {filter.loading ? (
                       <span className="flex items-center gap-2">
                         <Loader2 size={14} className="animate-spin" />
@@ -293,14 +296,14 @@ export default function MultiLevelSearch({ compact = false, onSearch }: MultiLev
                     )}
                   </span>
                   {selectedInfo.count > 0 && (
-                    <span className="text-xs text-slate-500 bg-slate-800/50 px-2 py-0.5 rounded">
+                    <span className="text-xs text-slate-500 bg-slate-800/50 px-2 py-0.5 rounded shrink-0">
                       {selectedInfo.count}
                     </span>
                   )}
                 </div>
                 <ChevronDown
                   size={18}
-                  className={`text-slate-400 transition-transform ${
+                  className={`text-slate-400 transition-transform shrink-0 ${
                     isExpanded ? 'rotate-180' : ''
                   }`}
                 />
@@ -343,14 +346,19 @@ export default function MultiLevelSearch({ compact = false, onSearch }: MultiLev
                           : 'text-slate-300'
                       }`}
                     >
-                      <span>{item.name}</span>
+                      <span className="min-w-0 truncate">{item.name}</span>
                       {item.userCount !== undefined && (
-                        <span className="text-xs text-slate-500 bg-slate-800/50 px-2 py-0.5 rounded">
+                        <span className="text-xs text-slate-500 bg-slate-800/50 px-2 py-0.5 rounded shrink-0">
                           {item.userCount}
                         </span>
                       )}
                     </button>
                   ))}
+                  {filter.key === 'profession' && filter.items.length === 0 && !filter.loading && fieldId && (
+                    <div className="border-t border-slate-600/50 px-2 py-1">
+                      <ProfessionNotFound compact />
+                    </div>
+                  )}
                 </div>
               )}
             </div>

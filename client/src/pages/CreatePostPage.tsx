@@ -280,14 +280,19 @@ export default function CreatePostPage() {
           >
             {uploading ? <Loader2 size={18} className="animate-spin" /> : <Image size={18} />}
           </button>
-          <button
-            type="button"
-            onClick={() => setShowEmoji(e => !e)}
-            title="Эмодзи"
-            className={`p-2 rounded-xl transition-colors flex-shrink-0 ${showEmoji ? 'text-primary-400 bg-slate-800' : 'text-slate-400 hover:text-primary-400 hover:bg-slate-800'}`}
-          >
-            <Smile size={18} />
-          </button>
+          <div className="relative flex-shrink-0">
+            <button
+              type="button"
+              onClick={() => setShowEmoji(e => !e)}
+              title="Эмодзи"
+              className={`p-2 rounded-xl transition-colors ${showEmoji ? 'text-primary-400 bg-slate-800' : 'text-slate-400 hover:text-primary-400 hover:bg-slate-800'}`}
+            >
+              <Smile size={18} />
+            </button>
+            {showEmoji && (
+              <EmojiPicker position="down" onSelect={emoji => insertEmoji(emoji)} onClose={() => setShowEmoji(false)} />
+            )}
+          </div>
 
           <button
             onClick={handlePublish}
@@ -299,8 +304,9 @@ export default function CreatePostPage() {
           </button>
         </div>
 
-        {/* Editor */}
-        <div className="flex-1 px-4 pt-4">
+        {/* Editor. pb-32: clears the fixed BottomNav so the last «Дополнительно»
+            field (Ссылки) is reachable and can scroll above the keyboard. */}
+        <div className="flex-1 px-4 pt-4 pb-32">
           {currentUser && (
             <div className="flex gap-3 mb-3">
               <AvatarComponent
@@ -537,7 +543,7 @@ export default function CreatePostPage() {
                       placeholder={`Вариант ${idx + 1}`}
                       value={opt}
                       onChange={e => setPollOptions(prev => prev.map((x, i) => i === idx ? e.target.value : x))}
-                      className="flex-1 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      className="flex-1 min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                     />
                     {pollOptions.length > 2 && (
                       <button type="button" onClick={() => setPollOptions(prev => prev.filter((_, i) => i !== idx))}
@@ -678,7 +684,7 @@ export default function CreatePostPage() {
                         value={genreSearch}
                         onChange={e => setGenreSearch(e.target.value)}
                         placeholder="Поиск жанра..."
-                        className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+                        className="flex-1 min-w-0 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
                       />
                     </div>
                     {genreSearch.trim() && filteredGenres.length > 0 && (
@@ -726,15 +732,6 @@ export default function CreatePostPage() {
 
         </div>
 
-        {/* Emoji picker (portal, opened from header) */}
-        {showEmoji && (
-          <div className="relative">
-            <EmojiPicker
-              onSelect={emoji => insertEmoji(emoji)}
-              onClose={() => setShowEmoji(false)}
-            />
-          </div>
-        )}
       </div>
 
       {showServicePicker && (

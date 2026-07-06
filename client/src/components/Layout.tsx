@@ -18,7 +18,10 @@ export default function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const { user } = useAuthStore();
 
-  const notifPending = 'Notification' in window && Notification.permission === 'default' && !notifDismissed;
+  // The open chat thread is a fixed-overlay whose top is pinned to the plain header
+  // height — the notification banner would grow the header and overlap the chat.
+  const isChatThread = /^\/(messages|chat)\/[^/]+/.test(location.pathname);
+  const notifPending = 'Notification' in window && Notification.permission === 'default' && !notifDismissed && !isChatThread;
 
   function requestNotifications() {
     Notification.requestPermission().then(() => setNotifDismissed(true));
@@ -46,15 +49,15 @@ export default function Layout({ children }: LayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950">
       {/* Mobile Header (sticky — stays in document flow so content flows naturally below it) */}
       <div className="lg:hidden sticky top-0 z-40 bg-slate-950/95 backdrop-blur-xl border-b border-slate-800/50" style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}>
         {/* Notification permission banner */}
         {notifPending && (
           <div className="bg-primary-600/90 px-4 py-2 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm text-white">
-              <Bell size={16} />
-              <span>Разрешите уведомления, чтобы получать сообщения и события</span>
+            <div className="flex items-center gap-2 text-sm text-white min-w-0 flex-1">
+              <Bell size={16} className="flex-shrink-0" />
+              <span className="min-w-0">Разрешите уведомления, чтобы получать сообщения и события</span>
             </div>
             <div className="flex items-center gap-2 shrink-0">
               <button onClick={requestNotifications} className="text-xs bg-white text-primary-700 font-semibold px-3 py-1 rounded-full hover:bg-primary-50 transition-colors">
@@ -183,7 +186,7 @@ export default function Layout({ children }: LayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="lg:ml-64 min-h-screen">
+      <main className="lg:ml-64 min-h-screen min-h-[100dvh]">
         <div className="max-w-7xl mx-auto">
           {children}
         </div>

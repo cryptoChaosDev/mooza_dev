@@ -248,7 +248,8 @@ export default function RegisterPage() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [nickname, setNickname] = useState('');
-  const [birthDate, setBirthDate] = useState('');
+  const [birthDate, setBirthDate] = useState('');           // ISO YYYY-MM-DD (validation/payload)
+  const [birthDateInput, setBirthDateInput] = useState(''); // masked ДД.ММ.ГГГГ (display)
   const [nicknameChecking, setNicknameChecking] = useState(false);
   const [nicknameTaken, setNicknameTaken] = useState(false);
   const nicknameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -386,8 +387,9 @@ export default function RegisterPage() {
     if (step === 1) {
       if (!firstName.trim()) { setError('Укажите имя'); return false; }
       if (!lastName.trim()) { setError('Укажите фамилию'); return false; }
-      if (!birthDate) { setError('Укажите дату рождения'); return false; }
+      if (!birthDate) { setError(birthDateInput.trim() ? 'Дата рождения — в формате ДД.ММ.ГГГГ' : 'Укажите дату рождения'); return false; }
       const birth = new Date(birthDate);
+      if (isNaN(birth.getTime())) { setError('Некорректная дата рождения'); return false; }
       const age = (Date.now() - birth.getTime()) / (365.25 * 24 * 3600 * 1000);
       if (age < 16) { setError('Для регистрации необходимо быть старше 16 лет'); return false; }
       if (age > 120) { setError('Проверьте дату рождения'); return false; }
@@ -501,7 +503,7 @@ export default function RegisterPage() {
   // ── Logged-in visitor opened an artist invite link → confirm & join ─────────
   if (isAuthed && artistInvite) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center px-6">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center px-6">
         <div className="w-full max-w-sm text-center">
           <div className="text-5xl mb-4">🎤</div>
           <h2 className="text-2xl font-bold text-white mb-2">Приглашение в артиста</h2>
@@ -538,7 +540,7 @@ export default function RegisterPage() {
   // ── Email verification screen ─────────────────────────────────────────────
   if (pendingEmail) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center px-6">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center px-6">
         <div className="w-full max-w-sm">
           <div className="text-center mb-8">
             <div className="text-5xl mb-4">📬</div>
@@ -706,11 +708,20 @@ export default function RegisterPage() {
         </Field>
         <Field label="Дата рождения" required hint="Необходима для подтверждения возраста (от 16 лет)">
           <input
-            type="date"
-            value={birthDate}
-            onChange={e => setBirthDate(e.target.value)}
-            max={new Date(Date.now() - 16 * 365.25 * 24 * 3600 * 1000).toISOString().split('T')[0]}
-            className="w-full px-4 py-3 bg-slate-800 border border-slate-700 rounded-2xl text-white focus:outline-none focus:border-primary-500 [color-scheme:dark]"
+            type="text"
+            inputMode="numeric"
+            placeholder="ДД.ММ.ГГГГ"
+            maxLength={10}
+            value={birthDateInput}
+            onChange={e => {
+              let v = e.target.value.replace(/\D/g, '');
+              if (v.length >= 3) v = v.slice(0, 2) + '.' + v.slice(2);
+              if (v.length >= 6) v = v.slice(0, 5) + '.' + v.slice(5);
+              v = v.slice(0, 10);
+              setBirthDateInput(v);
+              setBirthDate(v.length === 10 ? `${v.slice(6)}-${v.slice(3, 5)}-${v.slice(0, 2)}` : '');
+            }}
+            className="w-full min-w-0 px-4 py-3 bg-slate-800 border border-slate-700 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
           />
         </Field>
       </div>
@@ -729,7 +740,7 @@ export default function RegisterPage() {
               onChange={e => setProfSearch(e.target.value)}
               onFocus={() => profSearch.trim() && setShowProfDropdown(true)}
               placeholder="Начните вводить и выберите из списка"
-              className="flex-1 bg-transparent text-white text-sm placeholder-slate-500 focus:outline-none"
+              className="flex-1 min-w-0 bg-transparent text-white text-sm placeholder-slate-500 focus:outline-none"
               autoFocus
             />
             {profSearch && <button onClick={() => { setProfSearch(''); setShowProfDropdown(false); }} className="text-slate-500 hover:text-white"><X size={14} /></button>}

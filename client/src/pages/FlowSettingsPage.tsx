@@ -6,7 +6,7 @@ import { useAuthStore } from '../stores/authStore';
 import { isProActive, limitsFor } from '../lib/proLimits';
 
 export interface FlowFilters {
-  postType: string;
+  postType: string[];
   authorKind: string;
   sort: string;        // new | popular | discussed
   period: string;
@@ -20,7 +20,7 @@ export interface FlowFilters {
 export const FLOW_FILTERS_KEY = 'mooza_flow_filters';
 
 export const DEFAULT_FILTERS: FlowFilters = {
-  postType: 'all',
+  postType: [],
   authorKind: 'all',
   sort: 'new',
   period: 'all',
@@ -33,7 +33,11 @@ export const DEFAULT_FILTERS: FlowFilters = {
 export function loadFilters(): FlowFilters {
   try {
     const raw = localStorage.getItem(FLOW_FILTERS_KEY);
-    return raw ? { ...DEFAULT_FILTERS, ...JSON.parse(raw) } : DEFAULT_FILTERS;
+    if (!raw) return DEFAULT_FILTERS;
+    const f = { ...DEFAULT_FILTERS, ...JSON.parse(raw) };
+    // миграция: раньше postType был одиночной строкой ('all' | '<type>')
+    if (!Array.isArray(f.postType)) f.postType = f.postType && f.postType !== 'all' ? [f.postType] : [];
+    return f;
   } catch {
     return DEFAULT_FILTERS;
   }
@@ -64,10 +68,15 @@ function Chip({ label, active, onClick }: { label: string; active: boolean; onCl
 }
 
 
+// Типы постов — синхронизированы с меню «Добавить пост» (POST_TYPE_OPTIONS в FeedPage)
 const POST_TYPES = [
-  { id: 'all', label: 'Все' },
-  { id: 'blog', label: 'Блог' },
-  { id: 'service', label: 'Услуга' },
+  { id: 'blog',       label: 'Блог' },
+  { id: 'question',   label: 'Вопрос' },
+  { id: 'service',    label: 'Услуга' },
+  { id: 'order',      label: 'Заказ' },
+  { id: 'vacancy',    label: 'Вакансия' },
+  { id: 'employment', label: 'Апдейт занятости' },
+  { id: 'poll',       label: 'Опрос' },
 ];
 
 const PERIODS = [
@@ -192,7 +201,7 @@ function CityMultiSelect({ selected, onAdd, onRemove }: { selected: string[]; on
             onChange={e => setQuery(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); add(query.trim()); } }}
             placeholder="Начните вводить город..."
-            className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+            className="flex-1 min-w-0 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
           />
           {query && (
             <button type="button" onClick={() => { setQuery(''); setResults([]); setOpen(false); }} className="text-slate-500 hover:text-white transition-colors">
@@ -267,7 +276,12 @@ export default function FlowSettingsPage() {
   const atCap = presets.length >= presetCap;
 
   const applyPreset = (preset: FeedPreset) => {
-    const next = { ...DEFAULT_FILTERS, ...preset.filters };
+    const next = { ...DEFAULT_FILTERS, ...preset.filters } as FlowFilters;
+    // старые пресеты могли хранить postType строкой
+    if (!Array.isArray(next.postType)) {
+      const pt = next.postType as unknown as string;
+      next.postType = pt && pt !== 'all' ? [pt] : [];
+    }
     setFilters(next);
     localStorage.setItem(FLOW_FILTERS_KEY, JSON.stringify(next));
   };
@@ -297,9 +311,27 @@ export default function FlowSettingsPage() {
     }
   };
 
-  const set = (key: 'postType' | 'authorKind' | 'period' | 'employment' | 'artistType' | 'genre', value: string) => {
+  const set = (key: 'authorKind' | 'period' | 'employment' | 'artistType' | 'genre', value: string) => {
     setFilters(prev => {
       const next = { ...prev, [key]: value };
+      localStorage.setItem(FLOW_FILTERS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  // Тип поста — мультиселект (пустой массив = «Все»)
+  const toggleType = (id: string) => {
+    setFilters(prev => {
+      const has = prev.postType.includes(id);
+      const postType = has ? prev.postType.filter(t => t !== id) : [...prev.postType, id];
+      const next = { ...prev, postType };
+      localStorage.setItem(FLOW_FILTERS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+  const clearType = () => {
+    setFilters(prev => {
+      const next = { ...prev, postType: [] };
       localStorage.setItem(FLOW_FILTERS_KEY, JSON.stringify(next));
       return next;
     });
@@ -325,7 +357,7 @@ export default function FlowSettingsPage() {
       <div className="max-w-2xl mx-auto">
 
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-4 flex items-center justify-between">
+        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-4 flex items-center justify-between" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
           <div className="flex items-center gap-3">
             <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors">
               <ArrowLeft size={20} />
@@ -415,8 +447,9 @@ export default function FlowSettingsPage() {
           </div>
 
           <Section title="Тип поста">
+            <Chip label="Все" active={filters.postType.length === 0} onClick={clearType} />
             {POST_TYPES.map(t => (
-              <Chip key={t.id} label={t.label} active={filters.postType === t.id} onClick={() => set('postType', t.id)} />
+              <Chip key={t.id} label={t.label} active={filters.postType.includes(t.id)} onClick={() => toggleType(t.id)} />
             ))}
           </Section>
 
@@ -447,7 +480,7 @@ export default function FlowSettingsPage() {
           </Section>
 
           {/* ── Contextual filters (E4) ── */}
-          {(filters.authorKind === 'resident' || filters.postType === 'employment') && (
+          {(filters.authorKind === 'resident' || filters.postType.includes('employment')) && (
             <Section title="Статус занятости">
               {EMPLOYMENT_STATUSES.map(s => (
                 <Chip key={s.id} label={s.label} active={filters.employment === s.id} onClick={() => set('employment', s.id)} />
@@ -477,7 +510,7 @@ export default function FlowSettingsPage() {
               <p className="text-[11px] text-slate-600">Фильтры «Сфера» и «Уровень автора» — скоро</p>
             </div>
           )}
-          {filters.postType === 'service' && (
+          {filters.postType.includes('service') && (
             <div className="px-4 py-3 border-b border-slate-800/60">
               <p className="text-[11px] text-slate-600">Фильтр «Тип услуги» — скоро</p>
             </div>

@@ -45,7 +45,6 @@ export default function BottomSheet({ isOpen, onClose, title, children, height =
       {/* Content */}
       <div
         className="flex-1 min-h-0 overflow-y-auto"
-        style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
       >
         {children}
       </div>
@@ -59,7 +58,7 @@ export default function BottomSheet({ isOpen, onClose, title, children, height =
       />
       {/* Sheet */}
       <div
-        className={`fixed bottom-0 left-0 right-0 bg-gradient-to-b from-slate-800 to-slate-900 rounded-t-3xl shadow-2xl z-[61] animate-slideUp flex flex-col ${height === 'half' ? 'h-[50vh]' : 'max-h-[90vh]'}`}
+        className={`fixed bottom-0 left-0 right-0 bg-gradient-to-b from-slate-800 to-slate-900 rounded-t-3xl shadow-2xl z-[61] animate-slideUp flex flex-col ${height === 'half' ? 'h-[50dvh]' : 'max-h-[90dvh]'}`}
         style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
         {/* Handle */}
@@ -76,7 +75,6 @@ export default function BottomSheet({ isOpen, onClose, title, children, height =
         {/* Content */}
         <div
           className="flex-1 min-h-0 overflow-y-auto"
-          style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
         >
           {children}
         </div>

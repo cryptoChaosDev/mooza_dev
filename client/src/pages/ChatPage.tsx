@@ -716,7 +716,7 @@ export default function ChatPage() {
   // ── Loading state ──────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <Loader2 size={48} className="text-primary-500 animate-spin" />
       </div>
     );
@@ -724,7 +724,7 @@ export default function ChatPage() {
 
   if (!conversation) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <p className="text-slate-400 text-sm mb-3">Диалог не найден</p>
           <button onClick={() => navigate('/messages')} className="bg-primary-500 hover:bg-primary-600 text-white px-4 py-2 rounded-lg text-sm">
@@ -1134,7 +1134,7 @@ export default function ChatPage() {
                         </div>
                       )}
 
-                      <div className="max-w-xs md:max-w-md lg:max-w-lg relative group/msg">
+                      <div className="max-w-[80%] sm:max-w-md lg:max-w-lg relative group/msg">
                         {/* Sender name (group) */}
                         {showSender && senderInGroup && (
                           <p className="text-xs text-slate-400 mb-1 ml-1">
@@ -1177,7 +1177,7 @@ export default function ChatPage() {
                                 ) : (
                                   <a href={`${API_URL}${msg.attachmentUrl}`} target="_blank" rel="noreferrer" download={msg.attachmentName || true} className={`flex items-center gap-2 mb-1 px-3 py-2 rounded-lg ${isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-slate-600/50 hover:bg-slate-600'} transition-colors`}>
                                     <FileText size={16} className="flex-shrink-0" />
-                                    <span className="text-xs truncate flex-1">{msg.attachmentName || 'Файл'}</span>
+                                    <span className="text-xs truncate flex-1 min-w-0">{msg.attachmentName || 'Файл'}</span>
                                     <Download size={14} className="flex-shrink-0 opacity-60" />
                                   </a>
                                 );
@@ -1196,7 +1196,7 @@ export default function ChatPage() {
                                   </span>
                                 );
                                 return msg.content ? (
-                                  <p className="text-sm leading-relaxed break-words whitespace-pre-wrap overflow-hidden">
+                                  <p className="text-sm leading-relaxed break-words [overflow-wrap:anywhere] whitespace-pre-wrap overflow-hidden">
                                     {timeMeta}{msg.content}
                                   </p>
                                 ) : (
@@ -1454,20 +1454,14 @@ export default function ChatPage() {
           )}
 
           {/* Input bubble — emoji inside right */}
-          <div className="flex-1 flex items-end bg-slate-800 border border-slate-700 rounded-2xl focus-within:border-primary-500/50 transition-colors overflow-hidden">
+          <div className="flex-1 min-w-0 flex items-end bg-slate-800 border border-slate-700 rounded-2xl focus-within:border-primary-500/50 transition-colors overflow-hidden">
             <textarea
               ref={inputRef}
               value={newMessage}
               onChange={e => setNewMessage(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
-                  e.preventDefault();
-                  e.currentTarget.form?.requestSubmit();
-                }
-              }}
               placeholder={editingId ? 'Редактировать...' : 'Сообщение...'}
-              className="flex-1 bg-transparent text-sm text-white px-3 py-2.5 focus:outline-none placeholder-slate-500 resize-none overflow-y-auto"
-              style={{ height: '40px', maxHeight: '160px', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+              className="flex-1 min-w-0 bg-transparent text-sm text-white px-3 py-2.5 focus:outline-none placeholder-slate-500 resize-none overflow-y-auto"
+              style={{ height: '40px', maxHeight: '160px' } as React.CSSProperties}
             />
             <button type="button" onClick={() => setShowEmoji(p => !p)}
               className={`p-2.5 transition-colors flex-shrink-0 ${showEmoji ? 'text-primary-400' : 'text-slate-500 hover:text-slate-300'}`}>

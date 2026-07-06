@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { userAPI, referenceAPI, connectionAPI, groupAPI, dealAPI, authAPI } from '../lib/api';
+import { userAPI, referenceAPI, connectionAPI, groupAPI, dealAPI, authAPI, orderAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import AudioPlayer from '../components/AudioPlayer';
 import {
@@ -10,7 +10,8 @@ import {
   Globe, Calendar,
   Headphones, Edit3, Plus,
   FileText, FileSpreadsheet, FileArchive, Download, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
-  Music2, HandshakeIcon, Eye, Phone, Shield, ChevronDown,
+  Music2, HandshakeIcon, Eye, Phone, Shield, ChevronDown, ChevronUp,
+  ClipboardList,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConnectionCard from '../components/ConnectionCard';
@@ -19,6 +20,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import BadgeTooltip from '../components/BadgeTooltip';
 import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
+import { useScrollLock } from '../lib/scrollLock';
 import { limitsFor, isProActive } from '../lib/proLimits';
 import { yoNorm } from '../lib/search';
 import ShareButton from '../components/ShareButton';
@@ -27,6 +29,8 @@ import ReviewsBlock from '../components/ReviewsBlock';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
 import ProfileProgressBar, { profileCompletion } from '../components/ProfileProgressBar';
 import PublicConsentGate from '../components/PublicConsentGate';
+import OrderForm from '../components/OrderForm';
+import ProfessionNotFound from '../components/ProfessionNotFound';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 
@@ -116,6 +120,7 @@ function stripProfessions<T extends { userProfessions?: unknown }>(data: T): Omi
 
 export default function ProfilePage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { logout, user } = useAuthStore();
   const isPro = isProActive(user);
   const proLimits = limitsFor(isPro);
@@ -151,10 +156,15 @@ export default function ProfilePage() {
   const [imageFullscreen, setImageFullscreen] = useState<string | null>(null);
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
   const [portfolioTab, setPortfolioTab] = useState<'audio' | 'images' | 'other'>('audio');
+  const [editingPortfolio, setEditingPortfolio] = useState(false);
+  const [renamingFile, setRenamingFile] = useState<{ id: string; value: string } | null>(null);
   // Service add/edit form (single comprehensive form).
   // serviceFormOpen: 'add' to create a new entry, or the index of an existing
   // entry being edited. null = closed.
   const [serviceFormOpen, setServiceFormOpen] = useState<'add' | number | null>(null);
+  // Order ADD form (customer-posted «Заказ») — open/closed.
+  const [orderFormOpen, setOrderFormOpen] = useState(false);
+  const [confirmLogout, setConfirmLogout] = useState(false);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
   const [sections, setSections] = useState<any[]>([]);
   const [catalogSearch, setCatalogSearch] = useState('');
@@ -265,6 +275,12 @@ export default function ProfilePage() {
   const [profSearchResults, setProfSearchResults] = useState<any[]>([]);
   const [profSearching, setProfSearching] = useState(false);
   const [savingProfessions, setSavingProfessions] = useState(false);
+  // Профессии / Услуги / Заказы открываются модалками (как Вакансии) — блокируем фон.
+  useScrollLock(
+    editingProfessions || serviceFormOpen !== null || orderFormOpen ||
+    showPrivacy || !!renamingFile || !!selectedProfession ||
+    !!publishDialog || !!updateDialog || !!imageFullscreen || !!docFullscreen,
+  );
   const [profFiltersData, setProfFiltersData] = useState<Record<string, any[]>>({});
   const [profFilterSelections, setProfFilterSelections] = useState<Record<string, string[]>>({});
   // Per-profession filter accordions are collapsed by default (profId → open filterIds).
@@ -411,6 +427,13 @@ export default function ProfilePage() {
   });
   const activeDeals = myDeals.filter((d: any) => !['COMPLETED', 'CANCELLED'].includes(d.status));
 
+  // «Мои заказы» — customer-posted orders (author = current user).
+  const { data: myOrders = [] } = useQuery<any[]>({
+    queryKey: ['orders', 'mine'],
+    queryFn: async () => { const { data } = await orderAPI.getMine(); return data as any[]; },
+  });
+  const activeOrdersCount = myOrders.filter((o: any) => o.status === 'active').length;
+
   // One entry per unique partner
   const myConnPartners = Array.from(
     myConnectionsRaw.reduce((map: Map<string, { partner: any; connections: any[] }>, c: any) => {
@@ -501,6 +524,13 @@ export default function ProfilePage() {
     const birthDateISO = bd.length === 10
       ? `${bd.slice(6)}-${bd.slice(3, 5)}-${bd.slice(0, 2)}`
       : undefined;
+    if (birthDateISO) {
+      const birth = new Date(birthDateISO);
+      const now = new Date();
+      const age = now.getFullYear() - birth.getFullYear()
+        - (now < new Date(now.getFullYear(), birth.getMonth(), birth.getDate()) ? 1 : 0);
+      if (age < 16) { toast.error('Для использования платформы необходимо быть старше 16 лет'); return; }
+    }
     try {
       await updateMutation.mutateAsync({ ...stripProfessions(formData), birthDate: birthDateISO ?? null });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
@@ -774,6 +804,27 @@ export default function ProfilePage() {
     queryClient.invalidateQueries({ queryKey: ['profile'] });
   };
 
+  // Deep-link from the service page «Редактировать»: ?editService=<catalogServiceId>.
+  // The limited ServicePage modal can't change the section/custom filters, so the
+  // owner is sent here to the full ServiceForm. Wait until userServices is
+  // hydrated, then open that entry's editor, scroll to it, and drop the param.
+  const editServiceDeepLinkRef = useRef<string | null>(null);
+  useEffect(() => {
+    const target = searchParams.get('editService');
+    if (!target) return;
+    if (editServiceDeepLinkRef.current === target) return; // handled already
+    const idx = userServices.findIndex(s => s.serviceId === target);
+    if (idx < 0) return; // not hydrated yet (or no longer exists) — retry next render
+    editServiceDeepLinkRef.current = target;
+    setEditingServices(true);
+    openEditServiceForm(idx);
+    requestAnimationFrame(() => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    const next = new URLSearchParams(searchParams);
+    next.delete('editService');
+    setSearchParams(next, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams, userServices]);
+
   // ── Consent to public distribution of PD (152-ФЗ ст. 10.1) ──────────────────
   // One-time gate before the first public action (publish service / upload
   // portfolio / set contacts to «Все»). MUST stay above the isLoading return —
@@ -796,7 +847,7 @@ export default function ProfilePage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent mx-auto shadow-lg shadow-primary-500/30" />
           <p className="text-slate-400 mt-3 text-sm">Загрузка профиля...</p>
@@ -805,7 +856,7 @@ export default function ProfilePage() {
     );
   }
 
-  const inputCls = "w-full px-3.5 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white placeholder-slate-500";
+  const inputCls = "w-full min-w-0 px-3.5 py-2.5 bg-slate-800/60 border border-slate-700/50 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 transition text-white placeholder-slate-500";
   const labelCls = "block text-xs font-semibold mb-1 text-slate-400";
 
   // My services regrouped by SECTION (sections now own the catalog; services no
@@ -850,6 +901,40 @@ export default function ProfilePage() {
       setPortfolioFiles(prev => prev.filter((f: any) => f.id !== fileId));
     } catch (e: any) {
       toast.error(getApiError(e, 'Не удалось удалить файл'));
+    }
+  };
+
+  // Portfolio order/rename. sortOrder is global; reordering swaps a file with its
+  // neighbour of the SAME type (tab) inside the full list, then persists the order.
+  const portfolioTypeOf = (f: any): 'audio' | 'image' | 'other' =>
+    f.mimeType?.startsWith('audio/') ? 'audio' : f.mimeType?.startsWith('image/') ? 'image' : 'other';
+
+  const movePortfolioFile = async (file: any, dir: 'up' | 'down') => {
+    const t = portfolioTypeOf(file);
+    const siblings = portfolioFiles.filter((f: any) => portfolioTypeOf(f) === t);
+    const sIdx = siblings.findIndex((f: any) => f.id === file.id);
+    const target = siblings[sIdx + (dir === 'up' ? -1 : 1)];
+    if (!target) return;
+    const prev = portfolioFiles;
+    const full = [...portfolioFiles];
+    const i = full.findIndex((f: any) => f.id === file.id);
+    const j = full.findIndex((f: any) => f.id === target.id);
+    [full[i], full[j]] = [full[j], full[i]];
+    setPortfolioFiles(full);
+    try { await userAPI.reorderPortfolio(full.map((f: any) => f.id)); }
+    catch (e: any) { setPortfolioFiles(prev); toast.error(getApiError(e, 'Не удалось изменить порядок')); }
+  };
+
+  const commitPortfolioRename = async () => {
+    if (!renamingFile) return;
+    const { id, value } = renamingFile;
+    const title = value.trim();
+    try {
+      await userAPI.renamePortfolioFile(id, title);
+      setPortfolioFiles(prev => prev.map((f: any) => f.id === id ? { ...f, title: title || null } : f));
+      setRenamingFile(null);
+    } catch (e: any) {
+      toast.error(getApiError(e, 'Не удалось переименовать файл'));
     }
   };
 
@@ -1099,22 +1184,26 @@ export default function ProfilePage() {
             placeholder="Опишите услугу..." className={`${inputCls} resize-none`} />
         </div>
 
-        <div className="flex flex-wrap gap-2 pt-1">
-          <button
-            onClick={() => { serviceFormDiscardedRef.current = true; closeServiceForm(); }}
-            className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors flex-shrink-0">
-            Отмена
-          </button>
-          <button
-            onClick={() => commitServiceForm('draft')}
-            disabled={!canSave || updateServicesMutation.isPending}
-            className="py-2 px-3 rounded-lg border border-slate-600/50 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 text-sm font-medium transition-colors flex-shrink-0">
-            В черновики
-          </button>
+        {/* Footer — deterministic on every width: small row (Отмена / В черновики)
+            on top, full-width primary button at the very bottom. */}
+        <div className="flex flex-col gap-2 pt-1">
+          <div className="flex gap-2">
+            <button
+              onClick={() => { serviceFormDiscardedRef.current = true; closeServiceForm(); }}
+              className="flex-1 py-2 px-3 rounded-lg border border-slate-600/50 text-slate-400 hover:text-slate-200 text-sm transition-colors">
+              Отмена
+            </button>
+            <button
+              onClick={() => commitServiceForm('draft')}
+              disabled={!canSave || updateServicesMutation.isPending}
+              className="flex-1 py-2 px-3 rounded-lg border border-slate-600/50 text-slate-300 hover:text-white hover:border-slate-500 disabled:opacity-50 text-sm font-medium transition-colors">
+              В черновики
+            </button>
+          </div>
           <button
             onClick={() => ensurePublicConsent(() => commitServiceForm('publish'))}
             disabled={!canSave || updateServicesMutation.isPending}
-            className="flex-1 min-w-[8rem] py-2 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
+            className="w-full py-2.5 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
           >
             {updateServicesMutation.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
             {isEdit ? 'Сохранить изменения' : 'Добавить услугу'}
@@ -1187,7 +1276,7 @@ export default function ProfilePage() {
         <div className="px-4">
           {/* Avatar + action buttons */}
           <div className="flex items-end justify-between -mt-14 mb-4">
-            <div className="relative z-10">
+            <div className="relative z-10 flex-shrink-0">
               <div
                 className="rounded-full p-[3px]"
                 title={`Профиль заполнен на ${completionPct}%`}
@@ -1222,24 +1311,25 @@ export default function ProfilePage() {
                   e.target.value = '';
                 }} />
             </div>
-            <div className="flex items-center gap-2 mb-1">
+            {/* Actions — compact round icon buttons, single row (matches Artist hero) */}
+            <div className="flex items-center gap-2 pb-1">
               <ShareButton
                 url={`/profile/${profile?.id}`}
                 title={`${profile?.firstName} ${profile?.lastName} — Moooza`}
-                text={profile?.bio?.slice(0, proLimits.bioChars)}
-                className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
+                className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
                 iconSize={16}
               />
               <button
                 onClick={() => setEditingHero(v => !v)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all border ${editingHero ? 'bg-primary-600 border-primary-500 text-white' : 'bg-primary-600/20 hover:bg-primary-600/30 border-primary-500/40 text-primary-300 hover:text-primary-200'}`}
+                title={editingHero ? 'Закрыть' : 'Редактировать'}
+                className={`w-9 h-9 rounded-full flex items-center justify-center border transition-colors ${editingHero ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800 border-slate-700 hover:border-slate-600 text-slate-300 hover:text-white'}`}
               >
-                <Edit3 size={15} />{editingHero ? 'Закрыть' : 'Редактировать'}
+                {editingHero ? <X size={16} /> : <Edit3 size={16} />}
               </button>
               {profile?.id && (
                 <button
                   onClick={() => navigate(`/profile/${profile.id}`)}
-                  className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
+                  className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
                   title="Превью — как видят другие"
                 >
                   <Eye size={16} />
@@ -1247,13 +1337,13 @@ export default function ProfilePage() {
               )}
               <button
                 onClick={() => setShowPrivacy(true)}
-                className="p-2 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
+                className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
                 title="Приватность"
               >
                 <Shield size={16} />
               </button>
               {autoSaved && (
-                <span className="text-xs text-emerald-400 font-medium animate-pulse">✓ Сохранено</span>
+                <span className="text-xs text-emerald-400 font-medium animate-pulse whitespace-nowrap">✓</span>
               )}
             </div>
           </div>
@@ -1334,10 +1424,8 @@ export default function ProfilePage() {
                     if (v.length >= 3) v = v.slice(0, 2) + '.' + v.slice(2);
                     if (v.length >= 6) v = v.slice(0, 5) + '.' + v.slice(5);
                     v = v.slice(0, 10);
-                    const iso = v.length === 10
-                      ? `${v.slice(6)}-${v.slice(3, 5)}-${v.slice(0, 2)}`
-                      : '';
-                    setFormData({ ...formData, birthDate: v, ...(iso ? { _birthDateISO: iso } as any : {}) });
+                    // handleSaveHero re-derives the ISO from formData.birthDate on save.
+                    setFormData({ ...formData, birthDate: v });
                   }}
                   className={inputCls}
                 />
@@ -1502,8 +1590,13 @@ export default function ProfilePage() {
                 </button>
               </div>
 
-              {editingProfessions ? (
-                <div className="p-3 space-y-3">
+              {editingProfessions && createPortal(
+                <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => { setEditingProfessions(false); setProfAddOpen(false); setProfSearch(''); }}>
+                  <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                  <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
+                    <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+                    <p className="text-sm font-semibold text-white mb-3">Профессии</p>
+                    <div className="space-y-3">
                   {/* Existing professions */}
                   {myStandaloneProfessions.length > 0 && (
                     <div className="space-y-2">
@@ -1616,7 +1709,7 @@ export default function ProfilePage() {
                         {profSearching && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
                       </div>
                       {profSearch.trim() && profSearchResults.length === 0 && !profSearching && (
-                        <p className="text-xs text-slate-500 text-center py-1">Ничего не найдено</p>
+                        <ProfessionNotFound initialQuery={profSearch} compact />
                       )}
                       {profSearchResults.length > 0 && (
                         <div className="max-h-52 overflow-y-auto flex flex-wrap gap-1.5">
@@ -1650,8 +1743,12 @@ export default function ProfilePage() {
                       {savingProfessions ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
                     </button>
                   </div>
-                </div>
-              ) : myStandaloneProfessions.length > 0 ? (
+                    </div>
+                  </div>
+                </div>,
+                document.body
+              )}
+              {myStandaloneProfessions.length > 0 ? (
                 <div className="px-4 pt-3 pb-2 space-y-2">
                   {myStandaloneProfessions.map((p) => {
                     const profData = profile?.userProfessions?.find((up: any) => up.professionId === p.professionId);
@@ -1690,14 +1787,24 @@ export default function ProfilePage() {
                 <Briefcase size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Услуги</span>
                 {servicesFlat.length > 0 && <span className="text-xs text-slate-500">{servicesFlat.length}</span>}
-                {servicesFlat.length > 0 && (
-                  <button
-                    onClick={() => { setEditingServices(v => !v); closeServiceForm(); }}
-                    className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
-                  >
-                    {editingServices ? 'Готово' : 'Изменить'}
-                  </button>
-                )}
+                <div className="ml-auto flex items-center gap-3">
+                  {profile?.id && (
+                    <button
+                      onClick={() => navigate(`/profile/${profile.id}/services`)}
+                      className="text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                    >
+                      Смотреть все
+                    </button>
+                  )}
+                  {servicesFlat.length > 0 && (
+                    <button
+                      onClick={() => { setEditingServices(v => !v); closeServiceForm(); }}
+                      className="text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                    >
+                      {editingServices ? 'Готово' : 'Изменить'}
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="p-3 space-y-3">
@@ -1736,7 +1843,7 @@ export default function ProfilePage() {
                         {editingServices && stateIdx >= 0 && (
                           <button
                             onClick={() => setConfirmDeleteServiceIdx(stateIdx)}
-                            className="absolute -top-1 -right-1 p-0.5 rounded-md bg-slate-900 border border-slate-700 text-slate-400 hover:text-red-400 transition-colors z-10"
+                            className="absolute top-1 right-1 p-1 rounded-full bg-slate-900/90 border border-slate-700 text-slate-300 hover:text-red-400 transition-colors z-10"
                           >
                             <X size={10} />
                           </button>
@@ -1746,7 +1853,79 @@ export default function ProfilePage() {
                   })}
                 </div>
 
-                {ServiceForm()}
+                {serviceFormOpen !== null && createPortal(
+                  <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => { serviceFormDiscardedRef.current = true; closeServiceForm(); }}>
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                    <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
+                      <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+                      {ServiceForm()}
+                    </div>
+                  </div>,
+                  document.body
+                )}
+              </div>
+            </div>
+
+            {/* ── Orders card — tile slider ── */}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                <ClipboardList size={14} className="text-rose-400" />
+                <span className="text-sm font-semibold text-white">Мои заказы</span>
+                {activeOrdersCount > 0 && <span className="text-xs text-slate-500">{activeOrdersCount}</span>}
+                {myOrders.length > 0 && (
+                  <button onClick={() => navigate('/orders')} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
+                    Посмотреть все
+                  </button>
+                )}
+              </div>
+
+              <div className="p-3 space-y-3">
+                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+                  {/* Add tile — always first */}
+                  <button
+                    onClick={() => setOrderFormOpen(true)}
+                    className="flex flex-col gap-2 flex-shrink-0 group"
+                    style={{ width: 'calc((100% - 24px) / 3.5)' }}
+                  >
+                    <div className="w-full aspect-square rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-rose-500/50 group-hover:bg-rose-500/5 transition-all">
+                      <Plus size={16} className="text-slate-500 group-hover:text-rose-400 transition-colors" />
+                    </div>
+                    <span className="text-[10px] text-slate-500 group-hover:text-slate-400 transition-colors text-center leading-tight">Добавить</span>
+                  </button>
+
+                  {myOrders.map((o: any) => {
+                    const oSection = o.service?.section?.name || '';
+                    const oDeadline = o.deadline ? new Date(o.deadline).toLocaleDateString('ru-RU') : 'Срок не ограничен';
+                    return (
+                      <button
+                        key={o.id}
+                        onClick={() => navigate(`/orders/${o.id}`)}
+                        className="flex flex-col gap-0 flex-shrink-0 group text-left"
+                        style={{ width: 'calc((100% - 24px) / 3.5)' }}
+                      >
+                        <div className="w-full aspect-square rounded-xl bg-gradient-to-br from-rose-900/60 to-slate-800/80 border border-rose-700/30 flex items-center justify-center p-2 group-hover:border-rose-500/50 transition-colors overflow-hidden">
+                          <ClipboardList size={16} className="text-rose-400 flex-shrink-0" />
+                        </div>
+                        <div className="w-full mt-1.5">
+                          <p className="text-[10px] font-semibold text-white leading-tight line-clamp-2">{o.title}</p>
+                          {oSection && <p className="text-[9px] text-slate-500 leading-tight mt-0.5 truncate">{oSection}</p>}
+                          <p className="text-[9px] text-rose-400/90 leading-tight mt-0.5 truncate">{oDeadline}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {orderFormOpen && createPortal(
+                  <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setOrderFormOpen(false)}>
+                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                    <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
+                      <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+                      <OrderForm onClose={() => setOrderFormOpen(false)} />
+                    </div>
+                  </div>,
+                  document.body
+                )}
               </div>
             </div>
 
@@ -1831,6 +2010,12 @@ export default function ProfilePage() {
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <Headphones size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Портфолио</span>
+                {(portfolioFiles.length + portfolioLinks.length) > 0 && (
+                  <button onClick={() => { setEditingPortfolio(v => !v); setRenamingFile(null); }}
+                    className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
+                    {editingPortfolio ? 'Готово' : 'Изменить'}
+                  </button>
+                )}
               </div>
               {/* Tabs */}
               <div className="flex border-b border-slate-800/60">
@@ -1874,16 +2059,27 @@ export default function ProfilePage() {
                       <p className="text-xs text-slate-600 text-center py-1">Пока нет аудио</p>
                     ) : (
                       <div className="space-y-1">
-                        {audioFiles.map((f: any) => (
-                          <div key={f.id} className="flex items-center gap-1">
-                            <div className="flex-1 min-w-0"><AudioPlayer src={`${API_URL}${f.url}`} name={f.originalName} /></div>
-                            <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="p-2 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
+                        {audioFiles.map((f: any, i: number) => (
+                          <div key={f.id}>
+                            <AudioPlayer src={`${API_URL}${f.url}`} name={f.title || f.originalName} />
+                            {editingPortfolio && (
+                              <div className="flex items-center justify-end gap-1 mt-1">
+                                <button onClick={() => movePortfolioFile(f, 'up')} disabled={i === 0} title="Выше" className="p-1.5 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors"><ChevronUp size={16} /></button>
+                                <button onClick={() => movePortfolioFile(f, 'down')} disabled={i === audioFiles.length - 1} title="Ниже" className="p-1.5 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors"><ChevronDown size={16} /></button>
+                                <button onClick={() => setRenamingFile({ id: f.id, value: f.title || f.originalName })} title="Переименовать" className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors"><Edit3 size={15} /></button>
+                                <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"><Trash2 size={15} /></button>
+                              </div>
+                            )}
                           </div>
                         ))}
                         {audioLinks.map((l: any) => (
-                          <div key={l.id} className="flex items-center gap-1">
-                            <div className="flex-1 min-w-0"><AudioPlayer src={l.url} name={l.title || l.url} /></div>
-                            <button onClick={() => setConfirmDeleteLinkId(l.id)} title="Удалить" className="p-2 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
+                          <div key={l.id}>
+                            <AudioPlayer src={l.url} name={l.title || l.url} />
+                            {editingPortfolio && (
+                              <div className="flex items-center justify-end mt-1">
+                                <button onClick={() => setConfirmDeleteLinkId(l.id)} title="Удалить" className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"><Trash2 size={15} /></button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1897,13 +2093,22 @@ export default function ProfilePage() {
                       <span className="text-[10px] text-slate-500">Добавить</span>
                       <input type="file" accept="image/*" multiple className="hidden" disabled={isUploadingPortfolio || portfolioFull} onChange={e => handlePortfolioUpload(e.target.files)} />
                     </label>
-                    {imageFiles.map((f: any) => (
+                    {imageFiles.map((f: any, i: number) => (
                       <div key={f.id} className="relative group aspect-square">
                         <button onClick={() => setImageFullscreen(`${API_URL}${f.url}`)}
                           className="w-full h-full rounded-xl overflow-hidden border border-slate-700/40 hover:border-primary-500/40 transition-colors">
-                          <img src={`${API_URL}${f.url}`} alt={f.originalName} className="w-full h-full object-cover" />
+                          <img src={`${API_URL}${f.url}`} alt={f.title || f.originalName} className="w-full h-full object-cover" />
                         </button>
-                        <button onClick={() => handlePortfolioDelete(f.id)} className="absolute top-1 right-1 p-1 rounded-md bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-all"><X size={11} /></button>
+                        {editingPortfolio && (
+                          <>
+                            <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="absolute top-1 right-1 p-1 rounded-full bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-red-400 transition-all"><X size={11} /></button>
+                            <button onClick={() => setRenamingFile({ id: f.id, value: f.title || f.originalName })} title="Переименовать" className="absolute top-1 left-1 p-1 rounded-full bg-slate-900/80 border border-slate-700 text-slate-300 hover:text-primary-400 transition-all"><Edit3 size={10} /></button>
+                            <div className="absolute bottom-1 inset-x-1 flex justify-center gap-1">
+                              <button onClick={() => movePortfolioFile(f, 'up')} disabled={i === 0} title="Раньше" className="p-1 rounded-full bg-slate-900/85 border border-slate-700 text-slate-300 hover:text-primary-400 disabled:opacity-30 transition-all"><ChevronUp size={11} /></button>
+                              <button onClick={() => movePortfolioFile(f, 'down')} disabled={i === imageFiles.length - 1} title="Позже" className="p-1 rounded-full bg-slate-900/85 border border-slate-700 text-slate-300 hover:text-primary-400 disabled:opacity-30 transition-all"><ChevronDown size={11} /></button>
+                            </div>
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1919,20 +2124,29 @@ export default function ProfilePage() {
                       <p className="text-xs text-slate-600 text-center py-1">Пока нет документов</p>
                     ) : (
                       <div className="space-y-1.5">
-                        {otherFiles.map((f: any) => {
+                        {otherFiles.map((f: any, i: number) => {
                           const meta = fileTypeMeta(f.originalName);
                           const Icon = meta.Icon;
                           return (
-                            <div key={f.id} className="flex items-center gap-3 px-2.5 py-2 bg-slate-800/40 border border-slate-700/40 rounded-xl">
-                              <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
-                                <Icon size={18} className={meta.color} />
+                            <div key={f.id}>
+                              <div className="flex items-center gap-3 px-2.5 py-2 bg-slate-800/40 border border-slate-700/40 rounded-xl">
+                                <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
+                                  <Icon size={18} className={meta.color} />
+                                </div>
+                                <button onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.title || f.originalName })} className="flex-1 min-w-0 text-left">
+                                  <p className="text-sm text-slate-200 truncate">{f.title || f.originalName}</p>
+                                  <p className="text-[11px] text-slate-500">{meta.label}{f.size ? ` · ${formatBytes(f.size)}` : ''}</p>
+                                </button>
+                                <a href={`${API_URL}${f.url}`} download target="_blank" rel="noopener noreferrer" title="Скачать" className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0"><Download size={15} /></a>
                               </div>
-                              <button onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.originalName })} className="flex-1 min-w-0 text-left">
-                                <p className="text-sm text-slate-200 truncate">{f.originalName}</p>
-                                <p className="text-[11px] text-slate-500">{meta.label}{f.size ? ` · ${formatBytes(f.size)}` : ''}</p>
-                              </button>
-                              <a href={`${API_URL}${f.url}`} download target="_blank" rel="noopener noreferrer" title="Скачать" className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors flex-shrink-0"><Download size={15} /></a>
-                              <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="p-1.5 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"><Trash2 size={15} /></button>
+                              {editingPortfolio && (
+                                <div className="flex items-center justify-end gap-1 mt-1">
+                                  <button onClick={() => movePortfolioFile(f, 'up')} disabled={i === 0} title="Выше" className="p-1.5 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors"><ChevronUp size={16} /></button>
+                                  <button onClick={() => movePortfolioFile(f, 'down')} disabled={i === otherFiles.length - 1} title="Ниже" className="p-1.5 text-slate-500 hover:text-primary-400 disabled:opacity-30 transition-colors"><ChevronDown size={16} /></button>
+                                  <button onClick={() => setRenamingFile({ id: f.id, value: f.title || f.originalName })} title="Переименовать" className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors"><Edit3 size={15} /></button>
+                                  <button onClick={() => handlePortfolioDelete(f.id)} title="Удалить" className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"><Trash2 size={15} /></button>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -1994,7 +2208,7 @@ export default function ProfilePage() {
             </div>
 
             {/* Logout */}
-            <button onClick={() => logout()} className="w-full flex items-center justify-center gap-2 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/8 border border-red-500/20 hover:border-red-500/40 rounded-xl text-sm font-medium transition-all">
+            <button onClick={() => setConfirmLogout(true)} className="w-full flex items-center justify-center gap-2 py-3 text-red-400 hover:text-red-300 hover:bg-red-500/8 border border-red-500/20 hover:border-red-500/40 rounded-xl text-sm font-medium transition-all">
               <LogOut size={16} />Выйти из профиля
             </button>
 
@@ -2002,6 +2216,32 @@ export default function ProfilePage() {
         </div>
       </div>
     </div>
+
+    {/* Portfolio file rename */}
+    {renamingFile && createPortal(
+      <div className="fixed inset-0 z-[80] flex items-center justify-center px-4" onClick={() => setRenamingFile(null)}>
+        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        <div className="relative w-full max-w-xs bg-slate-900 border border-slate-700 rounded-2xl p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+          <p className="text-sm font-semibold text-white mb-3">Название файла</p>
+          <input
+            autoFocus
+            type="text"
+            maxLength={100}
+            value={renamingFile.value}
+            onChange={e => setRenamingFile(rf => rf ? { ...rf, value: e.target.value } : rf)}
+            onKeyDown={e => { if (e.key === 'Enter') commitPortfolioRename(); if (e.key === 'Escape') setRenamingFile(null); }}
+            placeholder="Введите название"
+            className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+          />
+          <p className="text-[11px] text-slate-600 mt-1.5">Пусто — вернётся исходное имя файла</p>
+          <div className="flex gap-2 mt-3">
+            <button onClick={() => setRenamingFile(null)} className="flex-1 py-2 text-sm text-slate-400 border border-slate-700 rounded-xl hover:text-white transition-colors">Отмена</button>
+            <button onClick={commitPortfolioRename} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 text-white font-semibold rounded-xl transition-colors">Сохранить</button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )}
 
     {/* Image fullscreen */}
     {imageFullscreen && (
@@ -2014,8 +2254,8 @@ export default function ProfilePage() {
     {/* Document fullscreen */}
     {docFullscreen && (
       <div className="fixed inset-0 z-50 bg-black/95 flex flex-col">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
-          <span className="text-sm text-slate-300 truncate">{docFullscreen.name}</span>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0" style={{ paddingTop: 'max(0.75rem, env(safe-area-inset-top))' }}>
+          <span className="text-sm text-slate-300 truncate min-w-0">{docFullscreen.name}</span>
           <button onClick={() => setDocFullscreen(null)} className="p-2 rounded-full bg-slate-800 text-white hover:bg-slate-700 transition-colors flex-shrink-0"><X size={20} /></button>
         </div>
         <iframe src={docFullscreen.url} className="flex-1 w-full border-0" title={docFullscreen.name} />
@@ -2036,7 +2276,7 @@ export default function ProfilePage() {
             </div>
             <button onClick={() => setShowPrivacy(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
           </div>
-          <div className="px-5 py-3">
+          <div className="px-5 py-3" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
             {/* Contacts visibility — 3-level selector */}
             <div className="py-3 border-b border-slate-800/60">
               <p className="text-sm font-medium text-white">Кто видит контакты</p>
@@ -2112,15 +2352,15 @@ export default function ProfilePage() {
     {selectedProfession && createPortal(
       <>
         <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm" onClick={() => setSelectedProfession(null)} />
-        <div className="fixed inset-x-0 bottom-0 z-[71] bg-slate-900 border-t border-slate-800 rounded-t-3xl" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
-          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1" />
-          <div className="flex items-center justify-between px-5 py-3 border-b border-slate-800">
-            <h3 className="text-base font-bold text-white">{selectedProfession.professionName}</h3>
-            <button onClick={() => setSelectedProfession(null)} className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors">
+        <div className="fixed inset-x-0 bottom-0 z-[71] max-h-[85dvh] flex flex-col bg-slate-900 border-t border-slate-800 rounded-t-3xl" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
+          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1 flex-shrink-0" />
+          <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-slate-800 flex-shrink-0">
+            <h3 className="text-base font-bold text-white min-w-0 truncate">{selectedProfession.professionName}</h3>
+            <button onClick={() => setSelectedProfession(null)} className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors flex-shrink-0">
               <X size={18} className="text-slate-400" />
             </button>
           </div>
-          <div className="px-5 py-4">
+          <div className="px-5 py-4 flex-1 overflow-y-auto min-h-0">
             {(() => {
               const relatedServices = (profile?.userServices ?? []).filter(
                 (us: any) => us.profession?.id === selectedProfession.professionId
@@ -2164,6 +2404,13 @@ export default function ProfilePage() {
       message="Удалить ссылку из портфолио?"
       onConfirm={() => { if (confirmDeleteLinkId) handleDeleteLink(confirmDeleteLinkId); }}
       onCancel={() => setConfirmDeleteLinkId(null)}
+    />
+    <ConfirmDialog
+      open={confirmLogout}
+      message="Выйти из профиля?"
+      confirmLabel="Выйти"
+      onConfirm={() => logout()}
+      onCancel={() => setConfirmLogout(false)}
     />
 
     {consentAction && (

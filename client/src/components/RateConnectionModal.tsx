@@ -5,6 +5,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { reviewAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { useScrollLock } from '../lib/scrollLock';
 
 const RATING_LABEL: Record<number, string> = {
   10: 'Восхитительно', 9: 'Отлично', 8: 'Очень хорошо', 7: 'Хорошо', 6: 'Приемлемо',
@@ -21,6 +22,7 @@ export default function RateConnectionModal({ targetId, targetName, serviceId, o
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  useScrollLock(true);
   const [rating, setRating] = useState(0);
   const [reviewText, setReviewText] = useState('');
   const [sent, setSent] = useState(false);

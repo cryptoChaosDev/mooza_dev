@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom';
 import { Trash2 } from 'lucide-react';
+import { useScrollLock } from "../lib/scrollLock";
 
 interface Props {
   open: boolean;
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export default function ConfirmDialog({ open, message = 'Вы точно хотите удалить?', confirmLabel = 'Удалить', onConfirm, onCancel }: Props) {
+  useScrollLock(open);
   if (!open) return null;
   return createPortal(
     <>

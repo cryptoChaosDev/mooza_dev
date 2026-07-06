@@ -8,8 +8,11 @@ import {
   UserPlus, Trash2, Search,
   Settings, Link2, Share2, Tag, Crown, Shield, UserCog, UserCheck, UserX, Star,
 } from 'lucide-react';
-import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI, releaseAPI, clipAPI } from '../lib/api';
-import { lockScroll, unlockScroll } from '../lib/scrollLock';
+import { createPortal } from 'react-dom';
+import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI, releaseAPI, clipAPI, vacancyAPI } from '../lib/api';
+import VacancyForm from '../components/VacancyForm';
+import { workFormatLabel } from '../lib/vacancyOptions';
+import { lockScroll, unlockScroll, useScrollLock } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
 import { yoNorm } from '../lib/search';
 import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
@@ -21,6 +24,8 @@ import RolePicker from '../components/RolePicker';
 import ConfirmDialog from '../components/ConfirmDialog';
 import MediaRail from '../components/MediaRail';
 import MediaItemForm from '../components/MediaItemForm';
+import ArtistLookup from '../components/ArtistLookup';
+import MediaImportList from '../components/MediaImportList';
 import { useAuthStore } from '../stores/authStore';
 import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
@@ -88,6 +93,9 @@ export default function ArtistPage() {
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
   const [isEditing, setIsEditing] = useState(false);
+  const [applyingLookup, setApplyingLookup] = useState(false);
+  const [foundReleases, setFoundReleases] = useState<any[]>([]);
+  const [foundClips, setFoundClips] = useState<any[]>([]);
 
   // Image cropping (avatar / banner) before upload
   const [cropAvatarFile, setCropAvatarFile] = useState<File | null>(null);
@@ -149,6 +157,11 @@ export default function ArtistPage() {
   // ── Phase 6b: releases & clips create-form modals ──────────────────────────
   const [showReleaseForm, setShowReleaseForm] = useState(false);
   const [showClipForm, setShowClipForm] = useState(false);
+  // ── Vacancies create-form modal ────────────────────────────────────────────
+  const [showVacancyForm, setShowVacancyForm] = useState(false);
+  // VacancyForm is inline in list/detail pages but a fixed overlay here — lock
+  // body scroll for this overlay (the form no longer self-locks).
+  useScrollLock(showVacancyForm);
 
   const { data: artist, isLoading, isError } = useQuery({
     queryKey: ['artist', id],
@@ -185,6 +198,18 @@ export default function ArtistPage() {
       return data as { id: string; title: string; coverUrl?: string | null }[];
     },
     enabled: !!id,
+  });
+
+  // ── Vacancies owned by this artist (owner/admin-visible) ───────────────────
+  // getMine is owner-scoped on the server (assertArtistOwner → 403 otherwise),
+  // so only fetch once we know the viewer is an admin/owner of this artist.
+  const { data: myVacancies = [] } = useQuery<any[]>({
+    queryKey: ['vacancies', 'mine', id],
+    queryFn: async () => {
+      const { data } = await vacancyAPI.getMine({ artistId: id! });
+      return data as any[];
+    },
+    enabled: !!id && !!(artist as any)?.viewerIsAdmin,
   });
 
   const isOwner = !!currentUser && (
@@ -301,6 +326,80 @@ export default function ArtistPage() {
     },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
+
+  // «Найти артиста» — autofill the edit form from Deezer/Apple Music (same as create).
+  const applyLookupCandidate = async (c: any) => {
+    setApplyingLookup(true);
+    try {
+      setForm(f => ({
+        ...f,
+        name: c.name || f.name,
+        type: c.type || f.type,
+        genreIds: c.genreIds?.length ? c.genreIds : f.genreIds,
+        socialLinks: {
+          ...f.socialLinks,
+          ...(c.links?.yandexMusic ? { yandex_music: c.links.yandexMusic } : {}),
+          ...(c.links?.spotify ? { spotify: c.links.spotify } : {}),
+          ...(c.links?.appleMusic ? { apple_music: c.links.appleMusic } : {}),
+          ...(c.links?.deezer ? { deezer: c.links.deezer } : {}),
+          ...(c.links?.vk ? { vk: c.links.vk } : {}),
+          ...(c.links?.soundcloud ? { soundcloud: c.links.soundcloud } : {}),
+          ...(c.links?.website ? { website: c.links.website } : {}),
+        },
+      }));
+      if (c.imageUrl) {
+        try {
+          const { data: blob } = await artistAPI.lookupAvatar(c.imageUrl);
+          uploadAvatarMut.mutate(new File([blob], 'avatar.jpg', { type: (blob as any)?.type || 'image/jpeg' }));
+        } catch { /* avatar best-effort */ }
+      }
+      // Pull the artist's Apple Music releases + clips for optional import (skip already-added).
+      if (c.itunesId) {
+        try {
+          const { data } = await artistAPI.lookupReleases({ itunesId: c.itunesId, deezerId: c.deezerId });
+          const key = (u: any) => String(u || '').split('?')[0];
+          const haveRel = new Set((releases || []).map((r: any) => key(r.url)));
+          const haveClip = new Set((clips || []).map((r: any) => key(r.url)));
+          setFoundReleases((data.releases || []).filter((r: any) => !haveRel.has(key(r.url))));
+          setFoundClips((data.clips || []).filter((r: any) => !haveClip.has(key(r.url))));
+        } catch { /* best-effort */ }
+      }
+      toast.success('Данные подставлены — проверьте и сохраните');
+    } finally {
+      setApplyingLookup(false);
+    }
+  };
+
+  const importReleases = async (selected: any[]) => {
+    let ok = 0;
+    for (const r of selected) {
+      try {
+        await releaseAPI.create({
+          artistId: id!, platform: 'APPLE_MUSIC', url: r.url, title: r.title,
+          coverUrl: r.coverUrl || undefined, releaseDate: r.releaseDate || undefined, participants: [],
+        });
+        ok++;
+      } catch { /* skip a failed one */ }
+    }
+    setFoundReleases([]);
+    queryClient.invalidateQueries({ queryKey: ['releases', 'artist', id] });
+    if (ok > 0) toast.success(`Импортировано релизов: ${ok}`); else toast.error('Не удалось импортировать релизы');
+  };
+  const importClips = async (selected: any[]) => {
+    let ok = 0;
+    for (const r of selected) {
+      try {
+        await clipAPI.create({
+          artistId: id!, platform: 'APPLE_MUSIC', url: r.url, title: r.title,
+          coverUrl: r.coverUrl || undefined, participants: [],
+        });
+        ok++;
+      } catch { /* skip a failed one */ }
+    }
+    setFoundClips([]);
+    queryClient.invalidateQueries({ queryKey: ['clips', 'artist', id] });
+    if (ok > 0) toast.success(`Импортировано клипов: ${ok}`); else toast.error('Не удалось импортировать клипы');
+  };
 
   const inviteMut = useMutation({
     mutationFn: () => groupAPI.invite(id!, inviteFriendId, inviteProfessionId),
@@ -449,7 +548,7 @@ export default function ArtistPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
         <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent" />
       </div>
     );
@@ -457,7 +556,7 @@ export default function ArtistPage() {
 
   if (isError || !artist) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 px-4">
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center gap-4 px-4">
         <p className="text-slate-400">Артист не найден</p>
         <button onClick={() => navigate(-1)} className="text-primary-400 text-sm">Назад</button>
       </div>
@@ -486,7 +585,10 @@ export default function ArtistPage() {
   const pendingMembers5b: any[] = artist.pendingMembers ?? [];
   const activeMembers = confirmedMembers.filter((m) => m.participationStatus === 'ACTIVE_MEMBER');
   const formerMembers = confirmedMembers.filter((m) => m.participationStatus === 'FORMER_MEMBER');
-  const ownerMember = confirmedMembers.find((m) => m.isOwner) ?? null;
+  // Owner = the member flagged isOwner, else the artist's creator (submittedById)
+  // — legacy/alternate-created artists often have no isOwner flag on any member.
+  const ownerMember = confirmedMembers.find((m) => m.isOwner)
+    ?? confirmedMembers.find((m) => m.user?.id === artist.submittedById) ?? null;
   const adminMembers = confirmedMembers.filter((m) => m.isAdmin);
   // Viewer is an active confirmed member (used to gate the gear button)
   const viewerIsActiveMember = !!currentUser && confirmedMembers.some(
@@ -506,8 +608,8 @@ export default function ArtistPage() {
       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/profile/${m.user.id}`)}>
         <p className="text-sm font-medium text-white truncate flex items-center gap-1.5">
           {memberName(m)}
-          {m.isOwner && <Crown size={12} className="text-amber-400 flex-shrink-0" />}
-          {m.isAdmin && !m.isOwner && <Shield size={11} className="text-sky-400 flex-shrink-0" />}
+          {(m.isOwner || m.user?.id === artist.submittedById) && <Crown size={12} className="text-amber-400 flex-shrink-0" />}
+          {m.isAdmin && !m.isOwner && m.user?.id !== artist.submittedById && <Shield size={11} className="text-sky-400 flex-shrink-0" />}
         </p>
         <p className="text-xs text-slate-500 truncate">{roleText(m) || '—'}</p>
       </div>
@@ -565,7 +667,7 @@ export default function ArtistPage() {
       >
         <div
           className="absolute bottom-0 left-0 right-0 bg-slate-900 rounded-t-3xl flex flex-col"
-          style={{ maxHeight: '92vh', paddingBottom: 'env(safe-area-inset-bottom, 0px)', WebkitOverflowScrolling: 'touch' } as React.CSSProperties}
+          style={{ maxHeight: '92dvh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' } as React.CSSProperties}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Drag handle */}
@@ -590,7 +692,12 @@ export default function ArtistPage() {
           </div>
 
           {/* Scrollable body */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
+
+            <ArtistLookup onApply={applyLookupCandidate} applying={applyingLookup} />
+
+            <MediaImportList title="Релизы на Apple Music" items={foundReleases} onImport={importReleases} />
+            <MediaImportList title="Клипы на Apple Music" items={foundClips} onImport={importClips} />
 
             {/* Название */}
             <div>
@@ -669,7 +776,7 @@ export default function ArtistPage() {
               <label className="block text-xs text-slate-500 mb-1">Слушателей в месяц</label>
               <input
                 type="number"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
+                className="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
                 value={form.listeners}
                 onChange={(e) => set('listeners', e.target.value)}
                 placeholder="0"
@@ -754,7 +861,8 @@ export default function ArtistPage() {
         {/* Back button — fixed so it stays visible on scroll */}
         <button
           onClick={() => navigate(-1)}
-          className="fixed top-[72px] left-4 z-30 w-9 h-9 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center shadow-lg"
+          className="fixed left-4 z-30 w-9 h-9 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center shadow-lg"
+          style={{ top: 'calc(72px + env(safe-area-inset-top, 0px))' }}
         >
           <ArrowLeft size={18} className="text-white" />
         </button>
@@ -880,6 +988,18 @@ export default function ArtistPage() {
           )}
         </div>
 
+        {/* Creator — explicit, visible to everyone */}
+        {ownerMember && (
+          <button
+            onClick={() => navigate(`/profile/${ownerMember.user.id}`)}
+            className="flex items-center gap-1.5 text-sm mb-1 group/creator"
+          >
+            <Crown size={12} className="text-amber-400 flex-shrink-0" />
+            <span className="text-slate-500">Создатель:</span>
+            <span className="text-slate-300 group-hover/creator:text-white transition-colors">{memberName(ownerMember)}</span>
+          </button>
+        )}
+
         {/* Status description (owner/admin) — what the current status means + next step. */}
         {isAdminOfArtist && ARTIST_STATUS_DESC[artist.status] && (
           <p className="text-xs text-slate-400 leading-relaxed mb-1.5">
@@ -986,7 +1106,7 @@ export default function ArtistPage() {
 
         {/* Description */}
         {artist.description && (
-          <p className="text-slate-300 text-sm leading-relaxed mb-4 border-l-2 border-primary-500/40 pl-3">
+          <p className="text-slate-300 text-sm leading-relaxed mb-4 border-l-2 border-primary-500/40 pl-3 break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
             {artist.description}
           </p>
         )}
@@ -1023,7 +1143,7 @@ export default function ArtistPage() {
                 className="flex items-center gap-2 text-primary-400 text-sm hover:underline mb-2"
               >
                 <ExternalLink size={14} className="flex-shrink-0" />
-                <span className="truncate">{artist.bandLink}</span>
+                <span className="truncate min-w-0">{artist.bandLink}</span>
               </a>
             )}
             {hasSocialLinks && <SocialIconRow links={(artist.socialLinks as Record<string, string>) || {}} labeled />}
@@ -1188,6 +1308,29 @@ export default function ArtistPage() {
             to="/clips"
             showAdd={viewerIsAdmin}
             onAdd={() => setShowClipForm(true)}
+          />
+        )}
+
+        {/* ── Vacancies rail (owner/admin only) — same look as Releases/Clips ── */}
+        {viewerIsAdmin && (
+          <MediaRail
+            title="Мои вакансии"
+            items={myVacancies.map((v: any) => ({
+              id: v.id,
+              title: v.title,
+              subtitle: [v.profession?.name, v.workFormat ? workFormatLabel(v.workFormat) : '']
+                .filter(Boolean).join(' · '),
+              badge: v.status === 'active'
+                ? { label: 'Активна', className: 'bg-emerald-600 text-white' }
+                : v.status === 'archived'
+                ? { label: 'Архив', className: 'bg-slate-600 text-white' }
+                : { label: 'Черновик', className: 'bg-amber-600 text-white' },
+            }))}
+            count={myVacancies.length}
+            to="/vacancies"
+            showAdd={viewerIsOwner}
+            onAdd={() => setShowVacancyForm(true)}
+            seeAllTo={`/artists/${id}/vacancies`}
           />
         )}
 
@@ -1570,7 +1713,7 @@ export default function ArtistPage() {
                 <>
                   <p className="text-xs text-slate-400">Ссылка-приглашение готова. Она привязана к выбранным ролям и не имеет срока действия.</p>
                   <div className="flex items-center gap-2 p-2 bg-slate-800 rounded-lg">
-                    <code className="text-xs text-primary-300 truncate flex-1">{generatedLink}</code>
+                    <code className="text-xs text-primary-300 truncate flex-1 min-w-0">{generatedLink}</code>
                   </div>
                   <button
                     onClick={async () => {
@@ -1737,6 +1880,21 @@ export default function ArtistPage() {
           artistId={id}
           onClose={() => setShowClipForm(false)}
         />
+      )}
+
+      {/* ── Create vacancy form (scoped to this artist) ── */}
+      {showVacancyForm && id && createPortal(
+        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setShowVacancyForm(false)}>
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
+            <VacancyForm artistId={id} onClose={() => setShowVacancyForm(false)} />
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Phase 7: avatar / banner cropping ── */}

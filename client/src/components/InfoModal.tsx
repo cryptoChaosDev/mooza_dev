@@ -4,6 +4,7 @@ import { X, Mail, FileText, Shield, MessageCircle, Music2, BookOpen, ChevronRigh
 import { useNavigate } from 'react-router-dom';
 import { APP_VERSION } from '../lib/changelog';
 import ChangelogModal from './ChangelogModal';
+import { useScrollLock } from "../lib/scrollLock";
 
 interface Props {
   onClose: () => void;
@@ -12,6 +13,7 @@ interface Props {
 export default function InfoModal({ onClose }: Props) {
   const navigate = useNavigate();
   const [showChangelog, setShowChangelog] = useState(false);
+  useScrollLock(true);
   return createPortal(
     <>
       <div className="fixed inset-0 z-[60] bg-black/50 backdrop-blur-sm" onClick={onClose} />

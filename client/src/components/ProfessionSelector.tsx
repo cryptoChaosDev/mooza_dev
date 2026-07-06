@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { X, Search, Plus, Check } from 'lucide-react';
 import { SORTED_PROFESSIONS } from '../constants/professions';
 import { yoNorm } from '../lib/search';
+import { useScrollLock } from "../lib/scrollLock";
+import ProfessionNotFound from './ProfessionNotFound';
 
 interface ProfessionSelectorProps {
   isOpen: boolean;
@@ -18,6 +20,8 @@ export default function ProfessionSelector({
   onUpdate,
 }: ProfessionSelectorProps) {
   const [searchQuery, setSearchQuery] = useState('');
+
+  useScrollLock(isOpen);
 
   const filteredProfessions = useMemo(() => {
     if (!searchQuery.trim()) return SORTED_PROFESSIONS;
@@ -65,7 +69,7 @@ export default function ProfessionSelector({
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Поиск профессии..."
-            className="flex-1 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
+            className="flex-1 min-w-0 bg-transparent text-sm text-white placeholder-slate-500 focus:outline-none"
           />
           {searchQuery && (
             <button onClick={() => setSearchQuery('')} className="text-slate-500 hover:text-white transition-colors">
@@ -94,7 +98,7 @@ export default function ProfessionSelector({
       )}
 
       {/* List */}
-      <div className="flex-1 overflow-y-auto px-2 py-2" style={{ WebkitOverflowScrolling: 'touch' } as React.CSSProperties}>
+      <div className="flex-1 overflow-y-auto px-2 py-2">
         {filteredProfessions.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 px-2">
             {filteredProfessions.map((profession) => {
@@ -109,7 +113,7 @@ export default function ProfessionSelector({
                       : 'bg-slate-800/60 text-slate-300 hover:bg-slate-800 border border-slate-700/40'
                   }`}
                 >
-                  <span className="truncate">{profession}</span>
+                  <span className="truncate min-w-0">{profession}</span>
                   {isSelected
                     ? <Check size={16} className="text-primary-400 flex-shrink-0 ml-2" />
                     : <Plus size={16} className="text-slate-500 flex-shrink-0 ml-2" />
@@ -119,7 +123,7 @@ export default function ProfessionSelector({
             })}
           </div>
         ) : (
-          <div className="text-center py-16 text-slate-500 text-sm">Профессии не найдены</div>
+          <ProfessionNotFound initialQuery={searchQuery} />
         )}
       </div>
 

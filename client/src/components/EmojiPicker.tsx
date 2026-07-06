@@ -22,9 +22,11 @@ const EMOJI_GROUPS = [
 interface EmojiPickerProps {
   onSelect: (emoji: string) => void;
   onClose: () => void;
+  /** 'up' (default) opens above the anchor (composer at page bottom); 'down' opens below it (trigger in a top bar). */
+  position?: 'up' | 'down';
 }
 
-export default function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
+export default function EmojiPicker({ onSelect, onClose, position = 'up' }: EmojiPickerProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -38,7 +40,9 @@ export default function EmojiPicker({ onSelect, onClose }: EmojiPickerProps) {
   return (
     <div
       ref={ref}
-      className="absolute bottom-full mb-2 left-0 z-50 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-3 w-72"
+      className={`absolute z-50 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl p-3 w-72 ${
+        position === 'down' ? 'top-full mt-2 right-0' : 'bottom-full mb-2 left-0'
+      }`}
     >
       <div className="max-h-64 overflow-y-auto space-y-3 scrollbar-hide">
         {EMOJI_GROUPS.map(group => (

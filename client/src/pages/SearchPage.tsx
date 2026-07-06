@@ -10,12 +10,13 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
-import { referenceAPI, userAPI } from '../lib/api';
+import { referenceAPI, userAPI, artistAPI, favoriteAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import DealCreateModal from '../components/DealCreateModal';
 import { DEALS_ENABLED } from '../lib/features';
 import { useAuthGate } from '../components/AuthGateModal';
 import { plural } from '../lib/plural';
+import { useScrollLock } from '../lib/scrollLock';
 
 // ─── Tile gradients ──────────────────────────────────────────────────────────
 const TILE_GRADIENTS = [
@@ -76,7 +77,7 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
         {/* Info — click navigates to profile. Surname first per spec. */}
         <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onNavigate(user.id)}>
           <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-sm font-semibold text-white">
+            <span className="text-sm font-semibold text-white min-w-0 break-words [overflow-wrap:anywhere]">
               {user.lastName} {user.firstName}
             </span>
             {user.isVerified && <span title="Верифицирован"><BadgeCheck size={12} className="text-sky-400 flex-shrink-0" /></span>}
@@ -84,9 +85,9 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
           </div>
 
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            {location && <span className="text-xs text-slate-500 truncate">{location}</span>}
+            {location && <span className="text-xs text-slate-500 min-w-0 break-words [overflow-wrap:anywhere]">{location}</span>}
             {professions.length > 0 && (
-              <span className="text-xs text-slate-400 truncate">{location ? '· ' : ''}{professions.slice(0, 2).join(', ')}</span>
+              <span className="text-xs text-slate-400 min-w-0 break-words [overflow-wrap:anywhere]">{location ? '· ' : ''}{professions.slice(0, 2).join(', ')}</span>
             )}
             <span className="flex items-center gap-0.5 text-xs text-slate-500">
               <Link2 size={10} />
@@ -95,24 +96,29 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
           </div>
         </div>
 
-        {/* Expand toggle (down arrow indicates expandable) */}
+        {/* Expand toggle — a visible bordered pill (a bare chevron read as non-clickable) */}
         <button
           onClick={e => { e.stopPropagation(); setExpanded(v => !v); }}
-          className="p-2 text-slate-500 hover:text-primary-400 hover:bg-primary-500/10 rounded-xl transition-all flex-shrink-0"
-          title={expanded ? 'Свернуть' : 'Раскрыть'}
+          className={`flex items-center gap-1 pl-2.5 pr-1.5 py-1.5 rounded-full border text-[11px] font-medium transition-all flex-shrink-0 ${
+            expanded
+              ? 'bg-primary-500/15 border-primary-500/40 text-primary-300'
+              : 'bg-slate-800 border-slate-600 text-slate-300 hover:text-primary-300 hover:border-primary-500/40'
+          }`}
+          title={expanded ? 'Свернуть' : 'Раскрыть превью профиля'}
         >
-          {expanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          {expanded ? 'Свернуть' : 'Превью'}
+          {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
         </button>
       </div>
 
       {/* ── Expanded preview (max ~half the screen, scroll inside) ── */}
       {expanded && (
-        <div className="px-4 pb-4 bg-slate-900/40 max-h-[50vh] overflow-y-auto space-y-3">
+        <div className="px-4 pb-4 bg-slate-900/40 max-h-[50dvh] overflow-y-auto space-y-3">
           {/* О себе */}
           {user.bio?.trim() ? (
             <div>
               <p className="text-[11px] text-slate-500 mb-1 font-medium uppercase tracking-wider">О себе</p>
-              <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line">{user.bio}</p>
+              <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere]">{user.bio}</p>
             </div>
           ) : (
             <p className="text-xs text-slate-600 italic">Описание не добавлено</p>
@@ -221,7 +227,7 @@ function ServiceCardItem({ card, currentUserId, onNavigate, onMessage, onDeal, e
 
       {/* Service title (free-form name) */}
       <button onClick={() => onNavigate(card)} className="block w-full text-left mt-3">
-        <p className="text-sm font-semibold text-white leading-snug">{title}</p>
+        <p className="text-sm font-semibold text-white leading-snug break-words [overflow-wrap:anywhere]">{title}</p>
         {card.service?.name && title !== card.service.name && (
           <p className="text-[11px] text-slate-500 mt-0.5">{card.service.name}</p>
         )}
@@ -234,7 +240,7 @@ function ServiceCardItem({ card, currentUserId, onNavigate, onMessage, onDeal, e
           <div className="mt-1.5 space-y-1">
             {priceItems.slice(0, 3).map((it, i) => (
               <div key={i} className="flex items-center justify-between gap-3 text-xs">
-                <span className="text-slate-400 truncate">{it.name}</span>
+                <span className="text-slate-400 truncate min-w-0">{it.name}</span>
                 <span className="text-slate-300 flex-shrink-0">{it.price ? `${it.price} ₽` : '—'}</span>
               </div>
             ))}
@@ -277,6 +283,8 @@ export default function SearchPage() {
   const { ensureAuth, authGateModal } = useAuthGate();
 
   const [activeTab, setActiveTab] = useState<CatalogTab>('services');
+  // Звёздочка «Избранное» — на вкладках «Артисты»/«Люди» показывает избранные (подписки/favorites)
+  const [showFavorites, setShowFavorites] = useState(false);
   const [dealCard, setDealCard] = useState<any>(null);
 
   // ── Услуги tab state ───────────────────────────────────────────────────────
@@ -371,6 +379,9 @@ export default function SearchPage() {
     { value: 'considering', label: 'Рассматриваю предложения' },
     { value: 'closed', label: 'Занят' },
   ];
+
+  // Lock body scroll while any full-screen filter modal is open (iOS jump fix).
+  useScrollLock(filtersOpen || artistFilterOpen || peopleFilterOpen);
 
   // Single-select type ('' clears to «Все»; selecting the active type clears it).
   function selectType(value: string) {
@@ -533,6 +544,30 @@ export default function SearchPage() {
     enabled: activeTab === 'artists',
   });
 
+  // ── Избранное: подписки на артистов + избранные пользователи ────────────────
+  const { data: favArtists, isLoading: favArtistsLoading } = useQuery({
+    queryKey: ['catalog-fav-artists'],
+    queryFn: async () => {
+      const { data } = await artistAPI.getFollowing();
+      return data as any[];
+    },
+    enabled: showFavorites && activeTab === 'artists' && !!currentUser,
+  });
+  const { data: favPeople, isLoading: favPeopleLoading } = useQuery({
+    queryKey: ['catalog-fav-people'],
+    queryFn: async () => {
+      const { data } = await favoriteAPI.list();
+      return (data as any[]).map((f) => f.user).filter(Boolean);
+    },
+    enabled: showFavorites && activeTab === 'people' && !!currentUser,
+  });
+
+  // Источник для вкладок с учётом звёздочки «Избранное»
+  const displayArtists = showFavorites ? (favArtists ?? []) : (artists ?? []);
+  const displayArtistsLoading = showFavorites ? favArtistsLoading : artistsLoading;
+  const displayPeople = showFavorites ? (favPeople ?? []) : (peopleUsers ?? []);
+  const displayPeopleLoading = showFavorites ? favPeopleLoading : peopleLoading;
+
   // ── Navigation helpers ─────────────────────────────────────────────────────
   // Open a section to reveal its services.
   const handleSectionClick = (section: any) => {
@@ -582,7 +617,7 @@ export default function SearchPage() {
     : [];
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950">
 
       {/* ── Sticky header ── */}
       <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
@@ -595,9 +630,20 @@ export default function SearchPage() {
                 <ChevronLeft size={20} />
               </button>
             )}
+            <Search size={20} className="text-primary-400 flex-shrink-0" />
             <h2 className="text-lg font-bold text-white">
               {canGoBack && activeTab === 'services' ? selectedSection!.name : 'Каталог'}
             </h2>
+            {activeTab !== 'services' && (
+              <button
+                onClick={() => setShowFavorites((s) => !s)}
+                className={`ml-auto flex items-center px-2.5 py-1.5 rounded-xl transition-colors ${showFavorites ? 'text-amber-300 bg-amber-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
+                title={showFavorites ? 'Показаны избранные' : 'Избранное'}
+                aria-label="Избранное"
+              >
+                <Star size={18} fill={showFavorites ? 'currentColor' : 'none'} />
+              </button>
+            )}
           </div>
 
           {/* Tabs */}
@@ -925,7 +971,7 @@ export default function SearchPage() {
               return (
                 <div className="mb-5">
                   <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Жанры</p>
-                  <div className="flex flex-wrap gap-2" style={{ maxHeight: showAllGenres ? undefined : '4.5rem', overflow: showAllGenres ? undefined : 'hidden' }}>
+                  <div className="flex flex-wrap gap-2" style={{ maxHeight: showAllGenres ? undefined : '4.5rem', overflow: showAllGenres ? undefined : 'hidden', maskImage: showAllGenres ? undefined : 'linear-gradient(to bottom, #000 68%, transparent)', WebkitMaskImage: showAllGenres ? undefined : 'linear-gradient(to bottom, #000 68%, transparent)' }}>
                     <button
                       onClick={() => setArtistGenreFilter([])}
                       className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${
@@ -968,10 +1014,10 @@ export default function SearchPage() {
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
                   {artistSort === 'alpha' ? 'Все артисты · от А до Я' : 'Все артисты · сначала новые'}
                 </p>
-                {artistsLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
+                {displayArtistsLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
               </div>
 
-              {artistsLoading ? (
+              {displayArtistsLoading ? (
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
                   {Array.from({ length: 6 }).map((_, i) => (
                     <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-slate-800/50 animate-pulse last:border-0">
@@ -983,9 +1029,9 @@ export default function SearchPage() {
                     </div>
                   ))}
                 </div>
-              ) : artists && artists.length > 0 ? (
+              ) : displayArtists.length > 0 ? (
                 <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden divide-y divide-slate-800/50">
-                  {artists.map((artist: any) => {
+                  {displayArtists.map((artist: any) => {
                     const genreNames = artist.genres?.map((g: any) => g.genre?.name).filter(Boolean).slice(0, 3) ?? [];
                     const typeLabel = artist.type === 'SOLO' ? 'Соло' : artist.type === 'GROUP' ? 'Группа' : artist.type === 'COVER_GROUP' ? 'Кавербэнд' : '';
                     return (
@@ -1070,10 +1116,12 @@ export default function SearchPage() {
                 <button
                   type="button"
                   onClick={() => setPeopleSortOpen(v => !v)}
-                  className="p-1.5 text-slate-400 hover:text-primary-400 hover:bg-primary-500/10 rounded-lg transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
                   title="Сортировка"
                 >
                   <ArrowDownUp size={14} />
+                  {PEOPLE_SORT_OPTIONS.find(o => o.value === peopleSort)?.label}
+                  <ChevronDown size={13} className={`transition-transform ${peopleSortOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {peopleSortOpen && (
                   <>
@@ -1106,10 +1154,10 @@ export default function SearchPage() {
                   </>
                 )}
               </div>
-              {peopleLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
+              {displayPeopleLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
             </div>
 
-            {peopleLoading ? (
+            {displayPeopleLoading ? (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
                 {Array.from({ length: 8 }).map((_, i) => (
                   <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-slate-800/50 animate-pulse last:border-0">
@@ -1121,9 +1169,9 @@ export default function SearchPage() {
                   </div>
                 ))}
               </div>
-            ) : peopleUsers && peopleUsers.length > 0 ? (
+            ) : displayPeople.length > 0 ? (
               <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
-                {peopleUsers.map((user: any) => (
+                {displayPeople.map((user: any) => (
                   <ExpandableUserRow
                     key={user.id}
                     user={user}
@@ -1159,7 +1207,7 @@ export default function SearchPage() {
       {filtersOpen && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setFiltersOpen(false)} />
-          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85dvh] flex flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal size={16} className="text-primary-400" />
@@ -1303,7 +1351,7 @@ export default function SearchPage() {
       {artistFilterOpen && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setArtistFilterOpen(false)} />
-          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85dvh] flex flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal size={16} className="text-primary-400" />
@@ -1362,7 +1410,7 @@ export default function SearchPage() {
       {peopleFilterOpen && createPortal(
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setPeopleFilterOpen(false)} />
-          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85vh] flex flex-col">
+          <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden max-h-[85dvh] flex flex-col" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal size={16} className="text-primary-400" />

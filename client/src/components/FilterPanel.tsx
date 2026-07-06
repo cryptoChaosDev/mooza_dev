@@ -13,6 +13,7 @@ import {
   useAvailabilities,
   useGeographies,
 } from '../stores/searchStore';
+import ProfessionNotFound from './ProfessionNotFound';
 
 // ─── Section label divider ──────────────────────────────────────────────────
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -123,12 +124,13 @@ interface FilterSectionProps {
   disabled?: boolean;
   indent?: boolean;
   maxVisible?: number;
+  requestOnEmpty?: boolean;
   onSelect: (id: string | null) => void;
 }
 
 function FilterSection({
   title, value, items, loading, disabled = false,
-  indent = false, maxVisible = 6, onSelect,
+  indent = false, maxVisible = 6, requestOnEmpty = false, onSelect,
 }: FilterSectionProps) {
   const [open, setOpen] = useState(!!value);
   const [showAll, setShowAll] = useState(false);
@@ -179,7 +181,9 @@ function FilterSection({
               ))}
             </div>
           ) : items.length === 0 ? (
-            <p className="text-slate-500 text-xs py-2 px-2">Нет вариантов</p>
+            requestOnEmpty
+              ? <ProfessionNotFound compact />
+              : <p className="text-slate-500 text-xs py-2 px-2">Нет вариантов</p>
           ) : (
             <>
               {visible.map(item => (
@@ -334,6 +338,7 @@ export default function FilterPanel({ showHeader = true }: FilterPanelProps) {
           loading={professionsLoading}
           disabled={!directionId}
           indent
+          requestOnEmpty
           onSelect={wrap(setProfessionId, () => { setServiceId(null); setGenreId(null); })}
         />
 

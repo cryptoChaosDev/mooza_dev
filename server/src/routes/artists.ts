@@ -56,12 +56,11 @@ async function isMember(artistId: string, userId: string): Promise<boolean> {
   return !!(await prisma.userArtist.findFirst({ where: { artistId, userId } }));
 }
 
-// Helper: is user an admin of the artist (UserArtist.isAdmin) or a system admin.
+// Helper: is user an admin of THIS artist (UserArtist.isAdmin). A system admin who
+// is not part of the artist has NO edit rights — only its creator/owners/admins do.
 async function isArtistAdmin(artistId: string, userId: string): Promise<boolean> {
   const ua = await prisma.userArtist.findFirst({ where: { artistId, userId, isAdmin: true } });
-  if (ua) return true;
-  const me = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
-  return !!me?.isAdmin;
+  return !!ua;
 }
 
 // ── GET /api/artists/suggest?q= ─────────────────────────────────────────────
@@ -152,6 +151,90 @@ router.get('/check-name', optionalAuthenticate, async (req: AuthRequest, res: Re
   }
 });
 
+// ── GET /api/artists/my-invites ──────────────────────────────────────────────
+// Invitations sent TO the current user (invitedById != null), still pending.
+router.get('/my-invites', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+
+    const memberships = await prisma.userArtist.findMany({
+      where: {
+        userId,
+        inviteStatus: 'PENDING',
+        invitedById: { not: null },
+      },
+      include: {
+        artist: { select: { id: true, name: true, avatar: true } },
+        profession: { select: { name: true } },
+        roles: { include: { role: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return res.json(
+      memberships.map((m) => ({
+        id: m.id,
+        artist: { id: m.artist.id, name: m.artist.name, avatar: m.artist.avatar },
+        roleNames: m.roles.map((r) => r.role.name),
+        professionName: m.profession?.name ?? null,
+        createdAt: m.createdAt,
+      })),
+    );
+  } catch (e) {
+    console.error('[artists] GET /my-invites', e);
+    return res.status(500).json({ error: 'Failed to fetch invites' });
+  }
+});
+
+// ── GET /api/artists/join-requests ───────────────────────────────────────────
+// Pending join requests (invitedById = null) for artists the current user OWNS.
+router.get('/join-requests', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const userId = req.userId!;
+
+    const ownedRows = await prisma.userArtist.findMany({
+      where: { userId, isOwner: true },
+      select: { artistId: true },
+    });
+    const artistIds = ownedRows.map((r) => r.artistId);
+    if (artistIds.length === 0) return res.json([]);
+
+    const requests = await prisma.userArtist.findMany({
+      where: {
+        artistId: { in: artistIds },
+        inviteStatus: 'PENDING',
+        invitedById: null,
+      },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+        artist: { select: { id: true, name: true } },
+        profession: { select: { name: true } },
+        roles: { include: { role: { select: { name: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return res.json(
+      requests.map((r) => ({
+        id: r.id,
+        artist: { id: r.artist.id, name: r.artist.name },
+        user: {
+          id: r.user.id,
+          firstName: r.user.firstName,
+          lastName: r.user.lastName,
+          avatar: r.user.avatar,
+        },
+        roleNames: r.roles.map((rr) => rr.role.name),
+        professionName: r.profession?.name ?? null,
+        createdAt: r.createdAt,
+      })),
+    );
+  } catch (e) {
+    console.error('[artists] GET /join-requests', e);
+    return res.status(500).json({ error: 'Failed to fetch join requests' });
+  }
+});
+
 // ── GET /api/artists/:id ─────────────────────────────────────────────────────
 router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -191,15 +274,11 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
       const mine = userArtists.find(
         (ua: any) => ua.userId === currentUserId && ua.inviteStatus === 'ACCEPTED',
       );
-      viewerIsOwner = !!mine?.isOwner;
-      viewerIsAdmin = !!mine?.isAdmin;
-      if (!viewerIsAdmin) {
-        const sys = await prisma.user.findUnique({
-          where: { id: currentUserId },
-          select: { isAdmin: true },
-        });
-        if (sys?.isAdmin) viewerIsAdmin = true;
-      }
+      // The artist's creator (submittedById) is always its owner — even if the
+      // UserArtist owner row is missing (legacy / alternate creation paths).
+      const isCreator = (artist as any).submittedById === currentUserId;
+      viewerIsOwner = !!mine?.isOwner || isCreator;
+      viewerIsAdmin = !!mine?.isAdmin || isCreator;
     }
 
     const serializeMember = (ua: any) => ({
@@ -771,8 +850,7 @@ router.get('/:id/memberships/pending', authenticate, async (req: AuthRequest, re
   try {
     const artistId = req.params.id;
     const isOwner = await prisma.userArtist.findFirst({ where: { artistId, userId: req.userId!, isOwner: true } });
-    const me = await prisma.user.findUnique({ where: { id: req.userId! }, select: { isAdmin: true } });
-    if (!isOwner && !me?.isAdmin) return res.status(403).json({ error: 'Forbidden' });
+    if (!isOwner) return res.status(403).json({ error: 'Forbidden' });
     const memberships = await prisma.userArtist.findMany({
       where: { artistId, inviteStatus: 'PENDING', invitedById: null },
       include: {
@@ -791,7 +869,8 @@ router.get('/:id/memberships/pending', authenticate, async (req: AuthRequest, re
   }
 });
 
-// Helper: check if current user can manage membership (artist owner or system admin)
+// Helper: check if current user can manage membership (artist owner only — system
+// admins have no rights on artists they don't own).
 async function canManageMembership(membershipId: string, userId: string): Promise<{ ua: any; allowed: boolean }> {
   const ua = await prisma.userArtist.findUnique({
     where: { id: membershipId },
@@ -799,8 +878,7 @@ async function canManageMembership(membershipId: string, userId: string): Promis
   });
   if (!ua) return { ua: null, allowed: false };
   const isArtistOwner = await prisma.userArtist.findFirst({ where: { artistId: ua.artistId, userId, isOwner: true } });
-  const me = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
-  return { ua, allowed: !!(isArtistOwner || me?.isAdmin) };
+  return { ua, allowed: !!isArtistOwner };
 }
 
 // ── PATCH /api/artists/memberships/:id/approve ───────────────────────────────
@@ -847,8 +925,8 @@ router.patch('/memberships/:id/reject', authenticate, async (req: AuthRequest, r
 
 const APP_URL = process.env.APP_URL || 'https://moooza.ru';
 
-// Resolve the requester's effective admin status for an artist, returning the
-// confirmed-owner membership too. System admins are allowed but have no membership.
+// Resolve the requester's admin status for an artist. Only a confirmed UserArtist
+// admin qualifies — a system admin gets NO edit rights on an artist they don't own.
 async function requireArtistAdmin(
   artistId: string,
   userId: string,
@@ -857,9 +935,7 @@ async function requireArtistAdmin(
     where: { artistId, userId, isAdmin: true, inviteStatus: 'ACCEPTED' },
     select: { id: true },
   });
-  if (ua) return { ok: true, isSystemAdmin: false };
-  const me = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
-  return { ok: !!me?.isAdmin, isSystemAdmin: !!me?.isAdmin };
+  return { ok: !!ua, isSystemAdmin: false };
 }
 
 // The confirmed OWNER membership of an artist (there is exactly one).

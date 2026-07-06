@@ -136,6 +136,8 @@ export const userAPI = {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
   deletePortfolioFile: (fileId: string) => api.delete(`/users/me/portfolio/${fileId}`),
+  renamePortfolioFile: (fileId: string, title: string) => api.patch(`/users/me/portfolio/${fileId}`, { title }),
+  reorderPortfolio: (orderedIds: string[]) => api.patch('/users/me/portfolio/reorder', { orderedIds }),
   addPortfolioLink: (data: { type: string; url: string; title?: string }) => api.post('/users/me/portfolio/links', data),
   deletePortfolioLink: (linkId: string) => api.delete(`/users/me/portfolio/links/${linkId}`),
   agreeToTerms: () => api.post('/users/me/agree-terms'),
@@ -231,8 +233,8 @@ export const postAPI = {
     api.post('/posts/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   likePost: (postId: string) => api.post(`/posts/${postId}/like`),
   unlikePost: (postId: string) => api.delete(`/posts/${postId}/like`),
-  commentPost: (postId: string, content: string, parentCommentId?: string) =>
-    api.post(`/posts/${postId}/comments`, { content, ...(parentCommentId ? { parentCommentId } : {}) }),
+  commentPost: (postId: string, content: string, parentCommentId?: string, imageUrl?: string) =>
+    api.post(`/posts/${postId}/comments`, { content, ...(parentCommentId ? { parentCommentId } : {}), ...(imageUrl ? { imageUrl } : {}) }),
   editPost: (postId: string, data: { content?: string; imageUrl?: string | null; audioUrl?: string | null; audioName?: string | null }) =>
     api.put(`/posts/${postId}`, data),
   deletePost: (postId: string) => api.delete(`/posts/${postId}`),
@@ -331,6 +333,9 @@ export const artistAPI = {
   unfollow: (id: string) => api.delete(`/artists/${id}/follow`),
   getFollowing: () => api.get('/artists/following'),
   checkName: (name: string) => api.get('/artists/check-name', { params: { name } }),
+  lookup: (q: string) => api.get('/artist-lookup', { params: { q } }),
+  lookupAvatar: (url: string) => api.get('/artist-lookup/avatar', { params: { url }, responseType: 'blob' }),
+  lookupReleases: (params: { itunesId?: number | null; deezerId?: number | null }) => api.get('/artist-lookup/releases', { params }),
   requestVerification: (id: string, verificationUrl: string) =>
     api.patch(`/artists/${id}/request-verification`, { verificationUrl }),
   withdrawVerification: (id: string) => api.patch(`/artists/${id}/withdraw`),
@@ -347,6 +352,9 @@ export const artistAPI = {
   pendingMemberships: (artistId: string) => api.get(`/artists/${artistId}/memberships/pending`),
   approveMembership: (id: string) => api.patch(`/artists/memberships/${id}/approve`),
   rejectMembership: (id: string) => api.patch(`/artists/memberships/${id}/reject`),
+  // «Запросы» inboxes: invitations sent to me + join requests to artists I own.
+  getMyInvites: () => api.get('/artists/my-invites'),
+  getJoinRequests: () => api.get('/artists/join-requests'),
 
   // Phase 5a — members / admins / ownership / invite links
   addMember: (
@@ -414,6 +422,7 @@ export const releaseAPI = {
     api.patch(`/releases/participants/${participantId}/confirm`),
   declineParticipant: (participantId: string) =>
     api.patch(`/releases/participants/${participantId}/decline`),
+  getPendingParticipations: () => api.get('/releases/participations/pending'),
   remove: (id: string) => api.delete(`/releases/${id}`),
 };
 
@@ -423,7 +432,7 @@ export const clipAPI = {
     api.post('/clips/metadata', { platform, url }),
   create: (data: {
     artistId: string;
-    platform: 'VK_VIDEO' | 'RUTUBE' | 'YOUTUBE';
+    platform: 'VK_VIDEO' | 'RUTUBE' | 'YOUTUBE' | 'APPLE_MUSIC';
     url: string;
     title: string;
     coverUrl?: string;
@@ -437,7 +446,7 @@ export const clipAPI = {
       title?: string;
       coverUrl?: string | null;
       url?: string;
-      platform?: 'VK_VIDEO' | 'RUTUBE' | 'YOUTUBE';
+      platform?: 'VK_VIDEO' | 'RUTUBE' | 'YOUTUBE' | 'APPLE_MUSIC';
       participants?: { userId: string; roleIds: string[] }[];
     },
   ) => api.patch(`/clips/${id}`, data),
@@ -445,6 +454,7 @@ export const clipAPI = {
     api.patch(`/clips/participants/${participantId}/confirm`),
   declineParticipant: (participantId: string) =>
     api.patch(`/clips/participants/${participantId}/decline`),
+  getPendingParticipations: () => api.get('/clips/participations/pending'),
   remove: (id: string) => api.delete(`/clips/${id}`),
 };
 
@@ -533,6 +543,9 @@ export const adminAPI = {
   geographies: crudFor('geographies'),
   priceRanges: crudFor('price-ranges'),
   artists: crudFor('artists'),
+  waitlist: {
+    list: (type?: string) => api.get(`${adminBase}/waitlist`, { params: type ? { type } : undefined }),
+  },
   artistModeration: {
     verification: () => api.get(`${adminBase}/artists/verification`),
     reject: (id: string, reason?: string) => api.patch(`${adminBase}/artists/${id}/reject`, { reason }),
@@ -542,6 +555,11 @@ export const adminAPI = {
     pending: () => api.get(`${adminBase}/user-services/pending`),
     approve: (id: string) => api.patch(`${adminBase}/user-services/${id}/approve`),
     reject: (id: string, reason?: string) => api.patch(`${adminBase}/user-services/${id}/reject`, { reason }),
+  },
+  professionRequests: {
+    list: (status?: string) => api.get(`${adminBase}/profession-requests`, { params: status ? { status } : undefined }),
+    resolve: (id: string, status: 'done' | 'rejected' | 'pending', addToCatalog?: boolean) =>
+      api.patch(`${adminBase}/profession-requests/${id}`, { status, addToCatalog }),
   },
   customFilters: {
     list: () => api.get(`${adminBase}/custom-filters`),
@@ -600,6 +618,51 @@ export const dealAPI = {
   rejectEdit: (reqId: string) => api.patch(`/deals/edit-request/${reqId}/reject`),
 };
 
+export const orderAPI = {
+  getMine: (params?: { status?: string }) => api.get('/orders/mine', { params }),
+  getOne: (id: string) => api.get(`/orders/${id}`),
+  create: (data: any) => api.post('/orders', data),
+  update: (id: string, data: any) => api.patch(`/orders/${id}`, data),
+  setStatus: (id: string, status: string) => api.patch(`/orders/${id}/status`, { status }),
+  remove: (id: string) => api.delete(`/orders/${id}`),
+  getMatches: (id: string, params?: { page?: number; limit?: number }) => api.get(`/orders/${id}/matches`, { params }),
+  respond: (id: string, data: { price: number; comment?: string }) => api.post(`/orders/${id}/responses`, data),
+  getResponses: (id: string) => api.get(`/orders/${id}/responses`),
+  getIncomingResponses: () => api.get('/orders/responses/incoming'),
+  offer: (id: string, executorId: string) => api.post(`/orders/${id}/offer`, { executorId }),
+  createDeal: (id: string, responseId: string) => api.post(`/orders/${id}/responses/${responseId}/deal`, {}),
+  uploadReferences: (id: string, formData: FormData) => api.post(`/orders/${id}/references`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  deleteReference: (id: string, fileId: string) => api.delete(`/orders/${id}/references/${fileId}`),
+};
+
+// Vacancy API — artist-posted «Вакансия» (plan §5). Mirrors orderAPI but author is
+// an Artist, the catalog is professions, and offers/responses replace deals.
+export const vacancyAPI = {
+  getMine: (params: { artistId: string; status?: string }) => api.get('/vacancies/mine', { params }),
+  getOne: (id: string) => api.get(`/vacancies/${id}`),
+  create: (data: any) => api.post('/vacancies', data),
+  update: (id: string, data: any) => api.patch(`/vacancies/${id}`, data),
+  setStatus: (id: string, status: string) => api.patch(`/vacancies/${id}/status`, { status }),
+  remove: (id: string) => api.delete(`/vacancies/${id}`),
+  getMatches: (id: string, params?: { page?: number; limit?: number }) => api.get(`/vacancies/${id}/matches`, { params }),
+  respond: (id: string, data: { comment?: string; portfolioLinks?: { url: string; title: string; source: string }[]; hasPortfolioFiles?: boolean }) =>
+    api.post(`/vacancies/${id}/responses`, data),
+  uploadPortfolio: (id: string, responseId: string, formData: FormData) =>
+    api.post(`/vacancies/${id}/responses/${responseId}/portfolio`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  deletePortfolio: (id: string, responseId: string, fileId: string) =>
+    api.delete(`/vacancies/${id}/responses/${responseId}/portfolio/${fileId}`),
+  getResponses: (id: string) => api.get(`/vacancies/${id}/responses`),
+  getMyOffers: () => api.get('/vacancies/my-offers'),
+  getIncomingResponses: () => api.get('/vacancies/responses/incoming'),
+  offerCandidate: (id: string, candidateId: string) => api.post(`/vacancies/${id}/offer`, { candidateId }),
+  makeCooperation: (id: string, responseId: string, data: { startDate: string; conditions: string; compensation: string; extraDetails?: string }) =>
+    api.post(`/vacancies/${id}/responses/${responseId}/cooperation`, data),
+  acceptOffer: (offerId: string) => api.post(`/vacancies/offers/${offerId}/accept`),
+  rejectOffer: (offerId: string) => api.post(`/vacancies/offers/${offerId}/reject`),
+  uploadReferences: (id: string, formData: FormData) => api.post(`/vacancies/${id}/references`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  deleteReference: (id: string, fileId: string) => api.delete(`/vacancies/${id}/references/${fileId}`),
+};
+
 export const referralAPI = {
   getStats: () => api.get('/referrals/stats'),
   getLinks: () => api.get('/referrals/links'),
@@ -632,6 +695,19 @@ export const complaintAPI = {
   resolve: (id: string, data: { status: string; resolution?: string; blockDays?: number | 'forever'; deleteContent?: boolean }) =>
     api.patch(`/complaints/${id}`, data),
   stats: () => api.get('/complaints/stats'),
+};
+
+export const supportAPI = {
+  // Запрос на добавление профессии/услуги, которой нет в каталоге → в поддержку
+  requestProfession: (data: { profession: string; comment?: string }) =>
+    api.post('/support/profession-request', data),
+};
+
+export const notificationAPI = {
+  // Дублирование уведомлений в Telegram-бот
+  telegramStatus: () => api.get('/notifications/telegram/status'),
+  telegramSubscribe: () => api.post('/notifications/telegram/subscribe'),
+  telegramUnsubscribe: () => api.delete('/notifications/telegram'),
 };
 
 // Search Filters Type

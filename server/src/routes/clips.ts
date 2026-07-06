@@ -2,24 +2,23 @@ import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { ClipPlatform } from '@prisma/client';
+import { detectClipPlatform } from '../lib/mediaPlatforms';
 import { fetchStreamMetadata } from '../utils/streamMetadata';
 import { notify } from '../utils/notify';
 
 const router = Router();
 
-const PLATFORMS: ClipPlatform[] = ['VK_VIDEO', 'RUTUBE', 'YOUTUBE'];
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-// Artist admin = confirmed UserArtist with isAdmin true, OR a system admin.
+// Artist admin = confirmed UserArtist with isAdmin true. System admins do NOT get
+// edit rights on artists they don't belong to.
 async function isArtistAdmin(artistId: string, userId: string): Promise<boolean> {
   const ua = await prisma.userArtist.findFirst({
     where: { artistId, userId, isAdmin: true, inviteStatus: 'ACCEPTED' },
     select: { id: true },
   });
-  if (ua) return true;
-  const me = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
-  return !!me?.isAdmin;
+  return !!ua;
 }
 
 async function actorName(userId: string): Promise<string> {
@@ -60,6 +59,51 @@ const participantInclude = {
   roles: { include: { role: { select: { id: true, name: true } } } },
 } as const;
 
+// ── GET /api/clips/participations/pending — my pending participation inbox ────
+// MUST be registered before '/:id' so Express doesn't capture the literal path.
+router.get('/participations/pending', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const participants = await prisma.clipParticipant.findMany({
+      where: { userId: meId, confirmStatus: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        clip: {
+          select: {
+            id: true,
+            title: true,
+            coverUrl: true,
+            artist: { select: { id: true, name: true, avatar: true } },
+          },
+        },
+        roles: { include: { role: { select: { name: true } } } },
+      },
+    });
+
+    return res.json(
+      participants.map((p) => ({
+        id: p.id,
+        kind: 'clip' as const,
+        clip: {
+          id: p.clip.id,
+          title: p.clip.title,
+          coverUrl: p.clip.coverUrl,
+          artist: {
+            id: p.clip.artist.id,
+            name: p.clip.artist.name,
+            avatar: p.clip.artist.avatar,
+          },
+        },
+        roleNames: p.roles.map((r) => r.role.name),
+        createdAt: p.createdAt,
+      })),
+    );
+  } catch (err) {
+    console.error('[clips] GET /participations/pending', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 // ── POST /api/clips/metadata — best-effort prefill (auth) ─────────────────────
 router.post('/metadata', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -77,9 +121,8 @@ router.post('/metadata', authenticate, async (req: AuthRequest, res: Response) =
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
-    const { artistId, platform, url, title, coverUrl, participants } = req.body as {
+    const { artistId, url, title, coverUrl, participants } = req.body as {
       artistId?: string;
-      platform?: string;
       url?: string;
       title?: string; // название трека
       coverUrl?: string;
@@ -89,8 +132,10 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     if (!artistId) return res.status(400).json({ error: 'artistId обязателен' });
     if (!title || !title.trim()) return res.status(400).json({ error: 'Название трека обязательно' });
     if (!url || !url.trim()) return res.status(400).json({ error: 'Ссылка обязательна' });
-    if (!platform || !PLATFORMS.includes(platform as ClipPlatform)) {
-      return res.status(400).json({ error: 'Неверная платформа' });
+    // Platform is derived from the link itself — reject fake / non-platform links.
+    const detectedPlatform = detectClipPlatform(url);
+    if (!detectedPlatform) {
+      return res.status(400).json({ error: 'Ссылка должна вести на поддерживаемый сервис (ВКонтакте Видео, Rutube, YouTube, Apple Music)' });
     }
 
     if (!(await isArtistAdmin(artistId, meId))) {
@@ -109,7 +154,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         artistId,
         title: title.trim(),
         coverUrl: coverUrl?.trim() || null,
-        platform: platform as ClipPlatform,
+        platform: detectedPlatform as ClipPlatform,
         url: url.trim(),
         participants: {
           create: cleanParticipants.map((p) => ({
@@ -204,11 +249,10 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
 router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
-    const { title, coverUrl, url, platform, participants } = req.body as {
+    const { title, coverUrl, url, participants } = req.body as {
       title?: string;
       coverUrl?: string | null;
       url?: string;
-      platform?: string;
       participants?: { userId: string; roleIds?: string[] }[];
     };
 
@@ -222,15 +266,18 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Нет прав' });
     }
 
-    if (platform !== undefined && !PLATFORMS.includes(platform as ClipPlatform)) {
-      return res.status(400).json({ error: 'Неверная платформа' });
-    }
-
     const data: any = {};
     if (title !== undefined) data.title = title.trim();
     if (coverUrl !== undefined) data.coverUrl = coverUrl ? coverUrl.trim() : null;
-    if (url !== undefined) data.url = url.trim();
-    if (platform !== undefined) data.platform = platform as ClipPlatform;
+    // Changing the link re-derives the platform; reject non-platform / fake links.
+    if (url !== undefined) {
+      const detectedPlatform = detectClipPlatform(url);
+      if (!detectedPlatform) {
+        return res.status(400).json({ error: 'Ссылка должна вести на поддерживаемый сервис (ВКонтакте Видео, Rutube, YouTube, Apple Music)' });
+      }
+      data.url = url.trim();
+      data.platform = detectedPlatform as ClipPlatform;
+    }
 
     await prisma.clip.update({ where: { id: clip.id }, data });
 

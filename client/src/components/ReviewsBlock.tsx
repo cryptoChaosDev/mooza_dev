@@ -2,12 +2,15 @@ import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { Star, X, MessageSquare, Trash2, Loader2 } from 'lucide-react';
+import { Star, X, MessageSquare, Trash2, Loader2, Flag } from 'lucide-react';
 import { reviewAPI } from '../lib/api';
+import ComplaintModal from './ComplaintModal';
+import ConfirmDialog from './ConfirmDialog';
 import { useAuthStore } from '../stores/authStore';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { useScrollLock } from '../lib/scrollLock';
 
 interface Review {
   id: string;
@@ -46,6 +49,10 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
   const [selected, setSelected] = useState<Review | null>(null);
   const [replyText, setReplyText] = useState('');
   const [savingReply, setSavingReply] = useState(false);
+  const [reportReviewId, setReportReviewId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  useScrollLock(!!selected);
 
   const { data: reviews = [] } = useQuery<Review[]>({
     queryKey: ['reviews', userId],
@@ -135,7 +142,7 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
         <>
           <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm" onClick={() => setSelected(null)} />
           <div
-            className="fixed inset-x-0 bottom-0 z-[71] bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[85vh] overflow-y-auto"
+            className="fixed inset-x-0 bottom-0 z-[71] bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[85dvh] overflow-y-auto"
             style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
           >
             <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1" />
@@ -167,24 +174,32 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
                   : <div className="w-9 h-9 rounded-full bg-primary-800 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">{selected.author.firstName[0]}</div>
                 }
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white">{selected.author.firstName} {selected.author.lastName}</p>
+                  <p className="text-sm font-semibold text-white break-words [overflow-wrap:anywhere]">{selected.author.firstName} {selected.author.lastName}</p>
                   <p className="text-[11px] text-slate-500">
                     {new Date(selected.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>
                 </div>
-                {user?.id === selected.authorId && (
+                {user?.id === selected.authorId ? (
                   <button
-                    onClick={() => deleteMutation.mutate(selected.id)}
+                    onClick={() => setConfirmDeleteId(selected.id)}
                     disabled={deleteMutation.isPending}
                     className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded-xl transition-colors"
                   >
                     {deleteMutation.isPending ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                   </button>
-                )}
+                ) : user ? (
+                  <button
+                    onClick={() => { setReportReviewId(selected.id); setSelected(null); }}
+                    title="Пожаловаться на отзыв"
+                    className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-slate-800 rounded-xl transition-colors"
+                  >
+                    <Flag size={16} />
+                  </button>
+                ) : null}
               </div>
 
               {selected.text && (
-                <p className="text-sm text-slate-300 leading-relaxed">{selected.text}</p>
+                <p className="text-sm text-slate-300 leading-relaxed break-words [overflow-wrap:anywhere]">{selected.text}</p>
               )}
 
               {selected.reply ? (
@@ -192,7 +207,7 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
                   <p className="text-xs font-semibold text-primary-400 flex items-center gap-1">
                     <MessageSquare size={11} />Ответ
                   </p>
-                  <p className="text-sm text-slate-300">{selected.reply}</p>
+                  <p className="text-sm text-slate-300 break-words [overflow-wrap:anywhere]">{selected.reply}</p>
                 </div>
               ) : isOwner ? (
                 <div className="space-y-2">
@@ -221,6 +236,18 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
         </>,
         document.body
       )}
+
+      {reportReviewId && (
+        <ComplaintModal targetType="review" targetId={reportReviewId} onClose={() => setReportReviewId(null)} />
+      )}
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        message="Удалить этот отзыв?"
+        confirmLabel="Удалить"
+        onConfirm={() => { if (confirmDeleteId) deleteMutation.mutate(confirmDeleteId); }}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }

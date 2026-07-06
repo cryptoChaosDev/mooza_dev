@@ -5,6 +5,7 @@ import AvatarComponent from './Avatar';
 import ConnectionViewModal from './ConnectionViewModal';
 import { type ConnectionData } from './ConnectionCard';
 import { useNavigate } from 'react-router-dom';
+import { useScrollLock } from "../lib/scrollLock";
 
 const ROLE_LABEL: Record<string, string> = {
   CUSTOMER: 'Заказчик',
@@ -39,6 +40,7 @@ interface Props {
 
 export default function PartnerConnectionsModal({ partner, connections, onClose, onConnectionUpdated }: Props) {
   const navigate = useNavigate();
+  useScrollLock(true);
   const [viewConn, setViewConn] = useState<ConnectionData | null>(null);
   const name = `${partner.firstName} ${partner.lastName}`.trim();
 
@@ -46,7 +48,10 @@ export default function PartnerConnectionsModal({ partner, connections, onClose,
     <>
       <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
         {/* Header */}
-        <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-800 flex-shrink-0 bg-slate-900/80 backdrop-blur">
+        <div
+          className="flex items-center gap-3 px-4 py-4 border-b border-slate-800 flex-shrink-0 bg-slate-900/80 backdrop-blur"
+          style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}
+        >
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors">
             <ArrowLeft size={20} />
           </button>

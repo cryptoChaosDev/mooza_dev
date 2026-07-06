@@ -50,6 +50,7 @@ model Profession {
   connections     Connection[]
   customFilters   CustomFilter[] @relation("ProfessionCustomFilters")
   serviceProfessions ServiceProfession[]
+  vacancies          Vacancy[]
 
   createdAt DateTime @default(now())
 
@@ -84,6 +85,7 @@ model Service {
   connectionServices ConnectionService[]
   reviews            Review[]
   deals              Deal[]
+  orders             Order[]
 
   createdAt DateTime @default(now())
 
@@ -353,6 +355,7 @@ enum ClipPlatform {
   VK_VIDEO
   RUTUBE
   YOUTUBE
+  APPLE_MUSIC
 }
 
 enum ContactsVisibility {
@@ -401,6 +404,7 @@ model Artist {
   releases    Release[]
   clips       Clip[]
   invites     ArtistInvite[]
+  vacancies   Vacancy[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -442,8 +446,10 @@ model PortfolioFile {
   userId       String
   url          String
   originalName String
+  title        String? // custom display name; falls back to originalName when null
   size         Int
   mimeType     String?
+  sortOrder    Int     @default(0) // manual ordering within the owner's portfolio
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -488,6 +494,7 @@ model User {
   password  String?
   telegramId       String?  @unique
   telegramUsername String?
+  telegramNotifyEnabled Boolean @default(false) // дублировать уведомления в Telegram-бот
   vkId             String?  @unique
   firstName String
   lastName  String
@@ -601,10 +608,21 @@ model User {
   reviewsReceived Review[] @relation("ReviewTarget")
 
   complaintsFiled Complaint[] @relation("ComplaintReporter")
+  professionRequests ProfessionRequest[] @relation("ProfessionRequester")
 
   dealsAsCustomer Deal[] @relation("DealCustomer")
   dealsAsExecutor Deal[] @relation("DealExecutor")
   dealEditRequests DealEditRequest[] @relation("DealEditRequester")
+
+  // Orders (customer-created briefs) — see Order model
+  orders         Order[]         @relation("OrderAuthor")
+  orderResponses OrderResponse[] @relation("OrderResponder")
+
+  // Vacancies (artist-owned hiring posts) — see Vacancy model
+  vacancies        Vacancy[]         @relation("VacancyAuthor")
+  vacancyResponses VacancyResponse[] @relation("VacancyApplicant")
+  vacancyOffers    VacancyOffer[]    @relation("VacancyOfferApplicant")
+  vacancyCandidateOffers VacancyCandidateOffer[] @relation("VacancyCandidateOffer")
 
   occupancyStatus  String?  // 'closed' | 'considering' | 'open'
 
@@ -679,6 +697,22 @@ model Complaint {
   updatedAt DateTime @updatedAt
 
   @@index([targetType, targetId])
+  @@index([status])
+}
+
+// Запрос пользователя на добавление профессии в каталог («не нашёл профессию → в поддержку»)
+model ProfessionRequest {
+  id         String    @id @default(uuid())
+  userId     String
+  profession String
+  comment    String?
+  status     String    @default("pending") // pending | done | rejected
+  resolvedAt DateTime?
+
+  user User @relation("ProfessionRequester", fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
   @@index([status])
 }
 
@@ -1022,6 +1056,16 @@ model Post {
   serviceId String?
   service   UserService? @relation(fields: [serviceId], references: [id], onDelete: SetNull)
 
+  // Structured "Заказ" post — link to the customer brief it advertises (for the
+  // «Посмотреть детали» button and to derive section/budget/deadline at render time).
+  orderId String?
+  order   Order?  @relation(fields: [orderId], references: [id], onDelete: SetNull)
+
+  // Structured "Вакансия" post — link to the artist hiring post it advertises (for the
+  // «Посмотреть детали» button and to derive profession/format/payment at render time).
+  vacancyId String?
+  vacancy   Vacancy? @relation(fields: [vacancyId], references: [id], onDelete: SetNull)
+
   likes     Like[]
   comments  Comment[]
   reactions PostReaction[]
@@ -1039,6 +1083,8 @@ model Post {
   @@index([repostOfId])
   @@index([type])
   @@index([city])
+  @@index([orderId])
+  @@index([vacancyId])
 }
 
 model PollVote {
@@ -1086,8 +1132,9 @@ model Like {
 }
 
 model Comment {
-  id      String @id @default(uuid())
-  content String
+  id       String  @id @default(uuid())
+  content  String
+  imageUrl String?
 
   author   User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
   authorId String
@@ -1246,6 +1293,8 @@ model CustomFilterValue {
 
   userServices    UserService[]
   userProfessions UserProfession[]
+  orders          Order[]
+  vacancies       Vacancy[]
 
   @@index([filterId])
 }
@@ -1379,4 +1428,218 @@ model FeedPreset {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+// Landing-page waitlist sign-up (closed launch). One row per email; the profile
+// `type` and consent flags are updated on re-submit (no duplicates).
+model WaitlistEntry {
+  id               String   @id @default(uuid())
+  email            String   @unique
+  type             String   // resident_waitlist | listener | customer | company
+  consentPd        Boolean  @default(false)
+  consentMarketing Boolean  @default(false)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([type])
+}
+
+// ============ ORDERS ============
+// A customer-created brief that mirrors a service offering (UserService) but is
+// authored by the customer. Section = serviceId (reference Service); attributes =
+// M2M selectedCustomFilterValues (same shape as UserService → direct executor-search
+// compatibility). References are split into file/link models (need ids to delete and
+// SUM(size) for the 20MB set limit).
+model Order {
+  id          String  @id @default(uuid())
+  authorId    String
+  serviceId   String
+  title       String
+  titleNorm   String?         // GENERATED in migration (ё→е, lower) — search only, never written
+  budgetFrom  Int?
+  budgetTo    Int?
+  deadline    DateTime?       // null = «Срок не ограничен»
+  description String?
+  status      String   @default("active")  // active | archived | draft
+  author  User    @relation("OrderAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  service Service @relation(fields: [serviceId], references: [id])
+  selectedCustomFilterValues CustomFilterValue[]
+  referenceFiles OrderReferenceFile[]
+  referenceLinks OrderReferenceLink[]
+  responses      OrderResponse[]
+  posts          Post[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([authorId])
+  @@index([serviceId])
+  @@index([status])
+  @@index([deadline])
+}
+
+model OrderResponse {
+  id        String  @id @default(uuid())
+  orderId   String
+  executorId String
+  price     Int
+  comment   String?
+  createdAt DateTime @default(now())
+  order    Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  executor User  @relation("OrderResponder", fields: [executorId], references: [id], onDelete: Cascade)
+  @@unique([orderId, executorId])
+  @@index([orderId])
+}
+
+model OrderReferenceFile {
+  id           String  @id @default(uuid())
+  orderId      String
+  url          String
+  originalName String
+  size         Int
+  mimeType     String?
+  order        Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  @@index([orderId])
+}
+
+model OrderReferenceLink {
+  id        String   @id @default(uuid())
+  orderId   String
+  url       String
+  title     String   @default("")
+  source    String   // yandex_disk | google_docs | dropbox | youtube
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  @@index([orderId])
+}
+
+// ============ VACANCIES ============
+// Artist-owned hiring posts mirroring orders, but keyed on a profession (not a
+// service) and matched by profession + profession filters. titleNorm is a STORED
+// generated column (ё→е, lower) created in the raw migration — NEVER via `prisma
+// db push` (it would drop the GENERATED expression and silently empty search).
+
+model Vacancy {
+  id             String   @id @default(uuid())
+  artistId       String
+  authorId       String                        // owner-человек (для откликов/notify/«Написать»)
+  professionId   String
+  title          String
+  titleNorm      String?                        // GENERATED in migration (ё→е, lower) — search only, never written
+  workFormat     String                         // online | offline | hybrid
+  geography      String                         // city | region | country | international
+  employmentType String                         // permanent | partial | project | intern | volunteer
+  paymentType    String                         // free | respect | barter | percent | rate
+  compensation   Int?                           // only for percent | rate
+  description    String?
+  requireComment   Boolean @default(false)
+  requirePortfolio Boolean @default(false)
+  status         String   @default("active")    // active | archived | draft
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  artist     Artist     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  author     User       @relation("VacancyAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  profession Profession @relation(fields: [professionId], references: [id], onDelete: Restrict)
+  selectedCustomFilterValues CustomFilterValue[]
+  referenceFiles VacancyReferenceFile[]
+  referenceLinks VacancyReferenceLink[]
+  responses      VacancyResponse[]
+  offers         VacancyOffer[]
+  candidateOffers VacancyCandidateOffer[]
+  posts          Post[]
+  @@index([artistId])
+  @@index([authorId])
+  @@index([professionId])
+  @@index([status])
+}
+
+// «Предложить вакансию» — a persisted nudge to a matched candidate (no formal
+// offer record; just marks that the owner already invited this candidate).
+model VacancyCandidateOffer {
+  id          String   @id @default(uuid())
+  vacancyId   String
+  candidateId String
+  createdAt   DateTime @default(now())
+  vacancy   Vacancy @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  candidate User    @relation("VacancyCandidateOffer", fields: [candidateId], references: [id], onDelete: Cascade)
+  @@unique([vacancyId, candidateId])
+  @@index([vacancyId])
+}
+
+model VacancyResponse {
+  id          String   @id @default(uuid())
+  vacancyId   String
+  applicantId String
+  comment     String?
+  createdAt   DateTime @default(now())
+  vacancy   Vacancy @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  applicant User    @relation("VacancyApplicant", fields: [applicantId], references: [id], onDelete: Cascade)
+  portfolioFiles VacancyResponseFile[]
+  portfolioLinks VacancyResponseLink[]
+  offers         VacancyOffer[]
+  @@unique([vacancyId, applicantId])
+  @@index([vacancyId])
+}
+
+model VacancyOffer {
+  id           String   @id @default(uuid())
+  vacancyId    String
+  responseId   String
+  applicantId  String
+  startDate    DateTime
+  conditions   String                          // описание условий
+  compensation String                          // вознаграждение (свободный ввод)
+  extraDetails String?
+  status       String   @default("pending")    // pending | accepted | rejected
+  createdAt    DateTime @default(now())
+  vacancy   Vacancy         @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  response  VacancyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  applicant User            @relation("VacancyOfferApplicant", fields: [applicantId], references: [id], onDelete: Cascade)
+  @@index([vacancyId])
+  @@index([applicantId])
+}
+
+model VacancyReferenceFile {
+  id           String   @id @default(uuid())
+  vacancyId    String
+  url          String
+  originalName String
+  size         Int
+  mimeType     String?
+  createdAt    DateTime @default(now())
+  vacancy      Vacancy  @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  @@index([vacancyId])
+}
+
+model VacancyReferenceLink {
+  id        String   @id @default(uuid())
+  vacancyId String
+  url       String
+  title     String   @default("")
+  source    String
+  createdAt DateTime @default(now())
+  vacancy   Vacancy  @relation(fields: [vacancyId], references: [id], onDelete: Cascade)
+  @@index([vacancyId])
+}
+
+model VacancyResponseFile {
+  id           String   @id @default(uuid())
+  responseId   String
+  url          String
+  originalName String
+  size         Int
+  mimeType     String?
+  createdAt    DateTime @default(now())
+  response     VacancyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  @@index([responseId])
+}
+
+model VacancyResponseLink {
+  id         String   @id @default(uuid())
+  responseId String
+  url        String
+  title      String   @default("")
+  source     String
+  createdAt  DateTime @default(now())
+  response   VacancyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+  @@index([responseId])
 }

@@ -70,7 +70,33 @@ const buildFeedInclude = (userId: string | undefined) => {
       priceTo: true,
       priceItems: true,
       service: { select: { name: true, section: { select: { name: true } } } },
-      user: { select: { id: true, firstName: true, lastName: true } },
+      profession: { select: { name: true } },
+      user: { select: { id: true, firstName: true, lastName: true, city: true } },
+    },
+  },
+  // Structured «Заказ» post — the linked customer brief, for the «Посмотреть детали» button.
+  order: {
+    select: {
+      id: true,
+      title: true,
+      budgetFrom: true,
+      budgetTo: true,
+      deadline: true,
+      status: true,
+      service: { select: { name: true, section: { select: { name: true } } } },
+    },
+  },
+  // Structured «Вакансия» post — the linked artist hiring post, for the «Посмотреть детали» button.
+  vacancy: {
+    select: {
+      id: true,
+      title: true,
+      workFormat: true,
+      geography: true,
+      paymentType: true,
+      compensation: true,
+      status: true,
+      profession: { select: { name: true } },
     },
   },
   repostOf: {
@@ -113,7 +139,12 @@ const buildFeedInclude = (userId: string | undefined) => {
     select: { id: true, emoji: true, userId: true }
   },
   _count: {
-    select: { likes: true, comments: true }
+    select: {
+      likes: true,
+      comments: true,
+      savedBy: true,
+      reposts: { where: { repostDeleted: false } },
+    }
   }
   };
 };
@@ -167,12 +198,25 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
 
     // Build the where clause from filters.
     const where: any = {};
-    if (type && type !== 'all') where.type = String(type);
+    if (type && type !== 'all') {
+      const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
+      if (types.length) where.type = types.length > 1 ? { in: types } : types[0];
+    }
     if (kind === 'resident') { where.channelId = null; where.artistId = null; }
     else if (kind === 'channel') where.channelId = { not: null };
     else if (kind === 'artist') where.artistId = { not: null };
     else if (kind === 'mine') where.authorId = req.userId;
     else if (teamUserId) where.authorId = { not: teamUserId }; // exclude team from default/other views
+
+    // Hide «Услуга» posts whose offering is no longer active (archived/draft) — an
+    // archived/unpublished service must not show in the feed. Also hide degenerate
+    // structured service posts whose linked offering was deleted (serviceId null):
+    // those would render as an empty «Услуга» card with no data. Non-service posts
+    // are unaffected.
+    where.NOT = [
+      { type: 'service', service: { status: { not: 'active' } } },
+      { type: 'service', serviceId: null },
+    ];
 
     // period — date lower bound on createdAt (server-computed)
     const periodStr = period ? String(period) : 'all';
@@ -297,7 +341,10 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
         if (teamUserId && kind === 'all') {
           const newUser = vid ? (await prisma.post.count({ where: { authorId: vid } })) === 0 : false;
           const teamWhere: any = { authorId: teamUserId };
-          if (type && type !== 'all') teamWhere.type = String(type);
+          if (type && type !== 'all') {
+            const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
+            if (types.length) teamWhere.type = types.length > 1 ? { in: types } : types[0];
+          }
           if (where.createdAt) teamWhere.createdAt = where.createdAt;
           if (where.city) teamWhere.city = where.city;
           const teamPosts = await prisma.post.findMany({ where: teamWhere, select: { id: true }, orderBy: { createdAt: newUser ? 'asc' : 'desc' }, take: 25 });
@@ -690,6 +737,29 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
             user: { select: { id: true, firstName: true, lastName: true } },
           },
         },
+        order: {
+          select: {
+            id: true,
+            title: true,
+            budgetFrom: true,
+            budgetTo: true,
+            deadline: true,
+            status: true,
+            service: { select: { name: true, section: { select: { name: true } } } },
+          },
+        },
+        vacancy: {
+          select: {
+            id: true,
+            title: true,
+            workFormat: true,
+            geography: true,
+            paymentType: true,
+            compensation: true,
+            status: true,
+            profession: { select: { name: true } },
+          },
+        },
         _count: {
           select: { likes: true, comments: true }
         }
@@ -774,10 +844,10 @@ router.delete('/:id/like', authenticate, async (req: AuthRequest, res) => {
 // Comment on post
 router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { content, parentCommentId } = req.body;
+    const { content, parentCommentId, imageUrl } = req.body;
 
-    if (!content) {
-      return res.status(400).json({ error: 'Content is required' });
+    if (!content && !imageUrl) {
+      return res.status(400).json({ error: 'Нужен текст или картинка' });
     }
 
     const post = await prisma.post.findUnique({
@@ -787,7 +857,8 @@ router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
 
     const comment = await (prisma.comment as any).create({
       data: {
-        content,
+        content: content || '',
+        imageUrl: imageUrl || null,
         authorId: req.userId!,
         postId: req.params.id,
         ...(parentCommentId ? { parentCommentId } : {}),

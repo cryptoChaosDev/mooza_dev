@@ -44,6 +44,10 @@ const ConnectionRequestsPage   = lazy(() => import('./pages/ConnectionRequestsPa
 const ConnectionPage           = lazy(() => import('./pages/ConnectionPage'));
 const DealPage                 = lazy(() => import('./pages/DealPage'));
 const DealsPage                = lazy(() => import('./pages/DealsPage'));
+const OrdersPage               = lazy(() => import('./pages/OrdersPage'));
+const OrderDetailPage          = lazy(() => import('./pages/OrderDetailPage'));
+const VacanciesPage            = lazy(() => import('./pages/VacanciesPage'));
+const VacancyDetailPage        = lazy(() => import('./pages/VacancyDetailPage'));
 const OnboardingPage     = lazy(() => import('./pages/OnboardingPage'));
 const VkSetupPage        = lazy(() => import('./pages/VkSetupPage'));
 
@@ -60,7 +64,7 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
 
 function PageLoader() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-900">
+    <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-slate-900">
       <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent" />
     </div>
   );
@@ -182,6 +186,10 @@ function AppRoutes() {
             <Route path="/connection/:partnerId" element={<ConnectionPage />} />
             <Route path="/deals" element={<DealsPage />} />
             <Route path="/deals/:dealId" element={<DealPage />} />
+            <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/orders/:orderId" element={<OrderDetailPage />} />
+            <Route path="/artists/:artistId/vacancies" element={<VacanciesPage />} />
+            <Route path="/vacancies/:vacancyId" element={<VacancyDetailPage />} />
             <Route path="/privacy"          element={<PrivacyPolicyPage />} />
             <Route path="/terms"            element={<TermsPage />} />
             {user?.isAdmin && <Route path="/admin" element={<AdminPage />} />}
@@ -206,14 +214,14 @@ function TelegramAutoLogin({ onDone }: { onDone: () => void }) {
   }, []);
 
   if (error) return (
-    <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center gap-4 px-6 text-center">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center gap-4 px-6 text-center">
       <p className="text-red-400 text-sm">{error}</p>
       <button onClick={onDone} className="text-primary-400 text-sm underline">Открыть в браузере</button>
     </div>
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 flex items-center justify-center">
+    <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
       <div className="animate-spin rounded-full h-10 w-10 border-4 border-primary-500 border-t-transparent" />
     </div>
   );

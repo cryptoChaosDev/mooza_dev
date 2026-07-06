@@ -5,6 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { connectionAPI, referenceAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { useScrollLock } from '../lib/scrollLock';
 import AvatarComponent from './Avatar';
 
 interface Props {
@@ -31,6 +32,7 @@ const REL_OPTIONS: { type: RelType; myRole: string; partnerRole: string; needsDe
 
 export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
   const queryClient = useQueryClient();
+  useScrollLock(true);
   const fullName = `${targetUser.firstName} ${targetUser.lastName}`.trim();
 
   // Check for existing connection
@@ -124,10 +126,10 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
     const { iAmRequester } = existingConn;
     return createPortal(
       <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
-        <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-800 flex-shrink-0 bg-slate-900/80 backdrop-blur">
+        <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-800 flex-shrink-0 bg-slate-900/80 backdrop-blur"
+             style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><ArrowLeft size={20} /></button>
           <h2 className="text-base font-semibold text-white flex-1">Связь</h2>
-          <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
         </div>
         <div className="flex-1 flex flex-col items-center justify-center px-6 gap-4 text-center">
           <AvatarComponent src={targetUser.avatar} name={fullName} size={56} />
@@ -163,13 +165,13 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
     <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
 
       {/* Top bar */}
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-800 flex-shrink-0 bg-slate-900/80 backdrop-blur">
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-800 flex-shrink-0 bg-slate-900/80 backdrop-blur"
+           style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
         {step === 'catalog'
           ? <button onClick={goBack} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><ArrowLeft size={20} /></button>
           : <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><ArrowLeft size={20} /></button>
         }
         <h2 className="text-base font-semibold text-white flex-1">Установить связь</h2>
-        <button onClick={onClose} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
       </div>
 
       {/* Partner block */}
@@ -190,54 +192,54 @@ export default function ConnectionRequestModal({ targetUser, onClose }: Props) {
           <p className="text-xs text-slate-500 uppercase tracking-wider font-semibold mb-4">Тип связи</p>
 
           <button onClick={() => { setRelType('customer_executor'); setStep('catalog'); }}
-            className="w-full flex items-center gap-4 p-4 bg-slate-900/60 hover:bg-slate-800/60 border border-slate-800 hover:border-sky-500/30 rounded-2xl text-left transition-all group">
-            <div className="flex flex-col items-center gap-1 w-20 flex-shrink-0">
-              <span className="text-xs font-semibold px-2 py-0.5 bg-sky-500/15 text-sky-400 rounded-full border border-sky-500/20">Заказчик</span>
-              <span className="text-[10px] text-slate-600">я</span>
+            className="w-full flex flex-col gap-2.5 p-4 bg-slate-900/60 hover:bg-slate-800/60 border border-slate-800 hover:border-sky-500/30 rounded-2xl text-left transition-all group">
+            <div className="flex items-center gap-3 w-full">
+              <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                <span className="text-xs font-semibold px-2 py-0.5 bg-sky-500/15 text-sky-400 rounded-full border border-sky-500/20 whitespace-nowrap">Заказчик</span>
+                <span className="text-[10px] text-slate-600">я</span>
+              </div>
+              <div className="text-slate-600 text-lg">↔</div>
+              <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                <span className="text-xs font-semibold px-2 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full border border-emerald-500/20 whitespace-nowrap">Исполнитель</span>
+                <span className="text-[10px] text-slate-600 truncate max-w-[72px]">{targetUser.firstName}</span>
+              </div>
+              <ChevronRight size={16} className="text-slate-600 group-hover:text-slate-400 flex-shrink-0 ml-auto" />
             </div>
-            <div className="text-slate-600 text-lg">↔</div>
-            <div className="flex flex-col items-center gap-1 w-20 flex-shrink-0">
-              <span className="text-xs font-semibold px-2 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full border border-emerald-500/20">Исполнитель</span>
-              <span className="text-[10px] text-slate-600">{targetUser.firstName}</span>
-            </div>
-            <div className="flex-1 min-w-0 ml-1">
-              <p className="text-xs text-slate-500 leading-relaxed">Платное сотрудничество — нужна сделка</p>
-            </div>
-            <ChevronRight size={16} className="text-slate-600 group-hover:text-slate-400 flex-shrink-0" />
+            <p className="text-xs text-slate-500 leading-snug">Платное сотрудничество — нужна сделка</p>
           </button>
 
           <button onClick={() => { setRelType('executor_customer'); setStep('catalog'); }}
-            className="w-full flex items-center gap-4 p-4 bg-slate-900/60 hover:bg-slate-800/60 border border-slate-800 hover:border-emerald-500/30 rounded-2xl text-left transition-all group">
-            <div className="flex flex-col items-center gap-1 w-20 flex-shrink-0">
-              <span className="text-xs font-semibold px-2 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full border border-emerald-500/20">Исполнитель</span>
-              <span className="text-[10px] text-slate-600">я</span>
+            className="w-full flex flex-col gap-2.5 p-4 bg-slate-900/60 hover:bg-slate-800/60 border border-slate-800 hover:border-emerald-500/30 rounded-2xl text-left transition-all group">
+            <div className="flex items-center gap-3 w-full">
+              <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                <span className="text-xs font-semibold px-2 py-0.5 bg-emerald-500/15 text-emerald-400 rounded-full border border-emerald-500/20 whitespace-nowrap">Исполнитель</span>
+                <span className="text-[10px] text-slate-600">я</span>
+              </div>
+              <div className="text-slate-600 text-lg">↔</div>
+              <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                <span className="text-xs font-semibold px-2 py-0.5 bg-sky-500/15 text-sky-400 rounded-full border border-sky-500/20 whitespace-nowrap">Заказчик</span>
+                <span className="text-[10px] text-slate-600 truncate max-w-[72px]">{targetUser.firstName}</span>
+              </div>
+              <ChevronRight size={16} className="text-slate-600 group-hover:text-slate-400 flex-shrink-0 ml-auto" />
             </div>
-            <div className="text-slate-600 text-lg">↔</div>
-            <div className="flex flex-col items-center gap-1 w-20 flex-shrink-0">
-              <span className="text-xs font-semibold px-2 py-0.5 bg-sky-500/15 text-sky-400 rounded-full border border-sky-500/20">Заказчик</span>
-              <span className="text-[10px] text-slate-600">{targetUser.firstName}</span>
-            </div>
-            <div className="flex-1 min-w-0 ml-1">
-              <p className="text-xs text-slate-500 leading-relaxed">Платное сотрудничество — нужна сделка</p>
-            </div>
-            <ChevronRight size={16} className="text-slate-600 group-hover:text-slate-400 flex-shrink-0" />
+            <p className="text-xs text-slate-500 leading-snug">Платное сотрудничество — нужна сделка</p>
           </button>
 
           <button onClick={() => { setRelType('colleague'); setStep('catalog'); }}
-            className="w-full flex items-center gap-4 p-4 bg-slate-900/60 hover:bg-slate-800/60 border border-slate-800 hover:border-violet-500/30 rounded-2xl text-left transition-all group">
-            <div className="flex flex-col items-center gap-1 w-20 flex-shrink-0">
-              <span className="text-xs font-semibold px-2 py-0.5 bg-violet-500/15 text-violet-400 rounded-full border border-violet-500/20">Коллега</span>
-              <span className="text-[10px] text-slate-600">я</span>
+            className="w-full flex flex-col gap-2.5 p-4 bg-slate-900/60 hover:bg-slate-800/60 border border-slate-800 hover:border-violet-500/30 rounded-2xl text-left transition-all group">
+            <div className="flex items-center gap-3 w-full">
+              <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                <span className="text-xs font-semibold px-2 py-0.5 bg-violet-500/15 text-violet-400 rounded-full border border-violet-500/20 whitespace-nowrap">Коллега</span>
+                <span className="text-[10px] text-slate-600">я</span>
+              </div>
+              <div className="text-slate-600 text-lg">↔</div>
+              <div className="flex flex-col items-center gap-1 flex-shrink-0">
+                <span className="text-xs font-semibold px-2 py-0.5 bg-violet-500/15 text-violet-400 rounded-full border border-violet-500/20 whitespace-nowrap">Коллега</span>
+                <span className="text-[10px] text-slate-600 truncate max-w-[72px]">{targetUser.firstName}</span>
+              </div>
+              <ChevronRight size={16} className="text-slate-600 group-hover:text-slate-400 flex-shrink-0 ml-auto" />
             </div>
-            <div className="text-slate-600 text-lg">↔</div>
-            <div className="flex flex-col items-center gap-1 w-20 flex-shrink-0">
-              <span className="text-xs font-semibold px-2 py-0.5 bg-violet-500/15 text-violet-400 rounded-full border border-violet-500/20">Коллега</span>
-              <span className="text-[10px] text-slate-600">{targetUser.firstName}</span>
-            </div>
-            <div className="flex-1 min-w-0 ml-1">
-              <p className="text-xs text-slate-500 leading-relaxed">Совместная работа без сделки</p>
-            </div>
-            <ChevronRight size={16} className="text-slate-600 group-hover:text-slate-400 flex-shrink-0" />
+            <p className="text-xs text-slate-500 leading-snug">Совместная работа без сделки</p>
           </button>
         </div>
       )}

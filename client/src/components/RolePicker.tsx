@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Check, Loader2 } from 'lucide-react';
 import { roleAPI } from '../lib/api';
+import { useScrollLock } from '../lib/scrollLock';
 
 interface RoleItem { id: string; name: string }
 interface RoleCategory { category: string; roles: RoleItem[] }
@@ -23,6 +24,8 @@ export default function RolePicker({ context, value, onSave, onClose, title }: R
   const [loading, setLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [selected, setSelected] = useState<Set<string>>(() => new Set(value));
+
+  useScrollLock(true);
 
   useEffect(() => {
     let alive = true;
@@ -66,7 +69,7 @@ export default function RolePicker({ context, value, onSave, onClose, title }: R
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full sm:max-w-lg max-h-[90vh] flex flex-col bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
+      <div className="relative w-full sm:max-w-lg max-h-[90dvh] flex flex-col bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800">
           <h3 className="text-base font-semibold text-white">{title || 'Выбор ролей'}</h3>
@@ -134,8 +137,8 @@ export default function RolePicker({ context, value, onSave, onClose, title }: R
                         isSel ? 'bg-primary-500/10 text-white' : 'text-slate-300 hover:bg-slate-800'
                       }`}
                     >
-                      <span>{r.name}</span>
-                      <span className={`flex items-center justify-center w-5 h-5 rounded-md border ${
+                      <span className="min-w-0 break-words [overflow-wrap:anywhere]">{r.name}</span>
+                      <span className={`flex-shrink-0 flex items-center justify-center w-5 h-5 rounded-md border ${
                         isSel ? 'bg-primary-500 border-primary-500' : 'border-slate-600'
                       }`}>
                         {isSel && <Check size={13} className="text-white" />}

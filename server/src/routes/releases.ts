@@ -2,24 +2,22 @@ import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { StreamingPlatform } from '@prisma/client';
+import { detectReleasePlatform } from '../lib/mediaPlatforms';
 import { fetchStreamMetadata } from '../utils/streamMetadata';
 import { notify } from '../utils/notify';
 
 const router = Router();
 
-const PLATFORMS: StreamingPlatform[] = ['VK', 'SPOTIFY', 'YANDEX_MUSIC', 'APPLE_MUSIC'];
-
 // ── helpers ──────────────────────────────────────────────────────────────────
 
-// Artist admin = confirmed UserArtist with isAdmin true, OR a system admin.
+// Artist admin = confirmed UserArtist with isAdmin true. System admins do NOT get
+// edit rights on artists they don't belong to.
 async function isArtistAdmin(artistId: string, userId: string): Promise<boolean> {
   const ua = await prisma.userArtist.findFirst({
     where: { artistId, userId, isAdmin: true, inviteStatus: 'ACCEPTED' },
     select: { id: true },
   });
-  if (ua) return true;
-  const me = await prisma.user.findUnique({ where: { id: userId }, select: { isAdmin: true } });
-  return !!me?.isAdmin;
+  return !!ua;
 }
 
 async function actorName(userId: string): Promise<string> {
@@ -61,6 +59,51 @@ const participantInclude = {
   roles: { include: { role: { select: { id: true, name: true } } } },
 } as const;
 
+// ── GET /api/releases/participations/pending — my pending participation inbox ─
+// MUST be registered before '/:id' so Express doesn't capture the literal path.
+router.get('/participations/pending', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const meId = req.userId!;
+    const participants = await prisma.releaseParticipant.findMany({
+      where: { userId: meId, confirmStatus: 'PENDING' },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        release: {
+          select: {
+            id: true,
+            title: true,
+            coverUrl: true,
+            artist: { select: { id: true, name: true, avatar: true } },
+          },
+        },
+        roles: { include: { role: { select: { name: true } } } },
+      },
+    });
+
+    return res.json(
+      participants.map((p) => ({
+        id: p.id,
+        kind: 'release' as const,
+        release: {
+          id: p.release.id,
+          title: p.release.title,
+          coverUrl: p.release.coverUrl,
+          artist: {
+            id: p.release.artist.id,
+            name: p.release.artist.name,
+            avatar: p.release.artist.avatar,
+          },
+        },
+        roleNames: p.roles.map((r) => r.role.name),
+        createdAt: p.createdAt,
+      })),
+    );
+  } catch (err) {
+    console.error('[releases] GET /participations/pending', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 // ── POST /api/releases/metadata — best-effort prefill (auth) ──────────────────
 router.post('/metadata', authenticate, async (req: AuthRequest, res: Response) => {
   try {
@@ -78,9 +121,8 @@ router.post('/metadata', authenticate, async (req: AuthRequest, res: Response) =
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
-    const { artistId, platform, url, title, coverUrl, releaseDate, participants } = req.body as {
+    const { artistId, url, title, coverUrl, releaseDate, participants } = req.body as {
       artistId?: string;
-      platform?: string;
       url?: string;
       title?: string;
       coverUrl?: string;
@@ -91,8 +133,11 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     if (!artistId) return res.status(400).json({ error: 'artistId обязателен' });
     if (!title || !title.trim()) return res.status(400).json({ error: 'Название обязательно' });
     if (!url || !url.trim()) return res.status(400).json({ error: 'Ссылка обязательна' });
-    if (!platform || !PLATFORMS.includes(platform as StreamingPlatform)) {
-      return res.status(400).json({ error: 'Неверная платформа' });
+    // Platform is derived from the link itself — anything that isn't a real URL to a
+    // supported streaming service (no phishing / arbitrary text) is rejected here.
+    const detectedPlatform = detectReleasePlatform(url);
+    if (!detectedPlatform) {
+      return res.status(400).json({ error: 'Ссылка должна вести на поддерживаемый стриминг-сервис (VK, Spotify, Яндекс Музыка, Apple Music)' });
     }
 
     if (!(await isArtistAdmin(artistId, meId))) {
@@ -112,7 +157,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         title: title.trim(),
         coverUrl: coverUrl?.trim() || null,
         releaseDate: releaseDate ? new Date(releaseDate) : null,
-        platform: platform as StreamingPlatform,
+        platform: detectedPlatform as StreamingPlatform,
         url: url.trim(),
         participants: {
           create: cleanParticipants.map((p) => ({
@@ -211,12 +256,11 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
 router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
-    const { title, coverUrl, releaseDate, url, platform, participants } = req.body as {
+    const { title, coverUrl, releaseDate, url, participants } = req.body as {
       title?: string;
       coverUrl?: string | null;
       releaseDate?: string | null;
       url?: string;
-      platform?: string;
       participants?: { userId: string; roleIds?: string[] }[];
     };
 
@@ -230,16 +274,19 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res: Response) => {
       return res.status(403).json({ error: 'Нет прав' });
     }
 
-    if (platform !== undefined && !PLATFORMS.includes(platform as StreamingPlatform)) {
-      return res.status(400).json({ error: 'Неверная платформа' });
-    }
-
     const data: any = {};
     if (title !== undefined) data.title = title.trim();
     if (coverUrl !== undefined) data.coverUrl = coverUrl ? coverUrl.trim() : null;
     if (releaseDate !== undefined) data.releaseDate = releaseDate ? new Date(releaseDate) : null;
-    if (url !== undefined) data.url = url.trim();
-    if (platform !== undefined) data.platform = platform as StreamingPlatform;
+    // Changing the link re-derives the platform; reject non-streaming / fake links.
+    if (url !== undefined) {
+      const detectedPlatform = detectReleasePlatform(url);
+      if (!detectedPlatform) {
+        return res.status(400).json({ error: 'Ссылка должна вести на поддерживаемый стриминг-сервис (VK, Spotify, Яндекс Музыка, Apple Music)' });
+      }
+      data.url = url.trim();
+      data.platform = detectedPlatform as StreamingPlatform;
+    }
 
     await prisma.release.update({ where: { id: release.id }, data });
 

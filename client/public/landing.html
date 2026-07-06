@@ -1,0 +1,2369 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Logged-in visitors skip the landing and go straight to the app feed. Runs
+     before render to avoid a flash of the landing. -->
+<script>try{if(localStorage.getItem('token')){location.replace('/feed');}}catch(e){}</script>
+<title>Moooza — место, где музыкальная индустрия работает</title>
+<meta property="og:title" content="Moooza — место, где музыкальная индустрия работает">
+<meta property="og:description" content="Собирай команду под релиз, находи специалистов и договаривайся об условиях. Закрытый запуск — только по приглашениям.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://moooza.ru">
+<meta property="og:image" content="https://moooza.ru/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Moooza — место, где музыкальная индустрия работает">
+<meta name="twitter:description" content="Собирай команду под релиз, находи специалистов и договаривайся об условиях. Закрытый запуск — только по приглашениям.">
+<!-- Яндекс.Метрика — подключить счётчик: заменить METRIKA_ID на реальный номер -->
+<script type="text/javascript">
+var METRIKA_ID = null; // ← заменить на реальный ID: например, 12345678
+
+function ymSafe(goal) {
+  if (METRIKA_ID && typeof ym === 'function') {
+    try { ym(METRIKA_ID, 'reachGoal', goal); } catch(e) {}
+  }
+}
+
+if (METRIKA_ID) {
+  (function(m,e,t,r,i,k,a){m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+  m[i].l=1*new Date();
+  for(var j=0;j<document.scripts.length;j++){if(document.scripts[j].src===r){return;}}
+  k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)})
+  (window, document, "script", "https://mc.yandex.ru/metrika/tag.js", "ym");
+  ym(METRIKA_ID, "init", { clickmap:true, trackLinks:true, accurateTrackBounce:true });
+}
+</script>
+<!-- /Яндекс.Метрика -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+
+
+/* ── SCREEN DIVIDERS ── */
+.screen-divider {
+  width: 100%;
+  max-width: 430px;
+  position: relative;
+  overflow: hidden;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.screen-divider svg {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  top: 0; left: 0;
+}
+
+.divider-dots {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+  z-index: 1;
+}
+
+.divider-dots span {
+  display: block;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4dd9f7, #7c5ff0);
+  opacity: 0.6;
+}
+
+.divider-line {
+  width: 100%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, #4dd9f7 30%, #7c5ff0 70%, transparent 100%);
+  opacity: 0.4;
+  position: relative;
+  z-index: 1;
+  margin: 0 20px;
+}
+
+/* ── FLUID TYPOGRAPHY & RESPONSIVE ── */
+html {
+  /* Base font scales with viewport: min 12px, preferred 3.5vw, max 16px */
+  font-size: clamp(12px, 3.5vw, 16px);
+}
+
+.page {
+  width: 100%;
+  max-width: 430px;
+  padding-top: 70px;
+  overflow-x: hidden;
+}
+
+/* All sections max-width and no overflow */
+section, .screen1, .screen2, .screen3, .screen4,
+.screen5, .screen6, .screen7, .screen8, .screen9 {
+  width: 100%;
+  max-width: 430px;
+  overflow-x: hidden;
+  box-sizing: border-box;
+}
+
+/* Fluid headings */
+.s2-title  { font-size: clamp(28px, 9vw, 38px) !important; }
+.s3-title  { font-size: clamp(20px, 6.5vw, 26px) !important; }
+.s4-title  { font-size: clamp(18px, 6vw, 24px) !important; }
+.s5-title  { font-size: clamp(18px, 6vw, 24px) !important; }
+.s6-title  { font-size: clamp(17px, 5.5vw, 22px) !important; }
+.s7-title  { font-size: clamp(17px, 5.5vw, 22px) !important; }
+.s8-title  { font-size: clamp(22px, 7vw, 28px) !important; }
+.s9-title  { font-size: clamp(20px, 6.5vw, 26px) !important; }
+
+.hero h1   { font-size: clamp(26px, 8.5vw, 32px) !important; }
+
+/* Prevent any element from overflowing */
+* {
+  max-width: 100%;
+  word-break: break-word;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Input and button don't overflow */
+input, button, a.btn-tg, a.s8-btn-tg {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Email rows wrap on very small screens */
+.role-email-row, .s8-email-row {
+  flex-wrap: wrap;
+}
+
+.role-email-input, .s8-email-input {
+  min-width: 0;
+  flex: 1 1 120px;
+}
+
+/* Side cards don't overflow */
+.side-card-right {
+  max-width: 40%;
+}
+
+/* Comparison rows text doesn't overflow */
+.compare-row-left-text,
+.compare-row-right-text {
+  word-break: break-word;
+  font-size: clamp(10px, 3vw, 12px) !important;
+}
+
+/* Footer links don't break */
+.s9-footer {
+  flex-wrap: nowrap;
+}
+
+.s9-footer-legal a {
+  font-size: clamp(9px, 2.5vw, 11px) !important;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0c0c12;
+  --bg-card: #13111f;
+  --bg-card-border: #1e1a30;
+  --accent-blue: #3a6ff7;
+  --text-white: #ffffff;
+  --text-muted: #8b8a9a;
+  --font: 'Manrope', sans-serif;
+}
+
+body {
+  background: var(--bg);
+  font-family: var(--font);
+  color: var(--text-white);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+
+/* ── NEON UTILITIES ── */
+.neon-box {
+  box-shadow: 0 0 0 1.5px transparent,
+              inset 0 0 0 1.5px transparent;
+}
+
+/* Gradient border mixin via pseudo */
+.grad-border {
+  position: relative;
+}
+.grad-border::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: linear-gradient(135deg, #4dd9f7 0%, #7c5ff0 55%, #ec4899 100%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* Glow text */
+.glow-text-blue  { text-shadow: 0 0 12px rgba(77,217,247,0.7), 0 0 24px rgba(77,217,247,0.3); }
+.glow-text-violet{ text-shadow: 0 0 12px rgba(167,139,250,0.7), 0 0 24px rgba(167,139,250,0.3); }
+
+/* Glow border */
+.glow-border-blue   { box-shadow: 0 0 0 1.5px #4dd9f7, 0 0 12px rgba(77,217,247,0.4); }
+.glow-border-violet { box-shadow: 0 0 0 1.5px #a78bfa, 0 0 12px rgba(167,139,250,0.4); }
+.glow-border-pink   { box-shadow: 0 0 0 1.5px #ec4899, 0 0 12px rgba(236,72,153,0.4); }
+
+/* ── FIXED HEADER ── */
+header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(12, 12, 18, 0.92);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(77,217,247,0.15);
+}
+
+.header-inner {
+  width: 100%;
+  max-width: 430px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+}
+
+.btn-login {
+  background: transparent;
+  border: 1.5px solid rgba(255,255,255,0.35);
+  color: var(--text-white);
+  font-family: var(--font);
+  font-size: 15px;
+  font-weight: 500;
+  padding: 9px 22px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+/* ── WRAPPER ── */
+.page {
+  width: 100%;
+  max-width: 430px;
+  padding-top: 70px; /* header height offset */
+}
+
+/* ══════════════ SCREEN 1 ══════════════ */
+.screen1 {
+  padding: 32px 20px 60px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  min-height: calc(100vh - 70px);
+}
+
+.bg-waves {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 220px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.screen1 > *:not(.bg-waves) { position: relative; z-index: 1; }
+
+/* Badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: linear-gradient(90deg, rgba(120,40,220,0.65) 0%, rgba(200,60,190,0.55) 100%);
+  border-radius: 100px;
+  padding: 8px 16px;
+  width: fit-content;
+  position: relative;
+}
+.badge::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 100px;
+  padding: 1.5px;
+  background: linear-gradient(90deg, #a855f7, #ec4899, #a855f7);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+}
+.badge-text {
+  font-size: 13px;
+  font-weight: 600;
+  background: linear-gradient(90deg, #c084fc, #f472b6);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Hero */
+.hero h1 {
+  font-size: 32px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -1px;
+  color: #fff;
+  margin-bottom: 12px;
+}
+.hero p {
+  font-size: 16px;
+  line-height: 1.55;
+  color: var(--text-muted);
+}
+
+/* Referral card */
+.referral-card {
+  background: var(--bg-card);
+  border: 1px solid var(--bg-card-border);
+  border-radius: 18px;
+  padding: 18px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.referral-icon-wrap {
+  flex-shrink: 0;
+  width: 60px; height: 60px;
+  background: #4930b8;
+  border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+.referral-icon-wrap svg { width: 28px; height: 28px; fill: white; }
+.referral-text { font-size: 14px; font-weight: 500; line-height: 1.5; color: #d4cfed; }
+
+/* CTA */
+.btn-tg {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  background: linear-gradient(90deg, #2c5af5 0%, #7c3ff0 100%);
+  color: #fff;
+  font-family: var(--font);
+  font-size: 16px; font-weight: 600;
+  padding: 14px 20px;
+  border-radius: 16px;
+  border: none; cursor: pointer;
+  text-decoration: none;
+  width: 100%;
+}
+.btn-tg svg { width: 22px; height: 22px; fill: white; flex-shrink: 0; }
+
+/* Viral */
+.viral { text-align: center; font-size: 14px; color: var(--text-muted); line-height: 1.6; }
+.viral-link-icon { width: 18px; height: 18px; vertical-align: middle; }
+
+/* ══════════════ SCREEN 2 ══════════════ */
+.screen2 {
+  padding: 28px 20px 32px;
+  position: relative;
+  overflow: hidden;
+}
+
+.screen2-bg {
+  position: absolute;
+  bottom: 0; left: 0; right: 0; height: 180px;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 100%, rgba(60,30,180,0.35) 0%, transparent 70%);
+}
+
+.screen2 > *:not(.screen2-bg) { position: relative; z-index: 1; }
+
+.s2-title {
+  font-size: clamp(26px, 8vw, 32px); font-weight: 800; letter-spacing: -1.5px; line-height: 1;
+  margin-bottom: 4px;
+  background: linear-gradient(90deg, #4dd9f7 0%, #7c5ff0 40%, #ec4899 75%, #f472b6 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  filter: drop-shadow(0 0 14px rgba(77,217,247,0.6)) drop-shadow(0 0 28px rgba(236,72,153,0.35));
+}
+.s2-subtitle { font-size: 15px; color: #7a7990; margin-bottom: 14px; line-height: 1.5; }
+
+.pain-cards { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+
+.pain-card {
+  background: #12101e;
+  border: 1px solid #252040;
+  border-radius: 14px;
+  padding: 12px 12px;
+  display: flex; align-items: flex-start; gap: 12px;
+}
+.pain-icon {
+  flex-shrink: 0;
+  width: 56px; height: 56px;
+  display: flex; align-items: center; justify-content: center;
+}
+.pain-icon img { width: 56px; height: 56px; object-fit: contain; display: block; }
+.lucide-icon {
+  width: 22px;
+  height: 22px;
+  stroke: #b98fff;
+  stroke-width: 1.8;
+  fill: none;
+}
+.pain-icon svg {
+  width: 22px; height: 22px;
+  stroke: #b98fff; fill: none;
+  stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+}
+.pain-text { font-size: 14px; color: #ccc8e8; line-height: 1.6; padding-top: 2px; }
+
+.summary-card {
+  border-radius: 14px; padding: 2px;
+  background: linear-gradient(135deg, #4dd9f7 0%, #7c5ff0 50%, #c46ef5 100%);
+  box-shadow: 0 0 20px rgba(77,217,247,0.2), 0 0 40px rgba(124,95,240,0.15);
+}
+.summary-card-inner { background: #0f0d1e; border-radius: 12px; padding: 16px 16px; }
+.summary-text { font-size: 15px; color: #ccc8e8; line-height: 1.65; }
+.summary-accent {
+  font-size: 14px; font-weight: 700; margin-top: 4px;
+  background: linear-gradient(90deg, #4dd9f7 0%, #a78bfa 60%, #f472b6 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+</style>
+</head>
+<body>
+
+<!-- FIXED HEADER -->
+<header>
+  <div class="header-inner">
+    <img src="landing/img/logo.webp" alt="Moooza" style="height: 38px; width: auto; display: block;">
+    <button class="btn-login">Войти</button>
+  </div>
+</header>
+
+<!-- PAGE CONTENT -->
+<div class="page">
+
+  <!-- ── SCREEN 1 ── -->
+  <section class="screen1">
+    <div class="bg-waves">
+      <svg viewBox="0 0 430 220" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="glow1" cx="50%" cy="100%" r="70%">
+            <stop offset="0%" stop-color="#5533cc" stop-opacity="0.55"/>
+            <stop offset="100%" stop-color="#0c0c12" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="glow2" cx="20%" cy="100%" r="50%">
+            <stop offset="0%" stop-color="#1a44d4" stop-opacity="0.4"/>
+            <stop offset="100%" stop-color="#0c0c12" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <rect width="430" height="220" fill="url(#glow1)"/>
+        <rect width="430" height="220" fill="url(#glow2)"/>
+        <path d="M-20 180 Q80 140 160 165 Q240 190 320 155 Q380 135 460 160" stroke="#6644ee" stroke-width="1" stroke-opacity="0.35" fill="none"/>
+        <path d="M-20 195 Q90 160 180 178 Q260 196 340 168 Q400 150 460 175" stroke="#3355dd" stroke-width="0.8" stroke-opacity="0.25" fill="none"/>
+      </svg>
+    </div>
+
+    <div class="badge" id="heroBadge" style="cursor:pointer;" onclick="toggleBadgePopup()">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#e879f9" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+      </svg>
+      <span class="badge-text">Закрытый запуск · Только по приглашениям</span>
+    </div>
+    <div id="badgePopup" style="display:none; background:#13111f; border:1px solid #2a2450; border-radius:14px; padding:16px 18px; margin-top:-12px; position:relative; z-index:10;">
+      <p style="font-size:13px; color:#ccc8e8; line-height:1.6;">Регистрация на Moooza сейчас доступна только по реферальной ссылке от участника платформы. Если у тебя есть такая ссылка — переходи по ней напрямую на регистрацию.</p>
+    </div>
+
+    <div class="hero">
+      <h1>Место, где музыкальная индустрия работает</h1>
+      <p>Собирай команду под релиз, находи специалистов и договаривайся об условиях — без поиска по чатам и договорённостей на словах</p>
+    </div>
+
+    <p style="font-size:14px; color:#9990bb; line-height:1.65;">Есть приглашение — переходи по реферальной ссылке и регистрируйся. Нет приглашения — оставь контакт ниже.</p>
+
+    <a href="https://t.me/moooza" target="_blank" class="btn-tg" id="heroTgBtn" onclick="heroTgClick()">
+      <svg viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+      Следить за запуском в Telegram →
+    </a>
+
+    <div class="viral" id="viralBlock">
+      <p>Знаешь кого-то из индустрии?</p>
+      <p>Перешли им эту страницу →&nbsp;
+        <button id="heroShareBtn" onclick="copyShareLink('heroShareBtn')" style="background:none;border:none;cursor:pointer;padding:0;vertical-align:middle;">
+          <svg class="viral-link-icon" viewBox="0 0 24 24" fill="none" stroke="#4dd9f7" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+          </svg>
+          <span id="heroShareBtnText" style="font-size:13px;color:#4dd9f7;vertical-align:middle;">Скопировать ссылку</span>
+        </button>
+      </p>
+    </div>
+  </section>
+
+  <!-- ── SCREEN 2 ── -->
+  <section class="screen2">
+    <div class="screen2-bg"></div>
+
+    <h2 class="s2-title">Знакомо?</h2>
+    <p class="s2-subtitle">Ты не один. Так работает индустрия прямо сейчас.</p>
+
+    <div class="pain-cards">
+      <div class="pain-card">
+        <div class="pain-icon">
+          <img src="landing/img/screen2-1.webp" alt="" loading="lazy">
+        </div>
+        <p class="pain-text">Есть музыка, есть идея релиза. Но непонятно, кому писать, кому доверять и вообще — с чего начинать. Всё узнаётся через чужих знакомых и случайные советы.</p>
+      </div>
+
+      <div class="pain-card">
+        <div class="pain-icon">
+          <img src="landing/img/screen2-3.webp" alt="" loading="lazy">
+        </div>
+        <p class="pain-text">Договорился в личке, ударили по рукам. А потом условия «немного изменились» — и ничего не докажешь, потому что ничего не зафиксировано.</p>
+      </div>
+
+      <div class="pain-card">
+        <div class="pain-icon">
+          <img src="landing/img/screen2-2.webp" alt="" loading="lazy">
+        </div>
+        <p class="pain-text">Отработал с человеком — классно вышло. Но его портфолио нигде нет, отзыва не осталось, порекомендовать коллеге толком не можешь. Всё осталось в личке.</p>
+      </div>
+    </div>
+
+    <div class="summary-card">
+      <div class="summary-card-inner">
+        <p class="summary-text">Связи в музыке всегда решали всё.</p>
+        <p class="summary-text">Просто раньше они жили в гримёрках и личках.</p>
+        <p class="summary-accent">Теперь — в одном месте.</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+  <!-- ═══════════════════════════════ SCREEN 3 ═══════════════════════════════ -->
+  <style>
+    .screen3 {
+      padding: 28px 20px 32px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .s3-title {
+      font-family: 'Manrope', sans-serif;
+      font-size: 26px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      line-height: 1.15;
+      color: #ffffff;
+      margin-bottom: 8px;
+    }
+
+    .s3-subtitle {
+      font-family: 'Manrope', sans-serif;
+      font-size: 13px;
+      color: #7a7990;
+      margin-bottom: 18px;
+      line-height: 1.5;
+    }
+
+    .feat-cards {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .feat-card {
+      background: #12101e;
+      border: none;
+      position: relative;
+      border-radius: 18px;
+      padding: 18px 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .feat-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 18px;
+      padding: 1.5px;
+      background: linear-gradient(135deg, #4dd9f7 0%, #7c5ff0 55%, #ec4899 100%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+    .feat-card-icon {
+      flex-shrink: 0;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: transparent;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+
+    .feat-card-icon img {
+      width: 80px;
+      height: 80px;
+      object-fit: contain;
+      display: block;
+    }
+
+    .feat-card-body {
+      padding-top: 2px;
+      flex: 1;
+    }
+
+    .feat-card-title {
+      font-family: 'Manrope', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 4px;
+    }
+
+    .feat-card-text {
+      font-family: 'Manrope', sans-serif;
+      font-size: 12px;
+      color: #ccc8e8;
+      line-height: 1.5;
+    }
+
+    /* Bottom bonus block */
+    .bonus-block {
+      padding-top: 8px;
+    }
+
+    .bonus-icons {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .bonus-icon {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .bonus-icon svg {
+      width: 26px;
+      height: 26px;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+      stroke-width: 1.8;
+    }
+
+    .bonus-text {
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px;
+      color: #8b8a9a;
+      line-height: 1.6;
+    }
+  </style>
+
+  <section class="screen3">
+    <h2 class="s3-title">Moooza — среда, в которой живёт музыкальная индустрия</h2>
+    <p class="s3-subtitle">Три вещи, которых не хватало индустрии</p>
+
+    <div class="feat-cards">
+
+      <div class="feat-card">
+        <div class="feat-card-icon">
+          <img src="landing/img/screen3-1.webp" loading="lazy" alt="search" style="">
+        </div>
+        <div class="feat-card-body">
+          <p class="feat-card-title">Каталог своих</p>
+          <p class="feat-card-text">Специалисты с реальным портфолио, отзывами и услугами.<br>Фильтруй по профессии, жанру, городу — и пиши напрямую.</p>
+        </div>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-card-icon">
+          <img src="landing/img/screen3-3.webp" loading="lazy" alt="document" style="">
+        </div>
+        <div class="feat-card-body">
+          <p class="feat-card-title">Заказы и отклики</p>
+          <p class="feat-card-text">Размести задачу — получи отклики от специалистов. Или сам откликайся на чужие. Выбирай, договаривайся, фиксируй условия.</p>
+        </div>
+      </div>
+
+      <div class="feat-card">
+        <div class="feat-card-icon">
+          <img src="landing/img/screen3-2.webp" loading="lazy" alt="people" style="">
+        </div>
+        <div class="feat-card-body">
+          <p class="feat-card-title">Связи, которые помнят контекст</p>
+          <p class="feat-card-text">После каждой совместной работы между вами устанавливается связь — кто вы друг другу и по каким делам пересекались.<br>Ваша профессиональная сеть внутри индустрии, которая растёт сама.</p>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bonus block -->
+    <div class="bonus-block">
+      <div class="bonus-icons">
+        <!-- chat -->
+        <div class="bonus-icon">
+          <svg stroke="#7c5ff0" viewBox="0 0 24 24">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            <circle cx="9" cy="11" r="1" fill="#7c5ff0" stroke="none"/>
+            <circle cx="12" cy="11" r="1" fill="#7c5ff0" stroke="none"/>
+            <circle cx="15" cy="11" r="1" fill="#7c5ff0" stroke="none"/>
+          </svg>
+        </div>
+        <!-- people -->
+        <div class="bonus-icon">
+          <svg stroke="#7c5ff0" viewBox="0 0 24 24">
+            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+            <circle cx="9" cy="7" r="4"/>
+            <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+            <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+          </svg>
+        </div>
+        <!-- document/list -->
+        <div class="bonus-icon">
+          <svg stroke="#7c5ff0" viewBox="0 0 24 24">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <line x1="10" y1="9" x2="8" y2="9"/>
+          </svg>
+        </div>
+      </div>
+      <p class="bonus-text">И ещё: поток с активностью индустрии, личные каналы как профессиональная витрина, личные и групповые чаты — всё, чтобы индустрия не просто работала, а общалась.</p>
+    </div>
+
+  </section>
+
+
+
+<div class="screen-divider" style="height:44px;width:100%;max-width:430px;">
+  <svg viewBox="0 0 430 44" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="dg34" x1="0" y1="0" x2="430" y2="0" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="transparent"/>
+        <stop offset="25%" stop-color="#4dd9f7" stop-opacity="0.4"/>
+        <stop offset="50%" stop-color="#ec4899" stop-opacity="0.5"/>
+        <stop offset="75%" stop-color="#7c5ff0" stop-opacity="0.4"/>
+        <stop offset="100%" stop-color="transparent"/>
+      </linearGradient>
+    </defs>
+    <path d="M40 22 L80 14 L120 22 L160 14 L200 22 L240 14 L280 22 L320 14 L360 22 L390 16" stroke="url(#dg34)" stroke-width="1.2" fill="none"/>
+  </svg>
+</div>
+  <!-- ═══════════════════════════════ SCREEN 4 ═══════════════════════════════ -->
+  <style>
+    .screen4 {
+      padding: 20px 20px 24px;
+      position: relative;
+    }
+
+    .s4-title {
+      font-family: 'Manrope', sans-serif;
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      line-height: 1.15;
+      color: #ffffff;
+      margin-bottom: 6px;
+    }
+
+    .s4-subtitle {
+      font-family: 'Manrope', sans-serif;
+      font-size: 12px;
+      color: #7a7990;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+
+    .cards-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      position: relative;
+    }
+
+    /* Иконка поверх двух карточек, по центру между ними */
+    .cards-switch {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      border: 1.5px solid #7c5ff0;
+      background: #0c0c12;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 16px rgba(124,95,240,0.7);
+    }
+    .cards-switch svg {
+      width: 20px; height: 20px;
+      stroke: #a78bfa; fill: none;
+      stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    /* Обе карточки — два отдельных блока */
+    .side-card {
+      border-radius: 16px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+    }
+
+    .side-card-purple {
+      background: #0d0818;
+      border: 1.5px solid #7c5ff0;
+    }
+
+    .side-card-blue {
+      background: #050d1a;
+      border: 1.5px solid #4dd9f7;
+    }
+
+    .side-card-left {
+      flex: 0 0 50%;
+      width: 50%;
+      padding: 16px 10px 16px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-start;
+      min-width: 0;
+      z-index: 1;
+    }
+
+    .side-card-right {
+      flex: 0 0 50%;
+      width: 50%;
+      position: relative;
+      overflow: hidden;
+      min-height: 180px;
+      background: rgba(0,0,0,0.2);
+    }
+
+    .side-card-right img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center center;
+      display: block;
+    }
+
+    /* Иконка профиля сверху левой части */
+    .side-card-icon {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 10px;
+      flex-shrink: 0;
+    }
+    .side-card-icon-purple {
+      background: rgba(124,95,240,0.25);
+      border: 1.5px solid #7c5ff0;
+    }
+    .side-card-icon-blue {
+      background: rgba(77,217,247,0.15);
+      border: 1.5px solid #4dd9f7;
+    }
+    .side-card-icon svg {
+      width: 22px; height: 22px;
+      fill: none; stroke-width: 1.8;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    .side-card-title {
+      font-family: 'Manrope', sans-serif;
+      font-size: 16px;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1.25;
+      margin-bottom: 8px;
+      letter-spacing: -0.3px;
+    }
+
+    .side-card-text {
+      font-family: 'Manrope', sans-serif;
+      font-size: 9px;
+      color: #ffffff;
+      line-height: 1.5;
+      opacity: 0.7;
+    }
+
+    .side-card-text p + p {
+      margin-top: 6px;
+    }
+
+    .s4-footer {
+      margin-top: 16px;
+      text-align: center;
+    }
+
+    .s4-footer-icon-placeholder {
+      width: 48px; height: 28px;
+      margin: 0 auto 8px;
+    }
+
+    .s4-footer-text {
+      font-family: 'Manrope', sans-serif;
+      font-size: 12px;
+      color: #7a7990;
+      line-height: 1.55;
+    }
+  </style>
+
+  <section class="screen4">
+    <h2 class="s4-title">Свои люди —<br>по обе стороны</h2>
+    <p class="s4-subtitle">Одна платформа. Два сценария. Ты можешь быть и тем, кто создаёт, и тем, кто ищет.</p>
+
+    <div class="cards-stack">
+
+      <!-- Card 1: фиолетовая рамка -->
+      <div class="side-card side-card-purple">
+        <div class="side-card-left">
+          <div class="side-card-icon side-card-icon-purple">
+            <svg stroke="#a78bfa" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/><path d="M16 3.13a4 4 0 0 1 0 7.75" stroke-opacity="0.5"/></svg>
+          </div>
+          <h3 class="side-card-title">Ты создаёшь — и хочешь, чтобы тебя находили</h3>
+          <div class="side-card-text">
+            <p>Ты звукорежиссёр, продюсер, битмейкер, аранжировщик, вокалист, дизайнер обложек, монтажёр.</p>
+            <p>Твои работы есть, твой уровень есть. Не хватает одного: места, где это всё видно и где тебя могут найти те, кому ты нужен.</p>
+          </div>
+        </div>
+        <div class="side-card-right">
+          <img src="landing/img/screen4-7.webp" alt="" loading="lazy">
+        </div>
+      </div>
+
+      <!-- Иконка поверх обеих карточек -->
+      <div class="cards-switch">
+        <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+      </div>
+
+      <!-- Card 2: голубая рамка -->
+      <div class="side-card side-card-blue">
+        <div class="side-card-left">
+          <div class="side-card-icon side-card-icon-blue">
+            <svg stroke="#4dd9f7" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          </div>
+          <h3 class="side-card-title">Ты делаешь музыку — и хочешь собрать правильную команду</h3>
+          <div class="side-card-text">
+            <p>Ты артист, лидер группы или продюсер. Знаешь, что хочешь сделать — но не всегда знаешь, кто нужен и можно ли ему доверять.</p>
+            <p>Не очередной поиск по чатам — а профили с реальными работами, отзывами и прямым выходом на человека.</p>
+          </div>
+        </div>
+        <div class="side-card-right">
+          <img src="landing/img/screen4-6.webp" alt="" loading="lazy">
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <div class="s4-footer">
+      <div class="s4-footer-icon-placeholder">
+        <img src="landing/img/screen4-1.webp" alt="" loading="lazy" style="width:48px;height:auto;display:block;margin:0 auto;">
+      </div>
+      <p class="s4-footer-text">Сегодня ты заказываешь услугу, завтра берёшь заказ сам.<br>Moooza работает в обе стороны.</p>
+    </div>
+
+  </section>
+
+
+
+<div class="screen-divider" style="height:52px;width:100%;max-width:430px;">
+  <svg viewBox="0 0 430 52" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <linearGradient id="dg45" x1="0" y1="0" x2="430" y2="0" gradientUnits="userSpaceOnUse">
+        <stop offset="0%" stop-color="transparent"/>
+        <stop offset="40%" stop-color="#4dd9f7" stop-opacity="0.45"/>
+        <stop offset="60%" stop-color="#7c5ff0" stop-opacity="0.45"/>
+        <stop offset="100%" stop-color="transparent"/>
+      </linearGradient>
+    </defs>
+    <path d="M0 20 Q107 8 215 20 Q322 32 430 20" stroke="url(#dg45)" stroke-width="1.5" fill="none"/>
+    <path d="M0 30 Q107 42 215 30 Q322 18 430 30" stroke="url(#dg45)" stroke-width="1" fill="none" opacity="0.5"/>
+    <circle cx="215" cy="25" r="2.5" fill="#7c5ff0" opacity="0.7"/>
+  </svg>
+</div>
+  <!-- ═══════════════════════════════ SCREEN 5 ═══════════════════════════════ -->
+  <style>
+    .screen5 {
+      padding: 24px 20px 28px;
+      position: relative;
+      background: #0c0c12;
+    }
+
+    .s5-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 36px;
+      gap: 12px;
+    }
+
+    .s5-title {
+      font-family: 'Manrope', sans-serif;
+      font-size: 32px;
+      font-weight: 800;
+      color: #ffffff;
+      line-height: 1.15;
+      letter-spacing: -0.8px;
+      flex: 1;
+    }
+
+    .s5-title-underline {
+      width: 120px;
+      height: 3px;
+      background: linear-gradient(90deg, #4dd9f7, #7c5ff0);
+      border-radius: 2px;
+      margin-top: 8px;
+      box-shadow: 0 0 8px rgba(77,217,247,0.6);
+    }
+
+    /* Timeline layout */
+    .timeline {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+    }
+
+    .timeline-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      position: relative;
+    }
+
+    .timeline-left {
+      flex-shrink: 0;
+      width: 80px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .timeline-left img {
+      width: 64px;
+      height: auto;
+      object-fit: contain;
+      display: block;
+    }
+
+    .timeline-card {
+      flex: 1;
+      background: #12101e;
+      border: none;
+      position: relative;
+      border-radius: 16px;
+      padding: 16px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      margin-bottom: 14px;
+    }
+
+    .timeline-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 16px;
+      padding: 1.5px;
+      background: linear-gradient(135deg, #4dd9f7 0%, #7c5ff0 55%, #ec4899 100%);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+    .timeline-card-icon {
+      flex-shrink: 0;
+      width: 60px;
+      height: 60px;
+    }
+
+    .timeline-card-icon img {
+      width: 48px;
+      height: 48px;
+      object-fit: contain;
+      display: block;
+      mix-blend-mode: screen;
+    }
+
+    .timeline-card-body {}
+
+    .timeline-card-title {
+      font-family: 'Manrope', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      color: #ffffff;
+      margin-bottom: 4px;
+      line-height: 1.3;
+    }
+
+    .timeline-card-text {
+      font-family: 'Manrope', sans-serif;
+      font-size: 11px;
+      color: #9990bb;
+      line-height: 1.5;
+    }
+
+    .timeline-card-accent {
+      font-family: 'Manrope', sans-serif;
+      font-size: 13px;
+      font-weight: 700;
+      margin-top: 8px;
+    }
+
+    .timeline-card-accent span {
+      background: linear-gradient(90deg, #4dd9f7, #a78bfa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    /* chevron bottom */
+    .s5-chevron {
+      display: flex;
+      justify-content: center;
+      margin-top: 8px;
+    }
+
+    .s5-chevron svg {
+      width: 28px;
+      height: 28px;
+      stroke: #7c5ff0;
+      fill: none;
+      stroke-width: 2.5;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+  </style>
+
+  <section class="screen5">
+
+    <div class="s5-header">
+      <div style="flex:1;">
+        <h2 class="s5-title">От регистрации до первого проекта — три шага</h2>
+        <div class="s5-title-underline"></div>
+      </div>
+      <img src="landing/img/screen5-8.webp" loading="lazy" alt="" style="width:210px; height:auto; object-fit:contain; margin-top:-16px; margin-right:-12px; flex-shrink:0;">
+    </div>
+
+    <div class="timeline">
+
+      <!-- Step 01 -->
+      <div class="timeline-row">
+        <div class="timeline-left">
+          <img src="landing/img/screen5-6.webp" loading="lazy" alt="01" style="">
+        </div>
+        <div class="timeline-card">
+          <div class="timeline-card-icon">
+            <img src="landing/img/screen5-2.webp" loading="lazy" alt="profile" style="">
+          </div>
+          <div class="timeline-card-body">
+            <p class="timeline-card-title">Создай профиль за 10 минут</p>
+            <p class="timeline-card-text">Укажи, кто ты и чем занимаешься. Добавь ссылки на музыку, соцсети, проекты. Это твоя визитка внутри индустрии.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 02 -->
+      <div class="timeline-row">
+        <div class="timeline-left">
+          <img src="landing/img/screen5-7.webp" loading="lazy" alt="02" style="">
+        </div>
+        <div class="timeline-card">
+          <div class="timeline-card-icon">
+            <img src="landing/img/screen5-4.webp" loading="lazy" alt="find" style="">
+          </div>
+          <div class="timeline-card-body">
+            <p class="timeline-card-title">Размести задачу или откликнись на чужую</p>
+            <p class="timeline-card-text">Нужен специалист — опиши задачу, получи отклики, выбери подходящего. Хочешь брать заказы — откликайся сам и договаривайся напрямую.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 03 -->
+      <div class="timeline-row">
+        <div class="timeline-left">
+          <img src="landing/img/screen5-1.webp" loading="lazy" alt="03" style="">
+        </div>
+        <div class="timeline-card">
+          <div class="timeline-card-icon">
+            <img src="landing/img/screen5-3.webp" loading="lazy" alt="work" style="">
+          </div>
+          <div class="timeline-card-body">
+            <p class="timeline-card-title">Закрой проект и получи кейс</p>
+            <p class="timeline-card-text">Сдай работу, зафиксируй результат. Каждая закрытая задача — это отзыв в профиле, связь с человеком и кейс, который работает на тебя дальше.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="s5-chevron">
+      <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+    </div>
+
+  </section>
+
+
+
+  <!-- ═══════════════════════════════ SCREEN 7 ═══════════════════════════════ -->
+  <style>
+    .screen7 {
+      padding: 24px 20px 28px;
+      background: #0c0c12;
+    }
+    .s7-title {
+      font-family: 'Manrope', sans-serif;
+      font-size: 22px; font-weight: 800;
+      color: #fff; line-height: 1.15;
+      letter-spacing: -0.5px; margin-bottom: 8px;
+    }
+    .s7-subtitle {
+      font-family: 'Manrope', sans-serif;
+      font-size: 12px; color: #7a7990;
+      line-height: 1.5; margin-bottom: 14px;
+    }
+    .founder-card {
+      background: #0f0d1e; border-radius: 14px;
+      padding: 14px 16px; display: flex;
+      gap: 14px; align-items: flex-start;
+      margin-bottom: 12px; position: relative;
+    }
+    .founder-card::before {
+      content: ''; position: absolute; inset: 0;
+      border-radius: 14px; padding: 1.5px;
+      background: linear-gradient(135deg, #4dd9f7, #7c5ff0, #ec4899);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+    }
+    .founder-avatar {
+      flex-shrink: 0; width: 60px; height: 60px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #2a1a70 0%, #0d0818 100%);
+      border: 2px solid #a78bfa;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 10px rgba(167,139,250,0.35);
+    }
+    .founder-avatar svg {
+      width: 28px; height: 28px; stroke: #a78bfa;
+      fill: none; stroke-width: 1.5;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+    .founder-name {
+      font-family: 'Manrope', sans-serif;
+      font-size: 15px; font-weight: 800; color: #fff; margin-bottom: 4px;
+    }
+    .founder-role {
+      display: inline-block; background: #1e1a30;
+      border: 1px solid #3a3060; color: #9990bb;
+      font-family: 'Manrope', sans-serif;
+      font-size: 10px; font-weight: 500;
+      padding: 2px 8px; border-radius: 100px; margin-bottom: 7px;
+    }
+    .founder-text {
+      font-family: 'Manrope', sans-serif;
+      font-size: 12px; color: #9990bb; line-height: 1.55;
+    }
+    /* Values grid */
+    .values-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px; margin-bottom: 12px;
+      align-items: stretch;
+    }
+    .value-left-col {
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .value-row {
+      display: flex; align-items: flex-start; gap: 10px;
+    }
+    .value-icon {
+      flex-shrink: 0; width: 46px; height: 46px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #0d2a4a 0%, #050d1a 100%);
+      border: 1.5px solid #4dd9f7;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 8px rgba(77,217,247,0.25);
+    }
+    .value-icon svg {
+      width: 22px; height: 22px; stroke: #4dd9f7;
+      fill: none; stroke-width: 1.8;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+    .value-title {
+      font-family: 'Manrope', sans-serif;
+      font-size: 12px; font-weight: 700; color: #fff;
+      margin-bottom: 3px; line-height: 1.3;
+    }
+    .value-desc {
+      font-family: 'Manrope', sans-serif;
+      font-size: 11px; color: #7a7990; line-height: 1.5;
+    }
+    /* Community card */
+    .community-col {
+      display: flex; align-items: center;
+    }
+    .community-card {
+      background: #150d2a; border-radius: 12px;
+      padding: 14px 12px; position: relative; width: 100%;
+    }
+    .community-card::before {
+      content: ''; position: absolute; inset: 0;
+      border-radius: 12px; padding: 1.5px;
+      background: linear-gradient(135deg, #a78bfa, #ec4899);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+    }
+    .community-card-header {
+      display: flex; align-items: center;
+      gap: 8px; margin-bottom: 8px;
+    }
+    .community-icon {
+      width: 30px; height: 30px; border-radius: 50%;
+      background: #2a1a5a; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .community-icon svg {
+      width: 16px; height: 16px; stroke: #a78bfa;
+      fill: none; stroke-width: 1.8;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+    .community-title {
+      font-family: 'Manrope', sans-serif;
+      font-size: 12px; font-weight: 700; color: #fff; line-height: 1.3;
+    }
+    .community-text {
+      font-family: 'Manrope', sans-serif;
+      font-size: 11px; color: #7a7990; line-height: 1.55;
+    }
+    /* Final */
+    .s7-final {
+      background: #0f0d1e; border-radius: 14px;
+      padding: 16px; display: flex;
+      align-items: center; gap: 14px; position: relative;
+    }
+    .s7-final::before {
+      content: ''; position: absolute; inset: 0;
+      border-radius: 14px; padding: 1.5px;
+      background: linear-gradient(135deg, #4dd9f7, #7c5ff0, #ec4899);
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+    }
+    .s7-final-icon {
+      flex-shrink: 0; width: 46px; height: 46px;
+      border-radius: 50%;
+      background: radial-gradient(circle, #3a1a8a, #1a0a4a);
+      border: 1.5px solid #7c5ff0;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 0 10px rgba(124,95,240,0.4);
+    }
+    .s7-final-icon svg {
+      width: 22px; height: 22px; stroke: #c084fc;
+      fill: none; stroke-width: 1.8;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+    .s7-final-text {
+      font-family: 'Manrope', sans-serif;
+      font-size: 13px; color: #ccc8e8; line-height: 1.6;
+    }
+  </style>
+
+  <section class="screen7">
+    <h2 class="s7-title">Платформа, созданная музыкантами для музыкантов</h2>
+    <p class="s7-subtitle">Мы знаем индустрию изнутри — потому что каждый день в ней работаем сами.</p>
+
+    <div class="founder-card">
+      <div class="founder-avatar">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      </div>
+      <div>
+        <p class="founder-name">Антон Сёмин</p>
+        <span class="founder-role">сооснователь</span>
+        <p class="founder-text">Вокалист и автор песен. Много лет внутри сцены: создаю музыку, выступаю, выпускаю релизы, собираю команды. IDEЯ FIX, 6000000000себя — и ещё несколько проектов за плечами. Moooza строю потому, что сам каждый день сталкиваюсь с тем, чего на рынке нет.</p>
+      </div>
+    </div>
+
+    <div class="founder-card">
+      <div class="founder-avatar">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+      </div>
+      <div>
+        <p class="founder-name">Дмитрий Дубровин</p>
+        <span class="founder-role">сооснователь</span>
+        <p class="founder-text">Гитарист «Горим!». Релизы, живые выступления, работа внутри индустрии. Понимаю платформу изнутри — как музыкант, которого ищут и который ищет сам.</p>
+      </div>
+    </div>
+
+    <p style="margin-top:16px; font-size:14px; font-weight:700; color:#ccc8e8; line-height:1.5; text-align:center;">Мы не строим сервис для музыкантов. Мы строим то, чего нам самим не хватало.</p>
+  </section>
+
+
+  <!-- ═══════════════════════════════ SCREEN 8 ═══════════════════════════════ -->
+  <style>
+    .screen8 {
+      padding: 24px 20px 32px;
+      background: #0c0c12;
+      position: relative;
+    }
+
+    .s8-title {
+      font-family: 'Manrope', sans-serif;
+      font-size: 28px; font-weight: 800;
+      color: #fff; line-height: 1.1;
+      letter-spacing: -1px; margin-bottom: 12px;
+    }
+
+    .s8-subtitle {
+      font-family: 'Manrope', sans-serif;
+      font-size: 13px; color: #7a7990;
+      line-height: 1.55; margin-bottom: 18px;
+    }
+
+    /* Main card */
+    .s8-card {
+      border-radius: 20px; padding: 2px;
+      background: linear-gradient(135deg, #4dd9f7 0%, #7c5ff0 50%, #ec4899 100%);
+      margin-bottom: 0;
+      box-shadow: 0 0 24px rgba(77,217,247,0.2), 0 0 48px rgba(124,95,240,0.15);
+    }
+
+    .s8-card-inner {
+      background: #0d0b1e;
+      border-radius: 18px;
+      padding: 16px 16px 18px;
+    }
+
+    /* Resident header */
+    .s8-resident-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .s8-resident-left {}
+
+    .s8-resident-icon-row {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 8px;
+    }
+
+    .s8-note-icon {
+      width: 54px; height: 54px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 35%, #3a1a7a 0%, #1a0a3a 100%);
+      border: 1.5px solid #7c5ff0;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .s8-note-icon svg {
+      width: 26px; height: 26px;
+      stroke: #a78bfa; fill: none;
+      stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    .s8-resident-title {
+      font-family: 'Manrope', sans-serif;
+      font-size: 18px; font-weight: 800; color: #fff;
+    }
+
+    .s8-badge-green {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      color: #34d399;
+      font-family: 'Manrope', sans-serif;
+      font-size: 11px; font-weight: 600;
+      padding: 4px 10px; border-radius: 100px;
+      margin-top: 6px;
+    }
+
+    .s8-badge-green::before {
+      content: '✓';
+      font-size: 11px;
+    }
+
+    /* Badge placeholder */
+    .s8-badge-placeholder {
+      width: 80px; height: 80px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #1a1a3a, #2a1a5a);
+      border: 1px solid #3a2a7a;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .s8-badge-placeholder svg {
+      width: 36px; height: 36px;
+      stroke: #7c5ff0; fill: none;
+      stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    .s8-desc {
+      font-family: 'Manrope', sans-serif;
+      font-size: 13px; color: #ccc8e8;
+      line-height: 1.6; margin-bottom: 14px;
+    }
+
+    /* TG button */
+    .s8-btn-tg {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%; padding: 17px;
+      border-radius: 14px; border: none; cursor: pointer;
+      background: linear-gradient(90deg, #2c5af5 0%, #7c3ff0 100%);
+      color: #fff; font-family: 'Manrope', sans-serif;
+      font-size: 14px; font-weight: 600;
+      text-decoration: none; margin-bottom: 20px;
+    }
+
+    .s8-btn-tg svg { width: 20px; height: 20px; fill: white; flex-shrink: 0; }
+
+    /* Divider OR */
+    .s8-divider {
+      display: flex; align-items: center; gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .s8-divider-line {
+      flex: 1; height: 1px; background: #2a2540;
+    }
+
+    .s8-divider-text {
+      font-family: 'Manrope', sans-serif;
+      font-size: 13px; color: #555370;
+    }
+
+    .s8-email-label {
+      font-family: 'Manrope', sans-serif;
+      font-size: 13px; color: #9990bb;
+      margin-bottom: 12px; line-height: 1.5;
+    }
+
+    /* Email row */
+    .s8-email-row {
+      display: flex; gap: 8px; margin-bottom: 14px;
+    }
+
+    .s8-email-input {
+      flex: 1; background: #0a0818;
+      border: 1px solid #2a2540;
+      border-radius: 12px; padding: 14px 16px;
+      color: #fff; font-family: 'Manrope', sans-serif;
+      font-size: 14px; outline: none;
+    }
+
+    .s8-email-input::placeholder { color: #555370; }
+
+    .s8-btn-notify {
+      background: linear-gradient(135deg, #7c3ff0, #ec4899);
+      color: #fff; border: none; border-radius: 12px;
+      padding: 14px 16px; cursor: pointer;
+      font-family: 'Manrope', sans-serif;
+      font-size: 13px; font-weight: 600;
+      white-space: nowrap;
+    }
+
+    /* Checkboxes */
+    .s8-checkbox-row {
+      display: flex; align-items: flex-start;
+      gap: 10px; margin-bottom: 10px;
+    }
+
+    .s8-checkbox {
+      width: 18px; height: 18px;
+      border: 1.5px solid #3a3060;
+      border-radius: 4px; flex-shrink: 0;
+      margin-top: 1px; background: transparent;
+      appearance: none; cursor: pointer;
+    }
+
+    .s8-checkbox:checked {
+      background: #7c5ff0;
+      border-color: #7c5ff0;
+    }
+
+    .s8-checkbox-text {
+      font-family: 'Manrope', sans-serif;
+      font-size: 12px; color: #7a7990; line-height: 1.5;
+    }
+
+    /* Share row */
+    .s8-share-divider {
+      height: 1px; background: #2a2540; margin: 16px 0;
+    }
+
+    .s8-share-row {
+      display: flex; align-items: center; gap: 10px;
+    }
+
+    .s8-share-icon svg {
+      width: 22px; height: 22px; fill: #4dd9f7;
+    }
+
+    .s8-share-text {
+      font-family: 'Manrope', sans-serif;
+      font-size: 13px; color: #9990bb; flex: 1; line-height: 1.4;
+    }
+
+    .s8-link-icon svg {
+      width: 18px; height: 18px;
+      stroke: #4dd9f7; fill: none;
+      stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+    }
+  </style>
+
+  <section class="screen8">
+    <h2 class="s8-title">Твоё место в музыкальной индустрии</h2>
+    <p class="s8-subtitle">Moooza запускается.<br>Зарегистрироваться можно по реферальной ссылке от участника платформы.</p>
+
+    <div class="s8-card">
+      <div class="s8-card-inner">
+
+        <div class="s8-resident-header">
+          <div class="s8-resident-left">
+            <div class="s8-resident-icon-row">
+              <div class="s8-note-icon">
+                <svg viewBox="0 0 24 24">
+                  <path d="M9 18V5l12-2v13"/>
+                  <circle cx="6" cy="18" r="3"/>
+                  <circle cx="18" cy="16" r="3"/>
+                </svg>
+              </div>
+              <span class="s8-resident-title">Резидент</span>
+            </div>
+            <span class="s8-badge-green">Регистрация открыта — только по приглашению</span>
+          </div>
+          <div class="s8-badge-placeholder">
+            <svg viewBox="0 0 24 24">
+              <rect x="2" y="4" width="20" height="16" rx="3"/>
+              <circle cx="9" cy="10" r="2.5"/>
+              <path d="M14 9h4M14 13h4"/>
+              <path d="M9 4v2M15 4v2"/>
+            </svg>
+          </div>
+        </div>
+
+        <p class="s8-desc">Если ты знаешь кого-то, кто уже на платформе — попроси у него реферальную ссылку. Она даст тебе прямой доступ к регистрации.</p>
+
+        <a href="#" class="s8-btn-tg">
+          <svg viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+          Следить за запуском в Telegram →
+        </a>
+
+        <div class="s8-divider">
+          <div class="s8-divider-line"></div>
+          <span class="s8-divider-text">— или —</span>
+          <div class="s8-divider-line"></div>
+        </div>
+
+        <p class="s8-email-label">Оставь email — напишем, когда будут свободные приглашения</p>
+
+        <div id="s8ResidentForm">
+          <div class="s8-email-row">
+            <input class="s8-email-input" id="s8EmailInput" type="email" placeholder="Ваш email">
+            <button class="s8-btn-notify" id="s8NotifyBtn" disabled style="opacity:0.45;cursor:not-allowed;" onclick="submitResidentForm()">Уведомить меня</button>
+          </div>
+
+          <div class="s8-checkbox-row">
+            <input type="checkbox" class="s8-checkbox" id="consent1" onchange="checkS8Consents()">
+            <label for="consent1" class="s8-checkbox-text">Я даю согласие на обработку персональных данных</label>
+          </div>
+
+          <div class="s8-checkbox-row">
+            <input type="checkbox" class="s8-checkbox" id="consent2" onchange="checkS8Consents()">
+            <label for="consent2" class="s8-checkbox-text">Я даю согласие на получение рекламных и информационных сообщений</label>
+          </div>
+        </div>
+
+        <div id="s8ResidentSuccess" style="display:none; background:#0f0d1e; border:1px solid #2a2450; border-radius:14px; padding:16px 18px; margin-top:4px;">
+          <p style="font-size:14px; color:#34d399; font-weight:700; margin-bottom:10px;">✓ Готово! Напишем, когда появятся свободные приглашения.</p>
+          <p style="font-size:13px; color:#9990bb; margin-bottom:10px;">Знаешь кого-то из индустрии? Перешли им эту страницу →</p>
+          <button id="s8ResidentShareBtn" onclick="copyShareLink('s8ResidentShareBtn')" style="background:linear-gradient(90deg,#2c5af5,#7c3ff0);color:#fff;border:none;border-radius:10px;padding:10px 18px;font-family:'Manrope',sans-serif;font-size:13px;font-weight:600;cursor:pointer;width:100%;">Скопировать ссылку</button>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+
+  <!-- ═══════════════════════════════ SCREEN 9 ═══════════════════════════════ -->
+  <style>
+    .screen9 {
+      padding: 24px 20px 0;
+      background: #0c0c12;
+    }
+
+    .s9-title {
+      font-family: 'Manrope', sans-serif;
+      font-size: 26px; font-weight: 800;
+      color: #fff; line-height: 1.15;
+      letter-spacing: -0.8px; margin-bottom: 10px;
+    }
+
+    .s9-subtitle {
+      font-family: 'Manrope', sans-serif;
+      font-size: 12px; color: #7a7990;
+      line-height: 1.5; margin-bottom: 16px;
+    }
+
+    .role-card {
+      border-radius: 16px;
+      padding: 2px;
+      background: linear-gradient(135deg, #4dd9f7 0%, #7c5ff0 50%, #ec4899 100%);
+      margin-bottom: 14px;
+      box-shadow: 0 0 16px rgba(77,217,247,0.12), 0 0 32px rgba(124,95,240,0.08);
+    }
+
+    .role-card-inner {
+      background: #0d0b1e;
+      border-radius: 14px;
+      padding: 12px 14px 16px;
+    }
+
+    .role-card-top {
+      display: flex; align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px; margin-bottom: 10px;
+    }
+
+    .role-card-top-left {
+      display: flex; align-items: center; gap: 14px;
+    }
+
+    .role-icon {
+      flex-shrink: 0; width: 58px; height: 58px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+
+    .role-icon svg {
+      width: 28px; height: 28px; fill: none;
+      stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+    }
+
+    .role-icon-blue {
+      background: radial-gradient(circle at 40% 35%, #0d2a4a 0%, #050d1a 100%);
+      border: 1.5px solid #4dd9f7;
+      box-shadow: 0 0 10px rgba(77,217,247,0.25);
+    }
+
+    .role-icon-blue svg { stroke: #4dd9f7; }
+
+    .role-icon-purple {
+      background: radial-gradient(circle at 40% 35%, #2a1a5a 0%, #0d0818 100%);
+      border: 1.5px solid #a78bfa;
+      box-shadow: 0 0 10px rgba(167,139,250,0.25);
+    }
+
+    .role-icon-purple svg { stroke: #a78bfa; }
+
+    .role-icon-pink {
+      background: radial-gradient(circle at 40% 35%, #3a1a3a 0%, #150818 100%);
+      border: 1.5px solid #ec4899;
+      box-shadow: 0 0 10px rgba(236,72,153,0.25);
+    }
+
+    .role-icon-pink svg { stroke: #ec4899; }
+
+    .role-title {
+      font-family: 'Manrope', sans-serif;
+      font-size: 14px; font-weight: 800; color: #fff;
+    }
+
+    .role-badge-soon {
+      background: transparent;
+      border: 1px solid #3a3060;
+      color: #7a7990;
+      font-family: 'Manrope', sans-serif;
+      font-size: 11px; font-weight: 500;
+      padding: 4px 12px; border-radius: 100px;
+      white-space: nowrap; flex-shrink: 0;
+    }
+
+    .role-desc {
+      font-family: 'Manrope', sans-serif;
+      font-size: 12px; color: #9990bb;
+      line-height: 1.5; margin-bottom: 10px;
+    }
+
+    .role-email-row {
+      display: flex; gap: 8px; margin-bottom: 12px;
+    }
+
+    .role-email-input {
+      flex: 1; background: #0a0818;
+      border: 1px solid #2a2540;
+      border-radius: 10px; padding: 12px 14px;
+      color: #fff; font-family: 'Manrope', sans-serif;
+      font-size: 13px; outline: none;
+    }
+
+    .role-email-input::placeholder { color: #555370; }
+
+    .role-btn-notify {
+      background: linear-gradient(135deg, #7c3ff0, #ec4899);
+      color: #fff; border: none; border-radius: 10px;
+      padding: 10px 12px; cursor: pointer;
+      font-family: 'Manrope', sans-serif;
+      font-size: 11px; font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .role-checkbox-row {
+      display: flex; align-items: flex-start;
+      gap: 8px; margin-bottom: 8px;
+    }
+
+    .role-checkbox {
+      width: 16px; height: 16px;
+      border: 1.5px solid #3a3060;
+      border-radius: 3px; flex-shrink: 0;
+      margin-top: 2px; background: transparent;
+      appearance: none; cursor: pointer;
+    }
+
+    .role-checkbox:checked {
+      background: #7c5ff0; border-color: #7c5ff0;
+    }
+
+    .role-checkbox-text {
+      font-family: 'Manrope', sans-serif;
+      font-size: 11px; color: #7a7990; line-height: 1.5;
+    }
+
+    .role-socials {
+      margin-top: 12px; padding-top: 12px;
+      border-top: 1px solid #1a1830;
+      font-family: 'Manrope', sans-serif;
+      font-size: 12px; color: #555370;
+    }
+
+    .role-socials a {
+      color: #7c5ff0; text-decoration: none; margin: 0 2px;
+    }
+
+    /* Footer */
+    .s9-footer {
+      margin-top: 24px;
+      padding: 20px 20px 28px;
+      border-top: 1px solid #1a1830;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .s9-footer-left {
+      flex-shrink: 0;
+    }
+
+    .s9-footer-tagline {
+      font-family: 'Manrope', sans-serif;
+      font-size: 11px; color: #555370;
+      margin-top: 6px; line-height: 1.5;
+    }
+
+    .s9-footer-copy {
+      font-family: 'Manrope', sans-serif;
+      font-size: 11px; color: #3a3850;
+      margin-top: 6px;
+    }
+
+    .s9-footer-right {
+      text-align: right;
+    }
+
+    .s9-footer-links {
+      display: flex;
+      flex-direction: row;
+      gap: 4px;
+      justify-content: flex-end;
+      margin-bottom: 8px;
+    }
+
+    .s9-footer-links a {
+      font-family: 'Manrope', sans-serif;
+      font-size: 11px; color: #7c5ff0;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .s9-footer-legal {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 4px;
+    }
+
+    .s9-footer-legal a {
+      font-family: 'Manrope', sans-serif;
+      font-size: 11px; color: #555370;
+      text-decoration: none;
+      white-space: nowrap;
+      line-height: 1.4;
+    }
+  </style>
+
+  <section class="screen9">
+    <h2 class="s9-title" style="font-size:clamp(17px,5.5vw,22px);">Другие профили на Moooza</h2>
+    <p class="s9-subtitle">Оставь email — напишем, когда откроется регистрация для твоего типа профиля.</p>
+
+    <!-- Единая форма ожидания (приглушена относительно карточки резидента) -->
+    <div style="background:#0d0b1a; border:1px solid #1e1a30; border-radius:16px; padding:20px 16px; opacity:0.88;">
+
+      <!-- Описания типов -->
+      <div style="display:flex; flex-direction:column; gap:12px; margin-bottom:18px;">
+
+        <div style="display:flex; align-items:flex-start; gap:10px;">
+          <!-- заглушка иконки: разработчик заменит на img -->
+          <div style="width:28px; height:28px; border-radius:8px; background:rgba(124,95,240,0.2); border:1px solid rgba(124,95,240,0.4); flex-shrink:0; margin-top:1px;"></div>
+          <div>
+            <p style="font-size:12px; font-weight:700; color:#ffffff; margin-bottom:2px;">Слушатель / фанат</p>
+            <p style="font-size:11px; color:#7a7990; line-height:1.5;">Следи за артистами, которых любишь. Первым узнавай о релизах и концертах.</p>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:flex-start; gap:10px;">
+          <div style="width:28px; height:28px; border-radius:8px; background:rgba(77,217,247,0.15); border:1px solid rgba(77,217,247,0.35); flex-shrink:0; margin-top:1px;"></div>
+          <div>
+            <p style="font-size:12px; font-weight:700; color:#ffffff; margin-bottom:2px;">Заказчик</p>
+            <p style="font-size:11px; color:#7a7990; line-height:1.5;">Нужна музыка для проекта, мероприятия или контента — это для тебя.</p>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:flex-start; gap:10px;">
+          <div style="width:28px; height:28px; border-radius:8px; background:rgba(236,72,153,0.15); border:1px solid rgba(236,72,153,0.35); flex-shrink:0; margin-top:1px;"></div>
+          <div>
+            <p style="font-size:12px; font-weight:700; color:#ffffff; margin-bottom:2px;">Компания или лейбл</p>
+            <p style="font-size:11px; color:#7a7990; line-height:1.5;">Лейблы, студии, агентства и другие игроки музыкального рынка.</p>
+          </div>
+        </div>
+
+      </div>
+
+      <div id="unifiedWaitlistForm">
+        <!-- Выпадающий список -->
+        <select id="unifiedRoleSelect" style="width:100%; background:#0a0818; border:1px solid #2a2540; border-radius:10px; padding:12px 14px; color:#fff; font-family:'Manrope',sans-serif; font-size:13px; outline:none; margin-bottom:10px; appearance:none; -webkit-appearance:none;">
+          <option value="" disabled selected style="color:#555370;">Выбери тип профиля</option>
+          <option value="listener">Слушатель / фанат</option>
+          <option value="customer">Заказчик</option>
+          <option value="company">Компания или лейбл</option>
+        </select>
+
+        <!-- Email -->
+        <input id="unifiedEmailInput" class="s8-email-input" type="email" placeholder="Ваш email" style="width:100%; margin-bottom:10px;">
+
+        <!-- Чекбоксы -->
+        <div class="role-checkbox-row">
+          <input type="checkbox" class="role-checkbox" id="uca" onchange="checkUnifiedConsents()">
+          <label for="uca" class="role-checkbox-text">Я даю согласие на обработку персональных данных</label>
+        </div>
+        <div class="role-checkbox-row">
+          <input type="checkbox" class="role-checkbox" id="ucb" onchange="checkUnifiedConsents()">
+          <label for="ucb" class="role-checkbox-text">Я даю согласие на получение рекламных и информационных сообщений</label>
+        </div>
+
+        <button id="unifiedNotifyBtn" disabled style="width:100%; margin-top:12px; background:linear-gradient(135deg,#7c3ff0,#ec4899); color:#fff; border:none; border-radius:10px; padding:13px; font-family:'Manrope',sans-serif; font-size:13px; font-weight:600; cursor:not-allowed; opacity:0.45;" onclick="submitUnifiedForm()">Уведомить меня</button>
+      </div>
+
+      <div id="unifiedSuccess" style="display:none; margin-top:4px;">
+        <p style="font-size:14px; color:#34d399; font-weight:700; margin-bottom:10px;">✓ Отлично! Напишем, когда откроется.</p>
+        <p style="font-size:13px; color:#9990bb; margin-bottom:10px;">Знаешь кого-то из индустрии? Перешли им эту страницу →</p>
+        <button id="unifiedShareBtn" onclick="copyShareLink('unifiedShareBtn')" style="background:linear-gradient(90deg,#2c5af5,#7c3ff0);color:#fff;border:none;border-radius:10px;padding:10px 18px;font-family:'Manrope',sans-serif;font-size:13px;font-weight:600;cursor:pointer;width:100%;">Скопировать ссылку</button>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="s9-footer">
+      <div class="s9-footer-left">
+        <img src="landing/img/logo.webp" alt="Moooza" style="height:22px;width:auto;">
+        <p class="s9-footer-tagline">Платформа для<br>музыкальной индустрии</p>
+        <p class="s9-footer-copy">© 2026 Moooza</p>
+      </div>
+      <div class="s9-footer-right">
+        <div class="s9-footer-links">
+          <a href="#">Telegram</a>&nbsp;·&nbsp;<a href="#">ВКонтакте</a>&nbsp;·&nbsp;<a href="#">Макс</a>
+        </div>
+        <div class="s9-footer-legal">
+          <!-- При клике открывается поп-ап с документами -->
+          <a href="#" onclick="openDocs(); return false;">Документы</a>
+          <!-- При клике — переход на страницу поддержки или открытие чата поддержки -->
+          <a href="#">Поддержка</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     ДОКУМЕНТЫ — ПОП-АП
+     Содержимое каждого документа заполняет разработчик.
+     openDocs() — открыть поп-ап
+     closeDocs() — закрыть поп-ап
+     При клике на документ из списка — открывать его содержимое
+     (можно реализовать как вложенный поп-ап или новую страницу)
+══════════════════════════════════════════════════════════ -->
+
+<style>
+  .docs-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(8, 6, 18, 0.85);
+    backdrop-filter: blur(8px);
+    z-index: 1000;
+    align-items: flex-end;
+    justify-content: center;
+  }
+  .docs-overlay.active {
+    display: flex;
+  }
+  .docs-popup {
+    background: #0f0d1e;
+    border-radius: 20px 20px 0 0;
+    width: 100%;
+    max-width: 430px;
+    padding: 8px 0 32px;
+    position: relative;
+    animation: slideUp 0.3s ease;
+  }
+  @keyframes slideUp {
+    from { transform: translateY(100%); }
+    to   { transform: translateY(0); }
+  }
+  .docs-handle {
+    width: 36px; height: 4px;
+    background: #3a3060;
+    border-radius: 2px;
+    margin: 12px auto 20px;
+  }
+  .docs-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px 16px;
+    border-bottom: 1px solid #1a1830;
+  }
+  .docs-title {
+    font-family: 'Manrope', sans-serif;
+    font-size: 16px; font-weight: 700; color: #fff;
+  }
+  .docs-close {
+    width: 28px; height: 28px;
+    background: #1e1a30; border: none;
+    border-radius: 50%; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: #7a7990; font-size: 16px; line-height: 1;
+  }
+  .docs-list {
+    padding: 8px 0;
+  }
+  .docs-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 20px;
+    cursor: pointer;
+    transition: background 0.15s;
+    text-decoration: none;
+    /* При клике: открыть содержимое документа */
+  }
+  .docs-item:hover, .docs-item:active {
+    background: rgba(124,95,240,0.08);
+  }
+  .docs-item-icon {
+    width: 36px; height: 36px;
+    background: #1a1530;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .docs-item-icon svg {
+    width: 18px; height: 18px;
+    stroke: #7c5ff0; fill: none;
+    stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .docs-item-text {
+    font-family: 'Manrope', sans-serif;
+    font-size: 14px; color: #ccc8e8; line-height: 1.3;
+  }
+  .docs-item-arrow {
+    margin-left: auto;
+    color: #3a3060; font-size: 16px;
+  }
+  .docs-item + .docs-item {
+    border-top: 1px solid #12101e;
+  }
+</style>
+
+<div class="docs-overlay" id="docsOverlay" onclick="if(event.target===this) closeDocs()">
+  <div class="docs-popup">
+    <div class="docs-handle"></div>
+    <div class="docs-header">
+      <span class="docs-title">Документы</span>
+      <button class="docs-close" onclick="closeDocs()">✕</button>
+    </div>
+    <div class="docs-list">
+
+      <!-- Документ 1 -->
+      <a class="docs-item" href="#" onclick="return false;">
+        <div class="docs-item-icon">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        </div>
+        <span class="docs-item-text">Пользовательское соглашение</span>
+        <span class="docs-item-arrow">›</span>
+      </a>
+
+      <!-- Документ 2 -->
+      <a class="docs-item" href="#" onclick="return false;">
+        <div class="docs-item-icon">
+          <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <span class="docs-item-text">Политика конфиденциальности</span>
+        <span class="docs-item-arrow">›</span>
+      </a>
+
+      <!-- Документ 3 -->
+      <a class="docs-item" href="#" onclick="return false;">
+        <div class="docs-item-icon">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        </div>
+        <span class="docs-item-text">Политика обработки персональных данных</span>
+        <span class="docs-item-arrow">›</span>
+      </a>
+
+      <!-- Документ 4 -->
+      <a class="docs-item" href="#" onclick="return false;">
+        <div class="docs-item-icon">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        </div>
+        <span class="docs-item-text">Политика использования cookies</span>
+        <span class="docs-item-arrow">›</span>
+      </a>
+
+      <!-- Документ 5 -->
+      <a class="docs-item" href="#" onclick="return false;">
+        <div class="docs-item-icon">
+          <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <span class="docs-item-text">Правила публикации контента</span>
+        <span class="docs-item-arrow">›</span>
+      </a>
+
+      <!-- Документ 6 -->
+      <a class="docs-item" href="#" onclick="return false;">
+        <div class="docs-item-icon">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        </div>
+        <span class="docs-item-text">Правила проведения сделок</span>
+        <span class="docs-item-arrow">›</span>
+      </a>
+
+      <!-- Документ 7 -->
+      <a class="docs-item" href="#" onclick="return false;">
+        <div class="docs-item-icon">
+          <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </div>
+        <span class="docs-item-text">Правила для специалистов</span>
+        <span class="docs-item-arrow">›</span>
+      </a>
+
+      <!-- Документ 8 -->
+      <a class="docs-item" href="#" onclick="return false;">
+        <div class="docs-item-icon">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/></svg>
+        </div>
+        <span class="docs-item-text">Реквизиты компании</span>
+        <span class="docs-item-arrow">›</span>
+      </a>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  function openDocs() {
+    document.getElementById('docsOverlay').classList.add('active');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeDocs() {
+    document.getElementById('docsOverlay').classList.remove('active');
+    document.body.style.overflow = '';
+  }
+  // Закрытие по свайпу вниз (для мобильных)
+  let startY = 0;
+  const popup = document.querySelector('.docs-popup');
+  popup.addEventListener('touchstart', e => startY = e.touches[0].clientY);
+  popup.addEventListener('touchend', e => {
+    if (e.changedTouches[0].clientY - startY > 80) closeDocs();
+  });
+</script>
+
+<script>
+// ── BADGE POPUP ──
+function toggleBadgePopup() {
+  var popup = document.getElementById('badgePopup');
+  popup.style.display = popup.style.display === 'none' ? 'block' : 'none';
+  ymSafe('badge_click');
+}
+
+// ── HERO TELEGRAM CLICK ──
+var _heroScrolled50 = false;
+window.addEventListener('scroll', function() {
+  if (!_heroScrolled50 && window.scrollY / document.body.scrollHeight > 0.5) {
+    _heroScrolled50 = true;
+  }
+  // Глубина скролла
+  var pct = window.scrollY / (document.body.scrollHeight - window.innerHeight);
+  if (!window._s50 && pct >= 0.5) { window._s50 = true; ymSafe('scroll_50'); }
+  if (!window._s75 && pct >= 0.75) { window._s75 = true; ymSafe('scroll_75'); }
+  if (!window._s100 && pct >= 0.99) { window._s100 = true; ymSafe('scroll_100'); }
+});
+
+function heroTgClick() {
+  ymSafe('hero_tg_click');
+  if (!_heroScrolled50) {
+    ymSafe('hero_tg_click_no_scroll');
+  }
+}
+
+// ── COPY SHARE LINK ──
+function copyShareLink(btnId) {
+  var url = window.location.href.split('?')[0];
+  navigator.clipboard.writeText(url).then(function() {
+    var btn = document.getElementById(btnId);
+    if (btn) {
+      var originalText = btn.innerText;
+      btn.innerText = 'Скопировано ✓';
+      setTimeout(function() { btn.innerText = originalText; }, 2500);
+    }
+    ymSafe('share_link_click');
+  }).catch(function() {
+    // Fallback for older browsers
+    var ta = document.createElement('textarea');
+    ta.value = window.location.href;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    var btn = document.getElementById(btnId);
+    if (btn) { btn.innerText = 'Скопировано ✓'; setTimeout(function() { btn.innerText = 'Скопировать ссылку'; }, 2500); }
+  });
+}
+
+// ── SCREEN 8 RESIDENT FORM ──
+function checkS8Consents() {
+  var c1 = document.getElementById('consent1').checked;
+  var c2 = document.getElementById('consent2').checked;
+  var btn = document.getElementById('s8NotifyBtn');
+  btn.disabled = !(c1 && c2);
+  btn.style.opacity = (c1 && c2) ? '1' : '0.45';
+  btn.style.cursor = (c1 && c2) ? 'pointer' : 'not-allowed';
+}
+
+// Shared POST to the waitlist API (same-origin → no CORS).
+async function submitWaitlist(email, type, consentPd, consentMarketing) {
+  var res = await fetch('/api/waitlist', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email, type: type, consentPd: !!consentPd, consentMarketing: !!consentMarketing }),
+  });
+  if (!res.ok) {
+    var msg = 'Не удалось отправить. Попробуйте позже.';
+    try { var j = await res.json(); if (j && j.error) msg = j.error; } catch (e) {}
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
+function showFormError(afterEl, text) {
+  if (!afterEl) return;
+  var id = afterEl.id + '_err';
+  var el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement('div');
+    el.id = id;
+    el.style.cssText = 'color:#fca5a5;font-size:12px;margin-top:8px;font-family:Manrope,sans-serif;';
+    afterEl.parentNode.insertBefore(el, afterEl.nextSibling);
+  }
+  el.textContent = text;
+}
+
+async function submitResidentForm() {
+  var email = (document.getElementById('s8EmailInput').value || '').trim();
+  if (!email || !email.includes('@')) { showFormError(document.getElementById('s8NotifyBtn'), 'Введите корректный email'); return; }
+  var btn = document.getElementById('s8NotifyBtn');
+  var orig = btn.innerText; btn.disabled = true; btn.innerText = 'Отправляем…';
+  try {
+    await submitWaitlist(email, 'resident_waitlist',
+      document.getElementById('consent1').checked, document.getElementById('consent2').checked);
+    document.getElementById('s8ResidentForm').style.display = 'none';
+    document.getElementById('s8ResidentSuccess').style.display = 'block';
+    ymSafe('form_submit_resident_waitlist');
+  } catch (e) {
+    btn.disabled = false; btn.innerText = orig;
+    showFormError(btn, e.message);
+  }
+}
+
+// ── UNIFIED WAITLIST FORM ──
+function checkUnifiedConsents() {
+  var ca = document.getElementById('uca').checked;
+  var cb = document.getElementById('ucb').checked;
+  var btn = document.getElementById('unifiedNotifyBtn');
+  btn.disabled = !(ca && cb);
+  btn.style.opacity = (ca && cb) ? '1' : '0.45';
+  btn.style.cursor = (ca && cb) ? 'pointer' : 'not-allowed';
+}
+
+async function submitUnifiedForm() {
+  var email = (document.getElementById('unifiedEmailInput').value || '').trim();
+  var role = document.getElementById('unifiedRoleSelect').value;
+  var btn = document.getElementById('unifiedNotifyBtn');
+  if (!role) { showFormError(btn, 'Выберите, кто вы'); return; }
+  if (!email || !email.includes('@')) { showFormError(btn, 'Введите корректный email'); return; }
+  var orig = btn.innerText; btn.disabled = true; btn.innerText = 'Отправляем…';
+  try {
+    await submitWaitlist(email, role,
+      document.getElementById('uca').checked, document.getElementById('ucb').checked);
+    document.getElementById('unifiedWaitlistForm').style.display = 'none';
+    document.getElementById('unifiedSuccess').style.display = 'block';
+    ymSafe('form_submit_' + role);
+  } catch (e) {
+    btn.disabled = false; btn.innerText = orig;
+    showFormError(btn, e.message);
+  }
+}
+</script>
+</body>
+</html>

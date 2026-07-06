@@ -103,7 +103,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
           type: 'connection_request',
           title: `${me?.firstName} ${me?.lastName} запрашивает связь`,
           body: serviceNames ? `По услугам: ${serviceNames}` : 'Новый запрос на связь',
-          link: `/friends?tab=connections`,
+          link: `/connections/requests`,
         },
       });
       emitToUser(receiverId, 'new_notification', notification);
@@ -456,7 +456,7 @@ router.patch('/:id/break', authenticate, async (req: AuthRequest, res: Response)
           type: 'connection_break',
           title: `${me?.firstName} ${me?.lastName} запрашивает разрыв связи`,
           body: 'Подтвердите или отклоните запрос',
-          link: `/friends?tab=connections`,
+          link: `/connections/requests`,
         },
       });
     } catch {}

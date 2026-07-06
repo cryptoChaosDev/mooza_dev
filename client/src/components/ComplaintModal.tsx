@@ -5,6 +5,7 @@ import { useMutation } from '@tanstack/react-query';
 import { complaintAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { useScrollLock } from '../lib/scrollLock';
 
 const CATEGORIES_USER = [
   'Спам', 'Недостоверная информация', 'Мошенничество / обман',
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export default function ComplaintModal({ targetType, targetId, onClose }: Props) {
+  useScrollLock(true);
   const [category, setCategory] = useState('');
   const [text, setText] = useState('');
   const [sent, setSent] = useState(false);

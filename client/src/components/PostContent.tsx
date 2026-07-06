@@ -63,7 +63,7 @@ export default function PostContent({ content, className = '' }: { content?: str
     // Legacy plain text: preserve line breaks, make bare URLs clickable.
     const parts = content.split(URL_RE);
     return (
-      <div className={`post-prose whitespace-pre-wrap break-words ${className}`}>
+      <div className={`post-prose whitespace-pre-wrap break-words [overflow-wrap:anywhere] ${className}`}>
         {parts.map((part, i) =>
           /^https?:\/\//.test(part) ? (
             <a key={i} href={part} target="_blank" rel="noopener noreferrer nofollow" onClick={(e) => e.stopPropagation()}>{part}</a>
@@ -85,7 +85,7 @@ export default function PostContent({ content, className = '' }: { content?: str
 
   return (
     <div
-      className={`post-prose break-words ${className}`}
+      className={`post-prose break-words [overflow-wrap:anywhere] ${className}`}
       onClick={onClick}
       dangerouslySetInnerHTML={{ __html: safeHtml }}
     />

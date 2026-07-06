@@ -35,7 +35,8 @@ export default function GroupInvitesPage() {
       <div className="max-w-xl mx-auto">
 
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-4 flex items-center gap-3">
+        <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-4 flex items-center gap-3"
+          style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
           <button onClick={() => navigate(-1)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors">
             <ArrowLeft size={20} />
           </button>
@@ -82,7 +83,7 @@ export default function GroupInvitesPage() {
                   {inv.invitedBy && (
                     <div className="flex items-center gap-2 mb-3">
                       <AvatarComponent src={inv.invitedBy.avatar} name={`${inv.invitedBy.firstName} ${inv.invitedBy.lastName}`} size={20} />
-                      <p className="text-xs text-slate-500">
+                      <p className="text-xs text-slate-500 min-w-0 break-words [overflow-wrap:anywhere]">
                         Пригласил: <span className="text-slate-400">{inv.invitedBy.firstName} {inv.invitedBy.lastName}</span>
                       </p>
                     </div>

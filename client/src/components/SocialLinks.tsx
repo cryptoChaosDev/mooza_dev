@@ -25,6 +25,9 @@ export type SocialKey =
   | 'dzen'         // Яндекс Дзен
   | 'soundcloud'   // SoundCloud
   | 'bandlink'     // Bandlink
+  | 'spotify'      // Spotify
+  | 'apple_music'  // Apple Music
+  | 'deezer'       // Deezer
   | 'website';     // Официальный сайт
 
 // Contact keys vs social keys — used to split the profile "Contacts" card
@@ -39,6 +42,9 @@ export const SOCIAL_KEYS: SocialKey[] = [
   'dzen',
   'soundcloud',
   'bandlink',
+  'spotify',
+  'apple_music',
+  'deezer',
   'website',
 ];
 
@@ -241,6 +247,33 @@ export const SOCIAL_SERVICES: SocialService[] = [
     icon: <LinkIcon />,
   },
   {
+    key: 'spotify',
+    label: 'Spotify',
+    baseUrl: 'https://open.spotify.com/',
+    placeholder: 'artist/…',
+    color: 'emerald',
+    iconBg: '#1DB954',
+    icon: <MusicNoteIcon />,
+  },
+  {
+    key: 'apple_music',
+    label: 'Apple Music',
+    baseUrl: 'https://music.apple.com/',
+    placeholder: 'ru/artist/…',
+    color: 'rose',
+    iconBg: '#FA243C',
+    icon: <MusicNoteIcon />,
+  },
+  {
+    key: 'deezer',
+    label: 'Deezer',
+    baseUrl: 'https://www.deezer.com/',
+    placeholder: 'artist/…',
+    color: 'purple',
+    iconBg: '#A238FF',
+    icon: <MusicNoteIcon />,
+  },
+  {
     key: 'website',
     label: 'Официальный сайт',
     baseUrl: 'https://',
@@ -263,18 +296,35 @@ export const getSocialService = (key: SocialKey) =>
 
 export function buildUrl(service: SocialService, slug: string): string {
   if (!slug) return '';
+  // Telegram: accept @username, t.me/username, a full URL, or a bare username and
+  // always normalise to https://t.me/<username> — no leading «@» (contact format).
+  if (service.baseUrl.includes('t.me/')) {
+    const u = slug.trim()
+      .replace(/^https?:\/\//i, '')
+      .replace(/^t\.me\//i, '')
+      .replace(/^@+/, '');
+    return u ? 'https://t.me/' + u : '';
+  }
   // If user pasted a full URL, return as-is
   if (slug.startsWith('http://') || slug.startsWith('https://')) return slug;
-  return service.baseUrl + slug;
+  // Collapse any repeated base prefix and add exactly one. Stored contact values
+  // already carry the prefix ('tel:+7…', 'mailto:you@…'), and some were even saved
+  // doubled ('tel:tel:…') — re-prepending here produced 'tel:tel:' / 'mailto:mailto:'.
+  let s = slug;
+  while (s.startsWith(service.baseUrl)) s = s.slice(service.baseUrl.length);
+  return s ? service.baseUrl + s : '';
 }
 
 export function extractSlug(service: SocialService, fullUrl: string): string {
   if (!fullUrl) return '';
-  // Strip base URL prefix if present
+  // Strip the base prefix — repeatedly, so legacy doubled values like
+  // 'tel:tel:+7…' / 'mailto:mailto:…' collapse to the bare slug in the editor.
+  let s = fullUrl;
   for (const base of [service.baseUrl, service.baseUrl.replace('https://', 'http://')]) {
-    if (base && fullUrl.startsWith(base)) return fullUrl.slice(base.length);
+    if (!base) continue;
+    while (s.startsWith(base)) s = s.slice(base.length);
   }
-  return fullUrl;
+  return s;
 }
 
 // ─── View: clickable icon row ─────────────────────────────────────────────────

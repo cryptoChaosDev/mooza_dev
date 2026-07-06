@@ -14,10 +14,11 @@ import { yoNorm } from '../lib/search';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 
 import ConfirmDialog from '../components/ConfirmDialog';
+import RequestsSection from '../components/RequestsSection';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 
-type Tab = 'friends' | 'connections' | 'favorites';
+type Tab = 'friends' | 'connections' | 'favorites' | 'requests';
 
 
 function SectionHeader({ label, danger }: { label: string; count?: number; danger?: boolean }) {
@@ -31,7 +32,7 @@ function SectionHeader({ label, danger }: { label: string; count?: number; dange
 export default function FriendsPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<Tab>((searchParams.get('tab') as Tab) || 'friends');
   const [viewConn, setViewConn] = useState<any>(null);
 
@@ -41,7 +42,7 @@ export default function FriendsPage() {
 
   useEffect(() => {
     const tab = searchParams.get('tab') as Tab | null;
-    if (tab && ['friends', 'connections', 'favorites'].includes(tab)) {
+    if (tab && ['friends', 'connections', 'favorites', 'requests'].includes(tab)) {
       setActiveTab(tab);
     }
   }, [searchParams]);
@@ -159,6 +160,7 @@ const { data: myBreakRequests = [] } = useQuery({
   const TABS: { id: Tab; label: string; badge: number }[] = [
     { id: 'friends',     label: 'Друзья',   badge: friendsBadge },
     { id: 'connections', label: 'Связи',    badge: connBadge },
+    { id: 'requests',    label: 'Запросы',  badge: 0 },
     { id: 'favorites',   label: 'Избранное', badge: 0 },
   ];
 
@@ -190,7 +192,7 @@ const { data: myBreakRequests = [] } = useQuery({
               {TABS.map(tab => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
+                  onClick={() => { setActiveTab(tab.id); setSearchParams({ tab: tab.id }, { replace: true }); }}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
                     activeTab === tab.id ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'
                   }`}
@@ -589,6 +591,13 @@ const { data: myBreakRequests = [] } = useQuery({
                   </div>
                 )
               )}
+            </div>
+          )}
+
+          {/* ══ REQUESTS TAB ══ */}
+          {activeTab === 'requests' && (
+            <div className="px-4 py-3">
+              <RequestsSection />
             </div>
           )}
         </div>
