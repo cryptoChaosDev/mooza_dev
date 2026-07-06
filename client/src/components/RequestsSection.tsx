@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Disc3, Users, Briefcase, ClipboardList, Check, X, Loader2, ChevronRight, HandshakeIcon,
 } from 'lucide-react';
@@ -16,7 +16,17 @@ const fullName = (u: any) => `${u?.lastName ?? ''} ${u?.firstName ?? ''}`.trim()
 export default function RequestsSection() {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const [sub, setSub] = useState<Sub>('media');
+  // Под-вкладку держим в URL (?req=), чтобы возврат назад со страницы заказа/вакансии
+  // (navigate(-1)) вернул на «Запросы» → нужную под-вкладку, а не сбросил.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [sub, setSubState] = useState<Sub>((searchParams.get('req') as Sub) || 'media');
+  const setSub = (s: Sub) => {
+    setSubState(s);
+    const next = new URLSearchParams(searchParams);
+    next.set('tab', 'requests');
+    next.set('req', s);
+    setSearchParams(next, { replace: true });
+  };
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const media = useQuery({
