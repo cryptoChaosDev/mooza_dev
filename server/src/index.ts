@@ -68,6 +68,19 @@ try {
 const app = express();
 export const prisma = new PrismaClient();
 
+// Дублирование уведомлений в Telegram-бот: notification.create разбросан по ~20 местам,
+// поэтому единственный надёжный hook — Prisma-middleware. Fire-and-forget (не тормозит ответ).
+// Ленивая загрузка утилиты — она импортирует prisma из этого модуля (циклический импорт).
+prisma.$use(async (params, next) => {
+  const result = await next(params);
+  if (params.model === 'Notification' && params.action === 'create' && result) {
+    import('./utils/telegramNotify')
+      .then(m => m.tgNotifyFromRow(result))
+      .catch(() => { /* best-effort */ });
+  }
+  return result;
+});
+
 const PORT = process.env.PORT || 4000;
 
 // Trust proxy - необходимо для корректной работы rate limiting в Docker

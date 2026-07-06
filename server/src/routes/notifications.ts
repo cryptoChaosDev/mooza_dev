@@ -1,8 +1,52 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
+import { createNotifySubscribeToken, getBotUsername } from '../utils/telegramNotify';
 
 const router = Router();
+
+// ── Telegram-дублирование уведомлений ────────────────────────────────────────
+
+// GET /api/notifications/telegram/status — подключено ли дублирование
+router.get('/telegram/status', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId! },
+      select: { telegramId: true, telegramNotifyEnabled: true } as any,
+    }) as any;
+    res.json({
+      linked: !!user?.telegramId,
+      enabled: !!user?.telegramNotifyEnabled,
+    });
+  } catch {
+    res.status(500).json({ error: 'Failed to get status' });
+  }
+});
+
+// POST /api/notifications/telegram/subscribe — deep-link на бота с одноразовым токеном
+router.post('/telegram/subscribe', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const botUsername = await getBotUsername();
+    if (!botUsername) return res.status(503).json({ error: 'Telegram-бот сейчас недоступен. Попробуйте позже.' });
+    const token = createNotifySubscribeToken(req.userId!);
+    res.json({ url: `https://t.me/${botUsername}?start=notify_${token}` });
+  } catch {
+    res.status(500).json({ error: 'Failed to create subscribe link' });
+  }
+});
+
+// DELETE /api/notifications/telegram — отписаться от дублирования
+router.delete('/telegram', authenticate, async (req: AuthRequest, res) => {
+  try {
+    await prisma.user.update({
+      where: { id: req.userId! },
+      data: { telegramNotifyEnabled: false } as any,
+    });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: 'Failed to unsubscribe' });
+  }
+});
 
 // GET /api/notifications — список последних 50 уведомлений
 router.get('/', authenticate, async (req: AuthRequest, res) => {

@@ -698,6 +698,13 @@ export const supportAPI = {
     api.post('/support/profession-request', data),
 };
 
+export const notificationAPI = {
+  // Дублирование уведомлений в Telegram-бот
+  telegramStatus: () => api.get('/notifications/telegram/status'),
+  telegramSubscribe: () => api.post('/notifications/telegram/subscribe'),
+  telegramUnsubscribe: () => api.delete('/notifications/telegram'),
+};
+
 // Search Filters Type
 export interface SearchFilters {
   fieldId?: string;

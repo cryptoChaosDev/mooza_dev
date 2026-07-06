@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Bell, MessageCircle, UserPlus, UserCheck, MessageSquare, X, CheckCheck, Link2, Users, UserX, Mic2, Disc3, Film, BadgeCheck, ShieldCheck, ShieldX, Crown, Trash2, Zap } from 'lucide-react';
+import { Bell, MessageCircle, UserPlus, UserCheck, MessageSquare, X, CheckCheck, Link2, Users, UserX, Mic2, Disc3, Film, BadgeCheck, ShieldCheck, ShieldX, Crown, Trash2, Zap, Send, Loader2 } from 'lucide-react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { useBadgeStore } from '../stores/badgeStore';
 import AvatarComponent from './Avatar';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { notificationAPI } from '../lib/api';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -213,6 +214,39 @@ export default function NotificationBell() {
     return () => unlockScroll();
   }, [open]);
 
+  // ── Дублирование уведомлений в Telegram ────────────────────────────────────
+  // После клика «Подписаться» ждём подтверждения из бота — поллим статус каждые 2.5с.
+  const [waitingTg, setWaitingTg] = useState(false);
+  const { data: tgStatus } = useQuery({
+    queryKey: ['tg-notify-status'],
+    queryFn: async () => (await notificationAPI.telegramStatus()).data as { linked: boolean; enabled: boolean },
+    enabled: open,
+    refetchInterval: waitingTg ? 2500 : false,
+  });
+  useEffect(() => {
+    if (waitingTg && tgStatus?.enabled) {
+      setWaitingTg(false);
+      toast.success('Уведомления в Telegram подключены');
+    }
+  }, [waitingTg, tgStatus?.enabled]);
+
+  const tgSubscribeMut = useMutation({
+    mutationFn: async () => (await notificationAPI.telegramSubscribe()).data as { url: string },
+    onSuccess: ({ url }) => {
+      window.open(url, '_blank', 'noopener');
+      setWaitingTg(true);
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось открыть Telegram-бота')),
+  });
+  const tgUnsubscribeMut = useMutation({
+    mutationFn: () => notificationAPI.telegramUnsubscribe(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tg-notify-status'] });
+      toast.success('Уведомления в Telegram отключены');
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отписаться')),
+  });
+
   const readOneMutation = useMutation({
     mutationFn: markRead,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
@@ -309,6 +343,45 @@ export default function NotificationBell() {
                 />
               )
             )
+          )}
+        </div>
+
+        {/* Telegram-дублирование уведомлений */}
+        <div className="flex-shrink-0 border-t border-slate-800 px-4 py-3">
+          {tgStatus?.enabled ? (
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-xs text-emerald-400 min-w-0">
+                <Send size={13} className="flex-shrink-0" />
+                Уведомления дублируются в Telegram
+              </span>
+              <button
+                onClick={() => tgUnsubscribeMut.mutate()}
+                disabled={tgUnsubscribeMut.isPending}
+                className="text-xs text-slate-400 hover:text-red-400 transition-colors flex-shrink-0 flex items-center gap-1"
+              >
+                {tgUnsubscribeMut.isPending && <Loader2 size={11} className="animate-spin" />}
+                Отписаться
+              </button>
+            </div>
+          ) : waitingTg ? (
+            <div className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-xs text-slate-400 min-w-0">
+                <Loader2 size={13} className="animate-spin flex-shrink-0" />
+                Ждём подтверждения в боте… Нажмите Start в Telegram
+              </span>
+              <button onClick={() => setWaitingTg(false)} className="text-xs text-slate-500 hover:text-white transition-colors flex-shrink-0">
+                Отмена
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => tgSubscribeMut.mutate()}
+              disabled={tgSubscribeMut.isPending}
+              className="w-full flex items-center justify-center gap-2 py-2 bg-[#229ED9]/15 hover:bg-[#229ED9]/25 text-[#4db8e8] rounded-xl text-xs font-semibold transition-colors disabled:opacity-50"
+            >
+              {tgSubscribeMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+              Подписаться на уведомления в Telegram
+            </button>
           )}
         </div>
       </div>

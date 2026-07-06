@@ -494,6 +494,7 @@ model User {
   password  String?
   telegramId       String?  @unique
   telegramUsername String?
+  telegramNotifyEnabled Boolean @default(false) // дублировать уведомления в Telegram-бот
   vkId             String?  @unique
   firstName String
   lastName  String
