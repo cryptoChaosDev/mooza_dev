@@ -335,20 +335,24 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
         scored.sort((a, b) => b.score - a.score);
         const ranked = diversifyByAuthor(scored);
 
-        // Official Moooza account posts ALWAYS rank highest (top of the feed),
-        // newest first — or oldest first (onboarding order) for brand-new users.
+        // Посты официального аккаунта Moooza закрепляются сверху ТОЛЬКО для новичков
+        // без собственных постов (онбординг, старые→новые) — как и в остальных
+        // сортировках. Для всех прочих они ранжируются наравне со всеми и тонут
+        // по свежести (раньше висели сверху у всех — жалоба «вечно вижу старые посты Музы»).
         let teamIds: string[] = [];
-        if (teamUserId && kind === 'all') {
-          const newUser = vid ? (await prisma.post.count({ where: { authorId: vid } })) === 0 : false;
-          const teamWhere: any = { authorId: teamUserId };
-          if (type && type !== 'all') {
-            const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
-            if (types.length) teamWhere.type = types.length > 1 ? { in: types } : types[0];
+        if (teamUserId && kind === 'all' && vid) {
+          const newUser = (await prisma.post.count({ where: { authorId: vid } })) === 0;
+          if (newUser) {
+            const teamWhere: any = { authorId: teamUserId };
+            if (type && type !== 'all') {
+              const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
+              if (types.length) teamWhere.type = types.length > 1 ? { in: types } : types[0];
+            }
+            if (where.createdAt) teamWhere.createdAt = where.createdAt;
+            if (where.city) teamWhere.city = where.city;
+            const teamPosts = await prisma.post.findMany({ where: teamWhere, select: { id: true }, orderBy: { createdAt: 'asc' }, take: 25 });
+            teamIds = teamPosts.map((p) => p.id);
           }
-          if (where.createdAt) teamWhere.createdAt = where.createdAt;
-          if (where.city) teamWhere.city = where.city;
-          const teamPosts = await prisma.post.findMany({ where: teamWhere, select: { id: true }, orderBy: { createdAt: newUser ? 'asc' : 'desc' }, take: 25 });
-          teamIds = teamPosts.map((p) => p.id);
         }
         const teamSet = new Set(teamIds);
         const ids = [...teamIds, ...ranked.filter((p) => !teamSet.has(p.id)).map((p) => p.id)];
@@ -366,20 +370,43 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
       return;
     }
 
-    // Sort order — newest by default, or by engagement (reactions / comments)
-    // with a chronological tie-breaker.
-    const orderBy: any =
-      sort === 'popular' ? [{ reactions: { _count: 'desc' } }, { createdAt: 'desc' }]
-      : sort === 'discussed' ? [{ comments: { _count: 'desc' } }, { createdAt: 'desc' }]
-      : [{ createdAt: 'desc' }];
-
-    const posts = await prisma.post.findMany({
-      where,
-      include,
-      orderBy,
-      take: limitNum,
-      skip: offsetNum,
-    });
+    // Sort order — newest by default, or by engagement with a chronological tie-breaker.
+    let posts: any[];
+    if (sort === 'popular') {
+      // «Популярные» — суммарная вовлечённость (лайки + реакции + сохранения + чуть комментов).
+      // Раньше считались ТОЛЬКО реакции → посты с 0 реакций падали в сортировку по дате,
+      // и свежие собственные посты обгоняли чужие залайканные. Prisma не умеет orderBy по
+      // сумме relation-count'ов — ранжируем пул из 600 свежих кандидатов в памяти.
+      const cands = await prisma.post.findMany({
+        where,
+        select: { id: true, createdAt: true, _count: { select: { likes: true, reactions: true, comments: true, savedBy: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 600,
+      });
+      const scored = cands.map((p) => ({
+        id: p.id,
+        t: new Date(p.createdAt).getTime(),
+        s: p._count.likes + p._count.reactions + 1.5 * p._count.savedBy + 0.5 * p._count.comments,
+      }));
+      scored.sort((a, b) => b.s - a.s || b.t - a.t);
+      const pageIds = scored.slice(offsetNum, offsetNum + limitNum).map((x) => x.id);
+      posts = pageIds.length
+        ? await prisma.post.findMany({ where: { id: { in: pageIds } }, include })
+        : [];
+      const orderMap = new Map(pageIds.map((id, i) => [id, i]));
+      posts.sort((a, b) => (orderMap.get(a.id)! - orderMap.get(b.id)!));
+    } else {
+      const orderBy: any =
+        sort === 'discussed' ? [{ comments: { _count: 'desc' } }, { createdAt: 'desc' }]
+        : [{ createdAt: 'desc' }];
+      posts = await prisma.post.findMany({
+        where,
+        include,
+        orderBy,
+        take: limitNum,
+        skip: offsetNum,
+      });
+    }
 
     // Pin team welcome posts at the top — only on the first page of the default
     // feed (no type/author filter) and only for users with no posts of their own.
