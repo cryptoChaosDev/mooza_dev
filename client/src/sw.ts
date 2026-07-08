@@ -1,7 +1,14 @@
 /// <reference lib="webworker" />
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
+import { clientsClaim } from 'workbox-core';
 
 declare const self: ServiceWorkerGlobalScope;
+
+// Новый SW активируется сразу, не дожидаясь закрытия всех вкладок/PWA — иначе
+// пользователи сидят на старом бандле до полного перезапуска приложения
+// (хроническое «деплой не виден», особенно в установленной PWA).
+self.skipWaiting();
+clientsClaim();
 
 // Workbox инжектирует список файлов для precache сюда
 precacheAndRoute(self.__WB_MANIFEST);
