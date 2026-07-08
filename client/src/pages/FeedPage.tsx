@@ -8,7 +8,7 @@ import {
   Plus, FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench,
   Zap, BarChart3, Star, WifiOff, RefreshCw, HelpCircle, Repeat2,
   ExternalLink, MessageSquare, HandshakeIcon, Loader2 as Spinner,
-  ArrowUpDown, ChevronDown, Megaphone,
+  ArrowUpDown, ChevronDown, ChevronUp, Megaphone,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import ShareButton from '../components/ShareButton';
@@ -1089,6 +1089,14 @@ export default function FeedPage() {
   const [showSavedOnly, setShowSavedOnly] = useState(false);
   useScrollLock(showPostTypePicker || showOrderForm || showVacancyForm);
 
+  // Кнопка «Вверх» — появляется после прокрутки на ~2 экрана
+  const [showScrollTop, setShowScrollTop] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setShowScrollTop(window.scrollY > 1200);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   // Persist filters between sessions (localStorage).
   const updateFilters = useCallback((patch: Partial<FlowFilters>) => {
     setFilters(prev => {
@@ -1274,6 +1282,16 @@ export default function FeedPage() {
             </div>
           )}
         </div>
+
+        {/* Кнопка «Вверх» — над FAB, показывается после прокрутки */}
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          aria-label="Наверх"
+          title="Наверх"
+          className={`fixed bottom-36 right-6 lg:bottom-24 lg:right-10 w-10 h-10 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white border border-slate-700 rounded-full shadow-xl backdrop-blur flex items-center justify-center transition-all z-40 ${showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}
+        >
+          <ChevronUp size={20} />
+        </button>
 
         {/* FAB — create post */}
         <button
