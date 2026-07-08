@@ -139,6 +139,20 @@ body.modal-open {
   outline-offset: 2px;
 }
 
+/* Android Chrome (Adreno/Mali, Xiaomi/MIUI): backdrop-filter рисует мусорные пиксели
+   (баг GPU-композитинга Chromium). Класс ставится в main.tsx по UA. Покрывает все
+   tailwind-утилиты backdrop-blur*: фоны у поверхностей ~95% непрозрачные, так что
+   отключение блюра почти незаметно. */
+html.android-no-backdrop-blur [class*="backdrop-blur"] {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+/* Гигантские filter:blur-слои — та же семья GPU-бага (onboarding-блоб — full-bleed
+   градиент, без блюра выглядит почти так же) */
+html.android-no-backdrop-blur .blur-3xl {
+  filter: none !important;
+}
+
 /* Selection color */
 ::selection {
   background: rgba(168, 85, 247, 0.3);

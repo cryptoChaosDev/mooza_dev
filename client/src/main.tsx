@@ -10,6 +10,14 @@ if ('scrollRestoration' in history) {
   history.scrollRestoration = 'manual';
 }
 
+// Android Chrome (Adreno/Mali GPU, особенно Xiaomi/MIUI) рендерит «мусорные пиксели»
+// вместо областей под backdrop-filter: blur — известный баг Chromium-композитинга.
+// На Android глушим backdrop-blur глобально (см. index.css) — фоны у нас и так ~95%
+// непрозрачные, визуальная потеря минимальна.
+if (/Android/i.test(navigator.userAgent)) {
+  document.documentElement.classList.add('android-no-backdrop-blur');
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
