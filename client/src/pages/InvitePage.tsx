@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Copy, Check, Share2, Star, Music2,
-  Plus, Trash2, Link2, Loader2, X, Zap,
+  Plus, EyeOff, Link2, Loader2, X, Zap,
 } from 'lucide-react';
 import { referralAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
@@ -65,7 +65,7 @@ export default function InvitePage() {
   const deleteMut = useMutation({
     mutationFn: (id: string) => referralAPI.deleteLink(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['referral-links'] }),
-    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить ссылку')),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось скрыть ссылку')),
   });
 
   const linkUrl = (code: string) => `${APP_URL}/register?ref=${code}`;
@@ -237,9 +237,9 @@ export default function InvitePage() {
                         onClick={() => setConfirmDeleteId(link.id)}
                         disabled={deleteMut.isPending}
                         className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors flex-shrink-0"
-                        title="Удалить"
+                        title="Скрыть из списка"
                       >
-                        <Trash2 size={15} />
+                        <EyeOff size={15} />
                       </button>
                     </div>
 
@@ -326,8 +326,8 @@ export default function InvitePage() {
 
       <ConfirmDialog
         open={!!confirmDeleteId}
-        message="Удалить ссылку? Если вы уже отправили её кому-то — приглашение перестанет работать, и человек не сможет зарегистрироваться."
-        confirmLabel="Удалить"
+        message="Скрыть ссылку из списка? Она продолжит работать: если вы уже отправили её кому-то — человек всё равно сможет зарегистрироваться."
+        confirmLabel="Скрыть"
         onConfirm={() => { if (confirmDeleteId) deleteMut.mutate(confirmDeleteId); setConfirmDeleteId(null); }}
         onCancel={() => setConfirmDeleteId(null)}
       />

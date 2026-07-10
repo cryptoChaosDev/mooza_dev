@@ -33,7 +33,7 @@ router.get('/stats', authenticate, async (req: AuthRequest, res) => {
 router.get('/links', authenticate, async (req: AuthRequest, res) => {
   try {
     const links = await prisma.referralLink.findMany({
-      where: { ownerId: req.userId },
+      where: { ownerId: req.userId, hiddenAt: null } as any,
       orderBy: { createdAt: 'desc' },
     });
     res.json(links);
@@ -50,7 +50,8 @@ router.post('/links', authenticate, async (req: AuthRequest, res) => {
     if (!label) return res.status(400).json({ error: 'Укажите название ссылки' });
     if (label.length > 60) return res.status(400).json({ error: 'Название слишком длинное' });
 
-    const existing = await prisma.referralLink.count({ where: { ownerId: req.userId } });
+    // Лимит считаем по ВИДИМЫМ ссылкам: скрытие (как раньше удаление) освобождает слот
+    const existing = await prisma.referralLink.count({ where: { ownerId: req.userId, hiddenAt: null } as any });
     if (existing >= MAX_LINKS) {
       return res.status(400).json({ error: `Максимум ${MAX_LINKS} ссылок` });
     }
@@ -96,17 +97,22 @@ router.patch('/links/:id', authenticate, async (req: AuthRequest, res) => {
 });
 
 // DELETE /api/referrals/links/:id — remove a link
+// Логическое удаление: скрываем из списка, но код остаётся рабочим — жёсткое
+// удаление ломало уже разосланные приглашения («Регистрация временно закрыта»).
 router.delete('/links/:id', authenticate, async (req: AuthRequest, res) => {
   try {
     const link = await prisma.referralLink.findUnique({ where: { id: req.params.id } });
     if (!link) return res.status(404).json({ error: 'Ссылка не найдена' });
     if (link.ownerId !== req.userId) return res.status(403).json({ error: 'Нет прав' });
 
-    await prisma.referralLink.delete({ where: { id: req.params.id } });
+    await prisma.referralLink.update({
+      where: { id: req.params.id },
+      data: { hiddenAt: new Date() } as any,
+    });
     res.json({ ok: true });
   } catch (error) {
-    console.error('Delete referral link error:', error);
-    res.status(500).json({ error: 'Failed to delete referral link' });
+    console.error('Hide referral link error:', error);
+    res.status(500).json({ error: 'Failed to hide referral link' });
   }
 });
 

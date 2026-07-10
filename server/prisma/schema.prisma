@@ -788,6 +788,10 @@ model ReferralLink {
   usedBy    User?    @relation("ReferralLinkConsumer", fields: [usedById], references: [id], onDelete: SetNull)
   usedAt    DateTime?
 
+  // Логическое удаление: скрыта из списка владельца, но код ПРОДОЛЖАЕТ работать
+  // (жёсткое удаление ломало уже разосланные приглашения)
+  hiddenAt  DateTime?
+
   createdAt DateTime @default(now())
 
   @@index([ownerId])
