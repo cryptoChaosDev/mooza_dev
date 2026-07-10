@@ -8,6 +8,7 @@ import {
 import { referralAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import ConfirmDialog from '../components/ConfirmDialog';
 
 // Referral links point at the current origin (dev → dev links, prod → prod links),
 // falling back to the canonical domain when origin is unavailable.
@@ -29,6 +30,8 @@ export default function InvitePage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [newLabel, setNewLabel] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  // Подтверждение удаления: удаление разосланной ссылки ломает приглашение у получателя
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const { data: stats } = useQuery({
     queryKey: ['referral-stats'],
@@ -231,7 +234,7 @@ export default function InvitePage() {
                         )}
                       </div>
                       <button
-                        onClick={() => deleteMut.mutate(link.id)}
+                        onClick={() => setConfirmDeleteId(link.id)}
                         disabled={deleteMut.isPending}
                         className="p-1.5 text-slate-600 hover:text-rose-400 transition-colors flex-shrink-0"
                         title="Удалить"
@@ -320,6 +323,14 @@ export default function InvitePage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        message="Удалить ссылку? Если вы уже отправили её кому-то — приглашение перестанет работать, и человек не сможет зарегистрироваться."
+        confirmLabel="Удалить"
+        onConfirm={() => { if (confirmDeleteId) deleteMut.mutate(confirmDeleteId); setConfirmDeleteId(null); }}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   );
 }

@@ -170,6 +170,10 @@ export default function RegisterPage() {
   // Resolve the ref code (single-use link code OR legacy userId) → owner id.
   const [referrerId, setReferrerId] = useState<string | undefined>(undefined);
   const [refUsed, setRefUsed] = useState(false);
+  // Ссылка не найдена (удалена владельцем или опечатка) — показываем честное
+  // объяснение вместо редиректа на «Регистрация временно закрыта».
+  const [refInvalid, setRefInvalid] = useState(false);
+  const [regClosed, setRegClosed] = useState(false);
 
   // Registration may be closed site-wide. In referral-only mode a valid referral
   // link (or an artist invite) still lets people register; otherwise → login.
@@ -178,6 +182,7 @@ export default function RegisterPage() {
     (async () => {
       let ownerId: string | null = null;
       let used = false;
+      let refBroken = false;
       if (refCode) {
         try {
           const { data } = await referralAPI.resolve(refCode);
@@ -186,15 +191,22 @@ export default function RegisterPage() {
           if (!cancelled) {
             if (used) setRefUsed(true);
             else if (ownerId) setReferrerId(ownerId);
+            else { refBroken = true; setRefInvalid(true); } // код не найден (удалён/опечатка)
           }
-        } catch { /* ignore */ }
+        } catch {
+          refBroken = true;
+          if (!cancelled) setRefInvalid(true);
+        }
       }
       try {
         const { data } = await siteSettingsAPI.get();
         const s = data as Record<string, string>;
         if (s?.registrationEnabled === 'false') {
+          if (!cancelled) setRegClosed(true);
           const invited = (s?.referralRegistrationEnabled === 'true' && !!ownerId && !used) || !!artistInvite;
-          if (!invited && !cancelled) navigate('/login', { replace: true });
+          // Пришёл с битой реф-ссылкой — остаёмся и показываем экран-объяснение,
+          // а не «Регистрация временно закрыта» на /login.
+          if (!invited && !refBroken && !cancelled) navigate('/login', { replace: true });
         }
       } catch { /* on error, don't hard-block */ }
     })();
@@ -823,6 +835,28 @@ export default function RegisterPage() {
   const nextDisabled =
     (step === 0 && (!agreedToPD || !emailValid || emailTaken || emailChecking || !pwStrong)) ||
     (step === 1 && !step1Valid);
+
+  // Битая пригласительная ссылка при закрытой регистрации — честное объяснение
+  // вместо формы (сервер такую регистрацию всё равно отклонит).
+  if (refInvalid && regClosed) {
+    return (
+      <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center px-6">
+        <div className="max-w-sm w-full text-center space-y-4">
+          <div className="mx-auto w-14 h-14 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
+            <AlertCircle size={26} className="text-amber-400" />
+          </div>
+          <h1 className="text-lg font-bold text-white">Ссылка-приглашение не действует</h1>
+          <p className="text-sm text-slate-400 leading-relaxed">
+            Похоже, ссылку удалил пригласивший, либо в ней опечатка. Регистрация сейчас — только по приглашениям:
+            попросите у пригласившего <b className="text-slate-200">новую ссылку</b> (Профиль → 🎁 Пригласить).
+          </p>
+          <button onClick={() => navigate('/login')} className="w-full py-3 bg-primary-600 hover:bg-primary-500 text-white font-semibold rounded-2xl transition-colors">
+            У меня уже есть аккаунт — войти
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   // ── Layout ────────────────────────────────────────────────────────────────
   return (
