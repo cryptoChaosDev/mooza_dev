@@ -249,6 +249,7 @@ export default function RegisterPage() {
   // Step 0
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [passwordConfirm, setPasswordConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [agreedToPD, setAgreedToPD] = useState(false);
   const [agreeMarketing, setAgreeMarketing] = useState(false);
@@ -335,6 +336,7 @@ export default function RegisterPage() {
   const pwHasDigit = /\d/.test(password);
   const pwHasSpecial = /[^A-Za-z0-9]/.test(password);
   const pwStrong = pwLongEnough && pwHasDigit && pwHasSpecial;
+  const pwMatch = password === passwordConfirm;
 
   // ── Profession search ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -395,6 +397,7 @@ export default function RegisterPage() {
       if (!pwLongEnough) { setError('Пароль — минимум 8 символов'); return false; }
       if (!pwHasDigit) { setError('Пароль должен содержать хотя бы одну цифру'); return false; }
       if (!pwHasSpecial) { setError('Пароль должен содержать спецсимвол (например ! @ # $)'); return false; }
+      if (!pwMatch) { setError('Пароли не совпадают'); return false; }
     }
     if (step === 1) {
       if (!firstName.trim()) { setError('Укажите имя'); return false; }
@@ -657,6 +660,15 @@ export default function RegisterPage() {
             ))}
           </div>
         </Field>
+        <Field label="Повторите пароль">
+          <Input
+            type={showPassword ? 'text' : 'password'}
+            value={passwordConfirm} onChange={setPasswordConfirm}
+            placeholder="Ещё раз тот же пароль"
+            right={passwordConfirm && pwMatch ? <Check size={15} className="text-green-400" /> : undefined}
+          />
+          {passwordConfirm && !pwMatch && <p className="text-xs text-amber-400 mt-1">Пароли не совпадают</p>}
+        </Field>
 
         {/* Checkboxes */}
         <div className="space-y-3 pt-1">
@@ -833,7 +845,7 @@ export default function RegisterPage() {
 
   // Button logic
   const nextDisabled =
-    (step === 0 && (!agreedToPD || !emailValid || emailTaken || emailChecking || !pwStrong)) ||
+    (step === 0 && (!agreedToPD || !emailValid || emailTaken || emailChecking || !pwStrong || !pwMatch)) ||
     (step === 1 && !step1Valid);
 
   // Битая пригласительная ссылка при закрытой регистрации — честное объяснение
