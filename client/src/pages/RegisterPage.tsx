@@ -47,16 +47,18 @@ function Field({
 }
 
 function Input({
-  type = 'text', value, onChange, placeholder, autoFocus, right, disabled, maxLength,
+  type = 'text', value, onChange, placeholder, autoFocus, right, disabled, maxLength, autoComplete, inputMode,
 }: {
   type?: string; value: string; onChange: (v: string) => void;
   placeholder?: string; autoFocus?: boolean; right?: React.ReactNode; disabled?: boolean; maxLength?: number;
+  autoComplete?: string; inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
 }) {
   return (
     <div className="relative">
       <input
         type={type} value={value} onChange={e => onChange(e.target.value)}
         placeholder={placeholder} autoFocus={autoFocus} disabled={disabled} maxLength={maxLength}
+        autoComplete={autoComplete} inputMode={inputMode} autoCapitalize={type === 'email' || autoComplete?.includes('password') ? 'off' : undefined}
         className={`w-full pl-4 py-3.5 bg-slate-800/70 border border-slate-700/60 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500/50 transition-all text-sm disabled:opacity-50 ${right ? 'pr-12' : 'pr-4'}`}
       />
       {right && <div className="absolute right-4 top-1/2 -translate-y-1/2">{right}</div>}
@@ -635,6 +637,7 @@ export default function RegisterPage() {
         )}
         <Field label="Email" hint="Используется для входа и восстановления пароля">
           <Input type="email" value={email} onChange={setEmail} placeholder="you@example.com" autoFocus
+            autoComplete="email" inputMode="email"
             right={emailChecking
               ? <Loader2 size={15} className="animate-spin text-slate-500" />
               : (emailValid && !emailTaken ? <Check size={15} className="text-green-400" /> : undefined)} />
@@ -646,6 +649,7 @@ export default function RegisterPage() {
             type={showPassword ? 'text' : 'password'}
             value={password} onChange={setPassword}
             placeholder="Придумайте пароль"
+            autoComplete="new-password"
             right={
               <button type="button" onClick={() => setShowPassword(p => !p)} className="text-slate-500 hover:text-slate-300 transition-colors">
                 {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
@@ -665,6 +669,7 @@ export default function RegisterPage() {
             type={showPassword ? 'text' : 'password'}
             value={passwordConfirm} onChange={setPasswordConfirm}
             placeholder="Ещё раз тот же пароль"
+            autoComplete="new-password"
             right={passwordConfirm && pwMatch ? <Check size={15} className="text-green-400" /> : undefined}
           />
           {passwordConfirm && !pwMatch && <p className="text-xs text-amber-400 mt-1">Пароли не совпадают</p>}
@@ -938,10 +943,34 @@ export default function RegisterPage() {
               </button>
             </>
           ) : (
-            <button onClick={next} disabled={nextDisabled}
-              className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base">
-              Далее <ArrowRight size={18} />
-            </button>
+            <>
+              <button onClick={next} disabled={nextDisabled}
+                className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base">
+                Далее <ArrowRight size={18} />
+              </button>
+              {nextDisabled && (() => {
+                const missing: string[] = step === 0
+                  ? [
+                      !emailValid && 'корректный email',
+                      emailTaken && 'другой email (этот занят)',
+                      emailChecking && 'проверяем email…',
+                      !pwStrong && 'надёжный пароль',
+                      pwStrong && !pwMatch && 'совпадение паролей',
+                      !agreedToPD && 'согласие с условиями',
+                    ].filter(Boolean) as string[]
+                  : [
+                      !firstName.trim() && 'имя',
+                      !lastName.trim() && 'фамилия',
+                      !birthDate && 'дата рождения',
+                      nicknameTaken && 'другой никнейм (этот занят)',
+                    ].filter(Boolean) as string[];
+                return missing.length > 0 ? (
+                  <p className="text-xs text-slate-500 text-center mt-2">
+                    Осталось: {missing.join(' · ')}
+                  </p>
+                ) : null;
+              })()}
+            </>
           )}
 
         </div>
