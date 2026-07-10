@@ -1,6 +1,6 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, ChevronDown, ShieldAlert, CheckCircle2, Check } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, Check, Send } from 'lucide-react';
 import { authAPI, siteSettingsAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import VkLoginButton from '../components/VkLoginButton';
@@ -8,50 +8,14 @@ import VkLoginButton from '../components/VkLoginButton';
 // Temporarily hide VK login/registration. Set back to true to restore.
 const SHOW_VK = false;
 
-// Renders the live, authoritative legal document (from /public/legal/*.html),
-// lazy-loaded on first expand — single source of truth, never drifts.
-function DocSection({ title, slug }: { title: string; slug: string }) {
-  const [open, setOpen] = useState(false);
-  const [content, setContent] = useState('');
-  const [loading, setLoading] = useState(false);
-  useEffect(() => {
-    if (!open || content) return;
-    setLoading(true);
-    fetch(`/legal/${slug}.html`)
-      .then(r => (r.ok ? r.text() : Promise.reject(r.status)))
-      .then(setContent)
-      .catch(() => setContent('<p>Не удалось загрузить документ.</p>'))
-      .finally(() => setLoading(false));
-  }, [open, slug, content]);
-  return (
-    <div className="border border-slate-700 rounded-xl overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-3 bg-slate-800/50 hover:bg-slate-800 transition-colors text-left"
-      >
-        <span className="text-sm font-medium text-slate-300">{title}</span>
-        <ChevronDown size={16} className={`text-slate-400 transition-transform flex-shrink-0 ml-2 ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && (
-        <div className="px-4 py-4 bg-slate-900/50 max-h-60 overflow-y-auto overscroll-contain border-t border-slate-700">
-          {loading
-            ? <div className="flex justify-center py-4"><Loader2 size={18} className="animate-spin text-slate-500" /></div>
-            : <div className="legal-prose" dangerouslySetInnerHTML={{ __html: content }} />}
-        </div>
-      )}
-    </div>
-  );
-}
+// Согласие с документами теперь спрашивается один раз — при регистрации.
+// На входе осталась только справочная сноска со ссылками (/terms, /privacy).
 
 export default function LoginPage() {
   useEffect(() => { document.title = 'Вход — Moooza'; }, []);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  // true if user already agreed in a previous session — skip the block entirely
-  const returningUser = localStorage.getItem('termsAgreed') === '1';
-  const [agreed, setAgreed] = useState(returningUser);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   // email verification
@@ -110,12 +74,54 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
     if (msg) setError(msg);
   };
 
+  // ── Вход через Telegram: deep-link на бота + поллинг подтверждения ─────────
+  const [tgWaiting, setTgWaiting] = useState(false);
+  const tgTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => () => { if (tgTimerRef.current) clearInterval(tgTimerRef.current); }, []);
+  const finishLogin = useCallback((user: any, token: string) => {
+    setAuth(user, token);
+    localStorage.setItem('termsAgreed', '1');
+    const tourDone = user.onboardingCompletedAt || localStorage.getItem('mooza_tour_done');
+    if (tourDone) localStorage.setItem('mooza_tour_done', '1');
+    navigate(tourDone ? '/' : '/onboarding');
+  }, [setAuth, navigate]);
+
+  const stopTgPoll = () => {
+    if (tgTimerRef.current) { clearInterval(tgTimerRef.current); tgTimerRef.current = null; }
+    setTgWaiting(false);
+  };
+
+  const tgLogin = async () => {
+    setError('');
+    try {
+      const { data } = await authAPI.telegramToken();
+      if (!data?.url) { setError('Вход через Telegram временно недоступен'); return; }
+      window.open(data.url, '_blank', 'noopener');
+      setTgWaiting(true);
+      const startedAt = Date.now();
+      tgTimerRef.current = setInterval(async () => {
+        if (Date.now() - startedAt > 120_000) { stopTgPoll(); return; }
+        try {
+          const { data: p } = await authAPI.telegramPoll(data.token);
+          if (p?.status === 'ok') {
+            stopTgPoll();
+            finishLogin(p.user, p.token);
+          }
+        } catch (e: any) {
+          const st = e?.response?.status;
+          if (st === 403 || st === 404) {
+            stopTgPoll();
+            setError(e.response?.data?.error || (st === 404 ? 'Ссылка устарела — попробуйте ещё раз' : 'Вход через Telegram недоступен'));
+          }
+        }
+      }, 2500);
+    } catch {
+      setError('Не удалось начать вход через Telegram');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!agreed) {
-      setError('Необходимо принять соглашения для входа');
-      return;
-    }
     setError('');
     setLoading(true);
 
@@ -263,7 +269,7 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
           {SHOW_VK && (
             <>
               <div className="mb-5">
-                <VkLoginButton onAuth={handleVkAuth} onError={handleSocialError} disabled={loading || !agreed} />
+                <VkLoginButton onAuth={handleVkAuth} onError={handleSocialError} disabled={loading} />
               </div>
 
               <div className="flex items-center gap-3 mb-5">
@@ -273,6 +279,37 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
               </div>
             </>
           )}
+
+          {/* Вход через Telegram — deep-link на бота + ожидание подтверждения */}
+          <div className="mb-5">
+            {tgWaiting ? (
+              <div className="flex items-center justify-between gap-2 px-4 py-3 bg-[#229ED9]/10 border border-[#229ED9]/30 rounded-xl">
+                <span className="flex items-center gap-2 text-sm text-[#4db8e8] min-w-0">
+                  <Loader2 size={16} className="animate-spin flex-shrink-0" />
+                  Нажмите Start в Telegram — ждём…
+                </span>
+                <button type="button" onClick={stopTgPoll} className="text-xs text-slate-500 hover:text-white transition-colors flex-shrink-0">
+                  Отмена
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={tgLogin}
+                disabled={loading}
+                className="w-full flex items-center justify-center gap-2.5 px-4 py-3 bg-[#229ED9] hover:bg-[#1a8bc4] disabled:opacity-50 text-white font-medium rounded-xl transition-all shadow-lg shadow-[#229ED9]/20"
+              >
+                <Send size={18} />
+                Войти через Telegram
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-3 mb-5">
+            <div className="flex-1 h-px bg-slate-700" />
+            <span className="text-xs text-slate-500 uppercase tracking-wide">или по email</span>
+            <div className="flex-1 h-px bg-slate-700" />
+          </div>
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Email */}
@@ -316,58 +353,23 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
               </div>
             </div>
 
-            {/* Documents + Agreement — hidden for returning users who already agreed */}
-            {!returningUser && (!agreed ? (
-              <div className="rounded-xl overflow-hidden border border-slate-700">
-                {/* Header */}
-                <div className="flex items-center gap-2 px-3 py-2.5 bg-slate-800/60 border-b border-slate-700">
-                  <ShieldAlert size={14} className="text-slate-400 flex-shrink-0" />
-                  <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">Перед входом ознакомьтесь</span>
-                  <span className="font-bold text-sm leading-none ml-0.5" style={{ color: '#f87171' }}>*</span>
-                </div>
-
-                <div className="p-3 space-y-2">
-                  <p className="text-xs text-slate-400">Ознакомьтесь с документами и подтвердите согласие</p>
-
-                  <DocSection title="Пользовательское соглашение" slug="user-agreement" />
-
-                  <DocSection title="Политика конфиденциальности" slug="privacy-policy" />
-
-                  {/* Confirm button */}
-                  <button
-                    type="button"
-                    onClick={() => { setAgreed(true); if (error) setError(''); }}
-                    className="w-full flex items-center justify-center gap-2 py-2.5 mt-1 rounded-lg bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 text-sm font-medium transition-colors"
-                  >
-                    <div className="w-4 h-4 rounded border-2 border-amber-400/70 bg-transparent flex items-center justify-center" />
-                    Ознакомился(ась) и принимаю условия
-                    <span style={{ color: '#f87171', fontWeight: 700, fontSize: '1rem', lineHeight: 1 }}>*</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-3 px-3 py-2.5 rounded-xl bg-green-500/10 border border-green-500/25">
-                <CheckCircle2 size={17} className="text-green-400 flex-shrink-0" />
-                <span className="text-sm text-green-300 flex-1">Соглашения приняты</span>
-                <button
-                  type="button"
-                  onClick={() => setAgreed(false)}
-                  className="text-slate-500 hover:text-slate-400 underline underline-offset-2 text-xs transition-colors"
-                >
-                  читать снова
-                </button>
-              </div>
-            ))}
-
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading || !agreed}
+              disabled={loading}
               className="w-full bg-gradient-to-r from-primary-500 to-purple-500 hover:from-primary-400 hover:to-purple-400 disabled:from-slate-700 disabled:to-slate-600 disabled:text-slate-500 text-white font-semibold py-3.5 px-4 rounded-xl transition-all disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-primary-500/25"
             >
               {loading && <Loader2 size={20} className="animate-spin" />}
               {loading ? 'Вход...' : 'Войти'}
             </button>
+
+            {/* Согласие даётся при регистрации; на входе — только справочная сноска */}
+            <p className="text-[11px] text-slate-600 text-center leading-relaxed -mt-1">
+              Входя, вы подтверждаете согласие с{' '}
+              <a href="/terms" className="text-slate-500 hover:text-slate-400 underline">условиями</a>
+              {' '}и{' '}
+              <a href="/privacy" className="text-slate-500 hover:text-slate-400 underline">политикой конфиденциальности</a>
+            </p>
           </form>
 
           <div className="mt-4 flex flex-col items-center gap-2">

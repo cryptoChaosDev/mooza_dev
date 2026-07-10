@@ -581,11 +581,18 @@ router.post('/login', authLimiter, async (req, res) => {
 });
 
 // ─── 1. Generate deep-link token ─────────────────────────────────────────────
-router.post('/telegram/token', authLimiter, (req, res) => {
+router.post('/telegram/token', authLimiter, async (req, res) => {
   const token = crypto.randomBytes(12).toString('hex'); // 24-char hex
   // Reserve slot (resolved = 0 means pending)
   tgPending.set(token, { telegramId: '', firstName: '', lastName: '', resolvedAt: Date.now() });
-  res.json({ token });
+  // Deep-link сразу с ссылкой на бота — клиенту не нужно знать username
+  let url: string | null = null;
+  try {
+    const { getBotUsername } = await import('../utils/telegramNotify');
+    const bot = await getBotUsername();
+    if (bot) url = `https://t.me/${bot}?start=${token}`;
+  } catch { /* бот недоступен — клиент покажет ошибку */ }
+  res.json({ token, url });
 });
 
 // ─── 2. Poll endpoint — frontend calls every 2s ───────────────────────────────
@@ -688,6 +695,7 @@ router.post('/telegram/webhook', async (req, res) => {
         resolvedAt: Date.now(),
       });
       console.log(`[Telegram] Webhook: auth confirmed for user ${from.id}`);
+      await sendBotMessage(chatId, '✅ Вход подтверждён — вернитесь на сайт Moooza, вы уже входите.');
       return;
     }
 
