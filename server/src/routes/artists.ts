@@ -59,7 +59,11 @@ async function isMember(artistId: string, userId: string): Promise<boolean> {
 // Helper: is user an admin of THIS artist (UserArtist.isAdmin). A system admin who
 // is not part of the artist has NO edit rights — only its creator/owners/admins do.
 async function isArtistAdmin(artistId: string, userId: string): Promise<boolean> {
-  const ua = await prisma.userArtist.findFirst({ where: { artistId, userId, isAdmin: true } });
+  // Владелец всегда имеет права администратора (owner ≥ admin) — иначе владелец
+  // без явного isAdmin получал «Нет прав» на верификацию/управление.
+  const ua = await prisma.userArtist.findFirst({
+    where: { artistId, userId, OR: [{ isAdmin: true }, { isOwner: true }] },
+  });
   return !!ua;
 }
 
