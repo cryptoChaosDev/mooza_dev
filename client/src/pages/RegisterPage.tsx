@@ -915,8 +915,10 @@ export default function RegisterPage() {
           {stepContent()}
         </div>
 
-        {/* Actions */}
-        <div className="mt-6 space-y-3">
+        {/* Actions — прилипают к низу вьюпорта, кнопка «Далее» всегда видна
+            (раньше на длинных шагах уезжала за экран: «кнопки вообще нет») */}
+        <div className="sticky bottom-0 -mx-5 px-5 mt-6 pt-3 pb-2 space-y-3 bg-slate-950/95 border-t border-slate-800/60"
+          style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' }}>
           {isProfStep ? (
             <>
               <button

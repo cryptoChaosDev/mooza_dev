@@ -118,13 +118,15 @@ body.modal-open {
   width: 100%;
 }
 
-/* Contain overscroll so a scroll region can't rubber-band the page or a fixed
-   bottom-sheet overlay (iOS «тянешь модалку вниз → застреваешь»).
-   ВАЖНО: `-webkit-overflow-scrolling: touch` НЕ ставим — его отдельный momentum-слой
-   на iOS вызывает «скролл залипает, размораживается только после повторного тапа». */
-.overflow-y-auto,
-.overflow-y-scroll,
-.overflow-auto {
+/* Contain overscroll ТОЛЬКО в модалках/шитах (они живут внутри fixed-обёрток) —
+   чтобы протяжка внутри модалки не дёргала страницу (iOS «застревание»).
+   НЕ глобально: на инлайн-скроллерах (фильтры профессий на регистрации и т.п.)
+   contain блокировал передачу прокрутки странице — «вниз нельзя уйти».
+   ВАЖНО: `-webkit-overflow-scrolling: touch` НЕ ставим — его momentum-слой на iOS
+   вызывает «скролл залипает до повторного тапа». */
+.fixed .overflow-y-auto,
+.fixed .overflow-y-scroll,
+.fixed .overflow-auto {
   overscroll-behavior: contain;
 }
 
