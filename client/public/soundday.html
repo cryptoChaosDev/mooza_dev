@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Регистрация на Sound Day — Moooza</title>
+  <meta name="description" content="QR и ссылка для регистрации участников Sound Day 2026 в Moooza — социальной сети для музыкантов.">
+  <link rel="icon" href="/logo.png">
+  <meta name="robots" content="noindex">
+  <!-- OpenGraph / превью при отправке ссылки -->
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Moooza">
+  <meta property="og:title" content="Регистрация на Sound Day — Moooza">
+  <meta property="og:description" content="Наведи камеру на QR — откроется регистрация в Moooza, соцсети для музыкантов.">
+  <meta property="og:url" content="https://moooza.ru/soundday">
+  <meta property="og:image" content="https://moooza.ru/soundday-qr.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="1690">
+  <meta name="twitter:card" content="summary_large_image">
+  <style>
+    :root{
+      --bg:#0a0c13; --card:#141826; --edge:#242a3d;
+      --ink:#eef0f8; --mut:#8a90a6; --mut2:#5f6479;
+      --cyan:#4dd9f7; --violet:#7c5ff0;
+      --font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+      --mono:ui-monospace,"Cascadia Code",Consolas,monospace;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0}
+    body{
+      background:radial-gradient(60vmax 60vmax at 50% -10%, #4d3fb033, transparent 70%), var(--bg);
+      color:var(--ink); font-family:var(--font); min-height:100dvh; -webkit-font-smoothing:antialiased;
+      display:flex; align-items:flex-start; justify-content:center; padding:clamp(20px,5vw,56px) 18px 64px;
+    }
+    .wrap{ width:100%; max-width:520px; display:flex; flex-direction:column; align-items:center; gap:26px; }
+    .eyebrow{ font-size:.72rem; letter-spacing:.22em; text-transform:uppercase; color:var(--cyan); font-weight:700; }
+    h1{ font-size:clamp(1.5rem,5vw,2rem); font-weight:800; letter-spacing:-.02em; text-align:center; text-wrap:balance; margin:.35rem 0 0; }
+    .sub{ color:var(--mut); text-align:center; margin:.5rem 0 0; font-size:.95rem; line-height:1.5; text-wrap:balance; }
+    header{ display:flex; flex-direction:column; align-items:center; }
+    .poster{ width:100%; border-radius:26px; overflow:hidden; box-shadow:0 30px 90px -30px #000, 0 0 0 1px #ffffff0d; line-height:0; background:var(--card); }
+    .poster img{ width:100%; height:auto; display:block; }
+    .actions{ display:flex; gap:12px; flex-wrap:wrap; justify-content:center; width:100%; }
+    .btn{ appearance:none; border:1px solid var(--edge); background:#1a2030; color:var(--ink); font:inherit; font-size:.92rem; font-weight:600; padding:12px 20px; border-radius:14px; cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:8px; transition:.15s; }
+    .btn:hover{ border-color:#39415c; background:#212840; }
+    .btn:focus-visible{ outline:2px solid var(--cyan); outline-offset:2px; }
+    .btn.primary{ border:none; color:#0a0c13; font-weight:700; background:linear-gradient(120deg,var(--cyan),var(--violet)); }
+    .btn.primary:hover{ filter:brightness(1.08); }
+    .btn.ok{ color:var(--cyan); border-color:#2a4a58; }
+    .facts{ display:grid; gap:1px; width:100%; background:var(--edge); border:1px solid var(--edge); border-radius:18px; overflow:hidden; }
+    .fact{ background:var(--card); padding:16px 18px; display:flex; gap:12px; align-items:flex-start; }
+    .fact .dot{ width:9px; height:9px; border-radius:50%; margin-top:6px; flex:0 0 auto; background:linear-gradient(120deg,var(--cyan),var(--violet)); }
+    .fact p{ margin:0; color:var(--mut); font-size:.9rem; line-height:1.5; }
+    .fact p b{ color:var(--ink); }
+    .url{ font-family:var(--mono); font-size:.82rem; color:var(--mut2); text-align:center; word-break:break-all; margin:0; }
+    .foot{ color:var(--mut2); font-size:.78rem; text-align:center; margin:0; }
+    .foot a{ color:var(--mut); text-decoration:none; }
+    .foot a:hover{ color:var(--ink); }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <span class="eyebrow">Moooza × Sound Day 2026</span>
+      <h1>Регистрация участников</h1>
+      <p class="sub">Наведи камеру телефона на QR — откроется регистрация в Moooza.
+        Ссылка работает для всех гостей конференции.</p>
+    </header>
+
+    <div class="poster">
+      <img src="/soundday-qr.png" width="1200" height="1690" alt="QR-постер Moooza для регистрации на Sound Day 2026">
+    </div>
+
+    <div class="actions">
+      <a class="btn primary" href="https://moooza.ru/register?ref=soundday">Открыть регистрацию →</a>
+      <a class="btn" href="/soundday-qr.png" download="moooza-soundday-qr.png">↓ Скачать QR (PNG)</a>
+      <button id="copy" class="btn" type="button">Скопировать ссылку</button>
+    </div>
+
+    <div class="facts">
+      <div class="fact"><span class="dot"></span><p><b>Проверено — сканируется.</b> QR ведёт точно на регистрацию.</p></div>
+      <div class="fact"><span class="dot"></span><p><b>Многоразовая ссылка.</b> Регистрируется сколько угодно людей — не «сгорает».</p></div>
+      <div class="fact"><span class="dot"></span><p><b>Считает конверсию.</b> Видно, сколько гостей пришло с Sound Day.</p></div>
+    </div>
+
+    <p class="url">moooza.ru/register?ref=soundday</p>
+    <p class="foot"><a href="https://moooza.ru">Moooza</a> — социальная сеть для музыкантов</p>
+  </div>
+
+  <script>
+    var copy = document.getElementById('copy');
+    copy.addEventListener('click', function () {
+      var url = 'https://moooza.ru/register?ref=soundday';
+      (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(function () {
+        copy.textContent = 'Скопировано ✓'; copy.classList.add('ok');
+        setTimeout(function () { copy.textContent = 'Скопировать ссылку'; copy.classList.remove('ok'); }, 1800);
+      }).catch(function () { copy.textContent = url; });
+    });
+  </script>
+</body>
+</html>
