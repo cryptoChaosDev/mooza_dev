@@ -792,6 +792,12 @@ model ReferralLink {
   // (жёсткое удаление ломало уже разосланные приглашения)
   hiddenAt  DateTime?
 
+  // Многоразовая ссылка-кампания (конференции/акции, напр. Sound Day): НЕ сгорает
+  // после первой регистрации, открывает регистрацию всем, кто по ней пришёл.
+  // usedCount — счётчик регистраций по такой ссылке (usedById для неё не ставится).
+  multiUse  Boolean @default(false)
+  usedCount Int     @default(0)
+
   createdAt DateTime @default(now())
 
   @@index([ownerId])

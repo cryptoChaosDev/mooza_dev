@@ -126,11 +126,11 @@ router.post('/resolve', async (req, res) => {
 
     const link = await prisma.referralLink.findUnique({
       where: { code },
-      select: { id: true, ownerId: true, usedById: true },
+      select: { id: true, ownerId: true, usedById: true, multiUse: true },
     });
     if (link) {
-      if (link.usedById) {
-        // Link already burned — no longer valid for registration
+      if (!link.multiUse && link.usedById) {
+        // Одноразовая ссылка уже использована — больше не валидна (кампанию не блокируем)
         return res.json({ ownerId: null, code, used: true });
       }
       await prisma.referralLink.update({

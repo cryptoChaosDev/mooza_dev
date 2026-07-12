@@ -67,8 +67,8 @@ async function safeNickname(candidate: string | null | undefined): Promise<strin
 async function isValidReferral(referralCode?: string | null, referrerId?: string | null): Promise<boolean> {
   const code = (referralCode ?? '').trim();
   if (code) {
-    const link = await prisma.referralLink.findUnique({ where: { code }, select: { usedById: true } });
-    if (link) return !link.usedById;
+    const link = await prisma.referralLink.findUnique({ where: { code }, select: { usedById: true, multiUse: true } });
+    if (link) return link.multiUse || !link.usedById; // кампания валидна всегда
     const owner = await prisma.user.findUnique({ where: { id: code }, select: { id: true } });
     if (owner) return true;
   }
@@ -306,13 +306,14 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
       }
 
       // Resolve the single-use referral link now that we actually create the account.
-      let refLink: { id: string; ownerId: string } | null = null;
+      let refLink: { id: string; ownerId: string; multiUse: boolean } | null = null;
       if (p.referralCode) {
         const link = await prisma.referralLink.findUnique({
           where: { code: p.referralCode },
-          select: { id: true, ownerId: true, usedById: true },
+          select: { id: true, ownerId: true, usedById: true, multiUse: true },
         });
-        if (link && !link.usedById) refLink = { id: link.id, ownerId: link.ownerId };
+        // Многоразовая ссылка-кампания валидна всегда и не сгорает; одноразовая — пока не использована.
+        if (link && (link.multiUse || !link.usedById)) refLink = { id: link.id, ownerId: link.ownerId, multiUse: link.multiUse };
       }
 
       // Create the real account AND burn the single-use referral link atomically
@@ -355,7 +356,13 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
         // `usedById: null` guard makes the claim atomic against a concurrent
         // signup; if the link was already taken we keep the account but strip
         // the referral credit so a single-use link is never double-counted.
-        if (refLink) {
+        if (refLink?.multiUse) {
+          // Кампания (Sound Day и т.п.) — не сжигаем, только считаем регистрации.
+          await tx.referralLink.update({
+            where: { id: refLink.id },
+            data: { usedCount: { increment: 1 } },
+          });
+        } else if (refLink) {
           const burned = await tx.referralLink.updateMany({
             where: { id: refLink.id, usedById: null },
             data: { usedById: created.id, usedAt: new Date() },
@@ -412,7 +419,9 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
       // Referral → Pro reward: every 10 referred signups grants the referrer
       // 1 month of Pro. Fire-and-forget; guarded so it can never break signup.
       {
-        const effectiveReferrerId = refLink?.ownerId || p.referrerId || undefined;
+        // Pro-награда «за 10 приглашённых» — только для личных (одноразовых) ссылок,
+        // не для кампаний (иначе владелец кампании копил бы Pro за посетителей конференции).
+        const effectiveReferrerId = refLink?.multiUse ? (p.referrerId || undefined) : (refLink?.ownerId || p.referrerId || undefined);
         if (effectiveReferrerId) {
           applyReferralProGrants(effectiveReferrerId).catch(() => {});
         }
