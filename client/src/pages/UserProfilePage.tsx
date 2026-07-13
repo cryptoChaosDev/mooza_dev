@@ -576,25 +576,26 @@ export default function UserProfilePage() {
                   </button>
                 </div>
                 <div className="p-3">
-                  <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-                    {servicesFlat.map((us: any) => {
+                  {/* Компактные строки — идентично своему профилю */}
+                  <div className="divide-y divide-slate-800/60">
+                    {servicesFlat.slice(0, 4).map((us: any) => {
                       const price = us.priceFrom != null || us.priceTo != null
                         ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
-                        : null;
+                        : 'По договорённости';
                       return (
                         <button
                           key={us.id}
                           onClick={() => navigate(`/services/${us.id}`)}
-                          className="flex flex-col flex-shrink-0 text-left group"
-                          style={{ width: 'calc((100% - 24px) / 3.5)' }}
+                          className="w-full flex items-center gap-3 py-2.5 text-left hover:bg-slate-800/20 -mx-1 px-1 rounded-lg transition-colors"
                         >
-                          <div className="w-full aspect-square rounded-xl bg-gradient-to-br from-primary-900/80 to-slate-800/80 border border-primary-700/30 flex items-center justify-center group-hover:border-primary-500/50 transition-colors">
-                            <Briefcase size={16} className="text-primary-400" />
+                          <div className="w-1 self-stretch rounded-full bg-primary-500/60 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-white truncate">{us.name || us.service?.name}</p>
+                            <p className="text-xs text-slate-500 truncate">
+                              {[us.service?.section?.name, price].filter(Boolean).join(' · ')}
+                            </p>
                           </div>
-                          <div className="w-full mt-1.5">
-                            <p className="text-[10px] font-semibold text-white leading-tight line-clamp-2">{us.service?.name}</p>
-                            {price && <p className="text-[9px] text-primary-400 leading-tight mt-0.5">{price}</p>}
-                          </div>
+                          <span className="text-slate-600 flex-shrink-0">›</span>
                         </button>
                       );
                     })}
