@@ -11,7 +11,6 @@ import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { useAuthStore } from '../stores/authStore';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AvatarComponent from '../components/Avatar';
-import GroupedFilterChips from '../components/GroupedFilterChips';
 import DealCreateModal from '../components/DealCreateModal';
 import { DEALS_ENABLED } from '../lib/features';
 import { useAuthGate } from '../components/AuthGateModal';
@@ -152,11 +151,6 @@ export default function ServicePage() {
     ...customFilterValues,
   ];
 
-  // Формат GroupedFilterChips: горизонтальные пилюли категорий, чипсы под нажатой
-  const filterChipValues = allFilters.flatMap((f, gi) =>
-    f.values.map((v: string, j: number) => ({ id: `${gi}-${j}`, value: v, filter: { id: `g${gi}`, name: f.filterName } }))
-  );
-
   return (
     <div className="min-h-screen bg-slate-950 pb-32">
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
@@ -222,8 +216,21 @@ export default function ServicePage() {
             <h1 className="text-xl font-bold text-white leading-tight min-w-0 break-words [overflow-wrap:anywhere]">{us.service?.name}</h1>
           </div>
 
-          {/* Filters — как в профиле: пилюли категорий, чипсы раскрываются под нажатой */}
-          {filterChipValues.length > 0 && <GroupedFilterChips values={filterChipValues} />}
+          {/* Filters — идентично карточке Заказа: «категория: значения» строками */}
+          {allFilters.length > 0 && (
+            <div className="space-y-2">
+              {allFilters.map((f, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span className="text-xs text-slate-500 flex-shrink-0 pt-0.5 min-w-[80px]">{f.filterName}</span>
+                  <div className="flex flex-wrap gap-1">
+                    {f.values.map((v: string, j: number) => (
+                      <span key={j} className="px-2 py-0.5 bg-slate-800 border border-slate-700/50 rounded-full text-xs text-slate-300">{v}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {/* Price */}
           <div className="flex items-center gap-2">
