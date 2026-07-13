@@ -211,13 +211,14 @@ export default function ServicePage() {
           {/* Заголовок — чистый, без иконки-плитки (идентично Заказу) */}
           <h1 className="text-xl font-bold text-white leading-tight min-w-0 break-words [overflow-wrap:anywhere]">{us.service?.name}</h1>
 
-          {/* Filters — идентично карточке Заказа: «категория: значения» строками */}
+          {/* Filters — как у Заказа, но гридом: у услуг лейблы длиннее («Тип занятости»,
+              «Формат работы»…), фикс-колонка держит все чипсы на одной вертикали */}
           {allFilters.length > 0 && (
-            <div className="space-y-2">
+            <div className="grid grid-cols-[92px_1fr] gap-x-2.5 gap-y-2">
               {allFilters.map((f, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <span className="text-xs text-slate-500 flex-shrink-0 pt-0.5 min-w-[80px]">{f.filterName}</span>
-                  <div className="flex flex-wrap gap-1">
+                <div key={i} className="contents">
+                  <span className="text-xs text-slate-500 pt-0.5 leading-snug break-words">{f.filterName}</span>
+                  <div className="flex flex-wrap gap-1 content-start">
                     {f.values.map((v: string, j: number) => (
                       <span key={j} className="px-2 py-0.5 bg-slate-800 border border-slate-700/50 rounded-full text-xs text-slate-300">{v}</span>
                     ))}

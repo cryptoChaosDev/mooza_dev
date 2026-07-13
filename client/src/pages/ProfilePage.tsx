@@ -1790,14 +1790,7 @@ export default function ProfilePage() {
                       Смотреть все
                     </button>
                   )}
-                  {servicesFlat.length > 0 && (
-                    <button
-                      onClick={() => { setEditingServices(v => !v); closeServiceForm(); }}
-                      className="text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
-                    >
-                      {editingServices ? 'Готово' : 'Изменить'}
-                    </button>
-                  )}
+                  {/* «Изменить» убрана: редактирование/удаление — внутри услуги (карандаш) */}
                 </div>
               </div>
 
@@ -1808,12 +1801,11 @@ export default function ProfilePage() {
                     const price = us.priceFrom != null || us.priceTo != null
                       ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
                       : 'По договорённости';
-                    const stateIdx = userServices.findIndex(s => s.serviceId === us.serviceId);
                     return (
                       <div key={us.id} className="flex items-center gap-3 py-2.5 group">
                         <div className="w-1 self-stretch rounded-full bg-primary-500/60 flex-shrink-0" />
                         <button
-                          onClick={() => editingServices && stateIdx >= 0 ? openEditServiceForm(stateIdx) : navigate(`/services/${us.id}`)}
+                          onClick={() => navigate(`/services/${us.id}`)}
                           className="flex-1 min-w-0 text-left"
                         >
                           <p className="text-sm font-semibold text-white truncate">{us.name || us.service?.name}</p>
@@ -1821,17 +1813,7 @@ export default function ProfilePage() {
                             {[us.service?.section?.name, price].filter(Boolean).join(' · ')}
                           </p>
                         </button>
-                        {editingServices && stateIdx >= 0 ? (
-                          <button
-                            onClick={() => setConfirmDeleteServiceIdx(stateIdx)}
-                            className="p-1.5 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"
-                            title="Удалить услугу"
-                          >
-                            <X size={14} />
-                          </button>
-                        ) : editingServices ? null : (
-                          <span className="text-slate-600 flex-shrink-0">›</span>
-                        )}
+                        <span className="text-slate-600 flex-shrink-0">›</span>
                       </div>
                     );
                   })}
