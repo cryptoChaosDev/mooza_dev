@@ -823,10 +823,18 @@ export default function ProfilePage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, userServices]);
 
-  // Deep-link со страницы профессии (карандаш): ?editProfessions=1 → открыть редактор.
+  // Deep-link со страницы профессии (карандаш): ?editProfessions=<professionId|1>.
+  // Открывает редактор и прокручивает к блоку конкретной профессии.
   useEffect(() => {
-    if (searchParams.get('editProfessions') !== '1') return;
+    const target = searchParams.get('editProfessions');
+    if (!target) return;
     setEditingProfessions(true);
+    if (target !== '1') {
+      // ждём рендер модалки, затем скроллим к нужной профессии
+      setTimeout(() => {
+        document.getElementById(`edit-prof-${target}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 300);
+    }
     const next = new URLSearchParams(searchParams);
     next.delete('editProfessions');
     setSearchParams(next, { replace: true });
@@ -1611,7 +1619,7 @@ export default function ProfilePage() {
                   {myStandaloneProfessions.length > 0 && (
                     <div className="space-y-2">
                       {myStandaloneProfessions.map((p, i) => (
-                        <div key={p.professionId} className="bg-primary-500/5 border border-primary-500/20 rounded-xl p-2">
+                        <div key={p.professionId} id={`edit-prof-${p.professionId}`} className="bg-primary-500/5 border border-primary-500/20 rounded-xl p-2">
                           <div className="flex items-center gap-1.5">
                             <span className="text-xs text-primary-300 font-medium flex-1">{p.professionName}</span>
                             <button onClick={() => { setMyStandaloneProfessions(prev => prev.filter((_, idx) => idx !== i)); }} className="text-primary-400/60 hover:text-red-400 transition-colors">
@@ -1718,15 +1726,20 @@ export default function ProfilePage() {
                         />
                         {profSearching && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
                       </div>
-                      {profSearch.trim() && profSearchResults.length === 0 && !profSearching && (
-                        <ProfessionNotFound initialQuery={profSearch} compact />
-                      )}
-                      {profSearchResults.length > 0 && (
+                      {(() => {
+                        // Уже добавленные профессии в подборе не показываем вовсе
+                        const available = profSearchResults.filter((p: any) => !myStandaloneProfessions.some(x => x.professionId === p.id));
+                        if (profSearch.trim() && !profSearching && profSearchResults.length === 0) {
+                          return <ProfessionNotFound initialQuery={profSearch} compact />;
+                        }
+                        if (profSearch.trim() && !profSearching && profSearchResults.length > 0 && available.length === 0) {
+                          return <p className="text-xs text-slate-500 py-1">Все найденные профессии уже добавлены.</p>;
+                        }
+                        if (available.length === 0) return null;
+                        return (
                         <div className="max-h-52 overflow-y-auto flex flex-wrap gap-1.5">
-                          {profSearchResults.map((p: any) => {
-                            const alreadyAdded = myStandaloneProfessions.some(x => x.professionId === p.id);
-                            return (
-                              <button key={p.id} type="button" disabled={alreadyAdded}
+                          {available.map((p: any) => (
+                              <button key={p.id} type="button"
                                 onClick={() => {
                                   setMyStandaloneProfessions(prev => [...prev, { professionId: p.id, professionName: p.name }]);
                                   // Immediately load + expand this profession's filters
@@ -1735,14 +1748,14 @@ export default function ProfilePage() {
                                   setProfSearch('');
                                   setProfSearchResults([]);
                                 }}
-                                className={`flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium ${alreadyAdded ? 'bg-slate-800/20 border-slate-700/30 text-slate-600 cursor-default' : 'bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300'}`}
+                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300"
                               >
-                                {alreadyAdded ? <span className="text-emerald-500">✓</span> : <Plus size={11} />}{p.name}
+                                <Plus size={11} />{p.name}
                               </button>
-                            );
-                          })}
+                          ))}
                         </div>
-                      )}
+                        );
+                      })()}
                       <button onClick={() => { setProfAddOpen(false); setProfSearch(''); setProfSearchResults([]); }} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
                     </div>
                   )}
