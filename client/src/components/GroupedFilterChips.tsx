@@ -4,8 +4,8 @@ import { ChevronDown } from 'lucide-react';
 /**
  * Чипсы значений фильтров профессии, сгруппированные по категориям («Жанр»,
  * «Инструмент», …). Категории — горизонтальные пилюли в одну строку с переносом.
- * Тап по пилюле раскрывает её чипсы ПРЯМО ЗА НЕЙ в том же потоке (визуально
- * привязано к нажатой категории); открыта максимум одна категория за раз.
+ * Тап по пилюле раскрывает её чипсы ОТДЕЛЬНОЙ СТРОКОЙ СРАЗУ ПОД НЕЙ (basis-full
+ * разрывает flex-ряд после нажатой пилюли); открыта максимум одна категория.
  * Используется в блоке «Профессии» своего и чужого профиля.
  *
  * values: [{ id, value, filter?: { id, name } }] — filter уже приходит с сервера.
@@ -40,12 +40,17 @@ export default function GroupedFilterChips({ values }: { values: any[] }) {
               <span className={`text-[10px] font-semibold ${isOpen ? 'text-primary-300' : 'text-slate-500'}`}>{g.items.length}</span>
               <ChevronDown size={10} className={`transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
             </button>
-            {/* Чипсы раскрытой категории — сразу за её пилюлей, в том же потоке */}
-            {isOpen && g.items.map((cfv: any) => (
-              <span key={cfv.id} className="text-[10px] bg-primary-500/10 border border-primary-500/20 text-slate-300 px-2 py-0.5 rounded-full">
-                {cfv.value}
+            {/* Чипсы раскрытой категории — отдельной строкой сразу ПОД её пилюлей
+                (basis-full занимает всю ширину и разрывает flex-ряд) */}
+            {isOpen && (
+              <span className="basis-full flex flex-wrap gap-1 pl-2 border-l-2 border-primary-500/40 my-0.5">
+                {g.items.map((cfv: any) => (
+                  <span key={cfv.id} className="text-[10px] bg-primary-500/10 border border-primary-500/20 text-slate-300 px-2 py-0.5 rounded-full">
+                    {cfv.value}
+                  </span>
+                ))}
               </span>
-            ))}
+            )}
           </span>
         );
       })}
