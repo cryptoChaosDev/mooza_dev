@@ -268,7 +268,6 @@ export default function ProfilePage() {
 
   const [myStandaloneProfessions, setMyStandaloneProfessions] = useState<{ professionId: string; professionName: string }[]>([]);
   const [editingProfessions, setEditingProfessions] = useState(false);
-  const [showAllProfessions, setShowAllProfessions] = useState(false);
   const [showJoinArtist, setShowJoinArtist] = useState(false);
   const [profAddOpen, setProfAddOpen] = useState(false);
   const [profSearch, setProfSearch] = useState('');
@@ -1591,12 +1590,12 @@ export default function ProfilePage() {
                 <GraduationCap size={14} className="text-fuchsia-400" />
                 <span className="text-sm font-semibold text-white">Профессии</span>
                 {myStandaloneProfessions.length > 0 && <span className="text-xs text-slate-500">{myStandaloneProfessions.length}</span>}
-                {myStandaloneProfessions.length > 4 && (
+                {myStandaloneProfessions.length > 0 && profile?.id && (
                   <button
-                    onClick={() => setShowAllProfessions(v => !v)}
+                    onClick={() => navigate(`/profile/${profile.id}/professions`)}
                     className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
                   >
-                    {showAllProfessions ? 'Свернуть' : 'Смотреть все'}
+                    Смотреть все
                   </button>
                 )}
               </div>
@@ -1762,7 +1761,7 @@ export default function ProfilePage() {
               <div className="p-3">
                 {/* Компактные строки — как Услуги/Заказы; детали внутри карточки профессии */}
                 <div className="divide-y divide-slate-800/60">
-                  {(showAllProfessions ? myStandaloneProfessions : myStandaloneProfessions.slice(0, 4)).map((p) => {
+                  {myStandaloneProfessions.slice(0, 4).map((p) => {
                     const profData = profile?.userProfessions?.find((up: any) => up.professionId === p.professionId);
                     const cfvs: any[] = profData?.selectedCustomFilterValues || [];
                     const dirName = profData?.profession?.direction?.name || '';
@@ -1790,7 +1789,7 @@ export default function ProfilePage() {
                     <div className="w-1 self-stretch rounded-full bg-slate-700/60 flex-shrink-0" />
                     <Plus size={14} className="text-slate-500 group-hover:text-primary-400 transition-colors flex-shrink-0" />
                     <span className="text-sm text-slate-500 group-hover:text-slate-300 transition-colors">
-                      {myStandaloneProfessions.length > 0 ? 'Добавить / изменить профессии' : 'Добавить профессию'}
+                      Добавить профессию
                     </span>
                   </button>
                 </div>
@@ -1863,11 +1862,11 @@ export default function ProfilePage() {
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <ClipboardList size={14} className="text-teal-400" />
-                <span className="text-sm font-semibold text-white">Мои заказы</span>
+                <span className="text-sm font-semibold text-white">Заказы</span>
                 {activeOrdersCount > 0 && <span className="text-xs text-slate-500">{activeOrdersCount}</span>}
                 {myOrders.length > 0 && (
                   <button onClick={() => navigate('/orders')} className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors">
-                    Посмотреть все
+                    Смотреть все
                   </button>
                 )}
               </div>

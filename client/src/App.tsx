@@ -38,6 +38,7 @@ const ProPage            = lazy(() => import('./pages/ProPage'));
 const ServicePage        = lazy(() => import('./pages/ServicePage'));
 const ServicesPage       = lazy(() => import('./pages/ServicesPage'));
 const ProfessionPage     = lazy(() => import('./pages/ProfessionPage'));
+const UserProfessionsPage = lazy(() => import('./pages/UserProfessionsPage'));
 const ConnectionsPage    = lazy(() => import('./pages/ConnectionsPage'));
 const ReviewsPage              = lazy(() => import('./pages/ReviewsPage'));
 const FriendRequestsPage       = lazy(() => import('./pages/FriendRequestsPage'));
@@ -180,6 +181,7 @@ function AppRoutes() {
             <Route path="/register"         element={<RegisterPage />} />
             <Route path="/services/:serviceId" element={<ServicePage />} />
             <Route path="/professions/:userId/:professionId" element={<ProfessionPage />} />
+            <Route path="/profile/:userId/professions" element={<UserProfessionsPage />} />
             <Route path="/profile/:userId/services" element={<ServicesPage />} />
             <Route path="/profile/:userId/connections" element={<ConnectionsPage />} />
             <Route path="/profile/:userId/reviews" element={<ReviewsPage />} />
