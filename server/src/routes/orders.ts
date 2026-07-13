@@ -18,6 +18,7 @@ const ORDER_INCLUDE = {
   selectedCustomFilterValues: { select: { id: true, value: true, filter: { select: { id: true, name: true } } } },
   referenceFiles: { orderBy: { createdAt: 'asc' as const } },
   referenceLinks: { orderBy: { createdAt: 'asc' as const } },
+  executor: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true } },
   _count: { select: { responses: true } },
 } as const;
 
@@ -450,6 +451,8 @@ router.post('/:id/responses', authenticate, async (req: AuthRequest, res) => {
     const order = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!order) return res.status(404).json({ error: 'Not found' });
     if (order.authorId === meId) return res.status(400).json({ error: 'Cannot respond to your own order' });
+    // Исполнитель уже выбран — отклики закрыты (заказ остаётся видимым всем).
+    if (order.executorId) return res.status(409).json({ error: 'Исполнитель уже выбран — отклики закрыты' });
     // Non-authors may respond only to a published order.
     const post = await prisma.post.findFirst({ where: { orderId: order.id, type: 'order' }, select: { id: true } });
     if (!post) return res.status(404).json({ error: 'Not found' });
@@ -561,6 +564,46 @@ router.post('/:id/responses/:responseId/deal', authenticate, async (req: AuthReq
     res.status(201).json({ deal });
   } catch (e: any) {
     console.error('[orders] POST /:id/responses/:responseId/deal', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── POST /api/orders/:id/responses/:responseId/choose — выбрать исполнителя ───
+// Автор выбирает исполнителя из откликов. Однократно: после выбора отклики
+// закрыты (гейт в POST /:id/responses), заказ остаётся видимым всем.
+router.post('/:id/responses/:responseId/choose', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const meId = req.userId!;
+    const order = await prisma.order.findUnique({ where: { id: req.params.id } });
+    if (!order || order.authorId !== meId) return res.status(404).json({ error: 'Not found' });
+    if (order.executorId) return res.status(409).json({ error: 'Исполнитель уже выбран' });
+    const response = await prisma.orderResponse.findUnique({
+      where: { id: req.params.responseId },
+      include: { executor: { select: { id: true, firstName: true, lastName: true, avatar: true } } },
+    });
+    if (!response || response.orderId !== order.id) return res.status(404).json({ error: 'Response not found' });
+
+    // Атомарно против гонки двойного выбора (executorId ещё пуст)
+    const updated = await prisma.order.updateMany({
+      where: { id: order.id, executorId: null },
+      data: { executorId: response.executorId, executorChosenAt: new Date() },
+    });
+    if (updated.count === 0) return res.status(409).json({ error: 'Исполнитель уже выбран' });
+
+    const name = await authorName(meId);
+    await notify({
+      userId: response.executorId,
+      actorId: meId,
+      type: 'order_executor_chosen',
+      title: '🎉 Вас выбрали исполнителем',
+      body: `${name} выбрал(а) вас исполнителем заказа «${order.title}». Обсудите детали в сообщениях.`,
+      link: `/orders/${order.id}`,
+    });
+
+    const fresh = await prisma.order.findUnique({ where: { id: order.id }, include: ORDER_INCLUDE });
+    res.json(fresh);
+  } catch (e: any) {
+    console.error('[orders] POST /:id/responses/:responseId/choose', e);
     res.status(500).json({ error: e.message });
   }
 });
