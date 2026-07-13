@@ -44,7 +44,9 @@ const userServiceInclude = {
   skillLevels:     { select: { id: true, name: true } },
   availabilities:  { select: { id: true, name: true } },
   geographies:     { select: { id: true, name: true } },
-  selectedCustomFilterValues: { select: { id: true, filterId: true, value: true } },
+  // filter.name нужен странице услуги: подписи категорий слева от чипсов
+  // («Уровень», «Жанр», …) — как на странице заказа. Без него лейблы пустые.
+  selectedCustomFilterValues: { select: { id: true, filterId: true, value: true, filter: { select: { id: true, name: true } } } },
 } as const;
 
 const userSelect = {
