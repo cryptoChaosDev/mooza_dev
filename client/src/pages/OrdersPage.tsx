@@ -11,8 +11,8 @@ type Tab = 'active' | 'done' | 'archived' | 'draft';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'active', label: 'Активные' },
-  { key: 'done', label: 'Выполненные' },
-  { key: 'archived', label: 'В архиве' },
+  { key: 'done', label: 'Выполнено' },
+  { key: 'archived', label: 'Архив' },
   { key: 'draft', label: 'Черновики' },
 ];
 
@@ -32,10 +32,17 @@ export default function OrdersPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('active');
 
-  const { data: orders = [], isLoading } = useQuery<any[]>({
-    queryKey: ['orders', 'mine', tab],
-    queryFn: async () => { const { data } = await orderAPI.getMine({ status: tab }); return data as any[]; },
+  const { data: allOrders = [], isLoading } = useQuery<any[]>({
+    queryKey: ['orders', 'mine'],
+    queryFn: async () => { const { data } = await orderAPI.getMine(); return data as any[]; },
   });
+  const orders = allOrders.filter((o: any) => (o.status ?? 'active') === tab);
+  const counts: Record<Tab, number> = {
+    active: allOrders.filter((o: any) => (o.status ?? 'active') === 'active').length,
+    done: allOrders.filter((o: any) => o.status === 'done').length,
+    archived: allOrders.filter((o: any) => o.status === 'archived').length,
+    draft: allOrders.filter((o: any) => o.status === 'draft').length,
+  };
 
   const statusMut = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => orderAPI.setStatus(id, status),
@@ -59,12 +66,15 @@ export default function OrdersPage() {
             <h1 className="text-base font-bold text-white">Мои заказы</h1>
           </div>
         </div>
-        {/* Tabs */}
-        <div className="max-w-lg mx-auto px-4 pb-3 flex gap-2">
+        {/* Tabs — компактные, как на странице услуг (не уезжают за экран) */}
+        <div className="max-w-lg mx-auto px-4 pb-3 flex gap-1">
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={`px-4 py-1.5 rounded-xl text-sm font-medium transition-all ${tab === t.key ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}>
-              {t.label}
+              className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-xl text-xs font-medium transition-all min-w-0 ${tab === t.key ? 'bg-primary-600 text-white' : 'bg-slate-900 border border-slate-800 text-slate-400 hover:text-white'}`}>
+              <span className="truncate">{t.label}</span>
+              {counts[t.key] > 0 && (
+                <span className={`text-[10px] font-bold ${tab === t.key ? 'opacity-80' : 'text-slate-500'}`}>{counts[t.key]}</span>
+              )}
             </button>
           ))}
         </div>
