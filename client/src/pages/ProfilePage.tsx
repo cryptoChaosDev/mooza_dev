@@ -817,8 +817,7 @@ export default function ProfilePage() {
     const idx = userServices.findIndex(s => s.serviceId === target);
     if (idx < 0) return; // not hydrated yet (or no longer exists) — retry next render
     editServiceDeepLinkRef.current = target;
-    setEditingServices(true);
-    openEditServiceForm(idx);
+    openEditServiceForm(idx); // режим «Изменить» убран — форма открывается напрямую
     requestAnimationFrame(() => servicesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
     const next = new URLSearchParams(searchParams);
     next.delete('editService');
