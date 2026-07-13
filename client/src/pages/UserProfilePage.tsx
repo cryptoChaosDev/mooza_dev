@@ -74,6 +74,7 @@ export default function UserProfilePage() {
   const [imageFullscreen, setImageFullscreen] = useState<string | null>(null);
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
   const [selectedProfession, setSelectedProfession] = useState<any>(null);
+  const [showAllProfessions, setShowAllProfessions] = useState(false);
   const [confirmRemoveFriend, setConfirmRemoveFriend] = useState(false);
   useScrollLock(!!imageFullscreen || !!docFullscreen || !!selectedProfession);
   const { data: user, isLoading } = useQuery({
@@ -528,22 +529,40 @@ export default function UserProfilePage() {
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                   <Briefcase size={14} className="text-primary-400" />
                   <span className="text-sm font-semibold text-white">Профессии</span>
+                  <span className="text-xs text-slate-500">{user.userProfessions.length}</span>
+                  {user.userProfessions.length > 4 && (
+                    <button
+                      onClick={() => setShowAllProfessions(v => !v)}
+                      className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                    >
+                      {showAllProfessions ? 'Свернуть' : 'Смотреть все'}
+                    </button>
+                  )}
                 </div>
-                <div className="px-4 pt-3 pb-3 space-y-3">
-                  {user.userProfessions.map((up: any, i: number) => {
-                    const cfvs: any[] = up.selectedCustomFilterValues || [];
-                    return (
-                      <div key={up.professionId ?? i}>
+                <div className="p-3">
+                  {/* Компактные строки — детали в карточке профессии (по тапу) */}
+                  <div className="divide-y divide-slate-800/60">
+                    {(showAllProfessions ? user.userProfessions : user.userProfessions.slice(0, 4)).map((up: any, i: number) => {
+                      const cfvs: any[] = up.selectedCustomFilterValues || [];
+                      const dirName = up.profession?.direction?.name || '';
+                      return (
                         <button
+                          key={up.professionId ?? i}
                           onClick={() => setSelectedProfession(up)}
-                          className="text-primary-400 hover:text-primary-300 font-medium underline underline-offset-2 decoration-primary-500/40 hover:decoration-primary-400 transition-colors text-sm"
+                          className="w-full flex items-center gap-3 py-2.5 text-left hover:bg-slate-800/20 -mx-1 px-1 rounded-lg transition-colors"
                         >
-                          {up.profession?.name}
+                          <div className="w-1 self-stretch rounded-full bg-primary-500/60 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-white truncate">{up.profession?.name}</p>
+                            <p className="text-xs text-slate-500 truncate">
+                              {[dirName, cfvs.length > 0 ? `характеристик: ${cfvs.length}` : null].filter(Boolean).join(' · ') || 'Без характеристик'}
+                            </p>
+                          </div>
+                          <span className="text-slate-600 flex-shrink-0">›</span>
                         </button>
-                        <GroupedFilterChips values={cfvs} />
-                      </div>
-                    );
-                  })}
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             )}
@@ -772,7 +791,14 @@ export default function UserProfilePage() {
               <X size={18} className="text-slate-400" />
             </button>
           </div>
-          <div className="px-5 py-4 flex-1 overflow-y-auto min-h-0">
+          <div className="px-5 py-4 flex-1 overflow-y-auto min-h-0 space-y-4">
+            {/* Характеристики — табличный вид, как на карточках Заказа/Услуги */}
+            {(selectedProfession.selectedCustomFilterValues?.length ?? 0) > 0 && (
+              <div>
+                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Характеристики</p>
+                <GroupedFilterChips values={selectedProfession.selectedCustomFilterValues} />
+              </div>
+            )}
             {(() => {
               const related = servicesFlat.filter(
                 (us: any) => us.professionId === selectedProfession.professionId
@@ -782,6 +808,7 @@ export default function UserProfilePage() {
               }
               return (
                 <div className="space-y-3">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Услуги по профессии</p>
                   {related.map((us: any) => (
                     <button
                       key={us.id}

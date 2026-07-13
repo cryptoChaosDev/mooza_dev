@@ -269,6 +269,7 @@ export default function ProfilePage() {
 
   const [myStandaloneProfessions, setMyStandaloneProfessions] = useState<{ professionId: string; professionName: string }[]>([]);
   const [editingProfessions, setEditingProfessions] = useState(false);
+  const [showAllProfessions, setShowAllProfessions] = useState(false);
   const [selectedProfession, setSelectedProfession] = useState<{ professionId: string; professionName: string } | null>(null);
   const [showJoinArtist, setShowJoinArtist] = useState(false);
   const [profAddOpen, setProfAddOpen] = useState(false);
@@ -1582,12 +1583,14 @@ export default function ProfilePage() {
                 <Briefcase size={14} className="text-primary-400" />
                 <span className="text-sm font-semibold text-white">Профессии</span>
                 {myStandaloneProfessions.length > 0 && <span className="text-xs text-slate-500">{myStandaloneProfessions.length}</span>}
-                <button
-                  onClick={() => { setEditingProfessions(v => !v); setProfAddOpen(false); setProfSearch(''); }}
-                  className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
-                >
-                  {editingProfessions ? 'Готово' : 'Изменить'}
-                </button>
+                {myStandaloneProfessions.length > 4 && (
+                  <button
+                    onClick={() => setShowAllProfessions(v => !v)}
+                    className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                  >
+                    {showAllProfessions ? 'Свернуть' : 'Смотреть все'}
+                  </button>
+                )}
               </div>
 
               {editingProfessions && createPortal(
@@ -1748,29 +1751,42 @@ export default function ProfilePage() {
                 </div>,
                 document.body
               )}
-              {myStandaloneProfessions.length > 0 ? (
-                <div className="px-4 pt-3 pb-2 space-y-2">
-                  {myStandaloneProfessions.map((p) => {
+              <div className="p-3">
+                {/* Компактные строки — как Услуги/Заказы; детали внутри карточки профессии */}
+                <div className="divide-y divide-slate-800/60">
+                  {(showAllProfessions ? myStandaloneProfessions : myStandaloneProfessions.slice(0, 4)).map((p) => {
                     const profData = profile?.userProfessions?.find((up: any) => up.professionId === p.professionId);
                     const cfvs: any[] = profData?.selectedCustomFilterValues || [];
+                    const dirName = profData?.profession?.direction?.name || '';
                     return (
-                      <div key={p.professionId}>
-                        <button
-                          onClick={() => setSelectedProfession(p)}
-                          className="text-primary-400 hover:text-primary-300 font-medium underline underline-offset-2 decoration-primary-500/40 hover:decoration-primary-400 transition-colors text-sm"
-                        >
-                          {p.professionName}
-                        </button>
-                        <GroupedFilterChips values={cfvs} />
-                      </div>
+                      <button
+                        key={p.professionId}
+                        onClick={() => setSelectedProfession(p)}
+                        className="w-full flex items-center gap-3 py-2.5 text-left hover:bg-slate-800/20 -mx-1 px-1 rounded-lg transition-colors"
+                      >
+                        <div className="w-1 self-stretch rounded-full bg-primary-500/60 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{p.professionName}</p>
+                          <p className="text-xs text-slate-500 truncate">
+                            {[dirName, cfvs.length > 0 ? `характеристик: ${cfvs.length}` : null].filter(Boolean).join(' · ') || 'Без характеристик'}
+                          </p>
+                        </div>
+                        <span className="text-slate-600 flex-shrink-0">›</span>
+                      </button>
                     );
                   })}
+                  <button
+                    onClick={() => { setEditingProfessions(true); setProfAddOpen(false); setProfSearch(''); }}
+                    className="w-full flex items-center gap-3 py-2.5 text-left group"
+                  >
+                    <div className="w-1 self-stretch rounded-full bg-slate-700/60 flex-shrink-0" />
+                    <Plus size={14} className="text-slate-500 group-hover:text-primary-400 transition-colors flex-shrink-0" />
+                    <span className="text-sm text-slate-500 group-hover:text-slate-300 transition-colors">
+                      {myStandaloneProfessions.length > 0 ? 'Добавить / изменить профессии' : 'Добавить профессию'}
+                    </span>
+                  </button>
                 </div>
-              ) : (
-                <div className="p-4 text-center">
-                  <p className="text-sm text-slate-600 italic">Нет добавленных профессий</p>
-                </div>
-              )}
+              </div>
             </div>
 
             {/* ── Services card — tile slider ── */}
@@ -2321,7 +2337,19 @@ export default function ProfilePage() {
               <X size={18} className="text-slate-400" />
             </button>
           </div>
-          <div className="px-5 py-4 flex-1 overflow-y-auto min-h-0">
+          <div className="px-5 py-4 flex-1 overflow-y-auto min-h-0 space-y-4">
+            {/* Характеристики профессии — табличный вид, как на карточках Заказа/Услуги */}
+            {(() => {
+              const profData = profile?.userProfessions?.find((up: any) => up.professionId === selectedProfession.professionId);
+              const cfvs: any[] = profData?.selectedCustomFilterValues || [];
+              if (!cfvs.length) return null;
+              return (
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Характеристики</p>
+                  <GroupedFilterChips values={cfvs} />
+                </div>
+              );
+            })()}
             {(() => {
               const relatedServices = (profile?.userServices ?? []).filter(
                 (us: any) => us.profession?.id === selectedProfession.professionId
@@ -2331,6 +2359,7 @@ export default function ProfilePage() {
               }
               return (
                 <div className="space-y-3">
+                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Услуги по профессии</p>
                   {relatedServices.map((us: any) => (
                     <button key={us.id} onClick={() => { setSelectedProfession(null); navigate(`/services/${us.id}`); }}
                       className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3 text-left hover:bg-slate-800 transition-colors">
