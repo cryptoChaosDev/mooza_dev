@@ -41,6 +41,7 @@ const ProfessionPage     = lazy(() => import('./pages/ProfessionPage'));
 const UserProfessionsPage = lazy(() => import('./pages/UserProfessionsPage'));
 const OrderFormPage      = lazy(() => import('./pages/OrderFormPage'));
 const ProfessionFormPage = lazy(() => import('./pages/ProfessionFormPage'));
+const ServiceFormPage    = lazy(() => import('./pages/ServiceFormPage'));
 const ConnectionsPage    = lazy(() => import('./pages/ConnectionsPage'));
 const ReviewsPage              = lazy(() => import('./pages/ReviewsPage'));
 const FriendRequestsPage       = lazy(() => import('./pages/FriendRequestsPage'));
@@ -181,6 +182,8 @@ function AppRoutes() {
             {/* Logged-in visitors who open an artist invite link land here too;
                 RegisterPage shows an accept screen (or bounces home if no invite). */}
             <Route path="/register"         element={<RegisterPage />} />
+            <Route path="/services/new" element={<ServiceFormPage />} />
+            <Route path="/services/edit/:serviceId" element={<ServiceFormPage />} />
             <Route path="/services/:serviceId" element={<ServicePage />} />
             <Route path="/professions/new" element={<ProfessionFormPage />} />
             <Route path="/professions/edit/:professionId" element={<ProfessionFormPage />} />
