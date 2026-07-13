@@ -94,9 +94,9 @@ export default function ProfessionPage() {
           </div>
           {isOwner && (
             <button
-              onClick={() => navigate('/profile?editProfessions=1')}
+              onClick={() => navigate(`/profile?editProfessions=${professionId}`)}
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex-shrink-0"
-              title="Редактировать профессии"
+              title="Редактировать профессию"
             >
               <Pencil size={14} />
             </button>
