@@ -71,7 +71,6 @@ export default function UserProfilePage() {
   const [portfolioTab, setPortfolioTab] = useState<'audio' | 'images' | 'other'>('audio');
   const [imageFullscreen, setImageFullscreen] = useState<string | null>(null);
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
-  const [showAllProfessions, setShowAllProfessions] = useState(false);
   const [confirmRemoveFriend, setConfirmRemoveFriend] = useState(false);
   useScrollLock(!!imageFullscreen || !!docFullscreen);
   const { data: user, isLoading } = useQuery({
@@ -527,19 +526,17 @@ export default function UserProfilePage() {
                   <GraduationCap size={14} className="text-fuchsia-400" />
                   <span className="text-sm font-semibold text-white">Профессии</span>
                   <span className="text-xs text-slate-500">{user.userProfessions.length}</span>
-                  {user.userProfessions.length > 4 && (
-                    <button
-                      onClick={() => setShowAllProfessions(v => !v)}
-                      className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
-                    >
-                      {showAllProfessions ? 'Свернуть' : 'Смотреть все'}
-                    </button>
-                  )}
+                  <button
+                    onClick={() => navigate(`/profile/${user.id}/professions`)}
+                    className="ml-auto text-xs text-primary-400 hover:text-primary-300 font-medium transition-colors"
+                  >
+                    Смотреть все
+                  </button>
                 </div>
                 <div className="p-3">
                   {/* Компактные строки — детали в карточке профессии (по тапу) */}
                   <div className="divide-y divide-slate-800/60">
-                    {(showAllProfessions ? user.userProfessions : user.userProfessions.slice(0, 4)).map((up: any, i: number) => {
+                    {user.userProfessions.slice(0, 4).map((up: any, i: number) => {
                       const cfvs: any[] = up.selectedCustomFilterValues || [];
                       const dirName = up.profession?.direction?.name || '';
                       return (
