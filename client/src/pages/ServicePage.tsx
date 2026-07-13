@@ -10,6 +10,7 @@ import { userAPI, messageAPI, orderAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { useAuthStore } from '../stores/authStore';
 import ConfirmDialog from '../components/ConfirmDialog';
+import AvatarComponent from '../components/Avatar';
 import DealCreateModal from '../components/DealCreateModal';
 import { DEALS_ENABLED } from '../lib/features';
 import { useAuthGate } from '../components/AuthGateModal';
@@ -279,28 +280,49 @@ export default function ServicePage() {
             </div>
             <p className="text-xs text-slate-500 -mt-1">Открытые заказы по вашей услуге — откликнитесь, пока не выбрали другого.</p>
             <div className="divide-y divide-slate-800/60">
-              {matchingOrders.map((o: any) => (
-                <button
-                  key={o.id}
-                  onClick={() => navigate(`/orders/${o.id}`)}
-                  className="w-full flex items-center gap-3 py-2.5 text-left hover:bg-slate-800/30 -mx-1 px-1 rounded-lg transition-colors"
-                >
-                  <div className="w-1 self-stretch rounded-full bg-teal-500/60 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-white truncate">{o.title}</p>
-                    <p className="text-xs text-slate-500 truncate">
-                      {[
-                        (o.budgetFrom != null || o.budgetTo != null)
-                          ? [o.budgetFrom != null ? `от ${Number(o.budgetFrom).toLocaleString('ru')} ₽` : null, o.budgetTo != null ? `до ${Number(o.budgetTo).toLocaleString('ru')} ₽` : null].filter(Boolean).join(' ')
-                          : 'По договорённости',
-                        o.deadline ? `до ${new Date(o.deadline).toLocaleDateString('ru-RU')}` : null,
-                        `откликов: ${o._count?.responses ?? 0}`,
-                      ].filter(Boolean).join(' · ')}
-                    </p>
+              {matchingOrders.map((o: any) => {
+                const authorName = `${o.author?.firstName ?? ''} ${o.author?.lastName ?? ''}`.trim() || 'Пользователь';
+                return (
+                  <div key={o.id} className="py-3 space-y-2">
+                    <button
+                      onClick={() => navigate(`/orders/${o.id}`)}
+                      className="w-full flex items-center gap-3 text-left hover:bg-slate-800/30 -mx-1 px-1 rounded-lg transition-colors"
+                    >
+                      <div className="w-1 self-stretch rounded-full bg-teal-500/60 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-white truncate">{o.title}</p>
+                        <p className="text-xs text-slate-500 truncate">
+                          {[
+                            (o.budgetFrom != null || o.budgetTo != null)
+                              ? [o.budgetFrom != null ? `от ${Number(o.budgetFrom).toLocaleString('ru')} ₽` : null, o.budgetTo != null ? `до ${Number(o.budgetTo).toLocaleString('ru')} ₽` : null].filter(Boolean).join(' ')
+                              : 'По договорённости',
+                            o.deadline ? `до ${new Date(o.deadline).toLocaleDateString('ru-RU')}` : null,
+                            `откликов: ${o._count?.responses ?? 0}`,
+                          ].filter(Boolean).join(' · ')}
+                        </p>
+                      </div>
+                      <span className="text-slate-600 flex-shrink-0">›</span>
+                    </button>
+                    <div className="flex items-center gap-2 pl-3">
+                      <button
+                        onClick={() => navigate(`/profile/${o.author?.id}`)}
+                        className="flex items-center gap-2 flex-1 min-w-0 text-left"
+                        title="Открыть профиль заказчика"
+                      >
+                        <AvatarComponent src={o.author?.avatar} name={authorName} size={24} />
+                        <span className="text-xs text-slate-400 hover:text-white transition-colors truncate">{authorName}</span>
+                      </button>
+                      <button
+                        onClick={() => navigate(`/messages/${o.author?.id}`)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 rounded-lg transition-colors flex-shrink-0"
+                      >
+                        <MessageCircle size={13} />
+                        Написать
+                      </button>
+                    </div>
                   </div>
-                  <span className="text-slate-600 flex-shrink-0">›</span>
-                </button>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
