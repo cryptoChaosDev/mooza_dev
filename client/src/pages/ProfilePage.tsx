@@ -198,7 +198,6 @@ export default function ProfilePage() {
 
   const [editingHero, setEditingHero] = useState(false);
   const [editingBio, setEditingBio] = useState(false);
-  const [editingServices, setEditingServices] = useState(false);
   const [editingContacts, setEditingContacts] = useState(false);
   const [editingSocials, setEditingSocials] = useState(false);
 
