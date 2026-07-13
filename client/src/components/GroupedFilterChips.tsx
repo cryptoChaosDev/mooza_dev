@@ -1,17 +1,12 @@
-import { useState } from 'react';
-import { ChevronDown } from 'lucide-react';
-
 /**
- * Чипсы значений фильтров профессии, сгруппированные по категориям («Жанр»,
- * «Инструмент», …). Категории — горизонтальные пилюли в одну строку с переносом.
- * Тап по пилюле раскрывает её чипсы ОТДЕЛЬНОЙ СТРОКОЙ СРАЗУ ПОД НЕЙ (basis-full
- * разрывает flex-ряд после нажатой пилюли); открыта максимум одна категория.
- * Используется в блоке «Профессии» своего и чужого профиля.
+ * Значения фильтров профессии в блоке «Профессии» (свой и чужой профиль).
+ * Табличный вид — идентично фильтрам на карточках Заказа и Услуги:
+ * название категории в фиксированной колонке слева, чипсы справа; все чипсы
+ * начинаются с одной вертикали, ничего не сворачивается.
  *
- * values: [{ id, value, filter?: { id, name } }] — filter уже приходит с сервера.
+ * values: [{ id, value, filter?: { id, name } }] — filter приходит с сервера.
  */
 export default function GroupedFilterChips({ values }: { values: any[] }) {
-  const [openId, setOpenId] = useState<string | null>(null);
   if (!values?.length) return null;
 
   const groups = new Map<string, { name: string; items: any[] }>();
@@ -22,38 +17,19 @@ export default function GroupedFilterChips({ values }: { values: any[] }) {
   }
 
   return (
-    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-      {[...groups.entries()].map(([gid, g]) => {
-        const isOpen = openId === gid;
-        return (
-          <span key={gid} className="contents">
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setOpenId(isOpen ? null : gid); }}
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] border transition-colors ${
-                isOpen
-                  ? 'bg-primary-600/20 border-primary-500/40 text-primary-300'
-                  : 'bg-slate-800/70 border-slate-700/60 text-slate-400 hover:text-white'
-              }`}
-            >
-              <span className="truncate max-w-[120px]">{g.name}</span>
-              <span className={`text-[10px] font-semibold ${isOpen ? 'text-primary-300' : 'text-slate-500'}`}>{g.items.length}</span>
-              <ChevronDown size={10} className={`transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {/* Чипсы раскрытой категории — отдельной строкой сразу ПОД её пилюлей
-                (basis-full занимает всю ширину и разрывает flex-ряд) */}
-            {isOpen && (
-              <span className="basis-full flex flex-wrap gap-1 pl-2 border-l-2 border-primary-500/40 my-0.5">
-                {g.items.map((cfv: any) => (
-                  <span key={cfv.id} className="text-[10px] bg-primary-500/10 border border-primary-500/20 text-slate-300 px-2 py-0.5 rounded-full">
-                    {cfv.value}
-                  </span>
-                ))}
+    <div className="mt-1.5 grid grid-cols-[92px_1fr] gap-x-2.5 gap-y-1.5">
+      {[...groups.entries()].map(([gid, g]) => (
+        <div key={gid} className="contents">
+          <span className="text-xs text-slate-500 pt-0.5 leading-snug break-words">{g.name}</span>
+          <div className="flex flex-wrap gap-1 content-start">
+            {g.items.map((cfv: any) => (
+              <span key={cfv.id} className="px-2 py-0.5 bg-slate-800 border border-slate-700/50 rounded-full text-xs text-slate-300">
+                {cfv.value}
               </span>
-            )}
-          </span>
-        );
-      })}
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
