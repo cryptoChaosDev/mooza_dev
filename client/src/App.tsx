@@ -39,6 +39,9 @@ const ServicePage        = lazy(() => import('./pages/ServicePage'));
 const ServicesPage       = lazy(() => import('./pages/ServicesPage'));
 const ProfessionPage     = lazy(() => import('./pages/ProfessionPage'));
 const UserProfessionsPage = lazy(() => import('./pages/UserProfessionsPage'));
+const OrderFormPage      = lazy(() => import('./pages/OrderFormPage'));
+const ProfessionFormPage = lazy(() => import('./pages/ProfessionFormPage'));
+const ServiceFormPage    = lazy(() => import('./pages/ServiceFormPage'));
 const ConnectionsPage    = lazy(() => import('./pages/ConnectionsPage'));
 const ReviewsPage              = lazy(() => import('./pages/ReviewsPage'));
 const FriendRequestsPage       = lazy(() => import('./pages/FriendRequestsPage'));
@@ -179,7 +182,11 @@ function AppRoutes() {
             {/* Logged-in visitors who open an artist invite link land here too;
                 RegisterPage shows an accept screen (or bounces home if no invite). */}
             <Route path="/register"         element={<RegisterPage />} />
+            <Route path="/services/new" element={<ServiceFormPage />} />
+            <Route path="/services/edit/:serviceId" element={<ServiceFormPage />} />
             <Route path="/services/:serviceId" element={<ServicePage />} />
+            <Route path="/professions/new" element={<ProfessionFormPage />} />
+            <Route path="/professions/edit/:professionId" element={<ProfessionFormPage />} />
             <Route path="/professions/:userId/:professionId" element={<ProfessionPage />} />
             <Route path="/profile/:userId/professions" element={<UserProfessionsPage />} />
             <Route path="/profile/:userId/services" element={<ServicesPage />} />
@@ -191,6 +198,8 @@ function AppRoutes() {
             <Route path="/deals" element={<DealsPage />} />
             <Route path="/deals/:dealId" element={<DealPage />} />
             <Route path="/orders" element={<OrdersPage />} />
+            <Route path="/orders/new" element={<OrderFormPage />} />
+            <Route path="/orders/edit/:orderId" element={<OrderFormPage />} />
             <Route path="/orders/:orderId" element={<OrderDetailPage />} />
             <Route path="/artists/:artistId/vacancies" element={<VacanciesPage />} />
             <Route path="/vacancies/:vacancyId" element={<VacancyDetailPage />} />

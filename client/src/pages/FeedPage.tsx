@@ -20,7 +20,6 @@ import { useAuthGate } from '../components/AuthGateModal';
 import DealCreateModal from '../components/DealCreateModal';
 import { DEALS_ENABLED } from '../lib/features';
 import OnboardingPrompt from '../components/OnboardingPrompt';
-import OrderForm from '../components/OrderForm';
 import VacancyForm from '../components/VacancyForm';
 import { workFormatLabel, geographyLabel, paymentLabel } from '../lib/vacancyOptions';
 import AvatarComponent from '../components/Avatar';
@@ -1093,11 +1092,10 @@ export default function FeedPage() {
   const [searchParams] = useSearchParams();
   const targetPostId = searchParams.get('post');
   const [showPostTypePicker, setShowPostTypePicker] = useState(false);
-  const [showOrderForm, setShowOrderForm] = useState(false);
   const [showVacancyForm, setShowVacancyForm] = useState(false);
   const [filters, setFilters] = useState<FlowFilters>(loadFilters);
   const [showSavedOnly, setShowSavedOnly] = useState(false);
-  useScrollLock(showPostTypePicker || showOrderForm || showVacancyForm);
+  useScrollLock(showPostTypePicker || showVacancyForm);
 
   // Кнопка «Вверх» — появляется после прокрутки на ~2 экрана
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -1314,26 +1312,12 @@ export default function FeedPage() {
         {showPostTypePicker && (
           <PostTypePicker
             onClose={() => setShowPostTypePicker(false)}
-            onPickOrder={() => setShowOrderForm(true)}
+            onPickOrder={() => navigate('/orders/new')}
             onPickVacancy={() => setShowVacancyForm(true)}
           />
         )}
 
         {/* Order create form — opened modally straight from the Поток composer. */}
-        {showOrderForm && createPortal(
-          <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setShowOrderForm(false)}>
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-            <div
-              className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl"
-              style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
-              <OrderForm onClose={() => setShowOrderForm(false)} />
-            </div>
-          </div>,
-          document.body
-        )}
 
         {/* Vacancy create form — opened modally from the Поток composer (no artistId — form asks). */}
         {showVacancyForm && createPortal(

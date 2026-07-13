@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -13,10 +12,8 @@ import { DEALS_ENABLED } from '../lib/features';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import AvatarComponent from '../components/Avatar';
-import OrderForm from '../components/OrderForm';
 import OrderStatusChip from '../components/OrderStatusChip';
 import ConfirmDialog from '../components/ConfirmDialog';
-import { useScrollLock } from '../lib/scrollLock';
 
 // Budget «от X ₽ до Y ₽» / «По договорённости»
 function formatBudget(from?: number | null, to?: number | null): string {
@@ -41,8 +38,6 @@ export default function OrderDetailPage() {
   const [showRespond, setShowRespond] = useState(false);
   const [respondPrice, setRespondPrice] = useState('');
   const [respondComment, setRespondComment] = useState('');
-  const [editing, setEditing] = useState(false);
-  useScrollLock(editing);
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['order', orderId],
@@ -168,7 +163,7 @@ export default function OrderDetailPage() {
     <button
       onClick={() => hasResponses
         ? toast.error('Заказ нельзя редактировать — на него уже есть отклики')
-        : setEditing(true)}
+        : navigate(`/orders/edit/${orderId}`)}
       className={`flex-1 py-3 flex items-center justify-center gap-2 text-sm font-medium border rounded-2xl transition-colors ${
         hasResponses ? 'border-slate-800 text-slate-500' : 'border-slate-700 text-slate-300 hover:text-white hover:border-slate-600'
       }`}
@@ -318,7 +313,7 @@ export default function OrderDetailPage() {
             {order.status === 'draft' && (
               <div className="flex gap-2">
                 <button
-                  onClick={() => setEditing(true)}
+                  onClick={() => navigate(`/orders/edit/${orderId}`)}
                   className="flex-1 py-3 flex items-center justify-center gap-2 text-sm font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 rounded-2xl transition-colors disabled:opacity-50"
                 >
                   <Pencil size={15} />
@@ -550,23 +545,6 @@ export default function OrderDetailPage() {
           </div>
         )}
       </div>
-
-      {isOwner && editing && createPortal(
-        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setEditing(false)}>
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
-            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
-            <OrderForm
-              order={order}
-              onClose={() => {
-                setEditing(false);
-                qc.invalidateQueries({ queryKey: ['order', orderId] });
-              }}
-            />
-          </div>
-        </div>,
-        document.body
-      )}
 
       <ConfirmDialog
         open={!!confirmChoose}

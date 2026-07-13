@@ -74,7 +74,7 @@ export default function UserProfessionsPage() {
               })}
               {isOwner && (
                 <button
-                  onClick={() => navigate('/profile?editProfessions=1')}
+                  onClick={() => navigate('/professions/new')}
                   className="w-full flex items-center gap-3 py-2.5 text-left group"
                 >
                   <div className="w-1 self-stretch rounded-full bg-slate-700/60 flex-shrink-0" />

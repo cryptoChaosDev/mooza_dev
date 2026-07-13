@@ -173,7 +173,7 @@ export default function ServicePage() {
                 // Edit via the full profile ServiceForm (the only place that can
                 // change the catalog section + custom filters). Deep-link by the
                 // catalog serviceId — ProfilePage keys its services by it.
-                navigate(`/profile?editService=${us.serviceId}`);
+                navigate(`/services/edit/${us.serviceId}`);
               }}
               className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex-shrink-0"
               title="Редактировать"
