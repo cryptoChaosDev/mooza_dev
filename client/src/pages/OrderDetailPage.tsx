@@ -14,6 +14,7 @@ import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import AvatarComponent from '../components/Avatar';
 import OrderForm from '../components/OrderForm';
+import ConfirmDialog from '../components/ConfirmDialog';
 import { useScrollLock } from '../lib/scrollLock';
 
 // Budget «от X ₽ до Y ₽» / «По договорённости»
@@ -113,6 +114,18 @@ export default function OrderDetailPage() {
       if (dealId) navigate(`/deals/${dealId}`);
     },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось оформить сделку')),
+  });
+
+  // Выбор исполнителя — однократный, с подтверждением (после него отклики закрываются)
+  const [confirmChoose, setConfirmChoose] = useState<{ responseId: string; name: string } | null>(null);
+  const chooseMut = useMutation({
+    mutationFn: (responseId: string) => orderAPI.chooseExecutor(orderId!, responseId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['order', orderId] });
+      qc.invalidateQueries({ queryKey: ['order-responses', orderId] });
+      toast.success('Исполнитель выбран');
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось выбрать исполнителя')),
   });
 
   if (isLoading) {
@@ -411,8 +424,9 @@ export default function OrderDetailPage() {
                   {responses.map((r: any) => {
                     const u = r.executor ?? {};
                     const name = `${u.firstName ?? ''} ${u.lastName ?? ''}`.trim();
+                    const isChosen = !!order.executorId && u.id === order.executorId;
                     return (
-                      <div key={r.id} className="p-3 rounded-xl bg-slate-800/40 border border-slate-800/60 space-y-2">
+                      <div key={r.id} className={`p-3 rounded-xl space-y-2 border ${isChosen ? 'bg-emerald-500/5 border-emerald-500/30' : 'bg-slate-800/40 border-slate-800/60'} ${order.executorId && !isChosen ? 'opacity-60' : ''}`}>
                         <div className="flex items-center gap-3">
                           <button onClick={() => navigate(`/profile/${u.id}`)} className="flex items-center gap-2.5 flex-1 min-w-0 text-left">
                             <AvatarComponent src={u.avatar} name={name} size={36} />
@@ -421,6 +435,11 @@ export default function OrderDetailPage() {
                               <p className="text-xs text-rose-400 font-semibold">{Number(r.price).toLocaleString('ru')} ₽</p>
                             </div>
                           </button>
+                          {isChosen && (
+                            <span className="flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-400 text-[11px] font-semibold flex-shrink-0">
+                              ✓ Исполнитель
+                            </span>
+                          )}
                         </div>
                         {r.comment && (
                           <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{r.comment}</p>
@@ -432,6 +451,16 @@ export default function OrderDetailPage() {
                           >
                             <MessageCircle size={13} />Написать
                           </button>
+                          {!order.executorId && (
+                            <button
+                              onClick={() => setConfirmChoose({ responseId: r.id, name })}
+                              disabled={chooseMut.isPending}
+                              className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              {chooseMut.isPending ? <Loader2 size={13} className="animate-spin" /> : '✓'}
+                              Выбрать исполнителем
+                            </button>
+                          )}
                           {DEALS_ENABLED && (
                             <button
                               onClick={() => dealMut.mutate(r.id)}
@@ -453,7 +482,17 @@ export default function OrderDetailPage() {
         ) : (
           /* ── NON-OWNER ── */
           <div className="space-y-2">
-            {showRespond ? (
+            {order.executorId ? (
+              <div className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-emerald-500/5 border border-emerald-500/25">
+                <span className="text-emerald-400 text-lg flex-shrink-0">✓</span>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white">
+                    Исполнитель выбран{order.executor ? `: ${order.executor.firstName} ${order.executor.lastName || ''}`.trim() : ''}
+                  </p>
+                  <p className="text-xs text-slate-400">Отклики на этот заказ закрыты.</p>
+                </div>
+              </div>
+            ) : showRespond ? (
               <div className="space-y-3 border border-primary-500/20 bg-primary-500/5 rounded-2xl p-4">
                 <p className="text-sm font-semibold text-white">Откликнуться на заказ</p>
                 <div>
@@ -516,6 +555,14 @@ export default function OrderDetailPage() {
         </div>,
         document.body
       )}
+
+      <ConfirmDialog
+        open={!!confirmChoose}
+        message={`Выбрать ${confirmChoose?.name || 'этого исполнителя'} исполнителем заказа? После выбора отклики закроются, изменить выбор будет нельзя.`}
+        confirmLabel="Выбрать"
+        onConfirm={() => { if (confirmChoose) chooseMut.mutate(confirmChoose.responseId); setConfirmChoose(null); }}
+        onCancel={() => setConfirmChoose(null)}
+      />
     </div>
   );
 }

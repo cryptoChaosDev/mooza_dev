@@ -631,6 +631,7 @@ export const orderAPI = {
   getIncomingResponses: () => api.get('/orders/responses/incoming'),
   offer: (id: string, executorId: string) => api.post(`/orders/${id}/offer`, { executorId }),
   createDeal: (id: string, responseId: string) => api.post(`/orders/${id}/responses/${responseId}/deal`, {}),
+  chooseExecutor: (id: string, responseId: string) => api.post(`/orders/${id}/responses/${responseId}/choose`, {}),
   uploadReferences: (id: string, formData: FormData) => api.post(`/orders/${id}/references`, formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   deleteReference: (id: string, fileId: string) => api.delete(`/orders/${id}/references/${fileId}`),
 };

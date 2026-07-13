@@ -20,6 +20,7 @@ import BadgeTooltip from '../components/BadgeTooltip';
 import ConnectionRequestModal from '../components/ConnectionRequestModal';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConfirmDialog from '../components/ConfirmDialog';
+import GroupedFilterChips from '../components/GroupedFilterChips';
 import ReviewsBlock from '../components/ReviewsBlock';
 import { useAuthStore } from '../stores/authStore';
 import { useScrollLock } from '../lib/scrollLock';
@@ -539,15 +540,7 @@ export default function UserProfilePage() {
                         >
                           {up.profession?.name}
                         </button>
-                        {cfvs.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1">
-                            {cfvs.map((cfv: any) => (
-                              <span key={cfv.id} className="text-[10px] bg-slate-700/50 text-slate-400 px-2 py-0.5 rounded-full">
-                                {cfv.value}
-                              </span>
-                            ))}
-                          </div>
-                        )}
+                        <GroupedFilterChips values={cfvs} />
                       </div>
                     );
                   })}

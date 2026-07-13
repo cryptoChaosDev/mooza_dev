@@ -83,6 +83,7 @@ const buildFeedInclude = (userId: string | undefined) => {
       budgetTo: true,
       deadline: true,
       status: true,
+      executorId: true,
       service: { select: { name: true, section: { select: { name: true } } } },
     },
   },

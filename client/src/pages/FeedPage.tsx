@@ -601,11 +601,15 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                     <div className="p-3.5 space-y-2.5">
                       <div className="flex items-start justify-between gap-2">
                         <p className="text-base font-bold text-white leading-snug min-w-0 break-words [overflow-wrap:anywhere]">{orderTitle}</p>
-                        {order.status === 'archived' && (
+                        {order.status === 'archived' ? (
                           <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-700/70 text-slate-300 border border-slate-600/60">
                             В архиве
                           </span>
-                        )}
+                        ) : order.executorId ? (
+                          <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                            ✓ Исполнитель выбран
+                          </span>
+                        ) : null}
                       </div>
                       <div className="flex flex-wrap gap-x-5 gap-y-1.5">
                         {sectionName && (

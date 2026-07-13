@@ -617,6 +617,7 @@ model User {
   // Orders (customer-created briefs) — see Order model
   orders         Order[]         @relation("OrderAuthor")
   orderResponses OrderResponse[] @relation("OrderResponder")
+  ordersExecuting Order[]        @relation("OrderExecutor")
 
   // Vacancies (artist-owned hiring posts) — see Vacancy model
   vacancies        Vacancy[]         @relation("VacancyAuthor")
@@ -1471,6 +1472,10 @@ model Order {
   deadline    DateTime?       // null = «Срок не ограничен»
   description String?
   status      String   @default("active")  // active | archived | draft
+  // Выбранный исполнитель: после выбора отклики закрыты, заказ остаётся видимым всем
+  executorId       String?
+  executorChosenAt DateTime?
+  executor User? @relation("OrderExecutor", fields: [executorId], references: [id], onDelete: SetNull)
   author  User    @relation("OrderAuthor", fields: [authorId], references: [id], onDelete: Cascade)
   service Service @relation(fields: [serviceId], references: [id])
   selectedCustomFilterValues CustomFilterValue[]
@@ -1484,6 +1489,7 @@ model Order {
   @@index([serviceId])
   @@index([status])
   @@index([deadline])
+  @@index([executorId])
 }
 
 model OrderResponse {
