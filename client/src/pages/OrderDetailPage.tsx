@@ -14,6 +14,7 @@ import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import AvatarComponent from '../components/Avatar';
 import OrderForm from '../components/OrderForm';
+import OrderStatusChip from '../components/OrderStatusChip';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useScrollLock } from '../lib/scrollLock';
 
@@ -188,9 +189,10 @@ export default function OrderDetailPage() {
             <ArrowLeft size={20} />
           </button>
           <div className="flex items-center gap-2 flex-1 min-w-0">
-            <Briefcase size={16} className="text-rose-400 flex-shrink-0" />
+            <Briefcase size={16} className="text-teal-400 flex-shrink-0" />
             <h1 className="text-base font-bold text-white truncate">{order.title}</h1>
           </div>
+          <OrderStatusChip order={order} className="flex-shrink-0" />
         </div>
 
         {/* Main card */}
@@ -220,7 +222,7 @@ export default function OrderDetailPage() {
           {/* Budget */}
           <div className="flex items-center gap-2">
             <DollarSign size={13} className="text-slate-500 flex-shrink-0" />
-            <span className="text-base font-bold text-rose-400">{budget}</span>
+            <span className="text-base font-bold text-teal-400">{budget}</span>
           </div>
 
           {/* Deadline */}
@@ -292,6 +294,16 @@ export default function OrderDetailPage() {
             {order.status === 'active' && (
               <div className="flex gap-2">
                 {editBtn}
+                {order.executorId && (
+                  <button
+                    onClick={() => statusMut.mutate('done')}
+                    disabled={statusMut.isPending}
+                    className="flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl transition-colors disabled:opacity-50"
+                  >
+                    {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : '✓'}
+                    Выполнен
+                  </button>
+                )}
                 <button
                   onClick={() => statusMut.mutate('archived')}
                   disabled={statusMut.isPending}
@@ -432,7 +444,7 @@ export default function OrderDetailPage() {
                             <AvatarComponent src={u.avatar} name={name} size={36} />
                             <div className="min-w-0">
                               <p className="text-sm font-semibold text-white truncate">{name}</p>
-                              <p className="text-xs text-rose-400 font-semibold">{Number(r.price).toLocaleString('ru')} ₽</p>
+                              <p className="text-xs text-teal-400 font-semibold">{Number(r.price).toLocaleString('ru')} ₽</p>
                             </div>
                           </button>
                           {isChosen && (
