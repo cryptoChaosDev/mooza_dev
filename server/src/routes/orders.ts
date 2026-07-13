@@ -10,7 +10,8 @@ import { matchesLinkSource } from '../lib/materialLinks';
 const router = Router();
 
 const MAX_REFERENCES_BYTES = 20 * 1024 * 1024; // 20MB total per order
-const VALID_STATUS = new Set(['active', 'draft', 'archived']);
+// done = «Выполнен»: заказ завершён исполнителем; пост остаётся в ленте с бейджем.
+const VALID_STATUS = new Set(['active', 'draft', 'archived', 'done']);
 
 // Full order shape returned to the author / single-order view.
 const ORDER_INCLUDE = {
@@ -31,6 +32,8 @@ const ORDER_MINE_SELECT = {
   budgetFrom: true,
   budgetTo: true,
   createdAt: true,
+  executorId: true,
+  executor: { select: { id: true, firstName: true, lastName: true, avatar: true } },
   service: { select: { id: true, name: true, section: { select: { id: true, name: true } } } },
   _count: { select: { responses: true } },
 } as const;
@@ -220,6 +223,37 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res) => {
     res.json({ ok: true });
   } catch (e: any) {
     console.error('[orders] DELETE /:id', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── GET /api/orders/for-service/:serviceId — заказы, подходящие моей услуге ───
+// Владелец услуги видит открытые заказы по той же каталожной услуге: активные,
+// без выбранного исполнителя, опубликованные (есть пост), не свои и куда он ещё
+// не откликался. Обратный матчинг к GET /:id/matches (заказ→исполнители).
+router.get('/for-service/:serviceId', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const meId = req.userId!;
+    const orders = await prisma.order.findMany({
+      where: {
+        serviceId: req.params.serviceId,
+        status: 'active',
+        executorId: null,
+        authorId: { not: meId },
+        posts: { some: { type: 'order' } },
+        responses: { none: { executorId: meId } },
+      },
+      select: {
+        id: true, title: true, budgetFrom: true, budgetTo: true, deadline: true, createdAt: true,
+        author: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+        _count: { select: { responses: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+    res.json(orders);
+  } catch (e: any) {
+    console.error('[orders] GET /for-service/:serviceId', e);
     res.status(500).json({ error: e.message });
   }
 });

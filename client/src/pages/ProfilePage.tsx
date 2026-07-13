@@ -18,6 +18,7 @@ import ConnectionCard from '../components/ConnectionCard';
 
 import ConfirmDialog from '../components/ConfirmDialog';
 import GroupedFilterChips from '../components/GroupedFilterChips';
+import OrderStatusChip from '../components/OrderStatusChip';
 import BadgeTooltip from '../components/BadgeTooltip';
 import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
@@ -1801,49 +1802,44 @@ export default function ProfilePage() {
               </div>
 
               <div className="p-3 space-y-3">
-                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-                  {/* Add tile — always first */}
-                  <button
-                    onClick={openAddServiceForm}
-                    className="flex flex-col gap-2 flex-shrink-0 group"
-                    style={{ width: 'calc((100% - 24px) / 3.5)' }}
-                  >
-                    <div className="w-full aspect-square rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-primary-500/50 group-hover:bg-primary-500/5 transition-all">
-                      <Plus size={16} className="text-slate-500 group-hover:text-primary-400 transition-colors" />
-                    </div>
-                    <span className="text-[10px] text-slate-500 group-hover:text-slate-400 transition-colors text-center leading-tight">Добавить</span>
-                  </button>
-
+                {/* Компактные строки вместо «квадратов» — целостно с остальным профилем */}
+                <div className="divide-y divide-slate-800/60">
                   {servicesFlat.map((us: any) => {
                     const price = us.priceFrom != null || us.priceTo != null
-                      ? [us.priceFrom != null ? `от ${us.priceFrom}₽` : null, us.priceTo != null ? `до ${us.priceTo}₽` : null].filter(Boolean).join(' ')
-                      : null;
+                      ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
+                      : 'По договорённости';
                     const stateIdx = userServices.findIndex(s => s.serviceId === us.serviceId);
                     return (
-                      <div key={us.id} className="flex flex-col gap-0 flex-shrink-0 relative group" style={{ width: 'calc((100% - 24px) / 3.5)' }}>
+                      <div key={us.id} className="flex items-center gap-3 py-2.5 group">
+                        <div className="w-1 self-stretch rounded-full bg-primary-500/60 flex-shrink-0" />
                         <button
                           onClick={() => editingServices && stateIdx >= 0 ? openEditServiceForm(stateIdx) : navigate(`/services/${us.id}`)}
-                          className="flex flex-col gap-0 text-left w-full"
+                          className="flex-1 min-w-0 text-left"
                         >
-                          <div className="w-full aspect-square rounded-xl bg-gradient-to-br from-primary-900/80 to-slate-800/80 border border-primary-700/30 flex items-center justify-center p-2 group-hover:border-primary-500/50 transition-colors overflow-hidden">
-                            {editingServices ? <Edit3 size={16} className="text-primary-400 flex-shrink-0" /> : <Briefcase size={16} className="text-primary-400 flex-shrink-0" />}
-                          </div>
-                          <div className="w-full mt-1.5">
-                            <p className="text-[10px] font-semibold text-white leading-tight line-clamp-2">{us.name || us.service?.name}</p>
-                            {price && <p className="text-[9px] text-primary-400 leading-tight mt-0.5">{price}</p>}
-                          </div>
+                          <p className="text-sm font-semibold text-white truncate">{us.name || us.service?.name}</p>
+                          <p className="text-xs text-slate-500 truncate">
+                            {[us.service?.section?.name, price].filter(Boolean).join(' · ')}
+                          </p>
                         </button>
-                        {editingServices && stateIdx >= 0 && (
+                        {editingServices && stateIdx >= 0 ? (
                           <button
                             onClick={() => setConfirmDeleteServiceIdx(stateIdx)}
-                            className="absolute top-1 right-1 p-1 rounded-full bg-slate-900/90 border border-slate-700 text-slate-300 hover:text-red-400 transition-colors z-10"
+                            className="p-1.5 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"
+                            title="Удалить услугу"
                           >
-                            <X size={10} />
+                            <X size={14} />
                           </button>
+                        ) : editingServices ? null : (
+                          <span className="text-slate-600 flex-shrink-0">›</span>
                         )}
                       </div>
                     );
                   })}
+                  <button onClick={openAddServiceForm} className="w-full flex items-center gap-3 py-2.5 text-left group">
+                    <div className="w-1 self-stretch rounded-full bg-slate-700/60 flex-shrink-0" />
+                    <Plus size={14} className="text-slate-500 group-hover:text-primary-400 transition-colors flex-shrink-0" />
+                    <span className="text-sm text-slate-500 group-hover:text-slate-300 transition-colors">Добавить услугу</span>
+                  </button>
                 </div>
 
                 {serviceFormOpen !== null && createPortal(
@@ -1862,7 +1858,7 @@ export default function ProfilePage() {
             {/* ── Orders card — tile slider ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                <ClipboardList size={14} className="text-rose-400" />
+                <ClipboardList size={14} className="text-teal-400" />
                 <span className="text-sm font-semibold text-white">Мои заказы</span>
                 {activeOrdersCount > 0 && <span className="text-xs text-slate-500">{activeOrdersCount}</span>}
                 {myOrders.length > 0 && (
@@ -1873,40 +1869,32 @@ export default function ProfilePage() {
               </div>
 
               <div className="p-3 space-y-3">
-                <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-                  {/* Add tile — always first */}
-                  <button
-                    onClick={() => setOrderFormOpen(true)}
-                    className="flex flex-col gap-2 flex-shrink-0 group"
-                    style={{ width: 'calc((100% - 24px) / 3.5)' }}
-                  >
-                    <div className="w-full aspect-square rounded-xl border-2 border-dashed border-slate-700 flex items-center justify-center group-hover:border-rose-500/50 group-hover:bg-rose-500/5 transition-all">
-                      <Plus size={16} className="text-slate-500 group-hover:text-rose-400 transition-colors" />
-                    </div>
-                    <span className="text-[10px] text-slate-500 group-hover:text-slate-400 transition-colors text-center leading-tight">Добавить</span>
-                  </button>
-
+                {/* Компактные строки со статусом жизненного цикла заказа */}
+                <div className="divide-y divide-slate-800/60">
                   {myOrders.map((o: any) => {
                     const oSection = o.service?.section?.name || '';
-                    const oDeadline = o.deadline ? new Date(o.deadline).toLocaleDateString('ru-RU') : 'Срок не ограничен';
+                    const oDeadline = o.deadline ? `до ${new Date(o.deadline).toLocaleDateString('ru-RU')}` : 'срок не ограничен';
                     return (
                       <button
                         key={o.id}
                         onClick={() => navigate(`/orders/${o.id}`)}
-                        className="flex flex-col gap-0 flex-shrink-0 group text-left"
-                        style={{ width: 'calc((100% - 24px) / 3.5)' }}
+                        className="w-full flex items-center gap-3 py-2.5 text-left hover:bg-slate-800/20 -mx-1 px-1 rounded-lg transition-colors"
                       >
-                        <div className="w-full aspect-square rounded-xl bg-gradient-to-br from-rose-900/60 to-slate-800/80 border border-rose-700/30 flex items-center justify-center p-2 group-hover:border-rose-500/50 transition-colors overflow-hidden">
-                          <ClipboardList size={16} className="text-rose-400 flex-shrink-0" />
+                        <div className="w-1 self-stretch rounded-full bg-teal-500/60 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-white truncate">{o.title}</p>
+                          <p className="text-xs text-slate-500 truncate">{[oSection, oDeadline].filter(Boolean).join(' · ')}</p>
                         </div>
-                        <div className="w-full mt-1.5">
-                          <p className="text-[10px] font-semibold text-white leading-tight line-clamp-2">{o.title}</p>
-                          {oSection && <p className="text-[9px] text-slate-500 leading-tight mt-0.5 truncate">{oSection}</p>}
-                          <p className="text-[9px] text-rose-400/90 leading-tight mt-0.5 truncate">{oDeadline}</p>
-                        </div>
+                        <OrderStatusChip order={o} className="flex-shrink-0" />
+                        <span className="text-slate-600 flex-shrink-0">›</span>
                       </button>
                     );
                   })}
+                  <button onClick={() => setOrderFormOpen(true)} className="w-full flex items-center gap-3 py-2.5 text-left group">
+                    <div className="w-1 self-stretch rounded-full bg-slate-700/60 flex-shrink-0" />
+                    <Plus size={14} className="text-slate-500 group-hover:text-teal-400 transition-colors flex-shrink-0" />
+                    <span className="text-sm text-slate-500 group-hover:text-slate-300 transition-colors">Новый заказ</span>
+                  </button>
                 </div>
 
                 {orderFormOpen && createPortal(

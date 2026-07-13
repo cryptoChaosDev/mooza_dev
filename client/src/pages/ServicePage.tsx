@@ -6,7 +6,7 @@ import {
   ArrowLeft, Briefcase, DollarSign, MapPin, MessageCircle,
   Archive, ArchiveRestore, Trash2, Loader2, HandshakeIcon, Send, Pencil, X, Check,
 } from 'lucide-react';
-import { userAPI, messageAPI } from '../lib/api';
+import { userAPI, messageAPI, orderAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { useAuthStore } from '../stores/authStore';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -52,6 +52,14 @@ export default function ServicePage() {
     queryKey: ['user-service', serviceId],
     queryFn: async () => { const { data } = await userAPI.getUserService(serviceId!); return data as any; },
     enabled: !!serviceId,
+  });
+
+  // «Подходящие заказы» — открытые заказы по той же каталожной услуге (владельцу).
+  // Хук ДО ранних return'ов (правила хуков); enabled сам отсекает не-владельца.
+  const { data: matchingOrders = [] } = useQuery<any[]>({
+    queryKey: ['orders-for-service', us?.serviceId],
+    queryFn: async () => { const { data } = await orderAPI.forService(us.serviceId); return data as any[]; },
+    enabled: !!us?.serviceId && !!me?.id && us?.user?.id === me.id,
   });
 
   const statusMut = useMutation({
@@ -260,6 +268,42 @@ export default function ServicePage() {
             </div>
           )}
         </div>
+
+        {/* ── Подходящие заказы (владельцу): открытые заказы по этой услуге ── */}
+        {isOwner && matchingOrders.length > 0 && (
+          <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-2.5">
+            <div className="flex items-center gap-2">
+              <Briefcase size={15} className="text-teal-400" />
+              <h3 className="text-sm font-bold text-white">Подходящие заказы</h3>
+              <span className="px-1.5 py-0.5 bg-teal-500/15 text-teal-400 text-[11px] rounded-full font-semibold">{matchingOrders.length}</span>
+            </div>
+            <p className="text-xs text-slate-500 -mt-1">Открытые заказы по вашей услуге — откликнитесь, пока не выбрали другого.</p>
+            <div className="divide-y divide-slate-800/60">
+              {matchingOrders.map((o: any) => (
+                <button
+                  key={o.id}
+                  onClick={() => navigate(`/orders/${o.id}`)}
+                  className="w-full flex items-center gap-3 py-2.5 text-left hover:bg-slate-800/30 -mx-1 px-1 rounded-lg transition-colors"
+                >
+                  <div className="w-1 self-stretch rounded-full bg-teal-500/60 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{o.title}</p>
+                    <p className="text-xs text-slate-500 truncate">
+                      {[
+                        (o.budgetFrom != null || o.budgetTo != null)
+                          ? [o.budgetFrom != null ? `от ${Number(o.budgetFrom).toLocaleString('ru')} ₽` : null, o.budgetTo != null ? `до ${Number(o.budgetTo).toLocaleString('ru')} ₽` : null].filter(Boolean).join(' ')
+                          : 'По договорённости',
+                        o.deadline ? `до ${new Date(o.deadline).toLocaleDateString('ru-RU')}` : null,
+                        `откликов: ${o._count?.responses ?? 0}`,
+                      ].filter(Boolean).join(' · ')}
+                    </p>
+                  </div>
+                  <span className="text-slate-600 flex-shrink-0">›</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ── OWNER ACTIONS ── */}
         {isOwner && (

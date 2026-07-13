@@ -605,9 +605,13 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                           <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-700/70 text-slate-300 border border-slate-600/60">
                             В архиве
                           </span>
-                        ) : order.executorId ? (
+                        ) : order.status === 'done' ? (
                           <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                            ✓ Исполнитель выбран
+                            ✓ Выполнен
+                          </span>
+                        ) : order.executorId ? (
+                          <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                            В работе
                           </span>
                         ) : null}
                       </div>
@@ -618,7 +622,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                           </span>
                         )}
                         <span className="text-xs text-slate-400">
-                          Бюджет: <span className="text-rose-300 font-semibold">{budget}</span>
+                          Бюджет: <span className="text-teal-300 font-semibold">{budget}</span>
                         </span>
                         <span className="text-xs text-slate-400">
                           Срок: <span className="text-slate-200">{deadline}</span>
@@ -908,7 +912,7 @@ const POST_TYPE_META: Record<string, { label: string; icon: any; accent: string;
   blog:       { label: 'Блог',              icon: FileText,    accent: '',                                           badge: '' },
   question:   { label: 'Вопрос',            icon: HelpCircle,  accent: 'border-l-2 border-blue-500/60',              badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
   service:    { label: 'Услуга',            icon: Wrench,      accent: 'border-l-2 border-primary-500/60',           badge: 'bg-primary-500/10 text-primary-400 border-primary-500/20' },
-  order:      { label: 'Заказ',             icon: Briefcase,   accent: 'border-l-2 border-rose-500/60',              badge: 'bg-rose-500/10 text-rose-400 border-rose-500/20' },
+  order:      { label: 'Заказ',             icon: Briefcase,   accent: 'border-l-2 border-teal-500/60',              badge: 'bg-teal-500/10 text-teal-400 border-teal-500/20' },
   vacancy:    { label: 'Вакансия',          icon: Megaphone,   accent: 'border-l-2 border-amber-500/60',             badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
   event:      { label: 'Мероприятие',       icon: Calendar,    accent: 'border-l-2 border-purple-500/60',            badge: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
   task:       { label: 'Задача',            icon: CheckSquare, accent: 'border-l-2 border-emerald-500/60',           badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },

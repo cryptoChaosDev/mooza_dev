@@ -7,18 +7,21 @@ import { orderAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import OrderForm from '../components/OrderForm';
+import OrderStatusChip from '../components/OrderStatusChip';
 import { useScrollLock } from '../lib/scrollLock';
 
-type Tab = 'active' | 'archived' | 'draft';
+type Tab = 'active' | 'done' | 'archived' | 'draft';
 
 const TABS: { key: Tab; label: string }[] = [
   { key: 'active', label: 'Активные' },
+  { key: 'done', label: 'Выполненные' },
   { key: 'archived', label: 'В архиве' },
   { key: 'draft', label: 'Черновики' },
 ];
 
 const EMPTY_LABEL: Record<Tab, string> = {
   active: 'Нет активных заказов',
+  done: 'Пока нет выполненных заказов',
   archived: 'Архив пуст',
   draft: 'Нет черновиков',
 };
@@ -70,7 +73,7 @@ export default function OrdersPage() {
             <ArrowLeft size={22} />
           </button>
           <div className="flex items-center gap-2 flex-1">
-            <Briefcase size={16} className="text-rose-400" />
+            <Briefcase size={16} className="text-teal-400" />
             <h1 className="text-base font-bold text-white">Мои заказы</h1>
           </div>
         </div>
@@ -117,13 +120,19 @@ export default function OrdersPage() {
           return (
             <div key={order.id} className="p-4 bg-slate-900/60 border border-slate-800/60 rounded-2xl space-y-3">
               <button onClick={() => navigate(`/orders/${order.id}`)} className="w-full text-left">
-                <p className="text-sm font-semibold text-white truncate">{order.title}</p>
+                <div className="flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold text-white truncate min-w-0">{order.title}</p>
+                  <OrderStatusChip order={order} className="flex-shrink-0" />
+                </div>
                 {sectionName && <p className="text-xs text-slate-500 mt-0.5 truncate">{sectionName}</p>}
+                {order.executor && (
+                  <p className="text-xs text-amber-400/90 mt-0.5 truncate">Исполнитель: {order.executor.firstName} {order.executor.lastName}</p>
+                )}
                 <div className="flex items-center gap-1.5 mt-1.5 text-xs text-slate-400">
                   <Calendar size={12} className="text-slate-500" />
                   <span>{formatDeadline(order.deadline)}</span>
                   {order._count?.responses != null && order._count.responses > 0 && (
-                    <span className="ml-auto text-rose-400">Откликов: {order._count.responses}</span>
+                    <span className="ml-auto text-teal-400">Откликов: {order._count.responses}</span>
                   )}
                 </div>
               </button>
@@ -132,6 +141,16 @@ export default function OrdersPage() {
                 {tab === 'active' && (
                   <>
                     {editBtn}
+                    {order.executorId && (
+                      <button
+                        onClick={() => statusMut.mutate({ id: order.id, status: 'done' })}
+                        disabled={statusMut.isPending}
+                        className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                      >
+                        {statusMut.isPending ? <Loader2 size={13} className="animate-spin" /> : '✓'}
+                        Выполнен
+                      </button>
+                    )}
                     <button
                       onClick={() => statusMut.mutate({ id: order.id, status: 'archived' })}
                       disabled={statusMut.isPending}
