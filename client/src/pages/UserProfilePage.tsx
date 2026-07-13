@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, MessageCircle,
   Crown, BadgeCheck, Ban, X, Zap,
-  Headphones, FileText, FileSpreadsheet, FileArchive, Download, Briefcase,
+  Headphones, FileText, FileSpreadsheet, FileArchive, Download, Briefcase, GraduationCap,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
   Globe, ChevronRight, Flag, Phone, Calendar,
   MoreHorizontal, Share2, Check,
@@ -20,7 +19,6 @@ import BadgeTooltip from '../components/BadgeTooltip';
 import ConnectionRequestModal from '../components/ConnectionRequestModal';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConfirmDialog from '../components/ConfirmDialog';
-import GroupedFilterChips from '../components/GroupedFilterChips';
 import ReviewsBlock from '../components/ReviewsBlock';
 import { useAuthStore } from '../stores/authStore';
 import { useScrollLock } from '../lib/scrollLock';
@@ -73,10 +71,9 @@ export default function UserProfilePage() {
   const [portfolioTab, setPortfolioTab] = useState<'audio' | 'images' | 'other'>('audio');
   const [imageFullscreen, setImageFullscreen] = useState<string | null>(null);
   const [docFullscreen, setDocFullscreen] = useState<{ url: string; name: string } | null>(null);
-  const [selectedProfession, setSelectedProfession] = useState<any>(null);
   const [showAllProfessions, setShowAllProfessions] = useState(false);
   const [confirmRemoveFriend, setConfirmRemoveFriend] = useState(false);
-  useScrollLock(!!imageFullscreen || !!docFullscreen || !!selectedProfession);
+  useScrollLock(!!imageFullscreen || !!docFullscreen);
   const { data: user, isLoading } = useQuery({
     queryKey: ['user', userId],
     queryFn: async () => { const { data } = await userAPI.getUser(userId!); return data; },
@@ -527,7 +524,7 @@ export default function UserProfilePage() {
             {(user.userProfessions?.length ?? 0) > 0 && (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                  <Briefcase size={14} className="text-primary-400" />
+                  <GraduationCap size={14} className="text-fuchsia-400" />
                   <span className="text-sm font-semibold text-white">Профессии</span>
                   <span className="text-xs text-slate-500">{user.userProfessions.length}</span>
                   {user.userProfessions.length > 4 && (
@@ -548,10 +545,10 @@ export default function UserProfilePage() {
                       return (
                         <button
                           key={up.professionId ?? i}
-                          onClick={() => setSelectedProfession(up)}
+                          onClick={() => navigate(`/professions/${user.id}/${up.professionId}`)}
                           className="w-full flex items-center gap-3 py-2.5 text-left hover:bg-slate-800/20 -mx-1 px-1 rounded-lg transition-colors"
                         >
-                          <div className="w-1 self-stretch rounded-full bg-primary-500/60 flex-shrink-0" />
+                          <div className="w-1 self-stretch rounded-full bg-fuchsia-500/60 flex-shrink-0" />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-white truncate">{up.profession?.name}</p>
                             <p className="text-xs text-slate-500 truncate">
@@ -776,64 +773,6 @@ export default function UserProfilePage() {
       </div>
     )}
 
-    {/* ── Profession popup ── */}
-    {selectedProfession && createPortal(
-      <>
-        <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm" onClick={() => setSelectedProfession(null)} />
-        <div
-          className="fixed inset-x-0 bottom-0 z-[71] max-h-[85dvh] flex flex-col bg-slate-900 border-t border-slate-800 rounded-t-3xl"
-          style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
-        >
-          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1 flex-shrink-0" />
-          <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-slate-800 flex-shrink-0">
-            <h3 className="text-base font-bold text-white min-w-0 truncate">{selectedProfession.profession?.name}</h3>
-            <button onClick={() => setSelectedProfession(null)} className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors flex-shrink-0">
-              <X size={18} className="text-slate-400" />
-            </button>
-          </div>
-          <div className="px-5 py-4 flex-1 overflow-y-auto min-h-0 space-y-4">
-            {/* Характеристики — табличный вид, как на карточках Заказа/Услуги */}
-            {(selectedProfession.selectedCustomFilterValues?.length ?? 0) > 0 && (
-              <div>
-                <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Характеристики</p>
-                <GroupedFilterChips values={selectedProfession.selectedCustomFilterValues} />
-              </div>
-            )}
-            {(() => {
-              const related = servicesFlat.filter(
-                (us: any) => us.professionId === selectedProfession.professionId
-              );
-              if (related.length === 0) {
-                return <p className="text-sm text-slate-500 text-center py-4">Нет услуг для этой профессии</p>;
-              }
-              return (
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Услуги по профессии</p>
-                  {related.map((us: any) => (
-                    <button
-                      key={us.id}
-                      onClick={() => { setSelectedProfession(null); navigate(`/services/${us.id}`); }}
-                      className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3 text-left hover:bg-slate-800 transition-colors"
-                    >
-                      <Briefcase size={16} className="text-primary-400 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white">{us.service?.name}</p>
-                        {(us.priceFrom || us.priceTo) && (
-                          <p className="text-xs text-primary-400 mt-0.5">
-                            {[us.priceFrom && `от ${us.priceFrom} ₽`, us.priceTo && `до ${us.priceTo} ₽`].filter(Boolean).join(' ')}
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      </>,
-      document.body
-    )}
 
     <ConfirmDialog
       open={confirmRemoveFriend}
