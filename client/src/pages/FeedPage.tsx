@@ -347,7 +347,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const original = post.repostOf;
 
   return (
-    <div id={`post-${post.id}`} className={`px-4 py-4 hover:bg-slate-900/30 transition-colors ${typeMeta.accent} ${highlight ? 'ring-2 ring-primary-500/40 ring-inset bg-primary-500/5' : ''}`}>
+    <div id={`post-${post.id}`} className={`px-4 py-4 hover:bg-slate-900/30 transition-colors ${highlight ? 'ring-2 ring-primary-500/40 ring-inset bg-primary-500/5' : ''}`}>
       {isRepost && (
         <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-2 ml-1">
           <Repeat2 size={13} className="flex-shrink-0" />
@@ -908,17 +908,19 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
 
 // ─── Post type meta ────────────────────────────────────────────────────────────
 
-const POST_TYPE_META: Record<string, { label: string; icon: any; accent: string; badge: string }> = {
-  blog:       { label: 'Блог',              icon: FileText,    accent: '',                                           badge: '' },
-  question:   { label: 'Вопрос',            icon: HelpCircle,  accent: 'border-l-2 border-blue-500/60',              badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-  service:    { label: 'Услуга',            icon: Wrench,      accent: 'border-l-2 border-primary-500/60',           badge: 'bg-primary-500/10 text-primary-400 border-primary-500/20' },
-  order:      { label: 'Заказ',             icon: Briefcase,   accent: 'border-l-2 border-teal-500/60',              badge: 'bg-teal-500/10 text-teal-400 border-teal-500/20' },
-  vacancy:    { label: 'Вакансия',          icon: Megaphone,   accent: 'border-l-2 border-amber-500/60',             badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
-  event:      { label: 'Мероприятие',       icon: Calendar,    accent: 'border-l-2 border-purple-500/60',            badge: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
-  task:       { label: 'Задача',            icon: CheckSquare, accent: 'border-l-2 border-emerald-500/60',           badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  offer:      { label: 'Предложение',       icon: Lightbulb,   accent: 'border-l-2 border-orange-500/60',            badge: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
-  employment: { label: 'Апдейт занятости', icon: Zap,         accent: 'border-l-2 border-amber-400/60',             badge: 'bg-amber-400/10 text-amber-400 border-amber-400/20' },
-  poll:       { label: 'Опрос',             icon: BarChart3,   accent: 'border-l-2 border-cyan-500/60',              badge: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' },
+// Левой цветовой полоски у постов больше нет (убрана по фидбеку) — тип поста
+// обозначается только бейджем в шапке.
+const POST_TYPE_META: Record<string, { label: string; icon: any; badge: string }> = {
+  blog:       { label: 'Блог',              icon: FileText,    badge: '' },
+  question:   { label: 'Вопрос',            icon: HelpCircle,  badge: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
+  service:    { label: 'Услуга',            icon: Wrench,      badge: 'bg-primary-500/10 text-primary-400 border-primary-500/20' },
+  order:      { label: 'Заказ',             icon: Briefcase,   badge: 'bg-teal-500/10 text-teal-400 border-teal-500/20' },
+  vacancy:    { label: 'Вакансия',          icon: Megaphone,   badge: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
+  event:      { label: 'Мероприятие',       icon: Calendar,    badge: 'bg-purple-500/10 text-purple-400 border-purple-500/20' },
+  task:       { label: 'Задача',            icon: CheckSquare, badge: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
+  offer:      { label: 'Предложение',       icon: Lightbulb,   badge: 'bg-orange-500/10 text-orange-400 border-orange-500/20' },
+  employment: { label: 'Апдейт занятости', icon: Zap,         badge: 'bg-amber-400/10 text-amber-400 border-amber-400/20' },
+  poll:       { label: 'Опрос',             icon: BarChart3,   badge: 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20' },
 };
 
 // ─── Post Type Picker ──────────────────────────────────────────────────────────
