@@ -1,14 +1,11 @@
 import { useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Briefcase, Calendar, Loader2, Archive, Send, Pencil } from 'lucide-react';
 import { orderAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
-import OrderForm from '../components/OrderForm';
 import OrderStatusChip from '../components/OrderStatusChip';
-import { useScrollLock } from '../lib/scrollLock';
 
 type Tab = 'active' | 'done' | 'archived' | 'draft';
 
@@ -34,21 +31,6 @@ export default function OrdersPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('active');
-  const [editingOrder, setEditingOrder] = useState<any>(null);
-  const [editLoadingId, setEditLoadingId] = useState<string | null>(null);
-  useScrollLock(!!editingOrder);
-
-  const openEdit = async (id: string) => {
-    setEditLoadingId(id);
-    try {
-      const { data } = await orderAPI.getOne(id);
-      setEditingOrder(data);
-    } catch (e: any) {
-      toast.error(getApiError(e, 'Не удалось открыть заказ для редактирования'));
-    } finally {
-      setEditLoadingId(null);
-    }
-  };
 
   const { data: orders = [], isLoading } = useQuery<any[]>({
     queryKey: ['orders', 'mine', tab],
@@ -106,14 +88,13 @@ export default function OrdersPage() {
             <button
               onClick={() => hasResponses
                 ? toast.error('Заказ нельзя редактировать — на него уже есть отклики')
-                : openEdit(order.id)}
-              disabled={editLoadingId === order.id}
-              className={`flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium border rounded-lg transition-colors disabled:opacity-50 ${
+                : navigate(`/orders/edit/${order.id}`)}
+                            className={`flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium border rounded-lg transition-colors disabled:opacity-50 ${
                 hasResponses ? 'border-slate-800 text-slate-500' : 'border-slate-700 text-slate-300 hover:text-white'
               }`}
               title={hasResponses ? 'Есть отклики — редактирование недоступно' : 'Редактировать'}
             >
-              {editLoadingId === order.id ? <Loader2 size={13} className="animate-spin" /> : <Pencil size={13} />}
+              <Pencil size={13} />
               Редактировать
             </button>
           );
@@ -165,11 +146,10 @@ export default function OrdersPage() {
                 {tab === 'draft' && (
                   <>
                     <button
-                      onClick={() => openEdit(order.id)}
-                      disabled={editLoadingId === order.id}
-                      className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium border border-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors disabled:opacity-50"
+                      onClick={() => navigate(`/orders/edit/${order.id}`)}
+                                            className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-medium border border-slate-700 text-slate-300 hover:text-white rounded-lg transition-colors disabled:opacity-50"
                     >
-                      {editLoadingId === order.id ? <Loader2 size={13} className="animate-spin" /> : <Pencil size={13} />}
+                      <Pencil size={13} />
                       Редактировать
                     </button>
                     <button
@@ -202,22 +182,6 @@ export default function OrdersPage() {
         })}
       </div>
 
-      {editingOrder && createPortal(
-        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setEditingOrder(null)}>
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
-            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
-            <OrderForm
-              order={editingOrder}
-              onClose={() => {
-                setEditingOrder(null);
-                qc.invalidateQueries({ queryKey: ['orders', 'mine'] });
-              }}
-            />
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   );
 }

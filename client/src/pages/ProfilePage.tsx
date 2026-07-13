@@ -30,8 +30,6 @@ import ReviewsBlock from '../components/ReviewsBlock';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
 import ProfileProgressBar, { profileCompletion } from '../components/ProfileProgressBar';
 import PublicConsentGate from '../components/PublicConsentGate';
-import OrderForm from '../components/OrderForm';
-import ProfessionNotFound from '../components/ProfessionNotFound';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 
@@ -164,7 +162,6 @@ export default function ProfilePage() {
   // entry being edited. null = closed.
   const [serviceFormOpen, setServiceFormOpen] = useState<'add' | number | null>(null);
   // Order ADD form (customer-posted «Заказ») — open/closed.
-  const [orderFormOpen, setOrderFormOpen] = useState(false);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [pending, setPending] = useState<UserServiceEntry>(emptyEntry());
   const [sections, setSections] = useState<any[]>([]);
@@ -267,39 +264,13 @@ export default function ProfilePage() {
 
 
   const [myStandaloneProfessions, setMyStandaloneProfessions] = useState<{ professionId: string; professionName: string }[]>([]);
-  const [editingProfessions, setEditingProfessions] = useState(false);
   const [showJoinArtist, setShowJoinArtist] = useState(false);
-  const [profAddOpen, setProfAddOpen] = useState(false);
-  const [profSearch, setProfSearch] = useState('');
-  const [profSearchResults, setProfSearchResults] = useState<any[]>([]);
-  const [profSearching, setProfSearching] = useState(false);
-  const [savingProfessions, setSavingProfessions] = useState(false);
   // Профессии / Услуги / Заказы открываются модалками (как Вакансии) — блокируем фон.
   useScrollLock(
-    editingProfessions || serviceFormOpen !== null || orderFormOpen ||
+    serviceFormOpen !== null ||
     showPrivacy || !!renamingFile ||
     !!publishDialog || !!updateDialog || !!imageFullscreen || !!docFullscreen,
   );
-  const [profFiltersData, setProfFiltersData] = useState<Record<string, any[]>>({});
-  const [profFilterSelections, setProfFilterSelections] = useState<Record<string, string[]>>({});
-  // Per-profession filter accordions are collapsed by default (profId → open filterIds).
-  const [profOpenFilters, setProfOpenFilters] = useState<Record<string, Set<string>>>({});
-  // Editable profession features (profId → selected feature names) + the catalog.
-  const [profFeatures, setProfFeatures] = useState<Record<string, string[]>>({});
-  const [allFeatures, setAllFeatures] = useState<{ id: string; name: string }[]>([]);
-
-
-  // Flat profession search (Task 1)
-  useEffect(() => {
-    if (!profSearch.trim()) { setProfSearchResults([]); return; }
-    const t = setTimeout(() => {
-      setProfSearching(true);
-      referenceAPI.getProfessions({ search: profSearch.trim(), all: true })
-        .then(r => setProfSearchResults(r.data))
-        .finally(() => setProfSearching(false));
-    }, 250);
-    return () => clearTimeout(t);
-  }, [profSearch]);
 
   // Load the sections catalog when the service form opens (for the autocomplete)
   useEffect(() => {
@@ -307,19 +278,6 @@ export default function ProfilePage() {
       referenceAPI.getSections().then(r => setSections(r.data)).catch(() => {});
     }
   }, [serviceFormOpen, sections.length]);
-
-  // Preload + expand filters for every already-added profession while editing (Task 1)
-  useEffect(() => {
-    if (!editingProfessions) return;
-    myStandaloneProfessions.forEach(p => { loadProfFilters(p.professionId); });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingProfessions, myStandaloneProfessions]);
-
-  // Load the global profession-features catalog once, when the editor opens.
-  useEffect(() => {
-    if (!editingProfessions || allFeatures.length) return;
-    referenceAPI.getProfessionFeatures().then(r => setAllFeatures(r.data)).catch(() => {});
-  }, [editingProfessions, allFeatures.length]);
 
   const { data: profile, isLoading } = useQuery({
     queryKey: ['profile'],
@@ -349,16 +307,6 @@ export default function ProfilePage() {
           professionName: up.profession?.name || '',
         })) || []
       );
-      if (data.userProfessions) {
-        const selections: Record<string, string[]> = {};
-        const feats: Record<string, string[]> = {};
-        data.userProfessions.forEach((up: any) => {
-          selections[up.professionId] = up.selectedCustomFilterValues?.map((cfv: any) => cfv.id) || [];
-          feats[up.professionId] = up.features || [];
-        });
-        setProfFilterSelections(selections);
-        setProfFeatures(feats);
-      }
       setPortfolioFiles(data.portfolioFiles ?? []);
       setPortfolioLinks(data.portfolioLinks ?? []);
       setUserServices(
@@ -577,57 +525,6 @@ export default function ProfilePage() {
     setCatalogSearch('');
   };
 
-  const loadProfFilters = async (profId: string) => {
-    if (profFiltersData[profId]) return;
-    try {
-      const { data } = await referenceAPI.getProfessionFilters(profId);
-      setProfFiltersData(prev => ({ ...prev, [profId]: data }));
-    } catch {}
-  };
-
-  const toggleProfFilterValue = (profId: string, valueId: string) => {
-    setProfFilterSelections(prev => {
-      const cur = prev[profId] || [];
-      const next = cur.includes(valueId) ? cur.filter(v => v !== valueId) : [...cur, valueId];
-      return { ...prev, [profId]: next };
-    });
-  };
-
-  const toggleProfFilterOpen = (profId: string, filterId: string) => {
-    setProfOpenFilters(prev => {
-      const cur = new Set(prev[profId] || []);
-      if (cur.has(filterId)) cur.delete(filterId); else cur.add(filterId);
-      return { ...prev, [profId]: cur };
-    });
-  };
-
-  const toggleProfFeature = (profId: string, name: string) => {
-    setProfFeatures(prev => {
-      const cur = prev[profId] || [];
-      const next = cur.includes(name) ? cur.filter(f => f !== name) : [...cur, name];
-      return { ...prev, [profId]: next };
-    });
-  };
-
-  const handleSaveProfessions = async (list: { professionId: string; professionName: string }[]) => {
-    setSavingProfessions(true);
-    try {
-      await updateMutation.mutateAsync({
-        userProfessions: list.map(p => ({
-          professionId: p.professionId,
-          features: profFeatures[p.professionId] || [],
-          selectedCustomFilterValueIds: profFilterSelections[p.professionId] || [],
-        })),
-      });
-      queryClient.invalidateQueries({ queryKey: ['profile'] });
-      setEditingProfessions(false);
-      setProfAddOpen(false);
-      setProfSearch('');
-    } finally {
-      setSavingProfessions(false);
-    }
-  };
-
   // Value TEXTS the user already selected across their professions — used to
   // partially auto-fill matching service filter values when a service is picked.
   const ownedFilterValueTexts: string[] = (profile?.userProfessions ?? [])
@@ -822,24 +719,6 @@ export default function ProfilePage() {
     setSearchParams(next, { replace: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, userServices]);
-
-  // Deep-link со страницы профессии (карандаш): ?editProfessions=<professionId|1>.
-  // Открывает редактор и прокручивает к блоку конкретной профессии.
-  useEffect(() => {
-    const target = searchParams.get('editProfessions');
-    if (!target) return;
-    setEditingProfessions(true);
-    if (target !== '1') {
-      // ждём рендер модалки, затем скроллим к нужной профессии
-      setTimeout(() => {
-        document.getElementById(`edit-prof-${target}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 300);
-    }
-    const next = new URLSearchParams(searchParams);
-    next.delete('editProfessions');
-    setSearchParams(next, { replace: true });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
 
   // ── Consent to public distribution of PD (152-ФЗ ст. 10.1) ──────────────────
   // One-time gate before the first public action (publish service / upload
@@ -1608,169 +1487,6 @@ export default function ProfilePage() {
                 )}
               </div>
 
-              {editingProfessions && createPortal(
-                <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => { setEditingProfessions(false); setProfAddOpen(false); setProfSearch(''); }}>
-                  <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-                  <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
-                    <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
-                    <p className="text-sm font-semibold text-white mb-3">Профессии</p>
-                    <div className="space-y-3">
-                  {/* Existing professions */}
-                  {myStandaloneProfessions.length > 0 && (
-                    <div className="space-y-2">
-                      {myStandaloneProfessions.map((p, i) => (
-                        <div key={p.professionId} id={`edit-prof-${p.professionId}`} className="bg-primary-500/5 border border-primary-500/20 rounded-xl p-2">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-xs text-primary-300 font-medium flex-1">{p.professionName}</span>
-                            <button onClick={() => { setMyStandaloneProfessions(prev => prev.filter((_, idx) => idx !== i)); }} className="text-primary-400/60 hover:text-red-400 transition-colors">
-                              <X size={12} />
-                            </button>
-                          </div>
-                          {/* Each filter is a collapsible accordion — collapsed by default. */}
-                          {!profFiltersData[p.professionId] && (
-                            <p className="text-[10px] text-slate-600 mt-1.5">Загрузка параметров...</p>
-                          )}
-                          {(profFiltersData[p.professionId]?.length > 0 || allFeatures.length > 0) && (
-                            <div className="mt-2">
-                              {(profFiltersData[p.professionId] || []).map((filter: any) => {
-                                const sel = profFilterSelections[p.professionId] || [];
-                                const selCount = filter.values.filter((v: any) => sel.includes(v.id)).length;
-                                const open = profOpenFilters[p.professionId]?.has(filter.id);
-                                return (
-                                  <div key={filter.id} className="border-b border-slate-800/60 last:border-0">
-                                    <button type="button"
-                                      onClick={() => toggleProfFilterOpen(p.professionId, filter.id)}
-                                      className="w-full flex items-center gap-1.5 py-1.5 text-left">
-                                      <span className="text-xs text-slate-400 flex-1">{filter.name}</span>
-                                      {selCount > 0 && <span className="text-[10px] bg-primary-600/80 text-white px-1.5 py-0.5 rounded-full">{selCount}</span>}
-                                      <ChevronDown size={13} className={`text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
-                                    </button>
-                                    {open && (
-                                      <div className="flex flex-wrap gap-1.5 pb-2">
-                                        {filter.values.map((v: any) => {
-                                          const isSelected = sel.includes(v.id);
-                                          return (
-                                            <button key={v.id} type="button"
-                                              onClick={() => toggleProfFilterValue(p.professionId, v.id)}
-                                              className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
-                                                isSelected ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                                              }`}>
-                                              {v.value}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })}
-                              {/* Profession features (e.g. «Начинающий», «Платно») — collapsible. */}
-                              {allFeatures.length > 0 && (() => {
-                                const selF = profFeatures[p.professionId] || [];
-                                const open = profOpenFilters[p.professionId]?.has('__features__');
-                                return (
-                                  <div className="border-b border-slate-800/60 last:border-0">
-                                    <button type="button"
-                                      onClick={() => toggleProfFilterOpen(p.professionId, '__features__')}
-                                      className="w-full flex items-center gap-1.5 py-1.5 text-left">
-                                      <span className="text-xs text-slate-400 flex-1">Особенности</span>
-                                      {selF.length > 0 && <span className="text-[10px] bg-primary-600/80 text-white px-1.5 py-0.5 rounded-full">{selF.length}</span>}
-                                      <ChevronDown size={13} className={`text-slate-500 transition-transform ${open ? 'rotate-180' : ''}`} />
-                                    </button>
-                                    {open && (
-                                      <div className="flex flex-wrap gap-1.5 pb-2">
-                                        {allFeatures.map((f) => {
-                                          const isSelected = selF.includes(f.name);
-                                          return (
-                                            <button key={f.id} type="button"
-                                              onClick={() => toggleProfFeature(p.professionId, f.name)}
-                                              className={`px-2.5 py-1 rounded-lg text-xs transition-all ${
-                                                isSelected ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                                              }`}>
-                                              {f.name}
-                                            </button>
-                                          );
-                                        })}
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              })()}
-                            </div>
-                          )}
-                          {profFiltersData[p.professionId]?.length === 0 && allFeatures.length === 0 && (
-                            <p className="text-[10px] text-slate-600 mt-1.5">Нет параметров для этой профессии</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Add flow — flat profession search */}
-                  {!profAddOpen && (
-                    <button onClick={() => { setProfAddOpen(true); setProfSearch(''); setProfSearchResults([]); }} className="w-full flex items-center justify-center gap-1.5 py-2.5 border border-dashed border-slate-600 rounded-xl text-slate-400 hover:text-primary-400 hover:border-primary-500/50 transition-all text-sm">
-                      <Plus size={14} />Добавить профессию
-                    </button>
-                  )}
-                  {profAddOpen && (
-                    <div className="border border-dashed border-primary-500/40 rounded-xl bg-primary-500/5 p-3 space-y-2">
-                      <div className="relative">
-                        <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                        <input
-                          autoFocus
-                          type="text"
-                          value={profSearch}
-                          onChange={e => setProfSearch(e.target.value)}
-                          placeholder="Поиск профессии..."
-                          className="w-full pl-8 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
-                        />
-                        {profSearching && <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 animate-spin" />}
-                      </div>
-                      {(() => {
-                        // Уже добавленные профессии в подборе не показываем вовсе
-                        const available = profSearchResults.filter((p: any) => !myStandaloneProfessions.some(x => x.professionId === p.id));
-                        if (profSearch.trim() && !profSearching && profSearchResults.length === 0) {
-                          return <ProfessionNotFound initialQuery={profSearch} compact />;
-                        }
-                        if (profSearch.trim() && !profSearching && profSearchResults.length > 0 && available.length === 0) {
-                          return <p className="text-xs text-slate-500 py-1">Все найденные профессии уже добавлены.</p>;
-                        }
-                        if (available.length === 0) return null;
-                        return (
-                        <div className="max-h-52 overflow-y-auto flex flex-wrap gap-1.5">
-                          {available.map((p: any) => (
-                              <button key={p.id} type="button"
-                                onClick={() => {
-                                  setMyStandaloneProfessions(prev => [...prev, { professionId: p.id, professionName: p.name }]);
-                                  // Immediately load + expand this profession's filters
-                                  loadProfFilters(p.id);
-                                  setProfAddOpen(false);
-                                  setProfSearch('');
-                                  setProfSearchResults([]);
-                                }}
-                                className="flex items-center gap-1 px-3 py-1.5 rounded-lg border transition-all text-xs font-medium bg-slate-700/30 border-slate-600/50 text-slate-300 hover:bg-primary-500/10 hover:border-primary-500/40 hover:text-primary-300"
-                              >
-                                <Plus size={11} />{p.name}
-                              </button>
-                          ))}
-                        </div>
-                        );
-                      })()}
-                      <button onClick={() => { setProfAddOpen(false); setProfSearch(''); setProfSearchResults([]); }} className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Отмена</button>
-                    </div>
-                  )}
-
-                  <div className="flex gap-2 pt-1">
-                    <button onClick={() => { setEditingProfessions(false); setProfAddOpen(false); setProfSearch(''); setMyStandaloneProfessions(profile?.userProfessions?.map((up: any) => ({ professionId: up.professionId, professionName: up.profession?.name || '' })) || []); }} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
-                    <button onClick={() => handleSaveProfessions(myStandaloneProfessions)} disabled={savingProfessions} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
-                      {savingProfessions ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
-                    </button>
-                  </div>
-                    </div>
-                  </div>
-                </div>,
-                document.body
-              )}
               <div className="p-3">
                 {/* Компактные строки — как Услуги/Заказы; детали внутри карточки профессии */}
                 <div className="divide-y divide-slate-800/60">
@@ -1796,7 +1512,7 @@ export default function ProfilePage() {
                     );
                   })}
                   <button
-                    onClick={() => { setEditingProfessions(true); setProfAddOpen(false); setProfSearch(''); }}
+                    onClick={() => navigate('/professions/new')}
                     className="w-full flex items-center gap-3 py-2.5 text-left group"
                   >
                     <div className="w-1 self-stretch rounded-full bg-slate-700/60 flex-shrink-0" />
@@ -1906,23 +1622,13 @@ export default function ProfilePage() {
                       </button>
                     );
                   })}
-                  <button onClick={() => setOrderFormOpen(true)} className="w-full flex items-center gap-3 py-2.5 text-left group">
+                  <button onClick={() => navigate('/orders/new')} className="w-full flex items-center gap-3 py-2.5 text-left group">
                     <div className="w-1 self-stretch rounded-full bg-slate-700/60 flex-shrink-0" />
                     <Plus size={14} className="text-slate-500 group-hover:text-teal-400 transition-colors flex-shrink-0" />
                     <span className="text-sm text-slate-500 group-hover:text-slate-300 transition-colors">Новый заказ</span>
                   </button>
                 </div>
 
-                {orderFormOpen && createPortal(
-                  <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setOrderFormOpen(false)}>
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-                    <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl" onClick={e => e.stopPropagation()} style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 0px))' }}>
-                      <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
-                      <OrderForm onClose={() => setOrderFormOpen(false)} />
-                    </div>
-                  </div>,
-                  document.body
-                )}
               </div>
             </div>
 
