@@ -7,7 +7,7 @@ import { useAuthStore } from '../stores/authStore';
 import AudioPlayer from '../components/AudioPlayer';
 import {
   Camera, Save, Check, X, MapPin, Briefcase, Star, LogOut,
-  Globe, Calendar,
+  Globe, Calendar, GraduationCap,
   Headphones, Edit3, Plus,
   FileText, FileSpreadsheet, FileArchive, Download, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2, Zap, Search,
   Music2, HandshakeIcon, Eye, Phone, Shield, ChevronDown, ChevronUp,
@@ -17,7 +17,6 @@ import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConnectionCard from '../components/ConnectionCard';
 
 import ConfirmDialog from '../components/ConfirmDialog';
-import GroupedFilterChips from '../components/GroupedFilterChips';
 import OrderStatusChip from '../components/OrderStatusChip';
 import BadgeTooltip from '../components/BadgeTooltip';
 import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
@@ -270,7 +269,6 @@ export default function ProfilePage() {
   const [myStandaloneProfessions, setMyStandaloneProfessions] = useState<{ professionId: string; professionName: string }[]>([]);
   const [editingProfessions, setEditingProfessions] = useState(false);
   const [showAllProfessions, setShowAllProfessions] = useState(false);
-  const [selectedProfession, setSelectedProfession] = useState<{ professionId: string; professionName: string } | null>(null);
   const [showJoinArtist, setShowJoinArtist] = useState(false);
   const [profAddOpen, setProfAddOpen] = useState(false);
   const [profSearch, setProfSearch] = useState('');
@@ -280,7 +278,7 @@ export default function ProfilePage() {
   // Профессии / Услуги / Заказы открываются модалками (как Вакансии) — блокируем фон.
   useScrollLock(
     editingProfessions || serviceFormOpen !== null || orderFormOpen ||
-    showPrivacy || !!renamingFile || !!selectedProfession ||
+    showPrivacy || !!renamingFile ||
     !!publishDialog || !!updateDialog || !!imageFullscreen || !!docFullscreen,
   );
   const [profFiltersData, setProfFiltersData] = useState<Record<string, any[]>>({});
@@ -825,6 +823,16 @@ export default function ProfilePage() {
     setSearchParams(next, { replace: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, userServices]);
+
+  // Deep-link со страницы профессии (карандаш): ?editProfessions=1 → открыть редактор.
+  useEffect(() => {
+    if (searchParams.get('editProfessions') !== '1') return;
+    setEditingProfessions(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete('editProfessions');
+    setSearchParams(next, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
 
   // ── Consent to public distribution of PD (152-ФЗ ст. 10.1) ──────────────────
   // One-time gate before the first public action (publish service / upload
@@ -1577,10 +1585,10 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* ── Professions card ── */}
+            {/* ── Professions card — акцент фуксия (отличен от фиолетовых услуг) ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
-                <Briefcase size={14} className="text-primary-400" />
+                <GraduationCap size={14} className="text-fuchsia-400" />
                 <span className="text-sm font-semibold text-white">Профессии</span>
                 {myStandaloneProfessions.length > 0 && <span className="text-xs text-slate-500">{myStandaloneProfessions.length}</span>}
                 {myStandaloneProfessions.length > 4 && (
@@ -1761,10 +1769,10 @@ export default function ProfilePage() {
                     return (
                       <button
                         key={p.professionId}
-                        onClick={() => setSelectedProfession(p)}
+                        onClick={() => navigate(`/professions/${profile?.id}/${p.professionId}`)}
                         className="w-full flex items-center gap-3 py-2.5 text-left hover:bg-slate-800/20 -mx-1 px-1 rounded-lg transition-colors"
                       >
-                        <div className="w-1 self-stretch rounded-full bg-primary-500/60 flex-shrink-0" />
+                        <div className="w-1 self-stretch rounded-full bg-fuchsia-500/60 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold text-white truncate">{p.professionName}</p>
                           <p className="text-xs text-slate-500 truncate">
@@ -2322,64 +2330,6 @@ export default function ProfilePage() {
           </div>
         </div>
       </div>,
-      document.body
-    )}
-
-    {/* Profession detail popup */}
-    {selectedProfession && createPortal(
-      <>
-        <div className="fixed inset-0 z-[70] bg-black/50 backdrop-blur-sm" onClick={() => setSelectedProfession(null)} />
-        <div className="fixed inset-x-0 bottom-0 z-[71] max-h-[85dvh] flex flex-col bg-slate-900 border-t border-slate-800 rounded-t-3xl" style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}>
-          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 mb-1 flex-shrink-0" />
-          <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-slate-800 flex-shrink-0">
-            <h3 className="text-base font-bold text-white min-w-0 truncate">{selectedProfession.professionName}</h3>
-            <button onClick={() => setSelectedProfession(null)} className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors flex-shrink-0">
-              <X size={18} className="text-slate-400" />
-            </button>
-          </div>
-          <div className="px-5 py-4 flex-1 overflow-y-auto min-h-0 space-y-4">
-            {/* Характеристики профессии — табличный вид, как на карточках Заказа/Услуги */}
-            {(() => {
-              const profData = profile?.userProfessions?.find((up: any) => up.professionId === selectedProfession.professionId);
-              const cfvs: any[] = profData?.selectedCustomFilterValues || [];
-              if (!cfvs.length) return null;
-              return (
-                <div>
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Характеристики</p>
-                  <GroupedFilterChips values={cfvs} />
-                </div>
-              );
-            })()}
-            {(() => {
-              const relatedServices = (profile?.userServices ?? []).filter(
-                (us: any) => us.profession?.id === selectedProfession.professionId
-              );
-              if (relatedServices.length === 0) {
-                return <p className="text-sm text-slate-500 text-center py-4">Нет добавленных услуг для этой профессии</p>;
-              }
-              return (
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Услуги по профессии</p>
-                  {relatedServices.map((us: any) => (
-                    <button key={us.id} onClick={() => { setSelectedProfession(null); navigate(`/services/${us.id}`); }}
-                      className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3 text-left hover:bg-slate-800 transition-colors">
-                      <Briefcase size={16} className="text-primary-400 flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white">{us.service?.name}</p>
-                        {(us.priceFrom || us.priceTo) && (
-                          <p className="text-xs text-primary-400 mt-0.5">
-                            {[us.priceFrom && `от ${us.priceFrom} ₽`, us.priceTo && `до ${us.priceTo} ₽`].filter(Boolean).join(' ')}
-                          </p>
-                        )}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              );
-            })()}
-          </div>
-        </div>
-      </>,
       document.body
     )}
 
