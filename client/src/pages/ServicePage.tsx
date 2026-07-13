@@ -155,66 +155,61 @@ export default function ServicePage() {
     <div className="min-h-screen bg-slate-950 pb-32">
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
 
-        {/* Back + author */}
+        {/* Шапка — идентично карточке Заказа: стрелка + иконка + название + статус */}
         <div className="flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="p-1.5 rounded-xl hover:bg-slate-800 text-slate-400 hover:text-white transition-all flex-shrink-0">
             <ArrowLeft size={20} />
           </button>
-          {us.user && !isOwner && (
-            <button onClick={() => navigate(`/profile/${us.user.id}`)} className="flex items-center gap-2.5 flex-1 min-w-0 text-left">
-              <div className="w-8 h-8 rounded-full overflow-hidden bg-slate-800 flex-shrink-0">
-                {authorAvatar
-                  ? <img src={authorAvatar} alt={authorName ?? ''} className="w-full h-full object-cover" />
-                  : <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs font-bold">{(authorName?.[0] ?? '?').toUpperCase()}</div>
-                }
-              </div>
-              <div className="min-w-0">
-                <p className="text-sm font-semibold text-white truncate">{authorName}</p>
-                {us.user.nickname && <p className="text-xs text-slate-500 truncate">@{us.user.nickname}</p>}
-              </div>
-            </button>
-          )}
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            <Briefcase size={16} className="text-primary-400 flex-shrink-0" />
+            <h1 className="text-base font-bold text-white truncate">{us.service?.name}</h1>
+          </div>
+          <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0 ${STATUS_COLOR[status]}`}>
+            {STATUS_LABEL[status]}
+          </span>
           {isOwner && (
-            <div className="ml-auto flex items-center gap-2">
-              <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg ${STATUS_COLOR[status]}`}>
-                {STATUS_LABEL[status]}
-              </span>
-              <button
-                onClick={() => {
-                  // Edit via the full profile ServiceForm (the only place that can
-                  // change the catalog section + custom filters). Deep-link by the
-                  // catalog serviceId — ProfilePage keys its services by it.
-                  navigate(`/profile?editService=${us.serviceId}`);
-                }}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all"
-                title="Редактировать"
-              >
-                <Pencil size={14} />
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                // Edit via the full profile ServiceForm (the only place that can
+                // change the catalog section + custom filters). Deep-link by the
+                // catalog serviceId — ProfilePage keys its services by it.
+                navigate(`/profile?editService=${us.serviceId}`);
+              }}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex-shrink-0"
+              title="Редактировать"
+            >
+              <Pencil size={14} />
+            </button>
           )}
         </div>
 
+        {/* Автор (для гостей) — компактной строкой под шапкой */}
+        {us.user && !isOwner && (
+          <button onClick={() => navigate(`/profile/${us.user.id}`)} className="flex items-center gap-2.5 min-w-0 text-left -mt-1">
+            <div className="w-7 h-7 rounded-full overflow-hidden bg-slate-800 flex-shrink-0">
+              {authorAvatar
+                ? <img src={authorAvatar} alt={authorName ?? ''} className="w-full h-full object-cover" />
+                : <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs font-bold">{(authorName?.[0] ?? '?').toUpperCase()}</div>
+              }
+            </div>
+            <span className="text-xs text-slate-400 hover:text-white transition-colors truncate">
+              {authorName}{us.user.nickname ? ` · @${us.user.nickname}` : ''}
+            </span>
+          </button>
+        )}
+
         {/* Main card */}
         <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-5 space-y-4">
-          {/* Service catalog label */}
-          <div className="space-y-0.5">
-            {us.profession?.direction?.fieldOfActivity?.name && (
-              <p className="text-[10px] text-slate-600 uppercase tracking-wider">
-                {us.profession.direction.fieldOfActivity.name} · {us.profession.direction.name}
-              </p>
-            )}
-            {us.profession?.name && (
-              <p className="text-xs font-semibold text-primary-400 uppercase tracking-wider">{us.profession.name}</p>
-            )}
-          </div>
+          {/* Каталожный лейбл — одной приглушённой строкой, как sectionName у Заказа */}
+          {(us.profession?.direction?.fieldOfActivity?.name || us.profession?.name) && (
+            <p className="text-[10px] text-slate-600 uppercase tracking-wider">
+              {[us.profession?.direction?.fieldOfActivity?.name, us.profession?.direction?.name, us.profession?.name]
+                .filter(Boolean).join(' · ')}
+            </p>
+          )}
 
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary-900/60 border border-primary-700/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <Briefcase size={18} className="text-primary-400" />
-            </div>
-            <h1 className="text-xl font-bold text-white leading-tight min-w-0 break-words [overflow-wrap:anywhere]">{us.service?.name}</h1>
-          </div>
+          {/* Заголовок — чистый, без иконки-плитки (идентично Заказу) */}
+          <h1 className="text-xl font-bold text-white leading-tight min-w-0 break-words [overflow-wrap:anywhere]">{us.service?.name}</h1>
 
           {/* Filters — идентично карточке Заказа: «категория: значения» строками */}
           {allFilters.length > 0 && (
