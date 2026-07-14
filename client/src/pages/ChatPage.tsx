@@ -15,6 +15,30 @@ function formatResponseTime(min: number): string {
 }
 import AvatarComponent from '../components/Avatar';
 import AudioPlayer from '../components/AudioPlayer';
+import ChatPicker from '../components/ChatPicker';
+
+// Кликабельные ссылки в тексте сообщений: внешние — в новой вкладке,
+// внутренние (moooza) — в той же.
+const URL_RE = /(https?:\/\/[^\s<>"']+)/g;
+function renderWithLinks(text: string) {
+  const parts = text.split(URL_RE);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) =>
+    /^https?:\/\//.test(part) ? (
+      <a
+        key={i}
+        href={part}
+        target={part.startsWith(window.location.origin) ? undefined : '_blank'}
+        rel="noopener noreferrer"
+        className="underline break-all hover:opacity-80"
+      >
+        {part}
+      </a>
+    ) : (
+      part
+    )
+  );
+}
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
@@ -127,6 +151,8 @@ export default function ChatPage() {
 
   // Context menu (long-press)
   const [contextMenu, setContextMenu] = useState<{ msg: Message; x: number; y: number } | null>(null);
+  // Пересылка сообщения в другой чат
+  const [forwardMsg, setForwardMsg] = useState<Message | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressMoved = useRef(false);
 
@@ -1328,7 +1354,7 @@ export default function ChatPage() {
                                 );
                                 return msg.content ? (
                                   <p className="text-sm leading-relaxed break-words [overflow-wrap:anywhere] whitespace-pre-wrap overflow-hidden">
-                                    {timeMeta}{msg.content}
+                                    {timeMeta}{renderWithLinks(msg.content)}
                                   </p>
                                 ) : (
                                   <div className={`flex items-center justify-end gap-0.5 text-[11px] mt-0.5 ${isMine ? 'text-primary-100/70' : 'text-slate-400'}`}>
@@ -1471,6 +1497,7 @@ export default function ChatPage() {
                   }
                 },
               } : null,
+              { label: 'Переслать', icon: '📤', action: () => { const m = contextMenu.msg; setContextMenu(null); setForwardMsg(m); } },
               contextMenu.msg.content ? { label: 'Скопировать', icon: '📋', action: () => copyText(contextMenu.msg.content) } : null,
               contextMenu.msg.attachmentUrl && contextMenu.msg.attachmentType?.startsWith('image/')
                 ? { label: 'Сохранить фото', icon: '🖼️', action: () => { const a = document.createElement('a'); a.href = `${API_URL}${contextMenu.msg.attachmentUrl}`; a.download = contextMenu.msg.attachmentName || 'photo'; a.click(); setContextMenu(null); } }
@@ -1675,6 +1702,37 @@ export default function ChatPage() {
         onConfirm={() => { if (confirmDeleteMsgId) handleDelete(confirmDeleteMsgId); }}
         onCancel={() => setConfirmDeleteMsgId(null)}
       />
+
+      {/* Пересылка в другой чат */}
+      {forwardMsg && (
+        <ChatPicker
+          title="Переслать в чат"
+          onClose={() => setForwardMsg(null)}
+          onPick={async (convId) => {
+            try {
+              const res = await messageAPI.sendMessage(
+                convId,
+                forwardMsg.content,
+                undefined,
+                forwardMsg.attachmentUrl
+                  ? {
+                      url: forwardMsg.attachmentUrl,
+                      name: forwardMsg.attachmentName || '',
+                      size: forwardMsg.attachmentSize || 0,
+                      type: forwardMsg.attachmentType || '',
+                    }
+                  : undefined
+              );
+              // Переслали в текущий чат — своё сообщение сокетом не приходит
+              if (convId === conversationId) setMessages(prev => [...prev, res.data]);
+              setForwardMsg(null);
+              toast.success('Переслано');
+            } catch (e: any) {
+              toast.error(getApiError(e, 'Не удалось переслать'));
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
