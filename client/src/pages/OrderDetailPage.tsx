@@ -499,6 +499,17 @@ export default function OrderDetailPage() {
                   <p className="text-xs text-slate-400">Отклики на этот заказ закрыты.</p>
                 </div>
               </div>
+            ) : order.status !== 'active' ? (
+              /* Архив/выполнен/черновик — отклики закрыты (сервер тоже гейтит) */
+              <div className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-slate-800/40 border border-slate-700/40">
+                <Archive size={18} className="text-slate-400 flex-shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white">
+                    {order.status === 'done' ? 'Заказ выполнен' : 'Заказ в архиве'}
+                  </p>
+                  <p className="text-xs text-slate-400">Отклики на этот заказ закрыты.</p>
+                </div>
+              </div>
             ) : showRespond ? (
               <div className="space-y-3 border border-primary-500/20 bg-primary-500/5 rounded-2xl p-4">
                 <p className="text-sm font-semibold text-white">Откликнуться на заказ</p>

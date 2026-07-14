@@ -485,6 +485,14 @@ router.post('/:id/responses', authenticate, async (req: AuthRequest, res) => {
     const order = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!order) return res.status(404).json({ error: 'Not found' });
     if (order.authorId === meId) return res.status(400).json({ error: 'Cannot respond to your own order' });
+    // Отклики принимаются только пока заказ активен («Ищем исполнителя»):
+    // архивный/выполненный/черновик остаются видимыми, но отклики закрыты.
+    if (order.status !== 'active') {
+      const label = order.status === 'done' ? 'Заказ выполнен'
+        : order.status === 'archived' ? 'Заказ в архиве'
+        : 'Заказ не опубликован';
+      return res.status(409).json({ error: `${label} — отклики закрыты` });
+    }
     // Исполнитель уже выбран — отклики закрыты (заказ остаётся видимым всем).
     if (order.executorId) return res.status(409).json({ error: 'Исполнитель уже выбран — отклики закрыты' });
     // Non-authors may respond only to a published order.
