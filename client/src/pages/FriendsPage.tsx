@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Users, MessageCircle, UserX, Clock,
-  Search, Wifi, Link2, Star, Crown, BadgeCheck,
+  Search, Wifi, Link2, Star, Crown,
   ChevronRight,
 } from 'lucide-react';
 import { friendshipAPI, connectionAPI, favoriteAPI, artistAPI, postAPI } from '../lib/api';
@@ -278,7 +278,6 @@ const { data: myBreakRequests = [] } = useQuery({
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="text-sm font-semibold text-white truncate">{friend.firstName} {friend.lastName}</span>
                             {friend.isPremium && <Crown size={13} className="text-amber-400 flex-shrink-0" />}
-                            {friend.isVerified && <BadgeCheck size={13} className="text-sky-400 flex-shrink-0" />}
 
                             {isOnline && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0" />}
                           </div>
@@ -359,7 +358,6 @@ const { data: myBreakRequests = [] } = useQuery({
                             <div className="flex items-center gap-1.5">
                               <span className="text-sm font-semibold text-white truncate">{g.partner.firstName} {g.partner.lastName}</span>
                               {g.partner.isPremium && <Crown size={13} className="text-amber-400 flex-shrink-0" />}
-                              {g.partner.isVerified && <BadgeCheck size={13} className="text-sky-400 flex-shrink-0" />}
                             </div>
                             <div className="flex flex-wrap gap-1 mt-1">
                               {roles.map((r: string) => (
@@ -477,7 +475,6 @@ const { data: myBreakRequests = [] } = useQuery({
                           <div className="flex items-center gap-1.5">
                             <span className="text-sm font-semibold text-white truncate">{fav.user.firstName} {fav.user.lastName}</span>
                             {fav.user.isPremium && <Crown size={13} className="text-amber-400 flex-shrink-0" />}
-                            {fav.user.isVerified && <BadgeCheck size={13} className="text-sky-400 flex-shrink-0" />}
                           </div>
                           {(fav.user.role || fav.user.city) && (
                             <p className="text-xs text-slate-500 truncate mt-0.5">{[fav.user.role, fav.user.city].filter(Boolean).join(' · ')}</p>
