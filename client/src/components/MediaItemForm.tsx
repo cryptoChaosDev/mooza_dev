@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Save, Loader2, Search, Tag, Trash2, RefreshCw, Check } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { releaseAPI, clipAPI, userAPI, roleAPI } from '../lib/api';
+import { releaseAPI, clipAPI, userAPI, roleAPI, artistAPI } from '../lib/api';
 import { detectMediaPlatform, MEDIA_PLATFORM_LABELS, allowedPlatformLabels } from '../lib/mediaPlatforms';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { toast } from '../stores/toastStore';
@@ -92,6 +92,34 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
       roleIds: (p.roles ?? []).map((r) => r.id),
     })),
   );
+
+  // Новый релиз/клип: по умолчанию подставляем ДЕЙСТВУЮЩИХ участников артиста
+  // (их можно убрать крестиком или добавить других через поиск). Один раз,
+  // и только если пользователь ещё не начал собирать список сам.
+  const [membersSeeded, setMembersSeeded] = useState(false);
+  const { data: artistForSeed } = useQuery({
+    queryKey: ['artist', artistId],
+    queryFn: async () => {
+      const { data } = await artistAPI.getArtist(artistId);
+      return data;
+    },
+    enabled: !editing && !membersSeeded,
+  });
+  useEffect(() => {
+    if (editing || membersSeeded || !artistForSeed) return;
+    const active = (artistForSeed.confirmedMembers ?? [])
+      .filter((m: any) => m.participationStatus === 'ACTIVE_MEMBER' && m.user?.id);
+    setParticipants((prev) => {
+      if (prev.length > 0) return prev; // пользователь уже добавил кого-то сам
+      return active.map((m: any) => ({
+        userId: m.user.id,
+        name: `${m.user.lastName ?? ''} ${m.user.firstName ?? ''}`.trim(),
+        avatar: m.user.avatar ?? null,
+        roleIds: [],
+      }));
+    });
+    setMembersSeeded(true);
+  }, [editing, membersSeeded, artistForSeed]);
 
   // Role catalog → id→name map for displaying chosen role names.
   const { data: roleCategories = [] } = useQuery({
