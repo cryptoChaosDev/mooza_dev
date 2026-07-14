@@ -737,6 +737,31 @@ export default function ProfilePage() {
             {/* Profile completion meter (own profile only) */}
             <ProfileProgressBar profile={profile} />
 
+            {/* ── Moooza Pro ── */}
+            <button
+              onClick={() => navigate('/pro')}
+              className={`w-full flex items-center gap-3 rounded-2xl p-4 text-left transition-colors border ${
+                isPro
+                  ? 'bg-violet-500/10 border-violet-500/25 hover:bg-violet-500/15'
+                  : 'bg-gradient-to-r from-violet-600/15 to-violet-500/5 border-violet-500/25 hover:border-violet-500/50'
+              }`}
+            >
+              <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center flex-shrink-0">
+                <Zap size={20} className="text-violet-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold text-white">{isPro ? 'Moooza Pro активен' : 'Moooza Pro'}</p>
+                <p className="text-xs text-slate-400 truncate">
+                  {isPro
+                    ? (user?.proUntil
+                        ? `до ${new Date(user.proUntil).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                        : 'Спасибо, что поддерживаешь Moooza 🎵')
+                    : 'Больше портфолио, расширенный профиль, GIF-аватар, пресеты ленты'}
+                </p>
+              </div>
+              <span className="text-xs font-semibold text-violet-400 flex-shrink-0">{isPro ? 'Управлять' : 'Поддержать →'}</span>
+            </button>
+
             {/* Bio — карточка в едином стиле блоков профиля */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
@@ -765,31 +790,6 @@ export default function ProfilePage() {
                 )}
               </div>
             </div>
-
-            {/* ── Moooza Pro ── */}
-            <button
-              onClick={() => navigate('/pro')}
-              className={`w-full flex items-center gap-3 rounded-2xl p-4 text-left transition-colors border ${
-                isPro
-                  ? 'bg-violet-500/10 border-violet-500/25 hover:bg-violet-500/15'
-                  : 'bg-gradient-to-r from-violet-600/15 to-violet-500/5 border-violet-500/25 hover:border-violet-500/50'
-              }`}
-            >
-              <div className="w-10 h-10 rounded-xl bg-violet-500/20 flex items-center justify-center flex-shrink-0">
-                <Zap size={20} className="text-violet-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-bold text-white">{isPro ? 'Moooza Pro активен' : 'Moooza Pro'}</p>
-                <p className="text-xs text-slate-400 truncate">
-                  {isPro
-                    ? (user?.proUntil
-                        ? `до ${new Date(user.proUntil).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}`
-                        : 'Спасибо, что поддерживаешь Moooza 🎵')
-                    : 'Больше портфолио, расширенный профиль, GIF-аватар, пресеты ленты'}
-                </p>
-              </div>
-              <span className="text-xs font-semibold text-violet-400 flex-shrink-0">{isPro ? 'Управлять' : 'Поддержать →'}</span>
-            </button>
 
             {/* ── Collectives tile slider ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
