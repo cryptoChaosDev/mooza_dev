@@ -11,7 +11,7 @@ import {
   Headphones, Edit3, Plus,
   FileText, FileSpreadsheet, FileArchive, Download, Trash2, Loader2, Crown, Ban, Link2, Zap,
   Music2, HandshakeIcon, Eye, Phone, Shield, ChevronDown, ChevronUp,
-  ClipboardList,
+  ClipboardList, UserRound,
 } from 'lucide-react';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 import ConnectionCard from '../components/ConnectionCard';
@@ -737,29 +737,34 @@ export default function ProfilePage() {
             {/* Profile completion meter (own profile only) */}
             <ProfileProgressBar profile={profile} />
 
-            {/* Bio */}
-            {editingBio ? (
-              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4 space-y-2">
-                <textarea value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} maxLength={proLimits.bioChars} rows={3} placeholder="Расскажите о себе..." className={`${inputCls} resize-none`} />
-                <p className="text-right text-[11px] text-slate-600">{formData.bio.length}/{proLimits.bioChars}</p>
-                <div className="flex gap-2">
-                  <button onClick={() => setEditingBio(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
-                  <button onClick={handleSaveBio} disabled={updateMutation.isPending} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
-                    {updateMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
-                  </button>
-                </div>
+            {/* Bio — карточка в едином стиле блоков профиля */}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                <UserRound size={14} className="text-sky-400" />
+                <span className="text-sm font-semibold text-white">О себе</span>
+                {!editingBio && (
+                  <button onClick={() => setEditingBio(true)} className="ml-auto p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800 flex-shrink-0"><Edit3 size={13} /></button>
+                )}
               </div>
-            ) : (
-              <div className="flex items-start gap-2">
-                <div className="flex-1 min-w-0">
-                  {profile?.bio
-                    ? <p className="text-slate-300 text-sm leading-relaxed break-words">{profile.bio}</p>
-                    : <button onClick={() => setEditingBio(true)} className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic">+ Добавить описание</button>
-                  }
-                </div>
-                <button onClick={() => setEditingBio(true)} className="p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800 flex-shrink-0 mt-0.5"><Edit3 size={13} /></button>
+              <div className="p-4">
+                {editingBio ? (
+                  <div className="space-y-2">
+                    <textarea value={formData.bio} onChange={e => setFormData({ ...formData, bio: e.target.value })} maxLength={proLimits.bioChars} rows={3} placeholder="Расскажите о себе..." className={`${inputCls} resize-none`} />
+                    <p className="text-right text-[11px] text-slate-600">{formData.bio.length}/{proLimits.bioChars}</p>
+                    <div className="flex gap-2">
+                      <button onClick={() => setEditingBio(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
+                      <button onClick={handleSaveBio} disabled={updateMutation.isPending} className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5">
+                        {updateMutation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}Сохранить
+                      </button>
+                    </div>
+                  </div>
+                ) : profile?.bio ? (
+                  <p className="text-slate-300 text-sm leading-relaxed break-words">{profile.bio}</p>
+                ) : (
+                  <button onClick={() => setEditingBio(true)} className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic">+ Добавить описание</button>
+                )}
               </div>
-            )}
+            </div>
 
             {/* ── Moooza Pro ── */}
             <button

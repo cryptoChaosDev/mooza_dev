@@ -5,7 +5,7 @@ import {
   ArrowLeft, MapPin, MessageCircle,
   Crown, Ban, X, Zap,
   Headphones, FileText, FileSpreadsheet, FileArchive, Download, Briefcase, GraduationCap,
-  Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
+  Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2, UserRound,
   Globe, ChevronRight, Flag, Phone, Calendar,
   MoreHorizontal, Share2, Check,
 } from 'lucide-react';
@@ -477,9 +477,17 @@ export default function UserProfilePage() {
 
           <div className="space-y-3">
 
-            {/* Bio */}
+            {/* Bio — карточка в едином стиле блоков профиля */}
             {user.bio && (
-              <p className="text-slate-300 text-sm leading-relaxed break-words">{user.bio}</p>
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                  <UserRound size={14} className="text-sky-400" />
+                  <span className="text-sm font-semibold text-white">О себе</span>
+                </div>
+                <div className="p-4">
+                  <p className="text-slate-300 text-sm leading-relaxed break-words">{user.bio}</p>
+                </div>
+              </div>
             )}
 
             {/* ── Artists ── */}
