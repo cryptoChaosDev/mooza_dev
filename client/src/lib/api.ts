@@ -142,6 +142,9 @@ export const userAPI = {
   addPortfolioLink: (data: { type: string; url: string; title?: string }) => api.post('/users/me/portfolio/links', data),
   deletePortfolioLink: (linkId: string) => api.delete(`/users/me/portfolio/links/${linkId}`),
   agreeToTerms: () => api.post('/users/me/agree-terms'),
+  // Настройки уведомлений по категориям (false = категория отключена)
+  updateNotificationPrefs: (prefs: { messages?: boolean; orders?: boolean; vacancies?: boolean; social?: boolean }) =>
+    api.patch('/users/me/notification-prefs', prefs),
   completeOnboarding: () => api.patch('/users/me/complete-onboarding'),
 };
 

@@ -1335,7 +1335,7 @@ export default function ProfilePage() {
             </div>
             <button onClick={() => setShowPrivacy(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
           </div>
-          <div className="px-5 py-3" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
+          <div className="px-5 py-3 max-h-[70dvh] overflow-y-auto" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
             {/* Contacts visibility — 3-level selector */}
             <div className="py-3 border-b border-slate-800/60">
               <p className="text-sm font-medium text-white">Кто видит контакты</p>
@@ -1376,6 +1376,42 @@ export default function ProfilePage() {
                   );
                 })}
               </div>
+            </div>
+            {/* Уведомления — какие категории получать */}
+            <div className="py-3 border-b border-slate-800/60">
+              <p className="text-sm font-medium text-white">Уведомления</p>
+              <p className="text-xs text-slate-500 mb-1">Пуши, колокольчик и дублирование в Telegram</p>
+              {([
+                { key: 'messages' as const, label: 'Сообщения', desc: 'Личные и групповые чаты' },
+                { key: 'orders' as const, label: 'Заказы и услуги', desc: 'Отклики, выбор исполнителя, интерес к услугам' },
+                { key: 'vacancies' as const, label: 'Вакансии и приглашения', desc: 'Отклики на вакансии, приглашения в релизы и клипы' },
+                { key: 'social' as const, label: 'Социальное', desc: 'Друзья, связи, ответы на посты, отзывы' },
+              ]).map(row => {
+                const prefs = (profile?.notificationPrefs as Record<string, boolean> | null) ?? {};
+                const enabled = prefs[row.key] !== false;
+                return (
+                  <div key={row.key} className="flex items-center gap-3 py-2.5 border-b border-slate-800/40 last:border-0">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white">{row.label}</p>
+                      <p className="text-xs text-slate-500">{row.desc}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await userAPI.updateNotificationPrefs({ [row.key]: !enabled });
+                          queryClient.invalidateQueries({ queryKey: ['profile'] });
+                        } catch (e: any) {
+                          toast.error(getApiError(e, 'Не удалось сохранить настройку'));
+                        }
+                      }}
+                      className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 ${enabled ? 'bg-primary-600' : 'bg-slate-700'}`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${enabled ? 'translate-x-4' : ''}`} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
             {/* Birth date visibility — boolean toggle */}
             {([
