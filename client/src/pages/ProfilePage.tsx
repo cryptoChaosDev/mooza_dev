@@ -793,9 +793,14 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* ── Collectives tile slider ── */}
-            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Артисты</p>
+            {/* ── Collectives — шапка в едином стиле блоков, плитки с аватарками ── */}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                <Music2 size={14} className="text-primary-400" />
+                <span className="text-sm font-semibold text-white">Артисты</span>
+                {myGroups.length > 0 && <span className="text-xs text-slate-500">{myGroups.length}</span>}
+              </div>
+              <div className="p-3">
               <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
                 {/* Add tile — first */}
                 <button
@@ -832,6 +837,7 @@ export default function ProfilePage() {
                     </button>
                   );
                 })}
+              </div>
               </div>
             </div>
 
