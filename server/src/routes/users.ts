@@ -100,6 +100,7 @@ const userSelect = {
   birthDateVisible: true,
   contactsVisible: true,
   contactsVisibility: true,
+  notificationPrefs: true,
   lastSeenAt: true,
   termsAgreedAt: true,
   publicConsentAt: true,
@@ -168,6 +169,7 @@ const publicUserSelect = {
   birthDateVisible: true,
   contactsVisible: true,
   contactsVisibility: true,
+  notificationPrefs: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, title: true, size: true, mimeType: true, sortOrder: true, createdAt: true }, orderBy: { sortOrder: 'asc' as const } },
   portfolioLinks: { select: { id: true, type: true, url: true, title: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
@@ -290,6 +292,36 @@ router.get('/me', authenticate, async (req: AuthRequest, res) => {
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user' });
+  }
+});
+
+// ─── PATCH /me/notification-prefs — настройки уведомлений ────────────────────
+// Категории: messages | orders | vacancies | social. false = отключено.
+// Присланные ключи мерджатся с сохранёнными (частичное обновление).
+router.patch('/me/notification-prefs', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const ALLOWED = ['messages', 'orders', 'vacancies', 'social'] as const;
+    const incoming: Record<string, boolean> = {};
+    for (const key of ALLOWED) {
+      if (typeof req.body?.[key] === 'boolean') incoming[key] = req.body[key];
+    }
+    if (Object.keys(incoming).length === 0) {
+      return res.status(400).json({ error: 'Nothing to update' });
+    }
+    const current = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { notificationPrefs: true },
+    });
+    const merged = { ...((current?.notificationPrefs as Record<string, boolean> | null) ?? {}), ...incoming };
+    const updated = await prisma.user.update({
+      where: { id: req.userId },
+      data: { notificationPrefs: merged },
+      select: { id: true, notificationPrefs: true },
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error('Update notification prefs error:', error);
+    res.status(500).json({ error: 'Failed to update notification prefs' });
   }
 });
 

@@ -631,6 +631,9 @@ model User {
   birthDateVisible      Boolean   @default(false)
   contactsVisible       Boolean   @default(true)
   contactsVisibility    ContactsVisibility @default(ALL)
+  // Настройки уведомлений по категориям: { messages, orders, vacancies, social }.
+  // null / отсутствие ключа = включено; false = категория отключена.
+  notificationPrefs     Json?
 
   // Consent to processing PD allowed for public distribution (152-ФЗ ст.10.1).
   // Obtained once, at the first public action (service/portfolio/public contacts).

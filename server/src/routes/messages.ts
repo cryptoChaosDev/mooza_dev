@@ -8,7 +8,7 @@ import { uploadChatAttachment } from '../middleware/upload';
 import { messageLimiter } from '../middleware/rateLimiter';
 import { yoNorm } from '../utils/search';
 import { tgLog, tgEvent, escTg } from '../utils/telegram';
-import { notify } from '../utils/notify';
+import { notify, isNotificationEnabled } from '../utils/notify';
 
 const router = Router();
 // Lazy proxy — avoids circular-import TDZ when this module loads before prisma is initialized
@@ -650,20 +650,26 @@ router.post('/conversations/:id/messages', authenticate, messageLimiter, async (
 
     const otherMembers = conv.members.filter((m: any) => m.userId !== userId);
     for (const member of otherMembers) {
-      notifyUser(
-        member.userId,
-        'new_message',
-        { ...message, conversationId },
-        {
-          title: conv.isGroup ? `${conv.name} — ${senderName}` : senderName,
-          body: preview,
-          link: `/messages/${conversationId}`,
-        },
-      );
+      // Сокет new_message идёт ВСЕГДА (живое обновление открытого чата);
+      // push-баннер — только если получатель не отключил «Сообщения».
+      if (await isNotificationEnabled(member.userId, 'message')) {
+        notifyUser(
+          member.userId,
+          'new_message',
+          { ...message, conversationId },
+          {
+            title: conv.isGroup ? `${conv.name} — ${senderName}` : senderName,
+            body: preview,
+            link: `/messages/${conversationId}`,
+          },
+        );
+      } else {
+        emitToUser(member.userId, 'new_message', { ...message, conversationId });
+      }
     }
 
     // DM notification (DB record for notification centre)
-    if (!conv.isGroup && otherMembers.length === 1) {
+    if (!conv.isGroup && otherMembers.length === 1 && (await isNotificationEnabled(otherMembers[0].userId, 'message'))) {
       const receiverId = otherMembers[0].userId;
       const notification = await db.notification.create({
         data: {
