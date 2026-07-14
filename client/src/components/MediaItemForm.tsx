@@ -39,6 +39,12 @@ interface Props {
   onClose: () => void;
   /** Called after a successful create/update with the saved item id. */
   onSaved?: (id: string) => void;
+  /**
+   * Page mode (/artist/:id/releases/new, /artist/:id/clips/new): renders the form
+   * inline with a sticky Отмена/Сохранить footer instead of a bottom sheet —
+   * no portal, no scroll lock.
+   */
+  asPage?: boolean;
 }
 
 // ISO (YYYY-MM-DD) → masked ДД.ММ.ГГГГ for the date field's display value.
@@ -47,7 +53,7 @@ function isoToMasked(iso: string): string {
   return m ? `${m[3]}.${m[2]}.${m[1]}` : '';
 }
 
-export default function MediaItemForm({ kind, artistId, initial, onClose, onSaved }: Props) {
+export default function MediaItemForm({ kind, artistId, initial, onClose, onSaved, asPage = false }: Props) {
   const queryClient = useQueryClient();
   const isRelease = kind === 'release';
   const api = isRelease ? releaseAPI : clipAPI;
@@ -117,10 +123,12 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
   const [fetchError, setFetchError] = useState('');
   const [saveError, setSaveError] = useState('');
 
+  // Sheet mode blocks the background page; page mode scrolls normally.
   useEffect(() => {
+    if (asPage) return;
     lockScroll();
     return () => unlockScroll();
-  }, []);
+  }, [asPage]);
 
   // Debounced user search
   useEffect(() => {
@@ -226,6 +234,28 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
     onError: (err: any) => setSaveError(err?.response?.data?.error ?? 'Не удалось сохранить.'),
   });
 
+  const handleSave = () => {
+    if (!detectedPlatform) {
+      toast.error('Вставьте ссылку на поддерживаемый сервис');
+      return;
+    }
+    if (isRelease && releaseDateInput.trim() && !releaseDate) {
+      toast.error('Дата релиза — в формате ДД.ММ.ГГГГ');
+      return;
+    }
+    if (isRelease && releaseDate && isNaN(new Date(releaseDate).getTime())) {
+      toast.error('Некорректная дата релиза');
+      return;
+    }
+    if (isRelease && releaseDate && releaseDate > todayStr) {
+      toast.error('Дата релиза не может быть позже сегодняшнего дня');
+      return;
+    }
+    setSaveError('');
+    saveMut.mutate();
+  };
+  const saveDisabled = saveMut.isPending || !title.trim() || !detectedPlatform;
+
   const addParticipant = (u: {
     id: string;
     firstName: string;
@@ -251,6 +281,240 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
 
   const titleLabel = isRelease ? 'релиз' : 'клип';
 
+  // Form fields — shared between the bottom-sheet and page variants.
+  const formFields = (
+    <>
+      {/* URL + fetch — platform is auto-detected from the link */}
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">Ссылка <span className="text-red-400">*</span></label>
+        <div className="flex gap-2">
+          <input
+            className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="https://..."
+          />
+          <button
+            type="button"
+            onClick={() => { setFetchError(''); metaMut.mutate(); }}
+            disabled={metaMut.isPending || !detectedPlatform}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium disabled:opacity-50 whitespace-nowrap"
+          >
+            {metaMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+            Подтянуть
+          </button>
+        </div>
+        {/* Auto-detected platform / invalid-link hint */}
+        {detectedPlatform ? (
+          <p className="flex items-center gap-1.5 text-xs text-emerald-400 mt-1.5">
+            <Check size={12} className="flex-shrink-0" />
+            Платформа: {MEDIA_PLATFORM_LABELS[detectedPlatform] ?? detectedPlatform}
+          </p>
+        ) : urlInvalid ? (
+          <p className="text-xs text-red-400 mt-1.5 leading-snug">
+            Ссылка должна вести на поддерживаемый сервис: {allowedPlatformLabels(kind).join(', ')}
+          </p>
+        ) : (
+          <p className="text-[11px] text-slate-500 mt-1.5 leading-snug">
+            Платформа определится автоматически. Поддерживаются: {allowedPlatformLabels(kind).join(', ')}
+          </p>
+        )}
+        {fetchError && <p className="text-xs text-amber-400 mt-1">{fetchError}</p>}
+      </div>
+
+      {/* Title */}
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">Название <span className="text-red-400">*</span></label>
+        <input
+          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder={isRelease ? 'Название релиза' : 'Название трека'}
+        />
+      </div>
+
+      {/* Cover */}
+      <div>
+        <label className="block text-xs text-slate-500 mb-1">Обложка (ссылка)</label>
+        <input
+          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
+          value={coverUrl ?? ''}
+          onChange={(e) => setCoverUrl(e.target.value)}
+          placeholder="https://..."
+        />
+        {coverUrl?.trim() && (
+          <img
+            src={coverUrl}
+            alt="cover preview"
+            className="mt-2 w-24 h-24 rounded-xl object-cover border border-slate-700"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+          />
+        )}
+      </div>
+
+      {/* Release date (releases only) */}
+      {isRelease && (
+        <div>
+          <label className="block text-xs text-slate-500 mb-1">Дата релиза</label>
+          <input
+            type="text"
+            inputMode="numeric"
+            placeholder="ДД.ММ.ГГГГ"
+            maxLength={10}
+            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-primary-500"
+            value={releaseDateInput}
+            onChange={(e) => {
+              let v = e.target.value.replace(/\D/g, '');
+              if (v.length >= 3) v = v.slice(0, 2) + '.' + v.slice(2);
+              if (v.length >= 6) v = v.slice(0, 5) + '.' + v.slice(5);
+              v = v.slice(0, 10);
+              setReleaseDateInput(v);
+              setReleaseDate(v.length === 10 ? `${v.slice(6)}-${v.slice(3, 5)}-${v.slice(0, 2)}` : '');
+            }}
+          />
+        </div>
+      )}
+
+      {/* Participants */}
+      <div>
+        <label className="block text-xs text-slate-500 mb-2">Участники</label>
+
+        {/* Search */}
+        <div className="relative mb-2">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Найти пользователя..."
+            className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 outline-none focus:border-primary-500"
+          />
+        </div>
+        {search.trim().length >= 1 && (
+          searching ? (
+            <div className="flex justify-center py-3">
+              <Loader2 size={18} className="animate-spin text-slate-500" />
+            </div>
+          ) : searchResults.length === 0 ? (
+            <p className="text-xs text-slate-600 italic py-1 mb-2">Никого не найдено</p>
+          ) : (
+            <div className="space-y-1.5 max-h-48 overflow-y-auto mb-2">
+              {searchResults
+                .filter((u) => !participants.some((p) => p.userId === u.id))
+                .map((u) => (
+                  <button
+                    key={u.id}
+                    onClick={() => addParticipant(u)}
+                    className="w-full flex items-center gap-3 p-2.5 rounded-xl border bg-slate-900 border-slate-800 hover:border-slate-700 transition-colors text-left"
+                  >
+                    <AvatarComponent
+                      src={u.avatar}
+                      name={`${u.lastName ?? ''} ${u.firstName ?? ''}`}
+                      size={32}
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white truncate">{u.lastName} {u.firstName}</p>
+                      {u.nickname && <p className="text-xs text-slate-500 truncate">@{u.nickname}</p>}
+                    </div>
+                  </button>
+                ))}
+            </div>
+          )
+        )}
+
+        {/* Added participants */}
+        {participants.length > 0 && (
+          <div className="space-y-2">
+            {participants.map((p) => (
+              <div
+                key={p.userId}
+                className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 border border-slate-800"
+              >
+                <AvatarComponent src={p.avatar} name={p.name} size={36} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-white truncate">{p.name}</p>
+                  {p.roleIds.length ? (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {p.roleIds.map((id) => (
+                        <span key={id} className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] leading-tight">
+                          {roleNameById.get(id) ?? id}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-500">Роли не выбраны</p>
+                  )}
+                </div>
+                <button
+                  onClick={() => setRolePickerUserId(p.userId)}
+                  title="Выбрать роли"
+                  className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors"
+                >
+                  <Tag size={15} />
+                </button>
+                <button
+                  onClick={() => removeParticipant(p.userId)}
+                  title="Убрать"
+                  className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {saveError && <p className="text-sm text-red-400">{saveError}</p>}
+    </>
+  );
+
+  // RolePicker overlay for the currently-edited participant (both variants).
+  const rolePickerEl = rolePickerUserId ? (
+    <RolePicker
+      context={roleContext}
+      value={participants.find((p) => p.userId === rolePickerUserId)?.roleIds ?? []}
+      onSave={(ids) =>
+        setParticipants((prev) =>
+          prev.map((p) => (p.userId === rolePickerUserId ? { ...p, roleIds: ids } : p)),
+        )
+      }
+      onClose={() => setRolePickerUserId(null)}
+      title="Роли участника"
+    />
+  ) : null;
+
+  // ── Page variant: inline form + sticky Отмена/Сохранить (как ArtistEditPage) ──
+  if (asPage) {
+    return (
+      <>
+        <div className="space-y-4">{formFields}</div>
+
+        <div
+          className="sticky bottom-0 -mx-4 px-4 pt-3 pb-2 mt-4 bg-slate-950/95 border-t border-slate-800/60 flex gap-2"
+          style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' }}
+        >
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-2xl transition-colors"
+          >
+            Отмена
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saveDisabled}
+            className="flex-1 py-3 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-semibold rounded-2xl transition-colors flex items-center justify-center gap-1.5"
+          >
+            {saveMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            Сохранить
+          </button>
+        </div>
+
+        {rolePickerEl}
+      </>
+    );
+  }
+
+  // ── Sheet variant (edit flows on ReleasePage/ClipPage etc.) ────────────────
   return (
     <>
       {createPortal(
@@ -277,27 +541,8 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
                 {editing ? `Редактировать ${titleLabel}` : `Добавить ${titleLabel}`}
               </span>
               <button
-                onClick={() => {
-                  if (!detectedPlatform) {
-                    toast.error('Вставьте ссылку на поддерживаемый сервис');
-                    return;
-                  }
-                  if (isRelease && releaseDateInput.trim() && !releaseDate) {
-                    toast.error('Дата релиза — в формате ДД.ММ.ГГГГ');
-                    return;
-                  }
-                  if (isRelease && releaseDate && isNaN(new Date(releaseDate).getTime())) {
-                    toast.error('Некорректная дата релиза');
-                    return;
-                  }
-                  if (isRelease && releaseDate && releaseDate > todayStr) {
-                    toast.error('Дата релиза не может быть позже сегодняшнего дня');
-                    return;
-                  }
-                  setSaveError('');
-                  saveMut.mutate();
-                }}
-                disabled={saveMut.isPending || !title.trim() || !detectedPlatform}
+                onClick={handleSave}
+                disabled={saveDisabled}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-600 text-white text-sm font-semibold disabled:opacity-50"
               >
                 {saveMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
@@ -306,210 +551,15 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
             </div>
 
             {/* Body */}
-            <div
-              className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4"
-            >
-              {/* URL + fetch — platform is auto-detected from the link */}
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Ссылка <span className="text-red-400">*</span></label>
-                <div className="flex gap-2">
-                  <input
-                    className="flex-1 min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
-                    value={url}
-                    onChange={(e) => setUrl(e.target.value)}
-                    placeholder="https://..."
-                  />
-                  <button
-                    type="button"
-                    onClick={() => { setFetchError(''); metaMut.mutate(); }}
-                    disabled={metaMut.isPending || !detectedPlatform}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-medium disabled:opacity-50 whitespace-nowrap"
-                  >
-                    {metaMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
-                    Подтянуть
-                  </button>
-                </div>
-                {/* Auto-detected platform / invalid-link hint */}
-                {detectedPlatform ? (
-                  <p className="flex items-center gap-1.5 text-xs text-emerald-400 mt-1.5">
-                    <Check size={12} className="flex-shrink-0" />
-                    Платформа: {MEDIA_PLATFORM_LABELS[detectedPlatform] ?? detectedPlatform}
-                  </p>
-                ) : urlInvalid ? (
-                  <p className="text-xs text-red-400 mt-1.5 leading-snug">
-                    Ссылка должна вести на поддерживаемый сервис: {allowedPlatformLabels(kind).join(', ')}
-                  </p>
-                ) : (
-                  <p className="text-[11px] text-slate-500 mt-1.5 leading-snug">
-                    Платформа определится автоматически. Поддерживаются: {allowedPlatformLabels(kind).join(', ')}
-                  </p>
-                )}
-                {fetchError && <p className="text-xs text-amber-400 mt-1">{fetchError}</p>}
-              </div>
-
-              {/* Title */}
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Название <span className="text-red-400">*</span></label>
-                <input
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder={isRelease ? 'Название релиза' : 'Название трека'}
-                />
-              </div>
-
-              {/* Cover */}
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Обложка (ссылка)</label>
-                <input
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
-                  value={coverUrl ?? ''}
-                  onChange={(e) => setCoverUrl(e.target.value)}
-                  placeholder="https://..."
-                />
-                {coverUrl?.trim() && (
-                  <img
-                    src={coverUrl}
-                    alt="cover preview"
-                    className="mt-2 w-24 h-24 rounded-xl object-cover border border-slate-700"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                )}
-              </div>
-
-              {/* Release date (releases only) */}
-              {isRelease && (
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1">Дата релиза</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="ДД.ММ.ГГГГ"
-                    maxLength={10}
-                    className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-primary-500"
-                    value={releaseDateInput}
-                    onChange={(e) => {
-                      let v = e.target.value.replace(/\D/g, '');
-                      if (v.length >= 3) v = v.slice(0, 2) + '.' + v.slice(2);
-                      if (v.length >= 6) v = v.slice(0, 5) + '.' + v.slice(5);
-                      v = v.slice(0, 10);
-                      setReleaseDateInput(v);
-                      setReleaseDate(v.length === 10 ? `${v.slice(6)}-${v.slice(3, 5)}-${v.slice(0, 2)}` : '');
-                    }}
-                  />
-                </div>
-              )}
-
-              {/* Participants */}
-              <div>
-                <label className="block text-xs text-slate-500 mb-2">Участники</label>
-
-                {/* Search */}
-                <div className="relative mb-2">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Найти пользователя..."
-                    className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 outline-none focus:border-primary-500"
-                  />
-                </div>
-                {search.trim().length >= 1 && (
-                  searching ? (
-                    <div className="flex justify-center py-3">
-                      <Loader2 size={18} className="animate-spin text-slate-500" />
-                    </div>
-                  ) : searchResults.length === 0 ? (
-                    <p className="text-xs text-slate-600 italic py-1 mb-2">Никого не найдено</p>
-                  ) : (
-                    <div className="space-y-1.5 max-h-48 overflow-y-auto mb-2">
-                      {searchResults
-                        .filter((u) => !participants.some((p) => p.userId === u.id))
-                        .map((u) => (
-                          <button
-                            key={u.id}
-                            onClick={() => addParticipant(u)}
-                            className="w-full flex items-center gap-3 p-2.5 rounded-xl border bg-slate-900 border-slate-800 hover:border-slate-700 transition-colors text-left"
-                          >
-                            <AvatarComponent
-                              src={u.avatar}
-                              name={`${u.lastName ?? ''} ${u.firstName ?? ''}`}
-                              size={32}
-                            />
-                            <div className="flex-1 min-w-0">
-                              <p className="text-sm text-white truncate">{u.lastName} {u.firstName}</p>
-                              {u.nickname && <p className="text-xs text-slate-500 truncate">@{u.nickname}</p>}
-                            </div>
-                          </button>
-                        ))}
-                    </div>
-                  )
-                )}
-
-                {/* Added participants */}
-                {participants.length > 0 && (
-                  <div className="space-y-2">
-                    {participants.map((p) => (
-                      <div
-                        key={p.userId}
-                        className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 border border-slate-800"
-                      >
-                        <AvatarComponent src={p.avatar} name={p.name} size={36} />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-white truncate">{p.name}</p>
-                          {p.roleIds.length ? (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {p.roleIds.map((id) => (
-                                <span key={id} className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 text-[11px] leading-tight">
-                                  {roleNameById.get(id) ?? id}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="text-xs text-slate-500">Роли не выбраны</p>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => setRolePickerUserId(p.userId)}
-                          title="Выбрать роли"
-                          className="p-1.5 text-slate-500 hover:text-primary-400 transition-colors"
-                        >
-                          <Tag size={15} />
-                        </button>
-                        <button
-                          onClick={() => removeParticipant(p.userId)}
-                          title="Убрать"
-                          className="p-1.5 text-slate-500 hover:text-red-400 transition-colors"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {saveError && <p className="text-sm text-red-400">{saveError}</p>}
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
+              {formFields}
             </div>
           </div>
         </div>,
         document.body,
       )}
 
-      {/* RolePicker for the currently-edited participant */}
-      {rolePickerUserId && (
-        <RolePicker
-          context={roleContext}
-          value={participants.find((p) => p.userId === rolePickerUserId)?.roleIds ?? []}
-          onSave={(ids) =>
-            setParticipants((prev) =>
-              prev.map((p) => (p.userId === rolePickerUserId ? { ...p, roleIds: ids } : p)),
-            )
-          }
-          onClose={() => setRolePickerUserId(null)}
-          title="Роли участника"
-        />
-      )}
+      {rolePickerEl}
     </>
   );
 }

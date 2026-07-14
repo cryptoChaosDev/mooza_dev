@@ -28,6 +28,12 @@ const AdminPage          = lazy(() => import('./pages/AdminPage'));
 const ArtistPage         = lazy(() => import('./pages/ArtistPage'));
 const ArtistCreatePage   = lazy(() => import('./pages/ArtistCreatePage'));
 const ArtistEditPage     = lazy(() => import('./pages/ArtistEditPage'));
+const ArtistMediaFormPage  = lazy(() => import('./pages/ArtistMediaFormPage'));
+const ArtistVacancyNewPage = lazy(() => import('./pages/ArtistVacancyNewPage'));
+const ArtistMemberAddPage  = lazy(() => import('./pages/ArtistMemberAddPage'));
+const ArtistInvitePage     = lazy(() => import('./pages/ArtistInvitePage'));
+const ArtistContactsPage   = lazy(() => import('./pages/ArtistContactsPage'));
+const ArtistGenresPage     = lazy(() => import('./pages/ArtistGenresPage'));
 const ReleasePage        = lazy(() => import('./pages/ReleasePage'));
 const ClipPage           = lazy(() => import('./pages/ClipPage'));
 const PrivacyPolicyPage  = lazy(() => import('./pages/PrivacyPolicyPage'));
@@ -164,6 +170,13 @@ function AppRoutes() {
             <Route path="/artist/create"     element={<ArtistCreatePage />} />
             <Route path="/artist/:id"       element={<ArtistPage />} />
             <Route path="/artist/:id/edit"  element={<ArtistEditPage />} />
+            <Route path="/artist/:id/releases/new" element={<ArtistMediaFormPage kind="release" />} />
+            <Route path="/artist/:id/clips/new"    element={<ArtistMediaFormPage kind="clip" />} />
+            <Route path="/artist/:id/vacancies/new" element={<ArtistVacancyNewPage />} />
+            <Route path="/artist/:id/members/add"  element={<ArtistMemberAddPage />} />
+            <Route path="/artist/:id/invite"       element={<ArtistInvitePage />} />
+            <Route path="/artist/:id/contacts"     element={<ArtistContactsPage />} />
+            <Route path="/artist/:id/genres"       element={<ArtistGenresPage />} />
             <Route path="/releases/:id"     element={<ReleasePage />} />
             <Route path="/clips/:id"        element={<ClipPage />} />
             {/* Legacy «Группы» routes — collapsed into the unified Artist page */}

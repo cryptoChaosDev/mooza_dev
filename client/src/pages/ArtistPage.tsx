@@ -6,24 +6,21 @@ import {
   Camera, Navigation, Edit3, X, Loader2,
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
   UserPlus, Trash2, Search,
-  Settings, Link2, Share2, Tag, Crown, Shield, UserCog, UserCheck, UserX, Star,
+  Settings, Link2, Tag, Crown, Shield, UserCog, UserCheck, UserX, Star,
   UserRound, Users, Disc3, Clapperboard, Briefcase, Activity, ChevronRight,
 } from 'lucide-react';
-import { createPortal } from 'react-dom';
-import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI, releaseAPI, clipAPI, vacancyAPI } from '../lib/api';
-import VacancyForm from '../components/VacancyForm';
+import { artistAPI, referenceAPI, groupAPI, friendshipAPI, releaseAPI, clipAPI, vacancyAPI } from '../lib/api';
 import { workFormatLabel } from '../lib/vacancyOptions';
 import { useScrollLock } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
 import { yoNorm } from '../lib/search';
-import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
+import { SocialIconRow } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
 import SelectSheet from '../components/SelectSheet';
 import ShareButton from '../components/ShareButton';
 import RolePicker from '../components/RolePicker';
 import ConfirmDialog from '../components/ConfirmDialog';
 import MediaRail from '../components/MediaRail';
-import MediaItemForm from '../components/MediaItemForm';
 import { useAuthStore } from '../stores/authStore';
 import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
@@ -96,31 +93,11 @@ export default function ArtistPage() {
   // Нижний лист «Управление артистом» (шестерёнка)
   const [showManageSheet, setShowManageSheet] = useState(false);
 
-  // Точечное редактирование карточек (как в Профиле): описание, жанры, контакты
+  // Точечное редактирование карточки «Об артисте» — остаётся инлайн.
+  // Жанры/контакты/участники/приглашения/релизы/клипы/вакансии — отдельные
+  // страницы /artist/:id/… (единая механика «форма = отдельная страница»).
   const [editingAbout, setEditingAbout] = useState(false);
   const [aboutDraft, setAboutDraft] = useState('');
-  const [genresSheetOpen, setGenresSheetOpen] = useState(false);
-  const [genreDraft, setGenreDraft] = useState<string[]>([]);
-  const [editingContacts, setEditingContacts] = useState(false);
-  const [contactsDraft, setContactsDraft] = useState<Record<string, string>>({});
-  const [bandLinkDraft, setBandLinkDraft] = useState('');
-
-  // Add registered member modal
-  const [showAddMember, setShowAddMember] = useState(false);
-  const [addSearch, setAddSearch] = useState('');
-  const [addSelectedUserId, setAddSelectedUserId] = useState('');
-  const [addRoleIds, setAddRoleIds] = useState<string[]>([]);
-  const [addParticipation, setAddParticipation] = useState<'ACTIVE_MEMBER' | 'FORMER_MEMBER'>('ACTIVE_MEMBER');
-  const [addRolePickerOpen, setAddRolePickerOpen] = useState(false);
-  const [addFeedback, setAddFeedback] = useState('');
-
-  // Invite-link (unregistered) flow
-  const [showInviteLink, setShowInviteLink] = useState(false);
-  const [linkRoleIds, setLinkRoleIds] = useState<string[]>([]);
-  const [linkParticipation, setLinkParticipation] = useState<'ACTIVE_MEMBER' | 'FORMER_MEMBER'>('ACTIVE_MEMBER');
-  const [linkRolePickerOpen, setLinkRolePickerOpen] = useState(false);
-  const [generatedLink, setGeneratedLink] = useState('');
-  const [linkCopied, setLinkCopied] = useState(false);
 
   // Per-member role editing
   const [roleEditMembershipId, setRoleEditMembershipId] = useState<string | null>(null);
@@ -138,17 +115,9 @@ export default function ArtistPage() {
   // Activity status sheet
   const [activitySheetOpen, setActivitySheetOpen] = useState(false);
 
-  // ── Phase 6b: releases & clips create-form modals ──────────────────────────
-  const [showReleaseForm, setShowReleaseForm] = useState(false);
-  const [showClipForm, setShowClipForm] = useState(false);
-  // ── Vacancies create-form modal ────────────────────────────────────────────
-  const [showVacancyForm, setShowVacancyForm] = useState(false);
   // iOS: любой открытый нижний лист/оверлей страницы блокирует фон.
   // (RolePicker/SelectSheet/ConfirmDialog лочат скролл сами — лок ref-counted.)
-  useScrollLock(
-    showVacancyForm || showInviteModal || showAddMember || showInviteLink ||
-    showOwnerPicker || showAdminPicker || showManageSheet,
-  );
+  useScrollLock(showInviteModal || showOwnerPicker || showAdminPicker || showManageSheet);
 
   const { data: artist, isLoading, isError } = useQuery({
     queryKey: ['artist', id],
@@ -236,26 +205,15 @@ export default function ArtistPage() {
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось загрузить аватар')),
   });
 
-  // Точечное сохранение поля карточки (описание/жанры/контакты) — PUT принимает
+  // Точечное сохранение поля карточки «Об артисте» — PUT принимает
   // частичные данные, непереданные поля не меняются.
   const patchMut = useMutation({
     mutationFn: (payload: Record<string, unknown>) => artistAPI.updateArtist(id!, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['artist', id] });
       setEditingAbout(false);
-      setEditingContacts(false);
     },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить')),
-  });
-
-  // Справочник жанров — только когда открыт лист выбора
-  const { data: genreOptions = [] } = useQuery({
-    queryKey: ['genres'],
-    queryFn: async () => {
-      const { data } = await referenceAPI.getGenres();
-      return data as { id: string; name: string }[];
-    },
-    enabled: genresSheetOpen,
   });
 
   const uploadBannerMut = useMutation({
@@ -315,16 +273,6 @@ export default function ArtistPage() {
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить заявку')),
   });
 
-  // ── Phase 5b: user search for add-member modal ─────────────────────────────
-  const { data: searchResults = [], isFetching: searchLoading } = useQuery({
-    queryKey: ['user-search', addSearch],
-    queryFn: async () => {
-      const { data } = await userAPI.search({ query: addSearch.trim() });
-      return data as { id: string; firstName: string; lastName: string; nickname?: string; avatar?: string }[];
-    },
-    enabled: showAddMember && addSearch.trim().length >= 1,
-  });
-
   const invalidateArtist = () => queryClient.invalidateQueries({ queryKey: ['artist', id] });
 
   // ── Phase 5b: mutations ────────────────────────────────────────────────────
@@ -338,31 +286,6 @@ export default function ArtistPage() {
     mutationFn: (membershipId: string) => artistAPI.declineMembership(membershipId),
     onSuccess: () => invalidateArtist(),
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить приглашение')),
-  });
-
-  const addMemberMut = useMutation({
-    mutationFn: () =>
-      artistAPI.addMember(id!, {
-        userId: addSelectedUserId,
-        roleIds: addRoleIds,
-        participationStatus: addParticipation,
-      }),
-    onSuccess: () => {
-      invalidateArtist();
-      setAddFeedback('Приглашение отправлено');
-      setAddSelectedUserId('');
-      setAddRoleIds([]);
-      setAddParticipation('ACTIVE_MEMBER');
-      setAddSearch('');
-      setTimeout(() => { setAddFeedback(''); setShowAddMember(false); }, 1200);
-    },
-  });
-
-  const inviteLinkMut = useMutation({
-    mutationFn: () =>
-      artistAPI.createInviteLink(id!, { roleIds: linkRoleIds, participationStatus: linkParticipation }),
-    onSuccess: (res: any) => { setGeneratedLink(res.data?.url ?? ''); setLinkCopied(false); },
-    onError: (e: any) => toast.error(getApiError(e, 'Не удалось создать ссылку')),
   });
 
   const setParticipationMut = useMutation({
@@ -851,7 +774,7 @@ export default function ArtistPage() {
           </div>
         )}
 
-        {/* Жанры — карандаш открывает лист выбора, сохранение по закрытию */}
+        {/* Жанры — карандаш ведёт на страницу /artist/:id/genres */}
         {((artist.genres?.length ?? 0) > 0 || viewerIsAdmin) && (
           <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden mb-3">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
@@ -860,10 +783,7 @@ export default function ArtistPage() {
               {(artist.genres?.length ?? 0) > 0 && <span className="text-xs text-slate-500">{artist.genres.length}</span>}
               {viewerIsAdmin && (
                 <button
-                  onClick={() => {
-                    setGenreDraft((artist.genres ?? []).map((g: { id: string }) => g.id));
-                    setGenresSheetOpen(true);
-                  }}
+                  onClick={() => navigate(`/artist/${id}/genres`)}
                   className="ml-auto p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800 flex-shrink-0"
                 >
                   <Edit3 size={13} />
@@ -886,19 +806,15 @@ export default function ArtistPage() {
           </div>
         )}
 
-        {/* Контакты — редактируются прямо в карточке */}
+        {/* Контакты — просмотр; карандаш ведёт на страницу /artist/:id/contacts */}
         {(hasSocialLinks || artist.bandLink || viewerIsAdmin) && (
           <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden mb-3">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
               <Link2 size={14} className="text-primary-400" />
               <span className="text-sm font-semibold text-white">Контакты</span>
-              {viewerIsAdmin && !editingContacts && (
+              {viewerIsAdmin && (
                 <button
-                  onClick={() => {
-                    setContactsDraft(((artist.socialLinks as Record<string, string>) ?? {}));
-                    setBandLinkDraft(artist.bandLink ?? '');
-                    setEditingContacts(true);
-                  }}
+                  onClick={() => navigate(`/artist/${id}/contacts`)}
                   className="ml-auto p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800 flex-shrink-0"
                 >
                   <Edit3 size={13} />
@@ -906,54 +822,20 @@ export default function ArtistPage() {
               )}
             </div>
             <div className="p-3">
-              {editingContacts ? (
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-1">Ссылка на страницу группы</label>
-                    <input
-                      value={bandLinkDraft}
-                      onChange={e => setBandLinkDraft(e.target.value)}
-                      placeholder="https://band.link/..."
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-2">Контакты</label>
-                    <SocialLinksEditor value={contactsDraft} onChange={setContactsDraft} only={CONTACT_KEYS} />
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-500 mb-2">Социальные сети</label>
-                    <SocialLinksEditor value={contactsDraft} onChange={setContactsDraft} only={SOCIAL_KEYS} />
-                  </div>
-                  <div className="flex gap-2">
-                    <button onClick={() => setEditingContacts(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
-                    <button
-                      onClick={() => patchMut.mutate({ socialLinks: contactsDraft, bandLink: bandLinkDraft.trim() })}
-                      disabled={patchMut.isPending}
-                      className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5"
-                    >
-                      {patchMut.isPending ? <Loader2 size={13} className="animate-spin" /> : null}Сохранить
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  {artist.bandLink && (
-                    <a
-                      href={artist.bandLink}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-2 text-primary-400 text-sm hover:underline mb-2"
-                    >
-                      <ExternalLink size={14} className="flex-shrink-0" />
-                      <span className="truncate min-w-0">{artist.bandLink}</span>
-                    </a>
-                  )}
-                  {hasSocialLinks && <SocialIconRow links={(artist.socialLinks as Record<string, string>) || {}} labeled />}
-                  {!hasSocialLinks && !artist.bandLink && (
-                    <p className="text-sm text-slate-600 italic">Контакты не указаны</p>
-                  )}
-                </>
+              {artist.bandLink && (
+                <a
+                  href={artist.bandLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-primary-400 text-sm hover:underline mb-2"
+                >
+                  <ExternalLink size={14} className="flex-shrink-0" />
+                  <span className="truncate min-w-0">{artist.bandLink}</span>
+                </a>
+              )}
+              {hasSocialLinks && <SocialIconRow links={(artist.socialLinks as Record<string, string>) || {}} labeled />}
+              {!hasSocialLinks && !artist.bandLink && (
+                <p className="text-sm text-slate-600 italic">Контакты не указаны</p>
               )}
             </div>
           </div>
@@ -1040,13 +922,13 @@ export default function ArtistPage() {
             {viewerIsAdmin && (
               <div className="flex flex-wrap gap-2 mb-3">
                 <button
-                  onClick={() => { setShowAddMember(true); setAddFeedback(''); }}
+                  onClick={() => navigate(`/artist/${id}/members/add`)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-xs font-semibold transition-colors"
                 >
                   <UserPlus size={13} /> Добавить участника
                 </button>
                 <button
-                  onClick={() => { setShowInviteLink(true); setGeneratedLink(''); }}
+                  onClick={() => navigate(`/artist/${id}/invite`)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition-colors"
                 >
                   <Link2 size={13} /> Пригласить на сервис
@@ -1100,7 +982,7 @@ export default function ArtistPage() {
             items={releases}
             to="/releases"
             showAdd={viewerIsAdmin}
-            onAdd={() => setShowReleaseForm(true)}
+            onAdd={() => navigate(`/artist/${id}/releases/new`)}
           />
         )}
 
@@ -1112,7 +994,7 @@ export default function ArtistPage() {
             items={clips}
             to="/clips"
             showAdd={viewerIsAdmin}
-            onAdd={() => setShowClipForm(true)}
+            onAdd={() => navigate(`/artist/${id}/clips/new`)}
           />
         )}
 
@@ -1135,7 +1017,7 @@ export default function ArtistPage() {
             count={myVacancies.length}
             to="/vacancies"
             showAdd={viewerIsOwner}
-            onAdd={() => setShowVacancyForm(true)}
+            onAdd={() => navigate(`/artist/${id}/vacancies/new`)}
             seeAllTo={`/artists/${id}/vacancies`}
           />
         )}
@@ -1263,229 +1145,6 @@ export default function ArtistPage() {
           )}
         </div>
         </>
-      )}
-
-      {/* ── Phase 5b: Add registered member sheet (нижний лист; z ниже RolePicker z-60) ── */}
-      {showAddMember && (
-        <>
-        <div className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm" onClick={() => setShowAddMember(false)} />
-        <div
-          className="fixed inset-x-0 bottom-0 z-[56] bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[85dvh] flex flex-col"
-          style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
-        >
-          {/* Drag handle */}
-          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 flex-shrink-0" />
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-800 flex-shrink-0">
-            <h2 className="text-base font-semibold text-white flex-1">Добавить участника</h2>
-            <button
-              onClick={() => addMemberMut.mutate()}
-              disabled={!addSelectedUserId || addRoleIds.length === 0 || addMemberMut.isPending}
-              title={addRoleIds.length === 0 ? 'Выберите роль участника' : undefined}
-              className="px-4 py-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center gap-2"
-            >
-              {addMemberMut.isPending && <Loader2 size={14} className="animate-spin" />}
-              Добавить
-            </button>
-            <button onClick={() => setShowAddMember(false)} className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors">
-              <X size={18} className="text-slate-400" />
-            </button>
-          </div>
-
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-5">
-            {/* Search users */}
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">1. Найдите пользователя</p>
-              <div className="relative mb-2">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input
-                  value={addSearch}
-                  onChange={e => { setAddSearch(e.target.value); setAddSelectedUserId(''); }}
-                  placeholder="Имя или никнейм..."
-                  className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 outline-none focus:border-primary-500"
-                />
-              </div>
-              {addSearch.trim().length < 1 ? (
-                <p className="text-xs text-slate-600 italic py-1">Начните вводить имя</p>
-              ) : searchLoading ? (
-                <div className="flex justify-center py-4"><Loader2 size={20} className="animate-spin text-slate-500" /></div>
-              ) : searchResults.length === 0 ? (
-                <p className="text-xs text-slate-600 italic py-1">Никого не найдено</p>
-              ) : (
-                <div className="space-y-1.5 max-h-56 overflow-y-auto">
-                  {searchResults.map((u) => (
-                    <button
-                      key={u.id}
-                      onClick={() => setAddSelectedUserId(u.id)}
-                      className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-colors text-left ${
-                        addSelectedUserId === u.id
-                          ? 'bg-primary-500/10 border-primary-500/40'
-                          : 'bg-slate-900 border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      <AvatarComponent src={u.avatar} name={`${u.lastName ?? ''} ${u.firstName ?? ''}`} size={36} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white truncate">{u.lastName} {u.firstName}</p>
-                        {u.nickname && <p className="text-xs text-slate-500 truncate">@{u.nickname}</p>}
-                      </div>
-                      {addSelectedUserId === u.id && <CheckCircle2 size={16} className="text-primary-400 flex-shrink-0" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Roles */}
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">2. Роли</p>
-              <button
-                onClick={() => setAddRolePickerOpen(true)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
-              >
-                <span className={addRoleIds.length ? 'text-white' : 'text-slate-500'}>
-                  {addRoleIds.length ? `Выбрано ролей: ${addRoleIds.length}` : 'Выбрать роли'}
-                </span>
-                <Tag size={14} className="text-slate-500" />
-              </button>
-            </div>
-
-            {/* Participation */}
-            <div>
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">3. Статус участия</p>
-              <div className="flex gap-2">
-                {([['ACTIVE_MEMBER', 'Действующий участник'], ['FORMER_MEMBER', 'Бывший участник']] as const).map(([val, label]) => (
-                  <button
-                    key={val}
-                    onClick={() => setAddParticipation(val)}
-                    className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-colors ${
-                      addParticipation === val
-                        ? 'bg-primary-500/10 border-primary-500/40 text-primary-300'
-                        : 'bg-slate-900 border-slate-800 text-slate-400'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {addFeedback && (
-              <p className="text-sm text-emerald-400 flex items-center gap-1.5"><CheckCircle2 size={15} /> {addFeedback}</p>
-            )}
-            {addMemberMut.isError && (
-              <p className="text-sm text-red-400">{(addMemberMut.error as any)?.response?.data?.error ?? 'Ошибка. Попробуйте снова.'}</p>
-            )}
-          </div>
-        </div>
-        </>
-      )}
-
-      {/* RolePicker for add-member */}
-      {addRolePickerOpen && (
-        <RolePicker
-          context="collective"
-          value={addRoleIds}
-          onSave={(ids) => setAddRoleIds(ids)}
-          onClose={() => setAddRolePickerOpen(false)}
-          title="Роли участника"
-        />
-      )}
-
-      {/* ── Phase 5b: Invite-link (unregistered) flow — нижний лист (z ниже RolePicker z-60) ── */}
-      {showInviteLink && (
-        <>
-        <div className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm" onClick={() => setShowInviteLink(false)} />
-        <div
-          className="fixed inset-x-0 bottom-0 z-[56] bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[85dvh] flex flex-col"
-          style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
-        >
-          {/* Drag handle */}
-          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 flex-shrink-0" />
-          <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800 flex-shrink-0">
-            <h3 className="font-semibold text-white text-sm">Пригласить на сервис</h3>
-            <button onClick={() => setShowInviteLink(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
-              <X size={16} className="text-slate-400" />
-            </button>
-          </div>
-          <div className="p-4 space-y-4 flex-1 min-h-0 overflow-y-auto">
-              {!generatedLink ? (
-                <>
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Роли</p>
-                    <button
-                      onClick={() => setLinkRolePickerOpen(true)}
-                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
-                    >
-                      <span className={linkRoleIds.length ? 'text-white' : 'text-slate-500'}>
-                        {linkRoleIds.length ? `Выбрано ролей: ${linkRoleIds.length}` : 'Выбрать роли'}
-                      </span>
-                      <Tag size={14} className="text-slate-500" />
-                    </button>
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Статус участия</p>
-                    <div className="flex gap-2">
-                      {([['ACTIVE_MEMBER', 'Действующий'], ['FORMER_MEMBER', 'Бывший']] as const).map(([val, label]) => (
-                        <button
-                          key={val}
-                          onClick={() => setLinkParticipation(val)}
-                          className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-colors ${
-                            linkParticipation === val
-                              ? 'bg-primary-500/10 border-primary-500/40 text-primary-300'
-                              : 'bg-slate-900 border-slate-800 text-slate-400'
-                          }`}
-                        >
-                          {label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => inviteLinkMut.mutate()}
-                    disabled={inviteLinkMut.isPending}
-                    className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
-                  >
-                    {inviteLinkMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />}
-                    Создать ссылку
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="text-xs text-slate-400">Ссылка-приглашение готова. Она привязана к выбранным ролям и не имеет срока действия.</p>
-                  <div className="flex items-center gap-2 p-2 bg-slate-800 rounded-lg">
-                    <code className="text-xs text-primary-300 truncate flex-1 min-w-0">{generatedLink}</code>
-                  </div>
-                  <button
-                    onClick={async () => {
-                      if (navigator.share) {
-                        try { await navigator.share({ url: generatedLink }); } catch { /* cancelled */ }
-                      } else {
-                        try {
-                          await navigator.clipboard.writeText(generatedLink);
-                          setLinkCopied(true);
-                          setTimeout(() => setLinkCopied(false), 1500);
-                        } catch { /* ignore */ }
-                      }
-                    }}
-                    className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2"
-                  >
-                    <Share2 size={14} /> {linkCopied ? 'Скопировано' : 'Поделиться'}
-                  </button>
-                </>
-              )}
-          </div>
-        </div>
-        </>
-      )}
-
-      {/* RolePicker for invite-link */}
-      {linkRolePickerOpen && (
-        <RolePicker
-          context="collective"
-          value={linkRoleIds}
-          onSave={(ids) => setLinkRoleIds(ids)}
-          onClose={() => setLinkRolePickerOpen(false)}
-          title="Роли приглашения"
-        />
       )}
 
       {/* RolePicker for editing a member's roles */}
@@ -1632,22 +1291,9 @@ export default function ArtistPage() {
             </button>
           </div>
 
+          {/* Только уникальные действия: редактирование, приглашения и добавление
+              участников доступны прямо на странице (карандаш и карточка «Состав»). */}
           <div className="px-4 pb-2 space-y-2 flex-1 min-h-0 overflow-y-auto">
-            {/* Редактировать артиста */}
-            {isOwner && (
-              <button
-                onClick={() => { setShowManageSheet(false); navigate(`/artist/${id}/edit`); }}
-                className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3.5 hover:bg-slate-800 transition-colors text-left"
-              >
-                <Edit3 size={17} className="text-primary-400 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-200">Редактировать артиста</p>
-                  <p className="text-xs text-slate-500 truncate">Название, описание, жанры, ссылки</p>
-                </div>
-                <ChevronRight size={16} className="text-slate-500 flex-shrink-0" />
-              </button>
-            )}
-
             {/* Статус активности */}
             {viewerIsAdmin && (
               <>
@@ -1695,58 +1341,10 @@ export default function ArtistPage() {
               </div>
               <ChevronRight size={16} className="text-slate-500 flex-shrink-0" />
             </button>
-
-            {/* Пригласить участника */}
-            {viewerIsAdmin && (
-              <button
-                onClick={() => { setShowManageSheet(false); setShowAddMember(true); setAddFeedback(''); }}
-                className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3.5 hover:bg-slate-800 transition-colors text-left"
-              >
-                <UserPlus size={17} className="text-primary-400 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-200">Пригласить участника</p>
-                  <p className="text-xs text-slate-500 truncate">Добавить зарегистрированного пользователя</p>
-                </div>
-                <ChevronRight size={16} className="text-slate-500 flex-shrink-0" />
-              </button>
-            )}
-
-            {/* Ссылка-приглашение */}
-            {viewerIsAdmin && (
-              <button
-                onClick={() => { setShowManageSheet(false); setShowInviteLink(true); setGeneratedLink(''); }}
-                className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3.5 hover:bg-slate-800 transition-colors text-left"
-              >
-                <Link2 size={17} className="text-primary-400 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-200">Ссылка-приглашение</p>
-                  <p className="text-xs text-slate-500 truncate">Пригласить незарегистрированного на сервис</p>
-                </div>
-                <ChevronRight size={16} className="text-slate-500 flex-shrink-0" />
-              </button>
-            )}
           </div>
         </div>
         </>
       )}
-
-      {/* Лист выбора жанров (редактирование карточки «Жанры») */}
-      <SelectSheet
-        isOpen={genresSheetOpen}
-        onClose={() => {
-          setGenresSheetOpen(false);
-          const current = new Set((artist.genres ?? []).map((g: { id: string }) => g.id));
-          const changed = genreDraft.length !== current.size || genreDraft.some((gid) => !current.has(gid));
-          if (changed) patchMut.mutate({ genreIds: genreDraft });
-        }}
-        title="Жанры"
-        options={genreOptions}
-        selectedIds={genreDraft}
-        onSelect={(v) => setGenreDraft(v as string[])}
-        mode="multiple"
-        showConfirm
-        height="full"
-      />
 
       {/* Activity status sheet */}
       <SelectSheet
@@ -1787,39 +1385,6 @@ export default function ArtistPage() {
         onConfirm={() => { if (removeAdminUserId) removeAdminMut.mutate(removeAdminUserId); }}
         onCancel={() => setRemoveAdminUserId(null)}
       />
-
-      {/* ── Phase 6b: Create release form ── */}
-      {showReleaseForm && id && (
-        <MediaItemForm
-          kind="release"
-          artistId={id}
-          onClose={() => setShowReleaseForm(false)}
-        />
-      )}
-
-      {/* ── Phase 6b: Create clip form ── */}
-      {showClipForm && id && (
-        <MediaItemForm
-          kind="clip"
-          artistId={id}
-          onClose={() => setShowClipForm(false)}
-        />
-      )}
-
-      {/* ── Create vacancy form (scoped to this artist) ── */}
-      {showVacancyForm && id && createPortal(
-        <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setShowVacancyForm(false)}>
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div
-            className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-4 pb-8 shadow-2xl"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mb-4 sm:hidden" />
-            <VacancyForm artistId={id} onClose={() => setShowVacancyForm(false)} />
-          </div>
-        </div>,
-        document.body
-      )}
 
       {/* ── Phase 7: avatar / banner cropping ── */}
       {cropAvatarFile && (
