@@ -138,8 +138,10 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
         userId: m.user.id,
         name: `${m.user.lastName ?? ''} ${m.user.firstName ?? ''}`.trim(),
         avatar: m.user.avatar ?? null,
+        // confirmedMembers отдаёт роли уже плоско ({id, name}); поддержим и
+        // вложенный формат ({role:{name}}) на всякий случай.
         roleIds: (m.roles ?? [])
-          .map((mr: any) => nameToId.get(String(mr.role?.name ?? '').trim().toLowerCase()))
+          .map((mr: any) => nameToId.get(String(mr.name ?? mr.role?.name ?? '').trim().toLowerCase()))
           .filter(Boolean) as string[],
       }));
     });
