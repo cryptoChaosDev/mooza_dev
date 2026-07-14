@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
   Crown, BadgeCheck, Ban, Users, Music2, Loader2, X,
-  BookOpen, Link2, ShieldCheck, Star, MessageCircle, HandshakeIcon, SlidersHorizontal,
+  BookOpen, Link2, ShieldCheck, Star, SlidersHorizontal,
   ArrowDownUp,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
@@ -12,9 +12,6 @@ import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
 import { referenceAPI, userAPI, artistAPI, favoriteAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
-import DealCreateModal from '../components/DealCreateModal';
-import { DEALS_ENABLED } from '../lib/features';
-import { useAuthGate } from '../components/AuthGateModal';
 import { plural } from '../lib/plural';
 import { useScrollLock } from '../lib/scrollLock';
 
@@ -165,127 +162,15 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
 }
 
 
-// ─── ServiceCardItem ─────────────────────────────────────────────────────────
-// Renders a single service offering (UserService) — a "service card", not a person.
-function ServiceCardItem({ card, currentUserId, onNavigate, onMessage, onDeal, ensureAuth }: {
-  card: any;
-  currentUserId?: string;
-  onNavigate: (card: any) => void;
-  onMessage: (userId: string) => void;
-  onDeal: (card: any) => void;
-  // Runs the action when signed in; otherwise opens the auth-gate modal.
-  ensureAuth: (action: () => void) => boolean;
-}) {
-  const user = card.user ?? {};
-  const isOwn = !!currentUserId && user.id === currentUserId;
-  const title = (card.name && String(card.name).trim()) || card.service?.name || 'Услуга';
-  const rating = user.rating && user.rating.count > 0 ? user.rating : null;
-  const priceItems: Array<{ name: string; price: string }> = Array.isArray(card.priceItems) ? card.priceItems : [];
-
-  // Price range label
-  let priceLabel = 'Цена договорная';
-  if (card.priceFrom != null && card.priceTo != null) {
-    priceLabel = `${Number(card.priceFrom).toLocaleString('ru-RU')} – ${Number(card.priceTo).toLocaleString('ru-RU')} ₽`;
-  } else if (card.priceFrom != null) {
-    priceLabel = `От ${Number(card.priceFrom).toLocaleString('ru-RU')} ₽`;
-  } else if (card.priceTo != null) {
-    priceLabel = `До ${Number(card.priceTo).toLocaleString('ru-RU')} ₽`;
-  }
-
-  return (
-    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 hover:border-primary-600/60 transition-all">
-      {/* Provider: avatar + name + rating */}
-      <button onClick={() => onNavigate(card)} className="w-full flex items-center gap-2.5 text-left">
-        <AvatarComponent
-          src={user.avatar}
-          name={`${user.firstName ?? ''} ${user.lastName ?? ''}`}
-          size={40}
-          className="rounded-xl flex-shrink-0"
-        />
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-sm font-semibold text-white truncate">{user.firstName} {user.lastName}</span>
-            {user.isPremium && <span title="Premium"><Crown size={12} className="text-amber-400 flex-shrink-0" /></span>}
-            {user.isVerified && <span title="Верифицирован"><BadgeCheck size={12} className="text-sky-400 flex-shrink-0" /></span>}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            {rating && (
-              <span className="flex items-center gap-0.5 text-[11px] text-amber-400 font-medium">
-                <Star size={11} fill="currentColor" />
-                {Number(rating.avg).toFixed(1)}
-              </span>
-            )}
-            {user.city && <span className="text-[11px] text-slate-600 truncate">{user.city}</span>}
-          </div>
-        </div>
-        {card.service?.section?.name && (
-          <span className="flex-shrink-0 self-start text-[10px] px-2 py-0.5 bg-primary-500/15 text-primary-300 rounded-md uppercase tracking-wide">
-            {card.service.section.name}
-          </span>
-        )}
-      </button>
-
-      {/* Service title (free-form name) */}
-      <button onClick={() => onNavigate(card)} className="block w-full text-left mt-3">
-        <p className="text-sm font-semibold text-white leading-snug break-words [overflow-wrap:anywhere]">{title}</p>
-        {card.service?.name && title !== card.service.name && (
-          <p className="text-[11px] text-slate-500 mt-0.5">{card.service.name}</p>
-        )}
-      </button>
-
-      {/* Price range + first 2-3 price-list positions */}
-      <div className="mt-2.5">
-        <p className="text-sm font-semibold text-primary-300">{priceLabel}</p>
-        {priceItems.length > 0 && (
-          <div className="mt-1.5 space-y-1">
-            {priceItems.slice(0, 3).map((it, i) => (
-              <div key={i} className="flex items-center justify-between gap-3 text-xs">
-                <span className="text-slate-400 truncate min-w-0">{it.name}</span>
-                <span className="text-slate-300 flex-shrink-0">{it.price ? `${it.price} ₽` : '—'}</span>
-              </div>
-            ))}
-            {priceItems.length > 3 && (
-              <p className="text-[11px] text-slate-600">ещё {priceItems.length - 3} поз.</p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Actions */}
-      {!isOwn && (
-        <div className="flex gap-2 mt-3.5">
-          <button
-            onClick={() => ensureAuth(() => onMessage(user.id))}
-            className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-primary-600 hover:bg-primary-500 text-white text-xs font-medium rounded-xl transition-colors"
-          >
-            <MessageCircle size={14} /> Написать
-          </button>
-          {DEALS_ENABLED && (
-            <button
-              onClick={() => ensureAuth(() => onDeal(card))}
-              className="flex-1 flex items-center justify-center gap-1.5 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-colors"
-            >
-              <HandshakeIcon size={14} /> Оформить сделку
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
 // ─── SearchPage ───────────────────────────────────────────────────────────────
 export default function SearchPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user: currentUser } = useAuthStore();
-  // Auth gate for guest "Написать" / "Оформить сделку" (default modal text).
-  const { ensureAuth, authGateModal } = useAuthGate();
 
   const [activeTab, setActiveTab] = useState<CatalogTab>('services');
   // Звёздочка «Избранное» — на вкладках «Артисты»/«Люди» показывает избранные (подписки/favorites)
   const [showFavorites, setShowFavorites] = useState(false);
-  const [dealCard, setDealCard] = useState<any>(null);
 
   // ── Услуги tab state ───────────────────────────────────────────────────────
   // Browse: Sections → Services → service filters. Results are service cards.
@@ -704,7 +589,121 @@ export default function SearchPage() {
             );
           })()}
 
-          {/* Sort + filters controls (services tab) */}
+          {/* Sort + filters — одинаковая строка контролов на всех вкладках */}
+          {activeTab === 'artists' && (
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setArtistSortOpen(v => !v)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+                >
+                  <ArrowDownUp size={14} />
+                  {ARTIST_SORT_OPTIONS.find(o => o.value === artistSort)?.label}
+                  <ChevronDown size={13} className={`transition-transform ${artistSortOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {artistSortOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[55]" onClick={() => setArtistSortOpen(false)} />
+                    <div className="absolute left-0 mt-1.5 z-[56] w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1">
+                      {ARTIST_SORT_OPTIONS.map(o => (
+                        <button
+                          key={o.value}
+                          type="button"
+                          onClick={() => { setArtistSort(o.value); setArtistSortOpen(false); }}
+                          className={`w-full text-left px-3 py-2 text-xs transition-colors ${
+                            artistSort === o.value ? 'bg-primary-600/20 text-primary-300 font-medium' : 'text-slate-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          {o.label}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => { setTempArtistGenres(artistGenreFilter); setArtistFilterOpen(true); }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+              >
+                <SlidersHorizontal size={14} />
+                Фильтры
+                {artistGenreFilter.length > 0 && (
+                  <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
+                    {artistGenreFilter.length}
+                  </span>
+                )}
+              </button>
+            </div>
+          )}
+          {activeTab === 'people' && (
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setPeopleSortOpen(v => !v)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+                  title="Сортировка"
+                >
+                  <ArrowDownUp size={14} />
+                  {PEOPLE_SORT_OPTIONS.find(o => o.value === peopleSort)?.label}
+                  <ChevronDown size={13} className={`transition-transform ${peopleSortOpen ? 'rotate-180' : ''}`} />
+                </button>
+                {peopleSortOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[55]" onClick={() => setPeopleSortOpen(false)} />
+                    <div className="absolute left-0 mt-1.5 z-[56] w-60 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1">
+                      {PEOPLE_SORT_OPTIONS.map(o => (
+                        <button
+                          key={o.value}
+                          type="button"
+                          onClick={() => {
+                            if (o.value === 'alpha' && peopleSort === 'alpha') {
+                              setPeopleAlphaDir(d => (d === 'asc' ? 'desc' : 'asc'));
+                            } else {
+                              setPeopleSort(o.value);
+                              if (o.value === 'alpha') setPeopleAlphaDir('asc');
+                            }
+                            if (o.value !== 'alpha') setPeopleSortOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 text-xs transition-colors flex items-center justify-between gap-2 ${
+                            peopleSort === o.value ? 'bg-primary-600/20 text-primary-300 font-medium' : 'text-slate-300 hover:bg-slate-800'
+                          }`}
+                        >
+                          <span>{o.label}</span>
+                          {o.value === 'alpha' && peopleSort === 'alpha' && (
+                            <span className="text-[10px] text-primary-400">{peopleAlphaDir === 'asc' ? 'А→Я' : 'Я→А'}</span>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setTempPeopleLocation(peopleLocation);
+                  setTempPeopleProfession(peopleProfession);
+                  setTempPeopleOccupancy(peopleOccupancy);
+                  setPeopleLocSearch('');
+                  setPeopleProfSearch('');
+                  setPeopleFilterOpen(true);
+                }}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+              >
+                <SlidersHorizontal size={14} />
+                Фильтры
+                {(() => {
+                  const n = peopleLocation.length + peopleProfession.length + peopleOccupancy.length;
+                  return n > 0 ? (
+                    <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{n}</span>
+                  ) : null;
+                })()}
+              </button>
+            </div>
+          )}
           {activeTab === 'services' && (() => {
             const activeFilterCount =
               profFilterValues.length + locationFilter.length + (priceMin !== '' || priceMax !== '' ? 1 : 0);
@@ -841,31 +840,70 @@ export default function SearchPage() {
               </div>
 
               {catalogLoading ? (
-                <div className="space-y-2">
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
                   {Array.from({ length: 6 }).map((_, i) => (
-                    <div key={i} className="bg-slate-900 border border-slate-800 rounded-2xl p-4 animate-pulse">
-                      <div className="h-4 bg-slate-800 rounded w-2/5 mb-2" />
-                      <div className="h-3 bg-slate-800 rounded w-1/3 mb-4" />
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-lg bg-slate-800" />
-                        <div className="h-3 bg-slate-800 rounded w-1/4" />
+                    <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-slate-800/50 animate-pulse last:border-0">
+                      <div className="w-11 h-11 rounded-xl bg-slate-800 flex-shrink-0" />
+                      <div className="flex-1 space-y-2">
+                        <div className="h-3.5 bg-slate-800 rounded w-1/3" />
+                        <div className="h-3 bg-slate-800 rounded w-1/2" />
                       </div>
                     </div>
                   ))}
                 </div>
               ) : serviceCards && serviceCards.length > 0 ? (
-                <div className="space-y-2">
-                  {serviceCards.map((card: any) => (
-                    <ServiceCardItem
-                      key={card.id}
-                      card={card}
-                      currentUserId={currentUser?.id}
-                      onNavigate={handleNavigateToServiceCard}
-                      onMessage={(uid) => navigate(`/messages/${uid}`)}
-                      onDeal={(c) => setDealCard(c)}
-                      ensureAuth={ensureAuth}
-                    />
-                  ))}
+                <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden divide-y divide-slate-800/50">
+                  {/* Компактные строки — та же анатомия, что у Артистов/Людей */}
+                  {serviceCards.map((card: any) => {
+                    const cardUser = card.user ?? {};
+                    const title = (card.name && String(card.name).trim()) || card.service?.name || 'Услуга';
+                    const rating = cardUser.rating && cardUser.rating.count > 0 ? cardUser.rating : null;
+                    let priceLabel = 'Договорная';
+                    if (card.priceFrom != null && card.priceTo != null) {
+                      priceLabel = `${Number(card.priceFrom).toLocaleString('ru-RU')}–${Number(card.priceTo).toLocaleString('ru-RU')} ₽`;
+                    } else if (card.priceFrom != null) {
+                      priceLabel = `от ${Number(card.priceFrom).toLocaleString('ru-RU')} ₽`;
+                    } else if (card.priceTo != null) {
+                      priceLabel = `до ${Number(card.priceTo).toLocaleString('ru-RU')} ₽`;
+                    }
+                    return (
+                      <button
+                        key={card.id}
+                        onClick={() => handleNavigateToServiceCard(card)}
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors text-left"
+                      >
+                        <AvatarComponent
+                          src={cardUser.avatar}
+                          name={`${cardUser.firstName ?? ''} ${cardUser.lastName ?? ''}`}
+                          size={44}
+                          className="rounded-xl flex-shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-sm font-semibold text-white truncate">{title}</span>
+                            {card.service?.section?.name && (
+                              <span className="text-[10px] px-1.5 py-0.5 bg-primary-500/20 text-primary-300 rounded-md flex-shrink-0">
+                                {card.service.section.name}
+                              </span>
+                            )}
+                            {cardUser.isPremium && <span title="Premium"><Crown size={12} className="text-amber-400 flex-shrink-0" /></span>}
+                            {cardUser.isVerified && <span title="Верифицирован"><BadgeCheck size={12} className="text-sky-400 flex-shrink-0" /></span>}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                            <span className="text-xs text-slate-500 truncate">{cardUser.firstName} {cardUser.lastName}</span>
+                            {cardUser.city && <span className="text-xs text-slate-600">· {cardUser.city}</span>}
+                            {rating && (
+                              <span className="flex items-center gap-0.5 text-xs text-amber-400 font-medium">
+                                · <Star size={11} fill="currentColor" />{Number(rating.avg).toFixed(1)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <span className="text-xs font-semibold text-primary-300 flex-shrink-0 whitespace-nowrap">{priceLabel}</span>
+                        <ChevronRight size={16} className="text-slate-600 flex-shrink-0" />
+                      </button>
+                    );
+                  })}
                 </div>
               ) : (
                 <div className="flex flex-col items-center py-14 text-center">
@@ -907,56 +945,6 @@ export default function SearchPage() {
                   );
                 })}
               </div>
-            </div>
-
-            {/* Sort + advanced filter controls */}
-            <div className="flex items-center gap-2 mb-4">
-              {/* Sort */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setArtistSortOpen(v => !v)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
-                >
-                  <ArrowDownUp size={14} />
-                  {ARTIST_SORT_OPTIONS.find(o => o.value === artistSort)?.label}
-                  <ChevronDown size={13} className={`transition-transform ${artistSortOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {artistSortOpen && (
-                  <>
-                    <div className="fixed inset-0 z-[55]" onClick={() => setArtistSortOpen(false)} />
-                    <div className="absolute left-0 mt-1.5 z-[56] w-52 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1">
-                      {ARTIST_SORT_OPTIONS.map(o => (
-                        <button
-                          key={o.value}
-                          type="button"
-                          onClick={() => { setArtistSort(o.value); setArtistSortOpen(false); }}
-                          className={`w-full text-left px-3 py-2 text-xs transition-colors ${
-                            artistSort === o.value ? 'bg-primary-600/20 text-primary-300 font-medium' : 'text-slate-300 hover:bg-slate-800'
-                          }`}
-                        >
-                          {o.label}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              {/* Advanced filter (full genre multiselect) */}
-              <button
-                type="button"
-                onClick={() => { setTempArtistGenres(artistGenreFilter); setArtistFilterOpen(true); }}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
-              >
-                <SlidersHorizontal size={14} />
-                Фильтр
-                {artistGenreFilter.length > 0 && (
-                  <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
-                    {artistGenreFilter.length}
-                  </span>
-                )}
-              </button>
             </div>
 
             {/* Genre tiles */}
@@ -1011,9 +999,7 @@ export default function SearchPage() {
             {/* Artist list */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
-                  {artistSort === 'alpha' ? 'Все артисты · от А до Я' : 'Все артисты · сначала новые'}
-                </p>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Все артисты</p>
                 {displayArtistsLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
               </div>
 
@@ -1084,76 +1070,8 @@ export default function SearchPage() {
         {/* ══ PEOPLE TAB ══ */}
         {activeTab === 'people' && (
           <div className="mt-4">
-            {/* Filters control */}
-            <div className="flex items-center gap-2 mb-4">
-              <button
-                type="button"
-                onClick={() => {
-                  setTempPeopleLocation(peopleLocation);
-                  setTempPeopleProfession(peopleProfession);
-                  setTempPeopleOccupancy(peopleOccupancy);
-                  setPeopleLocSearch('');
-                  setPeopleProfSearch('');
-                  setPeopleFilterOpen(true);
-                }}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
-              >
-                <SlidersHorizontal size={14} />
-                Фильтры
-                {(() => {
-                  const n = peopleLocation.length + peopleProfession.length + peopleOccupancy.length;
-                  return n > 0 ? (
-                    <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{n}</span>
-                  ) : null;
-                })()}
-              </button>
-            </div>
-
-            {/* "Все участники" + sort (no participant count) */}
             <div className="flex items-center gap-2 mb-3">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Все участники</p>
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setPeopleSortOpen(v => !v)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
-                  title="Сортировка"
-                >
-                  <ArrowDownUp size={14} />
-                  {PEOPLE_SORT_OPTIONS.find(o => o.value === peopleSort)?.label}
-                  <ChevronDown size={13} className={`transition-transform ${peopleSortOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {peopleSortOpen && (
-                  <>
-                    <div className="fixed inset-0 z-[55]" onClick={() => setPeopleSortOpen(false)} />
-                    <div className="absolute left-0 mt-1.5 z-[56] w-60 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden py-1">
-                      {PEOPLE_SORT_OPTIONS.map(o => (
-                        <button
-                          key={o.value}
-                          type="button"
-                          onClick={() => {
-                            if (o.value === 'alpha' && peopleSort === 'alpha') {
-                              setPeopleAlphaDir(d => (d === 'asc' ? 'desc' : 'asc'));
-                            } else {
-                              setPeopleSort(o.value);
-                              if (o.value === 'alpha') setPeopleAlphaDir('asc');
-                            }
-                            if (o.value !== 'alpha') setPeopleSortOpen(false);
-                          }}
-                          className={`w-full text-left px-3 py-2 text-xs transition-colors flex items-center justify-between gap-2 ${
-                            peopleSort === o.value ? 'bg-primary-600/20 text-primary-300 font-medium' : 'text-slate-300 hover:bg-slate-800'
-                          }`}
-                        >
-                          <span>{o.label}</span>
-                          {o.value === 'alpha' && peopleSort === 'alpha' && (
-                            <span className="text-[10px] text-primary-400">{peopleAlphaDir === 'asc' ? 'А→Я' : 'Я→А'}</span>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
-              </div>
               {displayPeopleLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
             </div>
 
@@ -1191,17 +1109,6 @@ export default function SearchPage() {
         )}
 
       </div>
-
-      {dealCard && dealCard.user && (
-        <DealCreateModal
-          executorId={dealCard.user.id}
-          executorName={`${dealCard.user.firstName ?? ''} ${dealCard.user.lastName ?? ''}`.trim()}
-          serviceId={dealCard.service?.id}
-          userServiceId={dealCard.id}
-          serviceName={(dealCard.name && String(dealCard.name).trim()) || dealCard.service?.name}
-          onClose={() => setDealCard(null)}
-        />
-      )}
 
       {/* Attribute filters modal */}
       {filtersOpen && createPortal(
@@ -1579,8 +1486,6 @@ export default function SearchPage() {
         document.body
       )}
 
-      {/* Guest auth-gate for "Написать" / "Оформить сделку" */}
-      {authGateModal}
     </div>
   );
 }
