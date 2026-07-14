@@ -123,36 +123,67 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
     return m;
   }, [roleCategories, initial]);
 
+  // Для КЛИПА «творческость» участника определяем по РЕЛИЗНОМУ справочнику
+  // (в клиповом — кино-роли, музыкантских имён там нет): музыканты
+  // подставляются с ролью «Артист» из клипового каталога.
+  const { data: releaseCatalogForSeed = [], isFetched: releaseCatFetched } = useQuery({
+    queryKey: ['roles', 'release'],
+    queryFn: async () => {
+      const { data } = await roleAPI.list('release');
+      return data as { category: string; roles: { id: string; name: string }[] }[];
+    },
+    enabled: !editing && !membersSeeded && !isRelease,
+  });
+
   // Сид участников: роли в коллективе (context COLLECTIVE) переносим в роли
-  // релиза/клипа ПО ИМЕНАМ — id в каталогах разные. Ждём загрузку каталога,
+  // релиза/клипа ПО ИМЕНАМ — id в каталогах разные. Ждём загрузку каталогов,
   // чтобы роли скопировались, а не потерялись.
   useEffect(() => {
     if (editing || membersSeeded || !artistForSeed || !rolesFetched) return;
+    if (!isRelease && !releaseCatFetched) return; // клипу нужен и релизный каталог
     const nameToId = new Map<string, string>();
     for (const c of roleCategories) for (const r of c.roles) nameToId.set(r.name.trim().toLowerCase(), r.id);
+    // Набор «творческих» имён ролей — из релизного справочника
+    const creativeNames = new Set<string>();
+    const creativeSource = isRelease ? roleCategories : releaseCatalogForSeed;
+    for (const c of creativeSource) for (const r of c.roles) creativeNames.add(r.name.trim().toLowerCase());
+    const defaultClipArtistId = !isRelease ? nameToId.get('артист') : undefined;
+
     const active = (artistForSeed.confirmedMembers ?? [])
       .filter((m: any) => m.participationStatus === 'ACTIVE_MEMBER' && m.user?.id);
     setParticipants((prev) => {
       if (prev.length > 0) return prev; // пользователь уже добавил кого-то сам
       return active
-        .map((m: any) => ({
-          userId: m.user.id,
-          name: `${m.user.lastName ?? ''} ${m.user.firstName ?? ''}`.trim(),
-          avatar: m.user.avatar ?? null,
+        .map((m: any) => {
           // confirmedMembers отдаёт роли уже плоско ({id, name}); поддержим и
           // вложенный формат ({role:{name}}) на всякий случай.
-          roleIds: (m.roles ?? [])
-            .map((mr: any) => nameToId.get(String(mr.name ?? mr.role?.name ?? '').trim().toLowerCase()))
-            .filter(Boolean) as string[],
-        }))
-        // Переносим только «творческих»: у кого хоть одна роль смапилась в
-        // релизный/клиповый справочник. Чисто менеджерские (директор, юрист…)
-        // и участники без ролей в состав кредитов не попадают — их можно
-        // добавить вручную через поиск.
-        .filter((p: { roleIds: string[] }) => p.roleIds.length > 0);
+          const memberRoleNames = (m.roles ?? [])
+            .map((mr: any) => String(mr.name ?? mr.role?.name ?? '').trim().toLowerCase())
+            .filter(Boolean) as string[];
+          let roleIds = memberRoleNames
+            .map((n) => nameToId.get(n))
+            .filter(Boolean) as string[];
+          const isCreative = roleIds.length > 0 || memberRoleNames.some((n) => creativeNames.has(n));
+          // Музыкант в клипе без прямого совпадения ролей — роль «Артист»
+          if (!isRelease && isCreative && roleIds.length === 0 && defaultClipArtistId) {
+            roleIds = [defaultClipArtistId];
+          }
+          return {
+            userId: m.user.id,
+            name: `${m.user.lastName ?? ''} ${m.user.firstName ?? ''}`.trim(),
+            avatar: m.user.avatar ?? null,
+            roleIds,
+            isCreative,
+          };
+        })
+        // Переносим только «творческих»: чисто менеджерские (директор, юрист…)
+        // и участники без ролей в кредиты не попадают — их можно добавить
+        // вручную через поиск.
+        .filter((p: { isCreative: boolean; roleIds: string[] }) => p.isCreative && p.roleIds.length > 0)
+        .map(({ isCreative: _c, ...p }: { isCreative: boolean; userId: string; name: string; avatar: string | null; roleIds: string[] }) => p);
     });
     setMembersSeeded(true);
-  }, [editing, membersSeeded, artistForSeed, rolesFetched, roleCategories]);
+  }, [editing, membersSeeded, artistForSeed, rolesFetched, roleCategories, isRelease, releaseCatFetched, releaseCatalogForSeed]);
 
   // Participant search
   const [search, setSearch] = useState('');
