@@ -42,7 +42,7 @@ export default function ArtistLookup({
         <input
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Название артиста на Deezer / Apple Music…"
+          placeholder="Название артиста на Яндекс.Музыке / Deezer / Apple…"
           className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
         />
         {(loading || applying) && <Loader2 size={14} className="absolute right-3 top-2.5 text-slate-400 animate-spin" />}

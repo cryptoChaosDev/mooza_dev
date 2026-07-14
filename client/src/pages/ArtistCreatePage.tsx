@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Loader2, Camera, Copy, Check, ShieldCheck, Image as ImageIcon, Search } from 'lucide-react';
+import { ArrowLeft, Loader2, Camera, Copy, Check, ShieldCheck, Image as ImageIcon } from 'lucide-react';
 import { artistAPI, referenceAPI, roleAPI, releaseAPI, clipAPI } from '../lib/api';
 import MediaImportList from '../components/MediaImportList';
 import { toast } from '../stores/toastStore';
@@ -298,48 +298,6 @@ export default function ArtistCreatePage() {
               />
             </div>
 
-            {/* ── Найти артиста: автозаполнение из площадок ── */}
-            <div className="rounded-2xl border border-primary-700/30 bg-primary-900/10 p-3">
-              <label className="text-xs font-semibold text-primary-300 mb-1.5 flex items-center gap-1.5">
-                <Search size={13} /> Найти артиста (автозаполнение)
-              </label>
-              <input
-                value={lookupQuery}
-                onChange={e => setLookupQuery(e.target.value)}
-                placeholder="Название на Deezer / Apple Music / MusicBrainz…"
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
-              />
-              {lookupLoading && <p className="text-[11px] text-slate-500 mt-1.5">Поиск…</p>}
-              {lookupResults.length > 0 && (
-                <div className="mt-2 space-y-1.5 max-h-72 overflow-y-auto">
-                  {lookupResults.map((c: any, i: number) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => applyCandidate(c)}
-                      disabled={applying}
-                      className="w-full flex items-center gap-2.5 p-2 rounded-xl bg-slate-800/60 border border-slate-700/50 hover:border-primary-500/50 text-left transition-colors disabled:opacity-50"
-                    >
-                      <div className="w-10 h-10 rounded-lg bg-slate-700 overflow-hidden flex-shrink-0 flex items-center justify-center">
-                        {c.imageUrl ? <img src={c.imageUrl} alt="" className="w-full h-full object-cover" /> : <Camera size={16} className="text-slate-500" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white truncate">
-                          {c.name}
-                          {c.type && <span className="text-[10px] text-slate-500 ml-1.5">{c.type === 'GROUP' ? 'группа' : 'соло'}</span>}
-                        </p>
-                        <p className="text-[10px] text-slate-500 truncate">
-                          {[c.disambiguation, (c.genres || []).slice(0, 2).join(', ')].filter(Boolean).join(' · ') || (c.sources || []).join(' · ')}
-                        </p>
-                      </div>
-                      <span className="text-[10px] text-primary-400 flex-shrink-0">{applying ? '…' : 'Заполнить'}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-              <p className="text-[10px] text-slate-500 mt-1.5">Подставит название, тип, жанры, фото и ссылки — всё можно отредактировать.</p>
-            </div>
-
             {/* Avatar */}
             <div>
               <label className="block text-xs text-slate-500 mb-2">Аватар <span className="text-red-400">*</span></label>
@@ -364,16 +322,48 @@ export default function ArtistCreatePage() {
               </div>
             </div>
 
-            {/* Название */}
+            {/* Название — с автопоиском по Яндекс.Музыке/Deezer/Apple по мере ввода */}
             <div>
               <label className="block text-xs text-slate-500 mb-1">Название <span className="text-red-400">*</span></label>
-              <input
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
-                value={form.name}
-                onChange={e => handleNameChange(e.target.value)}
-                placeholder="Название артиста"
-                autoComplete="off"
-              />
+              <div className="relative">
+                <input
+                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-white text-sm focus:outline-none focus:border-primary-500 transition-colors"
+                  value={form.name}
+                  onChange={e => { handleNameChange(e.target.value); setLookupQuery(e.target.value); }}
+                  placeholder="Название артиста"
+                  autoComplete="off"
+                />
+                {(lookupLoading || lookupResults.length > 0) && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 z-20 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto">
+                    {lookupLoading && lookupResults.length === 0 && (
+                      <p className="px-3 py-2.5 text-xs text-slate-500">Ищем на Яндекс.Музыке…</p>
+                    )}
+                    {lookupResults.map((c: any, i: number) => (
+                      <button
+                        key={i}
+                        type="button"
+                        onClick={() => applyCandidate(c)}
+                        disabled={applying}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-left hover:bg-slate-800/60 transition-colors disabled:opacity-50 border-b border-slate-800/50 last:border-0"
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-slate-700 overflow-hidden flex-shrink-0 flex items-center justify-center">
+                          {c.imageUrl ? <img src={c.imageUrl} alt="" className="w-full h-full object-cover" /> : <Camera size={15} className="text-slate-500" />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-white truncate">{c.name}</p>
+                          <p className="text-[10px] text-slate-500 truncate">
+                            {[(c.genres || []).slice(0, 2).join(', '), (c.sources || []).join(' · ')].filter(Boolean).join(' · ')}
+                          </p>
+                        </div>
+                        <span className="text-[10px] text-primary-400 flex-shrink-0">{applying ? '…' : 'Заполнить'}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1">
+                Начните вводить — найдём артиста на Яндекс.Музыке и других площадках и заполним карточку: фото, жанры, ссылки, релизы.
+              </p>
               {duplicate && (
                 <div className="mt-2 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
                   <p className="text-xs text-amber-300 font-medium mb-2">Такой артист уже существует</p>
