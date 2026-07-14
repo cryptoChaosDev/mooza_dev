@@ -375,9 +375,17 @@ router.post('/conversations/:id/upload', authenticate, uploadChatAttachment.sing
       return res.status(403).json({ error: 'Not a member' });
     }
 
+    // multer/busboy декодирует имя файла как latin1 — кириллица приходит
+    // кракозябрами. Перечитываем как UTF-8 (для ASCII это no-op).
+    let originalName = req.file.originalname;
+    try {
+      const decoded = Buffer.from(originalName, 'latin1').toString('utf8');
+      if (!decoded.includes('�')) originalName = decoded;
+    } catch {}
+
     res.json({
       url: `/uploads/chat/${req.file.filename}`,
-      name: req.file.originalname,
+      name: originalName,
       size: req.file.size,
       type: req.file.mimetype,
     });
