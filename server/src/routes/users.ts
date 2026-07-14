@@ -803,6 +803,8 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
     const locations = splitList(req.query.location);          // city/country names
     const professionFilter = splitList(req.query.profession); // profession ids
     const occupancy = splitList(req.query.occupancy).filter(o => ['open', 'considering', 'closed'].includes(o));
+    const verifiedOnly = req.query.verifiedOnly === '1' || req.query.verifiedOnly === 'true';
+    const withReviews = req.query.withReviews === '1' || req.query.withReviews === 'true';
     const sortRaw = String(req.query.sort ?? 'date');
     const sort = ['date', 'rating', 'connections', 'alpha'].includes(sortRaw) ? sortRaw : 'date';
     const alphaDir = String(req.query.alphaDir ?? 'asc') === 'desc' ? 'desc' : 'asc';
@@ -895,6 +897,10 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
       andClauses.push({ occupancyStatus: { in: occupancy } });
     }
 
+    if (verifiedOnly) {
+      andClauses.push({ isVerified: true });
+    }
+
     if (andClauses.length > 0) {
       where.AND = andClauses;
     }
@@ -943,7 +949,7 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
     });
 
     // Compute per-user aggregates: avg rating, reviews count, connection count.
-    const enriched = users.map((u: any) => {
+    let enriched = users.map((u: any) => {
       const reviews = u.reviewsReceived ?? [];
       const reviewsCount = reviews.length;
       const ratingAvg = reviewsCount > 0
@@ -954,6 +960,11 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
       const { reviewsReceived, ...rest } = u;
       return { ...rest, ratingAvg, reviewsCount, connectionsCount };
     });
+
+    // «Только с отзывами» — aggregate-based, so filtered post-query.
+    if (withReviews) {
+      enriched = enriched.filter((u: any) => u.reviewsCount > 0);
+    }
 
     if (sort === 'rating') {
       enriched.sort((a: any, b: any) => (b.ratingAvg ?? -1) - (a.ratingAvg ?? -1));

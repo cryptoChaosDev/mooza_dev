@@ -586,7 +586,10 @@ router.get('/search', async (req, res) => {
 //   sort             — date (default, newest first) | price_asc | price_desc | rating
 router.get('/service-search', async (req, res) => {
   try {
-    const { serviceId, sectionId, customFilterValueIds, query, location, priceMin, priceMax, sort, page = '1', limit = '20' } = req.query;
+    const {
+      serviceId, sectionId, customFilterValueIds, query, location, priceMin, priceMax,
+      deadlineMax, verifiedOnly, ratingMin, sort, page = '1', limit = '20',
+    } = req.query;
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
     const skip = (pageNum - 1) * limitNum;
@@ -594,43 +597,54 @@ router.get('/service-search', async (req, res) => {
     const cities = String(location || '').split(',').map(s => s.trim()).filter(Boolean).map(c => yoNorm(c));
     const priceMinNum = priceMin != null && priceMin !== '' ? parseInt(priceMin as string, 10) : null;
     const priceMaxNum = priceMax != null && priceMax !== '' ? parseInt(priceMax as string, 10) : null;
+    const deadlineMaxNum = deadlineMax != null && deadlineMax !== '' ? parseInt(deadlineMax as string, 10) : null;
+    const ratingMinNum = ratingMin != null && ratingMin !== '' ? parseFloat(ratingMin as string) : null;
     const sortMode = ['date', 'price_asc', 'price_desc', 'rating'].includes(String(sort)) ? String(sort) : 'date';
 
     // Show every created/submitted offering — only hide unfinished drafts and archived ones.
     const where: any = { status: { notIn: ['draft', 'archived'] } };
+    const andConds: any[] = [];
     if (serviceId) where.serviceId = String(serviceId);
     if (sectionId) where.service = { sectionId: String(sectionId) };
     if (cfvIds.length) where.selectedCustomFilterValues = { some: { id: { in: cfvIds } } };
-    if (cities.length) where.user = { cityNorm: { in: cities } };
+    const userWhere: any = {};
+    if (cities.length) userWhere.cityNorm = { in: cities };
+    if (verifiedOnly === '1' || verifiedOnly === 'true') userWhere.isVerified = true;
+    if (Object.keys(userWhere).length) where.user = userWhere;
     // Price range: keep offerings whose advertised range overlaps [priceMinNum, priceMaxNum].
+    // «Договорная» (обе цены пусты) при заданном диапазоне отсеивается — иначе фильтр
+    // выглядит неработающим.
+    if ((priceMinNum != null && !Number.isNaN(priceMinNum)) || (priceMaxNum != null && !Number.isNaN(priceMaxNum))) {
+      andConds.push({ OR: [{ priceFrom: { not: null } }, { priceTo: { not: null } }] });
+    }
     if (priceMinNum != null && !Number.isNaN(priceMinNum)) {
-      // Drop offerings that are entirely cheaper than the requested minimum.
-      where.OR = [{ priceTo: null }, { priceTo: { gte: priceMinNum } }, { priceFrom: { gte: priceMinNum } }];
+      andConds.push({ OR: [{ priceTo: null }, { priceTo: { gte: priceMinNum } }] });
     }
     if (priceMaxNum != null && !Number.isNaN(priceMaxNum)) {
-      // Drop offerings that are entirely more expensive than the requested maximum.
-      where.AND = [
-        ...(where.AND ?? []),
-        { OR: [{ priceFrom: null }, { priceFrom: { lte: priceMaxNum } }, { priceTo: { lte: priceMaxNum } }] },
-      ];
+      andConds.push({ OR: [{ priceFrom: null }, { priceFrom: { lte: priceMaxNum } }] });
+    }
+    // Срок выполнения ≤ N дней; услуги без указанного срока отсеиваются.
+    if (deadlineMaxNum != null && !Number.isNaN(deadlineMaxNum)) {
+      andConds.push({
+        OR: [
+          { deadlineTo: { lte: deadlineMaxNum } },
+          { AND: [{ deadlineTo: null }, { deadlineFrom: { lte: deadlineMaxNum } }] },
+        ],
+      });
     }
     if (query) {
       const q = yoNorm(String(query));
-      const queryOr = [
-        { user: { firstNameNorm: { contains: q } } },
-        { user: { lastNameNorm: { contains: q } } },
-        { user: { cityNorm: { contains: q } } },
-        { service: { nameNorm: { contains: q } } },
-        { nameNorm: { contains: q } },
-      ];
-      // If a price-min OR already exists, AND the two OR groups together.
-      if (where.OR) {
-        where.AND = [...(where.AND ?? []), { OR: where.OR }, { OR: queryOr }];
-        delete where.OR;
-      } else {
-        where.OR = queryOr;
-      }
+      andConds.push({
+        OR: [
+          { user: { firstNameNorm: { contains: q } } },
+          { user: { lastNameNorm: { contains: q } } },
+          { user: { cityNorm: { contains: q } } },
+          { service: { nameNorm: { contains: q } } },
+          { nameNorm: { contains: q } },
+        ],
+      });
     }
+    if (andConds.length) where.AND = andConds;
 
     const select = {
       id: true,
@@ -646,7 +660,7 @@ router.get('/service-search', async (req, res) => {
       selectedCustomFilterValues: { select: { id: true, value: true, filter: { select: { id: true, name: true } } } },
     } as const;
 
-    const totalCount = await prisma.userService.count({ where });
+    let totalCount = await prisma.userService.count({ where });
 
     // Compute provider ratings; needed both for "rating" sort and for display.
     const attachRatings = async (rows: any[]) => {
@@ -667,16 +681,30 @@ router.get('/service-search', async (req, res) => {
     };
 
     let results: any[];
-    if (sortMode === 'rating') {
-      // Rating is computed post-query, so DB-side ordering isn't possible. Fetch all
-      // matching rows (capped), attach ratings, sort by avg rating, then paginate.
+    if (sortMode === 'rating' || (ratingMinNum != null && !Number.isNaN(ratingMinNum))) {
+      // Rating is computed post-query, so DB-side ordering/filtering isn't possible.
+      // Fetch all matching rows (capped), attach ratings, filter/sort, then paginate.
       const all = await prisma.userService.findMany({ where, orderBy: { createdAt: 'desc' }, take: 500, select });
-      const withRatings = await attachRatings(all);
-      withRatings.sort((a, b) => {
-        const ra = a.user?.rating?.count > 0 ? Number(a.user.rating.avg) : -1;
-        const rb = b.user?.rating?.count > 0 ? Number(b.user.rating.avg) : -1;
-        return rb - ra;
-      });
+      let withRatings = await attachRatings(all);
+      if (ratingMinNum != null && !Number.isNaN(ratingMinNum)) {
+        withRatings = withRatings.filter(i => i.user?.rating?.count > 0 && Number(i.user.rating.avg) >= ratingMinNum);
+        totalCount = withRatings.length;
+      }
+      if (sortMode === 'rating') {
+        withRatings.sort((a, b) => {
+          const ra = a.user?.rating?.count > 0 ? Number(a.user.rating.avg) : -1;
+          const rb = b.user?.rating?.count > 0 ? Number(b.user.rating.avg) : -1;
+          return rb - ra;
+        });
+      } else if (sortMode === 'price_asc' || sortMode === 'price_desc') {
+        const dir = sortMode === 'price_asc' ? 1 : -1;
+        withRatings.sort((a, b) => {
+          if (a.priceFrom == null && b.priceFrom == null) return 0;
+          if (a.priceFrom == null) return 1;
+          if (b.priceFrom == null) return -1;
+          return (a.priceFrom - b.priceFrom) * dir;
+        });
+      }
       results = withRatings.slice(skip, skip + limitNum);
     } else {
       const orderBy =
@@ -801,7 +829,7 @@ router.get('/profession-features', async (_req, res) => {
 // Get artists (with search, type filter, genres)
 router.get('/artists', async (req, res) => {
   try {
-    const { search, type, genre, sort } = req.query;
+    const { search, type, genre, city, sort } = req.query;
     // Only verified artists are listed in the catalog.
     const where: any = { status: 'VERIFIED' };
     if (search) where.nameNorm = { contains: yoNorm(search as string) };
@@ -818,9 +846,16 @@ router.get('/artists', async (req, res) => {
         },
       };
     }
-    // Sort: alpha = name asc · date (default) = newest first.
+    // City filter: comma-separated names, case-insensitive exact match.
+    const cityTokens = String(city || '').split(',').map(s => s.trim()).filter(Boolean);
+    if (cityTokens.length) {
+      where.OR = cityTokens.map(c => ({ city: { equals: c, mode: 'insensitive' } }));
+    }
+    // Sort: alpha = name asc · listeners = most listened · date (default) = newest first.
     const orderBy = sort === 'alpha'
       ? { name: 'asc' as const }
+      : sort === 'listeners'
+      ? { listeners: 'desc' as const }
       : { createdAt: 'desc' as const };
     const artists = await prisma.artist.findMany({
       where,
@@ -834,6 +869,38 @@ router.get('/artists', async (req, res) => {
   } catch (error) {
     console.error('Get artists error:', error);
     res.status(500).json({ error: 'Failed to get artists' });
+  }
+});
+
+// GET /api/references/artist-cities — distinct cities of verified artists
+// (catalog city-filter autocomplete). q — ё/case-insensitive substring.
+router.get('/artist-cities', async (req, res) => {
+  try {
+    const { q } = req.query;
+    const rows = await prisma.artist.findMany({
+      where: { status: 'VERIFIED', city: { not: null } },
+      select: { city: true },
+      take: 2000,
+    });
+    const qn = q ? yoNorm(String(q)) : '';
+    const seen = new Set<string>();
+    const cities: string[] = [];
+    for (const r of rows) {
+      const city = r.city?.trim();
+      if (!city) continue;
+      // Дедуп по lower (НЕ yoNorm): фильтр /artists ё-чувствителен (у Artist нет
+      // cityNorm), поэтому «Орёл» и «Орел» должны остаться отдельными опциями.
+      const key = city.toLowerCase();
+      if (seen.has(key)) continue;
+      if (qn && !yoNorm(city).includes(qn)) continue;
+      seen.add(key);
+      cities.push(city);
+    }
+    cities.sort((a, b) => a.localeCompare(b, 'ru'));
+    res.json(cities.slice(0, 50).map(name => ({ name })));
+  } catch (e: any) {
+    console.error('Get artist cities error:', e);
+    res.status(500).json({ error: 'Failed to get cities' });
   }
 });
 
