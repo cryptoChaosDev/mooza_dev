@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, Ban, Search } from 'lucide-react';
+import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, Ban, Search, Bookmark } from 'lucide-react';
 import { messageAPI, friendshipAPI, userAPI } from '../lib/api';
 import { plural } from '../lib/plural';
 import { formatLastSeen } from '../lib/lastSeen';
@@ -689,6 +689,8 @@ export default function ChatPage() {
   }
 
   // Conversation display info
+  // «Избранное» — не-групповой разговор с единственным участником (я сам).
+  const isSaved = !conversation?.isGroup && (conversation?.members?.length ?? 0) === 1;
   const otherMember = !conversation?.isGroup
     ? conversation?.members.find(m => m.userId !== me?.id)?.user
     : null;
@@ -707,6 +709,8 @@ export default function ChatPage() {
 
   const chatName = conversation?.isGroup
     ? (conversation.name ?? 'Группа')
+    : isSaved
+    ? 'Избранное'
     : otherMember
     ? `${otherMember.firstName} ${otherMember.lastName}`
     : '...';
@@ -760,12 +764,12 @@ export default function ChatPage() {
               className={`flex items-center gap-3 flex-1 min-w-0 ${!conversation.isGroup && otherMember ? 'cursor-pointer' : ''}`}
               onClick={() => { if (!conversation.isGroup && otherMember) navigate(`/profile/${otherMember.id}`); }}
             >
-              {true ? (
-                <AvatarComponent src={chatAvatar} name={chatName} size={36} className="rounded-xl ring-2 ring-slate-700/50" />
-              ) : (
+              {isSaved ? (
                 <div className="w-9 h-9 bg-gradient-to-br from-primary-500 to-purple-600 rounded-xl flex items-center justify-center ring-2 ring-slate-700/50">
-                  <span className="text-white font-bold text-sm">{chatName[0]}</span>
+                  <Bookmark size={16} className="text-white" />
                 </div>
+              ) : (
+                <AvatarComponent src={chatAvatar} name={chatName} size={36} className="rounded-xl ring-2 ring-slate-700/50" />
               )}
 
               <div className="flex-1 min-w-0">
@@ -776,6 +780,8 @@ export default function ChatPage() {
                 </div>
                 {conversation.isGroup ? (
                   <p className="text-xs text-slate-400">{conversation.members.length} {plural(conversation.members.length, 'участник', 'участника', 'участников')}</p>
+                ) : isSaved ? (
+                  <p className="text-xs text-slate-500">Ваши сохранённые сообщения — видны только вам</p>
                 ) : (
                   <>
                     <p className={`text-xs flex items-center gap-1 ${otherOnline ? 'text-emerald-400' : 'text-slate-500'}`}>
@@ -1326,6 +1332,19 @@ export default function ChatPage() {
           >
             {[
               { label: 'Ответить', icon: '↩️', action: () => { startReply(contextMenu.msg); setContextMenu(null); } },
+              // Переслать себе в «Избранное» (в самом Избранном пункт не нужен)
+              !isSaved ? {
+                label: 'В Избранное', icon: '🔖', action: async () => {
+                  const msgId = contextMenu.msg.id;
+                  setContextMenu(null);
+                  try {
+                    await messageAPI.saveMessage(msgId);
+                    toast.success('Сохранено в «Избранное»');
+                  } catch (e: any) {
+                    toast.error(getApiError(e, 'Не удалось сохранить'));
+                  }
+                },
+              } : null,
               contextMenu.msg.content ? { label: 'Скопировать', icon: '📋', action: () => copyText(contextMenu.msg.content) } : null,
               contextMenu.msg.attachmentUrl && contextMenu.msg.attachmentType?.startsWith('image/')
                 ? { label: 'Сохранить фото', icon: '🖼️', action: () => { const a = document.createElement('a'); a.href = `${API_URL}${contextMenu.msg.attachmentUrl}`; a.download = contextMenu.msg.attachmentName || 'photo'; a.click(); setContextMenu(null); } }

@@ -292,6 +292,9 @@ export const messageAPI = {
   getUnreadCount: () => api.get('/messages/unread/count'),
   getConversations: () => api.get('/messages/conversations'),
   resolve: (id: string) => api.get(`/messages/resolve/${id}`),
+  // «Избранное» — чат с самим собой (создаётся при первом обращении).
+  getSaved: () => api.get('/messages/saved'),
+  saveMessage: (messageId: string) => api.post(`/messages/messages/${messageId}/save`),
   contactService: (userServiceId: string) =>
     api.post<{ conversationId: string }>(`/messages/services/${userServiceId}/contact`),
   getConversation: (conversationId: string) => api.get(`/messages/conversations/${conversationId}`),
