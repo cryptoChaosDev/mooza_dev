@@ -134,16 +134,22 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
       .filter((m: any) => m.participationStatus === 'ACTIVE_MEMBER' && m.user?.id);
     setParticipants((prev) => {
       if (prev.length > 0) return prev; // пользователь уже добавил кого-то сам
-      return active.map((m: any) => ({
-        userId: m.user.id,
-        name: `${m.user.lastName ?? ''} ${m.user.firstName ?? ''}`.trim(),
-        avatar: m.user.avatar ?? null,
-        // confirmedMembers отдаёт роли уже плоско ({id, name}); поддержим и
-        // вложенный формат ({role:{name}}) на всякий случай.
-        roleIds: (m.roles ?? [])
-          .map((mr: any) => nameToId.get(String(mr.name ?? mr.role?.name ?? '').trim().toLowerCase()))
-          .filter(Boolean) as string[],
-      }));
+      return active
+        .map((m: any) => ({
+          userId: m.user.id,
+          name: `${m.user.lastName ?? ''} ${m.user.firstName ?? ''}`.trim(),
+          avatar: m.user.avatar ?? null,
+          // confirmedMembers отдаёт роли уже плоско ({id, name}); поддержим и
+          // вложенный формат ({role:{name}}) на всякий случай.
+          roleIds: (m.roles ?? [])
+            .map((mr: any) => nameToId.get(String(mr.name ?? mr.role?.name ?? '').trim().toLowerCase()))
+            .filter(Boolean) as string[],
+        }))
+        // Переносим только «творческих»: у кого хоть одна роль смапилась в
+        // релизный/клиповый справочник. Чисто менеджерские (директор, юрист…)
+        // и участники без ролей в состав кредитов не попадают — их можно
+        // добавить вручную через поиск.
+        .filter((p: { roleIds: string[] }) => p.roleIds.length > 0);
     });
     setMembersSeeded(true);
   }, [editing, membersSeeded, artistForSeed, rolesFetched, roleCategories]);
