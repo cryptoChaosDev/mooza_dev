@@ -10,6 +10,7 @@ import {
   MoreHorizontal, Share2, Check,
 } from 'lucide-react';
 import { userAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
+import { DEALS_ENABLED } from '../lib/features';
 import ComplaintModal from '../components/ComplaintModal';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { SocialIconRow, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
@@ -460,8 +461,8 @@ export default function UserProfilePage() {
             </div>
           )}
 
-          {/* ── Stats row ── */}
-          <div className="grid grid-cols-2 divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+          {/* ── Stats row ── («Сделки» скрыты до включения DEALS_ENABLED) */}
+          <div className={`grid ${DEALS_ENABLED ? 'grid-cols-2' : 'grid-cols-1'} divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden`}>
             <button
               onClick={() => navigate(`/profile/${userId}/connections`)}
               className="flex flex-col items-center py-1.5 px-1 hover:bg-slate-800/40 transition-colors"
@@ -469,10 +470,12 @@ export default function UserProfilePage() {
               <span className="text-sm font-bold text-white">{userConnections.length}</span>
               <span className="text-[9px] text-slate-500">Связи</span>
             </button>
-            <div className="flex flex-col items-center py-1.5 px-1">
-              <span className="text-sm font-bold text-white">{user.dealsCount ?? 0}</span>
-              <span className="text-[9px] text-slate-500">Сделки</span>
-            </div>
+            {DEALS_ENABLED && (
+              <div className="flex flex-col items-center py-1.5 px-1">
+                <span className="text-sm font-bold text-white">{user.dealsCount ?? 0}</span>
+                <span className="text-[9px] text-slate-500">Сделки</span>
+              </div>
+            )}
           </div>
 
           <div className="space-y-3">

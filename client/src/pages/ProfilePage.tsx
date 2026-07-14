@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { userAPI, connectionAPI, groupAPI, dealAPI, authAPI, orderAPI } from '../lib/api';
+import { DEALS_ENABLED } from '../lib/features';
 import { useAuthStore } from '../stores/authStore';
 import AudioPlayer from '../components/AudioPlayer';
 import {
@@ -217,6 +218,7 @@ export default function ProfilePage() {
   const { data: myDeals = [] } = useQuery<any[]>({
     queryKey: ['deals'],
     queryFn: async () => { const { data } = await dealAPI.getAll(); return data as any[]; },
+    enabled: DEALS_ENABLED,
   });
   const activeDeals = myDeals.filter((d: any) => !['COMPLETED', 'CANCELLED'].includes(d.status));
 
@@ -984,7 +986,8 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            {/* ── Deals card ── */}
+            {/* ── Deals card — скрыта до включения сделок (DEALS_ENABLED) ── */}
+            {DEALS_ENABLED && (
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
               <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                 <HandshakeIcon size={14} className="text-primary-400" />
@@ -1029,6 +1032,7 @@ export default function ProfilePage() {
                 </div>
               )}
             </div>
+            )}
 
             {/* ── Connections card ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
