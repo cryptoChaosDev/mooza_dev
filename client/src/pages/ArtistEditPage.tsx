@@ -40,6 +40,13 @@ type EditForm = {
  * Заменяет бывшую модалку EditModal на ArtistPage: единая механика
  * «форма = отдельная страница» (как Профессии/Услуги/Заказы).
  */
+// Заголовок списка импорта — по платформе данных (Яндекс приоритетнее Apple)
+const importListTitle = (items: any[], kind: 'release' | 'clip') => {
+  const p = items[0]?.platform;
+  const src = p === 'YANDEX_MUSIC' ? 'Яндекс.Музыке' : p === 'YOUTUBE' ? 'YouTube' : 'Apple Music';
+  return kind === 'release' ? `Релизы на ${src}` : `Клипы на ${src}`;
+};
+
 export default function ArtistEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -252,8 +259,8 @@ export default function ArtistEditPage() {
             (жанры/соцсети) всё равно подставляются и сохранятся вместе с формой. */}
         <ArtistLookup onApply={applyLookupCandidate} applying={applyingLookup} />
 
-        <MediaImportList title="Релизы на Apple Music" items={foundReleases} onImport={importReleases} />
-        <MediaImportList title="Клипы на Apple Music" items={foundClips} onImport={importClips} />
+        <MediaImportList title={importListTitle(foundReleases, 'release')} items={foundReleases} onImport={importReleases} />
+        <MediaImportList title={importListTitle(foundClips, 'clip')} items={foundClips} onImport={importClips} />
 
         {/* Название */}
         <div>
