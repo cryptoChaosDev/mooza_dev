@@ -19,6 +19,7 @@ const RegisterPage       = lazy(() => import('./pages/RegisterPage'));
 const ForgotPasswordPage = lazy(() => import('./pages/ForgotPasswordPage'));
 const FeedPage           = lazy(() => import('./pages/FeedPage'));
 const ProfilePage        = lazy(() => import('./pages/ProfilePage'));
+const PrivacySettingsPage = lazy(() => import('./pages/PrivacySettingsPage'));
 const UserProfilePage    = lazy(() => import('./pages/UserProfilePage'));
 const SearchPage         = lazy(() => import('./pages/SearchPage'));
 const FriendsPage        = lazy(() => import('./pages/FriendsPage'));
@@ -166,6 +167,7 @@ function AppRoutes() {
           <Routes>
             <Route path="/"                 element={<FeedPage />} />
             <Route path="/profile"          element={<ProfilePage />} />
+            <Route path="/settings/privacy" element={<PrivacySettingsPage />} />
             <Route path="/profile/:userId"  element={<UserProfilePage />} />
             <Route path="/artist/create"     element={<ArtistCreatePage />} />
             <Route path="/artist/:id"       element={<ArtistPage />} />
