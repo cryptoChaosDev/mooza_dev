@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { userAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
 import { DEALS_ENABLED } from '../lib/features';
+import { isProActive } from '../lib/proLimits';
 import ComplaintModal from '../components/ComplaintModal';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { SocialIconRow, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
@@ -253,7 +254,7 @@ export default function UserProfilePage() {
           {/* ── Name + badges ── */}
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
             <h1 className="text-2xl font-bold text-white leading-tight min-w-0 break-words [overflow-wrap:anywhere]">{user.firstName} {user.lastName}</h1>
-            {user.isPro && <BadgeTooltip label="PRO аккаунт"><Zap size={18} className="text-violet-400" /></BadgeTooltip>}
+            {isProActive(user) && <BadgeTooltip label="PRO аккаунт"><Zap size={18} className="text-violet-400" /></BadgeTooltip>}
             {user.isPremium && <BadgeTooltip label="Premium"><Crown size={18} className="text-amber-400" /></BadgeTooltip>}
             {(user._count?.referrals ?? 0) >= 100 && <BadgeTooltip label="Амбасадор Moooza"><Star size={18} className="text-orange-400" /></BadgeTooltip>}
             {user.isBlocked && <BadgeTooltip label="Заблокирован"><Ban size={18} className="text-red-500" /></BadgeTooltip>}
