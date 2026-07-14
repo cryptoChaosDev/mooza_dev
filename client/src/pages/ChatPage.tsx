@@ -1239,22 +1239,26 @@ export default function ChatPage() {
             <div key={group.dateKey}>
               {/* Date divider */}
               <div className="text-center mb-6">
-                <span className="inline-block px-3 py-1 bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-sm border border-slate-700/50 text-slate-400 text-xs rounded-lg">
+                <span className="inline-block px-3 py-1 bg-slate-800/80 text-slate-300 text-xs font-medium rounded-full">
                   {group.label}
                 </span>
               </div>
 
-              <div className="space-y-1">
+              <div>
                 {group.messages.map((msg, idx) => {
                   const isMine = msg.senderId === me?.id;
-                  const showSender = conversation.isGroup && !isMine &&
-                    (idx === 0 || group.messages[idx - 1].senderId !== msg.senderId);
+                  // Серия сообщений одного отправителя — как в Telegram:
+                  // плотные отступы внутри серии, маленькие смежные углы,
+                  // хвостик и аватар только у последнего сообщения серии.
+                  const prevSame = idx > 0 && group.messages[idx - 1].senderId === msg.senderId;
+                  const nextSame = idx < group.messages.length - 1 && group.messages[idx + 1].senderId === msg.senderId;
+                  const showSender = conversation.isGroup && !isMine && !prevSame;
                   const senderInGroup = memberMap[msg.senderId];
                   return (
                     <div
                       key={msg.id}
                       id={`msg-${msg.id}`}
-                      className={`flex items-end ${isMine ? 'justify-end' : 'justify-start'} ${showSender ? 'mt-3' : 'mt-1'} group/row relative rounded-xl transition-shadow`}
+                      className={`flex items-end ${isMine ? 'justify-end' : 'justify-start'} ${prevSame ? 'mt-0.5' : 'mt-2.5'} group/row relative rounded-xl transition-shadow`}
                       onTouchStart={e => { if (!msg.deletedAt) { onMsgTouchStart(e, msg.id); onMsgLongPressStart(e, msg); } }}
                       onTouchMove={e => { if (!msg.deletedAt) { onMsgTouchMove(e, msg.id); onMsgLongPressMove(); } }}
                       onTouchEnd={() => { if (!msg.deletedAt) { onMsgTouchEnd(msg); onMsgLongPressEnd(); } }}
@@ -1274,35 +1278,46 @@ export default function ChatPage() {
                         ref={el => { swipeEls.current[msg.id] = el; }}
                         className="flex items-end"
                       >
-                      {/* Avatar for group non-mine */}
+                      {/* Avatar for group non-mine — у ПОСЛЕДНЕГО сообщения серии (как в Telegram) */}
                       {conversation.isGroup && !isMine && (
                         <div className="mr-2 flex-shrink-0 self-end w-7">
-                          {showSender && senderInGroup ? (
-                            <AvatarComponent src={senderInGroup.avatar} name={`${senderInGroup.firstName} ${senderInGroup.lastName}`} size={28} className="rounded-lg" />
+                          {!nextSame && senderInGroup ? (
+                            <AvatarComponent src={senderInGroup.avatar} name={`${senderInGroup.firstName} ${senderInGroup.lastName}`} size={28} className="rounded-full" />
                           ) : null}
                         </div>
                       )}
 
                       <div className="max-w-[80%] sm:max-w-md lg:max-w-lg relative group/msg">
-                        {/* Sender name (group) */}
-                        {showSender && senderInGroup && (
-                          <p className="text-xs text-slate-400 mb-1 ml-1">
-                            {senderInGroup.firstName} {senderInGroup.lastName}
-                          </p>
-                        )}
-
-                        {/* Bubble */}
+                        {/* Bubble — плоские цвета, телеграмная группировка углов */}
                         <div
                           onDoubleClick={() => !msg.deletedAt && setReactionPickerMsgId(msg.id)}
-                          className={`relative px-4 py-2.5 rounded-2xl cursor-default ${
+                          className={`relative px-3 py-2 rounded-2xl cursor-default text-white ${
                             isMine
-                              ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-tr-md shadow-lg shadow-primary-500/25'
-                              : 'bg-gradient-to-br from-slate-700/80 to-slate-800/80 backdrop-blur-sm border border-slate-600/50 text-white rounded-tl-md shadow-lg'
+                              ? `bg-primary-600 ${prevSame ? 'rounded-tr-md' : ''} ${nextSame ? 'rounded-br-md' : 'rounded-br-none'}`
+                              : `bg-slate-800 ${prevSame ? 'rounded-tl-md' : ''} ${nextSame ? 'rounded-bl-md' : 'rounded-bl-none'}`
                           } ${msg.deletedAt ? 'opacity-60' : ''}`}
                         >
+                          {/* Хвостик у последнего сообщения серии */}
+                          {!nextSame && (
+                            <svg
+                              viewBox="0 0 8 13"
+                              width="8"
+                              height="13"
+                              className={`absolute bottom-0 ${isMine ? '-right-[7px] text-primary-600' : '-left-[7px] text-slate-800 -scale-x-100'}`}
+                            >
+                              <path fill="currentColor" d="M0 0 C1.5 7 4 10.5 8 13 L0 13 Z" />
+                            </svg>
+                          )}
+
+                          {/* Sender name (group) — внутри пузыря, как в Telegram */}
+                          {showSender && senderInGroup && (
+                            <p className="text-xs font-semibold text-primary-400 mb-0.5">
+                              {senderInGroup.firstName} {senderInGroup.lastName}
+                            </p>
+                          )}
                           {/* Reply quote */}
                           {msg.replyTo && (
-                            <div className={`mb-2 pl-2 border-l-2 ${isMine ? 'border-white/50' : 'border-primary-500/70'} text-xs`}>
+                            <div className={`mb-1.5 pl-2 pr-2 py-1 border-l-2 rounded-md ${isMine ? 'border-white/60 bg-white/10' : 'border-primary-500/70 bg-primary-500/10'} text-xs`}>
                               <p className={`font-semibold ${isMine ? 'text-white/80' : 'text-primary-400'}`}>
                                 {msg.replyTo.sender.firstName} {msg.replyTo.sender.lastName}
                               </p>
