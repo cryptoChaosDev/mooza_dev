@@ -295,6 +295,8 @@ export const messageAPI = {
   // «Избранное» — чат с самим собой (создаётся при первом обращении).
   getSaved: () => api.get('/messages/saved'),
   saveMessage: (messageId: string) => api.post(`/messages/messages/${messageId}/save`),
+  // Голосовое → текст (расшифровка сохраняется на сервере)
+  transcribeMessage: (messageId: string) => api.post(`/messages/messages/${messageId}/transcribe`),
   contactService: (userServiceId: string) =>
     api.post<{ conversationId: string }>(`/messages/services/${userServiceId}/contact`),
   getConversation: (conversationId: string) => api.get(`/messages/conversations/${conversationId}`),
