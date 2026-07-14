@@ -25,7 +25,6 @@ import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { useScrollLock } from '../lib/scrollLock';
 import { limitsFor, isProActive } from '../lib/proLimits';
 import ShareButton from '../components/ShareButton';
-import JoinArtistModal from '../components/JoinArtistModal';
 import ReviewsBlock from '../components/ReviewsBlock';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
 import ProfileProgressBar, { profileCompletion } from '../components/ProfileProgressBar';
@@ -152,7 +151,6 @@ export default function ProfilePage() {
 
 
   const [myStandaloneProfessions, setMyStandaloneProfessions] = useState<{ professionId: string; professionName: string }[]>([]);
-  const [showJoinArtist, setShowJoinArtist] = useState(false);
   // Профессии / Услуги / Заказы открываются модалками (как Вакансии) — блокируем фон.
   useScrollLock(
     !!renamingFile || !!imageFullscreen || !!docFullscreen,
@@ -803,7 +801,7 @@ export default function ProfilePage() {
               <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
                 {/* Add tile — first */}
                 <button
-                  onClick={() => setShowJoinArtist(true)}
+                  onClick={() => navigate('/artist/create')}
                   className="flex flex-col gap-1.5 flex-shrink-0 group"
                   style={{ width: 'calc((100% - 24px) / 3.5)' }}
                 >
@@ -1351,7 +1349,6 @@ export default function ProfilePage() {
 
     {/* Announce-changes dialog — after an EXISTING service is edited. */}
 
-    {showJoinArtist && <JoinArtistModal onClose={() => setShowJoinArtist(false)} />}
 
     {cropAvatarFile && (
       <ImageCropModal

@@ -228,8 +228,8 @@ export default function ArtistCreatePage() {
     setTimeout(() => setCopied(false), 1500);
   };
 
-  // Required card fields: name, type, avatar.
-  const canCreate = !!form.name.trim() && !!form.type && !!avatarFile && !createMut.isPending;
+  // Required card fields: name, type, avatar, и ОБЯЗАТЕЛЬНАЯ роль создателя.
+  const canCreate = !!form.name.trim() && !!form.type && !!avatarFile && form.submitterRoleIds.length > 0 && !createMut.isPending;
 
   return (
     <div className="min-h-screen bg-slate-950 pb-24">
@@ -257,7 +257,7 @@ export default function ArtistCreatePage() {
           <>
             {/* Submitter role — picked from the role catalog */}
             <div>
-              <label className="block text-xs text-slate-500 mb-2">Кем вы являетесь для артиста</label>
+              <label className="block text-xs text-slate-500 mb-2">Кем вы являетесь для артиста <span className="text-red-400">*</span></label>
               {selectedRoleNames.length > 0 && (
                 <div className="flex flex-wrap gap-2 mb-2">
                   {selectedRoleNames.map(n => (
