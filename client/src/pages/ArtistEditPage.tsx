@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Music2, Save, Loader2 } from 'lucide-react';
-import { artistAPI, referenceAPI, releaseAPI, clipAPI } from '../lib/api';
-import { SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
+import { artistAPI, releaseAPI, clipAPI } from '../lib/api';
 import CityPicker from '../components/CityPicker';
 import SelectSheet from '../components/SelectSheet';
 import ArtistLookup from '../components/ArtistLookup';
@@ -54,7 +53,6 @@ export default function ArtistEditPage() {
   // загрузки аватара из «Найти артиста») не должны затирать правки пользователя.
   const [seeded, setSeeded] = useState(false);
 
-  const [genreSheetOpen, setGenreSheetOpen] = useState(false);
   const [typeSheetOpen, setTypeSheetOpen] = useState(false);
 
   const [applyingLookup, setApplyingLookup] = useState(false);
@@ -68,14 +66,6 @@ export default function ArtistEditPage() {
       return data;
     },
     enabled: !!id,
-  });
-
-  const { data: genreOptions = [] } = useQuery({
-    queryKey: ['genres'],
-    queryFn: async () => {
-      const { data } = await referenceAPI.getGenres();
-      return data as { id: string; name: string }[];
-    },
   });
 
   // Уже добавленные релизы/клипы — чтобы не предлагать импорт дублей.
@@ -247,12 +237,15 @@ export default function ArtistEditPage() {
             <ArrowLeft size={22} />
           </button>
           <Music2 size={16} className="text-primary-400 flex-shrink-0" />
-          <h1 className="text-base font-bold text-white truncate">Редактирование артиста</h1>
+          <h1 className="text-base font-bold text-white truncate">Основная информация</h1>
         </div>
       </div>
 
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-4">
 
+        {/* Описание, жанры и контакты редактируются в своих карточках на странице
+            артиста; здесь — только основная информация. Данные «Найти артиста»
+            (жанры/соцсети) всё равно подставляются и сохранятся вместе с формой. */}
         <ArtistLookup onApply={applyLookupCandidate} applying={applyingLookup} />
 
         <MediaImportList title="Релизы на Apple Music" items={foundReleases} onImport={importReleases} />
@@ -301,35 +294,6 @@ export default function ArtistEditPage() {
           />
         </div>
 
-        {/* Описание */}
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Описание</label>
-          <textarea
-            rows={4}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500 resize-none"
-            value={form.description}
-            onChange={(e) => set('description', e.target.value)}
-            placeholder="О коллективе..."
-          />
-        </div>
-
-        {/* Жанры */}
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Жанры</label>
-          <button
-            type="button"
-            onClick={() => setGenreSheetOpen(true)}
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
-          >
-            <span className={form.genreIds.length ? 'text-white' : 'text-slate-500'}>
-              {form.genreIds.length
-                ? genreOptions.filter((g) => form.genreIds.includes(g.id)).map((g) => g.name).join(', ')
-                : 'Выбрать жанры'}
-            </span>
-            <span className="text-slate-500 text-xs">▾</span>
-          </button>
-        </div>
-
         {/* Слушатели */}
         <div>
           <label className="block text-xs text-slate-500 mb-1">Слушателей в месяц</label>
@@ -340,37 +304,6 @@ export default function ArtistEditPage() {
             onChange={(e) => set('listeners', e.target.value)}
             placeholder="0"
             min="0"
-          />
-        </div>
-
-        {/* Ссылка BandLink */}
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Ссылка на страницу группы</label>
-          <input
-            className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
-            value={form.bandLink}
-            onChange={(e) => set('bandLink', e.target.value)}
-            placeholder="https://band.link/..."
-          />
-        </div>
-
-        {/* Контакты */}
-        <div>
-          <label className="block text-xs text-slate-500 mb-2">Контакты</label>
-          <SocialLinksEditor
-            value={form.socialLinks}
-            onChange={(v) => set('socialLinks', v)}
-            only={CONTACT_KEYS}
-          />
-        </div>
-
-        {/* Соцсети */}
-        <div>
-          <label className="block text-xs text-slate-500 mb-2">Социальные сети</label>
-          <SocialLinksEditor
-            value={form.socialLinks}
-            onChange={(v) => set('socialLinks', v)}
-            only={SOCIAL_KEYS}
           />
         </div>
 
@@ -409,17 +342,6 @@ export default function ArtistEditPage() {
         height="auto"
       />
 
-      <SelectSheet
-        isOpen={genreSheetOpen}
-        onClose={() => setGenreSheetOpen(false)}
-        title="Жанры"
-        options={genreOptions}
-        selectedIds={form.genreIds}
-        onSelect={(v) => { set('genreIds', v as string[]); }}
-        mode="multiple"
-        showConfirm
-        height="full"
-      />
     </div>
   );
 }

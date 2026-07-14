@@ -16,7 +16,7 @@ import { workFormatLabel } from '../lib/vacancyOptions';
 import { useScrollLock } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
 import { yoNorm } from '../lib/search';
-import { SocialIconRow } from '../components/SocialLinks';
+import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
 import SelectSheet from '../components/SelectSheet';
 import ShareButton from '../components/ShareButton';
@@ -95,6 +95,15 @@ export default function ArtistPage() {
   // ── Phase 5b state ─────────────────────────────────────────────────────────
   // Нижний лист «Управление артистом» (шестерёнка)
   const [showManageSheet, setShowManageSheet] = useState(false);
+
+  // Точечное редактирование карточек (как в Профиле): описание, жанры, контакты
+  const [editingAbout, setEditingAbout] = useState(false);
+  const [aboutDraft, setAboutDraft] = useState('');
+  const [genresSheetOpen, setGenresSheetOpen] = useState(false);
+  const [genreDraft, setGenreDraft] = useState<string[]>([]);
+  const [editingContacts, setEditingContacts] = useState(false);
+  const [contactsDraft, setContactsDraft] = useState<Record<string, string>>({});
+  const [bandLinkDraft, setBandLinkDraft] = useState('');
 
   // Add registered member modal
   const [showAddMember, setShowAddMember] = useState(false);
@@ -225,6 +234,28 @@ export default function ArtistPage() {
     mutationFn: (file: File) => artistAPI.uploadAvatar(id!, file),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось загрузить аватар')),
+  });
+
+  // Точечное сохранение поля карточки (описание/жанры/контакты) — PUT принимает
+  // частичные данные, непереданные поля не меняются.
+  const patchMut = useMutation({
+    mutationFn: (payload: Record<string, unknown>) => artistAPI.updateArtist(id!, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['artist', id] });
+      setEditingAbout(false);
+      setEditingContacts(false);
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить')),
+  });
+
+  // Справочник жанров — только когда открыт лист выбора
+  const { data: genreOptions = [] } = useQuery({
+    queryKey: ['genres'],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getGenres();
+      return data as { id: string; name: string }[];
+    },
+    enabled: genresSheetOpen,
   });
 
   const uploadBannerMut = useMutation({
@@ -606,10 +637,19 @@ export default function ArtistPage() {
           {isOwner && (
             <button
               onClick={() => navigate(`/artist/${id}/edit`)}
-              title="Редактировать"
+              title="Редактировать основную информацию"
               className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
             >
               <Edit3 size={16} />
+            </button>
+          )}
+          {canSeeGear && (
+            <button
+              onClick={() => setShowManageSheet(true)}
+              title="Управление артистом"
+              className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
+            >
+              <Settings size={16} />
             </button>
           )}
         </div>
@@ -759,61 +799,162 @@ export default function ArtistPage() {
           </>
         )}
 
-        {/* Об артисте — карточка в едином стиле блоков профиля */}
-        {artist.description && (
+        {/* Об артисте — редактируется прямо в карточке (как «О себе» в Профиле) */}
+        {(artist.description || viewerIsAdmin) && (
           <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden mb-3">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
               <UserRound size={14} className="text-sky-400" />
               <span className="text-sm font-semibold text-white">Об артисте</span>
+              {viewerIsAdmin && !editingAbout && (
+                <button
+                  onClick={() => { setAboutDraft(artist.description ?? ''); setEditingAbout(true); }}
+                  className="ml-auto p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800 flex-shrink-0"
+                >
+                  <Edit3 size={13} />
+                </button>
+              )}
             </div>
             <div className="p-4">
-              <p className="text-slate-300 text-sm leading-relaxed break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
-                {artist.description}
-              </p>
+              {editingAbout ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={aboutDraft}
+                    onChange={e => setAboutDraft(e.target.value)}
+                    rows={4}
+                    placeholder="О коллективе..."
+                    className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700/50 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500 resize-none"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={() => setEditingAbout(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
+                    <button
+                      onClick={() => patchMut.mutate({ description: aboutDraft.trim() })}
+                      disabled={patchMut.isPending}
+                      className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      {patchMut.isPending ? <Loader2 size={13} className="animate-spin" /> : null}Сохранить
+                    </button>
+                  </div>
+                </div>
+              ) : artist.description ? (
+                <p className="text-slate-300 text-sm leading-relaxed break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
+                  {artist.description}
+                </p>
+              ) : (
+                <button
+                  onClick={() => { setAboutDraft(''); setEditingAbout(true); }}
+                  className="text-sm text-slate-600 hover:text-slate-400 transition-colors italic"
+                >
+                  + Добавить описание
+                </button>
+              )}
             </div>
           </div>
         )}
 
-        {/* Жанры */}
-        {(artist.genres?.length ?? 0) > 0 && (
+        {/* Жанры — карандаш открывает лист выбора, сохранение по закрытию */}
+        {((artist.genres?.length ?? 0) > 0 || viewerIsAdmin) && (
           <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden mb-3">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
               <Tag size={14} className="text-primary-400" />
               <span className="text-sm font-semibold text-white">Жанры</span>
-              <span className="text-xs text-slate-500">{artist.genres.length}</span>
+              {(artist.genres?.length ?? 0) > 0 && <span className="text-xs text-slate-500">{artist.genres.length}</span>}
+              {viewerIsAdmin && (
+                <button
+                  onClick={() => {
+                    setGenreDraft((artist.genres ?? []).map((g: { id: string }) => g.id));
+                    setGenresSheetOpen(true);
+                  }}
+                  className="ml-auto p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800 flex-shrink-0"
+                >
+                  <Edit3 size={13} />
+                </button>
+              )}
             </div>
             <div className="p-3">
-              <div className="flex flex-wrap gap-1.5">
-                {artist.genres.map((g: { id: string; name: string }) => (
-                  <span key={g.id} className="px-2.5 py-1 bg-slate-800/80 border border-slate-700/50 text-slate-300 rounded-lg text-xs font-medium">
-                    {g.name}
-                  </span>
-                ))}
-              </div>
+              {(artist.genres?.length ?? 0) > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {artist.genres.map((g: { id: string; name: string }) => (
+                    <span key={g.id} className="px-2.5 py-1 bg-slate-800/80 border border-slate-700/50 text-slate-300 rounded-lg text-xs font-medium">
+                      {g.name}
+                    </span>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-600 italic">Жанры не указаны</p>
+              )}
             </div>
           </div>
         )}
 
-        {/* Контакты */}
-        {(hasSocialLinks || artist.bandLink) && (
+        {/* Контакты — редактируются прямо в карточке */}
+        {(hasSocialLinks || artist.bandLink || viewerIsAdmin) && (
           <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden mb-3">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
               <Link2 size={14} className="text-primary-400" />
               <span className="text-sm font-semibold text-white">Контакты</span>
+              {viewerIsAdmin && !editingContacts && (
+                <button
+                  onClick={() => {
+                    setContactsDraft(((artist.socialLinks as Record<string, string>) ?? {}));
+                    setBandLinkDraft(artist.bandLink ?? '');
+                    setEditingContacts(true);
+                  }}
+                  className="ml-auto p-1 text-slate-600 hover:text-slate-300 transition-colors rounded-lg hover:bg-slate-800 flex-shrink-0"
+                >
+                  <Edit3 size={13} />
+                </button>
+              )}
             </div>
             <div className="p-3">
-              {artist.bandLink && (
-                <a
-                  href={artist.bandLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-primary-400 text-sm hover:underline mb-2"
-                >
-                  <ExternalLink size={14} className="flex-shrink-0" />
-                  <span className="truncate min-w-0">{artist.bandLink}</span>
-                </a>
+              {editingContacts ? (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1">Ссылка на страницу группы</label>
+                    <input
+                      value={bandLinkDraft}
+                      onChange={e => setBandLinkDraft(e.target.value)}
+                      placeholder="https://band.link/..."
+                      className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-2">Контакты</label>
+                    <SocialLinksEditor value={contactsDraft} onChange={setContactsDraft} only={CONTACT_KEYS} />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-2">Социальные сети</label>
+                    <SocialLinksEditor value={contactsDraft} onChange={setContactsDraft} only={SOCIAL_KEYS} />
+                  </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => setEditingContacts(false)} className="flex-1 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors">Отмена</button>
+                    <button
+                      onClick={() => patchMut.mutate({ socialLinks: contactsDraft, bandLink: bandLinkDraft.trim() })}
+                      disabled={patchMut.isPending}
+                      className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                    >
+                      {patchMut.isPending ? <Loader2 size={13} className="animate-spin" /> : null}Сохранить
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {artist.bandLink && (
+                    <a
+                      href={artist.bandLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-primary-400 text-sm hover:underline mb-2"
+                    >
+                      <ExternalLink size={14} className="flex-shrink-0" />
+                      <span className="truncate min-w-0">{artist.bandLink}</span>
+                    </a>
+                  )}
+                  {hasSocialLinks && <SocialIconRow links={(artist.socialLinks as Record<string, string>) || {}} labeled />}
+                  {!hasSocialLinks && !artist.bandLink && (
+                    <p className="text-sm text-slate-600 italic">Контакты не указаны</p>
+                  )}
+                </>
               )}
-              {hasSocialLinks && <SocialIconRow links={(artist.socialLinks as Record<string, string>) || {}} labeled />}
             </div>
           </div>
         )}
@@ -892,15 +1033,6 @@ export default function ArtistPage() {
             <Users size={14} className="text-primary-400" />
             <span className="text-sm font-semibold text-white">Состав</span>
             {confirmedMembers.length > 0 && <span className="text-xs text-slate-500">{confirmedMembers.length}</span>}
-            {canSeeGear && (
-              <button
-                onClick={() => setShowManageSheet(true)}
-                title="Управление"
-                className="ml-auto p-1 rounded-lg text-slate-500 hover:text-primary-400 hover:bg-slate-800 transition-colors flex-shrink-0"
-              >
-                <Settings size={15} />
-              </button>
-            )}
           </div>
 
           <div className="p-3">
@@ -1597,6 +1729,24 @@ export default function ArtistPage() {
         </div>
         </>
       )}
+
+      {/* Лист выбора жанров (редактирование карточки «Жанры») */}
+      <SelectSheet
+        isOpen={genresSheetOpen}
+        onClose={() => {
+          setGenresSheetOpen(false);
+          const current = new Set((artist.genres ?? []).map((g: { id: string }) => g.id));
+          const changed = genreDraft.length !== current.size || genreDraft.some((gid) => !current.has(gid));
+          if (changed) patchMut.mutate({ genreIds: genreDraft });
+        }}
+        title="Жанры"
+        options={genreOptions}
+        selectedIds={genreDraft}
+        onSelect={(v) => setGenreDraft(v as string[])}
+        mode="multiple"
+        showConfirm
+        height="full"
+      />
 
       {/* Activity status sheet */}
       <SelectSheet
