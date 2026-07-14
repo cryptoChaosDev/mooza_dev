@@ -97,7 +97,6 @@ export default function ProfilePage() {
     contactsVisibility: 'ALL' as 'ALL' | 'REGISTERED' | 'FRIENDS',
     occupancyStatus: '' as '' | 'closed' | 'considering' | 'open',
   });
-  const [showPrivacy, setShowPrivacy] = useState(false);
 
   // Image cropping (avatar / banner) before upload
   const [cropAvatarFile, setCropAvatarFile] = useState<File | null>(null);
@@ -156,7 +155,7 @@ export default function ProfilePage() {
   const [showJoinArtist, setShowJoinArtist] = useState(false);
   // Профессии / Услуги / Заказы открываются модалками (как Вакансии) — блокируем фон.
   useScrollLock(
-    showPrivacy || !!renamingFile || !!imageFullscreen || !!docFullscreen,
+    !!renamingFile || !!imageFullscreen || !!docFullscreen,
   );
 
   const { data: profile, isLoading } = useQuery({
@@ -591,9 +590,9 @@ export default function ProfilePage() {
                 </button>
               )}
               <button
-                onClick={() => setShowPrivacy(true)}
+                onClick={() => navigate('/settings/privacy')}
                 className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
-                title="Приватность"
+                title="Настройки приватности и уведомлений"
               >
                 <Shield size={16} />
               </button>
@@ -1329,125 +1328,6 @@ export default function ProfilePage() {
 
     {viewConn && <ConnectionViewModal connection={viewConn} onClose={() => setViewConn(null)} />}
 
-    {/* Privacy settings */}
-    {showPrivacy && createPortal(
-      <div className="fixed inset-0 z-[80] flex items-end sm:items-center justify-center p-0 sm:p-4">
-        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setShowPrivacy(false)} />
-        <div className="relative w-full sm:max-w-sm bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
-          <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800">
-            <div className="flex items-center gap-2">
-              <Shield size={16} className="text-primary-400" />
-              <h3 className="text-base font-semibold text-white">Приватность</h3>
-            </div>
-            <button onClick={() => setShowPrivacy(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
-          </div>
-          <div className="px-5 py-3 max-h-[70dvh] overflow-y-auto" style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}>
-            {/* Contacts visibility — 3-level selector */}
-            <div className="py-3 border-b border-slate-800/60">
-              <p className="text-sm font-medium text-white">Кто видит контакты</p>
-              <p className="text-xs text-slate-500 mb-2.5">Телефон, email и Telegram</p>
-              <div className="space-y-1.5">
-                {([
-                  { value: 'ALL' as const, label: 'Все' },
-                  { value: 'REGISTERED' as const, label: 'Только зарегистрированные' },
-                  { value: 'FRIENDS' as const, label: 'Только друзья и коллеги' },
-                ]).map(opt => {
-                  const active = formData.contactsVisibility === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => {
-                        const apply = () => {
-                          const next = {
-                            ...formData,
-                            contactsVisibility: opt.value,
-                            contactsVisible: opt.value === 'ALL',
-                          };
-                          setFormData(next);
-                          updateMutation.mutate({ contactsVisibility: opt.value } as any, {
-                            onSettled: () => queryClient.invalidateQueries({ queryKey: ['profile'] }),
-                          });
-                        };
-                        // «Все» = public distribution of contacts → gate on consent.
-                        if (opt.value === 'ALL') ensurePublicConsent(apply); else apply();
-                      }}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border text-sm text-left transition-colors ${active ? 'border-primary-500 bg-primary-500/10 text-white' : 'border-slate-700/60 bg-slate-800/40 text-slate-300 hover:border-slate-600'}`}
-                    >
-                      <span className={`w-4 h-4 rounded-full border-2 flex-shrink-0 flex items-center justify-center ${active ? 'border-primary-500' : 'border-slate-600'}`}>
-                        {active && <span className="w-2 h-2 rounded-full bg-primary-500" />}
-                      </span>
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            {/* Уведомления — какие категории получать */}
-            <div className="py-3 border-b border-slate-800/60">
-              <p className="text-sm font-medium text-white">Уведомления</p>
-              <p className="text-xs text-slate-500 mb-1">Пуши, колокольчик и дублирование в Telegram</p>
-              {([
-                { key: 'messages' as const, label: 'Сообщения', desc: 'Личные и групповые чаты' },
-                { key: 'orders' as const, label: 'Заказы и услуги', desc: 'Отклики, выбор исполнителя, интерес к услугам' },
-                { key: 'vacancies' as const, label: 'Вакансии и приглашения', desc: 'Отклики на вакансии, приглашения в релизы и клипы' },
-                { key: 'social' as const, label: 'Социальное', desc: 'Друзья, связи, ответы на посты, отзывы' },
-              ]).map(row => {
-                const prefs = (profile?.notificationPrefs as Record<string, boolean> | null) ?? {};
-                const enabled = prefs[row.key] !== false;
-                return (
-                  <div key={row.key} className="flex items-center gap-3 py-2.5 border-b border-slate-800/40 last:border-0">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-white">{row.label}</p>
-                      <p className="text-xs text-slate-500">{row.desc}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          await userAPI.updateNotificationPrefs({ [row.key]: !enabled });
-                          queryClient.invalidateQueries({ queryKey: ['profile'] });
-                        } catch (e: any) {
-                          toast.error(getApiError(e, 'Не удалось сохранить настройку'));
-                        }
-                      }}
-                      className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 ${enabled ? 'bg-primary-600' : 'bg-slate-700'}`}
-                    >
-                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${enabled ? 'translate-x-4' : ''}`} />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-            {/* Birth date visibility — boolean toggle */}
-            {([
-              { key: 'birthDateVisible' as const, label: 'Показывать дату рождения', desc: 'Дата рождения видна в вашем профиле' },
-            ]).map(row => (
-              <div key={row.key} className="flex items-center gap-3 py-3 border-b border-slate-800/60 last:border-0">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-white">{row.label}</p>
-                  <p className="text-xs text-slate-500">{row.desc}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = { ...formData, [row.key]: !formData[row.key] };
-                    setFormData(next);
-                    updateMutation.mutate({ [row.key]: next[row.key] } as any, {
-                      onSettled: () => queryClient.invalidateQueries({ queryKey: ['profile'] }),
-                    });
-                  }}
-                  className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 ${formData[row.key] ? 'bg-primary-600' : 'bg-slate-700'}`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${formData[row.key] ? 'translate-x-4' : ''}`} />
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>,
-      document.body
-    )}
 
     <ConfirmDialog
       open={!!confirmDeleteLinkId}
