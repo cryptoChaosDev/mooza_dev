@@ -1,3 +1,4 @@
+import https from 'https';
 import { prisma } from '../index';
 import logger from './logger';
 import { tgLog } from './telegram';
@@ -26,22 +27,38 @@ export function extractYmArtistId(url: string | undefined | null): string | null
   return m ? m[1] : null;
 }
 
-async function fetchBrief(ymId: string): Promise<any | null> {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 20_000);
-  try {
-    const resp = await fetch(`https://api.music.yandex.net/artists/${ymId}/brief-info`, {
-      headers: { 'User-Agent': YM_UA },
-      signal: ctrl.signal,
-    });
-    if (!resp.ok) return null;
-    const data: any = await resp.json();
-    return data?.result ?? null;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
+// ВАЖНО: через классический node:https, НЕ через fetch — антибот Яндекса
+// режет TLS-сигнатуру undici (fetch стабильно получает 403, https.get — 200).
+function fetchBrief(ymId: string): Promise<any | null> {
+  return new Promise((resolve) => {
+    const req = https.get(
+      {
+        host: 'api.music.yandex.net',
+        path: `/artists/${ymId}/brief-info`,
+        headers: { 'User-Agent': YM_UA },
+        timeout: 20_000,
+      },
+      (res) => {
+        if (res.statusCode !== 200) {
+          res.resume();
+          resolve(null);
+          return;
+        }
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => {
+          try {
+            resolve(JSON.parse(body)?.result ?? null);
+          } catch {
+            resolve(null);
+          }
+        });
+      },
+    );
+    req.on('timeout', () => { req.destroy(); resolve(null); });
+    req.on('error', () => resolve(null));
+  });
 }
 
 // coverUri вида "avatars.yandex.net/get-music-content/.../%%" → https-URL 400x400
