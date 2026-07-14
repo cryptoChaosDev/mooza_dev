@@ -105,24 +105,9 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
     },
     enabled: !editing && !membersSeeded,
   });
-  useEffect(() => {
-    if (editing || membersSeeded || !artistForSeed) return;
-    const active = (artistForSeed.confirmedMembers ?? [])
-      .filter((m: any) => m.participationStatus === 'ACTIVE_MEMBER' && m.user?.id);
-    setParticipants((prev) => {
-      if (prev.length > 0) return prev; // пользователь уже добавил кого-то сам
-      return active.map((m: any) => ({
-        userId: m.user.id,
-        name: `${m.user.lastName ?? ''} ${m.user.firstName ?? ''}`.trim(),
-        avatar: m.user.avatar ?? null,
-        roleIds: [],
-      }));
-    });
-    setMembersSeeded(true);
-  }, [editing, membersSeeded, artistForSeed]);
 
   // Role catalog → id→name map for displaying chosen role names.
-  const { data: roleCategories = [] } = useQuery({
+  const { data: roleCategories = [], isFetched: rolesFetched } = useQuery({
     queryKey: ['roles', roleContext],
     queryFn: async () => {
       const { data } = await roleAPI.list(roleContext);
@@ -137,6 +122,29 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
       for (const r of p.roles ?? []) m.set(r.id, r.name);
     return m;
   }, [roleCategories, initial]);
+
+  // Сид участников: роли в коллективе (context COLLECTIVE) переносим в роли
+  // релиза/клипа ПО ИМЕНАМ — id в каталогах разные. Ждём загрузку каталога,
+  // чтобы роли скопировались, а не потерялись.
+  useEffect(() => {
+    if (editing || membersSeeded || !artistForSeed || !rolesFetched) return;
+    const nameToId = new Map<string, string>();
+    for (const c of roleCategories) for (const r of c.roles) nameToId.set(r.name.trim().toLowerCase(), r.id);
+    const active = (artistForSeed.confirmedMembers ?? [])
+      .filter((m: any) => m.participationStatus === 'ACTIVE_MEMBER' && m.user?.id);
+    setParticipants((prev) => {
+      if (prev.length > 0) return prev; // пользователь уже добавил кого-то сам
+      return active.map((m: any) => ({
+        userId: m.user.id,
+        name: `${m.user.lastName ?? ''} ${m.user.firstName ?? ''}`.trim(),
+        avatar: m.user.avatar ?? null,
+        roleIds: (m.roles ?? [])
+          .map((mr: any) => nameToId.get(String(mr.role?.name ?? '').trim().toLowerCase()))
+          .filter(Boolean) as string[],
+      }));
+    });
+    setMembersSeeded(true);
+  }, [editing, membersSeeded, artistForSeed, rolesFetched, roleCategories]);
 
   // Participant search
   const [search, setSearch] = useState('');
