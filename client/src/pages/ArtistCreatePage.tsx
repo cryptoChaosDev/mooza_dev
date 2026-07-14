@@ -109,9 +109,9 @@ export default function ArtistCreatePage() {
           setAvatarPreview(URL.createObjectURL(blob));
         } catch { /* avatar is best-effort */ }
       }
-      if (c.itunesId) {
+      if (c.itunesId || c.ymId) {
         try {
-          const { data } = await artistAPI.lookupReleases({ itunesId: c.itunesId, deezerId: c.deezerId });
+          const { data } = await artistAPI.lookupReleases({ itunesId: c.itunesId, deezerId: c.deezerId, ymId: c.ymId });
           setFoundReleases(data.releases || []);
           setFoundClips(data.clips || []);
         } catch { /* best-effort */ }
@@ -128,7 +128,7 @@ export default function ArtistCreatePage() {
     for (const r of selected) {
       try {
         await releaseAPI.create({
-          artistId: created.id, platform: 'APPLE_MUSIC', url: r.url, title: r.title,
+          artistId: created.id, platform: r.platform || 'APPLE_MUSIC', url: r.url, title: r.title,
           coverUrl: r.coverUrl || undefined, releaseDate: r.releaseDate || undefined, participants: [],
         });
         ok++;
@@ -143,7 +143,7 @@ export default function ArtistCreatePage() {
     for (const r of selected) {
       try {
         await clipAPI.create({
-          artistId: created.id, platform: 'APPLE_MUSIC', url: r.url, title: r.title,
+          artistId: created.id, platform: r.platform || 'APPLE_MUSIC', url: r.url, title: r.title,
           coverUrl: r.coverUrl || undefined, participants: [],
         });
         ok++;

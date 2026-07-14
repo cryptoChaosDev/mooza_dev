@@ -29,14 +29,14 @@ export function extractYmArtistId(url: string | undefined | null): string | null
 
 // ВАЖНО: через классический node:https, НЕ через fetch — антибот Яндекса
 // режет TLS-сигнатуру undici (fetch стабильно получает 403, https.get — 200).
-function fetchBrief(ymId: string): Promise<any | null> {
+export function ymGet(path: string, timeoutMs = 20_000): Promise<any | null> {
   return new Promise((resolve) => {
     const req = https.get(
       {
         host: 'api.music.yandex.net',
-        path: `/artists/${ymId}/brief-info`,
+        path,
         headers: { 'User-Agent': YM_UA },
-        timeout: 20_000,
+        timeout: timeoutMs,
       },
       (res) => {
         if (res.statusCode !== 200) {
@@ -49,7 +49,7 @@ function fetchBrief(ymId: string): Promise<any | null> {
         res.on('data', (chunk) => { body += chunk; });
         res.on('end', () => {
           try {
-            resolve(JSON.parse(body)?.result ?? null);
+            resolve(JSON.parse(body));
           } catch {
             resolve(null);
           }
@@ -61,10 +61,15 @@ function fetchBrief(ymId: string): Promise<any | null> {
   });
 }
 
-// coverUri вида "avatars.yandex.net/get-music-content/.../%%" → https-URL 400x400
-function ymCover(coverUri: string | undefined | null): string | undefined {
+async function fetchBrief(ymId: string): Promise<any | null> {
+  const data = await ymGet(`/artists/${ymId}/brief-info`);
+  return data?.result ?? null;
+}
+
+// coverUri/аватар YM → https-URL нужного размера
+export function ymCoverUrl(coverUri: string | undefined | null, size = '400x400'): string | undefined {
   if (!coverUri) return undefined;
-  return `https://${String(coverUri).replace('%%', '400x400')}`;
+  return `https://${String(coverUri).replace('%%', size)}`;
 }
 
 /** Синк одного артиста. Возвращает сводку изменений (для лога). */
@@ -122,7 +127,7 @@ export async function syncArtistFromYandexMusic(artist: {
         platform: 'YANDEX_MUSIC',
         url: `https://music.yandex.ru/album/${albumId}`,
         title,
-        coverUrl: ymCover(al.coverUri),
+        coverUrl: ymCoverUrl(al.coverUri),
         releaseDate: al.releaseDate ? new Date(al.releaseDate) : undefined,
       },
     });
@@ -151,7 +156,7 @@ export async function syncArtistFromYandexMusic(artist: {
         platform: 'YOUTUBE',
         url,
         title,
-        coverUrl: v.cover ? ymCover(v.cover) : undefined,
+        coverUrl: v.cover ? ymCoverUrl(v.cover) : undefined,
       },
     });
     summary.newClips++;
