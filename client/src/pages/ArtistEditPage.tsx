@@ -157,15 +157,19 @@ export default function ArtistEditPage() {
           uploadAvatarMut.mutate(new File([blob], 'avatar.jpg', { type: (blob as any)?.type || 'image/jpeg' }));
         } catch { /* avatar best-effort */ }
       }
-      // Pull the artist's Apple Music releases + clips for optional import (skip already-added).
-      if (c.itunesId) {
+      // Pull the artist's releases + clips for optional import (skip already-added).
+      // Яндекс.Музыка приоритетнее (ymId); бонусом приходят слушатели (details).
+      if (c.itunesId || c.ymId) {
         try {
-          const { data } = await artistAPI.lookupReleases({ itunesId: c.itunesId, deezerId: c.deezerId });
+          const { data } = await artistAPI.lookupReleases({ itunesId: c.itunesId, deezerId: c.deezerId, ymId: c.ymId });
           const key = (u: any) => String(u || '').split('?')[0];
           const haveRel = new Set((releases || []).map((r: any) => key(r.url)));
           const haveClip = new Set((clips || []).map((r: any) => key(r.url)));
           setFoundReleases((data.releases || []).filter((r: any) => !haveRel.has(key(r.url))));
           setFoundClips((data.clips || []).filter((r: any) => !haveClip.has(key(r.url))));
+          if (data.details?.listeners != null) {
+            setForm(f => ({ ...f, listeners: String(data.details.listeners) }));
+          }
         } catch { /* best-effort */ }
       }
       toast.success('Данные подставлены — проверьте и сохраните');
@@ -179,7 +183,7 @@ export default function ArtistEditPage() {
     for (const r of selected) {
       try {
         await releaseAPI.create({
-          artistId: id!, platform: 'APPLE_MUSIC', url: r.url, title: r.title,
+          artistId: id!, platform: r.platform || 'APPLE_MUSIC', url: r.url, title: r.title,
           coverUrl: r.coverUrl || undefined, releaseDate: r.releaseDate || undefined, participants: [],
         });
         ok++;
@@ -194,7 +198,7 @@ export default function ArtistEditPage() {
     for (const r of selected) {
       try {
         await clipAPI.create({
-          artistId: id!, platform: 'APPLE_MUSIC', url: r.url, title: r.title,
+          artistId: id!, platform: r.platform || 'APPLE_MUSIC', url: r.url, title: r.title,
           coverUrl: r.coverUrl || undefined, participants: [],
         });
         ok++;

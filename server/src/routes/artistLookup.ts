@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { yoNorm } from '../utils/search';
+import { ymGet, ymCoverUrl } from '../utils/yandexMusicSync';
 
 // External-API helper that pre-fills the artist-create form: searches Deezer,
 // Apple Music (iTunes) and MusicBrainz, merges matches by normalized name, and
@@ -15,6 +16,7 @@ const AVATAR_HOSTS = new Set([
   'cdn-images.dzcdn.net', 'e-cdns-images.dzcdn.net',
   'is1-ssl.mzstatic.com', 'is2-ssl.mzstatic.com', 'is3-ssl.mzstatic.com',
   'is4-ssl.mzstatic.com', 'is5-ssl.mzstatic.com', 'upload.wikimedia.org',
+  'avatars.yandex.net',
 ]);
 
 const cache = new Map<string, { at: number; data: any }>();
@@ -33,6 +35,9 @@ const GENRE_SYNONYMS: Record<string, string> = {
   rnb: 'rb', randb: 'rb', soul: 'соул', funk: 'фанк',
   classical: 'классическаямузыка', opera: 'классическаямузыка', опера: 'классическаямузыка',
   worldmusic: 'world', этно: 'этно', folk: 'фолк',
+  // Слаги жанров Яндекс.Музыки
+  rusrock: 'rock', ruspop: 'поп', rusrap: 'рэп', rusfolk: 'фолк', rusestrada: 'поп',
+  foreignrap: 'рэп', foreignbard: 'фолк', local_indie: 'инди', prog: 'rock', postrock: 'rock',
 };
 
 async function safeJson(url: string, headers?: Record<string, string>): Promise<any> {
@@ -60,9 +65,12 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const enc = encodeURIComponent(q);
     // MusicBrainz is intentionally omitted — it is unroutable from the RU host
     // (connection times out). Deezer + iTunes cover name/photo/genre/links.
-    const [dz, it, genreRows] = await Promise.all([
+    const [dz, it, ym, genreRows] = await Promise.all([
       safeJson(`https://api.deezer.com/search/artist?q=${enc}&limit=8`),
       safeJson(`https://itunes.apple.com/search?term=${enc}&entity=musicArtist&limit=8&country=RU`),
+      // Яндекс.Музыка — главный источник для русских артистов (через node:https,
+      // см. ymGet: fetch антибот режет)
+      ymGet(`/search?text=${enc}&type=artist&page=0&nocorrect=false`, 6000),
       prisma.genre.findMany({ select: { id: true, name: true } }),
     ]);
 
@@ -104,10 +112,21 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
     const byName = new Map<string, any>();
     const ensure = (name: string) => {
       const k = norm(name);
-      if (!byName.has(k)) byName.set(k, { name, type: null as string | null, imageUrl: null as string | null, genres: [] as string[], links: {} as any, deezerId: null as number | null, itunesId: null as number | null, sources: [] as string[], popularity: 0, disambiguation: undefined as string | undefined });
+      if (!byName.has(k)) byName.set(k, { name, type: null as string | null, imageUrl: null as string | null, genres: [] as string[], links: {} as any, deezerId: null as number | null, itunesId: null as number | null, ymId: null as string | null, sources: [] as string[], popularity: 0, disambiguation: undefined as string | undefined });
       return byName.get(k);
     };
 
+    // Яндекс.Музыка первым — для русских артистов это основной каталог.
+    for (const a of (ym?.result?.artists?.results || [])) {
+      if (!a?.name) continue;
+      const c = ensure(a.name);
+      if (!c.ymId && a.id) c.ymId = String(a.id);
+      c.imageUrl = c.imageUrl || ymCoverUrl(a.cover?.uri, '600x600') || null;
+      for (const g of (a.genres || [])) c.genres.push(String(g));
+      if (a.id) c.links.yandexMusic = `https://music.yandex.ru/artist/${a.id}`;
+      if (!c.sources.includes('яндекс')) c.sources.push('яндекс');
+      if ((a.name || '').length > c.name.length) c.name = a.name;
+    }
     for (const a of (dz?.data || [])) {
       const c = ensure(a.name);
       if (!c.deezerId && a.id) c.deezerId = a.id;
@@ -146,6 +165,60 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
 router.get('/releases', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const itunesId = String(req.query.itunesId || '').replace(/\D/g, '');
+    const ymId = String(req.query.ymId || '').replace(/\D/g, '');
+
+    // Яндекс.Музыка приоритетнее для русских артистов: релизы + клипы + бонусом
+    // описание и слушатели (details) из brief-info.
+    if (ymId) {
+      const brief = (await ymGet(`/artists/${ymId}/brief-info`))?.result;
+      if (brief?.artist) {
+        const relSeen = new Set<string>();
+        const releases: any[] = [];
+        for (const al of [...(brief.albums ?? []), ...(brief.lastReleases ?? [])]) {
+          const albumId = String(al?.id ?? '');
+          const title = String(al?.title ?? '').trim();
+          if (!albumId || !title || relSeen.has(albumId)) continue;
+          relSeen.add(albumId);
+          releases.push({
+            title,
+            coverUrl: ymCoverUrl(al.coverUri) || null,
+            releaseDate: al.releaseDate || null,
+            platform: 'YANDEX_MUSIC',
+            url: `https://music.yandex.ru/album/${albumId}`,
+          });
+        }
+        releases.sort((x, y) => String(y.releaseDate || '').localeCompare(String(x.releaseDate || '')));
+
+        const clipSeen = new Set<string>();
+        const clips: any[] = [];
+        for (const v of brief.videos ?? []) {
+          const provider = String(v?.provider ?? '').toLowerCase();
+          const vid = String(v?.providerVideoId ?? '');
+          const title = String(v?.title ?? '').trim();
+          if (provider !== 'youtube' || !vid || !title || clipSeen.has(vid)) continue;
+          clipSeen.add(vid);
+          clips.push({
+            title,
+            coverUrl: v.cover ? ymCoverUrl(v.cover) : null,
+            releaseDate: null,
+            platform: 'YOUTUBE',
+            url: `https://www.youtube.com/watch?v=${vid}`,
+          });
+        }
+
+        const ymDesc = brief.artist.description?.text ?? brief.artist.description;
+        return res.json({
+          releases,
+          clips,
+          details: {
+            description: typeof ymDesc === 'string' ? ymDesc.trim().slice(0, 4000) : null,
+            listeners: brief.stats?.lastMonthListeners ?? null,
+          },
+        });
+      }
+      // ЯМ не ответил — падаем на iTunes-ветку ниже
+    }
+
     if (!itunesId) return res.json({ releases: [], clips: [] });
     const [albums, videos] = await Promise.all([
       safeJson(`https://itunes.apple.com/lookup?id=${itunesId}&entity=album&limit=80&country=RU`),
