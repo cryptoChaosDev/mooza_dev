@@ -97,6 +97,27 @@ export function initSocket(app: Express) {
       }
     } catch {}
 
+    // Typing indicator — ephemeral relay to the other members of a conversation.
+    // Client throttles (~1 event / 2.5s while typing); membership is verified
+    // server-side so no one can spam arbitrary users.
+    socket.on('typing', async (payload: { conversationId?: string }) => {
+      const conversationId = String(payload?.conversationId ?? '');
+      if (!conversationId) return;
+      try {
+        const { prisma } = await import('./index');
+        const members = await prisma.conversationMember.findMany({
+          where: { conversationId, deletedAt: null },
+          select: { userId: true },
+        });
+        if (!members.some(m => m.userId === userId)) return;
+        for (const m of members) {
+          if (m.userId !== userId) {
+            emitToUser(m.userId, 'user_typing', { conversationId, userId });
+          }
+        }
+      } catch {}
+    });
+
     // Heartbeat — client sends 'ping' every 30s to keep lastSeenAt fresh
     socket.on('ping', async () => {
       try {
