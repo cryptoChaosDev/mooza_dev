@@ -37,6 +37,13 @@ type Form = {
   socialLinks: Record<string, string>;
 };
 
+// Заголовок списка импорта — по платформе данных (Яндекс приоритетнее Apple)
+const importListTitle = (items: any[], kind: 'release' | 'clip') => {
+  const p = items[0]?.platform;
+  const src = p === 'YANDEX_MUSIC' ? 'Яндекс.Музыке' : p === 'YOUTUBE' ? 'YouTube' : 'Apple Music';
+  return kind === 'release' ? `Релизы на ${src}` : `Клипы на ${src}`;
+};
+
 export default function ArtistCreatePage() {
   const navigate = useNavigate();
   const [form, setForm] = useState<Form>({ name: '', type: '', city: '', genreIds: [], submitterRoleIds: [], socialLinks: {} });
@@ -485,8 +492,8 @@ export default function ArtistCreatePage() {
               </div>
             </div>
 
-            <MediaImportList title="Релизы на Apple Music" items={foundReleases} onImport={importReleases} />
-            <MediaImportList title="Клипы на Apple Music" items={foundClips} onImport={importClips} />
+            <MediaImportList title={importListTitle(foundReleases, 'release')} items={foundReleases} onImport={importReleases} />
+            <MediaImportList title={importListTitle(foundClips, 'clip')} items={foundClips} onImport={importClips} />
 
             <div className="p-3 rounded-xl bg-primary-500/5 border border-primary-500/20">
               <p className="text-xs text-slate-300 leading-relaxed mb-3">
