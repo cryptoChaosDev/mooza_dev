@@ -461,8 +461,14 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
       if (!title?.trim() || !content?.trim()) {
         return res.status(400).json({ error: 'Вопрос требует заголовок и текст' });
       }
-    } else if (!content && !imageUrl && !audioUrl && imagesArr.length === 0 && !(type === 'employment' && employmentStatus)) {
-      return res.status(400).json({ error: 'Post cannot be empty' });
+    } else if (
+      !content && !imageUrl && !audioUrl && imagesArr.length === 0
+      && !(type === 'employment' && employmentStatus)
+      // Структурный пост «Услуга»: карточка услуги — само содержимое,
+      // текст-комментарий опционален.
+      && !(type === 'service' && serviceId)
+    ) {
+      return res.status(400).json({ error: 'Пост не может быть пустым' });
     }
 
     // Structured «Услуга» post — validate the linked offering belongs to the author.
