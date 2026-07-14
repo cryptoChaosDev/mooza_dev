@@ -19,6 +19,18 @@ const requireAdmin = async (req: AuthRequest, res: Response, next: any) => {
 
 router.use(authenticate, requireAdmin);
 
+// Ручной прогон синка Яндекс.Музыки (тот же код, что ночной джоб) — для проверки.
+router.post('/ym-sync', async (_req, res) => {
+  try {
+    const { runYandexMusicSync } = await import('../utils/yandexMusicSync');
+    // Фоном — обход с паузами может занять минуты; ответ сразу.
+    runYandexMusicSync().catch(() => {});
+    res.json({ started: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ─── Waitlist (landing sign-ups) ─────────────────────────────────────────────
 router.get('/waitlist', async (req, res) => {
   try {
