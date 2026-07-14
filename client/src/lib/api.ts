@@ -125,6 +125,8 @@ export const userAPI = {
     location?: string;       // comma-separated city/country names
     profession?: string;     // comma-separated profession ids
     occupancy?: string;      // comma-separated: open|considering|closed
+    verifiedOnly?: string;   // '1' — only verified users
+    withReviews?: string;    // '1' — only users with at least one review
     sort?: 'date' | 'rating' | 'connections' | 'alpha';
     alphaDir?: 'asc' | 'desc';
   }) =>
@@ -152,8 +154,10 @@ export const referenceAPI = {
   getProfessions: (params?: { directionId?: string; search?: string; excludeUserId?: string; all?: boolean }) =>
     api.get('/references/professions', { params }),
   getProfessionFeatures: () => api.get('/references/profession-features'),
-  getArtists: (params?: { search?: string; type?: string; genre?: string; sort?: 'date' | 'alpha' }) =>
+  getArtists: (params?: { search?: string; type?: string; genre?: string; city?: string; sort?: 'date' | 'alpha' | 'listeners' }) =>
     api.get('/references/artists', { params }),
+  // Distinct cities of verified artists (catalog city-filter autocomplete).
+  getArtistCities: (q?: string) => api.get('/references/artist-cities', { params: { q } }),
   // Multi-level search endpoints
   getServices: (params?: { directionId?: string; professionId?: string; fieldOfActivityId?: string }) =>
     api.get('/references/services', { params }),
@@ -179,6 +183,9 @@ export const referenceAPI = {
     location?: string;
     priceMin?: number;
     priceMax?: number;
+    deadlineMax?: number;    // срок выполнения ≤ N дней
+    verifiedOnly?: string;   // '1' — only verified providers
+    ratingMin?: number;      // минимальная средняя оценка исполнителя (1-10)
     sort?: 'date' | 'price_asc' | 'price_desc' | 'rating';
     page?: number;
     limit?: number;

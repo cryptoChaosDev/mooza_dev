@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Search, ChevronRight, ChevronDown, ChevronUp,
@@ -198,13 +198,23 @@ export default function SearchPage() {
   const [locationFilter, setLocationFilter] = useState<string[]>([]); // applied cities
   const [priceMin, setPriceMin] = useState<string>('');               // applied
   const [priceMax, setPriceMax] = useState<string>('');               // applied
+  const [deadlineMaxF, setDeadlineMaxF] = useState<string>('');       // applied: срок ≤ N дней
+  const [serviceVerified, setServiceVerified] = useState(false);      // applied: верифицированный исполнитель
+  const [ratingMinF, setRatingMinF] = useState<string>('');           // applied: оценка исполнителя от N
 
   // Draft values edited inside the filters modal (committed on "Применить").
   const [tempLocation, setTempLocation] = useState<string[]>([]);
   const [tempPriceMin, setTempPriceMin] = useState<string>('');
   const [tempPriceMax, setTempPriceMax] = useState<string>('');
+  const [tempDeadlineMax, setTempDeadlineMax] = useState<string>('');
+  const [tempServiceVerified, setTempServiceVerified] = useState(false);
+  const [tempRatingMin, setTempRatingMin] = useState<string>('');
   const [cityQuery, setCityQuery] = useState('');
   const [debouncedCityQuery, setDebouncedCityQuery] = useState('');
+
+  // Предиктивные подсказки под строкой поиска (все вкладки).
+  const [searchFocused, setSearchFocused] = useState(false);
+  const blurTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const SORT_OPTIONS: { value: ServiceSort; label: string }[] = [
     { value: 'date', label: 'По дате добавления' },
@@ -219,16 +229,22 @@ export default function SearchPage() {
   // Type is single-select among the 3 types ('' = «Все»). Genres combine on top.
   const [artistTypeFilter, setArtistTypeFilter] = useState<string>('');
   const [artistGenreFilter, setArtistGenreFilter] = useState<string[]>([]);
-  // Sort: 'date' (default, newest first) | 'alpha' (name A→Z).
-  const [artistSort, setArtistSort] = useState<'date' | 'alpha'>('date');
+  // Sort: 'date' (default, newest first) | 'alpha' (name A→Z) | 'listeners'.
+  type ArtistSort = 'date' | 'alpha' | 'listeners';
+  const [artistSort, setArtistSort] = useState<ArtistSort>('date');
   const [artistSortOpen, setArtistSortOpen] = useState(false);
-  // Advanced filter (genre multiselect) modal.
+  // Advanced filter (genres + cities) modal.
   const [artistFilterOpen, setArtistFilterOpen] = useState(false);
   const [tempArtistGenres, setTempArtistGenres] = useState<string[]>([]);
+  const [artistCityFilter, setArtistCityFilter] = useState<string[]>([]); // applied
+  const [tempArtistCities, setTempArtistCities] = useState<string[]>([]);
+  const [artistCitySearch, setArtistCitySearch] = useState('');
+  const [debouncedArtistCitySearch, setDebouncedArtistCitySearch] = useState('');
 
-  const ARTIST_SORT_OPTIONS: { value: 'date' | 'alpha'; label: string }[] = [
+  const ARTIST_SORT_OPTIONS: { value: ArtistSort; label: string }[] = [
     { value: 'date', label: 'По дате добавления' },
     { value: 'alpha', label: 'По алфавиту' },
+    { value: 'listeners', label: 'По слушателям' },
   ];
 
   // ── People tab state ───────────────────────────────────────────────────────
@@ -239,6 +255,8 @@ export default function SearchPage() {
   const [peopleLocation, setPeopleLocation] = useState<string[]>([]);
   const [peopleProfession, setPeopleProfession] = useState<string[]>([]);
   const [peopleOccupancy, setPeopleOccupancy] = useState<string[]>([]);
+  const [peopleVerified, setPeopleVerified] = useState(false);      // только верифицированные
+  const [peopleWithReviews, setPeopleWithReviews] = useState(false); // только с отзывами
   // Sort: date (default) | rating | connections | alpha. Alpha has a direction.
   type PeopleSort = 'date' | 'rating' | 'connections' | 'alpha';
   const [peopleSort, setPeopleSort] = useState<PeopleSort>('date');
@@ -250,6 +268,8 @@ export default function SearchPage() {
   const [tempPeopleLocation, setTempPeopleLocation] = useState<string[]>([]);
   const [tempPeopleProfession, setTempPeopleProfession] = useState<string[]>([]);
   const [tempPeopleOccupancy, setTempPeopleOccupancy] = useState<string[]>([]);
+  const [tempPeopleVerified, setTempPeopleVerified] = useState(false);
+  const [tempPeopleWithReviews, setTempPeopleWithReviews] = useState(false);
   // Per-checklist search boxes.
   const [peopleLocSearch, setPeopleLocSearch] = useState('');
   const [debouncedPeopleLocSearch, setDebouncedPeopleLocSearch] = useState('');
@@ -303,6 +323,11 @@ export default function SearchPage() {
     return () => clearTimeout(t);
   }, [peopleLocSearch]);
 
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedArtistCitySearch(artistCitySearch), 250);
+    return () => clearTimeout(t);
+  }, [artistCitySearch]);
+
   // ── Reference data ─────────────────────────────────────────────────────────
 
   // Sections (each with its nested services) — for the "Услуги" browse.
@@ -347,6 +372,9 @@ export default function SearchPage() {
     location: locationFilter.length ? locationFilter.join(',') : undefined,
     priceMin: priceMin !== '' ? Number(priceMin) : undefined,
     priceMax: priceMax !== '' ? Number(priceMax) : undefined,
+    deadlineMax: deadlineMaxF !== '' ? Number(deadlineMaxF) : undefined,
+    verifiedOnly: serviceVerified ? '1' : undefined,
+    ratingMin: ratingMinF !== '' ? Number(ratingMinF) : undefined,
     sort: sortMode,
   };
 
@@ -364,12 +392,13 @@ export default function SearchPage() {
   // Verified artists only (server-enforced). Search + type + genres + sort are
   // all applied server-side; type is single-select, genres combine with it.
   const { data: artists, isLoading: artistsLoading } = useQuery({
-    queryKey: ['catalog-artists', debouncedArtistQuery, artistTypeFilter, artistGenreFilter, artistSort],
+    queryKey: ['catalog-artists', debouncedArtistQuery, artistTypeFilter, artistGenreFilter, artistCityFilter, artistSort],
     queryFn: async () => {
       const { data } = await referenceAPI.getArtists({
         search: debouncedArtistQuery || undefined,
         type: artistTypeFilter || undefined,
         genre: artistGenreFilter.length ? artistGenreFilter.join(',') : undefined,
+        city: artistCityFilter.length ? artistCityFilter.join(',') : undefined,
         sort: artistSort,
       });
       return data as any[];
@@ -377,15 +406,27 @@ export default function SearchPage() {
     enabled: activeTab === 'artists',
   });
 
+  // Artist city autocomplete (only while the artists filter modal is open).
+  const { data: artistCityOptions } = useQuery({
+    queryKey: ['artist-cities', debouncedArtistCitySearch],
+    queryFn: async () => {
+      const { data } = await referenceAPI.getArtistCities(debouncedArtistCitySearch || undefined);
+      return (data as any[]).map((c) => c.name as string);
+    },
+    enabled: activeTab === 'artists' && artistFilterOpen,
+  });
+
   // ── People ────────────────────────────────────────────────────────────────
   const { data: peopleUsers, isLoading: peopleLoading } = useQuery({
-    queryKey: ['catalog-people', debouncedPeopleQuery, peopleLocation, peopleProfession, peopleOccupancy, peopleSort, peopleAlphaDir],
+    queryKey: ['catalog-people', debouncedPeopleQuery, peopleLocation, peopleProfession, peopleOccupancy, peopleVerified, peopleWithReviews, peopleSort, peopleAlphaDir],
     queryFn: async () => {
       const { data } = await userAPI.catalog({
         query: debouncedPeopleQuery || undefined,
         location: peopleLocation.length ? peopleLocation.join(',') : undefined,
         profession: peopleProfession.length ? peopleProfession.join(',') : undefined,
         occupancy: peopleOccupancy.length ? peopleOccupancy.join(',') : undefined,
+        verifiedOnly: peopleVerified ? '1' : undefined,
+        withReviews: peopleWithReviews ? '1' : undefined,
         sort: peopleSort,
         alphaDir: peopleSort === 'alpha' ? peopleAlphaDir : undefined,
       });
@@ -551,6 +592,103 @@ export default function SearchPage() {
               activeTab === 'services'
                 ? 'Поиск услуг...'
                 : activeTab === 'artists' ? 'Поиск артистов...' : 'Поиск людей...';
+            // ── Предиктивные подсказки: каталог (локально) + живые результаты ──
+            const norm = (s: string) => s.toLowerCase().replace(/ё/g, 'е');
+            const q = norm(value.trim());
+            const showSuggest = searchFocused && q.length >= 2;
+            let suggestContent: any = null;
+            if (showSuggest) {
+              if (activeTab === 'services') {
+                // Совпадения по каталогу услуг — мгновенно, из уже загруженных разделов.
+                const catalogMatches: { svc: any; section: any }[] = [];
+                for (const section of sections ?? []) {
+                  for (const svc of section.services ?? []) {
+                    if (norm(svc.name).includes(q)) catalogMatches.push({ svc, section });
+                    if (catalogMatches.length >= 4) break;
+                  }
+                  if (catalogMatches.length >= 4) break;
+                }
+                const cards = (serviceCards ?? []).slice(0, 4);
+                suggestContent = (catalogMatches.length || cards.length) ? (
+                  <>
+                    {catalogMatches.map(({ svc, section }) => (
+                      <button
+                        key={`cat-${svc.id}`}
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => {
+                          handleSectionClick(section);
+                          handleServiceClick(svc);
+                          setServiceQuery('');
+                          setSearchFocused(false);
+                        }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-slate-800/60 transition-colors"
+                      >
+                        <Search size={13} className="text-primary-400 flex-shrink-0" />
+                        <span className="text-sm text-white truncate">{svc.name}</span>
+                        <span className="text-xs text-slate-500 truncate ml-auto flex-shrink-0">{section.name}</span>
+                      </button>
+                    ))}
+                    {cards.map((card: any) => (
+                      <button
+                        key={`card-${card.id}`}
+                        onMouseDown={e => e.preventDefault()}
+                        onClick={() => { setSearchFocused(false); handleNavigateToServiceCard(card); }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-slate-800/60 transition-colors"
+                      >
+                        <AvatarComponent src={card.user?.avatar} name={`${card.user?.firstName ?? ''} ${card.user?.lastName ?? ''}`} size={24} className="rounded-lg flex-shrink-0" />
+                        <span className="text-sm text-white truncate">{card.name || card.service?.name}</span>
+                        <span className="text-xs text-slate-500 truncate ml-auto flex-shrink-0">{card.user?.firstName} {card.user?.lastName}</span>
+                      </button>
+                    ))}
+                  </>
+                ) : (
+                  <p className="px-3 py-2.5 text-xs text-slate-500">{catalogLoading ? 'Ищем…' : 'Ничего не найдено'}</p>
+                );
+              } else if (activeTab === 'artists') {
+                // Локальный дофильтр: сервер ищет по имени с дебаунсом, а избранные
+                // приходят вовсе без поиска — фильтруем по текущему вводу сразу.
+                const list = (displayArtists ?? []).filter((a: any) => norm(a.name ?? '').includes(q)).slice(0, 6);
+                suggestContent = list.length ? list.map((a: any) => (
+                  <button
+                    key={a.id}
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => { setSearchFocused(false); handleNavigateToArtist(a.id); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-slate-800/60 transition-colors"
+                  >
+                    <AvatarComponent src={a.avatar} name={a.name} size={24} className="rounded-lg flex-shrink-0" />
+                    <span className="text-sm text-white truncate">{a.name}</span>
+                    <span className="text-xs text-slate-500 truncate ml-auto flex-shrink-0">
+                      {a.type === 'SOLO' ? 'Соло' : a.type === 'GROUP' ? 'Группа' : a.type === 'COVER_GROUP' ? 'Кавербэнд' : ''}
+                    </span>
+                  </button>
+                )) : (
+                  <p className="px-3 py-2.5 text-xs text-slate-500">{displayArtistsLoading ? 'Ищем…' : 'Ничего не найдено'}</p>
+                );
+              } else {
+                // Серверный поиск людей шире имени (bio, профессии) — локально дофильтровываем
+                // только избранных, которых сервер по query не фильтрует вовсе.
+                const peoplePool = showFavorites
+                  ? (displayPeople ?? []).filter((u: any) => norm(`${u.lastName ?? ''} ${u.firstName ?? ''} ${u.nickname ?? ''}`).includes(q))
+                  : (displayPeople ?? []);
+                const list = peoplePool.slice(0, 6);
+                suggestContent = list.length ? list.map((u: any) => (
+                  <button
+                    key={u.id}
+                    onMouseDown={e => e.preventDefault()}
+                    onClick={() => { setSearchFocused(false); handleNavigateToProfile(u.id); }}
+                    className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-slate-800/60 transition-colors"
+                  >
+                    <AvatarComponent src={u.avatar} name={`${u.lastName ?? ''} ${u.firstName ?? ''}`} size={24} className="rounded-lg flex-shrink-0" />
+                    <span className="text-sm text-white truncate">{u.lastName} {u.firstName}</span>
+                    <span className="text-xs text-slate-500 truncate ml-auto flex-shrink-0">
+                      {u.userServices?.[0]?.profession?.name ?? u.city ?? ''}
+                    </span>
+                  </button>
+                )) : (
+                  <p className="px-3 py-2.5 text-xs text-slate-500">{displayPeopleLoading ? 'Ищем…' : 'Ничего не найдено'}</p>
+                );
+              }
+            }
             return (
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
@@ -558,6 +696,11 @@ export default function SearchPage() {
                   type="text"
                   value={value}
                   onChange={e => setValue(e.target.value)}
+                  onFocus={() => {
+                    if (blurTimerRef.current) clearTimeout(blurTimerRef.current);
+                    setSearchFocused(true);
+                  }}
+                  onBlur={() => { blurTimerRef.current = setTimeout(() => setSearchFocused(false), 150); }}
                   placeholder={placeholder}
                   className="w-full pl-8 pr-9 py-2.5 bg-slate-900 border border-slate-800 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
                 />
@@ -568,6 +711,11 @@ export default function SearchPage() {
                   >
                     <X size={16} />
                   </button>
+                )}
+                {showSuggest && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 z-[57] bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden max-h-72 overflow-y-auto divide-y divide-slate-800/50">
+                    {suggestContent}
+                  </div>
                 )}
               </div>
             );
@@ -608,14 +756,19 @@ export default function SearchPage() {
               </div>
               <button
                 type="button"
-                onClick={() => { setTempArtistGenres(artistGenreFilter); setArtistFilterOpen(true); }}
+                onClick={() => {
+                  setTempArtistGenres(artistGenreFilter);
+                  setTempArtistCities(artistCityFilter);
+                  setArtistCitySearch('');
+                  setArtistFilterOpen(true);
+                }}
                 className="flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium bg-slate-800/60 border border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
               >
                 <SlidersHorizontal size={14} />
                 Фильтры
-                {artistGenreFilter.length > 0 && (
+                {(artistGenreFilter.length + artistCityFilter.length) > 0 && (
                   <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">
-                    {artistGenreFilter.length}
+                    {artistGenreFilter.length + artistCityFilter.length}
                   </span>
                 )}
               </button>
@@ -671,6 +824,8 @@ export default function SearchPage() {
                   setTempPeopleLocation(peopleLocation);
                   setTempPeopleProfession(peopleProfession);
                   setTempPeopleOccupancy(peopleOccupancy);
+                  setTempPeopleVerified(peopleVerified);
+                  setTempPeopleWithReviews(peopleWithReviews);
                   setPeopleLocSearch('');
                   setPeopleProfSearch('');
                   setPeopleFilterOpen(true);
@@ -680,7 +835,8 @@ export default function SearchPage() {
                 <SlidersHorizontal size={14} />
                 Фильтры
                 {(() => {
-                  const n = peopleLocation.length + peopleProfession.length + peopleOccupancy.length;
+                  const n = peopleLocation.length + peopleProfession.length + peopleOccupancy.length
+                    + (peopleVerified ? 1 : 0) + (peopleWithReviews ? 1 : 0);
                   return n > 0 ? (
                     <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{n}</span>
                   ) : null;
@@ -690,7 +846,8 @@ export default function SearchPage() {
           )}
           {activeTab === 'services' && (() => {
             const activeFilterCount =
-              profFilterValues.length + locationFilter.length + (priceMin !== '' || priceMax !== '' ? 1 : 0);
+              profFilterValues.length + locationFilter.length + (priceMin !== '' || priceMax !== '' ? 1 : 0)
+              + (deadlineMaxF !== '' ? 1 : 0) + (serviceVerified ? 1 : 0) + (ratingMinF !== '' ? 1 : 0);
             return (
               <div className="flex items-center gap-2">
                 {/* Sort */}
@@ -733,6 +890,9 @@ export default function SearchPage() {
                     setTempLocation(locationFilter);
                     setTempPriceMin(priceMin);
                     setTempPriceMax(priceMax);
+                    setTempDeadlineMax(deadlineMaxF);
+                    setTempServiceVerified(serviceVerified);
+                    setTempRatingMin(ratingMinF);
                     setCityQuery('');
                     setFiltersOpen(true);
                   }}
@@ -904,14 +1064,14 @@ export default function SearchPage() {
                   onClick={() => selectType(type.value)}
                 />
               ))}
-              {/* Выбранные жанры — краткое напоминание с быстрым сбросом */}
-              {artistGenreFilter.length > 0 && (
+              {/* Активные фильтры (жанры+города) — краткое напоминание с быстрым сбросом */}
+              {(artistGenreFilter.length + artistCityFilter.length) > 0 && (
                 <button
-                  onClick={() => setArtistGenreFilter([])}
+                  onClick={() => { setArtistGenreFilter([]); setArtistCityFilter([]); }}
                   className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border bg-primary-500/10 border-primary-500/40 text-primary-300 hover:text-white transition-all"
-                  title="Сбросить жанры"
+                  title="Сбросить фильтры"
                 >
-                  Жанры: {artistGenreFilter.length}
+                  Фильтры: {artistGenreFilter.length + artistCityFilter.length}
                   <X size={12} />
                 </button>
               )}
@@ -1041,7 +1201,8 @@ export default function SearchPage() {
                 <SlidersHorizontal size={16} className="text-primary-400" />
                 <h3 className="text-base font-semibold text-white">Фильтры</h3>
                 {(() => {
-                  const n = tempFilters.length + tempLocation.length + (tempPriceMin !== '' || tempPriceMax !== '' ? 1 : 0);
+                  const n = tempFilters.length + tempLocation.length + (tempPriceMin !== '' || tempPriceMax !== '' ? 1 : 0)
+                    + (tempDeadlineMax !== '' ? 1 : 0) + (tempServiceVerified ? 1 : 0) + (tempRatingMin !== '' ? 1 : 0);
                   return n > 0 ? (
                     <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{n}</span>
                   ) : null;
@@ -1121,7 +1282,61 @@ export default function SearchPage() {
                 </div>
               </div>
 
+              {/* Срок выполнения */}
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Срок выполнения</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-slate-400">до</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    min={1}
+                    value={tempDeadlineMax}
+                    onChange={e => setTempDeadlineMax(e.target.value)}
+                    placeholder="—"
+                    className="w-24 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600"
+                  />
+                  <span className="text-sm text-slate-400">дней</span>
+                </div>
+                {tempDeadlineMax !== '' && (
+                  <p className="text-[11px] text-slate-500 mt-1.5">Услуги без указанного срока будут скрыты.</p>
+                )}
+              </div>
+
+              {/* Исполнитель */}
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Исполнитель</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setTempServiceVerified(v => !v)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                      tempServiceVerified ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600'
+                    }`}
+                  >
+                    Верифицированный
+                  </button>
+                  {['7', '8', '9'].map(r => (
+                    <button
+                      key={r}
+                      type="button"
+                      onClick={() => setTempRatingMin(prev => (prev === r ? '' : r))}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                        tempRatingMin === r ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600'
+                      }`}
+                    >
+                      Оценка {r}+
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Service-specific attribute filters (only when a service is selected) */}
+              {!selectedService && (
+                <p className="text-[11px] text-slate-500">
+                  Выберите конкретную услугу в каталоге над списком — здесь появятся её характеристики (опыт, жанры, оборудование и т.д.).
+                </p>
+              )}
               {(activeFilters ?? []).map((group: any) => (
                 <div key={group.id}>
                   <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">{group.name}</p>
@@ -1150,7 +1365,9 @@ export default function SearchPage() {
               <button
                 onClick={() => {
                   setTempFilters([]); setTempLocation([]); setTempPriceMin(''); setTempPriceMax(''); setCityQuery('');
+                  setTempDeadlineMax(''); setTempServiceVerified(false); setTempRatingMin('');
                   setProfFilterValues([]); setLocationFilter([]); setPriceMin(''); setPriceMax('');
+                  setDeadlineMaxF(''); setServiceVerified(false); setRatingMinF('');
                   setFiltersOpen(false);
                 }}
                 className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors"
@@ -1163,6 +1380,9 @@ export default function SearchPage() {
                   setLocationFilter(tempLocation);
                   setPriceMin(tempPriceMin);
                   setPriceMax(tempPriceMax);
+                  setDeadlineMaxF(tempDeadlineMax);
+                  setServiceVerified(tempServiceVerified);
+                  setRatingMinF(tempRatingMin);
                   setFiltersOpen(false);
                 }}
                 className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors"
@@ -1184,14 +1404,59 @@ export default function SearchPage() {
               <div className="flex items-center gap-2">
                 <SlidersHorizontal size={16} className="text-primary-400" />
                 <h3 className="text-base font-semibold text-white">Фильтры</h3>
-                {tempArtistGenres.length > 0 && (
-                  <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{tempArtistGenres.length}</span>
+                {(tempArtistGenres.length + tempArtistCities.length) > 0 && (
+                  <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{tempArtistGenres.length + tempArtistCities.length}</span>
                 )}
               </div>
               <button onClick={() => setArtistFilterOpen(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors"><X size={18} /></button>
             </div>
 
-            <div className="px-5 py-4 overflow-y-auto">
+            <div className="px-5 py-4 space-y-5 overflow-y-auto">
+              {/* Город — multiselect with autocomplete */}
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Город</p>
+                {tempArtistCities.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {tempArtistCities.map(city => (
+                      <button
+                        key={city}
+                        type="button"
+                        onClick={() => setTempArtistCities(prev => prev.filter(c => c !== city))}
+                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary-600 text-white"
+                      >
+                        {city}
+                        <X size={12} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                  <input
+                    type="text"
+                    value={artistCitySearch}
+                    onChange={e => setArtistCitySearch(e.target.value)}
+                    placeholder="Город..."
+                    className="w-full pl-8 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600"
+                  />
+                </div>
+                {(artistCityOptions ?? []).filter(c => !tempArtistCities.includes(c)).length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {(artistCityOptions ?? []).filter(c => !tempArtistCities.includes(c)).slice(0, 12).map(city => (
+                      <button
+                        key={city}
+                        type="button"
+                        onClick={() => { setTempArtistCities(prev => [...prev, city]); setArtistCitySearch(''); }}
+                        className="px-3 py-1.5 rounded-xl text-xs font-medium border bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600 transition-all"
+                      >
+                        {city}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Жанры</p>
               {(genresList ?? []).length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
@@ -1214,17 +1479,26 @@ export default function SearchPage() {
               ) : (
                 <p className="text-slate-500 text-sm">Жанры не найдены</p>
               )}
+              </div>
             </div>
 
             <div className="px-5 pb-5 pt-4 border-t border-slate-800 flex gap-2.5 flex-shrink-0">
               <button
-                onClick={() => { setTempArtistGenres([]); setArtistGenreFilter([]); setArtistFilterOpen(false); }}
+                onClick={() => {
+                  setTempArtistGenres([]); setTempArtistCities([]); setArtistCitySearch('');
+                  setArtistGenreFilter([]); setArtistCityFilter([]);
+                  setArtistFilterOpen(false);
+                }}
                 className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors"
               >
                 Сбросить
               </button>
               <button
-                onClick={() => { setArtistGenreFilter(tempArtistGenres); setArtistFilterOpen(false); }}
+                onClick={() => {
+                  setArtistGenreFilter(tempArtistGenres);
+                  setArtistCityFilter(tempArtistCities);
+                  setArtistFilterOpen(false);
+                }}
                 className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors"
               >
                 Применить
@@ -1245,7 +1519,8 @@ export default function SearchPage() {
                 <SlidersHorizontal size={16} className="text-primary-400" />
                 <h3 className="text-base font-semibold text-white">Фильтры</h3>
                 {(() => {
-                  const n = tempPeopleLocation.length + tempPeopleProfession.length + tempPeopleOccupancy.length;
+                  const n = tempPeopleLocation.length + tempPeopleProfession.length + tempPeopleOccupancy.length
+                    + (tempPeopleVerified ? 1 : 0) + (tempPeopleWithReviews ? 1 : 0);
                   return n > 0 ? (
                     <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{n}</span>
                   ) : null;
@@ -1377,14 +1652,41 @@ export default function SearchPage() {
                   })}
                 </div>
               </div>
+
+              {/* Дополнительно — надёжность участника */}
+              <div>
+                <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Дополнительно</p>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setTempPeopleVerified(v => !v)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                      tempPeopleVerified ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600'
+                    }`}
+                  >
+                    Только верифицированные
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTempPeopleWithReviews(v => !v)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
+                      tempPeopleWithReviews ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600'
+                    }`}
+                  >
+                    С отзывами
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="px-5 pb-5 pt-4 border-t border-slate-800 flex gap-2.5 flex-shrink-0">
               <button
                 onClick={() => {
                   setTempPeopleLocation([]); setTempPeopleProfession([]); setTempPeopleOccupancy([]);
+                  setTempPeopleVerified(false); setTempPeopleWithReviews(false);
                   setPeopleLocSearch(''); setPeopleProfSearch('');
                   setPeopleLocation([]); setPeopleProfession([]); setPeopleOccupancy([]);
+                  setPeopleVerified(false); setPeopleWithReviews(false);
                   setPeopleFilterOpen(false);
                 }}
                 className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors"
@@ -1396,6 +1698,8 @@ export default function SearchPage() {
                   setPeopleLocation(tempPeopleLocation);
                   setPeopleProfession(tempPeopleProfession);
                   setPeopleOccupancy(tempPeopleOccupancy);
+                  setPeopleVerified(tempPeopleVerified);
+                  setPeopleWithReviews(tempPeopleWithReviews);
                   setPeopleFilterOpen(false);
                 }}
                 className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors"
