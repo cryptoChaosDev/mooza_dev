@@ -8,6 +8,7 @@ import path from 'path';
 import { PrismaClient } from '@prisma/client';
 import { initSocket } from './socket';
 import { startScheduler } from './scheduler';
+import { scheduleYandexMusicSync } from './utils/yandexMusicSync';
 
 // Import rate limiters
 import { apiLimiter } from './middleware/rateLimiter';
@@ -288,6 +289,8 @@ httpServer.listen(PORT, () => {
   logger.info('🔌 Socket.io enabled');
   // Start background scheduler (deal timeouts + user unblock)
   startScheduler();
+  // Ночной синк с Яндекс.Музыкой (04:30 МСК) — привязанные артисты
+  scheduleYandexMusicSync();
 });
 
 // Graceful shutdown
