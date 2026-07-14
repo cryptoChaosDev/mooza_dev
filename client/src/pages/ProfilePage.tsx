@@ -9,7 +9,7 @@ import {
   Camera, Save, Check, X, MapPin, Briefcase, Star, LogOut,
   Globe, Calendar, GraduationCap,
   Headphones, Edit3, Plus,
-  FileText, FileSpreadsheet, FileArchive, Download, Trash2, Loader2, Crown, BadgeCheck, Ban, Link2, Zap,
+  FileText, FileSpreadsheet, FileArchive, Download, Trash2, Loader2, Crown, Ban, Link2, Zap,
   Music2, HandshakeIcon, Eye, Phone, Shield, ChevronDown, ChevronUp,
   ClipboardList,
 } from 'lucide-react';
@@ -699,7 +699,6 @@ export default function ProfilePage() {
                 <h1 className="text-2xl font-bold text-white leading-tight">{profile?.firstName} {profile?.lastName}</h1>
                 {isPro && <BadgeTooltip label="PRO аккаунт"><Zap size={18} className="text-violet-400" /></BadgeTooltip>}
                 {profile?.isPremium && <BadgeTooltip label="Premium"><Crown size={18} className="text-amber-400" /></BadgeTooltip>}
-                {profile?.isVerified && <BadgeTooltip label="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></BadgeTooltip>}
                 {(profile?._count?.referrals ?? 0) >= 100 && <BadgeTooltip label="Амбасадор Moooza"><Star size={18} className="text-orange-400" /></BadgeTooltip>}
                 {profile?.isBlocked && <BadgeTooltip label="Заблокирован"><Ban size={18} className="text-red-500" /></BadgeTooltip>}
               </div>

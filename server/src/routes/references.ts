@@ -588,7 +588,7 @@ router.get('/service-search', async (req, res) => {
   try {
     const {
       serviceId, sectionId, customFilterValueIds, query, location, priceMin, priceMax,
-      deadlineMax, verifiedOnly, ratingMin, sort, page = '1', limit = '20',
+      deadlineMax, ratingMin, sort, page = '1', limit = '20',
     } = req.query;
     const pageNum = parseInt(page as string, 10);
     const limitNum = parseInt(limit as string, 10);
@@ -607,10 +607,7 @@ router.get('/service-search', async (req, res) => {
     if (serviceId) where.serviceId = String(serviceId);
     if (sectionId) where.service = { sectionId: String(sectionId) };
     if (cfvIds.length) where.selectedCustomFilterValues = { some: { id: { in: cfvIds } } };
-    const userWhere: any = {};
-    if (cities.length) userWhere.cityNorm = { in: cities };
-    if (verifiedOnly === '1' || verifiedOnly === 'true') userWhere.isVerified = true;
-    if (Object.keys(userWhere).length) where.user = userWhere;
+    if (cities.length) where.user = { cityNorm: { in: cities } };
     // Price range: keep offerings whose advertised range overlaps [priceMinNum, priceMaxNum].
     // «Договорная» (обе цены пусты) при заданном диапазоне отсеивается — иначе фильтр
     // выглядит неработающим.

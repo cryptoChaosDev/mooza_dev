@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Search, Plus, X, Check, User, Briefcase, Users, Crown, BadgeCheck, Ban, Pin, Archive, ArchiveX, Trash2, MoreHorizontal, FolderKanban } from 'lucide-react';
+import { MessageCircle, Search, Plus, X, Check, User, Briefcase, Users, Crown, Ban, Pin, Archive, ArchiveX, Trash2, MoreHorizontal, FolderKanban } from 'lucide-react';
 import { messageAPI, friendshipAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
@@ -17,7 +17,7 @@ interface ConvItem {
   type: 'personal' | 'business' | 'group';
   name: string;
   avatar: string | null;
-  otherUser: { id: string; firstName: string; lastName: string; avatar: string | null; isPremium?: boolean; isVerified?: boolean; isBlocked?: boolean } | null;
+  otherUser: { id: string; firstName: string; lastName: string; avatar: string | null; isPremium?: boolean; isBlocked?: boolean } | null;
   lastMessage: { content: string; createdAt: string; senderId: string; senderName: string } | null;
   unreadCount: number;
   updatedAt: string;
@@ -368,7 +368,6 @@ export default function MessagesPage() {
                           <p className="font-semibold text-white text-sm truncate">{conv.name}</p>
                           {conv.isPinned && <Pin size={11} className="text-primary-400 flex-shrink-0" />}
                           {conv.otherUser?.isPremium && <span title="Premium"><Crown size={12} className="text-amber-400 flex-shrink-0" /></span>}
-                          {conv.otherUser?.isVerified && <span title="Верифицирован"><BadgeCheck size={12} className="text-sky-400 flex-shrink-0" /></span>}
                           {conv.otherUser?.isBlocked && <span title="Заблокирован"><Ban size={12} className="text-red-500 flex-shrink-0" /></span>}
                         </div>
                         {conv.lastMessage && (

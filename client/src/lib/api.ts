@@ -125,7 +125,6 @@ export const userAPI = {
     location?: string;       // comma-separated city/country names
     profession?: string;     // comma-separated profession ids
     occupancy?: string;      // comma-separated: open|considering|closed
-    verifiedOnly?: string;   // '1' — only verified users
     withReviews?: string;    // '1' — only users with at least one review
     sort?: 'date' | 'rating' | 'connections' | 'alpha';
     alphaDir?: 'asc' | 'desc';
@@ -184,7 +183,6 @@ export const referenceAPI = {
     priceMin?: number;
     priceMax?: number;
     deadlineMax?: number;    // срок выполнения ≤ N дней
-    verifiedOnly?: string;   // '1' — only verified providers
     ratingMin?: number;      // минимальная средняя оценка исполнителя (1-10)
     sort?: 'date' | 'price_asc' | 'price_desc' | 'rating';
     page?: number;

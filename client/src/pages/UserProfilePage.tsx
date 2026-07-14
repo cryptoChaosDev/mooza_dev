@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, MessageCircle,
-  Crown, BadgeCheck, Ban, X, Zap,
+  Crown, Ban, X, Zap,
   Headphones, FileText, FileSpreadsheet, FileArchive, Download, Briefcase, GraduationCap,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2,
   Globe, ChevronRight, Flag, Phone, Calendar,
@@ -254,7 +254,6 @@ export default function UserProfilePage() {
             <h1 className="text-2xl font-bold text-white leading-tight min-w-0 break-words [overflow-wrap:anywhere]">{user.firstName} {user.lastName}</h1>
             {user.isPro && <BadgeTooltip label="PRO аккаунт"><Zap size={18} className="text-violet-400" /></BadgeTooltip>}
             {user.isPremium && <BadgeTooltip label="Premium"><Crown size={18} className="text-amber-400" /></BadgeTooltip>}
-            {user.isVerified && <BadgeTooltip label="Верифицирован"><BadgeCheck size={18} className="text-sky-400" /></BadgeTooltip>}
             {(user._count?.referrals ?? 0) >= 100 && <BadgeTooltip label="Амбасадор Moooza"><Star size={18} className="text-orange-400" /></BadgeTooltip>}
             {user.isBlocked && <BadgeTooltip label="Заблокирован"><Ban size={18} className="text-red-500" /></BadgeTooltip>}
           </div>

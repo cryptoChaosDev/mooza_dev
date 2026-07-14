@@ -80,7 +80,6 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
             <span className="text-sm font-semibold text-white min-w-0 break-words [overflow-wrap:anywhere]">
               {user.lastName} {user.firstName}
             </span>
-            {user.isVerified && <span title="Верифицирован"><BadgeCheck size={12} className="text-sky-400 flex-shrink-0" /></span>}
             {user.isBlocked && <span title="Заблокирован"><Ban size={12} className="text-red-400 flex-shrink-0" /></span>}
           </div>
 
@@ -199,7 +198,6 @@ export default function SearchPage() {
   const [priceMin, setPriceMin] = useState<string>('');               // applied
   const [priceMax, setPriceMax] = useState<string>('');               // applied
   const [deadlineMaxF, setDeadlineMaxF] = useState<string>('');       // applied: срок ≤ N дней
-  const [serviceVerified, setServiceVerified] = useState(false);      // applied: верифицированный исполнитель
   const [ratingMinF, setRatingMinF] = useState<string>('');           // applied: оценка исполнителя от N
 
   // Draft values edited inside the filters modal (committed on "Применить").
@@ -207,7 +205,6 @@ export default function SearchPage() {
   const [tempPriceMin, setTempPriceMin] = useState<string>('');
   const [tempPriceMax, setTempPriceMax] = useState<string>('');
   const [tempDeadlineMax, setTempDeadlineMax] = useState<string>('');
-  const [tempServiceVerified, setTempServiceVerified] = useState(false);
   const [tempRatingMin, setTempRatingMin] = useState<string>('');
   const [cityQuery, setCityQuery] = useState('');
   const [debouncedCityQuery, setDebouncedCityQuery] = useState('');
@@ -255,7 +252,6 @@ export default function SearchPage() {
   const [peopleLocation, setPeopleLocation] = useState<string[]>([]);
   const [peopleProfession, setPeopleProfession] = useState<string[]>([]);
   const [peopleOccupancy, setPeopleOccupancy] = useState<string[]>([]);
-  const [peopleVerified, setPeopleVerified] = useState(false);      // только верифицированные
   const [peopleWithReviews, setPeopleWithReviews] = useState(false); // только с отзывами
   // Sort: date (default) | rating | connections | alpha. Alpha has a direction.
   type PeopleSort = 'date' | 'rating' | 'connections' | 'alpha';
@@ -268,7 +264,6 @@ export default function SearchPage() {
   const [tempPeopleLocation, setTempPeopleLocation] = useState<string[]>([]);
   const [tempPeopleProfession, setTempPeopleProfession] = useState<string[]>([]);
   const [tempPeopleOccupancy, setTempPeopleOccupancy] = useState<string[]>([]);
-  const [tempPeopleVerified, setTempPeopleVerified] = useState(false);
   const [tempPeopleWithReviews, setTempPeopleWithReviews] = useState(false);
   // Per-checklist search boxes.
   const [peopleLocSearch, setPeopleLocSearch] = useState('');
@@ -373,7 +368,6 @@ export default function SearchPage() {
     priceMin: priceMin !== '' ? Number(priceMin) : undefined,
     priceMax: priceMax !== '' ? Number(priceMax) : undefined,
     deadlineMax: deadlineMaxF !== '' ? Number(deadlineMaxF) : undefined,
-    verifiedOnly: serviceVerified ? '1' : undefined,
     ratingMin: ratingMinF !== '' ? Number(ratingMinF) : undefined,
     sort: sortMode,
   };
@@ -418,14 +412,13 @@ export default function SearchPage() {
 
   // ── People ────────────────────────────────────────────────────────────────
   const { data: peopleUsers, isLoading: peopleLoading } = useQuery({
-    queryKey: ['catalog-people', debouncedPeopleQuery, peopleLocation, peopleProfession, peopleOccupancy, peopleVerified, peopleWithReviews, peopleSort, peopleAlphaDir],
+    queryKey: ['catalog-people', debouncedPeopleQuery, peopleLocation, peopleProfession, peopleOccupancy, peopleWithReviews, peopleSort, peopleAlphaDir],
     queryFn: async () => {
       const { data } = await userAPI.catalog({
         query: debouncedPeopleQuery || undefined,
         location: peopleLocation.length ? peopleLocation.join(',') : undefined,
         profession: peopleProfession.length ? peopleProfession.join(',') : undefined,
         occupancy: peopleOccupancy.length ? peopleOccupancy.join(',') : undefined,
-        verifiedOnly: peopleVerified ? '1' : undefined,
         withReviews: peopleWithReviews ? '1' : undefined,
         sort: peopleSort,
         alphaDir: peopleSort === 'alpha' ? peopleAlphaDir : undefined,
@@ -824,7 +817,6 @@ export default function SearchPage() {
                   setTempPeopleLocation(peopleLocation);
                   setTempPeopleProfession(peopleProfession);
                   setTempPeopleOccupancy(peopleOccupancy);
-                  setTempPeopleVerified(peopleVerified);
                   setTempPeopleWithReviews(peopleWithReviews);
                   setPeopleLocSearch('');
                   setPeopleProfSearch('');
@@ -836,7 +828,7 @@ export default function SearchPage() {
                 Фильтры
                 {(() => {
                   const n = peopleLocation.length + peopleProfession.length + peopleOccupancy.length
-                    + (peopleVerified ? 1 : 0) + (peopleWithReviews ? 1 : 0);
+                    + (peopleWithReviews ? 1 : 0);
                   return n > 0 ? (
                     <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{n}</span>
                   ) : null;
@@ -847,7 +839,7 @@ export default function SearchPage() {
           {activeTab === 'services' && (() => {
             const activeFilterCount =
               profFilterValues.length + locationFilter.length + (priceMin !== '' || priceMax !== '' ? 1 : 0)
-              + (deadlineMaxF !== '' ? 1 : 0) + (serviceVerified ? 1 : 0) + (ratingMinF !== '' ? 1 : 0);
+              + (deadlineMaxF !== '' ? 1 : 0) + (ratingMinF !== '' ? 1 : 0);
             return (
               <div className="flex items-center gap-2">
                 {/* Sort */}
@@ -891,7 +883,6 @@ export default function SearchPage() {
                     setTempPriceMin(priceMin);
                     setTempPriceMax(priceMax);
                     setTempDeadlineMax(deadlineMaxF);
-                    setTempServiceVerified(serviceVerified);
                     setTempRatingMin(ratingMinF);
                     setCityQuery('');
                     setFiltersOpen(true);
@@ -1020,7 +1011,6 @@ export default function SearchPage() {
                               </span>
                             )}
                             {cardUser.isPremium && <span title="Premium"><Crown size={12} className="text-amber-400 flex-shrink-0" /></span>}
-                            {cardUser.isVerified && <span title="Верифицирован"><BadgeCheck size={12} className="text-sky-400 flex-shrink-0" /></span>}
                           </div>
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             <span className="text-xs text-slate-500 truncate">{cardUser.firstName} {cardUser.lastName}</span>
@@ -1202,7 +1192,7 @@ export default function SearchPage() {
                 <h3 className="text-base font-semibold text-white">Фильтры</h3>
                 {(() => {
                   const n = tempFilters.length + tempLocation.length + (tempPriceMin !== '' || tempPriceMax !== '' ? 1 : 0)
-                    + (tempDeadlineMax !== '' ? 1 : 0) + (tempServiceVerified ? 1 : 0) + (tempRatingMin !== '' ? 1 : 0);
+                    + (tempDeadlineMax !== '' ? 1 : 0) + (tempRatingMin !== '' ? 1 : 0);
                   return n > 0 ? (
                     <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{n}</span>
                   ) : null;
@@ -1307,15 +1297,6 @@ export default function SearchPage() {
               <div>
                 <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Исполнитель</p>
                 <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setTempServiceVerified(v => !v)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
-                      tempServiceVerified ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600'
-                    }`}
-                  >
-                    Верифицированный
-                  </button>
                   {['7', '8', '9'].map(r => (
                     <button
                       key={r}
@@ -1365,9 +1346,9 @@ export default function SearchPage() {
               <button
                 onClick={() => {
                   setTempFilters([]); setTempLocation([]); setTempPriceMin(''); setTempPriceMax(''); setCityQuery('');
-                  setTempDeadlineMax(''); setTempServiceVerified(false); setTempRatingMin('');
+                  setTempDeadlineMax(''); setTempRatingMin('');
                   setProfFilterValues([]); setLocationFilter([]); setPriceMin(''); setPriceMax('');
-                  setDeadlineMaxF(''); setServiceVerified(false); setRatingMinF('');
+                  setDeadlineMaxF(''); setRatingMinF('');
                   setFiltersOpen(false);
                 }}
                 className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors"
@@ -1381,7 +1362,6 @@ export default function SearchPage() {
                   setPriceMin(tempPriceMin);
                   setPriceMax(tempPriceMax);
                   setDeadlineMaxF(tempDeadlineMax);
-                  setServiceVerified(tempServiceVerified);
                   setRatingMinF(tempRatingMin);
                   setFiltersOpen(false);
                 }}
@@ -1520,7 +1500,7 @@ export default function SearchPage() {
                 <h3 className="text-base font-semibold text-white">Фильтры</h3>
                 {(() => {
                   const n = tempPeopleLocation.length + tempPeopleProfession.length + tempPeopleOccupancy.length
-                    + (tempPeopleVerified ? 1 : 0) + (tempPeopleWithReviews ? 1 : 0);
+                    + (tempPeopleWithReviews ? 1 : 0);
                   return n > 0 ? (
                     <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{n}</span>
                   ) : null;
@@ -1659,15 +1639,6 @@ export default function SearchPage() {
                 <div className="flex flex-wrap gap-1.5">
                   <button
                     type="button"
-                    onClick={() => setTempPeopleVerified(v => !v)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
-                      tempPeopleVerified ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600'
-                    }`}
-                  >
-                    Только верифицированные
-                  </button>
-                  <button
-                    type="button"
                     onClick={() => setTempPeopleWithReviews(v => !v)}
                     className={`px-3 py-1.5 rounded-xl text-xs font-medium border transition-all ${
                       tempPeopleWithReviews ? 'bg-primary-600 border-primary-500 text-white' : 'bg-slate-800/60 border-slate-700/60 text-slate-300 hover:text-white hover:border-slate-600'
@@ -1683,10 +1654,10 @@ export default function SearchPage() {
               <button
                 onClick={() => {
                   setTempPeopleLocation([]); setTempPeopleProfession([]); setTempPeopleOccupancy([]);
-                  setTempPeopleVerified(false); setTempPeopleWithReviews(false);
+                  setTempPeopleWithReviews(false);
                   setPeopleLocSearch(''); setPeopleProfSearch('');
                   setPeopleLocation([]); setPeopleProfession([]); setPeopleOccupancy([]);
-                  setPeopleVerified(false); setPeopleWithReviews(false);
+                  setPeopleWithReviews(false);
                   setPeopleFilterOpen(false);
                 }}
                 className="flex-1 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 rounded-xl text-sm font-medium transition-colors"
@@ -1698,7 +1669,6 @@ export default function SearchPage() {
                   setPeopleLocation(tempPeopleLocation);
                   setPeopleProfession(tempPeopleProfession);
                   setPeopleOccupancy(tempPeopleOccupancy);
-                  setPeopleVerified(tempPeopleVerified);
                   setPeopleWithReviews(tempPeopleWithReviews);
                   setPeopleFilterOpen(false);
                 }}

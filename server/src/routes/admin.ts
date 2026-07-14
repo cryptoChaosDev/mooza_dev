@@ -852,19 +852,6 @@ router.patch('/users/:id/premium', async (req, res) => {
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
 
-router.patch('/users/:id/verified', async (req, res) => {
-  try {
-    const user = await prisma.user.findUnique({ where: { id: req.params.id }, select: { isVerified: true } });
-    if (!user) return res.status(404).json({ error: 'User not found' });
-    const updated = await prisma.user.update({
-      where: { id: req.params.id },
-      data: { isVerified: !user.isVerified },
-      select: { id: true, isVerified: true },
-    });
-    res.json(updated);
-  } catch (e: any) { res.status(400).json({ error: e.message }); }
-});
-
 // Toggle effective Pro. Active (manual flag OR unexpired subscription) → fully
 // revoke (clears both isPro and the timed proUntil, so a mistakenly accepted
 // donation can be annulled). Inactive → grant permanent manual Pro.

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { adminAPI, api, siteSettingsAPI, complaintAPI } from '../lib/api';
 import { yoNorm, yoIncludes } from '../lib/search';
-import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, BadgeCheck, Ban, Loader2, ShieldCheck, Clock, Zap, Download, ExternalLink, RefreshCw, BarChart2, AlertTriangle } from 'lucide-react';
+import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, Ban, Loader2, ShieldCheck, Clock, Zap, Download, ExternalLink, RefreshCw, BarChart2, AlertTriangle } from 'lucide-react';
 import AvatarComponent from '../components/Avatar';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
@@ -1217,7 +1217,6 @@ interface AdminUser {
   isAdmin: boolean;
   isBlocked: boolean;
   isPremium: boolean;
-  isVerified: boolean;
   isPro: boolean;
   proUntil?: string | null;
   createdAt: string;
@@ -1263,7 +1262,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
   });
 
   const toggleMut = useMutation({
-    mutationFn: (field: 'block' | 'premium' | 'verified' | 'pro') => api.patch(`/admin/users/${user.id}/${field}`),
+    mutationFn: (field: 'block' | 'premium' | 'pro') => api.patch(`/admin/users/${user.id}/${field}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); onUpdated(); },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось изменить статус пользователя')),
   });
@@ -1310,7 +1309,6 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
               <p className="text-sm font-semibold text-white">{fullName}</p>
               {proActive && <span title={proExpiry ? `Pro до ${proExpiry}` : 'Pro (вечный)'} className="flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-500/20 text-violet-400 text-[10px] rounded-full border border-violet-500/30"><Zap size={9} />PRO{proExpiry ? ` до ${proExpiry}` : ''}</span>}
               {user.isPremium && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded-full border border-amber-500/30"><Crown size={9} />Premium</span>}
-              {user.isVerified && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-[10px] rounded-full border border-sky-500/30"><BadgeCheck size={9} />Verified</span>}
               {user.isAdmin && <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-400 text-[10px] rounded-full border border-purple-500/30">Admin</span>}
               {user.isBlocked && <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] rounded-full border border-red-500/30">Заблокирован</span>}
             </div>
@@ -1342,16 +1340,6 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
             }`}
           >
             <Crown size={13} />
-          </button>
-          <button
-            onClick={() => toggleMut.mutate('verified')}
-            disabled={toggleMut.isPending}
-            title={user.isVerified ? 'Убрать Verified' : 'Выдать Verified'}
-            className={`flex items-center justify-center px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
-              user.isVerified ? 'bg-sky-500/20 text-sky-400 border-sky-500/30 hover:bg-sky-500/30' : 'bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700'
-            }`}
-          >
-            <BadgeCheck size={13} />
           </button>
           <button
             onClick={() => toggleMut.mutate('pro')}
@@ -1613,7 +1601,6 @@ function UsersTab() {
               'Администратор': u.isAdmin ? 'Да' : 'Нет',
               'Premium': u.isPremium ? 'Да' : 'Нет',
               'Pro': u.isPro ? 'Да' : 'Нет',
-              'Верифицирован': u.isVerified ? 'Да' : 'Нет',
               'Заблокирован': u.isBlocked ? 'Да' : 'Нет',
               'Дата регистрации': u.createdAt ? new Date(u.createdAt).toLocaleDateString('ru-RU') : '',
             })), 'Пользователи');
@@ -1656,7 +1643,6 @@ function UsersTab() {
                   <span className="text-sm font-medium text-white">{u.firstName} {u.lastName}</span>
                   {u.isPro && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-500/20 text-violet-400 text-xs rounded-full border border-violet-500/30"><Zap size={10} />PRO</span>}
                   {u.isPremium && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded-full border border-amber-500/30"><Crown size={10} />Premium</span>}
-                  {u.isVerified && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-sky-500/20 text-sky-400 text-xs rounded-full border border-sky-500/30"><BadgeCheck size={10} />Verified</span>}
                   {u.isAdmin && <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full border border-purple-500/30">Admin</span>}
                   {u.isBlocked && <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full border border-red-500/30">Заблокирован</span>}
                 </div>
