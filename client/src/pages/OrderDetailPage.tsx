@@ -6,13 +6,14 @@ import {
   Archive, Loader2, Send, Link2, Users, Sparkles, HandshakeIcon, Share2,
   Pencil,
 } from 'lucide-react';
-import { orderAPI } from '../lib/api';
+import { orderAPI, messageAPI } from '../lib/api';
 import { avatarUrl } from '../lib/avatar';
 import { DEALS_ENABLED } from '../lib/features';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import AvatarComponent from '../components/Avatar';
 import OrderStatusChip from '../components/OrderStatusChip';
+import ChatPicker from '../components/ChatPicker';
 import ConfirmDialog from '../components/ConfirmDialog';
 
 // Budget «от X ₽ до Y ₽» / «По договорённости»
@@ -36,6 +37,7 @@ export default function OrderDetailPage() {
   const qc = useQueryClient();
 
   const [showRespond, setShowRespond] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [respondPrice, setRespondPrice] = useState('');
   const [respondComment, setRespondComment] = useState('');
 
@@ -188,7 +190,31 @@ export default function OrderDetailPage() {
             <h1 className="text-base font-bold text-white truncate">{order.title}</h1>
           </div>
           <OrderStatusChip order={order} className="flex-shrink-0" />
+          <button
+            onClick={() => setShareOpen(true)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex-shrink-0"
+            title="Отправить в чат"
+          >
+            <Share2 size={14} />
+          </button>
         </div>
+
+        {/* «Отправить в чат» — заказ уходит сообщением со ссылкой */}
+        {shareOpen && (
+          <ChatPicker
+            title="Отправить заказ в чат"
+            onClose={() => setShareOpen(false)}
+            onPick={async (convId) => {
+              try {
+                await messageAPI.sendMessage(convId, `Заказ «${order.title}» — ${window.location.origin}/orders/${order.id}`);
+                setShareOpen(false);
+                toast.success('Отправлено в чат');
+              } catch (e: any) {
+                toast.error(getApiError(e, 'Не удалось отправить'));
+              }
+            }}
+          />
+        )}
 
         {/* Main card */}
         <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl p-5 space-y-4">

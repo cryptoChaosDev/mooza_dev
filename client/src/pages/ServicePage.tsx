@@ -4,13 +4,14 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Briefcase, DollarSign, MapPin, MessageCircle,
-  Archive, ArchiveRestore, Trash2, Loader2, HandshakeIcon, Send, Pencil, X, Check,
+  Archive, ArchiveRestore, Trash2, Loader2, HandshakeIcon, Send, Pencil, X, Check, Share2,
 } from 'lucide-react';
 import { userAPI, messageAPI, orderAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { useAuthStore } from '../stores/authStore';
 import ConfirmDialog from '../components/ConfirmDialog';
 import AvatarComponent from '../components/Avatar';
+import ChatPicker from '../components/ChatPicker';
 import DealCreateModal from '../components/DealCreateModal';
 import { DEALS_ENABLED } from '../lib/features';
 import { useAuthGate } from '../components/AuthGateModal';
@@ -41,6 +42,7 @@ export default function ServicePage() {
   const { ensureAuth, authGateModal } = useAuthGate();
 
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [writingMessage, setWritingMessage] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [customText, setCustomText] = useState('');
@@ -167,6 +169,13 @@ export default function ServicePage() {
           <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0 ${STATUS_COLOR[status]}`}>
             {STATUS_LABEL[status]}
           </span>
+          <button
+            onClick={() => setShareOpen(true)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex-shrink-0"
+            title="Отправить в чат"
+          >
+            <Share2 size={14} />
+          </button>
           {isOwner && (
             <button
               onClick={() => {
@@ -182,6 +191,24 @@ export default function ServicePage() {
             </button>
           )}
         </div>
+
+        {/* «Отправить в чат» — услуга уходит сообщением со ссылкой */}
+        {shareOpen && (
+          <ChatPicker
+            title="Отправить услугу в чат"
+            onClose={() => setShareOpen(false)}
+            onPick={async (convId) => {
+              try {
+                const title = us.name?.trim() || us.service?.name || 'Услуга';
+                await messageAPI.sendMessage(convId, `Услуга «${title}» — ${window.location.origin}/services/${us.id}`);
+                setShareOpen(false);
+                toast.success('Отправлено в чат');
+              } catch (e: any) {
+                toast.error(getApiError(e, 'Не удалось отправить'));
+              }
+            }}
+          />
+        )}
 
         {/* Автор (для гостей) — компактной строкой под шапкой */}
         {us.user && !isOwner && (
