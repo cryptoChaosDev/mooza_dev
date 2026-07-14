@@ -498,7 +498,8 @@ export default function UserProfilePage() {
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                   <Music2 size={14} className="text-primary-400" />
-                  <span className="text-sm font-bold text-white">Артисты</span>
+                  <span className="text-sm font-semibold text-white">Артисты</span>
+                  <span className="text-xs text-slate-500">{user.userArtists.filter((ua: any) => ua.artist?.name).length}</span>
                 </div>
                 <div className="p-3">
                   <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
