@@ -37,7 +37,9 @@ self.addEventListener('push', (event) => {
       await self.registration.showNotification(payload.title, {
         body: payload.body,
         icon: payload.icon || '/pwa-192x192.png',
-        badge: '/pwa-192x192.png',
+        // badge: Android рисует ТОЛЬКО альфа-силуэт — нужен монохромный глиф
+        // на прозрачном фоне. Непрозрачная иконка давала белый квадрат в шторке.
+        badge: '/badge-96.png',
         data: { link: payload.link || '/' },
       });
     })(),
