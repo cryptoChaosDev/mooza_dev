@@ -559,6 +559,12 @@ router.post('/:id/responses', authenticate, async (req: AuthRequest, res) => {
     const vacancy = await prisma.vacancy.findUnique({ where: { id: req.params.id } });
     if (!vacancy) return res.status(404).json({ error: 'Not found' });
     if (vacancy.authorId === meId) return res.status(400).json({ error: 'Cannot respond to your own vacancy' });
+    // Отклики принимаются только на активную вакансию: архивная остаётся
+    // видимой (пост в ленте сохраняется), но отклики закрыты.
+    if (vacancy.status !== 'active') {
+      const label = vacancy.status === 'archived' ? 'Вакансия в архиве' : 'Вакансия не опубликована';
+      return res.status(409).json({ error: `${label} — отклики закрыты` });
+    }
     // Non-owners may respond only to a published vacancy.
     const post = await prisma.post.findFirst({ where: { vacancyId: vacancy.id, type: 'vacancy' }, select: { id: true } });
     if (!post) return res.status(404).json({ error: 'Not found' });
