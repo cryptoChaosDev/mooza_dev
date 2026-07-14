@@ -95,6 +95,10 @@ export default function ChatPage() {
   const [replyTo, setReplyTo] = useState<Message | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
+  // Typing indicator: userId -> last event timestamp (запись живёт ~3.5с)
+  const [typingIds, setTypingIds] = useState<Record<string, number>>({});
+  const lastTypingSentRef = useRef(0);
+
   // Group settings panel
   const [showSettings, setShowSettings] = useState(false);
   const [friends, setFriends] = useState<{ id: string; firstName: string; lastName: string; avatar: string | null }[]>([]);
@@ -289,6 +293,21 @@ export default function ChatPage() {
 
   useEffect(() => { loadChat(); }, [loadChat]);
 
+  // Прореживание индикатора «печатает…» — записи старше 3.5с исчезают.
+  const hasTyping = Object.keys(typingIds).length > 0;
+  useEffect(() => {
+    if (!hasTyping) return;
+    const t = setInterval(() => {
+      setTypingIds(prev => {
+        const now = Date.now();
+        const next: Record<string, number> = {};
+        for (const [k, v] of Object.entries(prev)) if (now - v < 3500) next[k] = v;
+        return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [hasTyping]);
+
   // ── Auto-resize textarea ───────────────────────────────────────────────────
   useEffect(() => {
     const el = inputRef.current;
@@ -390,6 +409,12 @@ export default function ChatPage() {
       setMessages(prev => prev.map(m => ids.has(m.id) ? { ...m, readAt, deliveredAt: m.deliveredAt ?? readAt } : m));
     };
 
+    const onTyping = ({ conversationId: cid, userId: uid }: { conversationId: string; userId: string }) => {
+      if (cid !== conversationId) return;
+      setTypingIds(prev => ({ ...prev, [uid]: Date.now() }));
+    };
+
+    socket.on('user_typing', onTyping);
     socket.on('new_message', onNew);
     socket.on('message_edited', onEdited);
     socket.on('message_deleted', onDeleted);
@@ -399,6 +424,7 @@ export default function ChatPage() {
     socket.on('messages_delivered', onDelivered);
     socket.on('messages_read', onRead);
     return () => {
+      socket.off('user_typing', onTyping);
       socket.off('new_message', onNew);
       socket.off('message_edited', onEdited);
       socket.off('message_deleted', onDeleted);
@@ -716,6 +742,12 @@ export default function ChatPage() {
     : '...';
   const chatAvatar = conversation?.isGroup ? conversation.avatar : (otherMember?.avatar ?? null);
 
+  // Кто сейчас печатает (имена — для групп)
+  const typingNames = Object.keys(typingIds)
+    .filter(id => id !== me?.id)
+    .map(id => conversation?.members.find(m => m.userId === id)?.user?.firstName)
+    .filter(Boolean) as string[];
+
 
   // ── Loading state ──────────────────────────────────────────────────────────
   if (loading) {
@@ -779,9 +811,17 @@ export default function ChatPage() {
                   {(otherMember as any)?.isBlocked && <span title="Заблокирован"><Ban size={13} className="text-red-500 flex-shrink-0" /></span>}
                 </div>
                 {conversation.isGroup ? (
-                  <p className="text-xs text-slate-400">{conversation.members.length} {plural(conversation.members.length, 'участник', 'участника', 'участников')}</p>
+                  typingNames.length > 0 ? (
+                    <p className="text-xs text-emerald-400 animate-pulse truncate">
+                      {typingNames.slice(0, 2).join(', ')} печатает…
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-400">{conversation.members.length} {plural(conversation.members.length, 'участник', 'участника', 'участников')}</p>
+                  )
                 ) : isSaved ? (
                   <p className="text-xs text-slate-500">Ваши сохранённые сообщения — видны только вам</p>
+                ) : typingNames.length > 0 ? (
+                  <p className="text-xs text-emerald-400 animate-pulse">печатает…</p>
                 ) : (
                   <>
                     <p className={`text-xs flex items-center gap-1 ${otherOnline ? 'text-emerald-400' : 'text-slate-500'}`}>
@@ -1476,7 +1516,15 @@ export default function ChatPage() {
             <textarea
               ref={inputRef}
               value={newMessage}
-              onChange={e => setNewMessage(e.target.value)}
+              onChange={e => {
+                setNewMessage(e.target.value);
+                // «печатает…» — не чаще раза в 2.5с, в Избранном не шлём
+                const now = Date.now();
+                if (conversationId && !isSaved && now - lastTypingSentRef.current > 2500) {
+                  lastTypingSentRef.current = now;
+                  getSocket()?.emit('typing', { conversationId });
+                }
+              }}
               placeholder={editingId ? 'Редактировать...' : 'Сообщение...'}
               className="flex-1 min-w-0 bg-transparent text-sm text-white px-3 py-2.5 focus:outline-none placeholder-slate-500 resize-none overflow-y-auto"
               style={{ height: '40px', maxHeight: '160px' } as React.CSSProperties}

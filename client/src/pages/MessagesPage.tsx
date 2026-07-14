@@ -73,15 +73,35 @@ export default function MessagesPage() {
     loadConversations();
   }, [loadConversations]);
 
+  // «печатает…» в списке чатов: conversationId -> timestamp, живёт ~3.5с
+  const [typingConvs, setTypingConvs] = useState<Record<string, number>>({});
+  const hasTypingConvs = Object.keys(typingConvs).length > 0;
+  useEffect(() => {
+    if (!hasTypingConvs) return;
+    const t = setInterval(() => {
+      setTypingConvs(prev => {
+        const now = Date.now();
+        const next: Record<string, number> = {};
+        for (const [k, v] of Object.entries(prev)) if (now - v < 3500) next[k] = v;
+        return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+      });
+    }, 1000);
+    return () => clearInterval(t);
+  }, [hasTypingConvs]);
+
   useEffect(() => {
     const socket = getSocket();
     if (!socket) return;
     const refresh = () => loadConversations();
+    const onTyping = ({ conversationId }: { conversationId: string }) =>
+      setTypingConvs(prev => ({ ...prev, [conversationId]: Date.now() }));
     socket.on('new_message', refresh);
     socket.on('group_created', refresh);
+    socket.on('user_typing', onTyping);
     return () => {
       socket.off('new_message', refresh);
       socket.off('group_created', refresh);
+      socket.off('user_typing', onTyping);
     };
   }, [loadConversations]);
 
@@ -438,7 +458,9 @@ export default function MessagesPage() {
                           </span>
                         )}
                       </div>
-                      {conv.lastMessage ? (
+                      {typingConvs[conv.id] ? (
+                        <p className="text-sm text-emerald-400 animate-pulse">печатает…</p>
+                      ) : conv.lastMessage ? (
                         <p className={`text-sm truncate ${conv.unreadCount > 0 ? 'text-white font-medium' : 'text-slate-500'}`}>
                           {conv.isGroup && `${conv.lastMessage.senderName.split(' ')[0]}: `}
                           {conv.lastMessage.content.length > 50
