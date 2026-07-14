@@ -16,6 +16,7 @@ function formatResponseTime(min: number): string {
 import AvatarComponent from '../components/Avatar';
 import AudioPlayer from '../components/AudioPlayer';
 import ChatPicker from '../components/ChatPicker';
+import ImageLightbox from '../components/ImageLightbox';
 
 // Кликабельные ссылки в тексте сообщений: внешние — в новой вкладке,
 // внутренние (moooza) — в той же.
@@ -148,6 +149,9 @@ export default function ChatPage() {
   // Reaction picker
   const [reactionPickerMsgId, setReactionPickerMsgId] = useState<string | null>(null);
   const [confirmDeleteMsgId, setConfirmDeleteMsgId] = useState<string | null>(null);
+
+  // Полноэкранный просмотр картинки
+  const [viewImage, setViewImage] = useState<{ src: string; name: string | null } | null>(null);
 
   // Context menu (long-press)
   const [contextMenu, setContextMenu] = useState<{ msg: Message; x: number; y: number } | null>(null);
@@ -1183,9 +1187,14 @@ export default function ChatPage() {
                 if (attachmentsTab === 'media') return (
                   <div className="grid grid-cols-3 gap-1">
                     {items.map((a: any) => (
-                      <a key={a.id} href={`${API_URL}${a.attachmentUrl}`} target="_blank" rel="noreferrer" className="aspect-square rounded-lg overflow-hidden bg-slate-700 block">
+                      <button
+                        key={a.id}
+                        type="button"
+                        onClick={() => setViewImage({ src: `${API_URL}${a.attachmentUrl}`, name: a.attachmentName ?? null })}
+                        className="aspect-square rounded-lg overflow-hidden bg-slate-700 block"
+                      >
                         <img src={`${API_URL}${a.attachmentUrl}`} alt={a.attachmentName || ''} className="w-full h-full object-cover hover:opacity-80 transition-opacity" />
-                      </a>
+                      </button>
                     ))}
                   </div>
                 );
@@ -1343,9 +1352,13 @@ export default function ChatPage() {
                                   );
                                 }
                                 return isImage ? (
-                                  <a href={`${API_URL}${msg.attachmentUrl}`} target="_blank" rel="noreferrer" className="block mb-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => setViewImage({ src: `${API_URL}${msg.attachmentUrl}`, name: msg.attachmentName ?? null })}
+                                    className="block mb-1"
+                                  >
                                     <img src={`${API_URL}${msg.attachmentUrl}`} alt={msg.attachmentName || 'image'} className="rounded-lg max-w-full max-h-60 object-cover" />
-                                  </a>
+                                  </button>
                                 ) : (
                                   <a href={`${API_URL}${msg.attachmentUrl}`} target="_blank" rel="noreferrer" download={msg.attachmentName || true} className={`flex items-center gap-2 mb-1 px-3 py-2 rounded-lg ${isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-slate-600/50 hover:bg-slate-600'} transition-colors`}>
                                     <FileText size={16} className="flex-shrink-0" />
@@ -1678,6 +1691,18 @@ export default function ChatPage() {
                   getSocket()?.emit('typing', { conversationId });
                 }
               }}
+              onPaste={e => {
+                // Вставка картинки из буфера (скриншоты и т.п.) — как вложение
+                const item = Array.from(e.clipboardData?.items ?? []).find(it => it.type.startsWith('image/'));
+                if (!item) return;
+                const file = item.getAsFile();
+                if (!file) return;
+                e.preventDefault();
+                setPendingFile(file);
+                const reader = new FileReader();
+                reader.onload = ev => setPendingPreview(ev.target?.result as string);
+                reader.readAsDataURL(file);
+              }}
               placeholder={editingId ? 'Редактировать...' : 'Сообщение...'}
               className="flex-1 min-w-0 bg-transparent text-sm text-white px-3 py-2.5 focus:outline-none placeholder-slate-500 resize-none overflow-y-auto"
               style={{ height: '40px', maxHeight: '160px' } as React.CSSProperties}
@@ -1717,6 +1742,11 @@ export default function ChatPage() {
         onConfirm={() => { if (confirmDeleteMsgId) handleDelete(confirmDeleteMsgId); }}
         onCancel={() => setConfirmDeleteMsgId(null)}
       />
+
+      {/* Полноэкранный просмотр картинки */}
+      {viewImage && (
+        <ImageLightbox src={viewImage.src} name={viewImage.name} onClose={() => setViewImage(null)} />
+      )}
 
       {/* Пересылка в другой чат */}
       {forwardMsg && (
