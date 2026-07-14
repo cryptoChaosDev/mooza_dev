@@ -1,22 +1,22 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, ExternalLink,
-  Camera, Navigation, Edit3, X, Save, Loader2,
+  Camera, Navigation, Edit3, X, Loader2,
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
   UserPlus, Trash2, Search,
   Settings, Link2, Share2, Tag, Crown, Shield, UserCog, UserCheck, UserX, Star,
+  UserRound, Users, Disc3, Clapperboard, Briefcase, Activity, ChevronRight,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { artistAPI, referenceAPI, groupAPI, friendshipAPI, userAPI, releaseAPI, clipAPI, vacancyAPI } from '../lib/api';
 import VacancyForm from '../components/VacancyForm';
 import { workFormatLabel } from '../lib/vacancyOptions';
-import { lockScroll, unlockScroll, useScrollLock } from '../lib/scrollLock';
+import { useScrollLock } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
 import { yoNorm } from '../lib/search';
-import { SocialIconRow, SocialLinksEditor, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
-import CityPicker from '../components/CityPicker';
+import { SocialIconRow } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
 import SelectSheet from '../components/SelectSheet';
 import ShareButton from '../components/ShareButton';
@@ -24,8 +24,6 @@ import RolePicker from '../components/RolePicker';
 import ConfirmDialog from '../components/ConfirmDialog';
 import MediaRail from '../components/MediaRail';
 import MediaItemForm from '../components/MediaItemForm';
-import ArtistLookup from '../components/ArtistLookup';
-import MediaImportList from '../components/MediaImportList';
 import { useAuthStore } from '../stores/authStore';
 import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
@@ -71,18 +69,6 @@ function resolveUrl(path: string | null | undefined): string | null {
   return `${API_URL}${path}`;
 }
 
-type EditForm = {
-  name: string;
-  type: string;
-  city: string;
-  tourReady: string;
-  description: string;
-  bandLink: string;
-  listeners: string;
-  genreIds: string[];
-  socialLinks: Record<string, string>;
-};
-
 export default function ArtistPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -92,23 +78,12 @@ export default function ArtistPage() {
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
 
-  const [isEditing, setIsEditing] = useState(false);
-  const [applyingLookup, setApplyingLookup] = useState(false);
-  const [foundReleases, setFoundReleases] = useState<any[]>([]);
-  const [foundClips, setFoundClips] = useState<any[]>([]);
-
   // Image cropping (avatar / banner) before upload
   const [cropAvatarFile, setCropAvatarFile] = useState<File | null>(null);
   const [cropBannerFile, setCropBannerFile] = useState<File | null>(null);
 
   const [proofUrl, setProofUrl] = useState('');
   const [verifyUnmet, setVerifyUnmet] = useState<string[]>([]);
-  const [form, setForm] = useState<EditForm>({
-    name: '', type: '', city: '', tourReady: '', description: '',
-    bandLink: '', listeners: '', genreIds: [], socialLinks: {},
-  });
-  const [genreSheetOpen, setGenreSheetOpen] = useState(false);
-  const [typeSheetOpen, setTypeSheetOpen] = useState(false);
 
   // Invite member state (legacy friend-invite flow)
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -118,8 +93,8 @@ export default function ArtistPage() {
   const [inviteProfSearch, setInviteProfSearch] = useState('');
 
   // ── Phase 5b state ─────────────────────────────────────────────────────────
-  // Admin block (gear) toggle
-  const [showAdminBlock, setShowAdminBlock] = useState(false);
+  // Нижний лист «Управление артистом» (шестерёнка)
+  const [showManageSheet, setShowManageSheet] = useState(false);
 
   // Add registered member modal
   const [showAddMember, setShowAddMember] = useState(false);
@@ -159,9 +134,12 @@ export default function ArtistPage() {
   const [showClipForm, setShowClipForm] = useState(false);
   // ── Vacancies create-form modal ────────────────────────────────────────────
   const [showVacancyForm, setShowVacancyForm] = useState(false);
-  // VacancyForm is inline in list/detail pages but a fixed overlay here — lock
-  // body scroll for this overlay (the form no longer self-locks).
-  useScrollLock(showVacancyForm);
+  // iOS: любой открытый нижний лист/оверлей страницы блокирует фон.
+  // (RolePicker/SelectSheet/ConfirmDialog лочат скролл сами — лок ref-counted.)
+  useScrollLock(
+    showVacancyForm || showInviteModal || showAddMember || showInviteLink ||
+    showOwnerPicker || showAdminPicker || showManageSheet,
+  );
 
   const { data: artist, isLoading, isError } = useQuery({
     queryKey: ['artist', id],
@@ -171,15 +149,6 @@ export default function ArtistPage() {
     },
     enabled: !!id,
   });
-
-  const { data: genreOptions = [] } = useQuery({
-    queryKey: ['genres'],
-    queryFn: async () => {
-      const { data } = await referenceAPI.getGenres();
-      return data as { id: string; name: string }[];
-    },
-  });
-
 
   // ── Phase 6b: releases & clips lists ──────────────────────────────────────
   const { data: releases = [] } = useQuery({
@@ -236,30 +205,6 @@ export default function ArtistPage() {
     enabled: showInviteModal && isOwner,
   });
 
-  // Lock body scroll when modal is open (iOS-compatible)
-  useEffect(() => {
-    if (isEditing) lockScroll();
-    else unlockScroll();
-    return () => unlockScroll();
-  }, [isEditing]);
-
-  // Populate form when opening edit
-  useEffect(() => {
-    if (isEditing && artist) {
-      setForm({
-        name: artist.name ?? '',
-        type: artist.type ?? '',
-        city: artist.city ?? '',
-        tourReady: artist.tourReady ?? '',
-        description: artist.description ?? '',
-        bandLink: artist.bandLink ?? '',
-        listeners: artist.listeners != null ? String(artist.listeners) : '',
-        genreIds: (artist.genres ?? []).map((g: { id: string }) => g.id),
-        socialLinks: (artist.socialLinks as Record<string, string>) ?? {},
-      });
-    }
-  }, [isEditing, artist]);
-
   const favInvalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['artist', id] });
     queryClient.invalidateQueries({ queryKey: ['followed-artists'] });
@@ -306,100 +251,6 @@ export default function ArtistPage() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось отозвать заявку')),
   });
-
-  const saveMut = useMutation({
-    mutationFn: () =>
-      artistAPI.updateArtist(id!, {
-        name: form.name.trim(),
-        type: form.type || undefined,
-        city: form.city.trim() || undefined,
-        tourReady: form.tourReady.trim() || undefined,
-        description: form.description.trim() || undefined,
-        bandLink: form.bandLink.trim() || undefined,
-        listeners: form.listeners !== '' ? Number(form.listeners) : undefined,
-        genreIds: form.genreIds,
-        socialLinks: form.socialLinks,
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['artist', id] });
-      setIsEditing(false);
-    },
-    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
-  });
-
-  // «Найти артиста» — autofill the edit form from Deezer/Apple Music (same as create).
-  const applyLookupCandidate = async (c: any) => {
-    setApplyingLookup(true);
-    try {
-      setForm(f => ({
-        ...f,
-        name: c.name || f.name,
-        type: c.type || f.type,
-        genreIds: c.genreIds?.length ? c.genreIds : f.genreIds,
-        socialLinks: {
-          ...f.socialLinks,
-          ...(c.links?.yandexMusic ? { yandex_music: c.links.yandexMusic } : {}),
-          ...(c.links?.spotify ? { spotify: c.links.spotify } : {}),
-          ...(c.links?.appleMusic ? { apple_music: c.links.appleMusic } : {}),
-          ...(c.links?.deezer ? { deezer: c.links.deezer } : {}),
-          ...(c.links?.vk ? { vk: c.links.vk } : {}),
-          ...(c.links?.soundcloud ? { soundcloud: c.links.soundcloud } : {}),
-          ...(c.links?.website ? { website: c.links.website } : {}),
-        },
-      }));
-      if (c.imageUrl) {
-        try {
-          const { data: blob } = await artistAPI.lookupAvatar(c.imageUrl);
-          uploadAvatarMut.mutate(new File([blob], 'avatar.jpg', { type: (blob as any)?.type || 'image/jpeg' }));
-        } catch { /* avatar best-effort */ }
-      }
-      // Pull the artist's Apple Music releases + clips for optional import (skip already-added).
-      if (c.itunesId) {
-        try {
-          const { data } = await artistAPI.lookupReleases({ itunesId: c.itunesId, deezerId: c.deezerId });
-          const key = (u: any) => String(u || '').split('?')[0];
-          const haveRel = new Set((releases || []).map((r: any) => key(r.url)));
-          const haveClip = new Set((clips || []).map((r: any) => key(r.url)));
-          setFoundReleases((data.releases || []).filter((r: any) => !haveRel.has(key(r.url))));
-          setFoundClips((data.clips || []).filter((r: any) => !haveClip.has(key(r.url))));
-        } catch { /* best-effort */ }
-      }
-      toast.success('Данные подставлены — проверьте и сохраните');
-    } finally {
-      setApplyingLookup(false);
-    }
-  };
-
-  const importReleases = async (selected: any[]) => {
-    let ok = 0;
-    for (const r of selected) {
-      try {
-        await releaseAPI.create({
-          artistId: id!, platform: 'APPLE_MUSIC', url: r.url, title: r.title,
-          coverUrl: r.coverUrl || undefined, releaseDate: r.releaseDate || undefined, participants: [],
-        });
-        ok++;
-      } catch { /* skip a failed one */ }
-    }
-    setFoundReleases([]);
-    queryClient.invalidateQueries({ queryKey: ['releases', 'artist', id] });
-    if (ok > 0) toast.success(`Импортировано релизов: ${ok}`); else toast.error('Не удалось импортировать релизы');
-  };
-  const importClips = async (selected: any[]) => {
-    let ok = 0;
-    for (const r of selected) {
-      try {
-        await clipAPI.create({
-          artistId: id!, platform: 'APPLE_MUSIC', url: r.url, title: r.title,
-          coverUrl: r.coverUrl || undefined, participants: [],
-        });
-        ok++;
-      } catch { /* skip a failed one */ }
-    }
-    setFoundClips([]);
-    queryClient.invalidateQueries({ queryKey: ['clips', 'artist', id] });
-    if (ok > 0) toast.success(`Импортировано клипов: ${ok}`); else toast.error('Не удалось импортировать клипы');
-  };
 
   const inviteMut = useMutation({
     mutationFn: () => groupAPI.invite(id!, inviteFriendId, inviteProfessionId),
@@ -528,9 +379,6 @@ export default function ArtistPage() {
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось снять администратора')),
   });
 
-  const set = (key: keyof EditForm, value: string | string[] | Record<string, string>) =>
-    setForm((f) => ({ ...f, [key]: value }));
-
   // Filtered lists for invite modal — must be before early returns
   const filteredFriends = useMemo(() => {
     const memberIds = new Set((artist?.members ?? []).map((m: any) => m.id));
@@ -657,199 +505,6 @@ export default function ArtistPage() {
     </div>
   );
 
-  // ── Edit modal ───────────────────────────────────────────────────────────────
-  function EditModal() {
-    return (
-      <>
-      <div
-        className="fixed inset-0 z-50 bg-black/70"
-        onClick={() => setIsEditing(false)}
-      >
-        <div
-          className="absolute bottom-0 left-0 right-0 bg-slate-900 rounded-t-3xl flex flex-col"
-          style={{ maxHeight: '92dvh', paddingBottom: 'env(safe-area-inset-bottom, 0px)' } as React.CSSProperties}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Drag handle */}
-          <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
-            <div className="w-10 h-1 rounded-full bg-slate-600" />
-          </div>
-
-          {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
-            <button onClick={() => setIsEditing(false)} className="p-2 text-slate-400 hover:text-white">
-              <X size={20} />
-            </button>
-            <span className="font-semibold text-white text-sm">Редактировать коллектив</span>
-            <button
-              onClick={() => saveMut.mutate()}
-              disabled={saveMut.isPending || !form.name.trim()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-600 text-white text-sm font-semibold disabled:opacity-50"
-            >
-              {saveMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
-              Сохранить
-            </button>
-          </div>
-
-          {/* Scrollable body */}
-          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-4">
-
-            <ArtistLookup onApply={applyLookupCandidate} applying={applyingLookup} />
-
-            <MediaImportList title="Релизы на Apple Music" items={foundReleases} onImport={importReleases} />
-            <MediaImportList title="Клипы на Apple Music" items={foundClips} onImport={importClips} />
-
-            {/* Название */}
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Название *</label>
-              <input
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
-                value={form.name}
-                onChange={(e) => set('name', e.target.value)}
-                placeholder="Название коллектива"
-              />
-            </div>
-
-            {/* Тип */}
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Тип</label>
-              <button
-                type="button"
-                onClick={() => setTypeSheetOpen(true)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
-              >
-                <span className={form.type ? 'text-white' : 'text-slate-500'}>
-                  {form.type ? TYPE_LABELS[form.type] : 'Выбрать тип'}
-                </span>
-                <span className="text-slate-500 text-xs">▾</span>
-              </button>
-            </div>
-
-            {/* Город — автокомплит реальных городов (выбор из списка) */}
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Город</label>
-              <CityPicker city={form.city} country="" onChange={(c) => set('city', c)} />
-            </div>
-
-            {/* Готовность к туру */}
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Готовность к туру</label>
-              <input
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
-                value={form.tourReady}
-                onChange={(e) => set('tourReady', e.target.value)}
-                placeholder="Готовы к гастролям"
-              />
-            </div>
-
-            {/* Описание */}
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Описание</label>
-              <textarea
-                rows={4}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500 resize-none"
-                value={form.description}
-                onChange={(e) => set('description', e.target.value)}
-                placeholder="О коллективе..."
-              />
-            </div>
-
-            {/* Жанры */}
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Жанры</label>
-              <button
-                type="button"
-                onClick={() => setGenreSheetOpen(true)}
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
-              >
-                <span className={form.genreIds.length ? 'text-white' : 'text-slate-500'}>
-                  {form.genreIds.length
-                    ? genreOptions.filter((g) => form.genreIds.includes(g.id)).map((g) => g.name).join(', ')
-                    : 'Выбрать жанры'}
-                </span>
-                <span className="text-slate-500 text-xs">▾</span>
-              </button>
-            </div>
-
-            {/* Слушатели */}
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Слушателей в месяц</label>
-              <input
-                type="number"
-                className="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
-                value={form.listeners}
-                onChange={(e) => set('listeners', e.target.value)}
-                placeholder="0"
-                min="0"
-              />
-            </div>
-
-            {/* Ссылка BandLink */}
-            <div>
-              <label className="block text-xs text-slate-500 mb-1">Ссылка на страницу группы</label>
-              <input
-                className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
-                value={form.bandLink}
-                onChange={(e) => set('bandLink', e.target.value)}
-                placeholder="https://band.link/..."
-              />
-            </div>
-
-            {/* Контакты */}
-            <div>
-              <label className="block text-xs text-slate-500 mb-2">Контакты</label>
-              <SocialLinksEditor
-                value={form.socialLinks}
-                onChange={(v) => set('socialLinks', v)}
-                only={CONTACT_KEYS}
-              />
-            </div>
-
-            {/* Соцсети */}
-            <div>
-              <label className="block text-xs text-slate-500 mb-2">Социальные сети</label>
-              <SocialLinksEditor
-                value={form.socialLinks}
-                onChange={(v) => set('socialLinks', v)}
-                only={SOCIAL_KEYS}
-              />
-            </div>
-
-            {/* Bottom spacer so the last field can scroll clear of the keyboard */}
-            <div className="h-40 flex-shrink-0" aria-hidden />
-          </div>
-        </div>
-      </div>
-
-      {/* Sheets rendered outside overlay so fixed positioning works correctly */}
-      <SelectSheet
-        isOpen={typeSheetOpen}
-        onClose={() => setTypeSheetOpen(false)}
-        title="Тип коллектива"
-        options={TYPE_OPTIONS}
-        selectedIds={form.type}
-        onSelect={(v) => { set('type', v as string); setTypeSheetOpen(false); }}
-        mode="single"
-        searchable={false}
-        height="auto"
-      />
-
-      <SelectSheet
-        isOpen={genreSheetOpen}
-        onClose={() => setGenreSheetOpen(false)}
-        title="Жанры"
-        options={genreOptions}
-        selectedIds={form.genreIds}
-        onSelect={(v) => { set('genreIds', v as string[]); }}
-        mode="multiple"
-        showConfirm
-        height="full"
-      />
-
-      </>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-950 pb-24">
       {/* ── Header banner ── */}
@@ -950,7 +605,7 @@ export default function ArtistPage() {
           />
           {isOwner && (
             <button
-              onClick={() => setIsEditing(true)}
+              onClick={() => navigate(`/artist/${id}/edit`)}
               title="Редактировать"
               className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
             >
@@ -1104,61 +759,74 @@ export default function ArtistPage() {
           </>
         )}
 
-        {/* Description */}
+        {/* Об артисте — карточка в едином стиле блоков профиля */}
         {artist.description && (
-          <p className="text-slate-300 text-sm leading-relaxed mb-4 border-l-2 border-primary-500/40 pl-3 break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
-            {artist.description}
-          </p>
+          <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden mb-3">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+              <UserRound size={14} className="text-sky-400" />
+              <span className="text-sm font-semibold text-white">Об артисте</span>
+            </div>
+            <div className="p-4">
+              <p className="text-slate-300 text-sm leading-relaxed break-words [overflow-wrap:anywhere] whitespace-pre-wrap">
+                {artist.description}
+              </p>
+            </div>
+          </div>
         )}
 
         {/* Жанры */}
         {(artist.genres?.length ?? 0) > 0 && (
-          <div className="mb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Жанры</span>
-              <div className="flex-1 h-px bg-slate-800" />
+          <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden mb-3">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+              <Tag size={14} className="text-primary-400" />
+              <span className="text-sm font-semibold text-white">Жанры</span>
+              <span className="text-xs text-slate-500">{artist.genres.length}</span>
             </div>
-            <div className="flex flex-wrap gap-1.5">
-              {artist.genres.map((g: { id: string; name: string }) => (
-                <span key={g.id} className="px-2.5 py-1 bg-slate-800/80 border border-slate-700/50 text-slate-300 rounded-lg text-xs font-medium">
-                  {g.name}
-                </span>
-              ))}
+            <div className="p-3">
+              <div className="flex flex-wrap gap-1.5">
+                {artist.genres.map((g: { id: string; name: string }) => (
+                  <span key={g.id} className="px-2.5 py-1 bg-slate-800/80 border border-slate-700/50 text-slate-300 rounded-lg text-xs font-medium">
+                    {g.name}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         )}
 
         {/* Контакты */}
         {(hasSocialLinks || artist.bandLink) && (
-          <div className="mb-4">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Контакты</span>
-              <div className="flex-1 h-px bg-slate-800" />
+          <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden mb-3">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+              <Link2 size={14} className="text-primary-400" />
+              <span className="text-sm font-semibold text-white">Контакты</span>
             </div>
-            {artist.bandLink && (
-              <a
-                href={artist.bandLink}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-2 text-primary-400 text-sm hover:underline mb-2"
-              >
-                <ExternalLink size={14} className="flex-shrink-0" />
-                <span className="truncate min-w-0">{artist.bandLink}</span>
-              </a>
-            )}
-            {hasSocialLinks && <SocialIconRow links={(artist.socialLinks as Record<string, string>) || {}} labeled />}
+            <div className="p-3">
+              {artist.bandLink && (
+                <a
+                  href={artist.bandLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 text-primary-400 text-sm hover:underline mb-2"
+                >
+                  <ExternalLink size={14} className="flex-shrink-0" />
+                  <span className="truncate min-w-0">{artist.bandLink}</span>
+                </a>
+              )}
+              {hasSocialLinks && <SocialIconRow links={(artist.socialLinks as Record<string, string>) || {}} labeled />}
+            </div>
           </div>
         )}
 
         {/* Запросы на участие — только для владельца */}
         {isOwner && pendingMembers.length > 0 && (
-          <div className="mb-4">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="text-[11px] font-semibold text-amber-400 uppercase tracking-wider">Запросы на участие</span>
-              <span className="text-[10px] bg-amber-500/20 text-amber-400 px-1.5 py-0.5 rounded-full font-bold">{pendingMembers.length}</span>
-              <div className="flex-1 h-px bg-slate-800" />
+          <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden mb-3">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+              <UserPlus size={14} className="text-amber-400" />
+              <span className="text-sm font-semibold text-white">Запросы на участие</span>
+              <span className="text-xs text-slate-500">{pendingMembers.length}</span>
             </div>
-            <div className="space-y-2">
+            <div className="p-3 space-y-2">
               {pendingMembers.map((m: any) => (
                 <div key={m.id} className="flex items-center gap-3 p-3 rounded-xl bg-amber-500/5 border border-amber-500/20">
                   <AvatarComponent src={m.user.avatar} name={`${m.user.firstName} ${m.user.lastName}`} size={40} />
@@ -1219,80 +887,84 @@ export default function ArtistPage() {
         )}
 
         {/* ── Состав (Phase 5b: active / former blocks) ── */}
-        <div className="mb-4">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Состав</span>
-            <div className="flex-1 h-px bg-slate-800" />
+        <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden mb-3">
+          <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+            <Users size={14} className="text-primary-400" />
+            <span className="text-sm font-semibold text-white">Состав</span>
+            {confirmedMembers.length > 0 && <span className="text-xs text-slate-500">{confirmedMembers.length}</span>}
             {canSeeGear && (
               <button
-                onClick={() => setShowAdminBlock(v => !v)}
+                onClick={() => setShowManageSheet(true)}
                 title="Управление"
-                className={`p-1.5 rounded-lg transition-colors ${showAdminBlock ? 'text-primary-400 bg-primary-500/10' : 'text-slate-500 hover:text-primary-400'}`}
+                className="ml-auto p-1 rounded-lg text-slate-500 hover:text-primary-400 hover:bg-slate-800 transition-colors flex-shrink-0"
               >
                 <Settings size={15} />
               </button>
             )}
           </div>
 
-          {/* Admin actions: add member / invite link */}
-          {viewerIsAdmin && (
-            <div className="flex flex-wrap gap-2 mb-3">
-              <button
-                onClick={() => { setShowAddMember(true); setAddFeedback(''); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-xs font-semibold transition-colors"
-              >
-                <UserPlus size={13} /> Добавить участника
-              </button>
-              <button
-                onClick={() => { setShowInviteLink(true); setGeneratedLink(''); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition-colors"
-              >
-                <Link2 size={13} /> Пригласить на сервис
-              </button>
-            </div>
-          )}
-
-          {/* Действующие участники */}
-          {activeMembers.length > 0 ? (
-            <div className="mb-3">
-              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Действующие участники</p>
-              <div className="space-y-2">
-                {activeMembers.map((m: any) => <MemberCard key={m.membershipId} m={m} />)}
+          <div className="p-3">
+            {/* Admin actions: add member / invite link */}
+            {viewerIsAdmin && (
+              <div className="flex flex-wrap gap-2 mb-3">
+                <button
+                  onClick={() => { setShowAddMember(true); setAddFeedback(''); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-xs font-semibold transition-colors"
+                >
+                  <UserPlus size={13} /> Добавить участника
+                </button>
+                <button
+                  onClick={() => { setShowInviteLink(true); setGeneratedLink(''); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition-colors"
+                >
+                  <Link2 size={13} /> Пригласить на сервис
+                </button>
               </div>
-            </div>
-          ) : viewerIsAdmin ? (
-            <p className="text-xs text-slate-600 italic mb-3">Действующих участников пока нет</p>
-          ) : null}
+            )}
 
-          {/* Бывшие участники */}
-          {formerMembers.length > 0 && (
-            <div className="mb-3">
-              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Бывшие участники</p>
-              <div className="space-y-2">
-                {formerMembers.map((m: any) => <MemberCard key={m.membershipId} m={m} />)}
+            {/* Действующие участники */}
+            {activeMembers.length > 0 ? (
+              <div className="mb-3">
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Действующие участники</p>
+                <div className="space-y-2">
+                  {activeMembers.map((m: any) => <MemberCard key={m.membershipId} m={m} />)}
+                </div>
               </div>
-            </div>
-          )}
+            ) : viewerIsAdmin ? (
+              <p className="text-xs text-slate-600 italic mb-3">Действующих участников пока нет</p>
+            ) : null}
 
-          {activeMembers.length === 0 && formerMembers.length === 0 && !viewerIsAdmin && (
-            <p className="text-xs text-slate-600 italic">Участников пока нет</p>
-          )}
-
-          {/* Ожидают подтверждения (admins only, read-only indicator) */}
-          {viewerIsAdmin && pendingMembers5b.length > 0 && (
-            <div className="mt-3">
-              <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider mb-2">Ожидают подтверждения</p>
-              <div className="space-y-2">
-                {pendingMembers5b.map((m: any) => <MemberCard key={m.membershipId} m={m} pending />)}
+            {/* Бывшие участники */}
+            {formerMembers.length > 0 && (
+              <div className="mb-3">
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Бывшие участники</p>
+                <div className="space-y-2">
+                  {formerMembers.map((m: any) => <MemberCard key={m.membershipId} m={m} />)}
+                </div>
               </div>
-            </div>
-          )}
+            )}
+
+            {activeMembers.length === 0 && formerMembers.length === 0 && !viewerIsAdmin && (
+              <p className="text-xs text-slate-600 italic">Участников пока нет</p>
+            )}
+
+            {/* Ожидают подтверждения (admins only, read-only indicator) */}
+            {viewerIsAdmin && pendingMembers5b.length > 0 && (
+              <div className="mt-3">
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Ожидают подтверждения</p>
+                <div className="space-y-2">
+                  {pendingMembers5b.map((m: any) => <MemberCard key={m.membershipId} m={m} pending />)}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── Phase 6b: Releases rail ── */}
         {(viewerIsAdmin || releases.length > 0) && (
           <MediaRail
             title="Релизы"
+            icon={Disc3}
             items={releases}
             to="/releases"
             showAdd={viewerIsAdmin}
@@ -1304,6 +976,7 @@ export default function ArtistPage() {
         {(viewerIsAdmin || clips.length > 0) && (
           <MediaRail
             title="Клипы"
+            icon={Clapperboard}
             items={clips}
             to="/clips"
             showAdd={viewerIsAdmin}
@@ -1315,6 +988,7 @@ export default function ArtistPage() {
         {viewerIsAdmin && (
           <MediaRail
             title="Мои вакансии"
+            icon={Briefcase}
             items={myVacancies.map((v: any) => ({
               id: v.id,
               title: v.title,
@@ -1334,105 +1008,20 @@ export default function ArtistPage() {
           />
         )}
 
-        {/* ── Admin block (gear) ── */}
-        {canSeeGear && showAdminBlock && (
-          <div className="mb-4 p-3 rounded-xl bg-slate-900/70 border border-slate-800 space-y-4">
-            {/* Activity status */}
-            {viewerIsAdmin && (
-              <div>
-                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Статус активности</p>
-                <button
-                  onClick={() => setActivitySheetOpen(true)}
-                  className="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm text-left flex justify-between items-center"
-                >
-                  <span className="text-white">{ACTIVITY_LABELS[currentActivity] ?? 'Действующий'}</span>
-                  <span className="text-slate-500 text-xs">▾</span>
-                </button>
-                <p className="text-[10px] text-slate-500 mt-1">
-                  При смене с «Действующий» все действующие участники переходят в бывшие.
-                </p>
-              </div>
-            )}
-
-            {/* Owner */}
-            <div>
-              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Владелец</p>
-              {ownerMember ? (
-                <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
-                  <AvatarComponent src={ownerMember.user.avatar} name={memberName(ownerMember)} size={36} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate flex items-center gap-1.5">
-                      <Crown size={12} className="text-amber-400" /> {memberName(ownerMember)}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-xs text-slate-600 italic">—</p>
-              )}
-              {viewerIsOwner && (
-                <button
-                  onClick={() => setShowOwnerPicker(true)}
-                  className="mt-2 text-xs text-primary-400 hover:text-primary-300 transition-colors"
-                >
-                  Изменить владельца
-                </button>
-              )}
-            </div>
-
-            {/* Admins */}
-            <div>
-              <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider mb-1.5">Администраторы</p>
-              {adminMembers.length === 0 ? (
-                <p className="text-xs text-slate-600 italic">Нет администраторов</p>
-              ) : (
-                <div className="space-y-2">
-                  {adminMembers.map((m: any) => (
-                    <div key={m.membershipId} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
-                      <AvatarComponent src={m.user.avatar} name={memberName(m)} size={36} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white truncate flex items-center gap-1.5">
-                          {m.isOwner ? <Crown size={12} className="text-amber-400" /> : <Shield size={11} className="text-sky-400" />}
-                          {memberName(m)}
-                        </p>
-                      </div>
-                      {viewerIsOwner && !m.isOwner && (
-                        <button
-                          onClick={() => setRemoveAdminUserId(m.user.id)}
-                          title="Снять администратора"
-                          className="p-1.5 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"
-                        >
-                          <X size={15} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {viewerIsOwner && (
-                <button
-                  onClick={() => setShowAdminPicker(true)}
-                  className="mt-2 text-xs text-primary-400 hover:text-primary-300 transition-colors"
-                >
-                  Добавить администратора
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
       </div>
 
-      {/* ── Edit modal ── */}
-      {isEditing && EditModal()}
-
-      {/* ── Invite member modal ── */}
+      {/* ── Invite member sheet (нижний лист; z ниже RolePicker/SelectSheet z-60) ── */}
       {showInviteModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
+        <>
+        <div className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm" onClick={() => setShowInviteModal(false)} />
+        <div
+          className="fixed inset-x-0 bottom-0 z-[56] bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[85dvh] flex flex-col"
+          style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+        >
+          {/* Drag handle */}
+          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 flex-shrink-0" />
           {/* Top bar */}
-          <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-800 flex-shrink-0 bg-slate-900/80 backdrop-blur">
-            <button onClick={() => setShowInviteModal(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors">
-              <ArrowLeft size={20} />
-            </button>
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-800 flex-shrink-0">
             <h2 className="text-base font-semibold text-white flex-1">Пригласить участника</h2>
             <button
               onClick={() => inviteMut.mutate()}
@@ -1442,9 +1031,12 @@ export default function ArtistPage() {
               {inviteMut.isPending && <Loader2 size={14} className="animate-spin" />}
               Пригласить
             </button>
+            <button onClick={() => setShowInviteModal(false)} className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors">
+              <X size={18} className="text-slate-400" />
+            </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 min-h-0 overflow-y-auto">
 
             {/* Step 1: Choose friend */}
             <div className="px-4 pt-4 pb-2">
@@ -1533,20 +1125,25 @@ export default function ArtistPage() {
           )}
 
           {inviteMut.isError && (
-            <p className="px-4 py-2 text-sm text-red-400 bg-red-500/5 border-t border-red-500/20">
+            <p className="px-4 py-2 text-sm text-red-400 bg-red-500/5 border-t border-red-500/20 flex-shrink-0">
               Ошибка. Попробуйте снова.
             </p>
           )}
         </div>
+        </>
       )}
 
-      {/* ── Phase 5b: Add registered member modal ── */}
+      {/* ── Phase 5b: Add registered member sheet (нижний лист; z ниже RolePicker z-60) ── */}
       {showAddMember && (
-        <div className="fixed inset-0 z-50 bg-slate-950 flex flex-col">
-          <div className="flex items-center gap-3 px-4 py-4 border-b border-slate-800 flex-shrink-0 bg-slate-900/80 backdrop-blur">
-            <button onClick={() => setShowAddMember(false)} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors">
-              <ArrowLeft size={20} />
-            </button>
+        <>
+        <div className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm" onClick={() => setShowAddMember(false)} />
+        <div
+          className="fixed inset-x-0 bottom-0 z-[56] bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[85dvh] flex flex-col"
+          style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+        >
+          {/* Drag handle */}
+          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 flex-shrink-0" />
+          <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-800 flex-shrink-0">
             <h2 className="text-base font-semibold text-white flex-1">Добавить участника</h2>
             <button
               onClick={() => addMemberMut.mutate()}
@@ -1557,9 +1154,12 @@ export default function ArtistPage() {
               {addMemberMut.isPending && <Loader2 size={14} className="animate-spin" />}
               Добавить
             </button>
+            <button onClick={() => setShowAddMember(false)} className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors">
+              <X size={18} className="text-slate-400" />
+            </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+          <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 space-y-5">
             {/* Search users */}
             <div>
               <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">1. Найдите пользователя</p>
@@ -1644,6 +1244,7 @@ export default function ArtistPage() {
             )}
           </div>
         </div>
+        </>
       )}
 
       {/* RolePicker for add-member */}
@@ -1657,17 +1258,23 @@ export default function ArtistPage() {
         />
       )}
 
-      {/* ── Phase 5b: Invite-link (unregistered) flow ── */}
+      {/* ── Phase 5b: Invite-link (unregistered) flow — нижний лист (z ниже RolePicker z-60) ── */}
       {showInviteLink && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
-          <div className="w-full max-w-sm bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800">
-              <h3 className="font-semibold text-white text-sm">Пригласить на сервис</h3>
-              <button onClick={() => setShowInviteLink(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
-                <X size={16} className="text-slate-400" />
-              </button>
-            </div>
-            <div className="p-4 space-y-4">
+        <>
+        <div className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm" onClick={() => setShowInviteLink(false)} />
+        <div
+          className="fixed inset-x-0 bottom-0 z-[56] bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[85dvh] flex flex-col"
+          style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+        >
+          {/* Drag handle */}
+          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 flex-shrink-0" />
+          <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800 flex-shrink-0">
+            <h3 className="font-semibold text-white text-sm">Пригласить на сервис</h3>
+            <button onClick={() => setShowInviteLink(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+              <X size={16} className="text-slate-400" />
+            </button>
+          </div>
+          <div className="p-4 space-y-4 flex-1 min-h-0 overflow-y-auto">
               {!generatedLink ? (
                 <>
                   <div>
@@ -1733,9 +1340,9 @@ export default function ArtistPage() {
                   </button>
                 </>
               )}
-            </div>
           </div>
         </div>
+        </>
       )}
 
       {/* RolePicker for invite-link */}
@@ -1760,68 +1367,235 @@ export default function ArtistPage() {
         />
       )}
 
-      {/* ── Phase 5b: Owner picker (transfer owner) ── */}
+      {/* ── Phase 5b: Owner picker (transfer owner) — нижний лист ── */}
       {showOwnerPicker && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
-          <div className="w-full max-w-sm bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800">
-              <h3 className="font-semibold text-white text-sm">Изменить владельца</h3>
-              <button onClick={() => setShowOwnerPicker(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
-                <X size={16} className="text-slate-400" />
-              </button>
-            </div>
-            <div className="p-4">
-              {confirmedMembers.filter((m) => !m.isOwner).length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-4">Нет других участников.</p>
-              ) : (
-                <div className="space-y-1.5 max-h-72 overflow-y-auto">
-                  {confirmedMembers.filter((m) => !m.isOwner).map((m: any) => (
-                    <button
-                      key={m.membershipId}
-                      onClick={() => { setTransferOwnerUserId(m.user.id); setShowOwnerPicker(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 border border-transparent transition-colors text-left"
-                    >
-                      <AvatarComponent src={m.user.avatar} name={memberName(m)} size={36} />
-                      <span className="text-sm text-white truncate">{memberName(m)}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+        <>
+        <div className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm" onClick={() => setShowOwnerPicker(false)} />
+        <div
+          className="fixed inset-x-0 bottom-0 z-[56] bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[85dvh] flex flex-col"
+          style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+        >
+          {/* Drag handle */}
+          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 flex-shrink-0" />
+          <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800 flex-shrink-0">
+            <h3 className="font-semibold text-white text-sm">Изменить владельца</h3>
+            <button onClick={() => setShowOwnerPicker(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+              <X size={16} className="text-slate-400" />
+            </button>
+          </div>
+          <div className="p-4 flex-1 min-h-0 overflow-y-auto">
+            {confirmedMembers.filter((m) => !m.isOwner).length === 0 ? (
+              <p className="text-sm text-slate-400 text-center py-4">Нет других участников.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {confirmedMembers.filter((m) => !m.isOwner).map((m: any) => (
+                  <button
+                    key={m.membershipId}
+                    onClick={() => { setTransferOwnerUserId(m.user.id); setShowOwnerPicker(false); }}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 border border-transparent transition-colors text-left"
+                  >
+                    <AvatarComponent src={m.user.avatar} name={memberName(m)} size={36} />
+                    <span className="text-sm text-white truncate">{memberName(m)}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
+        </>
       )}
 
-      {/* ── Phase 5b: Admin picker (add admin) ── */}
+      {/* ── Phase 5b: Администраторы — нижний лист (текущие + добавить; бывший center-picker) ── */}
       {showAdminPicker && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
-          <div className="w-full max-w-sm bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800">
-              <h3 className="font-semibold text-white text-sm">Добавить администратора</h3>
-              <button onClick={() => setShowAdminPicker(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
-                <X size={16} className="text-slate-400" />
-              </button>
-            </div>
-            <div className="p-4">
-              {confirmedMembers.filter((m) => !m.isAdmin).length === 0 ? (
-                <p className="text-sm text-slate-400 text-center py-4">Все участники уже администраторы.</p>
+        <>
+        <div className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm" onClick={() => setShowAdminPicker(false)} />
+        <div
+          className="fixed inset-x-0 bottom-0 z-[56] bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[85dvh] flex flex-col"
+          style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+        >
+          {/* Drag handle */}
+          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 flex-shrink-0" />
+          <div className="flex items-center justify-between px-4 py-3.5 border-b border-slate-800 flex-shrink-0">
+            <h3 className="font-semibold text-white text-sm">Администраторы</h3>
+            <button onClick={() => setShowAdminPicker(false)} className="p-1.5 hover:bg-slate-800 rounded-lg transition-colors">
+              <X size={16} className="text-slate-400" />
+            </button>
+          </div>
+          <div className="p-4 space-y-4 flex-1 min-h-0 overflow-y-auto">
+            {/* Текущие администраторы (владелец может снимать) — бывший инлайн Admin block */}
+            <div>
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Текущие</p>
+              {adminMembers.length === 0 ? (
+                <p className="text-xs text-slate-600 italic">Нет администраторов</p>
               ) : (
-                <div className="space-y-1.5 max-h-72 overflow-y-auto">
-                  {confirmedMembers.filter((m) => !m.isAdmin).map((m: any) => (
-                    <button
-                      key={m.membershipId}
-                      onClick={() => { addAdminMut.mutate(m.user.id); setShowAdminPicker(false); }}
-                      className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 border border-transparent transition-colors text-left"
-                    >
+                <div className="space-y-2">
+                  {adminMembers.map((m: any) => (
+                    <div key={m.membershipId} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
                       <AvatarComponent src={m.user.avatar} name={memberName(m)} size={36} />
-                      <span className="text-sm text-white truncate">{memberName(m)}</span>
-                    </button>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate flex items-center gap-1.5">
+                          {m.isOwner ? <Crown size={12} className="text-amber-400" /> : <Shield size={11} className="text-sky-400" />}
+                          {memberName(m)}
+                        </p>
+                      </div>
+                      {viewerIsOwner && !m.isOwner && (
+                        <button
+                          onClick={() => setRemoveAdminUserId(m.user.id)}
+                          title="Снять администратора"
+                          className="p-1.5 text-slate-500 hover:text-red-400 transition-colors flex-shrink-0"
+                        >
+                          <X size={15} />
+                        </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
             </div>
+
+            {/* Добавить администратора (только владелец) */}
+            {viewerIsOwner && (
+              <div>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Добавить</p>
+                {confirmedMembers.filter((m) => !m.isAdmin).length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-4">Все участники уже администраторы.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {confirmedMembers.filter((m) => !m.isAdmin).map((m: any) => (
+                      <button
+                        key={m.membershipId}
+                        onClick={() => { addAdminMut.mutate(m.user.id); setShowAdminPicker(false); }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-slate-800 border border-transparent transition-colors text-left"
+                      >
+                        <AvatarComponent src={m.user.avatar} name={memberName(m)} size={36} />
+                        <span className="text-sm text-white truncate">{memberName(m)}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
+        </>
+      )}
+
+      {/* ── Нижний лист «Управление артистом» (шестерёнка) ── */}
+      {showManageSheet && canSeeGear && (
+        <>
+        <div className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm" onClick={() => setShowManageSheet(false)} />
+        <div
+          className="fixed inset-x-0 bottom-0 z-[56] bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[85dvh] flex flex-col"
+          style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
+        >
+          {/* Drag handle */}
+          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 flex-shrink-0" />
+          <div className="flex items-center justify-between px-5 pt-4 pb-3 flex-shrink-0">
+            <div className="flex items-center gap-2.5">
+              <Settings size={18} className="text-primary-400" />
+              <h2 className="text-base font-bold text-white">Управление артистом</h2>
+            </div>
+            <button onClick={() => setShowManageSheet(false)} className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors">
+              <X size={18} className="text-slate-400" />
+            </button>
+          </div>
+
+          <div className="px-4 pb-2 space-y-2 flex-1 min-h-0 overflow-y-auto">
+            {/* Редактировать артиста */}
+            {isOwner && (
+              <button
+                onClick={() => { setShowManageSheet(false); navigate(`/artist/${id}/edit`); }}
+                className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3.5 hover:bg-slate-800 transition-colors text-left"
+              >
+                <Edit3 size={17} className="text-primary-400 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-200">Редактировать артиста</p>
+                  <p className="text-xs text-slate-500 truncate">Название, описание, жанры, ссылки</p>
+                </div>
+                <ChevronRight size={16} className="text-slate-500 flex-shrink-0" />
+              </button>
+            )}
+
+            {/* Статус активности */}
+            {viewerIsAdmin && (
+              <>
+                <button
+                  onClick={() => { setShowManageSheet(false); setActivitySheetOpen(true); }}
+                  className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3.5 hover:bg-slate-800 transition-colors text-left"
+                >
+                  <Activity size={17} className="text-emerald-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-200">Статус активности</p>
+                    <p className="text-xs text-slate-500 truncate">{ACTIVITY_LABELS[currentActivity] ?? 'Действующий'}</p>
+                  </div>
+                  <ChevronRight size={16} className="text-slate-500 flex-shrink-0" />
+                </button>
+                <p className="text-[10px] text-slate-500 px-1">
+                  При смене с «Действующий» все действующие участники переходят в бывшие.
+                </p>
+              </>
+            )}
+
+            {/* Владелец */}
+            {viewerIsOwner && (
+              <button
+                onClick={() => { setShowManageSheet(false); setShowOwnerPicker(true); }}
+                className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3.5 hover:bg-slate-800 transition-colors text-left"
+              >
+                <Crown size={17} className="text-amber-400 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-200">Владелец</p>
+                  <p className="text-xs text-slate-500 truncate">{ownerMember ? memberName(ownerMember) : '—'}</p>
+                </div>
+                <ChevronRight size={16} className="text-slate-500 flex-shrink-0" />
+              </button>
+            )}
+
+            {/* Администраторы */}
+            <button
+              onClick={() => { setShowManageSheet(false); setShowAdminPicker(true); }}
+              className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3.5 hover:bg-slate-800 transition-colors text-left"
+            >
+              <Shield size={17} className="text-sky-400 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-slate-200">Администраторы</p>
+                <p className="text-xs text-slate-500 truncate">{adminMembers.length} чел.</p>
+              </div>
+              <ChevronRight size={16} className="text-slate-500 flex-shrink-0" />
+            </button>
+
+            {/* Пригласить участника */}
+            {viewerIsAdmin && (
+              <button
+                onClick={() => { setShowManageSheet(false); setShowAddMember(true); setAddFeedback(''); }}
+                className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3.5 hover:bg-slate-800 transition-colors text-left"
+              >
+                <UserPlus size={17} className="text-primary-400 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-200">Пригласить участника</p>
+                  <p className="text-xs text-slate-500 truncate">Добавить зарегистрированного пользователя</p>
+                </div>
+                <ChevronRight size={16} className="text-slate-500 flex-shrink-0" />
+              </button>
+            )}
+
+            {/* Ссылка-приглашение */}
+            {viewerIsAdmin && (
+              <button
+                onClick={() => { setShowManageSheet(false); setShowInviteLink(true); setGeneratedLink(''); }}
+                className="w-full flex items-center gap-3 bg-slate-800/60 border border-slate-700/40 rounded-2xl px-4 py-3.5 hover:bg-slate-800 transition-colors text-left"
+              >
+                <Link2 size={17} className="text-primary-400 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-200">Ссылка-приглашение</p>
+                  <p className="text-xs text-slate-500 truncate">Пригласить незарегистрированного на сервис</p>
+                </div>
+                <ChevronRight size={16} className="text-slate-500 flex-shrink-0" />
+              </button>
+            )}
+          </div>
+        </div>
+        </>
       )}
 
       {/* Activity status sheet */}
