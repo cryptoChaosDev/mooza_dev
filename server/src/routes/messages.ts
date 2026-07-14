@@ -282,6 +282,82 @@ router.post('/conversations/group', authenticate, async (req: AuthRequest, res) 
   }
 });
 
+// ─── Избранное (saved messages) — личный чат с самим собой ───────────────────
+// Разговор с ЕДИНСТВЕННЫМ участником (member.type='saved'). Вложения, ответы,
+// поиск и реакции работают как в обычном чате; уведомления не шлются (нет
+// других участников). Схемы БД не меняет — используется существующее поле type.
+async function getOrCreateSavedConversation(userId: string) {
+  const membership = await db.conversationMember.findFirst({
+    where: { userId, type: 'saved' },
+    select: { conversationId: true },
+  });
+  if (membership) {
+    // Если пользователь когда-то «удалил» чат — восстановить членство.
+    await db.conversationMember.updateMany({
+      where: { conversationId: membership.conversationId, userId, deletedAt: { not: null } },
+      data: { deletedAt: null },
+    });
+    return membership.conversationId;
+  }
+  const conv = await db.conversation.create({
+    data: {
+      isGroup: false,
+      name: 'Избранное',
+      members: { create: [{ userId, isAdmin: true, type: 'saved' }] },
+    },
+  });
+  return conv.id;
+}
+
+// GET /saved → { id } — id чата «Избранное» (создаётся при первом обращении)
+router.get('/saved', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const id = await getOrCreateSavedConversation(req.userId!);
+    res.json({ id });
+  } catch (error) {
+    console.error('Get saved conversation error:', error);
+    res.status(500).json({ error: 'Failed to get saved conversation' });
+  }
+});
+
+// POST /messages/:id/save — переслать сообщение (своё или чужое) себе в «Избранное».
+// Копируется текст и вложение; требование — быть участником исходного диалога.
+router.post('/messages/:id/save', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const src = await db.message.findUnique({
+      where: { id: req.params.id },
+      include: { conversation: { select: { members: { select: { userId: true } } } } },
+    });
+    if (!src || src.deletedAt) return res.status(404).json({ error: 'Message not found' });
+    const isMember = src.conversation?.members.some((m: any) => m.userId === userId);
+    if (!isMember) return res.status(403).json({ error: 'Forbidden' });
+
+    const savedId = await getOrCreateSavedConversation(userId);
+    const message = await db.message.create({
+      data: {
+        conversationId: savedId,
+        senderId: userId,
+        content: src.content,
+        ...(src.attachmentUrl
+          ? {
+              attachmentUrl: src.attachmentUrl,
+              attachmentName: src.attachmentName,
+              attachmentSize: src.attachmentSize,
+              attachmentType: src.attachmentType,
+            }
+          : {}),
+      },
+      include: MSG_INCLUDE,
+    });
+    await db.conversation.update({ where: { id: savedId }, data: { updatedAt: new Date() } });
+    res.status(201).json(message);
+  } catch (error) {
+    console.error('Save message to favorites error:', error);
+    res.status(500).json({ error: 'Failed to save message' });
+  }
+});
+
 // ─── POST /conversations/:id/upload ──────────────────────────────────────────
 router.post('/conversations/:id/upload', authenticate, uploadChatAttachment.single('file'), async (req: AuthRequest, res) => {
   try {

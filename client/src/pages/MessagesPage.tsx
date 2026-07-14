@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MessageCircle, Search, Plus, X, Check, User, Briefcase, Users, Crown, Ban, Pin, Archive, ArchiveX, Trash2, MoreHorizontal, FolderKanban } from 'lucide-react';
+import { MessageCircle, Search, Plus, X, Check, User, Briefcase, Users, Crown, Ban, Pin, Archive, ArchiveX, Trash2, MoreHorizontal, FolderKanban, Bookmark } from 'lucide-react';
 import { messageAPI, friendshipAPI, userAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
@@ -330,6 +330,28 @@ export default function MessagesPage() {
         )}
 
         <div className="pb-24">
+          {/* «Избранное» — чат с самим собой (аналог Saved Messages), только на вкладке «Личные» */}
+          {!loading && activeTab === 'personal' && !showArchived && !searchQuery && (
+            <button
+              onClick={async () => {
+                try {
+                  const { data } = await messageAPI.getSaved();
+                  navigate(`/messages/${data.id}`);
+                } catch (e: any) {
+                  toast.error(getApiError(e, 'Не удалось открыть Избранное'));
+                }
+              }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-slate-800/40 transition-colors text-left border-b border-slate-800/60"
+            >
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-purple-600 flex items-center justify-center flex-shrink-0">
+                <Bookmark size={18} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-white text-sm">Избранное</p>
+                <p className="text-xs text-slate-500">Сохранённые сообщения, заметки и файлы</p>
+              </div>
+            </button>
+          )}
           {loading ? (
             <div className="divide-y divide-slate-800/60">
               {[1, 2, 3, 4, 5].map(i => (
