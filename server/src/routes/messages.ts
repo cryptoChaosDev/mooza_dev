@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import fs from 'fs';
+import path from 'path';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser, notifyUser, isUserOnline } from '../socket';
@@ -355,6 +357,61 @@ router.post('/messages/:id/save', authenticate, async (req: AuthRequest, res) =>
   } catch (error) {
     console.error('Save message to favorites error:', error);
     res.status(500).json({ error: 'Failed to save message' });
+  }
+});
+
+// ─── POST /messages/:id/transcribe — голосовое → текст (Vosk) ─────────────────
+// Расшифровка считается один раз и сохраняется в Message.transcript;
+// повторный запрос отдаёт сохранённый текст. Доступ — участникам диалога.
+router.post('/messages/:id/transcribe', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const userId = req.userId!;
+    const msg = await db.message.findUnique({
+      where: { id: req.params.id },
+      include: { conversation: { select: { members: { select: { userId: true } } } } },
+    });
+    if (!msg || msg.deletedAt) return res.status(404).json({ error: 'Message not found' });
+    if (!msg.conversation?.members.some((m: any) => m.userId === userId)) {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    if (!msg.attachmentUrl || !msg.attachmentType?.startsWith('audio/')) {
+      return res.status(400).json({ error: 'Not an audio message' });
+    }
+    if (msg.transcript != null && msg.transcript !== '') {
+      return res.json({ transcript: msg.transcript });
+    }
+
+    // attachmentUrl = /uploads/chat/<file> → путь на диске api-контейнера
+    const rel = msg.attachmentUrl.replace(/^\//, '');
+    const filePath = path.join(process.cwd(), rel);
+    if (!rel.startsWith('uploads/chat/') || !fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'Audio file not found' });
+    }
+
+    const sttUrl = process.env.STT_URL || 'http://stt:5005';
+    const fd = new FormData();
+    fd.append('file', new Blob([fs.readFileSync(filePath)]), 'audio');
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 120_000);
+    let text = '';
+    try {
+      const resp = await fetch(`${sttUrl}/transcribe`, { method: 'POST', body: fd, signal: ctrl.signal });
+      if (!resp.ok) throw new Error(`stt ${resp.status}`);
+      const data: any = await resp.json();
+      text = String(data?.text ?? '').trim();
+    } finally {
+      clearTimeout(timer);
+    }
+
+    if (!text) {
+      return res.status(422).json({ error: 'Не удалось распознать речь — попробуйте ещё раз' });
+    }
+
+    await db.message.update({ where: { id: msg.id }, data: { transcript: text } });
+    res.json({ transcript: text });
+  } catch (error) {
+    console.error('Transcribe message error:', error);
+    res.status(500).json({ error: 'Не удалось распознать речь' });
   }
 });
 

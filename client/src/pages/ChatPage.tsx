@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, Ban, Search, Bookmark, Mic } from 'lucide-react';
+import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, Ban, Search, Bookmark, Mic, Type } from 'lucide-react';
 import { messageAPI, friendshipAPI, userAPI } from '../lib/api';
 import { plural } from '../lib/plural';
 import { formatLastSeen } from '../lib/lastSeen';
@@ -76,6 +76,7 @@ interface Message {
   attachmentName?: string | null;
   attachmentSize?: number | null;
   attachmentType?: string | null;
+  transcript?: string | null;
   deliveredAt?: string | null;
   readAt?: string | null;
   reactions?: MsgReaction[];
@@ -152,6 +153,10 @@ export default function ChatPage() {
 
   // Полноэкранный просмотр картинки
   const [viewImage, setViewImage] = useState<{ src: string; name: string | null } | null>(null);
+
+  // Голосовое → текст: кто расшифровывается и чьи расшифровки развёрнуты
+  const [transcribingIds, setTranscribingIds] = useState<Set<string>>(new Set());
+  const [openTranscripts, setOpenTranscripts] = useState<Set<string>>(new Set());
 
   // Context menu (long-press)
   const [contextMenu, setContextMenu] = useState<{ msg: Message; x: number; y: number } | null>(null);
@@ -533,6 +538,29 @@ export default function ChatPage() {
     } finally {
       setSending(false);
       setUploading(false);
+    }
+  };
+
+  // Голосовое → текст: первый тап — распознать, дальше — показать/скрыть
+  const handleTranscribe = async (msg: Message) => {
+    if (msg.transcript) {
+      setOpenTranscripts(prev => {
+        const next = new Set(prev);
+        if (next.has(msg.id)) next.delete(msg.id); else next.add(msg.id);
+        return next;
+      });
+      return;
+    }
+    if (transcribingIds.has(msg.id)) return;
+    setTranscribingIds(prev => new Set(prev).add(msg.id));
+    try {
+      const { data } = await messageAPI.transcribeMessage(msg.id);
+      setMessages(prev => prev.map(m => m.id === msg.id ? { ...m, transcript: data.transcript } : m));
+      setOpenTranscripts(prev => new Set(prev).add(msg.id));
+    } catch (e: any) {
+      toast.error(getApiError(e, 'Не удалось распознать речь'));
+    } finally {
+      setTranscribingIds(prev => { const next = new Set(prev); next.delete(msg.id); return next; });
     }
   };
 
@@ -1347,7 +1375,31 @@ export default function ChatPage() {
                                 if (isAudio) {
                                   return (
                                     <div className="mb-1 min-w-[220px] max-w-[280px]">
-                                      <AudioPlayer src={`${API_URL}${msg.attachmentUrl}`} name={msg.attachmentName || 'Аудио'} />
+                                      <div className="flex items-center gap-1.5">
+                                        <div className="flex-1 min-w-0">
+                                          <AudioPlayer src={`${API_URL}${msg.attachmentUrl}`} name={msg.attachmentName || 'Аудио'} />
+                                        </div>
+                                        {/* Голос → текст */}
+                                        <button
+                                          type="button"
+                                          onClick={() => handleTranscribe(msg)}
+                                          title={msg.transcript ? 'Показать/скрыть текст' : 'Перевести в текст'}
+                                          className={`p-2 rounded-full flex-shrink-0 transition-colors ${
+                                            isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-slate-700/60 hover:bg-slate-600/60'
+                                          } ${msg.transcript && openTranscripts.has(msg.id) ? 'text-emerald-300' : ''}`}
+                                        >
+                                          {transcribingIds.has(msg.id)
+                                            ? <Loader2 size={14} className="animate-spin" />
+                                            : <Type size={14} />}
+                                        </button>
+                                      </div>
+                                      {msg.transcript && openTranscripts.has(msg.id) && (
+                                        <p className={`mt-1.5 pt-1.5 text-[13px] leading-snug whitespace-pre-wrap break-words border-t ${
+                                          isMine ? 'border-white/15 text-primary-50/90' : 'border-slate-700/60 text-slate-300'
+                                        }`}>
+                                          {msg.transcript}
+                                        </p>
+                                      )}
                                     </div>
                                   );
                                 }

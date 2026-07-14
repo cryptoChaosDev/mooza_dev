@@ -1214,6 +1214,7 @@ model Message {
   attachmentName String?
   attachmentSize Int?
   attachmentType String?
+  transcript     String?   // расшифровка голосового (по запросу пользователя)
   deletedAt      DateTime?
   deliveredAt    DateTime?
   readAt         DateTime?
