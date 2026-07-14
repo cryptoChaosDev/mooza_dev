@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, Ban, Search, Bookmark } from 'lucide-react';
+import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, Ban, Search, Bookmark, Mic } from 'lucide-react';
 import { messageAPI, friendshipAPI, userAPI } from '../lib/api';
 import { plural } from '../lib/plural';
 import { formatLastSeen } from '../lib/lastSeen';
@@ -14,6 +14,7 @@ function formatResponseTime(min: number): string {
   return `~${d} ${plural(d, 'день', 'дня', 'дней')}`;
 }
 import AvatarComponent from '../components/Avatar';
+import AudioPlayer from '../components/AudioPlayer';
 import { getSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
@@ -108,6 +109,14 @@ export default function ChatPage() {
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+
+  // Голосовые сообщения (MediaRecorder)
+  const [recording, setRecording] = useState(false);
+  const [recordSec, setRecordSec] = useState(0);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const recordChunksRef = useRef<Blob[]>([]);
+  const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recordCancelledRef = useRef(false);
 
   // Emoji picker
   const [showEmoji, setShowEmoji] = useState(false);
@@ -496,6 +505,75 @@ export default function ChatPage() {
       setUploading(false);
     }
   };
+
+  // ── Голосовые сообщения ────────────────────────────────────────────────────
+  const sendVoice = async (file: File) => {
+    if (!conversationId) return;
+    setSending(true);
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const up = await messageAPI.uploadAttachment(conversationId, fd);
+      const res = await messageAPI.sendMessage(conversationId, '', undefined, up.data);
+      setMessages(prev => [...prev, res.data]);
+    } catch (err) {
+      toast.error(getApiError(err, 'Не удалось отправить голосовое'));
+    } finally {
+      setSending(false);
+      setUploading(false);
+    }
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // Safari (iOS) не умеет audio/webm — берём audio/mp4
+      const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
+        : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+      const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+      recordChunksRef.current = [];
+      recordCancelledRef.current = false;
+      rec.ondataavailable = e => { if (e.data.size > 0) recordChunksRef.current.push(e.data); };
+      rec.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+        setRecording(false);
+        if (recordCancelledRef.current) return;
+        const type = rec.mimeType || mime || 'audio/webm';
+        const blob = new Blob(recordChunksRef.current, { type });
+        if (blob.size < 1000) return; // случайный тап — нечего отправлять
+        const ext = type.includes('mp4') ? 'm4a' : 'webm';
+        const file = new File([blob], `Голосовое сообщение.${ext}`, { type });
+        void sendVoice(file);
+      };
+      mediaRecorderRef.current = rec;
+      rec.start();
+      setRecordSec(0);
+      setRecording(true);
+      recordTimerRef.current = setInterval(() => {
+        setRecordSec(s => {
+          // Предохранитель: лимит вложений 10МБ ≈ 5 минут записи
+          if (s + 1 >= 300) { mediaRecorderRef.current?.stop(); return s + 1; }
+          return s + 1;
+        });
+      }, 1000);
+    } catch {
+      toast.error('Нет доступа к микрофону — разрешите его в настройках браузера');
+    }
+  };
+
+  const stopRecording = (cancel: boolean) => {
+    recordCancelledRef.current = cancel;
+    try { mediaRecorderRef.current?.stop(); } catch { setRecording(false); }
+  };
+
+  // Остановить запись при уходе со страницы
+  useEffect(() => () => {
+    recordCancelledRef.current = true;
+    try { mediaRecorderRef.current?.stop(); } catch {}
+    if (recordTimerRef.current) clearInterval(recordTimerRef.current);
+  }, []);
 
   const startEdit = (msg: Message) => {
     setEditingId(msg.id);
@@ -1215,6 +1293,14 @@ export default function ChatPage() {
                             <>
                               {msg.attachmentUrl && (() => {
                                 const isImage = msg.attachmentType?.startsWith('image/');
+                                const isAudio = msg.attachmentType?.startsWith('audio/');
+                                if (isAudio) {
+                                  return (
+                                    <div className="mb-1 min-w-[220px] max-w-[280px]">
+                                      <AudioPlayer src={`${API_URL}${msg.attachmentUrl}`} name={msg.attachmentName || 'Аудио'} />
+                                    </div>
+                                  );
+                                }
                                 return isImage ? (
                                   <a href={`${API_URL}${msg.attachmentUrl}`} target="_blank" rel="noreferrer" className="block mb-1">
                                     <img src={`${API_URL}${msg.attachmentUrl}`} alt={msg.attachmentName || 'image'} className="rounded-lg max-w-full max-h-60 object-cover" />
@@ -1501,7 +1587,32 @@ export default function ChatPage() {
           </div>
         )}
 
-        {/* Message form */}
+        {/* Recording bar — вместо формы во время записи голосового */}
+        {recording ? (
+          <div className="flex items-center gap-3 px-3 py-3">
+            <span className="flex items-center gap-2 flex-1 min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-pulse flex-shrink-0" />
+              <span className="text-sm text-white font-medium tabular-nums">
+                {Math.floor(recordSec / 60)}:{String(recordSec % 60).padStart(2, '0')}
+              </span>
+              <span className="text-xs text-slate-500 truncate">Запись голосового…</span>
+            </span>
+            <button
+              type="button"
+              onClick={() => stopRecording(true)}
+              className="px-3 py-2 text-sm text-slate-400 hover:text-white border border-slate-700 rounded-xl transition-colors flex-shrink-0"
+            >
+              Отмена
+            </button>
+            <button
+              type="button"
+              onClick={() => stopRecording(false)}
+              className="p-2.5 bg-primary-500 hover:bg-primary-600 text-white rounded-full transition-all flex-shrink-0"
+            >
+              <Send size={18} />
+            </button>
+          </div>
+        ) : (
         <form onSubmit={handleSubmit} className="flex items-end gap-2 px-2 py-2">
           {/* Attach — standalone left */}
           {!editingId && (
@@ -1535,15 +1646,27 @@ export default function ChatPage() {
             </button>
           </div>
 
-          {/* Send */}
-          <button
-            type="submit"
-            disabled={(!newMessage.trim() && !pendingFile) || sending || uploading}
-            className="p-2.5 bg-primary-500 hover:bg-primary-600 disabled:bg-slate-700 text-white rounded-full transition-all disabled:cursor-not-allowed flex-shrink-0"
-          >
-            {uploading ? <Loader2 size={18} className="animate-spin" /> : editingId ? <Check size={18} /> : <Send size={18} />}
-          </button>
+          {/* Mic (пусто в поле) / Send */}
+          {!newMessage.trim() && !pendingFile && !editingId && !uploading ? (
+            <button
+              type="button"
+              onClick={startRecording}
+              title="Записать голосовое"
+              className="p-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white rounded-full transition-all flex-shrink-0"
+            >
+              <Mic size={18} />
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={(!newMessage.trim() && !pendingFile) || sending || uploading}
+              className="p-2.5 bg-primary-500 hover:bg-primary-600 disabled:bg-slate-700 text-white rounded-full transition-all disabled:cursor-not-allowed flex-shrink-0"
+            >
+              {uploading ? <Loader2 size={18} className="animate-spin" /> : editingId ? <Check size={18} /> : <Send size={18} />}
+            </button>
+          )}
         </form>
+        )}
       </div>
 
       <ConfirmDialog
