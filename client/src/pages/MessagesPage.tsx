@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MessageCircle, Search, Plus, X, Check, User, Briefcase, Users, Crown, Ban, Pin, Archive, ArchiveX, Trash2, MoreHorizontal, FolderKanban } from 'lucide-react';
-import { messageAPI, friendshipAPI } from '../lib/api';
+import { messageAPI, friendshipAPI, userAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { getSocket } from '../lib/socket';
 import { yoIncludes } from '../lib/search';
@@ -40,7 +40,13 @@ export default function MessagesPage() {
   const [showNewGroup, setShowNewGroup] = useState(false);
   const [groupName, setGroupName] = useState('');
   const [friends, setFriends] = useState<Friend[]>([]);
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  // Участники проекта — полные объекты (нужны имена для чипсов); добавлять можно
+  // ЛЮБОГО пользователя через поиск, не только друзей.
+  const [selectedUsers, setSelectedUsers] = useState<Friend[]>([]);
+  const [memberSearch, setMemberSearch] = useState('');
+  const [debouncedMemberSearch, setDebouncedMemberSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<Friend[]>([]);
+  const [searchingMembers, setSearchingMembers] = useState(false);
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [convMenu, setConvMenu] = useState<{ conv: ConvItem; x: number; y: number } | null>(null);
@@ -82,7 +88,9 @@ export default function MessagesPage() {
   const openNewGroup = async () => {
     setShowNewGroup(true);
     setGroupName('');
-    setSelectedIds([]);
+    setSelectedUsers([]);
+    setMemberSearch('');
+    setSearchResults([]);
     try {
       const res = await friendshipAPI.getFriends();
       const list: Friend[] = (res.data as any[]).map((f: any) => ({
@@ -97,15 +105,47 @@ export default function MessagesPage() {
     }
   };
 
-  const toggleFriend = (id: string) => {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  // Поиск участников по всем пользователям (не только друзьям) — дебаунс 300мс.
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedMemberSearch(memberSearch), 300);
+    return () => clearTimeout(t);
+  }, [memberSearch]);
+
+  useEffect(() => {
+    if (!showNewGroup || debouncedMemberSearch.trim().length < 2) { setSearchResults([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        setSearchingMembers(true);
+        const { data } = await userAPI.catalog({ query: debouncedMemberSearch.trim() });
+        if (!cancelled) {
+          setSearchResults((data as any[]).slice(0, 20).map((u: any) => ({
+            id: u.id, firstName: u.firstName, lastName: u.lastName, avatar: u.avatar ?? null,
+          })));
+        }
+      } catch {
+        if (!cancelled) setSearchResults([]);
+      } finally {
+        if (!cancelled) setSearchingMembers(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [debouncedMemberSearch, showNewGroup]);
+
+  const toggleMember = (user: Friend) => {
+    setSelectedUsers(prev => prev.some(u => u.id === user.id)
+      ? prev.filter(u => u.id !== user.id)
+      : [...prev, user]);
   };
 
   const handleCreateGroup = async () => {
-    if (!groupName.trim() || selectedIds.length === 0 || creatingGroup) return;
+    if (creatingGroup) return;
+    // Кнопка всегда живая: вместо молчаливого disabled объясняем, чего не хватает.
+    if (!groupName.trim()) { toast.error('Введите название проекта'); return; }
+    if (selectedUsers.length === 0) { toast.error('Добавьте хотя бы одного участника — найдите людей через поиск'); return; }
     setCreatingGroup(true);
     try {
-      const res = await messageAPI.createGroup(groupName.trim(), selectedIds);
+      const res = await messageAPI.createGroup(groupName.trim(), selectedUsers.map(u => u.id));
       setShowNewGroup(false);
       navigate(`/messages/${res.data.id}`);
     } catch (err) {
@@ -437,7 +477,7 @@ export default function MessagesPage() {
               </button>
             </div>
 
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-3">
               <input
                 type="text"
                 value={groupName}
@@ -446,32 +486,86 @@ export default function MessagesPage() {
                 className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
               />
 
+              {/* Поиск участников — любой пользователь Moooza, не только друзья */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                <input
+                  type="text"
+                  value={memberSearch}
+                  onChange={e => setMemberSearch(e.target.value)}
+                  placeholder="Найти людей по имени..."
+                  className="w-full pl-8 pr-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
+                />
+              </div>
+
+              {/* Выбранные участники — чипсы с удалением */}
+              {selectedUsers.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {selectedUsers.map(u => (
+                    <button
+                      key={u.id}
+                      onClick={() => toggleMember(u)}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary-600 text-white"
+                    >
+                      {u.firstName} {u.lastName}
+                      <X size={12} />
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="space-y-1 max-h-52 overflow-y-auto">
-                {friends.length === 0 ? (
-                  <p className="text-slate-500 text-sm text-center py-4">Нет друзей для добавления</p>
+                {memberSearch.trim().length >= 2 ? (
+                  searchingMembers && searchResults.length === 0 ? (
+                    <p className="text-slate-500 text-sm text-center py-4">Ищем…</p>
+                  ) : searchResults.length === 0 ? (
+                    <p className="text-slate-500 text-sm text-center py-4">Никого не нашли</p>
+                  ) : searchResults.map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => toggleMember(f)}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
+                        selectedUsers.some(u => u.id === f.id)
+                          ? 'bg-primary-600/20 border border-primary-500/40'
+                          : 'hover:bg-slate-800 border border-transparent'
+                      }`}
+                    >
+                      <AvatarComponent src={f.avatar} name={`${f.firstName} ${f.lastName}`} size={32} />
+                      <span className="text-white text-sm flex-1 min-w-0 truncate">{f.firstName} {f.lastName}</span>
+                      {selectedUsers.some(u => u.id === f.id) && <Check size={16} className="text-primary-400 flex-shrink-0" />}
+                    </button>
+                  ))
+                ) : friends.length === 0 ? (
+                  <p className="text-slate-500 text-sm text-center py-4">
+                    Друзей пока нет — найдите участников через поиск выше
+                  </p>
                 ) : friends.map(f => (
                   <button
                     key={f.id}
-                    onClick={() => toggleFriend(f.id)}
+                    onClick={() => toggleMember(f)}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left ${
-                      selectedIds.includes(f.id)
+                      selectedUsers.some(u => u.id === f.id)
                         ? 'bg-primary-600/20 border border-primary-500/40'
                         : 'hover:bg-slate-800 border border-transparent'
                     }`}
                   >
                     <AvatarComponent src={f.avatar} name={`${f.firstName} ${f.lastName}`} size={32} />
                     <span className="text-white text-sm flex-1 min-w-0 truncate">{f.firstName} {f.lastName}</span>
-                    {selectedIds.includes(f.id) && <Check size={16} className="text-primary-400 flex-shrink-0" />}
+                    {selectedUsers.some(u => u.id === f.id) && <Check size={16} className="text-primary-400 flex-shrink-0" />}
                   </button>
                 ))}
               </div>
 
               <button
                 onClick={handleCreateGroup}
-                disabled={!groupName.trim() || selectedIds.length === 0 || creatingGroup}
-                className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-xl text-sm font-medium transition-colors"
+                disabled={creatingGroup}
+                className={`w-full py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                  groupName.trim() && selectedUsers.length > 0
+                    ? 'bg-primary-600 hover:bg-primary-500 text-white'
+                    : 'bg-slate-700 text-slate-300'
+                }`}
               >
-                {creatingGroup ? 'Создание...' : `Создать проект${selectedIds.length > 0 ? ` (${selectedIds.length})` : ''}`}
+                {creatingGroup ? 'Создание...' : `Создать проект${selectedUsers.length > 0 ? ` (${selectedUsers.length})` : ''}`}
               </button>
             </div>
           </div>
