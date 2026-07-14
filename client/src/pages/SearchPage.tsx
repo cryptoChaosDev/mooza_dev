@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Search, ChevronLeft, ChevronRight, ChevronDown, ChevronUp,
+  Search, ChevronRight, ChevronDown, ChevronUp,
   Crown, BadgeCheck, Ban, Users, Music2, Loader2, X,
-  BookOpen, Link2, ShieldCheck, Star, SlidersHorizontal,
+  Link2, ShieldCheck, Star, SlidersHorizontal,
   ArrowDownUp,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
@@ -15,26 +15,29 @@ import AvatarComponent from '../components/Avatar';
 import { plural } from '../lib/plural';
 import { useScrollLock } from '../lib/scrollLock';
 
-// ─── Tile gradients ──────────────────────────────────────────────────────────
-const TILE_GRADIENTS = [
-  'from-violet-600 to-purple-700',
-  'from-primary-600 to-cyan-700',
-  'from-rose-600 to-pink-700',
-  'from-amber-500 to-orange-600',
-  'from-emerald-600 to-teal-700',
-  'from-sky-600 to-blue-700',
-  'from-fuchsia-600 to-pink-700',
-  'from-lime-600 to-green-700',
-];
-
 type CatalogTab = 'services' | 'artists' | 'people';
 
 const ARTIST_TYPES = [
-  { value: 'ALL', label: 'Все', icon: Music2 },
-  { value: 'SOLO', label: 'Соло', icon: Music2 },
-  { value: 'GROUP', label: 'Группы', icon: Users },
-  { value: 'COVER_GROUP', label: 'Кавербэнды', icon: BookOpen },
+  { value: 'ALL', label: 'Все' },
+  { value: 'SOLO', label: 'Соло' },
+  { value: 'GROUP', label: 'Группы' },
+  { value: 'COVER_GROUP', label: 'Кавербэнды' },
 ];
+
+// ─── Chip ────────────────────────────────────────────────────────────────────
+// Спокойный чип-фильтр — тот же стиль, что у чипсов типов постов в Потоке.
+function Chip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+        active ? 'bg-primary-600 border-primary-500 text-white shadow-sm' : 'bg-slate-800/60 border-slate-700/50 text-slate-400 hover:text-white'
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
 
 // ─── ExpandableUserRow ───────────────────────────────────────────────────────
 // `user` is a flat user object (People tab / userAPI.catalog).
@@ -274,15 +277,6 @@ export default function SearchPage() {
     setArtistTypeFilter(prev => (prev === value ? '' : value));
   }
 
-  function toggleGenre(id: string) {
-    setArtistGenreFilter(prev =>
-      prev.includes(id) ? prev.filter(v => v !== id) : [...prev, id]
-    );
-  }
-  const [showAllGenres, setShowAllGenres] = useState(false);
-
-  const POPULAR_GENRE_NAMES = ['рок', 'рэп', 'поп', 'панк', 'инди'];
-
   // Debounce
   useEffect(() => {
     const t = setTimeout(() => setDebouncedServiceQuery(serviceQuery), 300);
@@ -493,9 +487,6 @@ export default function SearchPage() {
     }
   };
 
-  // Show the "back" control only when drilled into a section.
-  const canGoBack = !!selectedSection;
-
   // Services of the currently opened section (sections mode).
   const sectionServices: any[] = selectedSection
     ? ((sections ?? []).find((s: any) => s.id === selectedSection.id)?.services ?? [])
@@ -508,17 +499,10 @@ export default function SearchPage() {
       <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
         <div className="max-w-4xl mx-auto px-4 pt-4 pb-3 space-y-3">
 
-          {/* Title + back into section */}
+          {/* Title */}
           <div className="flex items-center gap-2">
-            {canGoBack && activeTab === 'services' && (
-              <button onClick={goBack} className="p-1.5 -ml-1.5 text-slate-400 hover:text-white transition-colors">
-                <ChevronLeft size={20} />
-              </button>
-            )}
             <Search size={20} className="text-primary-400 flex-shrink-0" />
-            <h2 className="text-lg font-bold text-white">
-              {canGoBack && activeTab === 'services' ? selectedSection!.name : 'Каталог'}
-            </h2>
+            <h2 className="text-lg font-bold text-white">Каталог</h2>
             {activeTab !== 'services' && (
               <button
                 onClick={() => setShowFavorites((s) => !s)}
@@ -774,58 +758,47 @@ export default function SearchPage() {
         {/* ══ УСЛУГИ TAB ══ */}
         {activeTab === 'services' && (
           <>
-            {/* ── Browse: Sections → Services ── */}
-            <div className="mt-4 mb-6">
-              {/* Section grid (no section opened yet) */}
-              {!selectedSection && (
-                  sectionsLoading ? (
-                    <div className="flex flex-wrap gap-2">
-                      {Array.from({ length: 7 }).map((_, i) => (
-                        <div key={i} className="h-10 w-28 bg-slate-800/50 rounded-xl animate-pulse" />
-                      ))}
-                    </div>
-                  ) : (sections ?? []).length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {(sections ?? []).map((section: any, i: number) => (
-                        <button
-                          key={section.id}
-                          onClick={() => handleSectionClick(section)}
-                          className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 shadow-md transition-all hover:scale-[1.03] active:scale-[0.97] bg-gradient-to-br ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]}`}
-                        >
-                          <span className="text-white font-semibold text-xs whitespace-nowrap">{section.name}</span>
-                          <ChevronRight size={13} className="text-white/70 flex-shrink-0" />
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-slate-500 text-sm">Разделы не найдены</p>
-                  )
-                )}
-
-                {/* Services of the opened section — tiles (fixed height, width by text) */}
-                {selectedSection && (
-                  sectionServices.length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {sectionServices.map((svc: any, i: number) => {
-                        const isActive = selectedService?.id === svc.id;
-                        return (
-                          <button
+            {/* ── Browse: разделы → услуги раздела (спокойные чипсы, оба уровня видны) ── */}
+            <div className="mt-4 mb-6 space-y-2.5">
+              {sectionsLoading ? (
+                <div className="flex flex-wrap gap-2">
+                  {Array.from({ length: 7 }).map((_, i) => (
+                    <div key={i} className="h-8 w-28 bg-slate-800/50 rounded-full animate-pulse" />
+                  ))}
+                </div>
+              ) : (sections ?? []).length > 0 ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    <Chip label="Все" active={!selectedSection} onClick={goBack} />
+                    {(sections ?? []).map((section: any) => (
+                      <Chip
+                        key={section.id}
+                        label={section.name}
+                        active={selectedSection?.id === section.id}
+                        onClick={() => (selectedSection?.id === section.id ? goBack() : handleSectionClick(section))}
+                      />
+                    ))}
+                  </div>
+                  {selectedSection && (
+                    sectionServices.length > 0 ? (
+                      <div className="flex flex-wrap gap-2 pt-2.5 border-t border-slate-800/60">
+                        {sectionServices.map((svc: any) => (
+                          <Chip
                             key={svc.id}
+                            label={svc.name}
+                            active={selectedService?.id === svc.id}
                             onClick={() => handleServiceClick(svc)}
-                            className={`inline-flex items-center gap-1.5 rounded-xl px-4 py-2.5 shadow-md transition-all hover:scale-[1.03] active:scale-[0.97] bg-gradient-to-br ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]} ${isActive ? 'ring-2 ring-white/80' : ''}`}
-                          >
-                            <span className="text-white font-semibold text-xs whitespace-nowrap">{svc.name}</span>
-                            {isActive
-                              ? <X size={13} className="text-white flex-shrink-0" />
-                              : <ChevronRight size={13} className="text-white/70 flex-shrink-0" />}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="text-slate-500 text-sm">В этом разделе нет услуг</p>
-                  )
-                )}
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-slate-500 text-sm">В этом разделе нет услуг</p>
+                    )
+                  )}
+                </>
+              ) : (
+                <p className="text-slate-500 text-sm">Разделы не найдены</p>
+              )}
             </div>
 
             {/* ── Results: service cards ── */}
@@ -921,80 +894,28 @@ export default function SearchPage() {
 
         {activeTab === 'artists' && (
           <>
-            {/* Artist type filter */}
-            <div className="mt-4 mb-4">
-              <div className="flex gap-2 overflow-x-auto pb-1" style={{ scrollbarWidth: 'none' }}>
-                {ARTIST_TYPES.map(type => {
-                  const Icon = type.icon;
-                  const isActive = type.value === 'ALL'
-                    ? artistTypeFilter === ''
-                    : artistTypeFilter === type.value;
-                  return (
-                    <button
-                      key={type.value}
-                      onClick={() => selectType(type.value)}
-                      className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all flex-shrink-0 ${
-                        isActive
-                          ? 'bg-primary-600 text-white shadow-sm'
-                          : 'bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'
-                      }`}
-                    >
-                      <Icon size={14} />
-                      {type.label}
-                    </button>
-                  );
-                })}
-              </div>
+            {/* Тип артиста — спокойные чипсы; жанры — в модалке «Фильтры» */}
+            <div className="mt-4 mb-4 flex flex-wrap gap-2">
+              {ARTIST_TYPES.map(type => (
+                <Chip
+                  key={type.value}
+                  label={type.label}
+                  active={type.value === 'ALL' ? artistTypeFilter === '' : artistTypeFilter === type.value}
+                  onClick={() => selectType(type.value)}
+                />
+              ))}
+              {/* Выбранные жанры — краткое напоминание с быстрым сбросом */}
+              {artistGenreFilter.length > 0 && (
+                <button
+                  onClick={() => setArtistGenreFilter([])}
+                  className="flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border bg-primary-500/10 border-primary-500/40 text-primary-300 hover:text-white transition-all"
+                  title="Сбросить жанры"
+                >
+                  Жанры: {artistGenreFilter.length}
+                  <X size={12} />
+                </button>
+              )}
             </div>
-
-            {/* Genre tiles */}
-            {genresList && genresList.length > 0 && (() => {
-              const popular = genresList.filter((g: any) =>
-                POPULAR_GENRE_NAMES.some(name => g.name.toLowerCase().includes(name))
-              );
-              const rest = genresList.filter((g: any) =>
-                !POPULAR_GENRE_NAMES.some(name => g.name.toLowerCase().includes(name))
-              );
-              const visibleGenres = showAllGenres ? genresList : popular;
-              return (
-                <div className="mb-5">
-                  <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Жанры</p>
-                  <div className="flex flex-wrap gap-2" style={{ maxHeight: showAllGenres ? undefined : '4.5rem', overflow: showAllGenres ? undefined : 'hidden', maskImage: showAllGenres ? undefined : 'linear-gradient(to bottom, #000 68%, transparent)', WebkitMaskImage: showAllGenres ? undefined : 'linear-gradient(to bottom, #000 68%, transparent)' }}>
-                    <button
-                      onClick={() => setArtistGenreFilter([])}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${
-                        artistGenreFilter.length === 0
-                          ? 'bg-primary-600 text-white'
-                          : 'bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'
-                      }`}
-                    >
-                      Все жанры
-                    </button>
-                    {visibleGenres.map((genre: any, i: number) => (
-                      <button
-                        key={genre.id}
-                        onClick={() => toggleGenre(genre.id)}
-                        className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all flex-shrink-0 ${
-                          artistGenreFilter.includes(genre.id)
-                            ? `bg-gradient-to-r ${TILE_GRADIENTS[i % TILE_GRADIENTS.length]} text-white`
-                            : 'bg-slate-800 border border-slate-700/50 text-slate-400 hover:text-white hover:border-slate-600'
-                        }`}
-                      >
-                        {genre.name}
-                      </button>
-                    ))}
-                  </div>
-                  {rest.length > 0 && (
-                    <button
-                      onClick={() => setShowAllGenres(v => !v)}
-                      className="mt-2 text-xs text-primary-400 hover:text-primary-300 transition-colors"
-                    >
-                      {showAllGenres ? 'Скрыть' : `Ещё ${rest.length} жанров →`}
-                    </button>
-                  )}
-                </div>
-              );
-            })()}
 
             {/* Artist list */}
             <div>
@@ -1262,7 +1183,7 @@ export default function SearchPage() {
             <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-slate-800 flex-shrink-0">
               <div className="flex items-center gap-2">
                 <SlidersHorizontal size={16} className="text-primary-400" />
-                <h3 className="text-base font-semibold text-white">Жанры</h3>
+                <h3 className="text-base font-semibold text-white">Фильтры</h3>
                 {tempArtistGenres.length > 0 && (
                   <span className="bg-primary-600 text-white rounded-full px-1.5 py-0.5 text-[10px] font-semibold leading-none">{tempArtistGenres.length}</span>
                 )}
@@ -1271,6 +1192,7 @@ export default function SearchPage() {
             </div>
 
             <div className="px-5 py-4 overflow-y-auto">
+              <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wide mb-2">Жанры</p>
               {(genresList ?? []).length > 0 ? (
                 <div className="flex flex-wrap gap-1.5">
                   {(genresList ?? []).map((genre: any) => {
