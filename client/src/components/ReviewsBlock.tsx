@@ -94,6 +94,7 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
       <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
         <Star size={14} className="text-amber-400 fill-amber-400" />
         <span className="text-sm font-semibold text-white">Отзывы</span>
+        {reviews.length > 0 && <span className="text-xs text-slate-500">{reviews.length}</span>}
         {reviews.length > 0 && <span className="text-xs text-amber-400 font-medium">{avgRating.toFixed(1)}</span>}
         {reviews.length > 0 && (
           <button
@@ -108,30 +109,28 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
         {reviews.length === 0 ? (
           <p className="text-sm text-slate-600 italic text-center py-2">Отзывов пока нет</p>
         ) : (
-        <div className="flex gap-3 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
-          {reviews.map(r => (
+        <div className="divide-y divide-slate-800/60">
+          {/* Компактные строки — как Профессии/Услуги/Заказы; детали в нижнем листе */}
+          {reviews.slice(0, 4).map(r => (
             <button
               key={r.id}
               onClick={() => { setSelected(r); setReplyText(r.reply || ''); }}
-              className="flex flex-col gap-1.5 flex-shrink-0 text-left bg-slate-800/50 border border-slate-700/40 rounded-2xl p-3 hover:border-primary-500/40 transition-colors"
-              style={{ width: 'calc((100% - 24px) / 3.5)' }}
+              className="w-full flex items-center gap-3 py-2.5 text-left hover:bg-slate-800/20 -mx-1 px-1 rounded-lg transition-colors"
             >
-              <Stars rating={r.rating} />
-              {r.service && (
-                <span className="text-[9px] bg-primary-500/15 text-primary-400 px-1.5 py-0.5 rounded-md font-medium leading-tight truncate w-full block">
-                  {r.service.name}
-                </span>
-              )}
-              {r.text && (
-                <p className="text-[10px] text-slate-400 leading-snug line-clamp-3 flex-1">{r.text}</p>
-              )}
-              <div className="flex items-center gap-1 mt-auto pt-1">
-                {r.author.avatar
-                  ? <img src={getAvatarUrl(r.author.avatar) ?? ''} alt="" className="w-4 h-4 rounded-full object-cover flex-shrink-0" />
-                  : <div className="w-4 h-4 rounded-full bg-primary-800 flex items-center justify-center text-[7px] font-bold text-white flex-shrink-0">{r.author.firstName[0]}</div>
-                }
-                <span className="text-[9px] text-slate-500 truncate">{r.author.firstName}</span>
+              <div className="w-1 self-stretch rounded-full bg-amber-400/60 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-white truncate">{r.author.firstName} {r.author.lastName}</p>
+                <p className="text-xs text-slate-500 truncate">
+                  {r.text || [
+                    r.service?.name || TYPE_LABELS[r.type] || null,
+                    new Date(r.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: 'numeric' }),
+                  ].filter(Boolean).join(' · ')}
+                </p>
               </div>
+              <span className="flex items-center gap-1 text-xs font-medium text-amber-400 flex-shrink-0">
+                <Star size={11} className="fill-amber-400 text-amber-400" />{r.rating}
+              </span>
+              <span className="text-slate-600 flex-shrink-0">›</span>
             </button>
           ))}
         </div>

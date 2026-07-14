@@ -8,13 +8,12 @@ import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 
+// Оценка по шкале 1–10 — показываем числом, а не пятью звёздами
 function Stars({ rating }: { rating: number }) {
   return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map(i => (
-        <Star key={i} size={13} className={i <= rating ? 'text-amber-400 fill-amber-400' : 'text-slate-600'} />
-      ))}
-    </div>
+    <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-400">
+      <Star size={12} className="text-amber-400 fill-amber-400" />{rating}/10
+    </span>
   );
 }
 
