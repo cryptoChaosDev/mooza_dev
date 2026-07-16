@@ -153,10 +153,12 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
           if (!albumId) return null;
           return (
             <div className="w-full max-w-md mx-auto mb-4 rounded-2xl overflow-hidden border border-slate-800">
+              {/* theme=rzt — недокументированная тёмная тема виджета (единственная
+                  кроме дефолтной light); без неё трек-лист — белая простыня. */}
               <iframe
-                src={`https://music.yandex.ru/iframe/album/${albumId}`}
+                src={`https://music.yandex.ru/iframe/album/${albumId}?theme=rzt`}
                 className="w-full block"
-                style={{ height: 450 }}
+                style={{ height: 400 }}
                 frameBorder="0"
                 allow="clipboard-write"
                 title="Плеер Яндекс.Музыки"
