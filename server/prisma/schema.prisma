@@ -386,6 +386,9 @@ model Artist {
   avatar      String?
   banner      String?
   listeners   BigInt       @default(0)
+  // Из ночного синка Яндекс.Музыки:
+  listenersDelta Int?  // изменение слушателей за месяц (может быть отрицательным)
+  ymData         Json? // снапшот витрины: links, similarArtists, popularTracks, photos, concerts, bestPlaylist, counts, likesCount
 
   activityStatus       ArtistActivityStatus @default(ACTIVE)
 
@@ -406,6 +409,7 @@ model Artist {
   clips       Clip[]
   invites     ArtistInvite[]
   vacancies   Vacancy[]
+  listenersSnapshots ArtistListenersSnapshot[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -420,6 +424,19 @@ model ArtistGenre {
   artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
   genre    Genre  @relation(fields: [genreId], references: [id], onDelete: Cascade)
   @@id([artistId, genreId])
+}
+
+// История «слушателей за месяц» с Яндекс.Музыки — по точке за ночной синк
+// (для графика динамики в карточке артиста).
+model ArtistListenersSnapshot {
+  id        String   @id @default(uuid())
+  artistId  String
+  listeners BigInt
+  createdAt DateTime @default(now())
+
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId, createdAt])
 }
 
 model ArtistFollower {
@@ -918,6 +935,13 @@ model Release {
   releaseDate DateTime?
   platform    StreamingPlatform
   url         String
+  // Метаданные с Яндекс.Музыки (заполняет синк/импорт):
+  releaseType String? // single | album | ep | compilation
+  label       String?
+  genre       String? // слаг жанра ЯМ (rusrock, rusrap…)
+  trackCount  Int?
+  likesCount  Int?
+  tracklist   Json?   // [{ id, title, durationMs, artists: string[] }]
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ExternalLink, Edit3, Trash2, Loader2, Calendar, Check, X } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Edit3, Trash2, Loader2, Calendar, Check, X, Heart, ListMusic } from 'lucide-react';
 import { releaseAPI, clipAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import AvatarComponent from '../components/Avatar';
@@ -10,11 +10,19 @@ import MediaItemForm, { MediaItemInitial } from '../components/MediaItemForm';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { MEDIA_PLATFORM_LABELS } from '../lib/mediaPlatforms';
+import { ymGenreLabel, RELEASE_TYPE_LABELS } from '../lib/ymGenres';
 
 interface ItemDetail extends MediaItemInitial {
   artistId: string;
   createdAt?: string;
   viewerIsAdmin?: boolean;
+  // Метаданные с Яндекс.Музыки (есть только у импортированных релизов):
+  releaseType?: string | null;
+  label?: string | null;
+  genre?: string | null;
+  trackCount?: number | null;
+  likesCount?: number | null;
+  tracklist?: { id: string; title: string; durationMs: number | null; artists: string[] }[] | null;
   participants?: {
     id: string;
     userId: string;
@@ -144,7 +152,33 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
         )}
 
         {/* Platform */}
-        <p className="text-center text-xs text-slate-500 mb-4">{platformLabel}</p>
+        <p className="text-center text-xs text-slate-500 mb-2">{platformLabel}</p>
+
+        {/* Бейджи метаданных ЯМ: тип, жанр, лейбл, лайки */}
+        {(item.releaseType || item.genre || item.label || (item.likesCount ?? 0) > 0) && (
+          <div className="flex items-center justify-center gap-1.5 flex-wrap mb-4">
+            {item.releaseType && (
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-primary-500/15 text-primary-300 border border-primary-500/25">
+                {RELEASE_TYPE_LABELS[item.releaseType] ?? item.releaseType}
+              </span>
+            )}
+            {item.genre && (
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                {ymGenreLabel(item.genre)}
+              </span>
+            )}
+            {item.label && (
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                {item.label}
+              </span>
+            )}
+            {(item.likesCount ?? 0) > 0 && (
+              <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-rose-500/10 text-rose-300 border border-rose-500/20">
+                <Heart size={10} className="fill-current" /> {item.likesCount}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Встроенный плеер Яндекс.Музыки — официальный embed-виджет, треки
             играют с серверов Яндекса, у нас ничего не хранится. */}
@@ -182,6 +216,38 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
             <ExternalLink size={15} />
             Открыть на {platformLabel}
           </a>
+        )}
+
+        {/* Треклист (метаданные ЯМ; сами треки играют на платформе) */}
+        {isRelease && (item.tracklist?.length ?? 0) > 0 && (
+          <div className="w-full max-w-md mx-auto mb-6 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+              <ListMusic size={14} className="text-primary-400" />
+              <span className="text-sm font-semibold text-white">Треки</span>
+              <span className="text-xs text-slate-500">{item.tracklist!.length}</span>
+            </div>
+            <div className="px-2 py-1.5">
+              {item.tracklist!.map((t, i) => (
+                <div key={t.id || i} className="flex items-center gap-3 px-2 py-1.5">
+                  <span className="w-5 text-right text-xs text-slate-500 flex-shrink-0">{i + 1}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-slate-200 truncate">{t.title}</p>
+                    {t.artists.length > 1 && (
+                      <p className="text-[11px] text-slate-500 truncate">{t.artists.join(', ')}</p>
+                    )}
+                  </div>
+                  <span className="text-xs text-slate-500 flex-shrink-0">
+                    {t.durationMs
+                      ? (() => {
+                          const s = Math.round(t.durationMs / 1000);
+                          return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+                        })()
+                      : ''}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Pending participant actions (for me) */}

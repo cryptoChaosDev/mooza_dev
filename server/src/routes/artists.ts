@@ -8,6 +8,7 @@ import { tgEvent } from '../utils/telegram';
 import { classifyUrl, BLOCK_MESSAGE } from '../utils/socialPlatforms';
 import { yoNorm } from '../utils/search';
 import { notify, notifyMany } from '../utils/notify';
+import { extractYmArtistId } from '../utils/yandexMusicSync';
 
 const router = Router();
 
@@ -341,8 +342,44 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
         }
       : null;
 
+    // История слушателей ЯМ (для графика динамики) — последние 90 точек.
+    const snapshots = await prisma.artistListenersSnapshot.findMany({
+      where: { artistId: id },
+      orderBy: { createdAt: 'desc' },
+      take: 90,
+      select: { listeners: true, createdAt: true },
+    });
+    const listenersHistory = snapshots
+      .reverse()
+      .map((s) => ({ listeners: Number(s.listeners), date: s.createdAt }));
+
+    // Похожие артисты с ЯМ: если такой артист есть на Moooza (по ymId в его
+    // ссылке yandex_music) — отдаём moozaArtistId, клиент ведёт на нашу карточку.
+    let ymData = rest.ymData as any;
+    const similar: any[] = ymData?.similarArtists ?? [];
+    if (similar.length > 0) {
+      const ours = await prisma.artist.findMany({
+        where: { status: { in: ['VERIFIED', 'APPROVED'] }, NOT: { id } },
+        select: { id: true, socialLinks: true },
+      });
+      const ymToMooza = new Map<string, string>();
+      for (const a of ours) {
+        const oid = extractYmArtistId(((a.socialLinks as any) ?? {}).yandex_music);
+        if (oid) ymToMooza.set(oid, a.id);
+      }
+      ymData = {
+        ...ymData,
+        similarArtists: similar.map((s: any) => ({
+          ...s,
+          moozaArtistId: ymToMooza.get(String(s.ymId)) ?? null,
+        })),
+      };
+    }
+
     return res.json(serializeArtist({
       ...rest,
+      ymData,
+      listenersHistory,
       genres: genres.map((ag) => ag.genre),
       followersCount: _count.followers,
       isFollowed: currentUserId ? followers.some((f) => f.userId === currentUserId) : false,
