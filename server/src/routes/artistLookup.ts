@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { yoNorm } from '../utils/search';
-import { ymGet, ymCoverUrl } from '../utils/yandexMusicSync';
+import { ymGet, ymCoverUrl, fetchAllYmAlbums } from '../utils/yandexMusicSync';
 
 // External-API helper that pre-fills the artist-create form: searches Deezer,
 // Apple Music (iTunes) and MusicBrainz, merges matches by normalized name, and
@@ -172,9 +172,12 @@ router.get('/releases', authenticate, async (req: AuthRequest, res: Response) =>
     if (ymId) {
       const brief = (await ymGet(`/artists/${ymId}/brief-info`))?.result;
       if (brief?.artist) {
+        // Полная дискография (brief-info — лишь витрина ~9 альбомов)
+        let allAlbums: any[] = await fetchAllYmAlbums(ymId);
+        if (allAlbums.length === 0) allAlbums = [...(brief.albums ?? []), ...(brief.lastReleases ?? [])];
         const relSeen = new Set<string>();
         const releases: any[] = [];
-        for (const al of [...(brief.albums ?? []), ...(brief.lastReleases ?? [])]) {
+        for (const al of allAlbums) {
           const albumId = String(al?.id ?? '');
           const title = String(al?.title ?? '').trim();
           if (!albumId || !title || relSeen.has(albumId)) continue;

@@ -66,6 +66,22 @@ async function fetchBrief(ymId: string): Promise<any | null> {
   return data?.result ?? null;
 }
 
+/**
+ * ПОЛНАЯ дискография артиста. brief-info отдаёт только витрину (~9 альбомов),
+ * весь список — в постраничном /direct-albums (у IDEЯ FIX: 9 против 36).
+ */
+export async function fetchAllYmAlbums(ymId: string, maxPages = 5): Promise<any[]> {
+  const out: any[] = [];
+  for (let page = 0; page < maxPages; page++) {
+    const d = await ymGet(`/artists/${ymId}/direct-albums?page=${page}&page-size=100&sort-by=year`);
+    const albums: any[] = d?.result?.albums ?? [];
+    out.push(...albums);
+    const pager = d?.result?.pager;
+    if (!pager || albums.length === 0 || (pager.page + 1) * pager.perPage >= pager.total) break;
+  }
+  return out;
+}
+
 // coverUri/аватар YM → https-URL нужного размера
 export function ymCoverUrl(coverUri: string | undefined | null, size = '400x400'): string | undefined {
   if (!coverUri) return undefined;
@@ -114,7 +130,9 @@ export async function syncArtistFromYandexMusic(artist: {
     existingReleases.some(
       (r) => r.url.includes(`/album/${albumId}`) || r.title.trim().toLowerCase() === title.trim().toLowerCase(),
     );
-  const albums: any[] = [...(brief.albums ?? []), ...(brief.lastReleases ?? [])];
+  // Полная дискография (brief-info — лишь витрина); фолбэк на витрину при сбое.
+  let albums: any[] = await fetchAllYmAlbums(ymId);
+  if (albums.length === 0) albums = [...(brief.albums ?? []), ...(brief.lastReleases ?? [])];
   const seenAlbumIds = new Set<string>();
   for (const al of albums) {
     const albumId = String(al?.id ?? '');
