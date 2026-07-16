@@ -104,6 +104,7 @@ export default function ProfessionFormPage() {
       });
       qc.invalidateQueries({ queryKey: ['profile'] });
       qc.invalidateQueries({ queryKey: ['profession-form-me'] });
+      qc.invalidateQueries({ queryKey: ['profession-gate-me'] });
       toast.success(isEdit ? 'Профессия обновлена' : 'Профессия добавлена');
       if (isEdit) navigate(-1); else navigate('/profile');
     } catch (e: any) {
