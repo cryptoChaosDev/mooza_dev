@@ -198,14 +198,25 @@ router.get('/releases', authenticate, async (req: AuthRequest, res: Response) =>
           const provider = String(v?.provider ?? '').toLowerCase();
           const vid = String(v?.providerVideoId ?? '');
           const title = String(v?.title ?? '').trim();
-          if (provider !== 'youtube' || !vid || !title || clipSeen.has(vid)) continue;
-          clipSeen.add(vid);
+          if (!title || clipSeen.has(vid || title)) continue;
+          let url = '';
+          let platform = '';
+          if (provider === 'youtube' && vid) {
+            url = `https://www.youtube.com/watch?v=${vid}`;
+            platform = 'YOUTUBE';
+          } else if (provider === 'yandex' && v.embedUrl) {
+            url = String(v.embedUrl);
+            platform = 'YANDEX_MUSIC';
+          } else {
+            continue;
+          }
+          clipSeen.add(vid || title);
           clips.push({
             title,
             coverUrl: v.cover ? ymCoverUrl(v.cover) : null,
             releaseDate: null,
-            platform: 'YOUTUBE',
-            url: `https://www.youtube.com/watch?v=${vid}`,
+            platform,
+            url,
           });
         }
 

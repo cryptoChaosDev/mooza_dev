@@ -165,13 +165,24 @@ export async function syncArtistFromYandexMusic(artist: {
     const provider = String(v?.provider ?? '').toLowerCase();
     const vid = String(v?.providerVideoId ?? '');
     const title = String(v?.title ?? '').trim();
-    if (provider !== 'youtube' || !vid || !title) continue;
-    const url = `https://www.youtube.com/watch?v=${vid}`;
+    if (!title) continue;
+    // YouTube-клипы и клипы, хостящиеся в самой Яндекс.Музыке (embed-плеер)
+    let url = '';
+    let platform: 'YOUTUBE' | 'YANDEX_MUSIC' | '' = '';
+    if (provider === 'youtube' && vid) {
+      url = `https://www.youtube.com/watch?v=${vid}`;
+      platform = 'YOUTUBE';
+    } else if (provider === 'yandex' && v.embedUrl) {
+      url = String(v.embedUrl);
+      platform = 'YANDEX_MUSIC';
+    } else {
+      continue;
+    }
     if (haveClip(url, title)) continue;
     await prisma.clip.create({
       data: {
         artistId: artist.id,
-        platform: 'YOUTUBE',
+        platform,
         url,
         title,
         coverUrl: v.cover ? ymCoverUrl(v.cover) : undefined,
