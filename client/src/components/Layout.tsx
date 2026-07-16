@@ -5,6 +5,7 @@ import { APP_VERSION } from '../lib/changelog';
 import BottomNav from './BottomNav';
 import NotificationBell from './NotificationBell';
 import InfoModal from './InfoModal';
+import ProfessionGate from './ProfessionGate';
 import { useAuthStore } from '../stores/authStore';
 
 interface LayoutProps {
@@ -198,6 +199,9 @@ export default function Layout({ children }: LayoutProps) {
           <BottomNav />
         </div>
       )}
+
+      {/* Обязательный выбор профессии для новых аккаунтов без неё */}
+      <ProfessionGate />
     </div>
   );
 }
