@@ -21,6 +21,7 @@ import ShareButton from '../components/ShareButton';
 import RolePicker from '../components/RolePicker';
 import ConfirmDialog from '../components/ConfirmDialog';
 import MediaRail from '../components/MediaRail';
+import ArtistYandexBlocks from '../components/ArtistYandexBlocks';
 import { useAuthStore } from '../stores/authStore';
 import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
@@ -997,6 +998,14 @@ export default function ArtistPage() {
             onAdd={() => navigate(`/artist/${id}/clips/new`)}
           />
         )}
+
+        {/* ── Данные Яндекс.Музыки: статистика, топ-треки, похожие, фото, концерты ── */}
+        <ArtistYandexBlocks
+          listeners={artist.listeners}
+          listenersDelta={artist.listenersDelta}
+          listenersHistory={artist.listenersHistory}
+          ymData={artist.ymData}
+        />
 
         {/* ── Vacancies rail (owner/admin only) — same look as Releases/Clips ── */}
         {viewerIsAdmin && (

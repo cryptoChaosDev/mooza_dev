@@ -66,6 +66,114 @@ async function fetchBrief(ymId: string): Promise<any | null> {
   return data?.result ?? null;
 }
 
+/** Треклист альбома: [{id, title, durationMs, artists}] или null при сбое. */
+export async function fetchYmTracklist(albumId: string): Promise<any[] | null> {
+  const d = await ymGet(`/albums/${albumId}/with-tracks`);
+  const volumes: any[][] = d?.result?.volumes ?? [];
+  if (!Array.isArray(volumes) || volumes.length === 0) return null;
+  const tracks = volumes.flat().map((t: any) => ({
+    id: String(t?.id ?? ''),
+    title: String(t?.title ?? '').trim(),
+    durationMs: typeof t?.durationMs === 'number' ? t.durationMs : null,
+    artists: (t?.artists ?? []).map((a: any) => String(a?.name ?? '')).filter(Boolean),
+  })).filter((t) => t.title);
+  return tracks.length > 0 ? tracks : null;
+}
+
+/** Метаданные релиза из объекта альбома ЯМ (direct-albums / витрина). */
+function albumMeta(al: any): Record<string, unknown> {
+  const meta: Record<string, unknown> = {};
+  if (typeof al?.type === 'string' && al.type) meta.releaseType = al.type;
+  else meta.releaseType = 'album'; // у обычных альбомов type отсутствует
+  const labels = (al?.labels ?? []).map((l: any) => String(l?.name ?? '')).filter(Boolean);
+  if (labels.length > 0) meta.label = labels.join(', ').slice(0, 200);
+  if (typeof al?.genre === 'string' && al.genre) meta.genre = al.genre;
+  if (typeof al?.trackCount === 'number') meta.trackCount = al.trackCount;
+  if (typeof al?.likesCount === 'number') meta.likesCount = al.likesCount;
+  return meta;
+}
+
+/**
+ * Снапшот «витрины» brief-info для карточки артиста: официальные ссылки,
+ * похожие артисты, топ-треки, фото, концерты, плейлист «Лучшее», счётчики.
+ * Храним компактно (без сырых ответов ЯМ) в Artist.ymData.
+ */
+function buildYmData(brief: any): Record<string, unknown> {
+  const a = brief.artist ?? {};
+  return {
+    updatedAt: new Date().toISOString(),
+    likesCount: typeof a.likesCount === 'number' ? a.likesCount : null,
+    counts: {
+      tracks: a.counts?.tracks ?? null,
+      albums: a.counts?.directAlbums ?? null,
+    },
+    genres: (a.genres ?? []).map((g: any) => String(g)).slice(0, 10),
+    links: (a.links ?? []).map((l: any) => ({
+      title: String(l?.title ?? ''),
+      href: String(l?.href ?? ''),
+      type: String(l?.type ?? ''),
+      socialNetwork: l?.socialNetwork ? String(l.socialNetwork) : null,
+    })).filter((l: any) => l.href).slice(0, 20),
+    similarArtists: (brief.similarArtists ?? []).map((s: any) => ({
+      ymId: String(s?.id ?? ''),
+      name: String(s?.name ?? ''),
+      cover: ymCoverUrl(s?.cover?.uri, '200x200') ?? null,
+      genres: (s?.genres ?? []).slice(0, 3),
+    })).filter((s: any) => s.ymId && s.name).slice(0, 10),
+    popularTracks: (brief.popularTracks ?? []).map((t: any) => ({
+      id: String(t?.id ?? ''),
+      title: String(t?.title ?? '').trim(),
+      durationMs: typeof t?.durationMs === 'number' ? t.durationMs : null,
+    })).filter((t: any) => t.title).slice(0, 10),
+    photos: (brief.allCovers ?? [])
+      .map((c: any) => ymCoverUrl(c?.uri, '600x600'))
+      .filter(Boolean)
+      .slice(0, 10),
+    concerts: (brief.concerts ?? []).slice(0, 10),
+    bestPlaylist: brief.playlists?.[0]
+      ? {
+          title: String(brief.playlists[0].title ?? ''),
+          trackCount: brief.playlists[0].trackCount ?? null,
+          url: brief.playlists[0].playlistUuid
+            ? `https://music.yandex.ru/playlists/${brief.playlists[0].playlistUuid}`
+            : `https://music.yandex.ru/users/${brief.playlists[0].uid}/playlists/${brief.playlists[0].kind}`,
+        }
+      : null,
+  };
+}
+
+/**
+ * Автозаполнение контактов артиста из официальных ссылок ЯМ — только пустых
+ * полей, ручные значения не перетираем. Ключи socialLinks — как в
+ * client/src/components/SocialLinks.tsx (vk, website, bandlink…).
+ */
+function autofillLinks(
+  artist: { socialLinks: unknown; bandLink?: string | null },
+  ymLinks: { href: string; type: string; socialNetwork: string | null }[],
+): { socialLinks?: Record<string, string>; bandLink?: string } {
+  const current = { ...((artist.socialLinks as Record<string, string> | null) ?? {}) };
+  const patch: { socialLinks?: Record<string, string>; bandLink?: string } = {};
+  const NETWORK_TO_KEY: Record<string, string> = { vk: 'vk', bandlink: 'bandlink' };
+  let changed = false;
+  for (const l of ymLinks) {
+    if (l.type === 'official' && !current.website) {
+      current.website = l.href;
+      changed = true;
+      continue;
+    }
+    const key = l.socialNetwork ? NETWORK_TO_KEY[l.socialNetwork] : undefined;
+    if (key && !current[key]) {
+      current[key] = l.href;
+      changed = true;
+    }
+    if (l.socialNetwork === 'bandlink' && !artist.bandLink) {
+      patch.bandLink = l.href;
+    }
+  }
+  if (changed) patch.socialLinks = current;
+  return patch;
+}
+
 /**
  * ПОЛНАЯ дискография артиста. brief-info отдаёт только витрину (~9 альбомов),
  * весь список — в постраничном /direct-albums (у IDEЯ FIX: 9 против 36).
@@ -97,6 +205,7 @@ export async function syncArtistFromYandexMusic(artist: {
   name: string;
   description: string | null;
   socialLinks: unknown;
+  bandLink?: string | null;
   submittedById: string | null;
 }): Promise<{ listeners?: number; newReleases: number; newClips: number } | null> {
   const links = (artist.socialLinks as Record<string, string> | null) ?? {};
@@ -108,40 +217,87 @@ export async function syncArtistFromYandexMusic(artist: {
 
   const summary = { listeners: undefined as number | undefined, newReleases: 0, newClips: 0 };
 
-  // 1. Слушатели за месяц — метрика, обновляем всегда.
+  // 1. Слушатели за месяц + дельта — метрика, обновляем всегда.
   const listeners = brief.stats?.lastMonthListeners;
   const patch: Record<string, unknown> = {};
   if (typeof listeners === 'number' && listeners >= 0) {
     patch.listeners = BigInt(listeners);
     summary.listeners = listeners;
+    const delta = brief.stats?.lastMonthListenersDelta;
+    if (typeof delta === 'number') patch.listenersDelta = delta;
   }
   // 2. Описание — только если у нас пусто.
   const ymDesc = brief.artist.description?.text ?? brief.artist.description;
   if (!artist.description && typeof ymDesc === 'string' && ymDesc.trim()) {
     patch.description = ymDesc.trim().slice(0, 4000);
   }
-  if (Object.keys(patch).length > 0) {
-    await prisma.artist.update({ where: { id: artist.id }, data: patch as any });
+  // 3. Витрина ЯМ (ссылки, похожие, топ-треки, фото, концерты, плейлист).
+  patch.ymData = buildYmData(brief);
+  // 4. Автозаполнение контактов из официальных ссылок — только пустых полей.
+  Object.assign(patch, autofillLinks(artist, (patch.ymData as any).links));
+  await prisma.artist.update({ where: { id: artist.id }, data: patch as any });
+
+  // 5. Точка истории слушателей — не чаще раза в 20 часов (ручной прогон
+  //    после ночного не плодит дубли), для графика динамики.
+  if (typeof listeners === 'number' && listeners >= 0) {
+    const last = await prisma.artistListenersSnapshot.findFirst({
+      where: { artistId: artist.id },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+    if (!last || Date.now() - last.createdAt.getTime() > 20 * 60 * 60 * 1000) {
+      await prisma.artistListenersSnapshot.create({
+        data: { artistId: artist.id, listeners: BigInt(listeners) },
+      });
+    }
   }
 
-  // 3. Релизы — добавляем отсутствующие (дедуп по album id в url).
+  // 6. Релизы — добавляем отсутствующие (дедуп по album id в url) и
+  //    дообогащаем существующие метаданными (тип/лейбл/жанр/лайки/треклист).
   const existingReleases = await prisma.release.findMany({
     where: { artistId: artist.id },
-    select: { url: true, title: true },
+    select: { id: true, url: true, title: true, tracklist: true, releaseType: true },
   });
-  const haveAlbum = (albumId: string, title: string) =>
-    existingReleases.some(
+  const findExisting = (albumId: string, title: string) =>
+    existingReleases.find(
       (r) => r.url.includes(`/album/${albumId}`) || r.title.trim().toLowerCase() === title.trim().toLowerCase(),
     );
   // Полная дискография (brief-info — лишь витрина); фолбэк на витрину при сбое.
   let albums: any[] = await fetchAllYmAlbums(ymId);
   if (albums.length === 0) albums = [...(brief.albums ?? []), ...(brief.lastReleases ?? [])];
   const seenAlbumIds = new Set<string>();
+  // Треклисты — по одному запросу на альбом: лимит на прогон, чтобы не долбить API.
+  let tracklistBudget = 15;
+  const getTracklist = async (albumId: string): Promise<any[] | null> => {
+    if (tracklistBudget <= 0) return null;
+    tracklistBudget--;
+    await new Promise((r) => setTimeout(r, 400));
+    return fetchYmTracklist(albumId);
+  };
   for (const al of albums) {
     const albumId = String(al?.id ?? '');
     const title = String(al?.title ?? '').trim();
-    if (!albumId || !title || seenAlbumIds.has(albumId) || haveAlbum(albumId, title)) continue;
+    if (!albumId || !title || seenAlbumIds.has(albumId)) continue;
     seenAlbumIds.add(albumId);
+    const existing = findExisting(albumId, title);
+    if (existing) {
+      // Дообогащение: лайки/счётчик — всегда свежие; тип/лейбл/жанр и
+      // треклист — только если ещё не заполнены.
+      const meta = albumMeta(al);
+      const upd: Record<string, unknown> = { trackCount: meta.trackCount, likesCount: meta.likesCount };
+      if (!existing.releaseType) {
+        upd.releaseType = meta.releaseType;
+        if (meta.label) upd.label = meta.label;
+        if (meta.genre) upd.genre = meta.genre;
+      }
+      if (!existing.tracklist) {
+        const tracks = await getTracklist(albumId);
+        if (tracks) upd.tracklist = tracks;
+      }
+      await prisma.release.update({ where: { id: existing.id }, data: upd as any });
+      continue;
+    }
+    const tracks = await getTracklist(albumId);
     await prisma.release.create({
       data: {
         artistId: artist.id,
@@ -150,12 +306,15 @@ export async function syncArtistFromYandexMusic(artist: {
         title,
         coverUrl: ymCoverUrl(al.coverUri),
         releaseDate: al.releaseDate ? new Date(al.releaseDate) : undefined,
-      },
+        ...albumMeta(al),
+        ...(tracks ? { tracklist: tracks } : {}),
+      } as any,
     });
     summary.newReleases++;
   }
 
-  // 4. Клипы — только с провайдером youtube (наш enum: VK_VIDEO/RUTUBE/YOUTUBE/APPLE_MUSIC).
+  // 7. Клипы — youtube и яндексовые (у видео в API только название/обложка/embed —
+  //    ни длительности, ни даты, обогащать карточку клипа больше нечем).
   const existingClips = await prisma.clip.findMany({
     where: { artistId: artist.id },
     select: { url: true, title: true },
@@ -218,7 +377,7 @@ export async function runYandexMusicSync(): Promise<void> {
   try {
     const artists = await prisma.artist.findMany({
       where: { status: { in: ['VERIFIED', 'APPROVED'] } },
-      select: { id: true, name: true, description: true, socialLinks: true, submittedById: true },
+      select: { id: true, name: true, description: true, socialLinks: true, bandLink: true, submittedById: true },
     });
     const linked = artists.filter((a) => extractYmArtistId(((a.socialLinks as any) ?? {}).yandex_music));
     if (linked.length === 0) return;
