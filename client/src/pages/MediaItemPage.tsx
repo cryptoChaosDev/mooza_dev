@@ -159,6 +159,39 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
         {/* Platform */}
         <p className="text-center text-xs text-slate-500 mb-4">{platformLabel}</p>
 
+        {/* Встроенный плеер Яндекс.Музыки — официальный embed-виджет, треки
+            играют с серверов Яндекса, у нас ничего не хранится. */}
+        {isRelease && item.platform === 'YANDEX_MUSIC' && (() => {
+          const albumId = /\/album\/(\d+)/.exec(item.url ?? '')?.[1];
+          if (!albumId) return null;
+          return (
+            <div className="w-full max-w-md mx-auto mb-4 rounded-2xl overflow-hidden border border-slate-800">
+              <iframe
+                src={`https://music.yandex.ru/iframe/album/${albumId}`}
+                className="w-full block"
+                style={{ height: 450 }}
+                frameBorder="0"
+                allow="clipboard-write"
+                title="Плеер Яндекс.Музыки"
+              />
+            </div>
+          );
+        })()}
+
+        {/* Встроенный плеер яндекс-клипа (embed frontend.vh.yandex.ru) */}
+        {!isRelease && item.platform === 'YANDEX_MUSIC' && item.url?.includes('frontend.vh.yandex.ru') && (
+          <div className="w-full max-w-md mx-auto mb-4 rounded-2xl overflow-hidden border border-slate-800 aspect-video">
+            <iframe
+              src={item.url}
+              className="w-full h-full block"
+              frameBorder="0"
+              allow="autoplay; fullscreen"
+              allowFullScreen
+              title="Клип"
+            />
+          </div>
+        )}
+
         {/* Open on platform */}
         {item.url && (
           <a
