@@ -9,19 +9,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import MediaItemForm, { MediaItemInitial } from '../components/MediaItemForm';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
-
-const RELEASE_PLATFORM_LABELS: Record<string, string> = {
-  VK: 'ВКонтакте',
-  SPOTIFY: 'Spotify',
-  YANDEX_MUSIC: 'Яндекс Музыка',
-  APPLE_MUSIC: 'Apple Music',
-};
-const CLIP_PLATFORM_LABELS: Record<string, string> = {
-  VK_VIDEO: 'ВКонтакте Видео',
-  RUTUBE: 'Rutube',
-  YOUTUBE: 'YouTube',
-  APPLE_MUSIC: 'Apple Music',
-};
+import { MEDIA_PLATFORM_LABELS } from '../lib/mediaPlatforms';
 
 interface ItemDetail extends MediaItemInitial {
   artistId: string;
@@ -43,7 +31,6 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
   const { user: currentUser } = useAuthStore();
   const isRelease = kind === 'release';
   const api = isRelease ? releaseAPI : clipAPI;
-  const platformLabels = isRelease ? RELEASE_PLATFORM_LABELS : CLIP_PLATFORM_LABELS;
 
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -99,7 +86,7 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
   }
 
   const viewerIsAdmin = !!item.viewerIsAdmin;
-  const platformLabel = platformLabels[item.platform] ?? item.platform;
+  const platformLabel = MEDIA_PLATFORM_LABELS[item.platform] ?? item.platform;
   const participants = item.participants ?? [];
   const myPending = currentUser
     ? participants.find((p) => p.userId === currentUser.id && p.confirmStatus === 'PENDING')
@@ -178,19 +165,9 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
           );
         })()}
 
-        {/* Встроенный плеер яндекс-клипа (embed frontend.vh.yandex.ru) */}
-        {!isRelease && item.platform === 'YANDEX_MUSIC' && item.url?.includes('frontend.vh.yandex.ru') && (
-          <div className="w-full max-w-md mx-auto mb-4 rounded-2xl overflow-hidden border border-slate-800 aspect-video">
-            <iframe
-              src={item.url}
-              className="w-full h-full block"
-              frameBorder="0"
-              allow="autoplay; fullscreen"
-              allowFullScreen
-              title="Клип"
-            />
-          </div>
-        )}
+        {/* Клипы Яндекс.Музыки НЕ встраиваем: frontend.vh.yandex.ru отдаёт
+            CSP frame-ancestors только для яндексовских доменов — iframe на
+            стороннем сайте блокируется браузером. Открываем по кнопке ниже. */}
 
         {/* Open on platform */}
         {item.url && (
