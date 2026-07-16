@@ -356,6 +356,7 @@ enum ClipPlatform {
   RUTUBE
   YOUTUBE
   APPLE_MUSIC
+  YANDEX_MUSIC
 }
 
 enum ContactsVisibility {

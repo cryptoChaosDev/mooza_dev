@@ -20,6 +20,8 @@ export const CLIP_PLATFORM_DOMAINS: Record<string, string[]> = {
   RUTUBE: ['rutube.ru'],
   YOUTUBE: ['youtube.com', 'youtu.be', 'm.youtube.com', 'music.youtube.com', 'youtube-nocookie.com'],
   APPLE_MUSIC: ['music.apple.com', 'geo.music.apple.com'],
+  // Клипы, хостящиеся в самой Яндекс.Музыке (embed-плеер frontend.vh.yandex.ru)
+  YANDEX_MUSIC: ['music.yandex.ru', 'music.yandex.com', 'frontend.vh.yandex.ru'],
 };
 
 export const MEDIA_PLATFORM_LABELS: Record<string, string> = {
