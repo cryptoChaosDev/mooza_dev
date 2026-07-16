@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Headphones, TrendingUp, TrendingDown, Music2, UsersRound, Camera,
-  CalendarDays, ExternalLink, ListMusic,
+  CalendarDays, ExternalLink, ListMusic, BadgeCheck, UserPlus,
 } from 'lucide-react';
 import ImageLightbox from './ImageLightbox';
+import { toast } from '../stores/toastStore';
 
 /**
  * Блоки карточки Артиста с данными Яндекс.Музыки (Artist.ymData из ночного
@@ -183,9 +184,23 @@ export default function ArtistYandexBlocks({
           </div>
           <div className="flex gap-3 px-4 py-3 overflow-x-auto">
             {similar.map((s) => {
-              const inner = (
-                <>
-                  <div className="w-16 h-16 rounded-full overflow-hidden bg-slate-800 border border-slate-700 mx-auto">
+              const onMoooza = !!s.moozaArtistId;
+              // Приглашение отсутствующего артиста: share (или буфер) с текстом,
+              // который пользователь сам отправит артисту.
+              const invite = async () => {
+                const text = `Приглашаю «${s.name}» на Moooza — соцсеть для музыкантов. Создайте карточку артиста: ${window.location.origin}/register`;
+                if (navigator.share) {
+                  try { await navigator.share({ text }); } catch { /* отменено */ }
+                } else {
+                  try {
+                    await navigator.clipboard.writeText(text);
+                    toast.success('Приглашение скопировано — отправьте артисту');
+                  } catch { /* ignore */ }
+                }
+              };
+              const avatar = (
+                <div className={`relative w-16 h-16 rounded-full mx-auto ${onMoooza ? 'ring-2 ring-primary-500 ring-offset-2 ring-offset-slate-900' : ''}`}>
+                  <div className="w-full h-full rounded-full overflow-hidden bg-slate-800 border border-slate-700">
                     {s.cover ? (
                       <img src={s.cover} alt={s.name} className="w-full h-full object-cover" loading="lazy" />
                     ) : (
@@ -194,30 +209,42 @@ export default function ArtistYandexBlocks({
                       </div>
                     )}
                   </div>
-                  <p className="text-[11px] text-slate-300 text-center mt-1.5 w-16 truncate">{s.name}</p>
-                  {s.moozaArtistId && (
-                    <p className="text-[10px] text-primary-400 text-center w-16 truncate">на Moooza</p>
+                  {onMoooza && (
+                    <BadgeCheck
+                      size={18}
+                      className="absolute -bottom-0.5 -right-0.5 text-primary-400 bg-slate-900 rounded-full"
+                    />
                   )}
-                </>
+                </div>
               );
-              return s.moozaArtistId ? (
-                <button
-                  key={s.ymId}
-                  onClick={() => navigate(`/artist/${s.moozaArtistId}`)}
-                  className="flex-shrink-0"
-                >
-                  {inner}
-                </button>
-              ) : (
-                <a
-                  key={s.ymId}
-                  href={`https://music.yandex.ru/artist/${s.ymId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-shrink-0"
-                >
-                  {inner}
-                </a>
+              return (
+                <div key={s.ymId} className="flex-shrink-0 w-16">
+                  {onMoooza ? (
+                    <button onClick={() => navigate(`/artist/${s.moozaArtistId}`)} className="block w-full">
+                      {avatar}
+                      <p className="text-[11px] text-slate-300 text-center mt-1.5 truncate">{s.name}</p>
+                      <p className="text-[10px] text-primary-400 text-center truncate">на Moooza</p>
+                    </button>
+                  ) : (
+                    <>
+                      <a
+                        href={`https://music.yandex.ru/artist/${s.ymId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block"
+                      >
+                        {avatar}
+                        <p className="text-[11px] text-slate-300 text-center mt-1.5 truncate">{s.name}</p>
+                      </a>
+                      <button
+                        onClick={invite}
+                        className="mt-1 w-full flex items-center justify-center gap-0.5 py-0.5 rounded-md border border-slate-700 text-[10px] text-slate-400 hover:text-white hover:border-slate-500 transition-colors"
+                      >
+                        <UserPlus size={9} /> Пригласить
+                      </button>
+                    </>
+                  )}
+                </div>
               );
             })}
           </div>
