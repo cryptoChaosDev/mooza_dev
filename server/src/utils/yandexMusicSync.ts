@@ -82,10 +82,13 @@ export async function fetchAllYmAlbums(ymId: string, maxPages = 5): Promise<any[
   return out;
 }
 
-// coverUri/аватар YM → https-URL нужного размера
+// coverUri/аватар YM → https-URL нужного размера. У альбомов coverUri приходит
+// БЕЗ протокола (avatars.yandex.net/...), а у видео cover — уже С https:// —
+// протокол добавляем только когда его нет.
 export function ymCoverUrl(coverUri: string | undefined | null, size = '400x400'): string | undefined {
   if (!coverUri) return undefined;
-  return `https://${String(coverUri).replace('%%', size)}`;
+  const u = String(coverUri).replace('%%', size);
+  return /^https?:\/\//i.test(u) ? u : `https://${u}`;
 }
 
 /** Синк одного артиста. Возвращает сводку изменений (для лога). */
