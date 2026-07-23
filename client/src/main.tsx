@@ -18,6 +18,21 @@ if (/Android/i.test(navigator.userAgent)) {
   document.documentElement.classList.add('android-no-backdrop-blur');
 }
 
+// SW обновляется агрессивно (skipWaiting + clientsClaim) и вычищает старый
+// precache — открытая вкладка/PWA остаётся со ссылками на уже удалённые чанки
+// и зависает (белый экран до ручной перезагрузки). Как только новый SW взял
+// контроль — перезагружаем страницу на свежий бандл. Гвард — от цикла reload.
+if ('serviceWorker' in navigator) {
+  // При первом визите claim тоже триггерит controllerchange — там reload не нужен.
+  const hadController = !!navigator.serviceWorker.controller;
+  let swReloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || swReloaded) return;
+    swReloaded = true;
+    window.location.reload();
+  });
+}
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
