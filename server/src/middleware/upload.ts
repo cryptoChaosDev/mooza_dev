@@ -275,10 +275,12 @@ const chatFileFilter = (req: any, file: any, cb: any) => {
   }
 };
 
+// 20MB — верх для мобильной загрузки; потолок HTTP-тела задаёт host-nginx
+// (client_max_body_size 50M — под Pro-портфолио).
 export const uploadChatAttachment = multer({
   storage: chatStorage,
   fileFilter: chatFileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
 });
 
 // ── Artist avatar upload ───────────────────────────────────────────────────────
