@@ -137,8 +137,10 @@ router.get('/professions', async (req, res) => {
     const { directionId, search, excludeUserId, all } = req.query;
     const where: any = {};
     if (all === 'true') {
-      // Only catalog professions (those with custom filters from catalog import)
-      where.customFilters = { some: {} };
+      // Весь каталог. Раньше здесь стоял фильтр customFilters={some:{}}
+      // («только каталожные с фильтрами»), из-за которого профессии,
+      // добавленные вручную по запросам пользователей БЕЗ кастомных
+      // фильтров, были невидимы в выборе (кейс «Бузукист», 2026-07-20).
     } else {
       // Default: only professions with actual users
       where.userServices = excludeUserId
