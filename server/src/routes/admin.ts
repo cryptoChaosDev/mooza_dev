@@ -3,7 +3,7 @@ import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
-import { notifyMany } from '../utils/notify';
+import { notify, notifyMany } from '../utils/notify';
 import { yoNorm } from '../utils/search';
 import { grantProMonth, isProActive } from '../utils/pro';
 
@@ -82,18 +82,17 @@ router.patch('/profession-requests/:id', async (req, res) => {
       data: { status, resolvedAt: status === 'pending' ? null : new Date() },
     });
 
-    // Сообщим автору запроса о результате
+    // Сообщим автору запроса о результате — через notify(): колокольчик,
+    // сокет и push, а не только тихая запись в БД.
     if (status !== 'pending') {
-      await prisma.notification.create({
-        data: {
-          userId: reqRow.userId,
-          type: 'support',
-          title: status === 'done' ? '✅ Профессия добавлена' : 'Запрос по профессии рассмотрен',
-          body: status === 'done'
-            ? `«${reqRow.profession}» появилась в каталоге — можно добавить её в профиль.`
-            : `«${reqRow.profession}» пока не добавили. Спасибо за предложение!`,
-          link: '/profile',
-        },
+      await notify({
+        userId: reqRow.userId,
+        type: 'support',
+        title: status === 'done' ? '✅ Профессия добавлена' : 'Запрос по профессии рассмотрен',
+        body: status === 'done'
+          ? `«${reqRow.profession}» появилась в каталоге — выберите её в своём профиле.`
+          : `«${reqRow.profession}» пока не добавили. Спасибо за предложение!`,
+        link: status === 'done' ? '/professions/new' : '/profile',
       });
     }
 
@@ -161,6 +160,27 @@ router.post('/professions', async (req, res) => {
   try {
     if (!req.body.name) return res.status(400).json({ error: 'Name required' });
     const item = await prisma.profession.create({ data: { name: req.body.name } });
+
+    // Если профессию добавили напрямую (мимо очереди запросов) — закрыть
+    // зависшие pending-запросы с этим названием и уведомить их авторов
+    // (кейс «Бузукист»: профессия появилась, а запрос остался висеть).
+    const pending = await (prisma as any).professionRequest.findMany({
+      where: { status: 'pending', profession: { equals: item.name.trim(), mode: 'insensitive' } },
+    });
+    for (const pr of pending) {
+      await (prisma as any).professionRequest.update({
+        where: { id: pr.id },
+        data: { status: 'done', resolvedAt: new Date() },
+      });
+      await notify({
+        userId: pr.userId,
+        type: 'support',
+        title: '✅ Профессия добавлена',
+        body: `«${pr.profession}» появилась в каталоге — выберите её в своём профиле.`,
+        link: '/professions/new',
+      });
+    }
+
     res.status(201).json(item);
   } catch (e: any) { res.status(400).json({ error: e.message }); }
 });
