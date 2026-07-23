@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { supportLimiter } from '../middleware/rateLimiter';
 import { tgEvent } from '../utils/telegram';
+import { notifyMany } from '../utils/notify';
 
 const router = Router();
 
@@ -32,20 +33,15 @@ router.post('/profession-request', authenticate, supportLimiter, async (req: Aut
       data: { userId: meId, profession, comment: comment || null },
     });
 
-    // In-app уведомление админам (fallback-иконка + title/body рендерятся корректно)
+    // In-app уведомление админам — через notifyMany (колокольчик + сокет + push)
     const admins = await prisma.user.findMany({ where: { isAdmin: true }, select: { id: true } });
-    await Promise.all(admins.map(admin =>
-      prisma.notification.create({
-        data: {
-          userId: admin.id,
-          actorId: meId,
-          type: 'support',
-          title: '➕ Запрос на добавление профессии',
-          body: `«${profession}»${comment ? '. ' + comment.slice(0, 120) : ''}`,
-          link: '/admin',
-        },
-      })
-    ));
+    await notifyMany(admins.map(a => a.id), {
+      actorId: meId,
+      type: 'support',
+      title: '➕ Запрос на добавление профессии',
+      body: `«${profession}»${comment ? '. ' + comment.slice(0, 120) : ''}`,
+      link: '/admin',
+    });
 
     // Уведомление команде в Telegram (основной канал поддержки)
     try { tgEvent.professionRequest(userName, profession, comment); } catch {}
