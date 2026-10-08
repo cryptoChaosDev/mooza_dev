@@ -1,0 +1,8 @@
+[Unit]
+Description=Hourly DEV+PROD availability -> Telegram (MOOOZA_LOG)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/root/hourly_status.sh

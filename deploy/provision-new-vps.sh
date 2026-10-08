@@ -105,7 +105,7 @@ cat > "/etc/nginx/sites-available/${DOMAIN}" <<NGINX
 server {
     listen 80;
     server_name ${DOMAIN} www.${DOMAIN};
-    client_max_body_size 20M;
+    client_max_body_size 50M;
 
     location /api/      { proxy_pass http://localhost:4000; include /etc/nginx/moooza-proxy.conf; }
     location /uploads/  { proxy_pass http://localhost:4000; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; }
