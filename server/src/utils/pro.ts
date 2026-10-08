@@ -103,35 +103,58 @@ export async function grantProMonth(
  * Referral → Pro reward: every 10 users a referrer brings in grants 1 month of
  * Pro automatically (capped at MAX_PRO_MONTHS concurrently by grantProMonth).
  *
- * Idempotent: `User.proMonthsFromReferrals` remembers how many referral-months
- * have already been granted, so the same registrations are never double-counted.
+ * Засчитываются ТОЛЬКО регистрации по личным одноразовым ReferralLink владельца
+ * (сожжённые ссылки: multiUse=false, usedById≠null). Не считаем:
+ *  • многоразовые ссылки-кампании (там referrerId=ownerId у каждого посетителя —
+ *    владелец кампании копил бы Pro за всю конференцию);
+ *  • «легаси» referrerId / голый userId из URL — его подставляет сам клиент,
+ *    это давало самореферал Pro.
+ *
+ * Idempotent + атомарно: `User.proMonthsFromReferrals` помнит, сколько месяцев уже
+ * выдано, и «забирается» условным update (compare-and-set по старому значению)
+ * ДО начисления — две параллельные верификации не выдадут один месяц дважды.
  * Never throws into the caller — safe to fire after signup.
  */
 export const REFERRALS_PER_PRO_MONTH = 10;
 
+/** Число регистраций, засчитываемых в реферальный Pro (личные одноразовые ссылки). */
+export async function countProReferrals(referrerId: string): Promise<number> {
+  return prisma.referralLink.count({
+    where: { ownerId: referrerId, multiUse: false, usedById: { not: null } },
+  });
+}
+
 export async function applyReferralProGrants(referrerId: string | null | undefined): Promise<void> {
   if (!referrerId) return;
   try {
-    const referrer = await prisma.user.findUnique({
-      where: { id: referrerId },
-      select: { proMonthsFromReferrals: true },
-    });
-    if (!referrer) return;
-
-    const count = await prisma.user.count({ where: { referrerId } });
+    const count = await countProReferrals(referrerId);
     const earned = Math.floor(count / REFERRALS_PER_PRO_MONTH);
-    const already = referrer.proMonthsFromReferrals;
-    const delta = earned - already;
-    if (delta <= 0) return;
 
-    for (let i = 0; i < delta; i++) {
-      await grantProMonth(referrerId, 'referral');
+    // Несколько попыток CAS: если параллельный вызов успел обновить счётчик,
+    // перечитываем и добираем только оставшуюся дельту.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const referrer = await prisma.user.findUnique({
+        where: { id: referrerId },
+        select: { proMonthsFromReferrals: true },
+      });
+      if (!referrer) return;
+
+      const already = referrer.proMonthsFromReferrals;
+      const delta = earned - already;
+      if (delta <= 0) return;
+
+      const claimed = await prisma.user.updateMany({
+        where: { id: referrerId, proMonthsFromReferrals: already },
+        data: { proMonthsFromReferrals: earned },
+      });
+      if (claimed.count === 0) continue; // кто-то опередил — перечитать
+
+      for (let i = 0; i < delta; i++) {
+        await grantProMonth(referrerId, 'referral');
+      }
+      logger.info(`applyReferralProGrants: ${referrerId} ${already}->${earned} referral pro-month(s) (count=${count})`);
+      return;
     }
-    await prisma.user.update({
-      where: { id: referrerId },
-      data: { proMonthsFromReferrals: earned },
-    });
-    logger.info(`applyReferralProGrants: ${referrerId} ${already}->${earned} referral pro-month(s) (count=${count})`);
   } catch (err: any) {
     logger.error(`applyReferralProGrants failed for ${referrerId}: ${err?.message}`);
   }
