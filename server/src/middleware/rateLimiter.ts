@@ -238,3 +238,20 @@ export const messageLimiter = rateLimit({
     });
   },
 });
+
+/**
+ * Голосовой ввод «Ищу музыканта» (POST /api/requests/transcribe). Распознавание
+ * дорогое (ffmpeg + Vosk, общий STT на 2 потока), поэтому лимит строже разбора:
+ * гость — 5 записей за 10 минут с IP, вошедший — 20 за 10 минут на аккаунт.
+ * Ставится ПОСЛЕ optionalAuthenticate и ДО приёма файла.
+ */
+export const voiceTranscribeLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: (req: any) => (req.userId ? 20 : 5),
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: any) => (req.userId ? `user:${req.userId}` : ipKeyGenerator(req.ip)),
+  handler: (_req, res) => {
+    res.status(429).json({ error: 'Слишком много голосовых запросов. Подождите несколько минут или введите текст.' });
+  },
+});

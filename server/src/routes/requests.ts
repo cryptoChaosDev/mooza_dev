@@ -7,11 +7,16 @@
  *                  постом в Потоке, как POST /api/orders), рассылает личные
  *                  уведомления топ-10 подходящих, возвращает { orderId, notifiedCount }.
  *   GET  /quota  — сколько запросов осталось сегодня.
+ *   POST /transcribe — голосовой ввод: запись ≤ 30 с (multipart, поле audio) →
+ *                  { text } через наш STT (Vosk); гостю тоже, rate limit.
  */
-import { Router, type Response } from 'express';
+import { Router, type Request, type Response, type NextFunction } from 'express';
+import multer from 'multer';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
+import { voiceTranscribeLimiter } from '../middleware/rateLimiter';
+import { transcribeAudio, SttBadAudioError, SttBusyError, SttTooLongError } from '../lib/sttClient';
 import { withAdvisoryLock } from '../lib/dealHelpers';
 import {
   applyOverrides, buildChips, emptyParsed, formatBudgetLabel, getRequestDictionaries, isoToMskDay,
@@ -161,6 +166,81 @@ router.post('/parse', optionalAuthenticate, parseLimiter, async (req: AuthReques
     });
   } catch (e) {
     return serverError(res, 'POST /parse', e);
+  }
+});
+
+// ── POST /api/requests/transcribe — голосовой ввод (гость или вошедший) ──────
+// Аудио принимается только в память (multer.memoryStorage) и передаётся в STT
+// из буфера: на диск не пишется, после ответа ссылка на буфер сбрасывается.
+// Текст распознавания не логируется.
+export const VOICE_MAX_SECONDS = 30;
+export const VOICE_MAX_BYTES = 2 * 1024 * 1024;
+const VOICE_TYPES = new Set(['audio/webm', 'audio/mp4', 'audio/ogg', 'audio/mpeg', 'audio/wav', 'audio/x-m4a']);
+// Запас к 30 с: таймер браузера останавливает запись с опозданием на доли секунды.
+const VOICE_LIMIT_WITH_SLACK = VOICE_MAX_SECONDS + 1;
+// Очередь STT (до 60 с) + распознавание записи ≤ 30 с.
+const VOICE_STT_TIMEOUT_MS = 90_000;
+
+const VOICE_TOO_LONG = 'Запись слишком длинная — говорите не дольше 30 секунд';
+const VOICE_NOT_HEARD = 'Не расслышали — попробуйте ещё раз ближе к микрофону';
+const VOICE_BUSY = 'Распознавание речи сейчас занято — попробуйте через минуту или введите текст';
+
+const baseMime = (t: string | undefined) => String(t ?? '').split(';')[0].trim().toLowerCase();
+
+const voiceUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: VOICE_MAX_BYTES, files: 1, fields: 5, parts: 6 },
+  fileFilter: (_req, file, cb) => {
+    if (VOICE_TYPES.has(baseMime(file.mimetype))) return cb(null, true);
+    cb(Object.assign(new Error('Неподдерживаемый формат записи'), { status: 415 }));
+  },
+}).single('audio');
+
+// Ошибки приёма — здесь, с понятным текстом (а не общим «Файл слишком большой»).
+function receiveVoice(req: Request, res: Response, next: NextFunction) {
+  voiceUpload(req, res, (err: any) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') return res.status(413).json({ error: VOICE_TOO_LONG, code: 'TOO_LONG' });
+      return res.status(400).json({ error: 'Не удалось загрузить запись' });
+    }
+    if (err?.status === 415) {
+      return res.status(415).json({ error: 'Неподдерживаемый формат записи', code: 'UNSUPPORTED_AUDIO' });
+    }
+    return res.status(400).json({ error: 'Не удалось загрузить запись' });
+  });
+}
+
+router.post('/transcribe', optionalAuthenticate, voiceTranscribeLimiter, receiveVoice, async (req: AuthRequest, res) => {
+  const file = (req as AuthRequest & { file?: Express.Multer.File }).file;
+  try {
+    if (!file?.buffer?.length) return res.status(400).json({ error: 'Нет записи — попробуйте ещё раз' });
+    const { text, duration } = await transcribeAudio(file.buffer, {
+      mimeType: baseMime(file.mimetype),
+      maxSeconds: VOICE_LIMIT_WITH_SLACK,
+      timeoutMs: VOICE_STT_TIMEOUT_MS,
+    });
+    if (duration != null && duration > VOICE_LIMIT_WITH_SLACK + 0.5) {
+      return res.status(413).json({ error: VOICE_TOO_LONG, code: 'TOO_LONG' });
+    }
+    const clean = text.replace(/\s+/g, ' ').trim().slice(0, MAX_REQUEST_TEXT);
+    if (!clean) return res.status(422).json({ error: VOICE_NOT_HEARD, code: 'NOT_HEARD' });
+    res.json({ text: clean });
+  } catch (e: any) {
+    if (e instanceof SttBusyError || e?.name === 'AbortError') {
+      return res.status(503).json({ error: VOICE_BUSY, code: 'STT_BUSY' });
+    }
+    if (e instanceof SttTooLongError) return res.status(413).json({ error: VOICE_TOO_LONG, code: 'TOO_LONG' });
+    if (e instanceof SttBadAudioError) return res.status(422).json({ error: VOICE_NOT_HEARD, code: 'NOT_HEARD' });
+    // STT недоступен (контейнер не запущен, сеть) — тоже «временно», а не 500.
+    if (e instanceof TypeError && /fetch failed/i.test(e.message)) {
+      console.error('[requests] STT unavailable', e.message);
+      return res.status(503).json({ error: 'Голосовой ввод временно недоступен — введите текст', code: 'STT_UNAVAILABLE' });
+    }
+    return serverError(res, 'POST /transcribe', e);
+  } finally {
+    // Аудио не храним: отпускаем буфер сразу, не дожидаясь конца запроса.
+    if (file) (file as { buffer?: Buffer }).buffer = undefined;
   }
 });
 
