@@ -14,6 +14,7 @@ import { yoNorm } from '../utils/search';
 import { disconnectUserSockets } from '../socket';
 import { validateArtistInvite, acceptArtistInvite, type ArtistInviteCheck } from '../lib/artistInvites';
 import { recordConsentEvent, requestMeta } from '../lib/consentEvents';
+import { markWaitlistRegistered } from '../lib/waitlist';
 
 // ─── Telegram bot-based auth (deep link + polling) ───────────────────────────
 // Map: token → { telegramId, firstName, lastName, username, photoUrl, resolvedAt }
@@ -598,6 +599,9 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
         throw e;
       }
       const user = created.user;
+
+      // Лист ожидания: заявка, которой выдана сожжённая ссылка (или с тем же email), → «Зарегистрировался».
+      await markWaitlistRegistered({ userId: user.id, email: normalizedEmail, referralLinkId: created.burnedSingleUse ? refLink?.id : null });
 
       // Журнал согласий (ConsentEvent), данных на форме регистрации: ПДн +
       // соглашение (обязательные) и реклама (если отмечена). Best-effort —

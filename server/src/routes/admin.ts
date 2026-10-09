@@ -9,6 +9,10 @@ import { grantProMonth, isProActive } from '../utils/pro';
 import logger from '../utils/logger';
 import { artistAdminIds } from '../lib/artistAccess';
 import { disconnectUserSockets } from '../socket';
+import {
+  WAITLIST_BULK_MAX, INVITES_DISABLED_ERROR, waitlistInvitesWork, inviteWaitlistEntry, inviteWaitlistBulk,
+  withWaitlistDetails, waitlistStats, syncWaitlistRegisteredByEmail, deleteWaitlistEntry,
+} from '../lib/waitlist';
 
 const router = Router();
 
@@ -64,18 +68,71 @@ router.post('/ym-sync', async (_req, res) => {
 });
 
 // ─── Waitlist (landing sign-ups) ─────────────────────────────────────────────
+// Приглашения, статусы и письма — lib/waitlist.ts.
 router.get('/waitlist', async (req, res) => {
   try {
-    const { type } = req.query as { type?: string };
+    const { type, status } = req.query as { type?: string; status?: string };
     const { page, limit, skip } = pageParams(req);
-    const where = typeof type === 'string' && type ? { type } : {};
+    const where: { type?: string; status?: string } = {};
+    if (typeof type === 'string' && type) where.type = type;
+    if (typeof status === 'string' && status) where.status = status;
+    await syncWaitlistRegisteredByEmail();
     const [items, total] = await Promise.all([
       prisma.waitlistEntry.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: limit }),
       prisma.waitlistEntry.count({ where }),
     ]);
-    res.json({ items, total, page, limit });
+    res.json({ items: await withWaitlistDetails(items), total, page, limit });
   } catch (e: any) {
     return adminError(res, 'GET /waitlist', e, 500);
+  }
+});
+
+// Счётчики: всего, по статусам/типам, конверсия; invitesEnabled — сработает ли ссылка.
+router.get('/waitlist/stats', async (_req, res) => {
+  try {
+    await syncWaitlistRegisteredByEmail();
+    res.json(await waitlistStats());
+  } catch (e: any) {
+    return adminError(res, 'GET /waitlist/stats', e, 500);
+  }
+});
+
+// Массовое приглашение: до WAITLIST_BULK_MAX заявок, по очереди с паузой.
+router.post('/waitlist/invite-bulk', async (req: AuthRequest, res) => {
+  try {
+    const raw = (req.body as { ids?: unknown })?.ids;
+    const ids = Array.isArray(raw) ? [...new Set(raw.filter((v): v is string => typeof v === 'string' && !!v))] : [];
+    if (ids.length === 0 || ids.length > WAITLIST_BULK_MAX) {
+      return res.status(400).json({ error: `Выберите от 1 до ${WAITLIST_BULK_MAX} заявок` });
+    }
+    if (!(await waitlistInvitesWork())) return res.status(409).json({ error: INVITES_DISABLED_ERROR, code: 'INVITES_DISABLED' });
+    res.json(await inviteWaitlistBulk(ids, req.userId!));
+  } catch (e: any) {
+    return adminError(res, 'POST /waitlist/invite-bulk', e, 500);
+  }
+});
+
+// Пригласить одну заявку (повтор — не чаще раза в 24 ч → 429).
+router.post('/waitlist/:id/invite', async (req: AuthRequest, res) => {
+  try {
+    if (!(await waitlistInvitesWork())) return res.status(409).json({ error: INVITES_DISABLED_ERROR, code: 'INVITES_DISABLED' });
+    const r = await inviteWaitlistEntry(req.params.id, req.userId!);
+    if (!r.ok) return res.status(r.status).json({ error: r.error, code: r.reason });
+    const [entry] = await withWaitlistDetails([r.entry]);
+    res.json({ ok: true, entry, inviteUrl: r.inviteUrl });
+  } catch (e: any) {
+    return adminError(res, 'POST /waitlist/:id/invite', e, 500);
+  }
+});
+
+// Удалить заявку по просьбе человека (152-ФЗ).
+router.delete('/waitlist/:id', async (req, res) => {
+  try {
+    const deleted = await deleteWaitlistEntry(req.params.id);
+    if (!deleted) return res.status(404).json({ error: 'Заявка не найдена' });
+    res.json({ ok: true });
+  } catch (e: any) {
+    return adminError(res, 'DELETE /waitlist/:id', e, 500);
   }
 });
 

@@ -17,10 +17,14 @@ function genCode(): string {
 // count — все приглашённые (вкл. кампании и легаси-ссылки); прогресс Pro считается
 // так же, как реальное начисление (applyReferralProGrants): только по личным
 // одноразовым ссылкам — иначе экран обещал месяцы, которые не будут выданы.
+// Приглашения из листа ожидания (ReferralLink.source='waitlist', владелец — админ)
+// не считаются ни в count, ни в Pro: это не личные рефералы.
 router.get('/stats', authenticate, async (req: AuthRequest, res) => {
   try {
     const [count, proCount] = await Promise.all([
-      prisma.user.count({ where: { referrerId: req.userId } }),
+      prisma.user.count({
+        where: { referrerId: req.userId, NOT: { usedReferralLink: { is: { source: 'waitlist' } } } },
+      }),
       countProReferrals(req.userId!),
     ]);
     const perMonth = REFERRALS_PER_PRO_MONTH;

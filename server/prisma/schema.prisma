@@ -920,6 +920,12 @@ model ReferralLink {
   multiUse  Boolean @default(false)
   usedCount Int     @default(0)
 
+  // Происхождение ссылки: null — личная ссылка пользователя; 'waitlist' —
+  // приглашение из листа ожидания (создаёт админ). Waitlist-ссылки НЕ дают
+  // владельцу реферальный Pro (utils/pro.ts countProReferrals) и скрыты из
+  // «Моих ссылок» (создаются сразу с hiddenAt — код при этом работает).
+  source    String?
+
   createdAt DateTime @default(now())
 
   @@index([ownerId])
@@ -1613,10 +1619,22 @@ model WaitlistEntry {
   type             String   // resident_waitlist | listener | customer | company
   consentPd        Boolean  @default(false)
   consentMarketing Boolean  @default(false)
+
+  // Приглашения из админки (lib/waitlist.ts): new → invited → registered.
+  status             String    @default("new") // new | invited | registered
+  invitedAt          DateTime? // последнее приглашение (повтор — не чаще раза в 24 ч)
+  invitedById        String?   // админ, отправивший последнее приглашение
+  invitesSent        Int       @default(0)
+  referralLinkId     String?   // одноразовая ReferralLink (source='waitlist') — ссылка-приглашение
+  registeredUserId   String?   // аккаунт, созданный по приглашению / с тем же email
+  registeredAt       DateTime?
+  confirmationSentAt DateTime? // письмо «Заявка принята» (не чаще раза в 24 ч)
+
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
   @@index([type])
+  @@index([status])
 }
 
 // ============ ORDERS ============
