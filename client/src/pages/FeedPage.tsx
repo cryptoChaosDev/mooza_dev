@@ -28,6 +28,7 @@ import VacancyForm from '../components/VacancyForm';
 import { workFormatLabel, geographyLabel, paymentLabel } from '../lib/vacancyOptions';
 import AvatarComponent from '../components/Avatar';
 import AudioPlayer from '../components/AudioPlayer';
+import FindMusicianButton from '../components/FindMusicianButton';
 import PostContent from '../components/PostContent';
 import RichTextEditor from '../components/RichTextEditor';
 import { ReactionBar, DoubleTapReactWrapper } from '../components/ReactionBar';
@@ -1526,6 +1527,7 @@ export default function FeedPage() {
               <h2 className="text-lg font-bold text-white">Поток</h2>
             </div>
             <div className="flex items-center gap-0.5 flex-shrink-0">
+              <FindMusicianButton />
               <button
                 onClick={() => gate.ensure('saved', undefined, () => setShowSavedOnly(s => !s))}
                 className={`flex items-center px-2.5 py-1.5 rounded-xl text-sm transition-colors ${showSavedOnly ? 'text-amber-300 bg-amber-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
