@@ -1,117 +1,143 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, type ReactNode } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { motion, AnimatePresence, type Transition } from 'framer-motion';
+import { m, AnimatePresence, LazyMotion, MotionConfig, useReducedMotion } from 'framer-motion';
 import {
-  Search, MessageCircle, Briefcase, Users, ArrowRight,
-  Star, Zap, Shield, Music2, Mic2, Headphones, Drum,
-  Guitar, Radio, BarChart3, CheckCircle2, FileText,
+  ArrowRight, BadgeCheck, CalendarDays, FileText, Headphones, IdCard, Search, Send, Zap,
 } from 'lucide-react';
 import { siteSettingsAPI, referenceAPI } from '../lib/api';
 import LegalDocsModal from '../components/LegalDocsModal';
 import { useSeo } from '../lib/seo';
 import { trackGuestView } from '../lib/metrika';
 import { openAuthGate } from '../components/AuthGateModal';
+import Bento from '../components/landing/Bento';
+import HowItWorks from '../components/landing/HowItWorks';
+import TelegramBlock from '../components/landing/TelegramBlock';
+import { EASE, GlassCard, Glow, Grad, TELEGRAM_CHANNEL_URL, fadeUp } from '../components/landing/ui';
+import '../components/landing/landing.css';
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
-const fadeUp = (delay = 0) => ({
-  initial: { opacity: 0, y: 28 },
-  whileInView: { opacity: 1, y: 0 },
-  viewport: { once: true as const },
-  transition: { duration: 0.6, delay, ease: [0.22, 1, 0.36, 1] } as Transition,
-});
+// Фичи анимаций подгружаются отдельным чанком уже после первого рендера.
+const loadMotionFeatures = () => import('../components/landing/motionFeatures').then((r) => r.default);
 
-const PROFESSIONS = [
-  'вокалистов', 'гитаристов', 'продюсеров', 'барабанщиков',
-  'звукорежиссёров', 'диджеев', 'клавишников', 'басистов',
-  'саунд-дизайнеров', 'музыкальных педагогов', 'видеографов',
-];
-
-const TICKER_ITEMS = [
-  'Вокалист', 'Гитарист', 'Продюсер', 'Звукорежиссёр', 'Диджей',
-  'Барабанщик', 'Клавишник', 'Бас-гитарист', 'Виолончелист', 'Флейтист',
-  'Саксофонист', 'Аранжировщик', 'Текстовик', 'Менеджер', 'Фотограф',
-  'Видеограф', 'SMM-специалист', 'Промоутер', 'Букинг-агент', 'Лейбл',
-];
-
-// ─── AnimatedProfession ───────────────────────────────────────────────────────
-function AnimatedProfession() {
-  const [idx, setIdx] = useState(0);
-  useEffect(() => {
-    const t = setInterval(() => setIdx(i => (i + 1) % PROFESSIONS.length), 2400);
-    return () => clearInterval(t);
-  }, []);
+// ─── Логотип: обрезанный и сжатый вордмарк (оригинал /logo.png — 1,2 МБ) ─────
+function Logo({ className = '' }: { className?: string }) {
   return (
-    <span className="relative inline-block overflow-hidden" style={{ minWidth: 240 }}>
-      <AnimatePresence mode="wait">
-        <motion.span
-          key={idx}
-          initial={{ y: 40, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: -40, opacity: 0 }}
-          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          className="block bg-gradient-to-r from-primary-400 to-purple-400 bg-clip-text text-transparent"
+    <img
+      src="/landing-assets/logo-wordmark.png"
+      width={565}
+      height={96}
+      alt="Moooza"
+      decoding="async"
+      className={`w-auto select-none ${className}`}
+    />
+  );
+}
+
+// ─── Hero: «Здесь находят …» с меняющимся словом ─────────────────────────────
+const HERO_WORDS = ['барабанщика', 'сцену', 'заказы', 'вокалистку', 'свой состав', 'гитариста'];
+
+function RotatingWord() {
+  const reduce = useReducedMotion();
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    if (reduce) return;
+    const t = setInterval(() => setI((v) => (v + 1) % HERO_WORDS.length), 2600);
+    return () => clearInterval(t);
+  }, [reduce]);
+  return (
+    <span aria-hidden className="grid justify-items-center overflow-hidden pb-[0.14em] -mb-[0.14em]">
+      <AnimatePresence initial={false}>
+        <m.span
+          key={i}
+          initial={{ y: '105%', opacity: 0 }}
+          animate={{ y: '0%', opacity: 1 }}
+          exit={{ y: '-105%', opacity: 0 }}
+          transition={{ duration: 0.65, ease: EASE }}
+          className="lp-grad-text col-start-1 row-start-1 whitespace-nowrap pr-[0.04em]"
         >
-          {PROFESSIONS[idx]}
-        </motion.span>
+          {HERO_WORDS[i]}
+        </m.span>
       </AnimatePresence>
     </span>
   );
 }
 
-// ─── Marquee ──────────────────────────────────────────────────────────────────
-function Marquee() {
-  const items = [...TICKER_ITEMS, ...TICKER_ITEMS];
+/** Эквалайзер внизу hero: CSS-анимация scaleY, при reduced-motion — статичен. */
+function Equalizer() {
+  const bars = useMemo(
+    () => Array.from({ length: 112 }, (_, i) => ({
+      h: 16 + Math.abs(Math.sin(i * 0.52)) * 58 + ((i * 37) % 19),
+      delay: (i * 173) % 2600,
+      dur: 2.2 + ((i * 7) % 10) / 9,
+    })),
+    [],
+  );
+  const mask = 'linear-gradient(to right, transparent, #000 18%, #000 82%, transparent)';
   return (
-    <div className="relative overflow-hidden py-3 border-y border-slate-800/60 bg-slate-950/80">
-      <div className="flex animate-marquee whitespace-nowrap gap-8 w-max">
-        {items.map((item, i) => (
-          <span key={i} className="flex items-center gap-2 text-slate-400 text-sm font-medium">
-            <Music2 size={13} className="text-primary-500 flex-shrink-0" />
-            {item}
-          </span>
-        ))}
-      </div>
-      <div className="absolute inset-y-0 left-0 w-16 bg-gradient-to-r from-slate-950 to-transparent pointer-events-none" />
-      <div className="absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-slate-950 to-transparent pointer-events-none" />
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-x-0 bottom-0 h-24 sm:h-32 flex items-end justify-center gap-[5px] overflow-hidden opacity-[0.32]"
+      style={{ WebkitMaskImage: mask, maskImage: mask }}
+    >
+      {bars.map((b, i) => (
+        <span
+          key={i}
+          className="lp-eq w-[3px] flex-shrink-0 rounded-full bg-gradient-to-t from-[#40d6f0]/0 via-[#40d6f0]/60 to-[#966cf6]"
+          style={{ height: `${Math.min(b.h, 100)}%`, animationDelay: `-${b.delay}ms`, animationDuration: `${b.dur}s` }}
+        />
+      ))}
     </div>
   );
 }
 
-// ─── Counter ──────────────────────────────────────────────────────────────────
-function Counter({ to, suffix = '' }: { to: number; suffix?: string }) {
-  const [val, setVal] = useState(0);
-  const ref = useRef(false);
+// ─── «Что нового» — бегущая строка ──────────────────────────────────────────
+const NEWS: Array<{ icon: typeof Zap; text: ReactNode }> = [
+  { icon: Search, text: <>«Ищу музыканта»&nbsp;— запрос одной фразой</> },
+  { icon: IdCard, text: 'Визитка артиста со всеми площадками' },
+  { icon: CalendarDays, text: 'Биржа лайнапов' },
+  { icon: BadgeCheck, text: 'Подтверждённый опыт' },
+  { icon: Headphones, text: 'Аудиодемо в каталоге' },
+  { icon: Zap, text: '«Отвечает быстро»' },
+  { icon: Send, text: 'Заказы в Telegram' },
+];
+
+function WhatsNew() {
+  const fade = 'linear-gradient(to right, transparent, #000 6%, #000 94%, transparent)';
   return (
-    <motion.span
-      onViewportEnter={() => {
-        if (ref.current) return;
-        ref.current = true;
-        const dur = 1600;
-        const start = performance.now();
-        const tick = (now: number) => {
-          const p = Math.min((now - start) / dur, 1);
-          setVal(Math.floor(p * to));
-          if (p < 1) requestAnimationFrame(tick);
-          else setVal(to);
-        };
-        requestAnimationFrame(tick);
-      }}
-    >
-      {val.toLocaleString('ru')}{suffix}
-    </motion.span>
+    <section aria-label="Что нового" className="relative border-y border-white/[0.06] bg-white/[0.015]">
+      <div className="flex items-center">
+        <div className="relative z-10 flex-shrink-0 pl-4 sm:pl-6 lg:pl-10 pr-3 py-3.5">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#40d6f0] to-[#966cf6] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-slate-950 whitespace-nowrap">
+            Что нового
+          </span>
+        </div>
+        <div className="relative flex-1 min-w-0 overflow-hidden" style={{ WebkitMaskImage: fade, maskImage: fade }}>
+          <div className="lp-marquee flex w-max animate-marquee [animation-duration:46s]">
+            {[0, 1].map((copy) => (
+              <ul key={copy} aria-hidden={copy === 1} className="flex flex-shrink-0">
+                {NEWS.map((n, i) => (
+                  <li key={i} className="flex items-center gap-2 pr-10 py-3.5 text-sm text-slate-300 whitespace-nowrap">
+                    <n.icon size={15} className="text-[#40d6f0] flex-shrink-0" />
+                    {n.text}
+                  </li>
+                ))}
+              </ul>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
 // ─── LandingPage ──────────────────────────────────────────────────────────────
 export default function LandingPage() {
   const navigate = useNavigate();
-  const [activeFeature, setActiveFeature] = useState(0);
   const [legalOpen, setLegalOpen] = useState(false);
 
   useSeo({
     title: 'Moooza — Музыкальная социальная сеть',
-    description: 'Moooza — социальная сеть для музыкантов: находите коллег, заказчиков и исполнителей, создавайте проекты и стройте карьеру в музыкальной индустрии.',
+    description: 'Moooza — соцсеть для музыкантов: найдите исполнителя одной фразой, соберите лайнап, заведите визитку артиста. Ленту и каталог можно смотреть сразу.',
     canonical: '/',
   });
   useEffect(() => { trackGuestView('landing'); }, []);
@@ -133,429 +159,272 @@ export default function LandingPage() {
   const guestBrowsingEnabled = settings?.guestBrowsingEnabled === 'true';
   const profCount = professions?.length ?? 126;
 
-  const FEATURES = [
-    {
-      icon: Search,
-      label: 'Каталог',
-      title: 'Найди нужного специалиста за секунды',
-      desc: 'Фильтруй по профессии, жанру, городу и атрибутам. 11 разделов и 126+ профессий — от вокалистов до букинг-агентов.',
-      pills: ['Уровень мастерства', 'Жанр', 'Специализация', 'Концертный опыт'],
-      color: 'from-primary-600/20 to-violet-600/10',
-    },
-    {
-      icon: Briefcase,
-      label: 'Сделки',
-      title: 'Структурированная совместная работа',
-      desc: 'Оформляй заказы, согласовывай условия, фиксируй этапы. Process-сделки с ревизиями и event-сделки с депозитом.',
-      pills: ['Согласование', 'Оплата', 'Сдача результата', 'Ревизия'],
-      color: 'from-emerald-600/20 to-teal-600/10',
-    },
-    {
-      icon: Users,
-      label: 'Связи',
-      title: 'Профессиональный нетворкинг',
-      desc: 'Устанавливай деловые связи с коллегами. Все совместные проекты, сделки и отзывы — в одном месте.',
-      pills: ['Запрос связи', 'История проектов', 'Отзывы 1-10', 'Избранное'],
-      color: 'from-amber-600/20 to-orange-600/10',
-    },
-    {
-      icon: MessageCircle,
-      label: 'Чат',
-      title: 'Общайся без посредников',
-      desc: 'Личные и групповые чаты, вложения, реакции на сообщения. Уведомления в реальном времени через WebSocket.',
-      pills: ['Личные чаты', 'Группы', 'Вложения', 'Реакции'],
-      color: 'from-rose-600/20 to-pink-600/10',
-    },
-  ];
+  const openWaitlist = (from: string) => openAuthGate('generic', { from }, undefined, 'waitlist');
 
-  const STEPS = [
-    { n: '01', icon: Mic2, title: 'Создай профиль', desc: 'Укажи профессии, атрибуты, портфолио и услуги. Тебя начнут находить в каталоге.' },
-    { n: '02', icon: Search, title: 'Найди коллег', desc: 'Каталог с фильтрами по жанру, уровню и городу. Смотри реальные профили — без ботов.' },
-    { n: '03', icon: Zap, title: 'Работай вместе', desc: 'Оформляй сделки, общайся в чате, получай отзывы. Всё в одном месте.' },
-  ];
+  const primaryBtn = 'group inline-flex items-center justify-center gap-2 min-h-[54px] px-5 sm:px-8 whitespace-nowrap rounded-2xl bg-white text-slate-950 text-[16px] font-semibold hover:bg-slate-100 transition-colors shadow-[0_18px_50px_-18px_rgba(150,108,246,0.85)]';
+  const secondaryBtn = 'inline-flex items-center justify-center gap-2 min-h-[54px] px-5 sm:px-7 whitespace-nowrap rounded-2xl text-slate-100 text-[16px] font-semibold bg-white/[0.04] hover:bg-white/[0.08] backdrop-blur-md shadow-[inset_0_0_0_1px_rgba(148,163,184,0.24)] transition-colors';
+  const textLinkBase = 'inline-flex items-center min-h-[44px] px-2.5 rounded-lg hover:text-white transition-colors';
+  const textLink = `${textLinkBase} text-slate-300`;
+  const textLinkAccent = `${textLinkBase} text-[#7fe3f5]`;
+  const navLink = 'inline-flex items-center min-h-[44px] px-2.5 sm:px-3 rounded-xl text-sm text-slate-300 hover:text-white hover:bg-white/[0.05] transition-colors';
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 overflow-x-hidden">
+    // LazyMotion + m.* — только нужные фичи framer-motion (меньше JS на первом экране)
+    <LazyMotion features={loadMotionFeatures} strict>
+    <MotionConfig reducedMotion="user">
+      <div className="lp-root relative min-h-screen bg-[#020617] text-slate-100 overflow-x-hidden">
+        {/* Шум поверх всего фона страницы */}
+        <div aria-hidden className="lp-noise pointer-events-none absolute inset-0 z-0" />
 
-      {/* ── HEADER: гостю сразу видно, куда идти без регистрации ─────────── */}
-      <header className="fixed top-0 inset-x-0 z-40 bg-slate-950/80 backdrop-blur border-b border-slate-800/60" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
-        <div className="max-w-5xl mx-auto h-14 px-4 flex items-center justify-between gap-3">
-          <Link to="/" className="flex-shrink-0"><img src="/logo.png" alt="Moooza" className="h-9 sm:h-10 w-auto" /></Link>
-          <nav className="flex items-center gap-1 sm:gap-2 min-w-0">
-            {guestBrowsingEnabled && (
-              <>
-                <Link to="/feed" className="px-2 sm:px-3 py-1.5 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors">Лента</Link>
-                <Link to="/search" className="px-2 sm:px-3 py-1.5 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors">Каталог</Link>
-                <Link to="/search?tab=artists" className="hidden sm:inline-block px-3 py-1.5 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors">Артисты</Link>
-              </>
-            )}
-            {loginEnabled && (
-              <Link to="/login" className="ml-1 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-slate-800 hover:bg-slate-700 transition-colors">Войти</Link>
-            )}
-          </nav>
-        </div>
-      </header>
-
-      {/* ── HERO ─────────────────────────────────────────────────────────── */}
-      <section className="relative flex flex-col items-center justify-center min-h-screen min-h-[100dvh] px-4 pt-20 pb-10 text-center">
-        {/* ambient */}
-        <div className="pointer-events-none absolute inset-0 overflow-hidden">
-          <div className="absolute top-[-15%] left-1/2 -translate-x-1/2 w-[900px] h-[600px] rounded-full bg-primary-700/15 blur-[160px]" />
-          <div className="absolute bottom-0 right-[-10%] w-[400px] h-[400px] rounded-full bg-violet-700/10 blur-[100px]" />
-        </div>
-
-        <div className="relative z-10 max-w-3xl mx-auto">
-          <motion.div {...fadeUp(0)} className="flex justify-center mb-5 sm:mb-8">
-            <img src="/logo.png" alt="Moooza" className="h-16 sm:h-40 md:h-48 w-auto drop-shadow-[0_0_40px_rgba(99,102,241,0.3)]" />
-          </motion.div>
-
-          <motion.h1 {...fadeUp(0.15)} className="text-3xl sm:text-5xl md:text-6xl font-extrabold leading-tight tracking-tight mb-4 sm:mb-5">
-            Платформа для
-            <br />
-            <AnimatedProfession />
-          </motion.h1>
-
-          <motion.p {...fadeUp(0.25)} className="text-slate-400 text-base sm:text-xl max-w-xl mx-auto mb-7 sm:mb-10 leading-relaxed">
-            Находите работу, создавайте проекты и стройте карьеру вместе с теми, кто живёт музыкой.
-          </motion.p>
-
-          {!registrationEnabled && !guestBrowsingEnabled && (
-            <motion.div {...fadeUp(0.3)} className="mx-auto max-w-md mb-8 px-4 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-sm leading-relaxed">
-              Регистрация временно закрыта. Если у вас уже есть аккаунт — войдите.
-            </motion.div>
-          )}
-
-          {/* Гостевой режим: главный путь — посмотреть платформу без регистрации */}
-          {guestBrowsingEnabled && (
-            <motion.div {...fadeUp(0.35)} className="flex flex-col items-center gap-4 mb-12">
-              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full">
-                <Link
-                  to="/feed"
-                  className="group w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-500 transition-all flex items-center justify-center gap-2"
-                >
-                  Смотреть без регистрации
-                  <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                </Link>
-                <Link
-                  to="/search"
-                  className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-slate-200 hover:text-white border border-slate-700 hover:border-slate-500 transition-all flex items-center justify-center gap-2"
-                >
-                  <Search size={16} /> Найти исполнителя
-                </Link>
-              </div>
-              <div className="flex items-center justify-center gap-x-4 gap-y-2 flex-wrap text-sm text-slate-400">
-                <Link to="/search?tab=artists" className="text-primary-300 hover:text-primary-200 underline-offset-4 hover:underline">Артисты</Link>
-                {registrationEnabled ? (
-                  <button onClick={() => navigate('/register')} className="text-primary-300 hover:text-primary-200 underline-offset-4 hover:underline">Создать аккаунт</button>
-                ) : (
-                  <button onClick={() => openAuthGate('generic', { from: 'landing' }, undefined, 'waitlist')} className="text-primary-300 hover:text-primary-200 underline-offset-4 hover:underline">Получить доступ</button>
-                )}
-                {loginEnabled && (
-                  <button onClick={() => navigate('/login')} className="text-slate-400 hover:text-white underline-offset-4 hover:underline">У меня есть аккаунт</button>
-                )}
-              </div>
-              {!registrationEnabled && (
-                <p className="text-xs text-slate-500 max-w-sm">Регистрация пока по приглашениям — смотреть ленту, артистов и исполнителей можно уже сейчас.</p>
-              )}
-            </motion.div>
-          )}
-
-          {!guestBrowsingEnabled && (registrationEnabled || loginEnabled) && (
-            <motion.div {...fadeUp(0.35)} className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12">
-              {registrationEnabled && (
-                <button
-                  onClick={() => navigate('/register')}
-                  className="group w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-500 transition-all flex items-center justify-center gap-2"
-                >
-                  Начать бесплатно
-                  <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                </button>
+        {/* ── ШАПКА ─────────────────────────────────────────────────────────── */}
+        <header className="lp-header fixed top-0 inset-x-0 z-40 bg-[#020617]/75 backdrop-blur-xl border-b border-white/[0.06]" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+          <div className="max-w-6xl mx-auto h-16 px-4 sm:px-6 flex items-center justify-between gap-2">
+            <Link to="/" aria-label="Moooza — на главную" className="flex-shrink-0 inline-flex items-center min-h-[44px]">
+              <Logo className="h-[18px] sm:h-[22px]" />
+            </Link>
+            <nav className="flex items-center gap-0.5 sm:gap-1 min-w-0">
+              {guestBrowsingEnabled && (
+                <>
+                  <Link to="/feed" className={`${navLink} hidden xs:inline-flex`}>Лента</Link>
+                  <Link to="/search" className={navLink}>Каталог</Link>
+                  <Link to="/search?tab=artists" className={`${navLink} hidden sm:inline-flex`}>Артисты</Link>
+                  <Link to="/lineups" className={`${navLink} hidden md:inline-flex`}>Лайнапы</Link>
+                </>
               )}
               {loginEnabled && (
-                <button
-                  onClick={() => navigate('/login')}
-                  className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-slate-300 hover:text-white border border-slate-700 hover:border-slate-500 transition-all"
+                <Link
+                  to="/login"
+                  className="ml-1 inline-flex items-center min-h-[44px] px-4 rounded-xl text-sm font-semibold text-white bg-white/[0.07] hover:bg-white/[0.12] shadow-[inset_0_0_0_1px_rgba(148,163,184,0.2)] transition-colors"
                 >
                   Войти
-                </button>
+                </Link>
               )}
-            </motion.div>
-          )}
+            </nav>
+          </div>
+        </header>
 
-          {!guestBrowsingEnabled && (
-            <motion.div {...fadeUp(0.4)} className="flex items-center justify-center gap-4 flex-wrap -mt-8 mb-12 text-sm">
-              <Link to="/feed" className="text-primary-300 hover:text-primary-200 underline-offset-4 hover:underline">Смотреть ленту</Link>
-            </motion.div>
-          )}
-
-          {/* mini stats */}
-          <motion.div {...fadeUp(0.45)} className="flex items-center justify-center gap-6 flex-wrap text-center">
-            {[
-              { value: profCount, suffix: '+', label: 'профессий' },
-              { value: 11, label: 'разделов' },
-              { value: 100, suffix: '%', label: 'бесплатно' },
-            ].map((s, i) => (
-              <div key={i} className="flex flex-col">
-                <span className="text-2xl font-bold text-white">
-                  <Counter to={s.value} suffix={s.suffix} />
-                </span>
-                <span className="text-xs text-slate-500 mt-0.5">{s.label}</span>
-              </div>
-            ))}
-          </motion.div>
-        </div>
-
-        {/* scroll cue */}
-        <motion.div
-          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.4 }}
-          className="absolute bottom-8 left-1/2 -translate-x-1/2"
+        {/* ── HERO ──────────────────────────────────────────────────────────── */}
+        <section
+          className="relative z-[1] px-4 sm:px-6 pb-32 sm:pb-44 lg:min-h-[92vh] flex flex-col justify-center"
+          style={{ paddingTop: 'calc(env(safe-area-inset-top) + 6.25rem)' }}
         >
-          <motion.div animate={{ y: [0, 8, 0] }} transition={{ duration: 2, repeat: Infinity }}
-            className="w-6 h-10 rounded-full border-2 border-slate-700 flex items-start justify-center pt-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-primary-400" />
-          </motion.div>
-        </motion.div>
-      </section>
-
-      {/* ── TICKER ───────────────────────────────────────────────────────── */}
-      <Marquee />
-
-      {/* ── HOW IT WORKS ─────────────────────────────────────────────────── */}
-      <section className="py-24 px-4">
-        <div className="max-w-5xl mx-auto">
-          <motion.div {...fadeUp()} className="text-center mb-16">
-            <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold tracking-widest uppercase text-primary-400 bg-primary-500/10 border border-primary-500/20 mb-4">
-              Как это работает
-            </span>
-            <h2 className="text-3xl sm:text-4xl font-bold">Три шага до первого проекта</h2>
-          </motion.div>
-
-          <div className="grid sm:grid-cols-3 gap-6">
-            {STEPS.map((step, i) => (
-              <motion.div key={i} {...fadeUp(i * 0.12)}
-                className="relative group p-7 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-primary-500/30 transition-all"
-              >
-                <div className="flex items-start gap-4 mb-4">
-                  <span className="text-4xl font-black text-slate-800 group-hover:text-primary-900 transition-colors leading-none select-none">
-                    {step.n}
-                  </span>
-                  <div className="w-10 h-10 rounded-xl bg-primary-500/10 flex items-center justify-center flex-shrink-0 mt-0.5 group-hover:bg-primary-500/20 transition-colors">
-                    <step.icon size={20} className="text-primary-400" />
-                  </div>
-                </div>
-                <h3 className="font-bold text-white text-lg mb-2">{step.title}</h3>
-                <p className="text-slate-400 text-sm leading-relaxed">{step.desc}</p>
-                {i < STEPS.length - 1 && (
-                  <div className="hidden sm:block absolute top-1/2 -right-3 z-10 w-6 h-6 rounded-full bg-slate-900 border border-slate-700 flex items-center justify-center">
-                    <ArrowRight size={12} className="text-slate-600" />
-                  </div>
-                )}
-              </motion.div>
-            ))}
+          {/* фон: сетка + свечения (radial-gradient, без filter: blur) */}
+          <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+            <div className="lp-grid absolute inset-0" />
+            <div
+              className="absolute left-1/2 top-[-22%] h-[760px] w-[1200px] -translate-x-1/2"
+              style={{ background: 'radial-gradient(closest-side, rgba(64,214,240,0.17), rgba(150,108,246,0.11) 55%, rgba(2,6,23,0) 100%)' }}
+            />
+            <div
+              className="absolute right-[-18%] top-[38%] h-[560px] w-[640px]"
+              style={{ background: 'radial-gradient(closest-side, rgba(168,85,247,0.14), rgba(2,6,23,0) 100%)' }}
+            />
+            <div
+              className="absolute left-[-22%] top-[52%] h-[480px] w-[580px]"
+              style={{ background: 'radial-gradient(closest-side, rgba(64,214,240,0.09), rgba(2,6,23,0) 100%)' }}
+            />
           </div>
-        </div>
-      </section>
+          <Equalizer />
 
-      {/* ── FEATURES TAB ─────────────────────────────────────────────────── */}
-      <section className="py-24 px-4 bg-slate-900/30">
-        <div className="max-w-5xl mx-auto">
-          <motion.div {...fadeUp()} className="text-center mb-12">
-            <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold tracking-widest uppercase text-primary-400 bg-primary-500/10 border border-primary-500/20 mb-4">
-              Возможности
-            </span>
-            <h2 className="text-3xl sm:text-4xl font-bold">Всё для работы в музыке</h2>
-          </motion.div>
-
-          {/* Tab pills */}
-          <div className="flex flex-wrap justify-center gap-2 mb-8">
-            {FEATURES.map((f, i) => (
-              <button
-                key={i}
-                onClick={() => setActiveFeature(i)}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                  activeFeature === i
-                    ? 'bg-primary-600 text-white shadow-lg shadow-primary-900/40'
-                    : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
-                }`}
+          <div className="relative z-10 max-w-4xl mx-auto w-full text-center">
+            <m.div {...fadeUp(0)} className="flex justify-center">
+              <Link
+                to="/find"
+                className="group inline-flex items-center gap-2.5 min-h-[44px] max-w-full rounded-full bg-white/[0.04] pl-1.5 pr-4 text-[13.5px] text-slate-300 hover:text-white shadow-[inset_0_0_0_1px_rgba(148,163,184,0.18)] backdrop-blur-md transition-colors"
               >
-                <f.icon size={15} />
-                {f.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Active feature panel */}
-          <AnimatePresence mode="wait">
-            {FEATURES.map((f, i) => i === activeFeature && (
-              <motion.div
-                key={i}
-                initial={{ opacity: 0, y: 16 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -16 }}
-                transition={{ duration: 0.3 }}
-                className={`rounded-2xl border border-slate-800 bg-gradient-to-br ${f.color} p-8 sm:p-10`}
-              >
-                <div className="max-w-lg">
-                  <div className="w-12 h-12 rounded-2xl bg-primary-500/15 flex items-center justify-center mb-5">
-                    <f.icon size={24} className="text-primary-400" />
-                  </div>
-                  <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4 leading-tight">{f.title}</h3>
-                  <p className="text-slate-300 text-base leading-relaxed mb-6">{f.desc}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {f.pills.map(pill => (
-                      <span key={pill} className="px-3 py-1 rounded-full bg-slate-800/80 border border-slate-700/60 text-slate-300 text-xs font-medium">
-                        {pill}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </div>
-      </section>
-
-      {/* ── WHY MOOOZA ───────────────────────────────────────────────────── */}
-      <section className="py-24 px-4">
-        <div className="max-w-5xl mx-auto">
-          <div className="grid sm:grid-cols-2 gap-12 items-center">
-            <motion.div {...fadeUp()}>
-              <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold tracking-widest uppercase text-primary-400 bg-primary-500/10 border border-primary-500/20 mb-5">
-                Почему Moooza
-              </span>
-              <h2 className="text-3xl sm:text-4xl font-bold mb-8 leading-tight">
-                Создана специально для&nbsp;творческой индустрии
-              </h2>
-              <ul className="space-y-4">
-                {[
-                  ['Только музыканты и творческие профессии — никакого шума', Shield],
-                  ['Профессии с кастомными атрибутами: жанр, уровень, специализация', Star],
-                  ['Реальное время: онлайн-статус, мгновенные сообщения', Zap],
-                  ['Сделки с защищёнными этапами оплаты и ревизий', CheckCircle2],
-                  ['Артисты и группы — страницы коллективов с постами', Users],
-                ].map(([text, Icon], i) => {
-                  const Ic = Icon as React.FC<{ size: number; className: string }>;
-                  return (
-                    <motion.li key={i} {...fadeUp(i * 0.07)} className="flex items-start gap-3">
-                      <div className="w-6 h-6 rounded-lg bg-primary-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                        <Ic size={14} className="text-primary-400" />
-                      </div>
-                      <span className="text-slate-300 text-sm leading-relaxed">{text as string}</span>
-                    </motion.li>
-                  );
-                })}
-              </ul>
-            </motion.div>
-
-            {/* Visual panel */}
-            <motion.div {...fadeUp(0.15)}>
-              <div className="grid grid-cols-2 gap-3">
-                {[
-                  { icon: Mic2, label: 'Вокалисты', count: '24' },
-                  { icon: Guitar, label: 'Инструменталисты', count: '40+' },
-                  { icon: Headphones, label: 'Продюсеры', count: '18' },
-                  { icon: Drum, label: 'Ударные', count: '12' },
-                  { icon: Radio, label: 'Диджеи', count: '16' },
-                  { icon: BarChart3, label: 'Менеджмент', count: '22+' },
-                ].map((card, i) => (
-                  <motion.div
-                    key={i}
-                    whileHover={{ scale: 1.04, borderColor: 'rgba(99,102,241,0.4)' }}
-                    className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 cursor-default"
-                  >
-                    <card.icon size={20} className="text-primary-400 mb-2" />
-                    <p className="text-white font-semibold text-sm">{card.label}</p>
-                    <p className="text-slate-500 text-xs mt-0.5">{card.count} специализаций</p>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
-          </div>
-        </div>
-      </section>
-
-      {/* ── FINAL CTA (гость, регистрация по приглашениям) ────────────────── */}
-      {guestBrowsingEnabled && !registrationEnabled && (
-        <section className="py-24 px-4">
-          <div className="max-w-2xl mx-auto text-center rounded-3xl border border-slate-800 bg-slate-900/60 px-8 py-14">
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-4 text-white">Загляните внутрь</h2>
-            <p className="text-slate-400 mb-8 max-w-sm mx-auto">Лента, артисты и исполнители открыты для просмотра. Писать и откликаться — после входа.</p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Link to="/feed" className="group w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-500 transition-all">
-                Смотреть без регистрации
-                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                <span className="rounded-full bg-gradient-to-r from-[#40d6f0] to-[#966cf6] px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-950">Новое</span>
+                <span className="truncate">
+                  «Ищу музыканта»<span className="hidden sm:inline">&nbsp;— запрос одной фразой</span>
+                </span>
+                <ArrowRight size={14} className="flex-shrink-0 text-[#40d6f0] transition-transform group-hover:translate-x-0.5" />
               </Link>
-              <button onClick={() => openAuthGate('generic', { from: 'landing_bottom' }, undefined, 'waitlist')} className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-slate-200 border border-slate-700 hover:border-slate-500 transition-all">
-                Получить доступ
-              </button>
-            </div>
-          </div>
-        </section>
-      )}
+            </m.div>
 
-      {/* ── FINAL CTA ────────────────────────────────────────────────────── */}
-      {registrationEnabled && (
-        <section className="py-24 px-4">
-          <div className="max-w-2xl mx-auto text-center">
-            <div className="relative rounded-3xl overflow-hidden border border-slate-800 bg-slate-900/60 px-8 py-16">
-              <div className="pointer-events-none absolute inset-0">
-                <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-[500px] h-[250px] rounded-full bg-primary-700/15 blur-[90px]" />
-                <div className="absolute top-0 right-0 w-[200px] h-[200px] rounded-full bg-violet-700/10 blur-[60px]" />
-              </div>
+            <m.h1
+              {...fadeUp(0.08)}
+              className="mt-7 sm:mt-9 text-[clamp(2.4rem,11vw,5.5rem)] leading-[1.02] font-semibold tracking-[-0.045em] text-white"
+            >
+              <span className="sr-only">Moooza&nbsp;— здесь находят барабанщика, сцену, заказы и&nbsp;свой состав</span>
+              <span aria-hidden className="block">Здесь находят</span>
+              <RotatingWord />
+            </m.h1>
 
-              <motion.div {...fadeUp()} className="relative">
-                <div className="flex justify-center mb-4">
-                  <img src="/logo.png" alt="Moooza" className="h-16 w-auto" />
+            <m.p {...fadeUp(0.16)} className="mt-6 sm:mt-7 text-[17px] sm:text-xl leading-relaxed text-slate-400 max-w-[34rem] mx-auto text-balance">
+              Moooza&nbsp;— соцсеть и&nbsp;маркетплейс для&nbsp;музыкантов. Исполнители, сцены, заказы и&nbsp;визитка артиста&nbsp;— в&nbsp;одном месте.
+            </m.p>
+
+            {!registrationEnabled && !guestBrowsingEnabled && (
+              <m.div {...fadeUp(0.22)} className="mx-auto mt-8 max-w-md px-4 py-3 rounded-2xl bg-amber-500/10 shadow-[inset_0_0_0_1px_rgba(245,158,11,0.3)] text-amber-300 text-sm leading-relaxed">
+                Регистрация временно закрыта. Если у&nbsp;вас уже есть аккаунт&nbsp;— войдите.
+              </m.div>
+            )}
+
+            {/* Гостевой режим: главный путь — открыть платформу гостем (лента) */}
+            {guestBrowsingEnabled && (
+              <m.div {...fadeUp(0.24)} className="mt-9 sm:mt-10">
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 max-w-sm sm:max-w-none mx-auto">
+                  <Link to="/feed" className={primaryBtn}>
+                    Открыть Moooza
+                    <ArrowRight size={17} className="transition-transform group-hover:translate-x-0.5" />
+                  </Link>
+                  <Link to="/search" className={secondaryBtn}>
+                    <Search size={17} /> Найти исполнителя
+                  </Link>
                 </div>
-                <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight mb-4">
-                  <span className="bg-gradient-to-r from-primary-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
-                    Стань частью
-                  </span>
-                  <br />
-                  <span className="text-white">сообщества</span>
-                </h2>
-                <p className="text-slate-400 mb-8 max-w-sm mx-auto">
-                  Регистрация занимает меньше минуты. Начни находить коллег прямо сейчас.
-                </p>
-                <button
-                  onClick={() => navigate('/register')}
-                  className="group inline-flex items-center gap-2 px-10 py-3.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-500 transition-all"
-                >
-                  Зарегистрироваться бесплатно
-                  <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
-                </button>
-              </motion.div>
-            </div>
+                <div className="mt-4 flex items-center justify-center gap-x-3 flex-wrap text-sm">
+                  <Link to="/search?tab=artists" className={textLink}>Артисты</Link>
+                  {registrationEnabled ? (
+                    <button type="button" onClick={() => navigate('/register')} className={textLinkAccent}>Создать аккаунт</button>
+                  ) : (
+                    <button type="button" onClick={() => openWaitlist('landing')} className={textLinkAccent}>Получить доступ</button>
+                  )}
+                  {loginEnabled && (
+                    <button type="button" onClick={() => navigate('/login')} className={textLink}>У&nbsp;меня есть аккаунт</button>
+                  )}
+                </div>
+                {!registrationEnabled && (
+                  <p className="mt-2 text-[13px] leading-relaxed text-slate-500 max-w-xs sm:max-w-sm mx-auto">
+                    Вход пока по&nbsp;приглашениям&nbsp;— ленту, артистов и&nbsp;исполнителей можно смотреть уже сейчас.
+                  </p>
+                )}
+              </m.div>
+            )}
+
+            {!guestBrowsingEnabled && (registrationEnabled || loginEnabled) && (
+              <m.div {...fadeUp(0.24)} className="mt-9 sm:mt-10 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 max-w-sm sm:max-w-none mx-auto">
+                {registrationEnabled && (
+                  <button type="button" onClick={() => navigate('/register')} className={primaryBtn}>
+                    Начать бесплатно
+                    <ArrowRight size={17} className="transition-transform group-hover:translate-x-0.5" />
+                  </button>
+                )}
+                {loginEnabled && (
+                  <button type="button" onClick={() => navigate('/login')} className={secondaryBtn}>
+                    Войти
+                  </button>
+                )}
+              </m.div>
+            )}
+
+            {!guestBrowsingEnabled && (
+              <m.div {...fadeUp(0.3)} className="mt-3 flex justify-center text-sm">
+                <Link to="/feed" className={textLinkAccent}>Смотреть ленту</Link>
+              </m.div>
+            )}
           </div>
         </section>
-      )}
 
-      {/* ── FOOTER ───────────────────────────────────────────────────────── */}
-      <footer className="border-t border-slate-800/60 py-8 px-4">
-        <div className="max-w-5xl mx-auto flex flex-col gap-5">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            <img src="/logo.png" alt="Moooza" className="h-7 w-auto" />
-            <div className="flex items-center gap-5 flex-wrap justify-center">
-              <button
-                onClick={() => setLegalOpen(true)}
-                className="flex items-center gap-1.5 text-slate-400 hover:text-white text-xs font-medium transition-colors"
-              >
-                <FileText size={13} /> Документы
-              </button>
-              <a href="mailto:support@moooza.ru" className="text-slate-500 hover:text-slate-300 text-xs transition-colors">Поддержка</a>
+        <div className="relative z-[1]">
+          {/* ── ЧТО НОВОГО ─────────────────────────────────────────────────── */}
+          <WhatsNew />
+
+          {/* ── ПРЕИМУЩЕСТВА (bento) ───────────────────────────────────────── */}
+          <Bento profCount={profCount} />
+
+          {/* ── КАК ЭТО РАБОТАЕТ ───────────────────────────────────────────── */}
+          <HowItWorks
+            registrationEnabled={registrationEnabled}
+            onRegister={() => navigate('/register')}
+            onWaitlist={() => openWaitlist('landing_how')}
+          />
+
+          {/* ── TELEGRAM ───────────────────────────────────────────────────── */}
+          <TelegramBlock />
+
+          {/* ── ФИНАЛЬНЫЙ CTA ──────────────────────────────────────────────── */}
+          {(guestBrowsingEnabled || registrationEnabled) && (
+            <section className="relative px-4 sm:px-6 pt-4 pb-24 sm:pb-32 overflow-x-clip">
+              <m.div {...fadeUp()} className="relative max-w-4xl mx-auto">
+                <Glow color="mix" className="-inset-x-16 -inset-y-24" />
+                <GlassCard strong lift={false} className="relative text-center px-6 py-14 sm:px-14 sm:py-20">
+                  <div
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 -top-1/2 h-full"
+                    style={{ background: 'radial-gradient(closest-side, rgba(64,214,240,0.16), rgba(150,108,246,0.08) 60%, rgba(2,6,23,0) 100%)' }}
+                  />
+                  <div className="relative">
+                    <Logo className="h-6 sm:h-7 mx-auto" />
+                    {registrationEnabled ? (
+                      <>
+                        <h2 className="mt-8 text-[2.4rem] leading-[1.04] sm:text-6xl font-semibold tracking-[-0.04em] text-white text-balance">
+                          Станьте частью <Grad>сцены</Grad>
+                        </h2>
+                        <p className="mt-5 text-base sm:text-lg leading-relaxed text-slate-400 max-w-md mx-auto">
+                          Регистрация занимает меньше минуты. Начните находить коллег, заказы и&nbsp;сцены уже сегодня.
+                        </p>
+                        <div className="mt-9 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 max-w-sm sm:max-w-none mx-auto">
+                          <button type="button" onClick={() => navigate('/register')} className={primaryBtn}>
+                            Создать аккаунт
+                            <ArrowRight size={17} className="transition-transform group-hover:translate-x-0.5" />
+                          </button>
+                          {guestBrowsingEnabled && (
+                            <Link to="/feed" className={secondaryBtn}>Открыть Moooza</Link>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <h2 className="mt-8 text-[2.4rem] leading-[1.04] sm:text-6xl font-semibold tracking-[-0.04em] text-white text-balance">
+                          Загляните <Grad>внутрь</Grad>
+                        </h2>
+                        <p className="mt-5 text-base sm:text-lg leading-relaxed text-slate-400 max-w-md mx-auto">
+                          Ленту, артистов и&nbsp;исполнителей можно смотреть сразу&nbsp;— писать и&nbsp;откликаться после входа.
+                        </p>
+                        <div className="mt-9 flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 max-w-sm sm:max-w-none mx-auto">
+                          <Link to="/feed" className={primaryBtn}>
+                            Открыть Moooza
+                            <ArrowRight size={17} className="transition-transform group-hover:translate-x-0.5" />
+                          </Link>
+                          <button type="button" onClick={() => openWaitlist('landing_bottom')} className={secondaryBtn}>
+                            Получить доступ
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </GlassCard>
+              </m.div>
+            </section>
+          )}
+
+          {/* ── ФУТЕР ──────────────────────────────────────────────────────── */}
+          <footer
+            className="border-t border-white/[0.06] px-4 sm:px-6 pt-10"
+            style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom))' }}
+          >
+            <div className="max-w-6xl mx-auto flex flex-col gap-6">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <Logo className="h-[18px]" />
+                <nav className="flex items-center gap-1 flex-wrap justify-center text-[13px]">
+                  <button
+                    type="button"
+                    onClick={() => setLegalOpen(true)}
+                    className="inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-lg font-medium text-slate-300 hover:text-white transition-colors"
+                  >
+                    <FileText size={14} /> Документы
+                  </button>
+                  <a href={TELEGRAM_CHANNEL_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center min-h-[44px] px-3 rounded-lg text-slate-400 hover:text-white transition-colors">
+                    Telegram-канал
+                  </a>
+                  <a href="mailto:support@moooza.ru" className="inline-flex items-center min-h-[44px] px-3 rounded-lg text-slate-400 hover:text-white transition-colors">
+                    Поддержка
+                  </a>
+                </nav>
+              </div>
+              {/* Реквизиты общества */}
+              <div className="border-t border-white/[0.05] pt-5 text-center sm:text-left text-[11px] leading-relaxed text-slate-600 space-y-0.5">
+                <p>ОБЩЕСТВО С&nbsp;ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ «МУЗА»</p>
+                <p>ОГРН 320631300056254 · ИНН 6312224590 · КПП 631201001</p>
+                <p>Юридический адрес: Самарская область, г.&nbsp;Самара, линия 11-я, д.&nbsp;67</p>
+                <p>© 2026 MOOOZA</p>
+              </div>
             </div>
-          </div>
-          {/* Реквизиты общества */}
-          <div className="border-t border-slate-800/40 pt-4 text-center sm:text-left text-[11px] leading-relaxed text-slate-600 space-y-0.5">
-            <p>ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ «МУЗА»</p>
-            <p>ОГРН 320631300056254 · ИНН 6312224590 · КПП 631201001</p>
-            <p>Юридический адрес: Самарская область, г. Самара, линия 11-я, д. 67</p>
-            <p>© 2026 MOOOZA</p>
-          </div>
+          </footer>
         </div>
-      </footer>
 
-      {legalOpen && <LegalDocsModal onClose={() => setLegalOpen(false)} />}
-    </div>
+        {legalOpen && <LegalDocsModal onClose={() => setLegalOpen(false)} />}
+      </div>
+    </MotionConfig>
+    </LazyMotion>
   );
 }
