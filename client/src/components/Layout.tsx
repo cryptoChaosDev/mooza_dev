@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, X, Info, LifeBuoy, Gift, Zap, LogIn } from 'lucide-react';
+import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, X, Info, LifeBuoy, Gift, Zap, LogIn, CalendarDays } from 'lucide-react';
 import { APP_VERSION } from '../lib/changelog';
 import BottomNav from './BottomNav';
 import NotificationBell from './NotificationBell';
@@ -92,14 +92,18 @@ export default function Layout({ children }: LayoutProps) {
     window.scrollTo(0, 0);
   }, [location.pathname]);
 
+  // Сайдбар десктопа («Лайнапы» — только здесь: мобильный BottomNav не
+  // перегружаем, на мобильном вход — плитка в ленте).
   const navItems = isGuest
     ? [
         { path: '/feed', icon: Zap, label: 'Поток' },
         { path: '/search', icon: Search, label: 'Каталог' },
+        { path: '/lineups', icon: CalendarDays, label: 'Лайнапы' },
       ]
     : [
         { path: '/', icon: Home, label: 'Главная' },
         { path: '/search', icon: Search, label: 'Каталог' },
+        { path: '/lineups', icon: CalendarDays, label: 'Лайнапы' },
         { path: '/messages', icon: MessageCircle, label: 'Сообщения' },
         { path: '/friends', icon: Users, label: 'Отношения' },
         { path: '/profile', icon: User, label: 'Профиль' },

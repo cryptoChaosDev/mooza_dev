@@ -8,7 +8,7 @@ import {
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
   UserPlus, Trash2,
   Settings, Link2, Tag, Crown, Shield, UserCog, UserCheck, UserX, Star,
-  UserRound, Users, Disc3, Clapperboard, Briefcase, Activity, ChevronRight, Lock,
+  UserRound, Users, Disc3, Clapperboard, Briefcase, Activity, ChevronRight, Lock, CalendarPlus,
 } from 'lucide-react';
 import { artistAPI, releaseAPI, clipAPI, vacancyAPI } from '../lib/api';
 import { workFormatLabel } from '../lib/vacancyOptions';
@@ -572,6 +572,17 @@ export default function ArtistPage() {
             iconSize={16}
             className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
           />
+          {/* «Биржа лайнапов»: пригласить артиста выступить (запрос + персональное приглашение) */}
+          {!viewerIsAdmin && artist.status !== 'REJECTED' && (
+            <button
+              onClick={() => gate.ensure('create', { type: 'lineup_invite' }, () => navigate(`/lineups/new?artist=${encodeURIComponent(artist.id)}`))}
+              title="Пригласить выступить"
+              aria-label="Пригласить выступить"
+              className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
+            >
+              <CalendarPlus size={16} />
+            </button>
+          )}
           {viewerIsAdmin && (
             <button
               onClick={() => navigate(`/artist/${id}/edit`)}

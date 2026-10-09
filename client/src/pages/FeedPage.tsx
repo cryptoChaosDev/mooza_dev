@@ -24,6 +24,7 @@ import { trackGuestView } from '../lib/metrika';
 import DealCreateModal from '../components/DealCreateModal';
 import { DEALS_ENABLED } from '../lib/features';
 import OnboardingPrompt from '../components/OnboardingPrompt';
+import LineupsEntryTile from '../components/LineupsEntryTile';
 import VacancyForm from '../components/VacancyForm';
 import { workFormatLabel, geographyLabel, paymentLabel } from '../lib/vacancyOptions';
 import AvatarComponent from '../components/Avatar';
@@ -1564,6 +1565,8 @@ export default function FeedPage() {
 
         {/* Onboarding prompt for new users */}
         {!showSavedOnly && <OnboardingPrompt />}
+        {/* Вход в «Биржу лайнапов» */}
+        {!showSavedOnly && <LineupsEntryTile />}
 
         {/* Posts */}
         <div className="pb-28">
