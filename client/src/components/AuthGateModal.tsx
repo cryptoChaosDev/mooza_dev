@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { create } from 'zustand';
-import { LogIn, UserPlus, Mail, Ticket, ArrowLeft, Loader2, CheckCircle2, X } from 'lucide-react';
+import { LogIn, UserPlus, Mail, Ticket, ArrowLeft, Loader2, CheckCircle2, UserCheck, X } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { useScrollLock } from '../lib/scrollLock';
 import { waitlistAPI } from '../lib/api';
@@ -112,7 +112,7 @@ export function AuthGatePanel({
 }) {
   const navigate = useNavigate();
   const { registrationEnabled, referralRegistrationEnabled } = useSiteSettings();
-  const [mode, setMode] = useState<'main' | 'waitlist' | 'waitlistDone' | 'invite'>(initialMode);
+  const [mode, setMode] = useState<'main' | 'waitlist' | 'waitlistDone' | 'waitlistRegistered' | 'invite'>(initialMode);
 
   // waitlist
   const [email, setEmail] = useState('');
@@ -150,8 +150,14 @@ export function AuthGatePanel({
     if (!consentPd) { setError('Нужно согласие на обработку персональных данных'); return; }
     setSending(true);
     try {
-      // Схема сервера: server/src/routes/waitlist.ts (email, type, consentPd, consentMarketing — оба true).
-      await waitlistAPI.submit({ email: email.trim(), type: wlType, consentPd: true, consentMarketing });
+      // Схема сервера: server/src/routes/waitlist.ts (email, type, consentPd обязательно, consentMarketing — по желанию).
+      const { data } = await waitlistAPI.submit({ email: email.trim(), type: wlType, consentPd: true, consentMarketing });
+      // На этот email уже есть аккаунт — заявку сервер не создаёт, предлагаем войти.
+      if (data?.alreadyRegistered) {
+        reachGoal('waitlist_submit', { type: wlType, reason, alreadyRegistered: true });
+        setMode('waitlistRegistered');
+        return;
+      }
       reachGoal('waitlist_submit', { type: wlType, reason });
       setMode('waitlistDone');
     } catch (err) {
@@ -180,8 +186,30 @@ export function AuthGatePanel({
     return (
       <div className="px-5 pt-6 pb-6 text-center space-y-3">
         <CheckCircle2 size={36} className="text-emerald-400 mx-auto" />
-        <p className="text-base font-semibold text-white">Заявка принята</p>
-        <p className="text-sm text-slate-400 leading-relaxed">Пришлём доступ на {email.trim()}, как только откроем набор.</p>
+        <p className="text-base font-semibold text-white">Заявка принята!</p>
+        <p className="text-sm text-slate-400 leading-relaxed">
+          Письмо-подтверждение отправили на <span className="text-slate-200 break-all">{email.trim().toLowerCase()}</span>.
+          Как только доступ будет готов, пришлём приглашение на этот же адрес.
+        </p>
+        <p className="text-xs text-slate-500 leading-relaxed">Не видите письма — проверьте папку «Спам».</p>
+        {variant === 'modal' && (
+          <button onClick={onDone} className="w-full py-2.5 text-sm text-slate-400 hover:text-white transition-colors">Закрыть</button>
+        )}
+      </div>
+    );
+  }
+
+  if (mode === 'waitlistRegistered') {
+    return (
+      <div className="px-5 pt-6 pb-6 text-center space-y-3">
+        <UserCheck size={36} className="text-primary-400 mx-auto" />
+        <p className="text-base font-semibold text-white">У вас уже есть аккаунт</p>
+        <p className="text-sm text-slate-400 leading-relaxed">
+          На <span className="text-slate-200 break-all">{email.trim().toLowerCase()}</span> уже зарегистрирован аккаунт Moooza — войдите, чтобы продолжить.
+        </p>
+        <button onClick={goLogin} className={btnPrimary}>
+          <LogIn size={16} /> Войти
+        </button>
         {variant === 'modal' && (
           <button onClick={onDone} className="w-full py-2.5 text-sm text-slate-400 hover:text-white transition-colors">Закрыть</button>
         )}

@@ -329,7 +329,11 @@ describe('applyReferralProGrants', () => {
     mockPrisma.user.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.user.update.mockResolvedValue({});
     await applyReferralProGrants('owner-1');
-    expect(mockPrisma.referralLink.count.mock.calls[0][0].where).toEqual({ ownerId: 'owner-1', multiUse: false, usedById: { not: null } });
+    expect(mockPrisma.referralLink.count.mock.calls[0][0].where).toEqual({
+      ownerId: 'owner-1', multiUse: false, usedById: { not: null },
+      // приглашения из листа ожидания (source='waitlist') в Pro не считаются
+      OR: [{ source: null }, { source: { not: 'waitlist' } }],
+    });
     expect(mockPrisma.user.count).not.toHaveBeenCalled();
     expect(mockPrisma.user.updateMany.mock.calls[0][0]).toEqual({
       where: { id: 'owner-1', proMonthsFromReferrals: 1 }, data: { proMonthsFromReferrals: 2 },

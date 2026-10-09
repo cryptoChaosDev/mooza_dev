@@ -607,8 +607,14 @@ export const adminAPI = {
   geographies: crudFor('geographies'),
   priceRanges: crudFor('price-ranges'),
   artists: crudFor('artists'),
+  // Лист ожидания: список/счётчики/приглашения (server/src/routes/admin.ts + lib/waitlist.ts)
   waitlist: {
-    list: (type?: string) => api.get(`${adminBase}/waitlist`, { params: type ? { type } : undefined }),
+    list: (params: { type?: string; status?: string; page?: number; limit?: number } = {}) =>
+      api.get(`${adminBase}/waitlist`, { params }),
+    stats: () => api.get(`${adminBase}/waitlist/stats`),
+    invite: (id: string) => api.post(`${adminBase}/waitlist/${id}/invite`),
+    inviteBulk: (ids: string[]) => api.post(`${adminBase}/waitlist/invite-bulk`, { ids }),
+    remove: (id: string) => api.delete(`${adminBase}/waitlist/${id}`),
   },
   artistModeration: {
     verification: () => api.get(`${adminBase}/artists/verification`),
@@ -745,8 +751,9 @@ export const referralAPI = {
 
 // Лист ожидания (закрытая регистрация). Схема: server/src/routes/waitlist.ts.
 export const waitlistAPI = {
+  // alreadyRegistered: на этот email уже есть аккаунт — заявка не создана, предложить войти.
   submit: (data: { email: string; type: 'resident_waitlist' | 'listener' | 'customer' | 'company'; consentPd: true; consentMarketing: boolean }) =>
-    api.post('/waitlist', data),
+    api.post<{ ok: boolean; alreadyRegistered?: boolean }>('/waitlist', data),
 };
 
 export const siteSettingsAPI = {

@@ -158,3 +158,111 @@ export async function sendPasswordResetEmail(to: string, code: string) {
     `),
   });
 }
+
+// ─── Лист ожидания (закрытая регистрация) ────────────────────────────────────
+// Оба письма — транзакционные (ответ на заявку человека), не реклама: уходят
+// независимо от consentMarketing. Вызывающий код (routes/waitlist.ts,
+// lib/waitlist.ts) шлёт их best-effort и сам ловит ошибки.
+
+const appUrl = () => (process.env.APP_URL || 'https://moooza.ru').replace(/\/+$/, '');
+
+const escHtml = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const button = (href: string, label: string) =>
+  `<a href="${escHtml(href)}" style="display:inline-block;padding:12px 28px;background:#6366f1;color:#fff;text-decoration:none;border-radius:10px;font-size:15px;font-weight:600">${label}</a>`;
+
+// Одна строка «что вас ждёт» под тип заявки (лендинг: resident_waitlist | customer | company | listener).
+const WAITLIST_TYPE_HINT: Record<string, string> = {
+  resident_waitlist: 'Когда доступ откроется, вы сможете заполнить профиль, собрать визитку артиста и откликаться на заказы и лайнапы.',
+  customer: 'Когда доступ откроется, вы сможете описать задачу одной фразой в «Ищу музыканта» — запрос получат подходящие исполнители.',
+  company: 'Когда доступ откроется, вы сможете искать исполнителей, публиковать вакансии и собирать лайнапы на свои события.',
+  listener: 'Когда доступ откроется, вы сможете следить за любимыми артистами и их релизами.',
+};
+
+/** «Заявка принята» — подтверждение записи в лист ожидания. */
+export async function sendWaitlistConfirmation(to: string, type: string) {
+  const site = appUrl();
+  const hint = WAITLIST_TYPE_HINT[type] || '';
+  await registerTransport.sendMail({
+    from: '"Moooza" <register@moooza.ru>',
+    to,
+    subject: 'Заявка в Moooza принята',
+    html: wrapper(`
+      <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#fff">Заявка принята</h2>
+      <p style="margin:0 0 12px;font-size:15px;color:#cbd5e1;line-height:1.6">
+        Спасибо за интерес к Moooza! Сейчас платформа открывается по приглашениям —
+        мы напишем на <strong style="color:#818cf8">${escHtml(to)}</strong>, как только доступ для вас будет готов.
+      </p>
+      ${hint ? `<p style="margin:0 0 12px;font-size:14px;color:#94a3b8;line-height:1.6">${hint}</p>` : ''}
+      <p style="margin:0 0 20px;font-size:14px;color:#94a3b8;line-height:1.6">
+        А пока можно смотреть ленту, артистов и исполнителей — для просмотра аккаунт не нужен.
+      </p>
+      ${button(site, 'Открыть Moooza')}
+      <p style="margin:24px 0 0;font-size:14px;color:#94a3b8;line-height:1.6">
+        Свежие заказы и вакансии — в Telegram-канале
+        <a href="https://t.me/moooza_jobs" style="color:#818cf8;text-decoration:none">@moooza_jobs</a>.
+      </p>
+      <p style="margin:24px 0 0;color:#64748b;font-size:12px;line-height:1.6">
+        Вы получили это письмо, потому что оставили заявку на moooza.ru. Если это были не вы — просто
+        проигнорируйте его или напишите на
+        <a href="mailto:support@moooza.ru" style="color:#6366f1;text-decoration:none">support@moooza.ru</a>, и мы удалим заявку.
+      </p>
+    `),
+    text: [
+      'Заявка в Moooza принята',
+      '',
+      `Спасибо за интерес к Moooza! Сейчас платформа открывается по приглашениям — мы напишем на ${to}, как только доступ для вас будет готов.`,
+      ...(hint ? ['', hint] : []),
+      '',
+      `А пока можно смотреть ленту, артистов и исполнителей: ${site}`,
+      'Свежие заказы и вакансии — в Telegram-канале @moooza_jobs: https://t.me/moooza_jobs',
+      '',
+      'Если заявку оставляли не вы — проигнорируйте письмо или напишите на support@moooza.ru.',
+    ].join('\n'),
+  });
+}
+
+/**
+ * «Ваш доступ в Moooza готов» — приглашение из листа ожидания.
+ * `link` — полная ссылка регистрации (lib/waitlist.ts waitlistInviteUrl:
+ * …/register?ref=<code>&email=<email>), одноразовая, без срока действия.
+ */
+export async function sendWaitlistInvite(to: string, link: string) {
+  await registerTransport.sendMail({
+    from: '"Moooza" <register@moooza.ru>',
+    to,
+    subject: 'Ваш доступ в Moooza готов',
+    html: wrapper(`
+      <h2 style="margin:0 0 16px;font-size:20px;font-weight:700;color:#fff">Ваш доступ в Moooza готов</h2>
+      <p style="margin:0 0 20px;font-size:15px;color:#cbd5e1;line-height:1.6">
+        Вы оставляли заявку в листе ожидания — приглашение готово. Создайте аккаунт по кнопке ниже, это займёт пару минут.
+      </p>
+      ${button(link, 'Создать аккаунт')}
+      <p style="margin:24px 0 8px;font-size:14px;color:#94a3b8">Что вас ждёт:</p>
+      <ul style="margin:0 0 8px;padding-left:20px;color:#94a3b8;font-size:14px;line-height:1.8">
+        <li><strong style="color:#cbd5e1">«Ищу музыканта»</strong> — опишите задачу одной фразой, и запрос получат подходящие исполнители</li>
+        <li><strong style="color:#cbd5e1">Визитка артиста</strong> — одна ссылка на группу или проект: релизы, состав, контакты</li>
+        <li><strong style="color:#cbd5e1">Лайнапы</strong> — организаторы собирают артистов на концерты, откликайтесь от имени группы</li>
+      </ul>
+      <p style="margin:24px 0 0;color:#64748b;font-size:12px;line-height:1.6">
+        Ссылка персональная и одноразовая: срок действия не ограничен, но после регистрации по ней она перестаёт работать.
+        Если кнопка не открывается, скопируйте адрес в браузер:<br />
+        <a href="${escHtml(link)}" style="color:#6366f1;text-decoration:none;word-break:break-all">${escHtml(link)}</a>
+      </p>
+    `),
+    text: [
+      'Ваш доступ в Moooza готов',
+      '',
+      'Вы оставляли заявку в листе ожидания — приглашение готово. Создайте аккаунт по ссылке:',
+      link,
+      '',
+      'Что вас ждёт:',
+      '— «Ищу музыканта»: опишите задачу одной фразой, и запрос получат подходящие исполнители',
+      '— Визитка артиста: одна ссылка на группу или проект — релизы, состав, контакты',
+      '— Лайнапы: организаторы собирают артистов на концерты, откликайтесь от имени группы',
+      '',
+      'Ссылка персональная и одноразовая: срок действия не ограничен, но после регистрации по ней она перестаёт работать.',
+    ].join('\n'),
+  });
+}

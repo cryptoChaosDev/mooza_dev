@@ -10,6 +10,7 @@ import { getApiError } from '../lib/apiError';
 import { useScrollLock } from '../lib/scrollLock';
 import { useAuthStore } from '../stores/authStore';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { copyText } from '../lib/artistUtils';
 import * as XLSX from 'xlsx';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -3083,44 +3084,197 @@ function DonationsTab() {
 }
 
 // ─── Waitlist (landing sign-ups) ──────────────────────────────────────────────
+// Сервер: routes/admin.ts (/admin/waitlist*) + lib/waitlist.ts. Приглашение —
+// одноразовая ссылка регистрации (не даёт Pro владельцу) + письмо «Ваш доступ готов».
 const WAITLIST_TYPE_LABEL: Record<string, string> = {
   resident_waitlist: 'Резидент (ожидание)',
   listener: 'Слушатель / фанат',
   customer: 'Заказчик',
   company: 'Компания / лейбл',
 };
+const WAITLIST_STATUS_LABEL: Record<string, string> = {
+  new: 'Новая',
+  invited: 'Приглашён',
+  registered: 'Зарегистрировался',
+};
+const WAITLIST_SKIP_REASON: Record<string, string> = {
+  not_found: 'не найдена',
+  already_registered: 'уже есть аккаунт',
+  too_soon: 'приглашали меньше суток назад',
+  mail_failed: 'письмо не ушло',
+  error: 'ошибка',
+};
+// Повторное приглашение — не чаще раза в 24 ч (сервер отвечает 429).
+const WAITLIST_RESEND_MS = 24 * 60 * 60 * 1000;
+const WAITLIST_BULK_MAX = 50;
+
+type WaitlistStatus = 'new' | 'invited' | 'registered';
 
 interface WaitlistRow {
   id: string; email: string; type: string;
   consentPd: boolean; consentMarketing: boolean;
+  status: WaitlistStatus;
+  invitedAt: string | null; invitesSent: number;
+  registeredAt: string | null; registeredUserId: string | null;
+  inviteUrl: string | null;
+  registeredUser: { id: string; firstName: string; lastName: string; nickname: string | null } | null;
   createdAt: string; updatedAt: string;
 }
 
+interface WaitlistStats {
+  total: number;
+  byStatus: Record<WaitlistStatus, number>;
+  byType: Record<string, number>;
+  invitedTotal: number;
+  conversion: number; // 0..1
+  invitesEnabled: boolean;
+}
+
+const fmtDayMonth = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
+
+/** Через сколько часов можно повторить приглашение (0 — можно сейчас). */
+function waitlistResendInHours(r: WaitlistRow): number {
+  if (!r.invitedAt) return 0;
+  const left = new Date(r.invitedAt).getTime() + WAITLIST_RESEND_MS - Date.now();
+  return left > 0 ? Math.ceil(left / 3_600_000) : 0;
+}
+
+function WaitlistStatusBadge({ r }: { r: WaitlistRow }) {
+  if (r.status === 'registered') {
+    const u = r.registeredUser;
+    return (
+      <div className="space-y-0.5">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-emerald-500/15 text-emerald-300 whitespace-nowrap">
+          Зарегистрировался{r.registeredAt ? ` ${fmtDayMonth(r.registeredAt)}` : ''}
+        </span>
+        {u && (
+          <a href={`/profile/${u.id}`} target="_blank" rel="noopener noreferrer"
+            className="flex items-center gap-1 text-xs text-primary-400 hover:underline max-w-[180px]">
+            <span className="truncate">{`${u.firstName} ${u.lastName}`.trim() || (u.nickname ? `@${u.nickname}` : 'Профиль')}</span>
+            <ExternalLink size={11} className="flex-shrink-0" />
+          </a>
+        )}
+      </div>
+    );
+  }
+  if (r.status === 'invited') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-indigo-500/15 text-indigo-300 whitespace-nowrap">
+        Приглашён{r.invitedAt ? ` ${fmtDayMonth(r.invitedAt)}` : ''}{r.invitesSent > 1 ? ` ×${r.invitesSent}` : ''}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-slate-700/60 text-slate-300 whitespace-nowrap">
+      Новая
+    </span>
+  );
+}
+
 function WaitlistTab() {
-  const [filter, setFilter] = useState<string>('');
+  const qc = useQueryClient();
+  const [typeFilter, setTypeFilter] = useState<string>('');
+  const [statusFilter, setStatusFilter] = useState<string>('');
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
-  useEffect(() => { setPage(1); }, [filter]);
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [deleteRow, setDeleteRow] = useState<WaitlistRow | null>(null);
+  useEffect(() => { setPage(1); setSelected(new Set()); }, [typeFilter, statusFilter]);
+
+  const { data: stats } = useQuery<WaitlistStats>({
+    queryKey: ['admin-waitlist-stats'],
+    queryFn: () => adminAPI.waitlist.stats().then((r: any) => r.data),
+  });
+  // Тот же ключ, что у вкладки «Настройки» — плашка обновится сразу после переключения.
+  const { data: settings } = useQuery({
+    queryKey: ['site-settings'],
+    queryFn: async () => { const { data } = await siteSettingsAPI.get(); return data as Record<string, string>; },
+  });
+  const invitesEnabled = settings
+    ? settings.registrationEnabled !== 'false' || settings.referralRegistrationEnabled === 'true'
+    : stats?.invitesEnabled ?? true;
+
+  const listParams = { type: typeFilter || undefined, status: statusFilter || undefined };
   const { data: rowsPage, isLoading } = useQuery<Paged<WaitlistRow>>({
-    queryKey: ['admin-waitlist', filter, page],
-    queryFn: () => api.get('/admin/waitlist', { params: { type: filter || undefined, page, limit: 100 } }).then((r: any) => r.data),
+    queryKey: ['admin-waitlist', typeFilter, statusFilter, page],
+    queryFn: () => adminAPI.waitlist.list({ ...listParams, page, limit: 100 }).then((r: any) => r.data),
     placeholderData: (prev) => prev,
   });
   const rows: WaitlistRow[] = rowsPage?.items ?? [];
-  const TYPES = ['', 'resident_waitlist', 'listener', 'customer', 'company'];
+  const selectable = rows.filter((r) => r.status !== 'registered');
+  const selectedIds = [...selected];
+  const allSelected = selectable.length > 0 && selectable.every((r) => selected.has(r.id));
 
-  // Excel — ВСЕ заявки по фильтру, а не только текущая страница.
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['admin-waitlist'] });
+    qc.invalidateQueries({ queryKey: ['admin-waitlist-stats'] });
+  };
+
+  const inviteMut = useMutation({
+    mutationFn: (id: string) => adminAPI.waitlist.invite(id),
+    onSuccess: () => { toast.success('Приглашение отправлено'); refresh(); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить приглашение')),
+  });
+
+  const bulkMut = useMutation({
+    mutationFn: (ids: string[]) => adminAPI.waitlist.inviteBulk(ids)
+      .then((r: any) => r.data as { invited: number; skipped: Array<{ id: string; reason: string }> }),
+    onSuccess: (res) => {
+      setSelected(new Set());
+      refresh();
+      if (res.skipped.length === 0) {
+        toast.success(`Приглашено: ${res.invited}`);
+        return;
+      }
+      const byReason = new Map<string, number>();
+      for (const s of res.skipped) byReason.set(s.reason, (byReason.get(s.reason) ?? 0) + 1);
+      const why = [...byReason].map(([k, n]) => `${WAITLIST_SKIP_REASON[k] || k} — ${n}`).join(', ');
+      const msg = `Приглашено: ${res.invited}, пропущено: ${res.skipped.length} (${why})`;
+      if (res.invited > 0) toast.info(msg); else toast.error(msg);
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось пригласить выбранных')),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => adminAPI.waitlist.remove(id),
+    onSuccess: (_d, id) => {
+      toast.success('Заявка удалена');
+      setSelected((prev) => { const next = new Set(prev); next.delete(id); return next; });
+      refresh();
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить заявку')),
+  });
+
+  const toggleRow = (id: string) => setSelected((prev) => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+  const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectable.map((r) => r.id)));
+
+  const copyInvite = async (url: string) => {
+    if (await copyText(url)) toast.success('Ссылка-приглашение скопирована');
+    else toast.error('Не удалось скопировать ссылку');
+  };
+
+  // Excel — ВСЕ заявки по фильтрам, а не только текущая страница.
   const exportAll = async () => {
     setExporting(true);
     try {
-      const all = await fetchAllPages<WaitlistRow>('/admin/waitlist', { type: filter || undefined });
+      const all = await fetchAllPages<WaitlistRow>('/admin/waitlist', listParams);
+      const dt = (iso: string | null) => (iso ? new Date(iso).toLocaleString('ru-RU') : '');
       exportToExcel(all.map((r, i) => ({
         '№': i + 1,
         'Email': r.email,
         'Тип': WAITLIST_TYPE_LABEL[r.type] || r.type,
+        'Статус': WAITLIST_STATUS_LABEL[r.status] || r.status,
         'Согласие ПДн': r.consentPd ? 'да' : 'нет',
         'Согласие реклама': r.consentMarketing ? 'да' : 'нет',
-        'Дата': new Date(r.createdAt).toLocaleString('ru-RU'),
+        'Дата заявки': dt(r.createdAt),
+        'Приглашён': dt(r.invitedAt),
+        'Приглашений': r.invitesSent,
+        'Зарегистрировался': dt(r.registeredAt),
+        'ID пользователя': r.registeredUserId ?? '',
       })), 'waitlist');
     } catch (e: any) {
       toast.error(getApiError(e, 'Не удалось выгрузить заявки'));
@@ -3129,10 +3283,24 @@ function WaitlistTab() {
     }
   };
 
+  const TYPES = ['', 'resident_waitlist', 'listener', 'customer', 'company'];
+  const STATUSES = ['', 'new', 'invited', 'registered'];
+  const chip = (active: boolean) => `px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+    active ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+  }`;
+  const conversionPct = stats ? `${Math.round(stats.conversion * 1000) / 10}%` : '—';
+  const cards = [
+    { label: 'Заявок', value: stats?.total ?? '—', sub: stats ? `новых: ${stats.byStatus.new}` : '' },
+    { label: 'Приглашено', value: stats?.invitedTotal ?? '—', sub: stats ? `ждут регистрации: ${stats.byStatus.invited}` : '' },
+    { label: 'Зарегистрировались', value: stats?.byStatus.registered ?? '—', sub: 'по приглашению или сами' },
+    { label: 'Конверсия', value: conversionPct, sub: 'из приглашённых' },
+  ];
+  const tooMany = selectedIds.length > WAITLIST_BULK_MAX;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="text-sm font-semibold text-white">Waitlist — заявки с лендинга ({rowsPage?.total ?? 0})</h2>
+        <h2 className="text-sm font-semibold text-white">Лист ожидания — заявки с лендинга ({rowsPage?.total ?? 0})</h2>
         <button
           onClick={exportAll}
           disabled={exporting}
@@ -3142,19 +3310,62 @@ function WaitlistTab() {
         </button>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
-        {TYPES.map(t => (
-          <button
-            key={t || 'all'}
-            onClick={() => setFilter(t)}
-            className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              filter === t ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
-            }`}
-          >
-            {t === '' ? 'Все' : WAITLIST_TYPE_LABEL[t]}
-          </button>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {cards.map((c) => (
+          <div key={c.label} className="bg-slate-900/60 border border-slate-800 rounded-xl px-3 py-2.5 min-w-0">
+            <div className="text-[11px] text-slate-500 truncate">{c.label}</div>
+            <div className="text-xl font-semibold text-white tabular-nums">{c.value}</div>
+            {c.sub && <div className="text-[11px] text-slate-500 truncate">{c.sub}</div>}
+          </div>
         ))}
       </div>
+
+      {!invitesEnabled && (
+        <div className="flex items-start gap-2 bg-amber-500/10 border border-amber-500/30 text-amber-200 rounded-xl px-3 py-2.5 text-xs leading-relaxed">
+          <AlertTriangle size={15} className="flex-shrink-0 mt-0.5" />
+          <span>
+            Регистрация по приглашениям выключена — ссылки из писем не сработают. Включите «Регистрация по реф-ссылкам»
+            во вкладке «Настройки» (или откройте регистрацию для всех).
+          </span>
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <div className="flex flex-wrap gap-1.5">
+          {STATUSES.map((s) => (
+            <button key={s || 'all'} onClick={() => setStatusFilter(s)} className={chip(statusFilter === s)}>
+              {s === '' ? 'Все статусы' : WAITLIST_STATUS_LABEL[s]}
+              {s && stats ? <span className="ml-1 opacity-70">{stats.byStatus[s as WaitlistStatus]}</span> : null}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          {TYPES.map((t) => (
+            <button key={t || 'all'} onClick={() => setTypeFilter(t)} className={chip(typeFilter === t)}>
+              {t === '' ? 'Все типы' : WAITLIST_TYPE_LABEL[t]}
+              {t && stats ? <span className="ml-1 opacity-70">{stats.byType[t] ?? 0}</span> : null}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {selectedIds.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => bulkMut.mutate(selectedIds)}
+            disabled={bulkMut.isPending || tooMany}
+            className="flex items-center gap-1.5 text-xs bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white px-3 py-2 rounded-lg transition-colors"
+          >
+            {bulkMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Zap size={13} />}
+            Пригласить выбранных ({selectedIds.length})
+          </button>
+          <button onClick={() => setSelected(new Set())} className="text-xs text-slate-400 hover:text-white px-2 py-2">
+            Снять выбор
+          </button>
+          {tooMany && <span className="text-xs text-amber-300">Не больше {WAITLIST_BULK_MAX} за раз</span>}
+          {bulkMut.isPending && <span className="text-xs text-slate-500">Отправляем письма по очереди…</span>}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="text-slate-500 text-sm py-8 text-center">Загрузка…</div>
@@ -3162,29 +3373,104 @@ function WaitlistTab() {
         <div className="text-slate-500 text-sm py-8 text-center">Заявок пока нет</div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-800">
-          <table className="w-full text-sm">
+          <table className="w-full min-w-[760px] text-sm">
             <thead className="bg-slate-900 text-slate-400 text-xs">
               <tr>
+                <th className="px-3 py-2 w-8">
+                  <input
+                    type="checkbox"
+                    aria-label="Выбрать все на странице"
+                    checked={allSelected}
+                    disabled={selectable.length === 0}
+                    onChange={toggleAll}
+                    className="w-4 h-4 accent-primary-500 align-middle"
+                  />
+                </th>
                 <th className="text-left px-3 py-2">Email</th>
                 <th className="text-left px-3 py-2">Тип</th>
+                <th className="text-left px-3 py-2">Статус</th>
                 <th className="text-left px-3 py-2 whitespace-nowrap">Согласия</th>
                 <th className="text-left px-3 py-2 whitespace-nowrap">Дата</th>
+                <th className="text-right px-3 py-2">Действия</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map(r => (
-                <tr key={r.id} className="border-t border-slate-800 text-slate-300">
-                  <td className="px-3 py-2 break-all">{r.email}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{WAITLIST_TYPE_LABEL[r.type] || r.type}</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-xs">{r.consentPd ? '✓' : '✗'} ПДн · {r.consentMarketing ? '✓' : '✗'} рекл.</td>
-                  <td className="px-3 py-2 whitespace-nowrap text-slate-500">{new Date(r.createdAt).toLocaleDateString('ru-RU')}</td>
-                </tr>
-              ))}
+              {rows.map((r) => {
+                const canSelect = r.status !== 'registered';
+                const waitH = waitlistResendInHours(r);
+                const inviting = inviteMut.isPending && inviteMut.variables === r.id;
+                return (
+                  <tr key={r.id} className="group border-t border-slate-800 text-slate-300 align-top">
+                    <td className="px-3 py-2">
+                      {canSelect && (
+                        <input
+                          type="checkbox"
+                          aria-label={`Выбрать ${r.email}`}
+                          checked={selected.has(r.id)}
+                          onChange={() => toggleRow(r.id)}
+                          className="w-4 h-4 accent-primary-500 align-middle"
+                        />
+                      )}
+                    </td>
+                    <td className="px-3 py-2 break-all">{r.email}</td>
+                    <td className="px-3 py-2 whitespace-nowrap">{WAITLIST_TYPE_LABEL[r.type] || r.type}</td>
+                    <td className="px-3 py-2"><WaitlistStatusBadge r={r} /></td>
+                    <td className="px-3 py-2 whitespace-nowrap text-xs">{r.consentPd ? '✓' : '✗'} ПДн · {r.consentMarketing ? '✓' : '✗'} рекл.</td>
+                    <td className="px-3 py-2 whitespace-nowrap text-slate-500">{new Date(r.createdAt).toLocaleDateString('ru-RU')}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center justify-end gap-1">
+                        {r.status !== 'registered' && (
+                          <button
+                            onClick={() => inviteMut.mutate(r.id)}
+                            disabled={inviting || waitH > 0}
+                            title={waitH > 0
+                              ? `Последнее приглашение ${r.invitedAt ? fmtDayMonth(r.invitedAt) : ''} — повторить можно через ${waitH} ч`
+                              : r.invitedAt ? `Последнее приглашение ${fmtDayMonth(r.invitedAt)}` : 'Отправить ссылку-приглашение на email'}
+                            className="flex items-center gap-1 text-xs bg-primary-600/90 hover:bg-primary-500 disabled:opacity-40 disabled:hover:bg-primary-600/90 text-white px-2 py-1 rounded-lg whitespace-nowrap transition-colors"
+                          >
+                            {inviting ? <Loader2 size={12} className="animate-spin" /> : r.status === 'invited' ? <RefreshCw size={12} /> : <Zap size={12} />}
+                            {r.status === 'invited'
+                              ? <>Повторить{r.invitedAt ? <span className="opacity-70">· {fmtDayMonth(r.invitedAt)}</span> : null}</>
+                              : 'Пригласить'}
+                          </button>
+                        )}
+                        <div className={`flex items-center gap-0.5 ${HOVER_ACTIONS}`}>
+                          {r.status === 'invited' && r.inviteUrl && (
+                            <button
+                              onClick={() => copyInvite(r.inviteUrl!)}
+                              title="Скопировать ссылку-приглашение"
+                              aria-label="Скопировать ссылку-приглашение"
+                              className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors"
+                            >
+                              <Copy size={13} />
+                            </button>
+                          )}
+                          <button
+                            onClick={() => setDeleteRow(r)}
+                            title="Удалить заявку"
+                            aria-label="Удалить заявку"
+                            className="p-1.5 text-slate-400 hover:text-red-400 rounded-lg hover:bg-slate-800 transition-colors"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
       {rowsPage && <Pager page={page} total={rowsPage.total} limit={rowsPage.limit} onPage={setPage} />}
+      <ConfirmDialog
+        open={!!deleteRow}
+        message={`Удалить заявку ${deleteRow?.email ?? ''}? Данные удаляются безвозвратно (по просьбе человека, 152-ФЗ); неиспользованная ссылка-приглашение перестанет работать.`}
+        confirmLabel="Удалить"
+        onConfirm={() => { if (deleteRow) deleteMut.mutate(deleteRow.id); }}
+        onCancel={() => setDeleteRow(null)}
+      />
     </div>
   );
 }

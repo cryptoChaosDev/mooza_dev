@@ -108,7 +108,9 @@ export async function grantProMonth(
  *  • многоразовые ссылки-кампании (там referrerId=ownerId у каждого посетителя —
  *    владелец кампании копил бы Pro за всю конференцию);
  *  • «легаси» referrerId / голый userId из URL — его подставляет сам клиент,
- *    это давало самореферал Pro.
+ *    это давало самореферал Pro;
+ *  • приглашения из листа ожидания (source='waitlist'): их «владелец» — админ,
+ *    разославший доступ, это не его рефералы.
  *
  * Idempotent + атомарно: `User.proMonthsFromReferrals` помнит, сколько месяцев уже
  * выдано, и «забирается» условным update (compare-and-set по старому значению)
@@ -117,10 +119,16 @@ export async function grantProMonth(
  */
 export const REFERRALS_PER_PRO_MONTH = 10;
 
-/** Число регистраций, засчитываемых в реферальный Pro (личные одноразовые ссылки). */
+/**
+ * Число регистраций, засчитываемых в реферальный Pro (личные одноразовые ссылки).
+ * source=NULL — обычная ссылка; `not: 'waitlist'` в SQL отбрасывает NULL, поэтому OR.
+ */
 export async function countProReferrals(referrerId: string): Promise<number> {
   return prisma.referralLink.count({
-    where: { ownerId: referrerId, multiUse: false, usedById: { not: null } },
+    where: {
+      ownerId: referrerId, multiUse: false, usedById: { not: null },
+      OR: [{ source: null }, { source: { not: 'waitlist' } }],
+    },
   });
 }
 

@@ -3,10 +3,9 @@ import { z } from 'zod';
 import { prisma } from '../index';
 import { waitlistLimiter } from '../middleware/rateLimiter';
 import { tgEvent } from '../utils/telegram';
+import { WAITLIST_TYPES, markWaitlistRegistered, sendWaitlistConfirmationOnce } from '../lib/waitlist';
 
 const router = Router();
-
-const WAITLIST_TYPES = ['resident_waitlist', 'listener', 'customer', 'company'] as const;
 
 const waitlistSchema = z.object({
   // Trim + lowercase before validating, so pasted spaces / caps don't break it.
@@ -23,21 +22,54 @@ const waitlistSchema = z.object({
 
 // POST /api/waitlist — landing waitlist sign-up (public, closed launch).
 // Upsert by email: a repeat submit is silently accepted, never duplicated.
+//  • email уже зарегистрирован → заявку не создаём, { ok, alreadyRegistered } (клиент
+//    предложит войти); старую заявку с этим email отмечаем «Зарегистрировался».
+//  • первая заявка → письмо «Заявка принята»; повторная отправка формы — письмо
+//    не чаще раза в 24 ч (lib/waitlist), и только пока заявку не пригласили.
 router.post('/', waitlistLimiter, async (req, res) => {
   try {
     const data = waitlistSchema.parse(req.body);
-    const entry = await prisma.waitlistEntry.upsert({
-      where: { email: data.email as string },
-      update: { type: data.type, consentPd: true, consentMarketing: data.consentMarketing },
-      create: { email: data.email as string, type: data.type, consentPd: true, consentMarketing: data.consentMarketing },
-    });
-    // Notify the monitor bot only on the first sign-up (created == updated).
+    const email = data.email as string;
+
+    const user = await prisma.user.findUnique({ where: { email }, select: { id: true } });
+    if (user) {
+      await markWaitlistRegistered({ userId: user.id, email });
+      return res.json({ ok: true, alreadyRegistered: true });
+    }
+
+    const fields = { type: data.type, consentPd: true, consentMarketing: data.consentMarketing };
+    let created = false;
+    let entry = await prisma.waitlistEntry.findUnique({ where: { email } });
+    if (entry) {
+      entry = await prisma.waitlistEntry.update({ where: { email }, data: fields });
+    } else {
+      try {
+        entry = await prisma.waitlistEntry.create({ data: { email, ...fields } });
+        created = true;
+      } catch (e: any) {
+        if (e?.code !== 'P2002') throw e;
+        // Параллельная отправка той же формы успела создать заявку.
+        entry = await prisma.waitlistEntry.update({ where: { email }, data: fields });
+      }
+    }
+
+    // Notify the monitor bot only on the first sign-up.
     // Без email: в мониторинговый чат уходят только событие, тип и счётчик (ПДн не логируем).
-    if (entry.createdAt.getTime() === entry.updatedAt.getTime()) {
+    if (created) {
       try {
         const total = await prisma.waitlistEntry.count();
         tgEvent.waitlist(entry.type, total);
       } catch {}
+    }
+
+    // «Заявка принята» — транзакционное письмо, не зависит от consentMarketing.
+    // Best-effort: ошибка письма не ломает ответ формы.
+    if (entry.status === 'new') {
+      try {
+        await sendWaitlistConfirmationOnce(entry);
+      } catch (mailErr) {
+        console.error('[waitlist] confirmation claim failed:', mailErr);
+      }
     }
     return res.json({ ok: true });
   } catch (err) {

@@ -346,7 +346,8 @@ export default function RegisterPage() {
   const restoredDraft = !!draft && !draft.pendingEmail && draft.step > 0;
 
   // Step 0
-  const [email, setEmail] = useState(draft?.email ?? '');
+  // ?email= — префилл из письма-приглашения листа ожидания (если в черновике пусто).
+  const [email, setEmail] = useState(() => draft?.email || (searchParams.get('email') || '').trim());
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
