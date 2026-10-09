@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Cookie } from 'lucide-react';
+import { enableMetrika } from '../lib/metrika';
 
 const COOKIE_KEY = 'mooza_cookie_consent';
 
@@ -16,6 +17,8 @@ export default function CookieConsent() {
 
   const accept = (level: 'all' | 'necessary') => {
     try { localStorage.setItem(COOKIE_KEY, level); } catch { /* приватный режим — просто скрываем */ }
+    // Аналитика — только с согласия (Политика, п. 11.5).
+    if (level === 'all') enableMetrika();
     setVisible(false);
   };
 

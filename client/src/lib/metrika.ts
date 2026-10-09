@@ -1,8 +1,15 @@
-// Яндекс.Метрика: безопасная обёртка над window.ym. Счётчик подключается в
-// client/index.html; если скрипт не загрузился (блокировщик, офлайн, тесты) —
-// вызовы молча пропускаются.
+// Яндекс.Метрика: безопасная обёртка над window.ym. Загрузчик (window.mzLoadMetrika)
+// объявлен в client/index.html и запускается только после согласия на cookies
+// («Принять»). Без согласия/если скрипт не загрузился — вызовы молча пропускаются.
 
 export const YM_ID = 109562743;
+
+/** Подключить счётчик после согласия на cookies (CookieConsent → «Принять»). */
+export function enableMetrika(): void {
+  try {
+    (window as unknown as { mzLoadMetrika?: () => void }).mzLoadMetrika?.();
+  } catch { /* ignore */ }
+}
 
 export type MetrikaGoal =
   | 'guest_view' | 'gate_open' | 'gate_login_click' | 'gate_access_click'

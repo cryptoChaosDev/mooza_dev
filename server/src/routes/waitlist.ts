@@ -15,10 +15,10 @@ const waitlistSchema = z.object({
     z.string().email('Некорректный email'),
   ),
   type: z.enum(WAITLIST_TYPES),
-  // Both consents (152-ФЗ + закон о рекламе) are mandatory — the front-end gates
-  // the button on them, but this is the real server-side guard.
+  // PD consent (152-FZ) is mandatory — the real server-side guard. Marketing consent is
+  // optional: advertising law forbids making it a condition (privacy policy, 4.1).
   consentPd: z.boolean().refine((v) => v === true, { message: 'Требуется согласие на обработку персональных данных' }),
-  consentMarketing: z.boolean().refine((v) => v === true, { message: 'Требуется согласие на рекламные и информационные рассылки' }),
+  consentMarketing: z.boolean().optional().default(false),
 });
 
 // POST /api/waitlist — landing waitlist sign-up (public, closed launch).
@@ -28,8 +28,8 @@ router.post('/', waitlistLimiter, async (req, res) => {
     const data = waitlistSchema.parse(req.body);
     const entry = await prisma.waitlistEntry.upsert({
       where: { email: data.email as string },
-      update: { type: data.type, consentPd: true, consentMarketing: true },
-      create: { email: data.email as string, type: data.type, consentPd: true, consentMarketing: true },
+      update: { type: data.type, consentPd: true, consentMarketing: data.consentMarketing },
+      create: { email: data.email as string, type: data.type, consentPd: true, consentMarketing: data.consentMarketing },
     });
     // Notify the monitor bot only on the first sign-up (created == updated).
     // Без email: в мониторинговый чат уходят только событие, тип и счётчик (ПДн не логируем).

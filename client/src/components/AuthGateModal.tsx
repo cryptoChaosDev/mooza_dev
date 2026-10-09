@@ -147,11 +147,11 @@ export function AuthGatePanel({
     e.preventDefault();
     setError('');
     if (!isValidEmail(email)) { setError('Проверьте email'); return; }
-    if (!consentPd || !consentMarketing) { setError('Нужны оба согласия'); return; }
+    if (!consentPd) { setError('Нужно согласие на обработку персональных данных'); return; }
     setSending(true);
     try {
       // Схема сервера: server/src/routes/waitlist.ts (email, type, consentPd, consentMarketing — оба true).
-      await waitlistAPI.submit({ email: email.trim(), type: wlType, consentPd: true, consentMarketing: true });
+      await waitlistAPI.submit({ email: email.trim(), type: wlType, consentPd: true, consentMarketing });
       reachGoal('waitlist_submit', { type: wlType, reason });
       setMode('waitlistDone');
     } catch (err) {
@@ -227,11 +227,11 @@ export function AuthGatePanel({
         <label className="flex items-start gap-2.5 cursor-pointer">
           <input type="checkbox" checked={consentMarketing} onChange={(e) => setConsentMarketing(e.target.checked)} className="mt-0.5 w-4 h-4 accent-primary-500 flex-shrink-0" />
           <span className="text-[11px] text-slate-400 leading-relaxed">
-            Я даю <a href="/legal/consent-marketing.html" target="_blank" rel="noopener noreferrer" className="text-primary-400 underline underline-offset-2">согласие на получение рекламных и информационных сообщений</a>
+            Я даю <a href="/legal/consent-marketing.html" target="_blank" rel="noopener noreferrer" className="text-primary-400 underline underline-offset-2">согласие на получение рекламных и информационных сообщений</a> <span className="text-slate-500">(по желанию)</span>
           </span>
         </label>
         {error && <p className="text-xs text-red-400">{error}</p>}
-        <button type="submit" disabled={sending || !email.trim() || !consentPd || !consentMarketing} className={btnPrimary}>
+        <button type="submit" disabled={sending || !email.trim() || !consentPd} className={btnPrimary}>
           {sending ? <Loader2 size={16} className="animate-spin" /> : <Mail size={16} />} Отправить заявку
         </button>
       </form>

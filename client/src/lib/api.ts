@@ -740,7 +740,7 @@ export const referralAPI = {
 
 // Лист ожидания (закрытая регистрация). Схема: server/src/routes/waitlist.ts.
 export const waitlistAPI = {
-  submit: (data: { email: string; type: 'resident_waitlist' | 'listener' | 'customer' | 'company'; consentPd: true; consentMarketing: true }) =>
+  submit: (data: { email: string; type: 'resident_waitlist' | 'listener' | 'customer' | 'company'; consentPd: true; consentMarketing: boolean }) =>
     api.post('/waitlist', data),
 };
 
