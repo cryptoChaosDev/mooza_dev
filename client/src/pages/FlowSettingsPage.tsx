@@ -7,6 +7,8 @@ import { isProActive, limitsFor } from '../lib/proLimits';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { openAuthGate } from '../components/AuthGateModal';
+import { useSeo, seoTitle, ROBOTS_NOINDEX_FOLLOW } from '../lib/seo';
 
 export interface FlowFilters {
   postType: string[];
@@ -267,8 +269,12 @@ export default function FlowSettingsPage() {
   const [savingPreset, setSavingPreset] = useState(false);
   const [presetToDelete, setPresetToDelete] = useState<FeedPreset | null>(null);
 
+  useSeo({ title: seoTitle('Фильтры ленты'), robots: ROBOTS_NOINDEX_FOLLOW });
+
   useEffect(() => {
     let active = true;
+    // Пресеты хранятся на сервере — гостю не запрашиваем (401), сохранение через AuthGate.
+    if (!user) { setPresetsLoading(false); return; }
     feedPresetAPI.list()
       .then(res => { if (active) setPresets(res.data); })
       .catch(() => { if (active) setPresets([]); })
@@ -290,6 +296,7 @@ export default function FlowSettingsPage() {
   };
 
   const saveCurrentAsPreset = async () => {
+    if (!user) { openAuthGate('preset'); return; }
     if (atCap || savingPreset) return;
     const name = window.prompt('Название пресета')?.trim();
     if (!name) return;

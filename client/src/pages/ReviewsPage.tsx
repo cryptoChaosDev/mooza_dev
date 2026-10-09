@@ -4,7 +4,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, Star, MessageSquare, Trash2, Loader2 } from 'lucide-react';
 import { reviewAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import { useSeo, seoTitle, ROBOTS_NOINDEX_FOLLOW } from '../lib/seo';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
+import { personName } from '../lib/publicPerson';
+
+// Автор отзыва без согласия на публичность приходит гостю обезличенным.
+const reviewAuthorName = (a: any) => personName(a, { fallback: 'Пользователь Moooza' });
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 
@@ -29,6 +34,8 @@ type SortMode = 'date' | 'positive' | 'negative';
 
 export default function ReviewsPage() {
   const { userId } = useParams<{ userId: string }>();
+  // Подстраницы профиля — noindex,follow (план, раздел A).
+  useSeo({ title: seoTitle('Отзывы'), robots: ROBOTS_NOINDEX_FOLLOW });
   const navigate = useNavigate();
   const { user } = useAuthStore();
   const queryClient = useQueryClient();
@@ -124,11 +131,11 @@ export default function ReviewsPage() {
               <div className="flex items-start gap-3">
                 {r.author.avatar
                   ? <img src={getAvatarUrl(r.author.avatar) ?? ''} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0 mt-0.5" />
-                  : <div className="w-9 h-9 rounded-full bg-primary-800 flex items-center justify-center text-sm font-bold text-white flex-shrink-0 mt-0.5">{r.author.firstName[0]}</div>
+                  : <div className="w-9 h-9 rounded-full bg-primary-800 flex items-center justify-center text-sm font-bold text-white flex-shrink-0 mt-0.5">{reviewAuthorName(r.author)[0]}</div>
                 }
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-white min-w-0 break-words [overflow-wrap:anywhere]">{r.author.firstName} {r.author.lastName}</span>
+                    <span className="text-sm font-semibold text-white min-w-0 break-words [overflow-wrap:anywhere]">{reviewAuthorName(r.author)}</span>
                     <Stars rating={r.rating} />
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 flex-wrap">

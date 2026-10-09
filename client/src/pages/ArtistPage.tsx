@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, ExternalLink,
@@ -8,7 +8,7 @@ import {
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
   UserPlus, Trash2,
   Settings, Link2, Tag, Crown, Shield, UserCog, UserCheck, UserX, Star,
-  UserRound, Users, Disc3, Clapperboard, Briefcase, Activity, ChevronRight,
+  UserRound, Users, Disc3, Clapperboard, Briefcase, Activity, ChevronRight, Lock,
 } from 'lucide-react';
 import { artistAPI, releaseAPI, clipAPI, vacancyAPI } from '../lib/api';
 import { workFormatLabel } from '../lib/vacancyOptions';
@@ -28,6 +28,10 @@ import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { useAuthGate, openAuthGate } from '../components/AuthGateModal';
+import { personName, personHref } from '../lib/publicPerson';
+import { useSeo, seoTitle, seoDescription, ROBOTS_INDEX, ROBOTS_NOINDEX } from '../lib/seo';
+import { trackGuestView } from '../lib/metrika';
 
 const ACTIVITY_OPTIONS = [
   { id: 'ACTIVE',    name: 'Действующий' },
@@ -66,6 +70,13 @@ function resolveUrl(path: string | null | undefined): string | null {
   if (!path) return null;
   if (path.startsWith('http://') || path.startsWith('https://')) return path;
   return `${API_URL}${path}`;
+}
+
+function pluralMembers(n: number): string {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return 'участник';
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return 'участника';
+  return 'участников';
 }
 
 export default function ArtistPage() {
@@ -121,6 +132,23 @@ export default function ArtistPage() {
       return data;
     },
     enabled: !!id,
+    retry: (count, e: any) => e?.response?.status !== 404 && count < 1,
+  });
+
+  const gate = useAuthGate();
+  const isGuest = !currentUser;
+  useEffect(() => { if (id) trackGuestView('artist', id); }, [id]);
+  const artistIndexable = artist?.status === 'VERIFIED' || artist?.status === 'APPROVED';
+  const artistTypeLabel = artist?.type ? (TYPE_LABELS[artist.type] ?? null) : null;
+  useSeo({
+    title: artist ? seoTitle(artist.name, [artistTypeLabel ?? 'артист', artist.city].filter(Boolean).join(', ')) : seoTitle('Артист'),
+    description: artist
+      ? seoDescription(artist.description)
+        || seoDescription(`${artist.name} — ${(artistTypeLabel ?? 'артист').toLowerCase()}${artist.city ? ` из города ${artist.city}` : ''}${(artist.genres?.length ?? 0) > 0 ? `. Жанры: ${artist.genres.map((g: any) => g.name).join(', ')}` : ''}. Состав, релизы и клипы на Moooza.`)
+      : null,
+    canonical: `/artist/${id}`,
+    // DRAFT/PENDING — с бейджем, но noindex (план, раздел A).
+    robots: artist && artistIndexable ? ROBOTS_INDEX : ROBOTS_NOINDEX,
   });
 
   // ── Phase 6b: releases & clips lists ──────────────────────────────────────
@@ -344,24 +372,37 @@ export default function ArtistPage() {
     (m) => m.user.id === currentUser.id && m.participationStatus === 'ACTIVE_MEMBER',
   );
   const canSeeGear = viewerIsOwner || viewerIsAdmin || viewerIsActiveMember;
-  const memberName = (m: any) => `${m.user.lastName ?? ''} ${m.user.firstName ?? ''}`.trim();
+  const memberName = (m: any) => personName(m.user, { surnameFirst: true });
+  // Гостю сервер отдаёт только участников с согласием + число остальных.
+  const hiddenMembersCount: number = artist.hiddenMembersCount ?? 0;
   const roleText = (m: any) => (m.roles ?? []).map((r: any) => r.name).join(', ');
   const currentActivity: string = artist.activityStatus ?? 'ACTIVE';
 
   // Helper to render a confirmed-member card (public + admin controls).
   const MemberCard = ({ m, pending = false }: { m: any; pending?: boolean }) => (
     <div className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 border border-slate-800">
-      <button onClick={() => navigate(`/profile/${m.user.id}`)} className="flex-shrink-0">
-        <AvatarComponent src={m.user.avatar} name={memberName(m)} size={40} />
-      </button>
-      <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/profile/${m.user.id}`)}>
-        <p className="text-sm font-medium text-white flex items-center gap-1.5 min-w-0">
-          <span className="truncate min-w-0">{memberName(m)}</span>
-          {m.isOwner && <Crown size={12} className="text-amber-400 flex-shrink-0" />}
-          {m.isAdmin && !m.isOwner && <Shield size={11} className="text-sky-400 flex-shrink-0" />}
-        </p>
-        <p className="text-xs text-slate-500 truncate">{roleText(m) || '—'}</p>
-      </div>
+      {/* <Link> вместо onClick-navigate — ссылка на профиль видна краулеру. */}
+      {personHref(m.user) ? (
+        <Link to={personHref(m.user)!} className="flex items-center gap-3 flex-1 min-w-0">
+          <AvatarComponent src={m.user?.avatar} name={memberName(m)} size={40} />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-white flex items-center gap-1.5 min-w-0">
+              <span className="truncate min-w-0">{memberName(m)}</span>
+              {m.isOwner && <Crown size={12} className="text-amber-400 flex-shrink-0" />}
+              {m.isAdmin && !m.isOwner && <Shield size={11} className="text-sky-400 flex-shrink-0" />}
+            </p>
+            <p className="text-xs text-slate-500 truncate">{roleText(m) || '—'}</p>
+          </div>
+        </Link>
+      ) : (
+        <div className="flex items-center gap-3 flex-1 min-w-0">
+          <AvatarComponent src={m.user?.avatar} name={memberName(m)} size={40} />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-white truncate">{memberName(m)}</p>
+            <p className="text-xs text-slate-500 truncate">{roleText(m) || '—'}</p>
+          </div>
+        </div>
+      )}
       {pending && (
         <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-400 rounded-md flex-shrink-0">ожидает</span>
       )}
@@ -489,12 +530,12 @@ export default function ArtistPage() {
 
         {/* Actions under the cover: favorite star + share */}
         <div className="flex items-center gap-2 pb-1">
-          {currentUser && !isMemberOfArtist && (
+          {!isMemberOfArtist && (
             <button
-              onClick={() => {
+              onClick={() => gate.ensure('follow', { type: 'artist' }, () => {
                 if (artist.isFollowed) unfollowMut.mutate();
                 else followMut.mutate();
-              }}
+              })}
               disabled={followMut.isPending || unfollowMut.isPending}
               aria-label={artist.isFollowed ? 'Убрать из избранного' : 'В избранное'}
               title={artist.isFollowed ? 'В избранном' : 'В избранное'}
@@ -546,9 +587,15 @@ export default function ArtistPage() {
               <ShieldCheck size={11} /> Верифицирован
             </span>
           )}
-          {artist.status === 'PENDING' && (
+          {artist.status === 'PENDING' && viewerIsAdmin && (
             <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/20 text-amber-400 border border-amber-500/30">
               <Clock size={11} /> На модерации
+            </span>
+          )}
+          {/* Не прошедший проверку артист: посетителям — бейдж «Не верифицирован» */}
+          {!viewerIsAdmin && artist.status !== 'VERIFIED' && artist.status !== 'APPROVED' && (
+            <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-slate-700/50 text-slate-300 border border-slate-600/60">
+              <ShieldX size={11} /> Не верифицирован
             </span>
           )}
           {artist.status === 'APPROVED' && (
@@ -559,15 +606,15 @@ export default function ArtistPage() {
         </div>
 
         {/* Creator — explicit, visible to everyone */}
-        {ownerMember && (
-          <button
-            onClick={() => navigate(`/profile/${ownerMember.user.id}`)}
-            className="flex items-center gap-1.5 text-sm mb-1 group/creator"
+        {ownerMember && personHref(ownerMember.user) && (
+          <Link
+            to={personHref(ownerMember.user)!}
+            className="flex items-center gap-1.5 text-sm mb-1 group/creator w-fit"
           >
             <Crown size={12} className="text-amber-400 flex-shrink-0" />
             <span className="text-slate-500">Создатель:</span>
             <span className="text-slate-300 group-hover/creator:text-white transition-colors">{memberName(ownerMember)}</span>
-          </button>
+          </Link>
         )}
 
         {/* Status description (owner/admin) — what the current status means + next step. */}
@@ -763,7 +810,7 @@ export default function ArtistPage() {
         )}
 
         {/* Контакты — просмотр; карандаш ведёт на страницу /artist/:id/contacts */}
-        {(hasSocialLinks || artist.bandLink || viewerIsAdmin) && (
+        {(hasSocialLinks || artist.bandLink || viewerIsAdmin || (isGuest && artist.contactsAvailable)) && (
           <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden mb-3">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
               <Link2 size={14} className="text-primary-400" />
@@ -790,7 +837,16 @@ export default function ArtistPage() {
                 </a>
               )}
               {hasSocialLinks && <SocialIconRow links={(artist.socialLinks as Record<string, string>) || {}} labeled />}
-              {!hasSocialLinks && !artist.bandLink && (
+              {/* Гостю контактные ключи socialLinks сервер не отдаёт — только флаг. */}
+              {isGuest && artist.contactsAvailable && (
+                <button
+                  onClick={() => gate.ensure('contacts', { type: 'artist' })}
+                  className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 transition-colors"
+                >
+                  <Lock size={12} className="text-slate-400" /> Показать контакты
+                </button>
+              )}
+              {!hasSocialLinks && !artist.bandLink && !(isGuest && artist.contactsAvailable) && (
                 <p className="text-sm text-slate-600 italic">Контакты не указаны</p>
               )}
             </div>
@@ -870,7 +926,7 @@ export default function ArtistPage() {
           <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
             <Users size={14} className="text-primary-400" />
             <span className="text-sm font-semibold text-white">Состав</span>
-            {confirmedMembers.length > 0 && <span className="text-xs text-slate-500">{confirmedMembers.length}</span>}
+            {confirmedMembers.length + hiddenMembersCount > 0 && <span className="text-xs text-slate-500">{confirmedMembers.length + hiddenMembersCount}</span>}
           </div>
 
           <div className="p-3">
@@ -914,8 +970,19 @@ export default function ArtistPage() {
               </div>
             )}
 
-            {activeMembers.length === 0 && formerMembers.length === 0 && !viewerIsAdmin && (
+            {activeMembers.length === 0 && formerMembers.length === 0 && !viewerIsAdmin && hiddenMembersCount === 0 && (
               <p className="text-xs text-slate-600 italic">Участников пока нет</p>
+            )}
+
+            {/* Участники без согласия на публичность гостю не показываются */}
+            {hiddenMembersCount > 0 && (
+              <button
+                onClick={() => openAuthGate('page', { type: 'artist_members' }, 'Полный состав виден после входа')}
+                className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-slate-400 hover:text-white transition-colors"
+              >
+                <Lock size={12} />
+                {activeMembers.length + formerMembers.length > 0 ? 'и ещё' : 'В составе'} {hiddenMembersCount} {pluralMembers(hiddenMembersCount)} — после входа
+              </button>
             )}
 
             {/* Ожидают подтверждения (admins only, read-only indicator) */}

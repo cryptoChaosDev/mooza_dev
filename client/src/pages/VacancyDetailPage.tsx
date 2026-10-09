@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { createPortal } from 'react-dom';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -21,6 +21,12 @@ import {
   workFormatLabel, geographyLabel, employmentLabel, paymentLabel,
   PAYMENT_WITH_COMPENSATION, occupancyLabel, occupancyBadgeClass,
 } from '../lib/vacancyOptions';
+import { useAuthStore } from '../stores/authStore';
+import { useAuthGate, openAuthGate } from '../components/AuthGateModal';
+import ShareButton from '../components/ShareButton';
+import { plural } from '../lib/plural';
+import { useSeo, seoTitle, seoDescription, ROBOTS_INDEX, ROBOTS_NOINDEX } from '../lib/seo';
+import { trackGuestView } from '../lib/metrika';
 
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp)$/i;
 
@@ -67,6 +73,20 @@ export default function VacancyDetailPage() {
     queryKey: ['vacancy', vacancyId],
     queryFn: async () => { const { data } = await vacancyAPI.getOne(vacancyId!); return data as any; },
     enabled: !!vacancyId,
+    retry: (count, e: any) => e?.response?.status !== 404 && count < 1,
+  });
+
+  const isGuest = !useAuthStore((s) => s.token);
+  const gate = useAuthGate();
+  useEffect(() => { if (vacancyId) trackGuestView('vacancy', vacancyId); }, [vacancyId]);
+  useSeo({
+    title: vacancy ? seoTitle(`Вакансия: ${vacancy.title}`, vacancy.artist?.name) : seoTitle('Вакансия'),
+    description: vacancy
+      ? seoDescription([vacancy.profession?.name, vacancy.description].filter(Boolean).join('. '))
+      : null,
+    canonical: `/vacancies/${vacancyId}`,
+    // Архивные — 200 + noindex (план, раздел A).
+    robots: vacancy && vacancy.status === 'active' ? ROBOTS_INDEX : ROBOTS_NOINDEX,
   });
 
   // Seed «Предложено» marks from the persisted offers (owner view).
@@ -342,6 +362,13 @@ export default function VacancyDetailPage() {
             <Megaphone size={16} className="text-amber-400 flex-shrink-0" />
             <h1 className="text-base font-bold text-white truncate">{vacancy.title}</h1>
           </div>
+          {/* «Поделиться» — без входа */}
+          <ShareButton
+            url={`/vacancies/${vacancy.id}`}
+            title={`Вакансия «${vacancy.title}» — Moooza`}
+            iconSize={14}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex-shrink-0"
+          />
         </div>
 
         {/* Main card */}
@@ -357,6 +384,14 @@ export default function VacancyDetailPage() {
           )}
 
           <h2 className="text-xl font-bold text-white leading-tight break-words [overflow-wrap:anywhere]">{vacancy.title}</h2>
+
+          {/* Автор вакансии — артист (в т.ч. для гостя) */}
+          {vacancy.artist?.name && (
+            <Link to={`/artist/${vacancy.artist.id ?? vacancy.artistId}`} className="flex items-center gap-2 w-fit min-w-0 group">
+              <AvatarComponent src={vacancy.artist.avatar} name={vacancy.artist.name} size={24} />
+              <span className="text-sm text-slate-300 group-hover:text-white transition-colors truncate">{vacancy.artist.name}</span>
+            </Link>
+          )}
 
           {/* Filters */}
           {customFilterValues.length > 0 && (
@@ -435,6 +470,21 @@ export default function VacancyDetailPage() {
               </div>
             </div>
           )}
+
+          {/* Гостю материалы вакансии не отдаются — только их число */}
+          {!vacancy.referenceFiles?.length && !vacancy.referenceLinks?.length
+            && ((vacancy.referenceFilesCount ?? 0) + (vacancy.referenceLinksCount ?? 0)) > 0 && (() => {
+            const n = (vacancy.referenceFilesCount ?? 0) + (vacancy.referenceLinksCount ?? 0);
+            return (
+              <button
+                onClick={() => openAuthGate('page', { type: 'vacancy_materials' }, 'Материалы вакансии доступны после входа')}
+                className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+              >
+                <Link2 size={14} className="flex-shrink-0" />
+                {n} {plural(n, 'материал', 'материала', 'материалов')} — после входа
+              </button>
+            );
+          })()}
 
           {/* References — links */}
           {vacancy.referenceLinks?.length > 0 && (
@@ -685,9 +735,9 @@ export default function VacancyDetailPage() {
           /* ── APPLICANT (non-owner) ── */
           <div className="space-y-2">
             {/* Write before responding (ТЗ 11) */}
-            {contactUserId && (
+            {(contactUserId || isGuest) && (
               <button
-                onClick={() => navigate(`/messages/${contactUserId}`)}
+                onClick={() => gate.ensure('message', { type: 'vacancy' }, () => { if (contactUserId) navigate(`/messages/${contactUserId}`); })}
                 className="w-full py-3 flex items-center justify-center gap-2 text-sm font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 rounded-2xl transition-colors"
               >
                 <MessageCircle size={16} />Написать
@@ -724,7 +774,7 @@ export default function VacancyDetailPage() {
                 <Archive size={18} className="text-slate-400 flex-shrink-0" />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white">
-                    {vacancy.status === 'archived' ? 'Вакансия в архиве' : 'Вакансия не опубликована'}
+                    {isGuest ? 'Вакансия закрыта' : vacancy.status === 'archived' ? 'Вакансия в архиве' : 'Вакансия не опубликована'}
                   </p>
                   <p className="text-xs text-slate-400">Отклики на эту вакансию закрыты.</p>
                 </div>
@@ -817,7 +867,7 @@ export default function VacancyDetailPage() {
               </div>
             ) : (
               <button
-                onClick={() => setShowRespond(true)}
+                onClick={() => gate.ensure('respondVacancy', { type: 'vacancy' }, () => setShowRespond(true))}
                 className="w-full py-3.5 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 active:bg-primary-700 text-white rounded-2xl transition-colors"
               >
                 <Send size={16} />Откликнуться

@@ -1,5 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 export interface RailItem {
   id: string;
@@ -67,9 +67,10 @@ export default function MediaRail({ title, items, to, icon: Icon, showAdd = fals
         ) : (
           <div className="flex gap-3 overflow-x-auto pb-1 -mx-3 px-3 scrollbar-hide">
             {items.map((it) => (
-              <button
+              // <Link>, а не onClick-navigate: ссылка видна краулеру и открывается в новой вкладке.
+              <Link
                 key={it.id}
-                onClick={() => navigate(`${to}/${it.id}`)}
+                to={`${to}/${it.id}`}
                 className="flex-shrink-0 w-28 flex flex-col items-center"
               >
                 <div className="relative w-28 h-28 rounded-xl overflow-hidden bg-slate-800 border border-slate-700 flex items-center justify-center">
@@ -86,7 +87,7 @@ export default function MediaRail({ title, items, to, icon: Icon, showAdd = fals
                 </div>
                 <span className="mt-1.5 text-xs text-slate-300 text-center line-clamp-2 w-full">{it.title}</span>
                 {it.subtitle && <span className="text-[10px] text-slate-500 text-center line-clamp-1 w-full">{it.subtitle}</span>}
-              </button>
+              </Link>
             ))}
           </div>
         )}

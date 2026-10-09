@@ -17,7 +17,10 @@ import { api, postAPI, messageAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { useAuthStore } from '../stores/authStore';
-import { useAuthGate } from '../components/AuthGateModal';
+import { useAuthGate, AuthGatePanel } from '../components/AuthGateModal';
+import { personName, personHref } from '../lib/publicPerson';
+import { useSeo, seoTitle } from '../lib/seo';
+import { trackGuestView } from '../lib/metrika';
 import DealCreateModal from '../components/DealCreateModal';
 import { DEALS_ENABLED } from '../lib/features';
 import OnboardingPrompt from '../components/OnboardingPrompt';
@@ -48,8 +51,13 @@ function timeAgo(dateStr: string) {
   return new Date(dateStr).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
 }
 
-function Avatar({ user, size = 10 }: { user: { firstName: string; lastName: string; avatar?: string }; size?: number }) {
-  return <AvatarComponent src={user.avatar} name={`${user.firstName} ${user.lastName}`} size={size * 4} />;
+function Avatar({ user, size = 10 }: { user: { firstName?: string; lastName?: string; displayName?: string | null; avatar?: string | null }; size?: number }) {
+  return <AvatarComponent src={user.avatar} name={personName(user)} size={size * 4} />;
+}
+
+// Счётчик комментариев: у гостя сервер отдаёт comments: [] и commentsCount.
+function commentsCountOf(p: any): number {
+  return p?._count?.comments ?? p?.commentsCount ?? 0;
 }
 
 // ─── Feed cache helpers ────────────────────────────────────────────────────────
@@ -321,7 +329,9 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
   useScrollLock(showComments);
 
   // Structured «Услуга» card — guest gating + «Написать» / «Оформить сделку».
-  const { ensureAuth, authGateModal } = useAuthGate();
+  // Все действия гостя (лайк, реакция, сохранение, репост, голос, комментарий,
+  // жалоба, «Написать», сделка) — через AuthGate с причиной; «Поделиться» — без входа.
+  const gate = useAuthGate();
   const [showDeal, setShowDeal] = useState(false);
   const [contacting, setContacting] = useState(false);
   const svc = post.type === 'service' && post.service ? post.service : null;
@@ -339,11 +349,9 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
       .finally(() => setContacting(false));
   };
 
-  // Guests (no current user) cannot react — bounce them to login instead.
-  const requireAuth = (action: () => void) => {
-    if (!currentUserId) { navigate('/login'); return; }
-    action();
-  };
+  const isGuest = !currentUserId;
+  const authorHref = personHref(post.author);
+  const authorName = personName(post.author);
   const [editContent, setEditContent] = useState(post.content);
   // Фото поста при редактировании: новые посты хранят images[], легаси — imageUrl.
   const originalImages: string[] = Array.isArray(post.images) && post.images.length > 0
@@ -540,19 +548,27 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
       {isRepost && (
         <div className="flex items-center gap-1.5 text-xs text-slate-500 mb-2 ml-1">
           <Repeat2 size={13} className="flex-shrink-0" />
-          <span className="truncate min-w-0">«{post.author.firstName} {post.author.lastName} поделился(ась)»</span>
+          <span className="truncate min-w-0">«{authorName} поделился(ась)»</span>
         </div>
       )}
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-3 min-w-0">
-          <Link to={vacancyArtist ? `/artist/${vacancyArtist.id}` : `/profile/${post.author.id}`} className="flex-shrink-0">
-            <Avatar user={vacancyArtist ? { firstName: vacancyArtist.name, lastName: '', avatar: vacancyArtist.avatar } : post.author} size={10} />
-          </Link>
+          {(vacancyArtist || authorHref) ? (
+            <Link to={vacancyArtist ? `/artist/${vacancyArtist.id}` : authorHref!} className="flex-shrink-0">
+              <Avatar user={vacancyArtist ? { firstName: vacancyArtist.name, lastName: '', avatar: vacancyArtist.avatar } : post.author} size={10} />
+            </Link>
+          ) : (
+            <span className="flex-shrink-0"><Avatar user={post.author} size={10} /></span>
+          )}
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <Link to={vacancyArtist ? `/artist/${vacancyArtist.id}` : `/profile/${post.author.id}`} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate">
-                {vacancyArtist ? vacancyArtist.name : `${post.author.firstName} ${post.author.lastName}`}
-              </Link>
+              {(vacancyArtist || authorHref) ? (
+                <Link to={vacancyArtist ? `/artist/${vacancyArtist.id}` : authorHref!} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate">
+                  {vacancyArtist ? vacancyArtist.name : authorName}
+                </Link>
+              ) : (
+                <span className="text-sm font-semibold text-white truncate">{authorName}</span>
+              )}
               {!vacancyArtist && post.author.isPremium && <span title="Premium"><Crown size={13} className="text-amber-400 flex-shrink-0" /></span>}
               {!vacancyArtist && post.author.isVerified && <span title="Верифицирован"><BadgeCheck size={13} className="text-sky-400 flex-shrink-0" /></span>}
               {!vacancyArtist && post.author.isBlocked && <span title="Заблокирован"><Ban size={13} className="text-red-500 flex-shrink-0" /></span>}
@@ -564,9 +580,11 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
               )}
             </div>
             {vacancyArtist ? (
-              <Link to={`/profile/${post.author.id}`} className="text-xs text-slate-500 hover:text-primary-400 transition-colors truncate block">
-                👤 {post.author.firstName} {post.author.lastName}
-              </Link>
+              authorHref ? (
+                <Link to={authorHref} className="text-xs text-slate-500 hover:text-primary-400 transition-colors truncate block">
+                  👤 {authorName}
+                </Link>
+              ) : null
             ) : post.channel ? (
               <p className="text-xs text-slate-500 truncate">📢 {post.channel.name}</p>
             ) : post.artist ? (
@@ -594,7 +612,7 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
                   </button>
                 </>
               ) : (
-                <button type="button" onClick={() => { setShowMenu(false); requireAuth(() => setShowComplaint(true)); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-slate-700 transition-colors">
+                <button type="button" onClick={() => { setShowMenu(false); gate.ensure('complaint', { type: 'post' }, () => setShowComplaint(true)); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-slate-700 transition-colors">
                   <Flag size={14} /> Пожаловаться
                 </button>
               )}
@@ -633,7 +651,7 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
             </div>
           </div>
         ) : (
-          <DoubleTapReactWrapper myEmoji={post.myReaction ?? null} currentUserId={currentUserId} onReact={(emoji) => requireAuth(() => reactMut.mutate(emoji))} onUnreact={() => requireAuth(() => unreactMut.mutate())}>
+          <DoubleTapReactWrapper myEmoji={post.myReaction ?? null} currentUserId={currentUserId} onReact={(emoji) => gate.ensure('reaction', { type: 'post' }, () => reactMut.mutate(emoji))} onUnreact={() => gate.ensure('reaction', { type: 'post' }, () => unreactMut.mutate())}>
             <>
               {isRepost && (
                 <>
@@ -647,13 +665,13 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
                   ) : original ? (
                     <button
                       type="button"
-                      onClick={() => original.author?.id && navigate(`/profile/${original.author.id}`)}
+                      onClick={() => { const href = personHref(original.author); if (href) navigate(href); }}
                       className="w-full text-left rounded-xl border border-slate-800 bg-slate-900/40 hover:bg-slate-900/70 transition-colors p-3"
                     >
                       <div className="flex items-center gap-2 mb-2">
                         {original.author && <Avatar user={original.author} size={7} />}
                         <span className="text-sm font-semibold text-white truncate min-w-0">
-                          {original.author ? `${original.author.firstName} ${original.author.lastName}` : 'Автор'}
+                          {original.author ? personName(original.author) : 'Автор'}
                         </span>
                         <span className="text-xs text-slate-500 flex-shrink-0">{original.createdAt ? timeAgo(original.createdAt) : ''}</span>
                       </div>
@@ -689,7 +707,7 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
                       return (
                         <button key={idx} type="button"
                           disabled={ended || voteMut.isPending}
-                          onClick={() => requireAuth(() => voteMut.mutate(idx))}
+                          onClick={() => gate.ensure('vote', { type: 'post' }, () => voteMut.mutate(idx))}
                           className="w-full relative overflow-hidden bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/50 rounded-xl px-3 py-2 text-left transition-all disabled:cursor-default disabled:opacity-80">
                           <div className="absolute inset-0 bg-cyan-500/15" style={{ width: `${pct}%` }} />
                           <div className="relative flex items-center justify-between gap-3">
@@ -753,17 +771,16 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
                         <PostContent content={post.content} className="text-sm text-slate-200" />
                       )}
                       <div className="flex flex-wrap gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/services/${svc.id}`)}
+                        <Link
+                          to={`/services/${svc.id}`}
                           className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors"
                         >
                           <ExternalLink size={15} /> Детали услуги
-                        </button>
-                        {!isOwner && svc.user?.id !== currentUserId && (
+                        </Link>
+                        {!isOwner && (isGuest || svc.user?.id !== currentUserId) && (
                           <button
                             type="button"
-                            onClick={() => ensureAuth(openServiceChat)}
+                            onClick={() => gate.ensure('message', { type: 'service' }, openServiceChat)}
                             disabled={contacting}
                             className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-60 text-white text-sm font-medium rounded-xl transition-colors"
                           >
@@ -773,7 +790,7 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
                         {DEALS_ENABLED && (
                           <button
                             type="button"
-                            onClick={() => ensureAuth(() => setShowDeal(true))}
+                            onClick={() => gate.ensure('deal', { type: 'service' }, () => setShowDeal(true))}
                             className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-semibold rounded-xl transition-colors"
                           >
                             <HandshakeIcon size={15} /> Оформить сделку
@@ -839,17 +856,16 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
                         <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>
                       )}
                       <div className="flex flex-wrap gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/orders/${order.id}`)}
+                        <Link
+                          to={`/orders/${order.id}`}
                           className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors"
                         >
                           <ExternalLink size={15} /> Посмотреть детали
-                        </button>
+                        </Link>
                         {!isOwner && (
                           <button
                             type="button"
-                            onClick={() => navigate(`/messages/${post.author.id}`)}
+                            onClick={() => gate.ensure('message', { type: 'order' }, () => { if (post.author?.id) navigate(`/messages/${post.author.id}`); })}
                             className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors"
                           >
                             <MessageSquare size={15} /> Написать
@@ -910,13 +926,12 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
                         <button onClick={() => setExpanded(e => !e)} className="text-xs text-primary-400 hover:text-primary-300 transition-colors">{expanded ? 'Свернуть' : 'Читать полностью'}</button>
                       )}
                       <div className="flex flex-wrap gap-2 pt-1">
-                        <button
-                          type="button"
-                          onClick={() => navigate(`/vacancies/${vacancy.id}`)}
+                        <Link
+                          to={`/vacancies/${vacancy.id}`}
                           className="flex items-center gap-1.5 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium rounded-xl transition-colors"
                         >
                           <ExternalLink size={15} /> Посмотреть детали
-                        </button>
+                        </Link>
                       </div>
                     </div>
                   </div>
@@ -964,25 +979,26 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
             </>
           </DoubleTapReactWrapper>
         )}
-        {!editing && <ReactionBar summary={post.reactionSummary ?? []} myEmoji={post.myReaction ?? null} currentUserId={currentUserId} onReact={(emoji) => requireAuth(() => { if (!reactMut.isPending && !unreactMut.isPending) reactMut.mutate(emoji); })} onUnreact={() => requireAuth(() => { if (!reactMut.isPending && !unreactMut.isPending) unreactMut.mutate(); })} />}
+        {!editing && <ReactionBar summary={post.reactionSummary ?? []} myEmoji={post.myReaction ?? null} currentUserId={currentUserId} onReact={(emoji) => gate.ensure('reaction', { type: 'post' }, () => { if (!reactMut.isPending && !unreactMut.isPending) reactMut.mutate(emoji); })} onUnreact={() => gate.ensure('reaction', { type: 'post' }, () => { if (!reactMut.isPending && !unreactMut.isPending) unreactMut.mutate(); })} />}
       </div>
 
       <div className="flex items-center gap-1 ml-[52px]">
-        <button type="button" onClick={() => requireAuth(() => { if (!isOwner && !likeMut.isPending) likeMut.mutate(!post.isLiked); })} disabled={likeMut.isPending || isOwner} title={isOwner ? 'Нельзя лайкать свой пост' : undefined} aria-label={post.isLiked ? 'Убрать лайк' : 'Лайк'} aria-pressed={!!post.isLiked}
+        <button type="button" onClick={() => gate.ensure('like', { type: 'post' }, () => { if (!isOwner && !likeMut.isPending) likeMut.mutate(!post.isLiked); })} disabled={likeMut.isPending || isOwner} title={isOwner ? 'Нельзя лайкать свой пост' : undefined} aria-label={post.isLiked ? 'Убрать лайк' : 'Лайк'} aria-pressed={!!post.isLiked}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${currentUserId && isOwner ? 'cursor-default text-slate-600' : post.isLiked ? 'text-red-400 hover:bg-red-400/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}>
           <Heart size={15} className={post.isLiked ? 'fill-red-400 text-red-400' : ''} />
           {!!post._count?.likes && <span className="text-xs font-medium">{post._count.likes}</span>}
         </button>
-        <button onClick={() => requireAuth(() => setShowComments(true))} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all">
+        {/* Гостю комментарии не показываются — только счётчик; нажатие → «Войдите, чтобы читать обсуждение» */}
+        <button onClick={() => gate.ensure('comment', { type: 'post' }, () => setShowComments(true))} title={isGuest ? 'Войдите, чтобы читать обсуждение' : 'Комментарии'} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all">
           <MessageCircle size={15} />
-          {!!post._count?.comments && <span className="text-xs font-medium">{post._count.comments}</span>}
+          {commentsCountOf(post) > 0 && <span className="text-xs font-medium">{commentsCountOf(post)}</span>}
         </button>
-        <button onClick={() => requireAuth(() => setShowRepost(true))} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all" title="Поделиться в ленте">
+        <button onClick={() => gate.ensure('repost', { type: 'post' }, () => setShowRepost(true))} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all" title="Поделиться в ленте">
           <Repeat2 size={15} />
           {!!post._count?.reposts && <span className="text-xs font-medium">{post._count.reposts}</span>}
         </button>
-        <ShareButton url={`/feed?post=${post.id}`} title={`Пост от ${post.author.firstName} ${post.author.lastName}`} text={htmlToText(post.content || post.repostComment).slice(0, 100) || undefined} iconSize={15} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all" />
-        <button type="button" onClick={() => requireAuth(() => { if (!saveMut.isPending) saveMut.mutate(!post.isSaved); })} disabled={saveMut.isPending} aria-pressed={!!post.isSaved}
+        <ShareButton url={`/feed?post=${post.id}`} title={`Пост от ${authorName}`} text={htmlToText(post.content || post.repostComment).slice(0, 100) || undefined} iconSize={15} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all" />
+        <button type="button" onClick={() => gate.ensure('save', { type: 'post' }, () => { if (!saveMut.isPending) saveMut.mutate(!post.isSaved); })} disabled={saveMut.isPending} aria-pressed={!!post.isSaved}
           className={`ml-auto flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-all ${post.isSaved ? 'text-amber-400 hover:bg-amber-400/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
           title={post.isSaved ? 'Убрать из сохранённого' : 'Сохранить'}>
           <Star size={15} fill={post.isSaved ? 'currentColor' : 'none'} />
@@ -997,7 +1013,7 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
             {/* Header */}
             <div className="relative flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
               <div className="w-10 h-1 bg-slate-700 rounded-full absolute left-1/2 -translate-x-1/2 top-1.5 sm:hidden" />
-              <h3 className="text-base font-bold text-white">Комментарии{!!post._count?.comments && ` · ${post._count.comments}`}</h3>
+              <h3 className="text-base font-bold text-white">Комментарии{commentsCountOf(post) > 0 && ` · ${commentsCountOf(post)}`}</h3>
               <button type="button" onClick={() => setShowComments(false)} aria-label="Закрыть" className="p-2 -mr-2 text-slate-400 hover:text-white rounded-lg transition-colors"><X size={18} /></button>
             </div>
             {/* Список: самый верхний комментарий сверху, скролл до последнего */}
@@ -1059,7 +1075,7 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
                   rows={1}
                   className="flex-1 min-w-0 resize-none max-h-[120px] bg-slate-800/60 border border-slate-700 rounded-2xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
                 />
-                <button type="button" aria-label="Отправить комментарий" onClick={() => requireAuth(() => { if ((commentText.trim() || commentImage) && !commentMut.isPending) commentMut.mutate(); })} disabled={(!commentText.trim() && !commentImage) || commentMut.isPending || commentUploading} className="p-2.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-full transition-colors flex-shrink-0">
+                <button type="button" aria-label="Отправить комментарий" onClick={() => gate.ensure('comment', { type: 'post' }, () => { if ((commentText.trim() || commentImage) && !commentMut.isPending) commentMut.mutate(); })} disabled={(!commentText.trim() && !commentImage) || commentMut.isPending || commentUploading} className="p-2.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-full transition-colors flex-shrink-0">
                   {commentMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                 </button>
               </div>
@@ -1119,7 +1135,7 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
       {showDeal && svc && (
         <DealCreateModal
           executorId={svc.user?.id}
-          executorName={svc.user ? `${svc.user.firstName} ${svc.user.lastName}`.trim() : ''}
+          executorName={svc.user ? personName(svc.user, { fallback: '' }) : ''}
           userServiceId={svc.id}
           serviceName={svc.name || svc.service?.name}
           onClose={() => setShowDeal(false)}
@@ -1128,7 +1144,6 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
       {showComplaint && (
         <ComplaintModal targetType="post" targetId={post.id} onClose={() => setShowComplaint(false)} />
       )}
-      {authGateModal}
     </div>
   );
 }
@@ -1313,10 +1328,21 @@ function PostSkeleton() {
 // ─── Feed Page ─────────────────────────────────────────────────────────────────
 
 const PAGE_SIZE = 20;
+// Глубина ленты для гостя (сервер: offset ≤ 200) — дальше стена «Войдите,
+// чтобы смотреть дальше».
+const GUEST_FEED_MAX = 200;
 
 export default function FeedPage() {
-  const { user: currentUser } = useAuthStore();
+  const { user: currentUser, token } = useAuthStore();
+  const isGuest = !token;
+  const gate = useAuthGate();
   const navigate = useNavigate();
+  useSeo({
+    title: seoTitle('Поток', 'публикации, заказы и вакансии музыкантов'),
+    description: 'Лента Moooza: новости артистов, услуги, заказы и вакансии в музыкальной индустрии.',
+    canonical: '/feed',
+  });
+  useEffect(() => { trackGuestView('feed'); }, []);
   const [searchParams] = useSearchParams();
   const targetPostId = searchParams.get('post');
   const [showPostTypePicker, setShowPostTypePicker] = useState(false);
@@ -1398,12 +1424,19 @@ export default function FeedPage() {
   const isError = active.isError;
   const retry = () => { active.refetch(); };
 
+  // Стена для гостя: лимит глубины или отказ сервера на следующей странице.
+  const nextPageStatus = (feed.error as any)?.response?.status;
+  const guestWall = isGuest && !showSavedOnly && posts.length > 0 && (
+    posts.length >= GUEST_FEED_MAX
+    || (feed.isFetchNextPageError && (nextPageStatus === 401 || nextPageStatus === 403))
+  );
+
   // ── Infinite-scroll sentinel ──────────────────────────────────────────────
   const sentinelRef = useRef<HTMLDivElement>(null);
   const { hasNextPage, isFetchingNextPage, fetchNextPage } = active;
   useEffect(() => {
     const el = sentinelRef.current;
-    if (!el) return;
+    if (!el || guestWall) return;
     const io = new IntersectionObserver((entries) => {
       if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
         fetchNextPage();
@@ -1411,7 +1444,7 @@ export default function FeedPage() {
     }, { rootMargin: '600px' });
     io.observe(el);
     return () => io.disconnect();
-  }, [showSavedOnly, hasNextPage, isFetchingNextPage, fetchNextPage, posts.length]);
+  }, [showSavedOnly, hasNextPage, isFetchingNextPage, fetchNextPage, posts.length, guestWall]);
 
   // ── Deep link ?post=<id> — пост грузится отдельно по id (не выкачиваем ленту до конца)
   const targetPost = useQuery({
@@ -1461,7 +1494,7 @@ export default function FeedPage() {
             </div>
             <div className="flex items-center gap-0.5 flex-shrink-0">
               <button
-                onClick={() => setShowSavedOnly(s => !s)}
+                onClick={() => gate.ensure('saved', undefined, () => setShowSavedOnly(s => !s))}
                 className={`flex items-center px-2.5 py-1.5 rounded-xl text-sm transition-colors ${showSavedOnly ? 'text-amber-300 bg-amber-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
                 title="Сохранённые"
               >
@@ -1525,10 +1558,16 @@ export default function FeedPage() {
                   <PostCard key={post.id} post={post} currentUserId={currentUser?.id ?? ''} highlight={post.id === targetPostId} />
                 ))}
               </div>
-              {/* Infinite-scroll sentinel + loader */}
-              <div ref={sentinelRef} className="py-6 flex justify-center">
-                {isFetchingNextPage && <Loader2 size={22} className="animate-spin text-slate-500" />}
-              </div>
+              {guestWall ? (
+                <div className="mx-4 my-6 bg-slate-900/80 border border-slate-800 rounded-3xl overflow-hidden">
+                  <AuthGatePanel reason="feedWall" variant="page" />
+                </div>
+              ) : (
+                /* Infinite-scroll sentinel + loader */
+                <div ref={sentinelRef} className="py-6 flex justify-center">
+                  {isFetchingNextPage && <Loader2 size={22} className="animate-spin text-slate-500" />}
+                </div>
+              )}
             </>
           ) : (
             <div className="flex flex-col items-center py-16 px-6 text-center">
@@ -1551,17 +1590,17 @@ export default function FeedPage() {
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           aria-label="Наверх"
           title="Наверх"
-          className={`fixed bottom-[calc(9rem_+_env(safe-area-inset-bottom,0px))] right-6 lg:bottom-24 lg:right-10 w-10 h-10 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white border border-slate-700 rounded-full shadow-xl backdrop-blur flex items-center justify-center transition-all z-40 ${showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}
+          className={`fixed bottom-[calc(9rem_+_var(--guest-banner-h,0px)_+_env(safe-area-inset-bottom,0px))] right-6 lg:bottom-[calc(6rem_+_var(--guest-banner-h,0px))] lg:right-10 w-10 h-10 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white border border-slate-700 rounded-full shadow-xl backdrop-blur flex items-center justify-center transition-all z-40 ${showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}
         >
           <ChevronUp size={20} />
         </button>
 
         {/* FAB — create post */}
         <button
-          onClick={() => setShowPostTypePicker(true)}
+          onClick={() => gate.ensure('create', { type: 'post' }, () => setShowPostTypePicker(true))}
           aria-label="Создать пост"
           title="Создать пост"
-          className="fixed bottom-[calc(5rem_+_env(safe-area-inset-bottom,0px))] right-4 lg:bottom-8 lg:right-8 w-14 h-14 bg-primary-600 hover:bg-primary-500 active:scale-95 text-white rounded-2xl shadow-2xl shadow-primary-900/50 flex items-center justify-center transition-all z-40"
+          className="fixed bottom-[calc(5rem_+_var(--guest-banner-h,0px)_+_env(safe-area-inset-bottom,0px))] right-4 lg:bottom-[calc(2rem_+_var(--guest-banner-h,0px))] lg:right-8 w-14 h-14 bg-primary-600 hover:bg-primary-500 active:scale-95 text-white rounded-2xl shadow-2xl shadow-primary-900/50 flex items-center justify-center transition-all z-40"
         >
           <Plus size={26} />
         </button>

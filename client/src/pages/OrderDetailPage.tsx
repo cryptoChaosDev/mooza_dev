@@ -16,6 +16,13 @@ import OrderStatusChip from '../components/OrderStatusChip';
 import ChatPicker from '../components/ChatPicker';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { formatDateMsk, maskDateInput, maskedToMskEndOfDayIso, isMaskedDatePast, isoToMaskedMsk } from '../lib/mskDate';
+import { useAuthStore } from '../stores/authStore';
+import { useAuthGate, openAuthGate } from '../components/AuthGateModal';
+import ShareButton from '../components/ShareButton';
+import { personName } from '../lib/publicPerson';
+import { useSeo, seoTitle, seoDescription, ROBOTS_INDEX, ROBOTS_NOINDEX } from '../lib/seo';
+import { trackGuestView } from '../lib/metrika';
+import { plural } from '../lib/plural';
 
 // Budget «от X ₽ до Y ₽» / «По договорённости»
 function formatBudget(from?: number | null, to?: number | null): string {
@@ -51,9 +58,22 @@ export default function OrderDetailPage() {
     queryKey: ['order', orderId],
     queryFn: async () => { const { data } = await orderAPI.getOne(orderId!); return data as any; },
     enabled: !!orderId,
+    retry: (count, e: any) => e?.response?.status !== 404 && count < 1,
   });
 
   const isOwner = !!order?.isOwner;
+  const isGuest = !useAuthStore((s) => s.token);
+  const gate = useAuthGate();
+  useEffect(() => { if (orderId) trackGuestView('order', orderId); }, [orderId]);
+  useSeo({
+    title: order ? seoTitle(`Заказ: ${order.title}`, order.service?.section?.name) : seoTitle('Заказ'),
+    description: order
+      ? seoDescription([formatBudget(order.budgetFrom, order.budgetTo), order.description].filter(Boolean).join('. '))
+      : null,
+    canonical: `/orders/${orderId}`,
+    // Закрытые заказы — 200 + noindex (план, раздел A).
+    robots: order && order.status === 'active' ? ROBOTS_INDEX : ROBOTS_NOINDEX,
+  });
 
   // «Предложено» переживает перезагрузку: сервер отдаёт, кому автор уже предлагал заказ.
   useEffect(() => {
@@ -239,13 +259,23 @@ export default function OrderDetailPage() {
             <h1 className="text-base font-bold text-white truncate">{order.title}</h1>
           </div>
           <OrderStatusChip order={order} className="flex-shrink-0" />
-          <button
-            onClick={() => setShareOpen(true)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex-shrink-0"
-            title="Отправить в чат"
-          >
-            <Share2 size={14} />
-          </button>
+          {/* «Поделиться» доступно без входа; вошедшему — «Отправить в чат» */}
+          {isGuest ? (
+            <ShareButton
+              url={`/orders/${order.id}`}
+              title={`Заказ «${order.title}» — Moooza`}
+              iconSize={14}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex-shrink-0"
+            />
+          ) : (
+            <button
+              onClick={() => setShareOpen(true)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex-shrink-0"
+              title="Отправить в чат"
+            >
+              <Share2 size={14} />
+            </button>
+          )}
         </div>
 
         {/* «Отправить в чат» — заказ уходит сообщением со ссылкой */}
@@ -338,6 +368,21 @@ export default function OrderDetailPage() {
               </div>
             </div>
           )}
+
+          {/* Гостю материалы заказа не отдаются — только их число */}
+          {!order.referenceFiles?.length && !order.referenceLinks?.length
+            && ((order.referenceFilesCount ?? 0) + (order.referenceLinksCount ?? 0)) > 0 && (() => {
+            const n = (order.referenceFilesCount ?? 0) + (order.referenceLinksCount ?? 0);
+            return (
+              <button
+                onClick={() => openAuthGate('page', { type: 'order_materials' }, 'Материалы заказа доступны после входа')}
+                className="flex items-center gap-2 text-sm text-slate-400 hover:text-white transition-colors"
+              >
+                <Link2 size={14} className="flex-shrink-0" />
+                {n} {plural(n, 'материал', 'материала', 'материалов')} — после входа
+              </button>
+            );
+          })()}
 
           {/* References — links */}
           {order.referenceLinks?.length > 0 && (
@@ -619,7 +664,7 @@ export default function OrderDetailPage() {
                 <span className="text-emerald-400 text-lg flex-shrink-0">✓</span>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white">
-                    Исполнитель выбран{order.executor ? `: ${order.executor.firstName} ${order.executor.lastName || ''}`.trim() : ''}
+                    Исполнитель выбран{order.executor ? `: ${personName(order.executor)}` : ''}
                   </p>
                   <p className="text-xs text-slate-400">Отклики на этот заказ закрыты.</p>
                 </div>
@@ -652,7 +697,7 @@ export default function OrderDetailPage() {
                 <Archive size={18} className="text-slate-400 flex-shrink-0" />
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white">
-                    {order.status === 'done' ? 'Заказ выполнен' : 'Заказ в архиве'}
+                    {isGuest ? 'Заказ закрыт' : order.status === 'done' ? 'Заказ выполнен' : 'Заказ в архиве'}
                   </p>
                   <p className="text-xs text-slate-400">Отклики на этот заказ закрыты.</p>
                 </div>
@@ -694,7 +739,7 @@ export default function OrderDetailPage() {
               </div>
             ) : (
               <button
-                onClick={() => setShowRespond(true)}
+                onClick={() => gate.ensure('respondOrder', { type: 'order' }, () => setShowRespond(true))}
                 className="w-full py-3.5 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 active:bg-primary-700 text-white rounded-2xl transition-colors"
               >
                 <Send size={16} />Откликнуться

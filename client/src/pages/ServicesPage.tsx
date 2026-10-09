@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, Briefcase, DollarSign } from 'lucide-react';
 import { userAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import { useSeo, seoTitle, ROBOTS_NOINDEX_FOLLOW } from '../lib/seo';
 
 type StatusTab = 'active' | 'draft' | 'archived';
 
@@ -39,6 +40,8 @@ function ServiceCard({ us, onClick }: { us: any; onClick: () => void }) {
 
 export default function ServicesPage() {
   const { userId } = useParams<{ userId: string }>();
+  // Подстраницы профиля — noindex,follow (план, раздел A).
+  useSeo({ title: seoTitle('Услуги'), robots: ROBOTS_NOINDEX_FOLLOW });
   const navigate = useNavigate();
   const me = useAuthStore(s => s.user);
   const isOwner = me?.id === userId;
