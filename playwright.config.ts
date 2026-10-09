@@ -9,7 +9,17 @@ export default defineConfig({
   timeout: 30_000,
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'tests/playwright-report' }]],
   use: {
-    baseURL: process.env.PW_BASE_URL || 'https://moooza.ru',
+    // DEV stand by default. Never point at PROD (moooza.ru) — helpers write test users into the DB.
+    baseURL: process.env.PW_BASE_URL || 'https://dev.moooza.ru',
+    // Browsers pick up the OS proxy (e.g. a local VPN client). If that proxy drops the
+    // first connection of each fresh context, set PW_PROXY_SERVER to it so the stand
+    // is bypassed (direct) while everything else still goes through the proxy.
+    ...(process.env.PW_PROXY_SERVER
+      ? { proxy: { server: process.env.PW_PROXY_SERVER, bypass: process.env.PW_PROXY_BYPASS || '*.moooza.ru,moooza.ru' } }
+      : {}),
+    // Extra Chromium flags for flaky local networks, e.g.
+    // PW_CHROMIUM_ARGS="--host-resolver-rules=MAP dev.moooza.ru 81.31.246.105"
+    ...(process.env.PW_CHROMIUM_ARGS ? { launchOptions: { args: process.env.PW_CHROMIUM_ARGS.split('||') } } : {}),
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'off',

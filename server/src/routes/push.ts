@@ -5,6 +5,25 @@ import { getPushStats } from '../utils/webpush';
 
 const router = Router();
 
+/**
+ * Endpoint подписки — URL, на который сервер потом делает POST (web-push).
+ * Принимаем только https на внешний хост: иначе подписка с endpoint
+ * http://localhost:…/ или на внутренний IP превращала бы рассылку в SSRF.
+ */
+function isValidPushEndpoint(endpoint: unknown): endpoint is string {
+  if (typeof endpoint !== 'string' || endpoint.length > 2048) return false;
+  try {
+    const u = new URL(endpoint);
+    if (u.protocol !== 'https:') return false;
+    const host = u.hostname.toLowerCase();
+    if (!host.includes('.') || host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local') || host.endsWith('.internal')) return false;
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host) || host.startsWith('[')) return false; // IP-литералы
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // GET /api/push/vapid-public-key — expose public key to client (no auth required)
 router.get('/vapid-public-key', (_req, res) => {
   const key = process.env.VAPID_PUBLIC_KEY;
@@ -22,10 +41,10 @@ router.post('/resubscribe', async (req: AuthRequest, res) => {
     const endpoint = subscription?.endpoint;
     const p256dh = subscription?.keys?.p256dh;
     const auth = subscription?.keys?.auth;
-    if (!endpoint || !p256dh || !auth) {
+    if (!isValidPushEndpoint(endpoint) || typeof p256dh !== 'string' || typeof auth !== 'string' || !p256dh || !auth) {
       return res.status(400).json({ error: 'Invalid subscription data' });
     }
-    const old = oldEndpoint
+    const old = typeof oldEndpoint === 'string' && oldEndpoint
       ? await prisma.pushSubscription.findUnique({ where: { endpoint: oldEndpoint } })
       : null;
     if (!old) return res.json({ ok: false }); // can't map to a user — ignore quietly
@@ -39,8 +58,8 @@ router.post('/resubscribe', async (req: AuthRequest, res) => {
       await prisma.pushSubscription.deleteMany({ where: { endpoint: oldEndpoint } }).catch(() => {});
     }
     res.json({ ok: true });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch {
+    res.status(500).json({ error: 'Push subscription error' });
   }
 });
 
@@ -48,16 +67,20 @@ router.use(authenticate);
 
 // GET /api/push/stats — push delivery counters since last restart (admin only).
 router.get('/stats', async (req: AuthRequest, res) => {
-  const me = await prisma.user.findUnique({ where: { id: req.userId! }, select: { isAdmin: true } });
-  if (!me?.isAdmin) return res.status(403).json({ error: 'Forbidden' });
-  res.json(getPushStats());
+  try {
+    const me = await prisma.user.findUnique({ where: { id: req.userId! }, select: { isAdmin: true } });
+    if (!me?.isAdmin) return res.status(403).json({ error: 'Forbidden' });
+    res.json(getPushStats());
+  } catch {
+    res.status(500).json({ error: 'Failed to get push stats' });
+  }
 });
 
 // POST /api/push/subscribe — save push subscription
 router.post('/subscribe', async (req: AuthRequest, res) => {
   try {
     const { endpoint, keys } = req.body;
-    if (!endpoint || !keys?.p256dh || !keys?.auth) {
+    if (!isValidPushEndpoint(endpoint) || typeof keys?.p256dh !== 'string' || typeof keys?.auth !== 'string' || !keys.p256dh || !keys.auth) {
       return res.status(400).json({ error: 'Invalid subscription data' });
     }
 
@@ -68,8 +91,8 @@ router.post('/subscribe', async (req: AuthRequest, res) => {
     });
 
     res.json({ ok: true });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch {
+    res.status(500).json({ error: 'Push subscription error' });
   }
 });
 
@@ -77,14 +100,14 @@ router.post('/subscribe', async (req: AuthRequest, res) => {
 router.delete('/subscribe', async (req: AuthRequest, res) => {
   try {
     const { endpoint } = req.body;
-    if (endpoint) {
+    if (typeof endpoint === 'string' && endpoint) {
       await prisma.pushSubscription.deleteMany({
         where: { endpoint, userId: req.userId! },
       });
     }
     res.json({ ok: true });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+  } catch {
+    res.status(500).json({ error: 'Push subscription error' });
   }
 });
 

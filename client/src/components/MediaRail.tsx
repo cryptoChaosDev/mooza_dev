@@ -74,7 +74,7 @@ export default function MediaRail({ title, items, to, icon: Icon, showAdd = fals
               >
                 <div className="relative w-28 h-28 rounded-xl overflow-hidden bg-slate-800 border border-slate-700 flex items-center justify-center">
                   {it.coverUrl ? (
-                    <img src={it.coverUrl} alt={it.title} className="w-full h-full object-cover" />
+                    <img src={it.coverUrl} alt={it.title} loading="lazy" decoding="async" className="w-full h-full object-cover" />
                   ) : (
                     <span className="text-slate-600 text-2xl font-bold">{it.title?.[0]?.toUpperCase()}</span>
                   )}

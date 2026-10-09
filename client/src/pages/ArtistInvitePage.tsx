@@ -6,12 +6,13 @@ import { artistAPI } from '../lib/api';
 import RolePicker from '../components/RolePicker';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { copyText } from '../lib/artistUtils';
 
 /**
  * Страница «Пригласить на сервис» — /artist/:id/invite.
  * Бывший нижний лист showInviteLink на ArtistPage: выбор ролей и статуса
- * участия → генерация бессрочной ссылки-приглашения для незарегистрированного
- * → поделиться/скопировать.
+ * участия → генерация ссылки-приглашения (действует 30 дней) для
+ * незарегистрированного → поделиться/скопировать.
  */
 export default function ArtistInvitePage() {
   const { id } = useParams<{ id: string }>();
@@ -33,12 +34,11 @@ export default function ArtistInvitePage() {
   const shareLink = async () => {
     if (navigator.share) {
       try { await navigator.share({ url: generatedLink }); } catch { /* cancelled */ }
+    } else if (await copyText(generatedLink)) {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 1500);
     } else {
-      try {
-        await navigator.clipboard.writeText(generatedLink);
-        setLinkCopied(true);
-        setTimeout(() => setLinkCopied(false), 1500);
-      } catch { /* ignore */ }
+      toast.error('Не удалось скопировать — выделите ссылку вручную');
     }
   };
 
@@ -94,9 +94,9 @@ export default function ArtistInvitePage() {
           </>
         ) : (
           <>
-            <p className="text-xs text-slate-400">Ссылка-приглашение готова. Она привязана к выбранным ролям и не имеет срока действия.</p>
+            <p className="text-xs text-slate-400">Ссылка-приглашение готова. Она привязана к выбранным ролям и действует 30 дней.</p>
             <div className="flex items-center gap-2 p-2 bg-slate-800 rounded-lg">
-              <code className="text-xs text-primary-300 truncate flex-1 min-w-0">{generatedLink}</code>
+              <code className="text-xs text-primary-300 break-all select-all flex-1 min-w-0">{generatedLink}</code>
             </div>
           </>
         )}

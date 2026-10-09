@@ -68,6 +68,8 @@ export default function RequestsSection() {
       qc.invalidateQueries({ queryKey: ['notifications'] });
       toast.success(ok);
     } catch (e: any) {
+      // 409 «уже обработано» и т.п. — подтянуть актуальный список.
+      qc.invalidateQueries({ queryKey: [key] });
       toast.error(getApiError(e, 'Не удалось выполнить действие'));
     } finally {
       setBusyId(null);
@@ -219,7 +221,7 @@ export default function RequestsSection() {
                         <p className="text-xs text-slate-500 truncate">{o.vacancy?.artist?.name}</p>
                       </div>
                     </div>
-                    <p className="text-xs text-slate-300">💰 {o.compensation} · с {o.startDate ? new Date(o.startDate).toLocaleDateString('ru-RU') : '—'}</p>
+                    <p className="text-xs text-slate-300">💰 {o.compensation} · с {o.startDate ? new Date(o.startDate).toLocaleDateString('ru-RU', { timeZone: 'UTC' }) : '—'}</p>
                     {o.conditions && <p className="text-xs text-slate-400 break-words [overflow-wrap:anywhere] line-clamp-3">{o.conditions}</p>}
                     <div className="flex gap-2 pt-0.5">
                       <button onClick={() => act(o.id, () => vacancyAPI.acceptOffer(o.id), 'req-vacancies', 'Предложение принято')} disabled={busyId === o.id}

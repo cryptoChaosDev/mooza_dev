@@ -1,7 +1,11 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Send, ArrowLeft, Loader2, Reply, Pencil, Trash2, X, Users, Check, CheckCheck, Settings, UserPlus, LogOut, Crown, Paperclip, FileText, Download, Smile, Ban, Search, Bookmark, Mic, Type } from 'lucide-react';
-import { messageAPI, friendshipAPI, userAPI } from '../lib/api';
+import { api, messageAPI, friendshipAPI, userAPI } from '../lib/api';
+import { useScrollLock } from '../lib/scrollLock';
+import { useKeyboardViewport } from '../lib/viewport';
+import { useBadgeStore } from '../stores/badgeStore';
 import { plural } from '../lib/plural';
 import { formatLastSeen } from '../lib/lastSeen';
 
@@ -40,7 +44,7 @@ function renderWithLinks(text: string) {
     )
   );
 }
-import { getSocket } from '../lib/socket';
+import { getSocket, useSocket } from '../lib/socket';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
 import { groupReactions } from '../components/ReactionBar';
@@ -49,6 +53,27 @@ import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
+
+// Лимит вложения чата — как на сервере (uploadChatAttachment, 20 МБ)
+const MAX_ATTACHMENT_MB = 20;
+const MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_MB * 1024 * 1024;
+
+// Голосовые: AAC/MP4 воспроизводится везде, включая старые iOS (webm там не
+// играет); webm — запасной вариант, если браузер не пишет mp4.
+const VOICE_MIME_CANDIDATES = ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'];
+function pickVoiceMime(): string {
+  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return '';
+  return VOICE_MIME_CANDIDATES.find((t) => MediaRecorder.isTypeSupported(t)) ?? '';
+}
+
+const isTabVisible = () => document.visibilityState === 'visible';
+
+// URL вложения — только файлы с нашего сервера (/uploads/...). Защита для уже
+// сохранённых в БД записей вида `@evil.com/x.png` (→ https://moooza.ru@evil.com).
+const SAFE_UPLOAD_RE = /^\/uploads\/[\w.\-/]+$/;
+function attachmentSrc(url?: string | null): string {
+  return url && SAFE_UPLOAD_RE.test(url) && !url.includes('..') ? `${API_URL}${url}` : '';
+}
 
 interface MsgSender {
   id: string;
@@ -198,10 +223,16 @@ export default function ChatPage() {
     return el.scrollHeight - el.scrollTop - el.clientHeight;
   }, []);
 
+  // Был ли список у нижнего края — чтобы удержать низ при открытии клавиатуры
+  const nearBottomRef = useRef(true);
   const handleMessagesScroll = useCallback(() => {
     const dist = getDistFromBottom();
+    nearBottomRef.current = dist < 150;
     setShowScrollDown(dist > 200);
     if (dist < 60) setUnreadNewCount(0);
+    // Близко к началу истории — подгрузить более ранние сообщения
+    const el = messagesScrollRef.current;
+    if (el && el.scrollTop < 300) void loadOlderRef.current();
   }, [getDistFromBottom]);
 
   const scrollToBottom = useCallback(() => {
@@ -317,25 +348,156 @@ export default function ChatPage() {
   };
 
   // ── Load chat ──────────────────────────────────────────────────────────────
+  // id в URL — conversationId ИЛИ userId (/messages/:userId из профиля).
+  // После resolve URL заменяется на /messages/<conversationId> (replace), иначе
+  // App не считает беседу открытой: растёт бейдж и всплывает баннер во время
+  // чтения. loadedConvRef защищает от повторной загрузки после этой замены.
+  const loadedConvRef = useRef<string | null>(null);
+  const messagesRef = useRef<Message[]>([]);
+  messagesRef.current = messages;
+  const [hasMore, setHasMore] = useState(false);
+  const hasMoreRef = useRef(false);
+  hasMoreRef.current = hasMore;
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const loadingOlderRef = useRef(false);
+  // Сохранение позиции прокрутки при подгрузке истории сверху
+  const scrollAdjustRef = useRef<{ prevHeight: number; prevTop: number } | null>(null);
+  const isFirstLoad = useRef(true);
+  // Прочтение, отложенное пока вкладка была скрыта
+  const pendingReadRef = useRef(false);
+
+  const fetchPage = useCallback(async (convId: string, opts: { before?: string; markRead?: boolean } = {}) => {
+    const params: Record<string, string> = {};
+    if (opts.before) params.before = opts.before;
+    // Скрытая вкладка не отмечает прочитанным — отметим по возвращению
+    if (opts.markRead === false) params.markRead = '0';
+    const res = await api.get(`/messages/conversations/${convId}`, { params });
+    return res.data as { conversation: Conversation; messages: Message[]; hasMore?: boolean };
+  }, []);
+
   const loadChat = useCallback(async () => {
     if (!id) return;
+    if (id === loadedConvRef.current) return;
     try {
       setLoading(true);
       const resolveRes = await messageAPI.resolve(id);
       const convId: string = resolveRes.data.conversationId;
-      setConversationId(convId);
 
-      const convRes = await messageAPI.getConversation(convId);
-      setConversation(convRes.data.conversation);
-      setMessages(convRes.data.messages);
+      const visible = isTabVisible();
+      const data = await fetchPage(convId, { markRead: visible });
+      loadedConvRef.current = convId;
+      pendingReadRef.current = !visible;
+      isFirstLoad.current = true;
+      setConversationId(convId);
+      setConversation(data.conversation);
+      setMessages(data.messages);
+      setHasMore(!!data.hasMore);
+      useBadgeStore.getState().setActiveConversationId(convId);
+      if (visible) void useBadgeStore.getState().refreshMessages();
+
+      if (convId !== id) {
+        const base = location.pathname.startsWith('/chat/') ? '/chat/' : '/messages/';
+        navigate(`${base}${convId}`, { replace: true, state: location.state });
+      }
     } catch (err: any) {
       console.error('Failed to load chat:', err);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, fetchPage]);
 
   useEffect(() => { loadChat(); }, [loadChat]);
+
+  // Открытая беседа — для App (бейдж/баннеры); снять при уходе со страницы
+  useEffect(() => () => { useBadgeStore.getState().setActiveConversationId(null); }, []);
+
+  /**
+   * Догрузить пропущенное (после реконнекта сокета / возврата из фона):
+   * перечитываем последнюю страницу и сливаем с уже загруженной историей —
+   * новые сообщения, правки, удаления, реакции и галочки в ней обновятся.
+   * Если разрыв больше страницы — показываем последнюю страницу заново.
+   */
+  const syncingRef = useRef(false);
+  const syncLatest = useCallback(async () => {
+    const convId = loadedConvRef.current;
+    if (!convId || syncingRef.current) return;
+    syncingRef.current = true;
+    const visible = isTabVisible();
+    try {
+      const data = await fetchPage(convId, { markRead: visible });
+      if (loadedConvRef.current !== convId) return;
+      if (visible) {
+        pendingReadRef.current = false;
+        void useBadgeStore.getState().refreshMessages();
+      }
+      setConversation(data.conversation);
+      const latest = data.messages;
+      if (!latest.length) return;
+      const gap = !!data.hasMore && !messagesRef.current.some((m) => m.id === latest[0].id);
+      if (gap) {
+        setMessages(latest);
+        setHasMore(true);
+        return;
+      }
+      const latestIds = new Set(latest.map((m) => m.id));
+      const firstTs = new Date(latest[0].createdAt).getTime();
+      const lastTs = new Date(latest[latest.length - 1].createdAt).getTime();
+      setMessages((prev) => [
+        ...prev.filter((m) => !latestIds.has(m.id) && new Date(m.createdAt).getTime() < firstTs),
+        ...latest,
+        // пришедшие по сокету, пока шёл запрос
+        ...prev.filter((m) => !latestIds.has(m.id) && new Date(m.createdAt).getTime() > lastTs),
+      ]);
+    } catch {
+      // сеть ещё не поднялась — следующий connect/visibility повторит
+    } finally {
+      syncingRef.current = false;
+    }
+  }, [fetchPage]);
+
+  /** Подгрузить более ранние сообщения (скролл к началу истории). */
+  const loadOlder = useCallback(async () => {
+    const convId = loadedConvRef.current;
+    const first = messagesRef.current[0];
+    if (!convId || !first || loadingOlderRef.current || !hasMoreRef.current) return;
+    loadingOlderRef.current = true;
+    setLoadingOlder(true);
+    try {
+      const data = await fetchPage(convId, { before: first.id });
+      if (loadedConvRef.current !== convId) return;
+      const el = messagesScrollRef.current;
+      scrollAdjustRef.current = el ? { prevHeight: el.scrollHeight, prevTop: el.scrollTop } : null;
+      setMessages((prev) => {
+        const ids = new Set(prev.map((m) => m.id));
+        return [...data.messages.filter((m) => !ids.has(m.id)), ...prev];
+      });
+      setHasMore(!!data.hasMore);
+    } catch {
+      // повторится при следующей прокрутке
+    } finally {
+      loadingOlderRef.current = false;
+      setLoadingOlder(false);
+    }
+  }, [fetchPage]);
+  const loadOlderRef = useRef(loadOlder);
+  loadOlderRef.current = loadOlder;
+
+  // После подгрузки истории сверху — удержать видимую позицию
+  useLayoutEffect(() => {
+    const adj = scrollAdjustRef.current;
+    const el = messagesScrollRef.current;
+    if (!adj || !el) return;
+    scrollAdjustRef.current = null;
+    el.scrollTop = el.scrollHeight - adj.prevHeight + adj.prevTop;
+  }, [messages]);
+
+  // Возврат из фона → догрузить пропущенное и отметить прочитанным
+  useEffect(() => {
+    const onVis = () => { if (isTabVisible()) void syncLatest(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [syncLatest]);
 
   // Прореживание индикатора «печатает…» — записи старше 3.5с исчезают.
   const hasTyping = Object.keys(typingIds).length > 0;
@@ -361,13 +523,16 @@ export default function ChatPage() {
   }, [newMessage]);
 
   // ── Auto-scroll ────────────────────────────────────────────────────────────
-  const isFirstLoad = useRef(true);
-  const prevMsgCount = useRef(0);
+  // Новые сообщения определяются по смене ПОСЛЕДНЕГО id (а не по длине
+  // массива): подгрузка истории сверху не должна прокручивать вниз и
+  // показывать «новые» на кнопке.
+  const prevLastIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!messages.length) return;
+    if (!messages.length) { prevLastIdRef.current = null; return; }
+    const last = messages[messages.length - 1];
     if (isFirstLoad.current) {
       isFirstLoad.current = false;
-      prevMsgCount.current = messages.length;
+      prevLastIdRef.current = last.id;
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           const el = messagesScrollRef.current;
@@ -376,13 +541,14 @@ export default function ChatPage() {
       });
       return;
     }
-    const addedCount = messages.length - prevMsgCount.current;
-    prevMsgCount.current = messages.length;
-    if (addedCount <= 0) return; // edit/delete, not a new message
+    const prevLastId = prevLastIdRef.current;
+    prevLastIdRef.current = last.id;
+    if (prevLastId === last.id) return; // edit/delete/reaction/older page — not a new message
 
-    const lastMsg = messages[messages.length - 1];
+    const prevIdx = prevLastId ? messages.findIndex(m => m.id === prevLastId) : -1;
+    const addedCount = prevIdx >= 0 ? messages.length - 1 - prevIdx : 1;
     const myId = useAuthStore.getState().user?.id;
-    const isMyMessage = lastMsg?.senderId === myId;
+    const isMyMessage = last.senderId === myId;
 
     // Check scroll position right now (synchronous, avoids stale ref during animation)
     const dist = getDistFromBottom();
@@ -399,17 +565,19 @@ export default function ChatPage() {
   }, [messages]);
 
   // ── Socket ─────────────────────────────────────────────────────────────────
+  // useSocket: перевешиваем слушателей, если сокет создан/пересоздан позже.
+  const socket = useSocket();
   useEffect(() => {
-    const socket = getSocket();
     if (!socket || !conversationId) return;
 
     const onNew = (msg: Message) => {
-      if (msg.conversationId === conversationId) {
-        setMessages(prev => [...prev, msg]);
-        // We're reading this chat right now — mark it read so the incoming
-        // message doesn't linger as an unread notification in the bell.
-        messageAPI.markRead(conversationId).catch(() => {});
-      }
+      if (msg.conversationId !== conversationId) return;
+      setMessages(prev => prev.some(m => m.id === msg.id) ? prev : [...prev, msg]);
+      // We're reading this chat right now — mark it read so the incoming
+      // message doesn't linger as unread. Только если вкладка видима: иначе
+      // отметим при возврате (visibilitychange → syncLatest).
+      if (isTabVisible()) messageAPI.markRead(conversationId).catch(() => {});
+      else pendingReadRef.current = true;
     };
 
     const onEdited = (msg: Message) => {
@@ -418,9 +586,12 @@ export default function ChatPage() {
       }
     };
 
-    const onDeleted = ({ messageId }: { messageId: string; conversationId: string }) => {
+    const onDeleted = ({ messageId, conversationId: cid }: { messageId: string; conversationId: string }) => {
+      if (cid && cid !== conversationId) return;
       setMessages(prev =>
-        prev.map(m => m.id === messageId ? { ...m, deletedAt: new Date().toISOString() } : m)
+        prev.map(m => m.id === messageId
+          ? { ...m, deletedAt: new Date().toISOString(), content: '', attachmentUrl: null, attachmentName: null, attachmentType: null, transcript: null, reactions: [] }
+          : m)
       );
     };
 
@@ -458,6 +629,9 @@ export default function ChatPage() {
       setTypingIds(prev => ({ ...prev, [uid]: Date.now() }));
     };
 
+    // Реконнект — сообщения, пришедшие пока сокет был отключён, иначе теряются
+    const onConnect = () => { void syncLatest(); };
+
     socket.on('user_typing', onTyping);
     socket.on('new_message', onNew);
     socket.on('message_edited', onEdited);
@@ -467,6 +641,7 @@ export default function ChatPage() {
     socket.on('message_reaction_removed', onReactionRemoved);
     socket.on('messages_delivered', onDelivered);
     socket.on('messages_read', onRead);
+    socket.on('connect', onConnect);
     return () => {
       socket.off('user_typing', onTyping);
       socket.off('new_message', onNew);
@@ -477,13 +652,24 @@ export default function ChatPage() {
       socket.off('message_reaction_removed', onReactionRemoved);
       socket.off('messages_delivered', onDelivered);
       socket.off('messages_read', onRead);
+      socket.off('connect', onConnect);
     };
-  }, [conversationId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket, conversationId, syncLatest]);
 
   // ── Send / Edit ────────────────────────────────────────────────────────────
+  // Проверка размера ДО загрузки: сервер всё равно отклонит (413), но после
+  // долгой выгрузки 20+ МБ по мобильной сети.
+  const fileTooBig = (file: File) => {
+    if (file.size <= MAX_ATTACHMENT_BYTES) return false;
+    toast.error(`Файл больше ${MAX_ATTACHMENT_MB} МБ — такой не отправить`);
+    return true;
+  };
+
   const pickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (fileTooBig(file)) { e.target.value = ''; return; }
     setPendingFile(file);
     if (file.type.startsWith('image/')) {
       const reader = new FileReader();
@@ -504,6 +690,7 @@ export default function ChatPage() {
     e.preventDefault();
     const text = newMessage.trim();
     if ((!text && !pendingFile) || !conversationId || sending) return;
+    if (pendingFile && fileTooBig(pendingFile)) return;
 
     const fileToSend = pendingFile;
     setNewMessage('');
@@ -527,7 +714,7 @@ export default function ChatPage() {
           setUploading(false);
         }
         const res = await messageAPI.sendMessage(conversationId, text, replyTo?.id, attachment);
-        setMessages(prev => [...prev, res.data]);
+        setMessages(prev => prev.some(m => m.id === res.data.id) ? prev : [...prev, res.data]);
         setReplyTo(null);
       }
     } catch (err) {
@@ -567,6 +754,7 @@ export default function ChatPage() {
   // ── Голосовые сообщения ────────────────────────────────────────────────────
   const sendVoice = async (file: File) => {
     if (!conversationId) return;
+    if (fileTooBig(file)) return;
     setSending(true);
     setUploading(true);
     try {
@@ -574,7 +762,7 @@ export default function ChatPage() {
       fd.append('file', file);
       const up = await messageAPI.uploadAttachment(conversationId, fd);
       const res = await messageAPI.sendMessage(conversationId, '', undefined, up.data);
-      setMessages(prev => [...prev, res.data]);
+      setMessages(prev => prev.some(m => m.id === res.data.id) ? prev : [...prev, res.data]);
     } catch (err) {
       toast.error(getApiError(err, 'Не удалось отправить голосовое'));
     } finally {
@@ -586,9 +774,9 @@ export default function ChatPage() {
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      // Safari (iOS) не умеет audio/webm — берём audio/mp4
-      const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
-        : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+      // Предпочитаем audio/mp4 (AAC): webm не воспроизводится на старых iOS у
+      // получателя; webm — только если браузер не умеет писать mp4.
+      const mime = pickVoiceMime();
       const rec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
       recordChunksRef.current = [];
       recordCancelledRef.current = false;
@@ -598,7 +786,7 @@ export default function ChatPage() {
         if (recordTimerRef.current) clearInterval(recordTimerRef.current);
         setRecording(false);
         if (recordCancelledRef.current) return;
-        const type = rec.mimeType || mime || 'audio/webm';
+        const type = (rec.mimeType || mime || 'audio/webm').split(';')[0];
         const blob = new Blob(recordChunksRef.current, { type });
         if (blob.size < 1000) return; // случайный тап — нечего отправлять
         const ext = type.includes('mp4') ? 'm4a' : 'webm';
@@ -611,7 +799,8 @@ export default function ChatPage() {
       setRecording(true);
       recordTimerRef.current = setInterval(() => {
         setRecordSec(s => {
-          // Предохранитель: лимит вложений 10МБ ≈ 5 минут записи
+          // Предохранитель: 5 минут записи — с запасом укладывается в лимит
+          // вложений 20 МБ (и в лимит распознавания речи)
           if (s + 1 >= 300) { mediaRecorderRef.current?.stop(); return s + 1; }
           return s + 1;
         });
@@ -752,10 +941,18 @@ export default function ChatPage() {
     }
   };
 
-  const scrollToMessage = (msgId: string) => {
+  const scrollToMessage = async (msgId: string) => {
     setShowSearch(false);
     setSearchQuery('');
     setSearchResults([]);
+    // История грузится страницами — найденное сообщение может быть ещё не
+    // загружено: подгружаем более ранние страницы, пока не найдём.
+    const nextFrame = () => new Promise(r => requestAnimationFrame(() => r(null)));
+    for (let guard = 0; guard < 30 && !messagesRef.current.some(m => m.id === msgId) && hasMoreRef.current; guard++) {
+      await loadOlderRef.current();
+      await nextFrame();
+      await nextFrame();
+    }
     // Small delay to let search panel close, then scroll
     setTimeout(() => {
       const el = document.getElementById(`msg-${msgId}`);
@@ -790,7 +987,7 @@ export default function ChatPage() {
     try {
       await messageAPI.addMember(conversationId, memberId);
       setFriends(prev => prev.filter(f => f.id !== memberId));
-      await loadChat();
+      await syncLatest();
     } catch (err: any) {
       console.error('Failed to add member:', err);
       toast.error(getApiError(err, 'Не удалось добавить участника'));
@@ -804,7 +1001,7 @@ export default function ChatPage() {
       if (memberId === me?.id) {
         navigate('/messages');
       } else {
-        await loadChat();
+        await syncLatest();
       }
     } catch (err) {
       console.error('Failed to remove member:', err);
@@ -885,6 +1082,23 @@ export default function ChatPage() {
     .filter(Boolean) as string[];
 
 
+  // ── Экранная клавиатура (iOS/Android) ─────────────────────────────────────
+  // Контейнер чата fixed между шапкой и BottomNav; при открытой клавиатуре
+  // iOS не уменьшает layout viewport — поле ввода уезжало под клавиатуру.
+  // Пока клавиатура открыта, контейнер занимает ровно видимую область
+  // (visualViewport), перекрывая шапку приложения; BottomNav прячется сам.
+  const keyboard = useKeyboardViewport();
+  useEffect(() => {
+    if (!nearBottomRef.current) return;
+    requestAnimationFrame(() => {
+      const el = messagesScrollRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    });
+  }, [keyboard.open, keyboard.height]);
+
+  // Боковые панели — порталы поверх шапки/BottomNav, фон не прокручивается
+  useScrollLock(showSettings || showAttachments);
+
   // ── Loading state ──────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -911,7 +1125,13 @@ export default function ChatPage() {
     <div
       ref={chatContainerRef}
       className="fixed inset-x-0 z-10 lg:static lg:h-screen bg-slate-950 flex flex-col"
-      style={{
+      style={keyboard.open ? {
+        top: `${keyboard.offsetTop}px`,
+        height: `${keyboard.height}px`,
+        bottom: 'auto',
+        paddingTop: 'env(safe-area-inset-top, 0px)',
+        zIndex: 55,
+      } : {
         top: 'calc(2.75rem + env(safe-area-inset-top, 0px))',
         bottom: 'calc(3.75rem + env(safe-area-inset-bottom, 0px))',
       }}
@@ -1014,7 +1234,7 @@ export default function ChatPage() {
                 value={searchQuery}
                 onChange={e => handleSearch(e.target.value)}
                 placeholder="Поиск в чате..."
-                className="w-full bg-slate-800 border border-slate-700 text-sm text-white placeholder-slate-500 pl-8 pr-8 py-2 rounded-xl focus:outline-none focus:border-primary-500/50 transition-colors"
+                className="w-full bg-slate-800 border border-slate-700 text-base sm:text-sm text-white placeholder-slate-500 pl-8 pr-8 py-2 rounded-xl focus:outline-none focus:border-primary-500/50 transition-colors"
               />
               {searchQuery && (
                 <button onClick={() => { setSearchQuery(''); setSearchResults([]); }} className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-slate-500 hover:text-slate-300">
@@ -1051,12 +1271,17 @@ export default function ChatPage() {
       {/* Group Settings Panel */}
       {showSettings && conversation.isGroup && (() => {
         const amIAdmin = conversation.members.find(m => m.userId === me?.id)?.isAdmin ?? false;
-        return (
-          <div className="fixed inset-0 z-40 flex">
+        // Портал в body: внутри контейнера чата (fixed z-10) панель оказывалась
+        // под шапкой/BottomNav и на узких экранах её нельзя было закрыть.
+        return createPortal(
+          <div className="fixed inset-0 z-[60] flex">
             {/* Backdrop */}
             <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowSettings(false)} />
             {/* Panel */}
-            <div className="relative ml-auto w-full max-w-sm bg-gradient-to-b from-slate-800 to-slate-900 border-l border-slate-700/50 shadow-2xl flex flex-col overflow-hidden">
+            <div
+              className="relative ml-auto w-full max-w-sm bg-gradient-to-b from-slate-800 to-slate-900 border-l border-slate-700/50 shadow-2xl flex flex-col overflow-hidden"
+              style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+            >
               {/* Panel header */}
               <div className="flex items-center justify-between p-4 border-b border-slate-700/50 flex-shrink-0">
                 <div className="flex items-center gap-2">
@@ -1068,7 +1293,7 @@ export default function ChatPage() {
                 </button>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-24">
+              <div className="flex-1 overflow-y-auto p-4 space-y-5 pb-8">
                 {/* Group name */}
                 <div className="flex items-center gap-3 p-3 bg-slate-700/30 rounded-xl">
                   <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-pink-600 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -1160,15 +1385,19 @@ export default function ChatPage() {
                 )}
               </div>
             </div>
-          </div>
+          </div>,
+          document.body,
         );
       })()}
 
       {/* Attachments panel */}
-      {showAttachments && (
-        <div className="fixed inset-0 z-40 flex">
+      {showAttachments && createPortal(
+        <div className="fixed inset-0 z-[60] flex">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowAttachments(false)} />
-          <div className="relative ml-auto w-full max-w-sm bg-gradient-to-b from-slate-800 to-slate-900 border-l border-slate-700/50 shadow-2xl flex flex-col overflow-hidden">
+          <div
+            className="relative ml-auto w-full max-w-sm bg-gradient-to-b from-slate-800 to-slate-900 border-l border-slate-700/50 shadow-2xl flex flex-col overflow-hidden"
+            style={{ paddingTop: 'env(safe-area-inset-top, 0px)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
             {/* Header */}
             <div className="flex items-center justify-between p-4 border-b border-slate-700/50 flex-shrink-0">
               <div className="flex items-center gap-2">
@@ -1218,10 +1447,10 @@ export default function ChatPage() {
                       <button
                         key={a.id}
                         type="button"
-                        onClick={() => setViewImage({ src: `${API_URL}${a.attachmentUrl}`, name: a.attachmentName ?? null })}
+                        onClick={() => setViewImage({ src: attachmentSrc(a.attachmentUrl), name: a.attachmentName ?? null })}
                         className="aspect-square rounded-lg overflow-hidden bg-slate-700 block"
                       >
-                        <img src={`${API_URL}${a.attachmentUrl}`} alt={a.attachmentName || ''} className="w-full h-full object-cover hover:opacity-80 transition-opacity" />
+                        <img src={attachmentSrc(a.attachmentUrl)} alt={a.attachmentName || ''} className="w-full h-full object-cover hover:opacity-80 transition-opacity" />
                       </button>
                     ))}
                   </div>
@@ -1230,7 +1459,7 @@ export default function ChatPage() {
                 return (
                   <div className="space-y-2">
                     {items.map((a: any) => (
-                      <a key={a.id} href={`${API_URL}${a.attachmentUrl}`} target="_blank" rel="noreferrer" download={a.attachmentName || true} className="flex items-center gap-3 p-3 bg-slate-700/40 hover:bg-slate-700/60 rounded-xl transition-colors">
+                      <a key={a.id} href={attachmentSrc(a.attachmentUrl)} target="_blank" rel="noreferrer" download={a.attachmentName || true} className="flex items-center gap-3 p-3 bg-slate-700/40 hover:bg-slate-700/60 rounded-xl transition-colors">
                         <div className="w-10 h-10 rounded-lg bg-slate-600 flex items-center justify-center flex-shrink-0">
                           <FileText size={18} className="text-slate-300" />
                         </div>
@@ -1249,7 +1478,8 @@ export default function ChatPage() {
               })()}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Messages */}
@@ -1264,6 +1494,9 @@ export default function ChatPage() {
         onTouchEnd={onBackTouchEnd}
       >
         <div className="max-w-4xl mx-auto px-4 py-4 space-y-4">
+          {loadingOlder && (
+            <div className="flex justify-center py-2"><Loader2 size={18} className="text-primary-500 animate-spin" /></div>
+          )}
           {grouped.length === 0 ? (
             <div className="text-center py-10">
               <div className="inline-flex p-4 bg-slate-700/30 rounded-2xl mb-4">
@@ -1369,7 +1602,7 @@ export default function ChatPage() {
                             <p className="text-sm italic opacity-70">Сообщение удалено</p>
                           ) : (
                             <>
-                              {msg.attachmentUrl && (() => {
+                              {attachmentSrc(msg.attachmentUrl) && (() => {
                                 const isImage = msg.attachmentType?.startsWith('image/');
                                 const isAudio = msg.attachmentType?.startsWith('audio/');
                                 if (isAudio) {
@@ -1377,7 +1610,7 @@ export default function ChatPage() {
                                     <div className="mb-1 min-w-[220px] max-w-[280px]">
                                       <div className="flex items-center gap-1.5">
                                         <div className="flex-1 min-w-0">
-                                          <AudioPlayer src={`${API_URL}${msg.attachmentUrl}`} name={msg.attachmentName || 'Аудио'} />
+                                          <AudioPlayer src={attachmentSrc(msg.attachmentUrl)} name={msg.attachmentName || 'Аудио'} />
                                         </div>
                                         {/* Голос → текст */}
                                         <button
@@ -1406,13 +1639,13 @@ export default function ChatPage() {
                                 return isImage ? (
                                   <button
                                     type="button"
-                                    onClick={() => setViewImage({ src: `${API_URL}${msg.attachmentUrl}`, name: msg.attachmentName ?? null })}
+                                    onClick={() => setViewImage({ src: attachmentSrc(msg.attachmentUrl), name: msg.attachmentName ?? null })}
                                     className="block mb-1"
                                   >
-                                    <img src={`${API_URL}${msg.attachmentUrl}`} alt={msg.attachmentName || 'image'} className="rounded-lg max-w-full max-h-60 object-cover" />
+                                    <img src={attachmentSrc(msg.attachmentUrl)} alt={msg.attachmentName || 'image'} className="rounded-lg max-w-full max-h-60 object-cover" />
                                   </button>
                                 ) : (
-                                  <a href={`${API_URL}${msg.attachmentUrl}`} target="_blank" rel="noreferrer" download={msg.attachmentName || true} className={`flex items-center gap-2 mb-1 px-3 py-2 rounded-lg ${isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-slate-600/50 hover:bg-slate-600'} transition-colors`}>
+                                  <a href={attachmentSrc(msg.attachmentUrl)} target="_blank" rel="noreferrer" download={msg.attachmentName || true} className={`flex items-center gap-2 mb-1 px-3 py-2 rounded-lg ${isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-slate-600/50 hover:bg-slate-600'} transition-colors`}>
                                     <FileText size={16} className="flex-shrink-0" />
                                     <span className="text-xs truncate flex-1 min-w-0">{msg.attachmentName || 'Файл'}</span>
                                     <Download size={14} className="flex-shrink-0 opacity-60" />
@@ -1481,9 +1714,10 @@ export default function ChatPage() {
                           </div>
                         )}
 
-                        {/* Action icons under bubble */}
+                        {/* Action icons under bubble — скрыты до наведения только на
+                            устройствах с hover (мышь); на iPad/тач-экранах видны всегда */}
                         {!msg.deletedAt && (
-                          <div className={`flex items-center gap-1 mt-1 opacity-100 sm:opacity-0 sm:group-hover/msg:opacity-100 transition-opacity ${isMine ? 'justify-end' : 'justify-start'}`}>
+                          <div className={`flex items-center gap-1 mt-1 opacity-100 [@media(hover:hover)]:sm:opacity-0 [@media(hover:hover)]:sm:group-hover/msg:opacity-100 focus-within:opacity-100 transition-opacity ${isMine ? 'justify-end' : 'justify-start'}`}>
                             <button
                               onClick={() => setReactionPickerMsgId(msg.id)}
                               className="p-1.5 rounded-lg text-slate-500 hover:text-yellow-400 hover:bg-slate-700/60 transition-colors"
@@ -1549,9 +1783,9 @@ export default function ChatPage() {
       )}
 
       {/* Context menu overlay */}
-      {contextMenu && (
+      {contextMenu && createPortal(
         <div
-          className="fixed inset-0 z-50"
+          className="fixed inset-0 z-[60]"
           onClick={() => setContextMenu(null)}
         >
           <div
@@ -1580,7 +1814,7 @@ export default function ChatPage() {
               { label: 'Переслать', icon: '📤', action: () => { const m = contextMenu.msg; setContextMenu(null); setForwardMsg(m); } },
               contextMenu.msg.content ? { label: 'Скопировать', icon: '📋', action: () => copyText(contextMenu.msg.content) } : null,
               contextMenu.msg.attachmentUrl && contextMenu.msg.attachmentType?.startsWith('image/')
-                ? { label: 'Сохранить фото', icon: '🖼️', action: () => { const a = document.createElement('a'); a.href = `${API_URL}${contextMenu.msg.attachmentUrl}`; a.download = contextMenu.msg.attachmentName || 'photo'; a.click(); setContextMenu(null); } }
+                ? { label: 'Сохранить фото', icon: '🖼️', action: () => { const a = document.createElement('a'); a.href = attachmentSrc(contextMenu.msg.attachmentUrl); a.download = contextMenu.msg.attachmentName || 'photo'; a.click(); setContextMenu(null); } }
                 : null,
               contextMenu.msg.senderId === me?.id
                 ? { label: 'Редактировать', icon: '✏️', action: () => { startEdit(contextMenu.msg); setContextMenu(null); } }
@@ -1599,13 +1833,14 @@ export default function ChatPage() {
               </button>
             ))}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Reaction picker overlay */}
-      {reactionPickerMsgId && (
+      {reactionPickerMsgId && createPortal(
         <div
-          className="fixed inset-0 z-50"
+          className="fixed inset-0 z-[60]"
           onClick={() => setReactionPickerMsgId(null)}
         >
           <div
@@ -1630,7 +1865,8 @@ export default function ChatPage() {
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       {/* Hidden file inputs */}
@@ -1750,13 +1986,14 @@ export default function ChatPage() {
                 const file = item.getAsFile();
                 if (!file) return;
                 e.preventDefault();
+                if (fileTooBig(file)) return;
                 setPendingFile(file);
                 const reader = new FileReader();
                 reader.onload = ev => setPendingPreview(ev.target?.result as string);
                 reader.readAsDataURL(file);
               }}
               placeholder={editingId ? 'Редактировать...' : 'Сообщение...'}
-              className="flex-1 min-w-0 bg-transparent text-sm text-white px-3 py-2.5 focus:outline-none placeholder-slate-500 resize-none overflow-y-auto"
+              className="flex-1 min-w-0 bg-transparent text-base sm:text-sm text-white px-3 py-2.5 focus:outline-none placeholder-slate-500 resize-none overflow-y-auto"
               style={{ height: '40px', maxHeight: '160px' } as React.CSSProperties}
             />
             <button type="button" onClick={() => setShowEmoji(p => !p)}

@@ -121,6 +121,30 @@ export async function sendVerificationEmail(to: string, code: string) {
   });
 }
 
+// Смена email в профиле: код уходит на НОВЫЙ адрес и подтверждает, что он
+// принадлежит пользователю. Отдельный текст — письмо «Подтверждение регистрации»
+// путало тех, кто давно зарегистрирован.
+export async function sendEmailChangeCode(to: string, code: string) {
+  await registerTransport.sendMail({
+    from: '"Moooza" <register@moooza.ru>',
+    to,
+    subject: 'Подтверждение нового email',
+    html: wrapper(`
+      <h2 style="margin:0 0 8px;font-size:20px;color:#fff">Подтвердите новый email</h2>
+      <p style="margin:0 0 24px;color:#94a3b8;font-size:14px">Этот адрес указали как новый email аккаунта Moooza. Введите код, чтобы подтвердить смену:</p>
+      ${codeBlock(code)}
+      <p style="margin:24px 0 0;color:#64748b;font-size:12px">Код действителен 15 минут. Пока код не введён, вход выполняется со старым email. Если вы не меняли email — просто проигнорируйте это письмо.</p>
+    `),
+    text: [
+      'Подтверждение нового email на Moooza',
+      '',
+      `Код: ${code}`,
+      '',
+      'Код действителен 15 минут. Если вы не меняли email — проигнорируйте это письмо.',
+    ].join('\n'),
+  });
+}
+
 export async function sendPasswordResetEmail(to: string, code: string) {
   await recoverTransport.sendMail({
     from: '"Moooza" <recover@moooza.ru>',

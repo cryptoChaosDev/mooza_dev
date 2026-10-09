@@ -5,12 +5,23 @@ import {
   Check, Globe, ArrowRight, ArrowLeft, X, Search,
 } from 'lucide-react';
 import { authAPI, referenceAPI, referralAPI, artistAPI, siteSettingsAPI } from '../lib/api';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
+import { isValidEmail, passwordChecks, passwordProblem } from '../lib/authHelpers';
 import CityPicker from '../components/CityPicker';
 import VkLoginButton from '../components/VkLoginButton';
 
 // Temporarily hide VK login/registration. Set back to true to restore.
 const SHOW_VK = false;
 import { useAuthStore } from '../stores/authStore';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+interface SelectedProfession {
+  professionId: string;
+  professionName: string;
+  directionName?: string;
+}
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -28,6 +39,62 @@ function formatPhone(value: string): string {
 function unformatPhone(formatted: string): string {
   return formatted.replace(/\D/g, '');
 }
+
+// ДД.ММ.ГГГГ → ГГГГ-ММ-ДД (пусто, пока дата не введена целиком).
+function maskedToIso(v: string): string {
+  return v.length === 10 ? `${v.slice(6)}-${v.slice(3, 5)}-${v.slice(0, 2)}` : '';
+}
+
+// ── Draft (sessionStorage) ────────────────────────────────────────────────────
+// Черновик шагов переживает перезагрузку/сворачивание вкладки (iOS выгружает
+// фоновые вкладки). Пароль в черновик НЕ пишем никогда.
+const DRAFT_KEY = 'mooza_register_draft';
+
+interface RegisterDraft {
+  v: 1;
+  ref: string;
+  artistInvite: string;
+  step: number;
+  email: string;
+  firstName: string;
+  lastName: string;
+  nickname: string;
+  birthDateInput: string;
+  selectedProfs: SelectedProfession[];
+  profFilterValues: Record<string, string[]>;
+  city: string;
+  country: string;
+  phone: string;
+  agreedToPD: boolean;
+  agreeMarketing: boolean;
+  pendingEmail: string | null;
+}
+
+function loadDraft(ref?: string, artistInvite?: string): RegisterDraft | null {
+  try {
+    const raw = sessionStorage.getItem(DRAFT_KEY);
+    if (!raw) return null;
+    const d = JSON.parse(raw) as RegisterDraft;
+    if (d?.v !== 1) return null;
+    // Черновик относится к той же ссылке-приглашению, иначе начинаем с чистого листа.
+    if ((d.ref || '') !== (ref || '') || (d.artistInvite || '') !== (artistInvite || '')) return null;
+    return d;
+  } catch {
+    return null;
+  }
+}
+
+function clearDraft() {
+  try { sessionStorage.removeItem(DRAFT_KEY); } catch { /* storage unavailable */ }
+}
+
+// Поле из ответа сервера → шаг мастера, на котором его можно исправить.
+const FIELD_STEP: Record<string, number> = {
+  email: 0, password: 0, consentPd: 0, consentMarketing: 0,
+  firstName: 1, lastName: 1, nickname: 1, birthDate: 1,
+  userProfessions: 2,
+  phone: 3, city: 3, country: 3,
+};
 
 // ── Field ─────────────────────────────────────────────────────────────────────
 
@@ -66,14 +133,6 @@ function Input({
   );
 }
 
-// ── Types ─────────────────────────────────────────────────────────────────────
-
-interface SelectedProfession {
-  professionId: string;
-  professionName: string;
-  directionName?: string;
-}
-
 interface ProfessionResult {
   id: string;
   name: string;
@@ -85,12 +144,13 @@ interface ProfessionResult {
 interface FilterValue { id: string; value: string; sortOrder: number; }
 interface ProfessionFilter { id: string; name: string; values: FilterValue[]; }
 
-function ProfessionFilterPicker({ professionId, onChange }: {
+function ProfessionFilterPicker({ professionId, initialSelected, onChange }: {
   professionId: string;
+  initialSelected?: string[];
   onChange: (valueIds: string[]) => void;
 }) {
   const [filters, setFilters] = useState<ProfessionFilter[]>([]);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<string[]>(initialSelected ?? []);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -167,15 +227,22 @@ export default function RegisterPage() {
 
   useEffect(() => { document.title = 'Регистрация — Moooza'; }, []);
 
-  useEffect(() => { document.title = 'Регистрация — Moooza'; }, []);
+  // Черновик шагов (без пароля) — читаем один раз при монтировании.
+  const [draft] = useState(() => (isAuthed ? null : loadDraft(refCode, artistInvite)));
 
   // Resolve the ref code (single-use link code OR legacy userId) → owner id.
   const [referrerId, setReferrerId] = useState<string | undefined>(undefined);
   const [refUsed, setRefUsed] = useState(false);
-  // Ссылка не найдена (удалена владельцем или опечатка) — показываем честное
-  // объяснение вместо редиректа на «Регистрация временно закрыта».
-  const [refInvalid, setRefInvalid] = useState(false);
-  const [regClosed, setRegClosed] = useState(false);
+  // Закрытая регистрация + приглашение не действует (ссылка удалена/опечатка,
+  // легаси-код, отозванное приглашение в артиста) — честное объяснение вместо
+  // редиректа на «Регистрация временно закрыта» или 403 после всех шагов.
+  const [inviteBroken, setInviteBroken] = useState(false);
+
+  // Resolve the artist-invite token → preview (artist name + roles) for the banner.
+  const [artistInvitePreview, setArtistInvitePreview] = useState<{ artist: { name: string }; roles: { id: string; name: string }[] } | null>(null);
+  // Приглашение в артиста не действует: 404 — ссылки нет, 410 — истекла или
+  // исчерпана. Текст причины — от сервера.
+  const [artistInviteError, setArtistInviteError] = useState('');
 
   // Registration may be closed site-wide. In referral-only mode a valid referral
   // link (or an artist invite) still lets people register; otherwise → login.
@@ -184,46 +251,66 @@ export default function RegisterPage() {
     (async () => {
       let ownerId: string | null = null;
       let used = false;
+      let legacy = false;
       let refBroken = false;
       if (refCode) {
         try {
           const { data } = await referralAPI.resolve(refCode);
           used = !!data?.used;
+          legacy = !!data?.legacy;
           ownerId = data?.ownerId ?? null;
           if (!cancelled) {
             if (used) setRefUsed(true);
             else if (ownerId) setReferrerId(ownerId);
-            else { refBroken = true; setRefInvalid(true); } // код не найден (удалён/опечатка)
+            else refBroken = true; // код не найден (удалён/опечатка)
           }
         } catch {
           refBroken = true;
-          if (!cancelled) setRefInvalid(true);
         }
       }
+      let inviteOk = false;
+      let inviteErr = '';
+      if (artistInvite) {
+        try {
+          const { data } = await artistAPI.getInvite(artistInvite);
+          inviteOk = true;
+          if (!cancelled) setArtistInvitePreview(data);
+        } catch (e) {
+          inviteErr = getApiError(e, 'Приглашение в артиста не найдено — попросите новую ссылку');
+          if (!cancelled) {
+            setArtistInvitePreview(null);
+            setArtistInviteError(inviteErr);
+          }
+        }
+      }
+      if (isAuthed) return; // залогиненным — только экран принятия приглашения
+      let leaving = false; // экран «ссылка не действует» или уход на /login
       try {
         const { data } = await siteSettingsAPI.get();
         const s = data as Record<string, string>;
         if (s?.registrationEnabled === 'false') {
-          if (!cancelled) setRegClosed(true);
-          const invited = (s?.referralRegistrationEnabled === 'true' && !!ownerId && !used) || !!artistInvite;
-          // Пришёл с битой реф-ссылкой — остаёмся и показываем экран-объяснение,
-          // а не «Регистрация временно закрыта» на /login.
-          if (!invited && !refBroken && !cancelled) navigate('/login', { replace: true });
+          // Тот же гейт, что на сервере: в режиме «только по приглашению» пускают
+          // ReferralLink (неиспользованная или кампания) или приглашение в артиста —
+          // и ТОЛЬКО если включён referralRegistrationEnabled. Легаси-код (голый
+          // userId) регистрацию не открывает. Иначе человек проходил все шаги и
+          // получал 403 в самом конце.
+          const refOk = !!ownerId && !used && !legacy;
+          const invited = s?.referralRegistrationEnabled === 'true' && (refOk || inviteOk);
+          if (!invited && !cancelled) {
+            leaving = true;
+            const brokenInvite = refBroken || legacy || (!!artistInvite && !inviteOk);
+            if (brokenInvite && s?.referralRegistrationEnabled === 'true') setInviteBroken(true);
+            else navigate('/login', { replace: true });
+          }
         }
       } catch { /* on error, don't hard-block */ }
+      // Регистрация открыта — зарегистрироваться можно и без приглашения,
+      // но человек должен знать, что в артиста он так не попадёт.
+      if (inviteErr && !leaving && !cancelled) toast.error(inviteErr);
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refCode, artistInvite, navigate]);
-
-  // Resolve the artist-invite token → preview (artist name + roles) for the banner.
-  const [artistInvitePreview, setArtistInvitePreview] = useState<{ artist: { name: string }; roles: { id: string; name: string }[] } | null>(null);
-  useEffect(() => {
-    if (!artistInvite) return;
-    artistAPI.getInvite(artistInvite)
-      .then(({ data }) => setArtistInvitePreview(data))
-      .catch(() => setArtistInvitePreview(null));
-  }, [artistInvite]);
 
   // ── Accept-invite flow for users who are ALREADY logged in ──────────────────
   const [accepting, setAccepting] = useState(false);
@@ -241,30 +328,38 @@ export default function RegisterPage() {
       const { data } = await artistAPI.acceptInvite(artistInvite);
       navigate(`/artist/${data.artistId}`, { replace: true });
     } catch (err: any) {
-      setAcceptError(err.response?.data?.error || 'Не удалось принять приглашение');
+      const msg = getApiError(err, 'Не удалось принять приглашение');
+      toast.error(msg);
+      setAcceptError(msg);
       setAccepting(false);
     }
   };
 
+  // Пароль в черновике не хранится — после перезагрузки начинаем с шага 0
+  // (остальные поля уже заполнены), чтобы ввести его заново.
   const [step, setStep] = useState(0);
+  const restoredDraft = !!draft && !draft.pendingEmail && draft.step > 0;
 
   // Step 0
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState(draft?.email ?? '');
   const [password, setPassword] = useState('');
   const [passwordConfirm, setPasswordConfirm] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [agreedToPD, setAgreedToPD] = useState(false);
-  const [agreeMarketing, setAgreeMarketing] = useState(false);
+  const [agreedToPD, setAgreedToPD] = useState(draft?.agreedToPD ?? false);
+  const [agreeMarketing, setAgreeMarketing] = useState(draft?.agreeMarketing ?? false);
   const [emailChecking, setEmailChecking] = useState(false);
   const [emailTaken, setEmailTaken] = useState(false);
+  // На email уже есть неподтверждённая регистрация — не «занят», предлагаем продолжить.
+  const [emailPending, setEmailPending] = useState(false);
+  const [continuing, setContinuing] = useState(false);
   const emailTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Step 1
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [nickname, setNickname] = useState('');
-  const [birthDate, setBirthDate] = useState('');           // ISO YYYY-MM-DD (validation/payload)
-  const [birthDateInput, setBirthDateInput] = useState(''); // masked ДД.ММ.ГГГГ (display)
+  const [firstName, setFirstName] = useState(draft?.firstName ?? '');
+  const [lastName, setLastName] = useState(draft?.lastName ?? '');
+  const [nickname, setNickname] = useState(draft?.nickname ?? '');
+  const [birthDateInput, setBirthDateInput] = useState(draft?.birthDateInput ?? ''); // masked ДД.ММ.ГГГГ (display)
+  const [birthDate, setBirthDate] = useState(() => maskedToIso(draft?.birthDateInput ?? '')); // ISO YYYY-MM-DD (validation/payload)
   const [nicknameChecking, setNicknameChecking] = useState(false);
   const [nicknameTaken, setNicknameTaken] = useState(false);
   const nicknameTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -274,31 +369,49 @@ export default function RegisterPage() {
   const [profResults, setProfResults] = useState<ProfessionResult[]>([]);
   const [profLoading, setProfLoading] = useState(false);
   const [showProfDropdown, setShowProfDropdown] = useState(false);
-  const [selectedProfs, setSelectedProfs] = useState<SelectedProfession[]>([]);
-  const [profFilterValues, setProfFilterValues] = useState<Record<string, string[]>>({});
+  const [selectedProfs, setSelectedProfs] = useState<SelectedProfession[]>(draft?.selectedProfs ?? []);
+  const [profFilterValues, setProfFilterValues] = useState<Record<string, string[]>>(draft?.profFilterValues ?? {});
   const profTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const profInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   // Step 3
-  const [city, setCity] = useState('');
-  const [country, setCountry] = useState('');
-  const [phone, setPhone] = useState('');
+  const [city, setCity] = useState(draft?.city ?? '');
+  const [country, setCountry] = useState(draft?.country ?? '');
+  const [phone, setPhone] = useState(draft?.phone ?? '');
   const [geoLoading, setGeoLoading] = useState(false);
 
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
   // Email verification
-  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
+  const [pendingEmail, setPendingEmail] = useState<string | null>(draft?.pendingEmail ?? null);
   const [verifyCode, setVerifyCode] = useState('');
-  const [verifyError, setVerifyError] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
+  const cooldownTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => () => { if (cooldownTimer.current) clearInterval(cooldownTimer.current); }, []);
 
   const startCooldown = () => {
+    if (cooldownTimer.current) clearInterval(cooldownTimer.current);
     setResendCooldown(60);
-    const t = setInterval(() => setResendCooldown(c => { if (c <= 1) { clearInterval(t); return 0; } return c - 1; }), 1000);
+    cooldownTimer.current = setInterval(() => setResendCooldown(c => {
+      if (c <= 1) { if (cooldownTimer.current) clearInterval(cooldownTimer.current); cooldownTimer.current = null; return 0; }
+      return c - 1;
+    }), 1000);
   };
+
+  // ── Save the draft (no password) ──────────────────────────────────────────
+  useEffect(() => {
+    if (isAuthed) return;
+    const d: RegisterDraft = {
+      v: 1, ref: refCode || '', artistInvite: artistInvite || '',
+      step, email, firstName, lastName, nickname, birthDateInput,
+      selectedProfs, profFilterValues, city, country, phone,
+      agreedToPD, agreeMarketing, pendingEmail,
+    };
+    try { sessionStorage.setItem(DRAFT_KEY, JSON.stringify(d)); } catch { /* storage full/unavailable */ }
+  }, [isAuthed, refCode, artistInvite, step, email, firstName, lastName, nickname, birthDateInput,
+      selectedProfs, profFilterValues, city, country, phone, agreedToPD, agreeMarketing, pendingEmail]);
 
   // ── Nickname uniqueness ───────────────────────────────────────────────────
   useEffect(() => {
@@ -317,27 +430,26 @@ export default function RegisterPage() {
   }, [nickname]);
 
   // ── Email availability ────────────────────────────────────────────────────
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  // Та же проверка, что у сервера (zod .email()), — без расхождений на кириллице/TLD.
+  const emailValid = isValidEmail(email);
   useEffect(() => {
     const e = email.trim().toLowerCase();
-    if (!emailValid) { setEmailTaken(false); setEmailChecking(false); return; }
+    if (!emailValid) { setEmailTaken(false); setEmailPending(false); setEmailChecking(false); return; }
     setEmailChecking(true);
     if (emailTimer.current) clearTimeout(emailTimer.current);
     emailTimer.current = setTimeout(async () => {
       try {
         const { data } = await authAPI.checkEmail(e);
         setEmailTaken(data.valid && !data.available);
-      } catch { setEmailTaken(false); }
+        setEmailPending(!!data.valid && !!data.available && !!data.pending);
+      } catch { setEmailTaken(false); setEmailPending(false); }
       finally { setEmailChecking(false); }
     }, 500);
     return () => { if (emailTimer.current) clearTimeout(emailTimer.current); };
   }, [email, emailValid]);
 
   // ── Password strength: min 8 + at least one digit + one special char ───────
-  const pwLongEnough = password.length >= 8;
-  const pwHasDigit = /\d/.test(password);
-  const pwHasSpecial = /[^A-Za-z0-9]/.test(password);
-  const pwStrong = pwLongEnough && pwHasDigit && pwHasSpecial;
+  const { longEnough: pwLongEnough, hasDigit: pwHasDigit, hasSpecial: pwHasSpecial, strong: pwStrong } = passwordChecks(password);
   const pwMatch = password === passwordConfirm;
 
   // ── Profession search ─────────────────────────────────────────────────────
@@ -394,12 +506,12 @@ export default function RegisterPage() {
   const validate = (): boolean => {
     setError('');
     if (step === 0) {
-      if (!emailValid) { setError('Укажите корректный email'); return false; }
+      if (!emailValid) { setError('Укажите корректный email (латиницей, например name@mail.ru)'); return false; }
       if (emailTaken) { setError('Этот email уже занят'); return false; }
-      if (!pwLongEnough) { setError('Пароль — минимум 8 символов'); return false; }
-      if (!pwHasDigit) { setError('Пароль должен содержать хотя бы одну цифру'); return false; }
-      if (!pwHasSpecial) { setError('Пароль должен содержать спецсимвол (например ! @ # $)'); return false; }
+      const pwProblem = passwordProblem(password);
+      if (pwProblem) { setError(pwProblem); return false; }
       if (!pwMatch) { setError('Пароли не совпадают'); return false; }
+      if (!agreedToPD) { setError('Нужно согласие на обработку персональных данных'); return false; }
     }
     if (step === 1) {
       if (!firstName.trim()) { setError('Укажите имя'); return false; }
@@ -430,17 +542,32 @@ export default function RegisterPage() {
   const handleVkError = (msg: string) => { if (msg) setError(msg); };
 
   // ── Submit ────────────────────────────────────────────────────────────────
-  const handleSubmit = async (skipProfs = false) => {
-    setLoading(true);
+  const handleSubmit = async () => {
     setError('');
+    // Пароль не хранится в черновике — после перезагрузки его нужно ввести снова.
+    if (!password || !pwStrong || !pwMatch) {
+      setStep(0);
+      setError('Введите пароль ещё раз, чтобы завершить регистрацию');
+      return;
+    }
+    if (!agreedToPD) { setStep(0); setError('Нужно согласие на обработку персональных данных'); return; }
+    if (selectedProfs.length === 0) { setStep(2); setError('Выберите хотя бы одну профессию'); return; }
+    if (!birthDate) { setStep(1); setError('Укажите дату рождения'); return; }
+    setLoading(true);
     try {
-      const payload: any = {
+      const payload: Parameters<typeof authAPI.register>[0] = {
         email: email.trim().toLowerCase(),
         password,
         firstName: firstName.trim(),
         lastName: lastName.trim(),
+        birthDate, // ГГГГ-ММ-ДД
+        consentPd: true,
+        consentMarketing: agreeMarketing,
+        userProfessions: selectedProfs.map(p => ({
+          professionId: p.professionId,
+          selectedCustomFilterValueIds: profFilterValues[p.professionId] || [],
+        })),
       };
-      if (birthDate) payload.birthDate = new Date(birthDate).toISOString();
       if (nickname.trim()) payload.nickname = nickname.trim();
       if (city.trim()) payload.city = city.trim();
       if (country.trim()) payload.country = country.trim();
@@ -449,15 +576,10 @@ export default function RegisterPage() {
       if (referrerId) payload.referrerId = referrerId;
       if (refCode) payload.referralCode = refCode;
       if (artistInvite) payload.artistInviteToken = artistInvite;
-      if (!skipProfs && selectedProfs.length > 0) {
-        payload.userProfessions = selectedProfs.map(p => ({
-          professionId: p.professionId,
-          selectedCustomFilterValueIds: profFilterValues[p.professionId] || [],
-        }));
-      }
 
       const { data } = await authAPI.register(payload);
       if (data.pendingVerification) {
+        setVerifyCode('');
         setPendingEmail(data.email);
         startCooldown();
       } else {
@@ -465,25 +587,86 @@ export default function RegisterPage() {
         navigate('/onboarding');
       }
     } catch (err: any) {
-      const msg = err.response?.data?.error;
-      setError(typeof msg === 'string' ? msg : 'Ошибка регистрации');
+      const body = err?.response?.data;
+      // Регистрация на этот email уже начата этим же человеком (пароль совпал) —
+      // ведём к вводу кода (код можно запросить повторно).
+      if (body?.code === 'PENDING_EXISTS' && body?.canContinue) {
+        toast.info(getApiError(err, 'Код уже отправлен на этот email'));
+        setVerifyCode('');
+        setPendingEmail(body.email || email.trim().toLowerCase());
+        return;
+      }
+      toast.error(getApiError(err, 'Ошибка регистрации'));
+      // 410 — ссылка-приглашение в артиста истекла/исчерпана, пока заполняли
+      // форму (регистрация только по приглашениям) — тот же экран-объяснение.
+      if (err?.response?.status === 410 && (body?.code === 'EXPIRED' || body?.code === 'EXHAUSTED')) {
+        setArtistInvitePreview(null);
+        setArtistInviteError(getApiError(err, 'Ссылка-приглашение больше не действует — попросите новую'));
+        setInviteBroken(true);
+        return;
+      }
+      // Ошибка относится к полю другого шага — переводим туда, где её можно исправить.
+      const field = typeof body?.field === 'string' ? body.field : '';
+      if (Object.prototype.hasOwnProperty.call(FIELD_STEP, field)) setStep(FIELD_STEP[field]);
     } finally {
       setLoading(false);
     }
   };
 
+  // «На этот email уже начата регистрация» → продолжить: сервер проверит, что
+  // пароль совпадает с паролем той заявки, и (пере)отправит код.
+  const handleContinuePending = async () => {
+    const e = email.trim().toLowerCase();
+    if (!e || !password) { setError('Введите пароль, который указывали при регистрации'); return; }
+    setContinuing(true);
+    setError('');
+    try {
+      await authAPI.resendVerification(e, password);
+      toast.success('Код отправлен — проверьте почту');
+      setVerifyCode('');
+      setPendingEmail(e);
+      startCooldown();
+    } catch (err: any) {
+      const code = err?.response?.data?.code;
+      if (code === 'RESEND_COOLDOWN') {
+        // Код ушёл меньше минуты назад — он действует, просто вводим его.
+        setVerifyCode('');
+        setPendingEmail(e);
+        startCooldown();
+        return;
+      }
+      toast.error(getApiError(err, 'Не удалось продолжить регистрацию'));
+      if (code === 'PENDING_EXPIRED' || code === 'PENDING_NOT_FOUND') setEmailPending(false);
+      if (code === 'ALREADY_VERIFIED') { setEmailPending(false); setEmailTaken(true); }
+    } finally {
+      setContinuing(false);
+    }
+  };
+
+  // Вернуться с экрана кода к шагу email (опечатка в адресе, другой ящик).
+  const handleChangeEmail = () => {
+    setPendingEmail(null);
+    setVerifyCode('');
+    setError('');
+    setStep(0);
+  };
+
   const handleVerify = async () => {
-    if (!pendingEmail || verifyCode.length < 8) return;
+    if (!pendingEmail || verifyCode.length < 8 || loading) return;
     setLoading(true);
-    setVerifyError('');
     try {
       const { data } = await authAPI.verifyEmail(pendingEmail, verifyCode.trim());
+      clearDraft();
       setAuth(data.user, data.token);
       // Hard navigation: bypasses React Router concurrent-mode race condition where
       // the router resolves the URL during Zustand state transition and ends up at '/'.
       window.location.href = '/onboarding';
     } catch (err: any) {
-      setVerifyError(err.response?.data?.error || 'Неверный код');
+      toast.error(getApiError(err, 'Неверный код'));
+      if (err?.response?.data?.code === 'ALREADY_VERIFIED') {
+        clearDraft();
+        navigate('/login', { replace: true });
+      }
     } finally { setLoading(false); }
   };
 
@@ -491,10 +674,13 @@ export default function RegisterPage() {
     if (!pendingEmail || resendCooldown > 0) return;
     try {
       await authAPI.resendVerification(pendingEmail);
+      toast.success('Код отправлен — проверьте почту');
       startCooldown();
     } catch (err: any) {
-      const msg = err.response?.data?.error;
-      setVerifyError(msg || 'Не удалось отправить код. Проверьте почту или попробуйте позже.');
+      const code = err?.response?.data?.code;
+      toast.error(getApiError(err, 'Не удалось отправить код. Проверьте почту или попробуйте позже.'));
+      if (code === 'PENDING_EXPIRED' || code === 'PENDING_NOT_FOUND') handleChangeEmail();
+      if (code === 'ALREADY_VERIFIED') { clearDraft(); navigate('/login', { replace: true }); }
     }
   };
 
@@ -532,12 +718,12 @@ export default function RegisterPage() {
                 ? <> в роли <span className="text-white font-medium">{artistInvitePreview.roles.map(r => r.name).join(', ')}</span></>
                 : null}.
             </p>
-          ) : (
+          ) : artistInviteError ? null : (
             <p className="text-slate-500 text-sm mb-6">Загрузка приглашения…</p>
           )}
-          {acceptError && (
+          {(acceptError || artistInviteError) && (
             <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-red-400 text-sm">
-              <AlertCircle size={15} className="flex-shrink-0" />{acceptError}
+              <AlertCircle size={15} className="flex-shrink-0" />{acceptError || artistInviteError}
             </div>
           )}
           <button onClick={handleAcceptInvite} disabled={accepting || !artistInvitePreview}
@@ -574,11 +760,6 @@ export default function RegisterPage() {
             placeholder="00000000" autoFocus
             className="w-full text-center text-3xl font-bold tracking-[8px] bg-slate-800 border border-slate-700 rounded-2xl px-4 py-5 text-white placeholder-slate-700 focus:outline-none focus:border-primary-500 mb-4"
           />
-          {verifyError && (
-            <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-red-400 text-sm">
-              <AlertCircle size={15} className="flex-shrink-0" />{verifyError}
-            </div>
-          )}
           <button onClick={handleVerify} disabled={loading || verifyCode.length < 8}
             className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-40 text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base mb-3">
             {loading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
@@ -587,6 +768,10 @@ export default function RegisterPage() {
           <button onClick={handleResend} disabled={resendCooldown > 0}
             className="w-full py-2.5 text-sm text-slate-500 hover:text-slate-300 disabled:opacity-50 transition-colors">
             {resendCooldown > 0 ? `Повторный код через ${resendCooldown} с` : 'Отправить код повторно'}
+          </button>
+          <button onClick={handleChangeEmail}
+            className="w-full py-2.5 text-sm text-slate-500 hover:text-slate-300 transition-colors flex items-center justify-center gap-1.5">
+            <ArrowLeft size={14} /> Изменить email
           </button>
           <p className="mt-4 text-center text-xs text-slate-600 leading-relaxed">
             Код не приходит?{' '}
@@ -619,10 +804,22 @@ export default function RegisterPage() {
             </div>
           </>
         )}
+        {restoredDraft && !password && (
+          <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-2xl bg-slate-800/60 border border-slate-700/60 text-slate-300 text-xs leading-relaxed">
+            <Check size={15} className="flex-shrink-0 mt-0.5 text-primary-400" />
+            <span>Мы сохранили введённые данные. Введите пароль ещё раз — остальные шаги уже заполнены.</span>
+          </div>
+        )}
         {refUsed && (
           <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs leading-relaxed">
             <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
             <span>Эта пригласительная ссылка уже использована. Вы можете зарегистрироваться, но она не будет засчитана пригласившему.</span>
+          </div>
+        )}
+        {artistInviteError && (
+          <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs leading-relaxed">
+            <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+            <span>Приглашение в артиста не действует: {artistInviteError}. Зарегистрироваться можно, но участником артиста вы не станете.</span>
           </div>
         )}
         {artistInvitePreview && (
@@ -641,8 +838,18 @@ export default function RegisterPage() {
             right={emailChecking
               ? <Loader2 size={15} className="animate-spin text-slate-500" />
               : (emailValid && !emailTaken ? <Check size={15} className="text-green-400" /> : undefined)} />
-          {email.trim() && !emailValid && <p className="text-xs text-amber-400 mt-1">Некорректный email</p>}
+          {email.trim() && !emailValid && <p className="text-xs text-amber-400 mt-1">Некорректный email — латиницей, например name@mail.ru</p>}
           {emailTaken && <p className="text-xs text-red-400 mt-1">Этот email уже занят — войдите или используйте другой</p>}
+          {emailPending && !emailTaken && (
+            <div className="mt-2 px-3.5 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-200 text-xs leading-relaxed space-y-2">
+              <p>На этот email уже начата регистрация, но не подтверждена. Если это были вы — введите тот же пароль ниже и продолжите: мы отправим код.</p>
+              <button type="button" onClick={handleContinuePending} disabled={continuing || !password}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 disabled:opacity-50 text-amber-100 font-medium transition-colors">
+                {continuing ? <Loader2 size={13} className="animate-spin" /> : <ArrowRight size={13} />}
+                Продолжить регистрацию
+              </button>
+            </div>
+          )}
         </Field>
         <Field label="Пароль">
           <Input
@@ -748,7 +955,7 @@ export default function RegisterPage() {
               if (v.length >= 6) v = v.slice(0, 5) + '.' + v.slice(5);
               v = v.slice(0, 10);
               setBirthDateInput(v);
-              setBirthDate(v.length === 10 ? `${v.slice(6)}-${v.slice(3, 5)}-${v.slice(0, 2)}` : '');
+              setBirthDate(maskedToIso(v));
             }}
             className="w-full min-w-0 px-4 py-3 bg-slate-800 border border-slate-700 rounded-2xl text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
           />
@@ -809,6 +1016,7 @@ export default function RegisterPage() {
                 </div>
                 <ProfessionFilterPicker
                   professionId={prof.professionId}
+                  initialSelected={profFilterValues[prof.professionId]}
                   onChange={valueIds => setProfFilterValues(prev => ({ ...prev, [prof.professionId]: valueIds }))}
                 />
               </div>
@@ -855,7 +1063,7 @@ export default function RegisterPage() {
 
   // Битая пригласительная ссылка при закрытой регистрации — честное объяснение
   // вместо формы (сервер такую регистрацию всё равно отклонит).
-  if (refInvalid && regClosed) {
+  if (inviteBroken) {
     return (
       <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center px-6">
         <div className="max-w-sm w-full text-center space-y-4">
@@ -863,10 +1071,17 @@ export default function RegisterPage() {
             <AlertCircle size={26} className="text-amber-400" />
           </div>
           <h1 className="text-lg font-bold text-white">Ссылка-приглашение не действует</h1>
-          <p className="text-sm text-slate-400 leading-relaxed">
-            Похоже, ссылку удалил пригласивший, либо в ней опечатка. Регистрация сейчас — только по приглашениям:
-            попросите у пригласившего <b className="text-slate-200">новую ссылку</b> (Профиль → 🎁 Пригласить).
-          </p>
+          {artistInviteError ? (
+            <p className="text-sm text-slate-400 leading-relaxed">
+              {artistInviteError}. Регистрация сейчас — только по приглашениям,
+              <b className="text-slate-200"> новую ссылку</b> выдаёт администратор артиста.
+            </p>
+          ) : (
+            <p className="text-sm text-slate-400 leading-relaxed">
+              Похоже, ссылку удалил пригласивший, приглашение отозвано, либо в ссылке опечатка. Регистрация сейчас — только по приглашениям:
+              попросите у пригласившего <b className="text-slate-200">новую ссылку</b> (Профиль → 🎁 Пригласить).
+            </p>
+          )}
           <button onClick={() => navigate('/login')} className="w-full py-3 bg-primary-600 hover:bg-primary-500 text-white font-semibold rounded-2xl transition-colors">
             У меня уже есть аккаунт — войти
           </button>
@@ -934,12 +1149,12 @@ export default function RegisterPage() {
             </>
           ) : isLast ? (
             <>
-              <button onClick={() => handleSubmit(false)} disabled={loading}
+              <button onClick={() => handleSubmit()} disabled={loading}
                 className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-2 transition-colors text-base">
                 {loading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
                 {loading ? 'Создаём аккаунт...' : 'Создать аккаунт'}
               </button>
-              <button onClick={() => handleSubmit(false)} disabled={loading}
+              <button onClick={() => handleSubmit()} disabled={loading}
                 className="w-full py-3 text-sm text-slate-500 hover:text-slate-300 transition-colors">
                 Пропустить и создать
               </button>

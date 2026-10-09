@@ -16,6 +16,7 @@ import ConfirmDialog from '../components/ConfirmDialog';
 import VacancyForm from '../components/VacancyForm';
 import { useScrollLock } from '../lib/scrollLock';
 import { detectLinkSource, isAllowedLinkUrl } from '../lib/materialLinks';
+import { maskDateInput, maskedToIsoDay, isMaskedDatePast } from '../lib/mskDate';
 import {
   workFormatLabel, geographyLabel, employmentLabel, paymentLabel,
   PAYMENT_WITH_COMPENSATION, occupancyLabel, occupancyBadgeClass,
@@ -61,9 +62,6 @@ export default function VacancyDetailPage() {
 
   // Lock body scroll while the inline cooperation-offer modal is open (iOS jump fix).
   useScrollLock(!!coopResponseId || editing);
-  // Local «today» (YYYY-MM-DD) — cooperation start date cannot be earlier than this.
-  const _td = new Date();
-  const todayStr = `${_td.getFullYear()}-${String(_td.getMonth() + 1).padStart(2, '0')}-${String(_td.getDate()).padStart(2, '0')}`;
 
   const { data: vacancy, isLoading } = useQuery({
     queryKey: ['vacancy', vacancyId],
@@ -165,7 +163,12 @@ export default function VacancyDetailPage() {
       qc.invalidateQueries({ queryKey: ['vacancy', vacancyId] });
       toast.success('Отклик отправлен');
     },
-    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить отклик')),
+    onError: (e: any) => {
+      // Отклик мог создаться, а файлы — не загрузиться: обновляем состояние, чтобы
+      // показать «прикрепите портфолио» вместо ложного «отклик отправлен».
+      qc.invalidateQueries({ queryKey: ['vacancy', vacancyId] });
+      toast.error(getApiError(e, 'Не удалось отправить отклик'));
+    },
   });
 
   const coopMut = useMutation({
@@ -185,7 +188,10 @@ export default function VacancyDetailPage() {
       qc.invalidateQueries({ queryKey: ['vacancy-responses', vacancyId] });
       toast.success('Предложение о сотрудничестве отправлено');
     },
-    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить предложение')),
+    onError: (e: any) => {
+      qc.invalidateQueries({ queryKey: ['vacancy-responses', vacancyId] });
+      toast.error(getApiError(e, 'Не удалось отправить предложение'));
+    },
   });
 
   const offerActionMut = useMutation({
@@ -195,7 +201,11 @@ export default function VacancyDetailPage() {
       qc.invalidateQueries({ queryKey: ['vacancy', vacancyId] });
       toast.success(vars.action === 'accept' ? 'Предложение принято' : 'Предложение отклонено');
     },
-    onError: (e: any) => toast.error(getApiError(e, 'Не удалось обработать предложение')),
+    onError: (e: any) => {
+      // 409 «уже обработано» — подтянуть актуальный статус оффера.
+      qc.invalidateQueries({ queryKey: ['vacancy', vacancyId] });
+      toast.error(getApiError(e, 'Не удалось обработать предложение'));
+    },
   });
 
   if (isLoading) {
@@ -231,7 +241,12 @@ export default function VacancyDetailPage() {
   }
 
   // Archive prompt: accepted cooperation offer + still active.
-  const myResponse = vacancy.myResponse ?? null;
+  // Неполный отклик (обязательное портфолио не загрузилось) управляющие не видят —
+  // показываем форму снова, чтобы приложить портфолио.
+  const myResponseIncomplete = !!vacancy.myResponseIncomplete;
+  const myResponse = myResponseIncomplete ? null : (vacancy.myResponse ?? null);
+  // Кому писать: текущий владелец артиста (сервер), фолбэк — автор вакансии.
+  const contactUserId: string | null = vacancy.contactUserId ?? vacancy.authorId ?? null;
   const hasAcceptedOffer = Array.isArray(responses)
     && responses.some((r: any) => (r.offers || []).some((o: any) => o.status === 'accepted'));
   const showArchivePrompt = isOwner && hasAcceptedOffer && vacancy.status === 'active' && !archiveDismissed;
@@ -257,8 +272,8 @@ export default function VacancyDetailPage() {
                   <audio controls src={url} className="w-full" />
                 ) : (
                   <a href={url} target="_blank" rel="noreferrer"
-                    className="flex items-center gap-2 text-sm text-primary-400 hover:text-primary-300 transition-colors">
-                    <Link2 size={14} />{file.originalName}
+                    className="flex items-center gap-2 text-sm text-primary-400 hover:text-primary-300 transition-colors min-w-0">
+                    <Link2 size={14} className="flex-shrink-0" /><span className="min-w-0 break-all">{file.originalName}</span>
                   </a>
                 )}
               </div>
@@ -270,8 +285,8 @@ export default function VacancyDetailPage() {
         <div className="space-y-1.5">
           {links.map((link: any) => (
             <a key={link.id} href={link.url} target="_blank" rel="noreferrer"
-              className="flex items-center gap-2 text-sm text-primary-400 hover:text-primary-300 transition-colors break-all">
-              <Link2 size={14} className="flex-shrink-0" />{link.title || link.url}
+              className="flex items-center gap-2 text-sm text-primary-400 hover:text-primary-300 transition-colors min-w-0">
+              <Link2 size={14} className="flex-shrink-0" /><span className="min-w-0 break-all">{link.title || link.url}</span>
             </a>
           ))}
         </div>
@@ -283,7 +298,7 @@ export default function VacancyDetailPage() {
     <div key={offer.id} className="border border-primary-500/20 bg-primary-500/5 rounded-2xl p-4 space-y-2">
       <p className="text-sm font-semibold text-white">Предложение о сотрудничестве</p>
       <div className="space-y-1.5 text-sm text-slate-300">
-        <p><span className="text-slate-500">Дата начала:</span> {offer.startDate ? new Date(offer.startDate).toLocaleDateString('ru-RU') : '—'}</p>
+        <p><span className="text-slate-500">Дата начала:</span> {offer.startDate ? new Date(offer.startDate).toLocaleDateString('ru-RU', { timeZone: 'UTC' }) : '—'}</p>
         {offer.conditions && <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><span className="text-slate-500">Условия:</span> {offer.conditions}</p>}
         {offer.compensation && <p><span className="text-slate-500">Вознаграждение:</span> {offer.compensation}</p>}
         {offer.extraDetails && <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]"><span className="text-slate-500">Детали:</span> {offer.extraDetails}</p>}
@@ -670,9 +685,9 @@ export default function VacancyDetailPage() {
           /* ── APPLICANT (non-owner) ── */
           <div className="space-y-2">
             {/* Write before responding (ТЗ 11) */}
-            {vacancy.authorId && (
+            {contactUserId && (
               <button
-                onClick={() => navigate(`/messages/${vacancy.authorId}`)}
+                onClick={() => navigate(`/messages/${contactUserId}`)}
                 className="w-full py-3 flex items-center justify-center gap-2 text-sm font-medium border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 rounded-2xl transition-colors"
               >
                 <MessageCircle size={16} />Написать
@@ -683,6 +698,12 @@ export default function VacancyDetailPage() {
             {myPendingOffers.length > 0 && (
               <div className="space-y-2">
                 {myPendingOffers.map((o: any) => renderOfferCard(o))}
+              </div>
+            )}
+
+            {myResponseIncomplete && vacancy.status === 'active' && (
+              <div className="px-4 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-300">
+                Отклик не доставлен: портфолио не загрузилось. Прикрепите портфолио и отправьте отклик снова.
               </div>
             )}
 
@@ -821,13 +842,10 @@ export default function VacancyDetailPage() {
                 maxLength={10}
                 value={coopStartDateInput}
                 onChange={e => {
-                  let v = e.target.value.replace(/\D/g, '');
-                  if (v.length >= 3) v = v.slice(0, 2) + '.' + v.slice(2);
-                  if (v.length >= 6) v = v.slice(0, 5) + '.' + v.slice(5);
-                  v = v.slice(0, 10);
+                  const v = maskDateInput(e.target.value);
                   setCoopStartDateInput(v);
-                  // Store ISO only once the full ДД.ММ.ГГГГ is entered.
-                  setCoopStartDate(v.length === 10 ? `${v.slice(6)}-${v.slice(3, 5)}-${v.slice(0, 2)}` : '');
+                  // Store ISO only once a full, VALID ДД.ММ.ГГГГ is entered (31.02 → пусто).
+                  setCoopStartDate(maskedToIsoDay(v) ?? '');
                 }}
                 className="w-full px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
               />
@@ -866,9 +884,11 @@ export default function VacancyDetailPage() {
               <button onClick={() => setCoopResponseId(null)} className="flex-1 py-2.5 text-sm text-slate-400 border border-slate-700 rounded-xl hover:text-white transition-colors">Отмена</button>
               <button
                 onClick={() => {
-                  if (!coopStartDate) { toast.error('Укажите дату начала в формате ДД.ММ.ГГГГ'); return; }
-                  if (isNaN(new Date(coopStartDate).getTime())) { toast.error('Некорректная дата начала'); return; }
-                  if (coopStartDate < todayStr) { toast.error('Дата начала не может быть раньше сегодня'); return; }
+                  if (!coopStartDate) {
+                    toast.error(coopStartDateInput.length === 10 ? 'Некорректная дата начала' : 'Укажите дату начала в формате ДД.ММ.ГГГГ');
+                    return;
+                  }
+                  if (isMaskedDatePast(coopStartDateInput)) { toast.error('Дата начала не может быть раньше сегодня'); return; }
                   if (!coopConditions.trim()) { toast.error('Опишите условия'); return; }
                   if (!coopCompensation.trim()) { toast.error('Укажите вознаграждение'); return; }
                   coopMut.mutate(coopResponseId);

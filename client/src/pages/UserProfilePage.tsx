@@ -28,6 +28,7 @@ import { formatLastSeen } from '../lib/lastSeen';
 import { usePresenceStore } from '../stores/presenceStore';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { canPreviewInline, openInNewTab } from '../lib/docPreview';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -675,7 +676,15 @@ export default function UserProfilePage() {
                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
                                   <Icon size={18} className={meta.color} />
                                 </div>
-                                <button onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.title || f.originalName })} className="flex-1 min-w-0 text-left">
+                                <button
+                                  onClick={() => {
+                                    // На мобильных и для DOC/XLS iframe не работает — открываем во вкладке.
+                                    const url = `${API_URL}${f.url}`;
+                                    if (canPreviewInline(f)) setDocFullscreen({ url, name: f.title || f.originalName });
+                                    else openInNewTab(url);
+                                  }}
+                                  className="flex-1 min-w-0 text-left"
+                                >
                                   <p className="text-sm text-slate-200 truncate">{f.title || f.originalName}</p>
                                   <p className="text-[11px] text-slate-500">{meta.label}{f.size ? ` · ${formatBytes(f.size)}` : ''}</p>
                                 </button>

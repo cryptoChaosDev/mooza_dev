@@ -1,8 +1,9 @@
 import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { tgLog, tgEvent } from '../utils/telegram';
-import { emitToUser, notifyUser } from '../socket';
+import { tgEvent } from '../utils/telegram';
+import { emitToUser } from '../socket';
+import { notify } from '../utils/notify';
 
 const router = Router();
 
@@ -10,6 +11,10 @@ const USER_SELECT = {
   id: true, firstName: true, lastName: true, avatar: true,
   role: true, city: true, isPremium: true, isVerified: true,
 };
+
+// Повторный запрос тому, кто отклонил предыдущий, — не раньше чем через 7 дней
+const REJECT_COOLDOWN_DAYS = 7;
+const MAX_SERVICES_PER_CONNECTION = 50;
 
 function formatConnection(conn: any, meId: string) {
   const iAmRequester = conn.requesterId === meId;
@@ -42,15 +47,41 @@ const CONN_INCLUDE = {
   profession: { select: { id: true, name: true } },
 };
 
+/** Ответ на гонку: статус связи изменился между проверкой и записью. */
+function conflict(res: Response) {
+  return res.status(409).json({ error: 'Статус связи уже изменился — обновите страницу' });
+}
+
+/**
+ * serviceIds из тела: массив строк без дублей, все услуги существуют.
+ * Возвращает null при некорректных данных (→ 400, а не 500 от FK/PK).
+ */
+async function validateServiceIds(raw: unknown): Promise<string[] | null> {
+  if (raw == null) return [];
+  if (!Array.isArray(raw)) return null;
+  if (raw.some((x) => typeof x !== 'string' || !x)) return null;
+  const ids = [...new Set(raw as string[])];
+  if (ids.length > MAX_SERVICES_PER_CONNECTION) return null;
+  if (ids.length === 0) return [];
+  const found = await prisma.service.findMany({ where: { id: { in: ids } }, select: { id: true } });
+  if (found.length !== ids.length) return null;
+  return ids;
+}
+
+async function userName(userId: string): Promise<string> {
+  const u = await prisma.user.findUnique({ where: { id: userId }, select: { firstName: true, lastName: true } });
+  return `${u?.firstName ?? ''} ${u?.lastName ?? ''}`.trim();
+}
+
 // ── POST /api/connections ─────────────────────────────────────────────────────
 // Send a connection request
 router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
-    const { receiverId, serviceIds, requesterRole, receiverRole, needsDeal } =
+    const { receiverId, requesterRole, receiverRole, needsDeal } =
       req.body as { receiverId: string; serviceIds: string[]; requesterRole?: string; receiverRole?: string; needsDeal?: boolean };
 
-    if (!receiverId) {
+    if (!receiverId || typeof receiverId !== 'string') {
       return res.status(400).json({ error: 'receiverId обязателен' });
     }
     if (receiverId === meId) {
@@ -61,6 +92,24 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     if (!receiver) return res.status(404).json({ error: 'Пользователь не найден' });
     if (receiver.isBlocked) return res.status(403).json({ error: 'Пользователь заблокирован' });
 
+    const serviceIds = await validateServiceIds(req.body?.serviceIds);
+    if (!serviceIds) return res.status(400).json({ error: 'Некорректный список услуг' });
+
+    // Кулдаун после отказа: нельзя засыпать человека повторными запросами.
+    const cooldownFrom = new Date(Date.now() - REJECT_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
+    const recentReject = await prisma.connection.findFirst({
+      where: { requesterId: meId, receiverId, status: 'REJECTED', updatedAt: { gt: cooldownFrom } },
+      select: { id: true, updatedAt: true },
+    });
+    if (recentReject) {
+      const until = new Date(recentReject.updatedAt.getTime() + REJECT_COOLDOWN_DAYS * 24 * 60 * 60 * 1000);
+      const days = Math.max(1, Math.ceil((until.getTime() - Date.now()) / (24 * 60 * 60 * 1000)));
+      return res.status(429).json({
+        error: `Пользователь отклонил ваш предыдущий запрос. Повторить можно через ${days} дн.`,
+        retryAfter: until.toISOString(),
+      });
+    }
+
     // Multiple pending connection requests to the same person are allowed (they
     // are aggregated per-user in the UI). Block only an EXACT duplicate from me —
     // same roles AND the same set of services — to avoid accidental double-submits.
@@ -68,7 +117,7 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
       where: { status: 'PENDING', requesterId: meId, receiverId },
       include: { services: { select: { serviceId: true } } },
     });
-    const newServiceSet = new Set((serviceIds ?? []).map(String));
+    const newServiceSet = new Set(serviceIds);
     const exactDup = myPending.find(c => {
       const existSet = new Set(c.services.map(s => s.serviceId));
       const sameServices = existSet.size === newServiceSet.size && [...newServiceSet].every(id => existSet.has(id));
@@ -87,37 +136,30 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
         requesterRole: requesterRole ?? null,
         receiverRole: receiverRole ?? null,
         needsDeal: needsDeal ?? false,
-        services: { create: (serviceIds ?? []).map((sid: string) => ({ serviceId: sid })) },
+        services: { create: serviceIds.map((sid: string) => ({ serviceId: sid })) },
       },
       include: CONN_INCLUDE,
     });
 
-    // Notification for receiver
+    // Notification for receiver: запись + new_notification + push (с link) через
+    // notify() — он же учитывает настройки уведомлений. Событие для живого
+    // обновления списков — один раз.
+    const serviceNames = conn.services.map((cs: any) => cs.service.name).join(', ');
     try {
-      const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
-      const serviceNames = conn.services.map((cs: any) => cs.service.name).join(', ');
-      const notification = await prisma.notification.create({
-        data: {
-          userId: receiverId,
-          actorId: meId,
-          type: 'connection_request',
-          title: `${me?.firstName} ${me?.lastName} запрашивает связь`,
-          body: serviceNames ? `По услугам: ${serviceNames}` : 'Новый запрос на связь',
-          link: `/connections/requests`,
-        },
-      });
-      emitToUser(receiverId, 'new_notification', notification);
-      emitToUser(receiverId, 'connection_request', { connId: conn.id });
-      notifyUser(receiverId, 'connection_request', { connId: conn.id }, {
-        title: `${me?.firstName} ${me?.lastName} запрашивает связь`,
+      const myName = await userName(meId);
+      await notify({
+        userId: receiverId,
+        actorId: meId,
+        type: 'connection_request',
+        title: `${myName} запрашивает связь`,
         body: serviceNames ? `По услугам: ${serviceNames}` : 'Новый запрос на связь',
+        link: `/connections/requests`,
       });
+      emitToUser(receiverId, 'connection_request', { connId: conn.id });
     } catch {}
 
-    const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
-    const them = await prisma.user.findUnique({ where: { id: receiverId }, select: { firstName: true, lastName: true } });
-    const services = conn.services.map((cs: any) => cs.service.name).join(', ');
-    tgLog(`🔗 <b>Новая связь</b>\n${me?.firstName} ${me?.lastName} → ${them?.firstName} ${them?.lastName}\n📋 ${services}`);
+    // В лог команды — без ФИО (ПДн), названия услуг из каталога экранируются.
+    try { tgEvent.connectionRequest(serviceNames); } catch {}
     return res.status(201).json(formatConnection(conn, meId));
   } catch (err) {
     console.error('[connections] POST /', err);
@@ -287,28 +329,27 @@ router.patch('/:id/accept', authenticate, async (req: AuthRequest, res: Response
     if (conn.receiverId !== meId) return res.status(403).json({ error: 'Нет прав' });
     if (conn.status !== 'PENDING') return res.status(400).json({ error: 'Неверный статус' });
 
-    const updated = await prisma.connection.update({
-      where: { id: conn.id },
+    // Условная запись: двойной тап / параллельный reject не перезапишут друг друга
+    const r = await prisma.connection.updateMany({
+      where: { id: conn.id, receiverId: meId, status: 'PENDING' },
       data: { status: 'ACCEPTED' },
-      include: CONN_INCLUDE,
     });
+    if (r.count === 0) return conflict(res);
+    const updated = await prisma.connection.findUnique({ where: { id: conn.id }, include: CONN_INCLUDE });
 
-    // Notify requester
+    // Notify requester (запись + сокет + push — через notify, с учётом настроек)
     try {
-      const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
-      await prisma.notification.create({
-        data: {
-          userId: conn.requesterId,
-          actorId: meId,
-          type: 'connection_accepted',
-          title: `${me?.firstName} ${me?.lastName} принял(а) связь`,
-          body: '',
-          link: `/friends?tab=connections`,
-        },
+      const myName = await userName(meId);
+      await notify({
+        userId: conn.requesterId,
+        actorId: meId,
+        type: 'connection_accepted',
+        title: `${myName} принял(а) связь`,
+        body: '',
+        link: `/friends?tab=connections`,
       });
-      const requester = await prisma.user.findUnique({ where: { id: conn.requesterId }, select: { firstName: true, lastName: true } });
-      const me2 = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
-      tgEvent.connectionAccept(`${me2?.firstName} ${me2?.lastName}`, `${requester?.firstName} ${requester?.lastName}`);
+      emitToUser(conn.requesterId, 'connection_updated', { connId: conn.id, status: 'ACCEPTED' });
+      tgEvent.connectionAccept();
     } catch {}
 
     return res.json(formatConnection(updated, meId));
@@ -327,30 +368,24 @@ router.patch('/:id/reject', authenticate, async (req: AuthRequest, res: Response
     if (conn.receiverId !== meId) return res.status(403).json({ error: 'Нет прав' });
     if (conn.status !== 'PENDING') return res.status(400).json({ error: 'Неверный статус' });
 
-    await prisma.connection.update({
-      where: { id: conn.id },
+    const r = await prisma.connection.updateMany({
+      where: { id: conn.id, receiverId: meId, status: 'PENDING' },
       data: { status: 'REJECTED' },
     });
+    if (r.count === 0) return conflict(res);
 
     // Notify requester
     try {
-      const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
-      const notification = await prisma.notification.create({
-        data: {
-          userId: conn.requesterId,
-          actorId: meId,
-          type: 'connection_rejected',
-          title: `${me?.firstName} ${me?.lastName} отклонил(а) запрос на связь`,
-          body: '',
-          link: `/friends?tab=connections`,
-        },
-      });
-      emitToUser(conn.requesterId, 'new_notification', notification);
-      emitToUser(conn.requesterId, 'connection_rejected', { connId: conn.id });
-      notifyUser(conn.requesterId, 'connection_rejected', { connId: conn.id }, {
-        title: `${me?.firstName} ${me?.lastName} отклонил(а) запрос на связь`,
+      const myName = await userName(meId);
+      await notify({
+        userId: conn.requesterId,
+        actorId: meId,
+        type: 'connection_rejected',
+        title: `${myName} отклонил(а) запрос на связь`,
         body: '',
+        link: `/friends?tab=connections`,
       });
+      emitToUser(conn.requesterId, 'connection_rejected', { connId: conn.id });
     } catch {}
 
     return res.json({ ok: true });
@@ -370,7 +405,10 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res: Response) => {
     if (conn.requesterId !== meId) return res.status(403).json({ error: 'Нет прав' });
     if (conn.status !== 'PENDING') return res.status(400).json({ error: 'Можно отменить только PENDING запрос' });
 
-    await prisma.connection.delete({ where: { id: conn.id } });
+    // Условное удаление: запрос, который успели принять, не исчезнет молча
+    const r = await prisma.connection.deleteMany({ where: { id: conn.id, requesterId: meId, status: 'PENDING' } });
+    if (r.count === 0) return conflict(res);
+    emitToUser(conn.receiverId, 'connection_updated', { connId: conn.id, status: 'CANCELLED' });
     return res.json({ ok: true });
   } catch (err) {
     console.error('[connections] DELETE /:id', err);
@@ -433,32 +471,32 @@ router.patch('/:id/break', authenticate, async (req: AuthRequest, res: Response)
   try {
     const meId = req.userId!;
     const { reason } = req.body as { reason?: string };
-    if (!reason?.trim()) return res.status(400).json({ error: 'Укажите причину разрыва связи' });
+    if (typeof reason !== 'string' || !reason.trim()) return res.status(400).json({ error: 'Укажите причину разрыва связи' });
 
     const conn = await prisma.connection.findUnique({ where: { id: req.params.id } });
     if (!conn) return res.status(404).json({ error: 'Не найдено' });
     if (conn.requesterId !== meId && conn.receiverId !== meId) return res.status(403).json({ error: 'Нет прав' });
     if (conn.status !== 'ACCEPTED') return res.status(400).json({ error: 'Связь не активна' });
 
-    const updated = await prisma.connection.update({
-      where: { id: conn.id },
+    const r = await prisma.connection.updateMany({
+      where: { id: conn.id, status: 'ACCEPTED' },
       data: { status: 'BREAK_REQUESTED', breakRequestedBy: meId, breakReasonRequester: reason.trim() },
-      include: CONN_INCLUDE,
     });
+    if (r.count === 0) return conflict(res);
+    const updated = await prisma.connection.findUnique({ where: { id: conn.id }, include: CONN_INCLUDE });
 
     const otherId = conn.requesterId === meId ? conn.receiverId : conn.requesterId;
     try {
-      const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
-      await prisma.notification.create({
-        data: {
-          userId: otherId,
-          actorId: meId,
-          type: 'connection_break',
-          title: `${me?.firstName} ${me?.lastName} запрашивает разрыв связи`,
-          body: 'Подтвердите или отклоните запрос',
-          link: `/connections/requests`,
-        },
+      const myName = await userName(meId);
+      await notify({
+        userId: otherId,
+        actorId: meId,
+        type: 'connection_break',
+        title: `${myName} запрашивает разрыв связи`,
+        body: 'Подтвердите или отклоните запрос',
+        link: `/connections/requests`,
       });
+      emitToUser(otherId, 'connection_updated', { connId: conn.id, status: 'BREAK_REQUESTED' });
     } catch {}
 
     return res.json(formatConnection(updated, meId));
@@ -470,11 +508,12 @@ router.patch('/:id/break', authenticate, async (req: AuthRequest, res: Response)
 
 // ── PATCH /api/connections/:id/confirm-break ──────────────────────────────────
 // Other party confirms the break (requires reason) → save to history, delete connection
+class ConnConflict extends Error {}
 router.patch('/:id/confirm-break', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
     const { reason } = req.body as { reason?: string };
-    if (!reason?.trim()) return res.status(400).json({ error: 'Укажите причину разрыва связи' });
+    if (typeof reason !== 'string' || !reason.trim()) return res.status(400).json({ error: 'Укажите причину разрыва связи' });
 
     const conn = await prisma.connection.findUnique({ where: { id: req.params.id } });
     if (!conn) return res.status(404).json({ error: 'Не найдено' });
@@ -482,21 +521,33 @@ router.patch('/:id/confirm-break', authenticate, async (req: AuthRequest, res: R
     if (conn.status !== 'BREAK_REQUESTED') return res.status(400).json({ error: 'Запрос разрыва не найден' });
     if (conn.breakRequestedBy === meId) return res.status(400).json({ error: 'Вы сами запросили разрыв' });
 
-    await prisma.$transaction([
-      prisma.connectionHistory.create({
-        data: {
-          requesterId: conn.requesterId,
-          receiverId: conn.receiverId,
-          professionId: conn.professionId,
-          breakInitiatorId: conn.breakRequestedBy!,
-          breakReasonRequester: conn.breakReasonRequester,
-          breakReasonReceiver: reason.trim(),
-          connectedAt: conn.createdAt,
-        },
-      }),
-      prisma.connection.delete({ where: { id: conn.id } }),
-    ]);
+    try {
+      await prisma.$transaction(async (tx) => {
+        // Удаляем только если запрос разрыва всё ещё в силе (его могли отменить)
+        const del = await tx.connection.deleteMany({
+          where: { id: conn.id, status: 'BREAK_REQUESTED', breakRequestedBy: conn.breakRequestedBy },
+        });
+        if (del.count === 0) throw new ConnConflict();
+        await tx.connectionHistory.create({
+          data: {
+            requesterId: conn.requesterId,
+            receiverId: conn.receiverId,
+            professionId: conn.professionId,
+            breakInitiatorId: conn.breakRequestedBy!,
+            breakReasonRequester: conn.breakReasonRequester,
+            breakReasonReceiver: reason.trim(),
+            connectedAt: conn.createdAt,
+          },
+        });
+      });
+    } catch (e) {
+      if (e instanceof ConnConflict) return conflict(res);
+      throw e;
+    }
 
+    if (conn.breakRequestedBy) {
+      emitToUser(conn.breakRequestedBy, 'connection_updated', { connId: conn.id, status: 'BROKEN' });
+    }
     return res.json({ ok: true });
   } catch (err) {
     console.error('[connections] PATCH /:id/confirm-break', err);
@@ -504,19 +555,23 @@ router.patch('/:id/confirm-break', authenticate, async (req: AuthRequest, res: R
   }
 });
 
-// ── PATCH /api/connections/:id/cancel-break ───────────────────────────────────
-// The requester cancels their break request → back to ACCEPTED
 // ── PATCH /api/connections/:id/add-services ───────────────────────────────────
-// Add services to an existing connection (both parties can do this)
+// Add services to the requester's own PENDING request (до ответа получателя).
+// Изменить уже принятую связь в одностороннем порядке нельзя — для новых услуг
+// отправляется новый запрос (POST /), который партнёр принимает или отклоняет.
 router.patch('/:id/add-services', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
-    const { serviceIds } = req.body as { serviceIds: string[] };
-    if (!serviceIds?.length) return res.status(400).json({ error: 'serviceIds обязательны' });
+    const serviceIds = await validateServiceIds(req.body?.serviceIds);
+    if (!serviceIds) return res.status(400).json({ error: 'Некорректный список услуг' });
+    if (!serviceIds.length) return res.status(400).json({ error: 'serviceIds обязательны' });
 
     const conn = await prisma.connection.findUnique({ where: { id: req.params.id }, include: CONN_INCLUDE });
     if (!conn) return res.status(404).json({ error: 'Не найдено' });
     if (conn.requesterId !== meId && conn.receiverId !== meId) return res.status(403).json({ error: 'Нет прав' });
+    if (conn.status !== 'PENDING' || conn.requesterId !== meId) {
+      return res.status(409).json({ error: 'Добавить услуги можно только в свой ещё не принятый запрос. Для принятой связи отправьте новый запрос.' });
+    }
 
     // Only add services not already in the connection
     const existingIds = new Set(conn.services.map((cs: any) => cs.service.id));
@@ -525,17 +580,21 @@ router.patch('/:id/add-services', authenticate, async (req: AuthRequest, res: Re
     if (newIds.length > 0) {
       await prisma.connectionService.createMany({
         data: newIds.map((sid: string) => ({ connectionId: conn.id, serviceId: sid })),
+        skipDuplicates: true,
       });
     }
 
     const updated = await prisma.connection.findUnique({ where: { id: conn.id }, include: CONN_INCLUDE });
-    return res.json(formatConnection(updated!, meId));
+    if (!updated) return res.status(404).json({ error: 'Не найдено' });
+    return res.json(formatConnection(updated, meId));
   } catch (err) {
     console.error('[connections] PATCH /:id/add-services', err);
     return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });
 
+// ── PATCH /api/connections/:id/cancel-break ───────────────────────────────────
+// The requester cancels their break request → back to ACCEPTED
 router.patch('/:id/cancel-break', authenticate, async (req: AuthRequest, res: Response) => {
   try {
     const meId = req.userId!;
@@ -544,11 +603,15 @@ router.patch('/:id/cancel-break', authenticate, async (req: AuthRequest, res: Re
     if (conn.breakRequestedBy !== meId) return res.status(403).json({ error: 'Нет прав' });
     if (conn.status !== 'BREAK_REQUESTED') return res.status(400).json({ error: 'Неверный статус' });
 
-    const updated = await prisma.connection.update({
-      where: { id: conn.id },
+    const r = await prisma.connection.updateMany({
+      where: { id: conn.id, status: 'BREAK_REQUESTED', breakRequestedBy: meId },
       data: { status: 'ACCEPTED', breakRequestedBy: null },
-      include: CONN_INCLUDE,
     });
+    if (r.count === 0) return conflict(res);
+    const updated = await prisma.connection.findUnique({ where: { id: conn.id }, include: CONN_INCLUDE });
+
+    const otherId = conn.requesterId === meId ? conn.receiverId : conn.requesterId;
+    emitToUser(otherId, 'connection_updated', { connId: conn.id, status: 'ACCEPTED' });
     return res.json(formatConnection(updated, meId));
   } catch (err) {
     console.error('[connections] PATCH /:id/cancel-break', err);

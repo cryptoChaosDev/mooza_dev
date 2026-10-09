@@ -294,8 +294,10 @@ export const getSocialService = (key: SocialKey) =>
 
 // ─── Build full URL from slug ─────────────────────────────────────────────────
 
-export function buildUrl(service: SocialService, slug: string): string {
-  if (!slug) return '';
+export function buildUrl(service: SocialService, slug: unknown): string {
+  // Данные из БД/API: не-строка (например {"vk":123}) раньше роняла страницу
+  // целиком на slug.startsWith — просто не показываем такую ссылку.
+  if (typeof slug !== 'string' || !slug) return '';
   // Telegram: accept @username, t.me/username, a full URL, or a bare username and
   // always normalise to https://t.me/<username> — no leading «@» (contact format).
   if (service.baseUrl.includes('t.me/')) {
@@ -315,8 +317,8 @@ export function buildUrl(service: SocialService, slug: string): string {
   return s ? service.baseUrl + s : '';
 }
 
-export function extractSlug(service: SocialService, fullUrl: string): string {
-  if (!fullUrl) return '';
+export function extractSlug(service: SocialService, fullUrl: unknown): string {
+  if (typeof fullUrl !== 'string' || !fullUrl) return '';
   // Strip the base prefix — repeatedly, so legacy doubled values like
   // 'tel:tel:+7…' / 'mailto:mailto:…' collapse to the bare slug in the editor.
   let s = fullUrl;
@@ -331,8 +333,10 @@ export function extractSlug(service: SocialService, fullUrl: string): string {
 
 export function SocialIconRow({ links, labeled = false, only }: { links: Record<string, string>; labeled?: boolean; only?: SocialKey[] }) {
   const pool = only ? SOCIAL_SERVICES.filter(s => only.includes(s.key)) : SOCIAL_SERVICES;
-  // Filter out legacy keys that are no longer offered (they silently disappear).
-  const entries = pool.filter(s => links[s.key]);
+  // Filter out legacy keys that are no longer offered (they silently disappear),
+  // and values that don't build into a link (non-strings, empty).
+  const safeLinks: Record<string, unknown> = links && typeof links === 'object' ? links : {};
+  const entries = pool.filter(s => !!buildUrl(s, safeLinks[s.key]));
   if (entries.length === 0) return null;
 
   if (labeled) {
@@ -341,7 +345,7 @@ export function SocialIconRow({ links, labeled = false, only }: { links: Record<
         {entries.map(service => (
           <a
             key={service.key}
-            href={buildUrl(service, links[service.key])}
+            href={buildUrl(service, safeLinks[service.key])}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-2 px-3 py-2 rounded-xl border border-slate-700/50 bg-slate-800/50 hover:bg-slate-700/60 hover:border-slate-600 transition-all group"
@@ -361,7 +365,7 @@ export function SocialIconRow({ links, labeled = false, only }: { links: Record<
       {entries.map(service => (
         <a
           key={service.key}
-          href={buildUrl(service, links[service.key])}
+          href={buildUrl(service, safeLinks[service.key])}
           target="_blank"
           rel="noopener noreferrer"
           title={service.label}

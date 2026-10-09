@@ -3,6 +3,7 @@ import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { yoNorm } from '../utils/search';
 import { ymGet, ymCoverUrl, fetchAllYmAlbums } from '../utils/yandexMusicSync';
+import { normalizeImportedReleaseDate } from '../lib/mediaItems';
 
 // External-API helper that pre-fills the artist-create form: searches Deezer,
 // Apple Music (iTunes) and MusicBrainz, merges matches by normalized name, and
@@ -19,8 +20,32 @@ const AVATAR_HOSTS = new Set([
   'avatars.yandex.net',
 ]);
 
+// Кэш поиска: TTL + жёсткий предел размера (раньше Map рос без вытеснения —
+// уникальные запросы копились в памяти процесса бесконечно).
 const cache = new Map<string, { at: number; data: any }>();
 const TTL = 10 * 60 * 1000;
+const CACHE_MAX = 500;
+
+function cacheGet(key: string): any | undefined {
+  const hit = cache.get(key);
+  if (!hit) return undefined;
+  if (Date.now() - hit.at >= TTL) {
+    cache.delete(key);
+    return undefined;
+  }
+  return hit.data;
+}
+
+function cacheSet(key: string, data: any): void {
+  cache.delete(key);
+  cache.set(key, { at: Date.now(), data });
+  // Map хранит порядок вставки — вытесняем самые старые записи.
+  while (cache.size > CACHE_MAX) {
+    const oldest = cache.keys().next().value;
+    if (oldest === undefined) break;
+    cache.delete(oldest);
+  }
+}
 
 const norm = (s: any) => yoNorm(String(s || '')).toLowerCase().replace(/[!?.,'"«»()\-\s&]+/g, '');
 
@@ -56,11 +81,11 @@ async function safeJson(url: string, headers?: Record<string, string>): Promise<
 // GET /api/artist-lookup?q= — candidate artists from external catalogs
 router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
   try {
-    const q = String(req.query.q || '').trim();
+    const q = String(req.query.q || '').trim().slice(0, 100);
     if (q.length < 2) return res.json({ candidates: [] });
     const key = norm(q);
-    const hit = cache.get(key);
-    if (hit && Date.now() - hit.at < TTL) return res.json(hit.data);
+    const hit = cacheGet(key);
+    if (hit) return res.json(hit);
 
     const enc = encodeURIComponent(q);
     // MusicBrainz is intentionally omitted — it is unroutable from the RU host
@@ -152,11 +177,11 @@ router.get('/', authenticate, async (req: AuthRequest, res: Response) => {
       ((norm(b.name) === key ? 1 : 0) - (norm(a.name) === key ? 1 : 0)) || (b.popularity - a.popularity));
 
     const out = { candidates: candidates.slice(0, 8) };
-    cache.set(key, { at: Date.now(), data: out });
+    cacheSet(key, out);
     res.json(out);
   } catch (e: any) {
     console.error('[artist-lookup] GET /', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Не удалось выполнить поиск' });
   }
 });
 
@@ -182,10 +207,12 @@ router.get('/releases', authenticate, async (req: AuthRequest, res: Response) =>
           const title = String(al?.title ?? '').trim();
           if (!albumId || !title || relSeen.has(albumId)) continue;
           relSeen.add(albumId);
+          // Календарная дата (YYYY-MM-DD) — без сдвига на день из-за часового пояса.
+          const relDate = normalizeImportedReleaseDate(al.releaseDate);
           releases.push({
             title,
             coverUrl: ymCoverUrl(al.coverUri) || null,
-            releaseDate: al.releaseDate || null,
+            releaseDate: relDate ? relDate.toISOString().slice(0, 10) : null,
             platform: 'YANDEX_MUSIC',
             url: `https://music.yandex.ru/album/${albumId}`,
           });
@@ -248,10 +275,11 @@ router.get('/releases', authenticate, async (req: AuthRequest, res: Response) =>
       const k = norm(a.collectionName);
       if (relSeen.has(k)) continue;
       relSeen.add(k);
+      const relDate = normalizeImportedReleaseDate(a.releaseDate);
       releases.push({
         title: a.collectionName,
         coverUrl: big(a.artworkUrl100) || a.artworkUrl60 || null,
-        releaseDate: a.releaseDate || null,
+        releaseDate: relDate ? relDate.toISOString().slice(0, 10) : null,
         platform: 'APPLE_MUSIC',
         url: String(a.collectionViewUrl).split('?')[0],
       });
@@ -278,25 +306,84 @@ router.get('/releases', authenticate, async (req: AuthRequest, res: Response) =>
     res.json({ releases, clips });
   } catch (e: any) {
     console.error('[artist-lookup] GET /releases', e);
-    res.status(500).json({ error: e.message });
+    res.status(500).json({ error: 'Не удалось получить релизы' });
   }
 });
 
 // GET /api/artist-lookup/avatar?url= — proxy a whitelisted external image so the
 // browser can turn it into a File for the avatar (avoids CORS + SSRF).
-router.get('/avatar', authenticate, async (req: AuthRequest, res: Response) => {
+// Только https и хосты из AVATAR_HOSTS (в т.ч. на каждом хопе редиректа),
+// таймаут на всю операцию, лимит размера потоком, отдаём только jpeg/png/webp.
+const AVATAR_TIMEOUT_MS = 5000;
+const AVATAR_MAX_BYTES = 5 * 1024 * 1024;
+const AVATAR_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+function allowedAvatarUrl(raw: string): URL | null {
   try {
-    const url = String(req.query.url || '');
-    let host = '';
-    try { host = new URL(url).hostname; } catch { return res.status(400).json({ error: 'bad url' }); }
-    if (!AVATAR_HOSTS.has(host)) return res.status(400).json({ error: 'host not allowed' });
-    const r = await fetch(url);
-    if (!r.ok) return res.status(502).end();
-    res.setHeader('Content-Type', r.headers.get('content-type') || 'image/jpeg');
-    res.setHeader('Cache-Control', 'public, max-age=86400');
-    res.end(Buffer.from(await r.arrayBuffer()));
+    const u = new URL(raw);
+    if (u.protocol !== 'https:' || u.username || u.password || (u.port && u.port !== '443')) return null;
+    return AVATAR_HOSTS.has(u.hostname.toLowerCase()) ? u : null;
+  } catch {
+    return null;
+  }
+}
+
+router.get('/avatar', authenticate, async (req: AuthRequest, res: Response) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), AVATAR_TIMEOUT_MS);
+  try {
+    let target = allowedAvatarUrl(String(req.query.url || ''));
+    if (!target) return res.status(400).json({ error: 'Недопустимый адрес изображения' });
+
+    let r: globalThis.Response | null = null;
+    for (let hop = 0; hop < 4 && target; hop++) {
+      r = await fetch(target.toString(), { redirect: 'manual', signal: ctrl.signal });
+      if (r.status >= 300 && r.status < 400) {
+        const loc = r.headers.get('location');
+        r.body?.cancel().catch(() => {});
+        let next: URL | null = null;
+        try { next = loc ? allowedAvatarUrl(new URL(loc, target).toString()) : null; } catch { next = null; }
+        if (!next) return res.status(502).json({ error: 'Изображение недоступно' });
+        target = next;
+        r = null;
+        continue;
+      }
+      break;
+    }
+    if (!r || !r.ok || !r.body) {
+      r?.body?.cancel().catch(() => {});
+      return res.status(502).json({ error: 'Изображение недоступно' });
+    }
+    const ctype = (r.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    const declared = Number(r.headers.get('content-length') || '0');
+    if (!AVATAR_TYPES.has(ctype) || declared > AVATAR_MAX_BYTES) {
+      r.body.cancel().catch(() => {});
+      return res.status(415).json({ error: 'Неподдерживаемое изображение' });
+    }
+
+    const reader = r.body.getReader();
+    const chunks: Buffer[] = [];
+    let total = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > AVATAR_MAX_BYTES) {
+        reader.cancel().catch(() => {});
+        return res.status(413).json({ error: 'Изображение слишком большое' });
+      }
+      chunks.push(Buffer.from(value.buffer, value.byteOffset, value.byteLength));
+    }
+
+    res.setHeader('Content-Type', ctype);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.end(Buffer.concat(chunks));
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    if (!res.headersSent) res.status(502).json({ error: 'Изображение недоступно' });
+  } finally {
+    clearTimeout(timer);
   }
 });
 

@@ -18,19 +18,22 @@ export default function ArtistLookup({
 
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 2) { setResults([]); return; }
+    if (q.length < 2) { setResults([]); setLoading(false); return; }
+    // Защита от гонки: ответ на устаревший запрос (уже введено другое) не
+    // перезаписывает результаты актуального.
+    let alive = true;
     setLoading(true);
     const t = setTimeout(async () => {
       try {
         const { data } = await artistAPI.lookup(q);
-        setResults(data.candidates || []);
+        if (alive) setResults(data.candidates || []);
       } catch {
-        setResults([]);
+        if (alive) setResults([]);
       } finally {
-        setLoading(false);
+        if (alive) setLoading(false);
       }
     }, 450);
-    return () => clearTimeout(t);
+    return () => { alive = false; clearTimeout(t); };
   }, [query]);
 
   return (

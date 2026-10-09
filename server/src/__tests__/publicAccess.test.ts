@@ -63,7 +63,7 @@ jest.mock('../middleware/auth', () => ({
   },
   invalidateAuthCache: () => {},
 }));
-jest.mock('../socket', () => ({ emitToUser: jest.fn(), notifyUser: jest.fn(), isUserOnline: jest.fn(() => false) }));
+jest.mock('../socket', () => ({ emitToUser: jest.fn(), notifyUser: jest.fn(), isUserOnline: jest.fn(() => false), disconnectUserSockets: jest.fn() }));
 jest.mock('../utils/telegram', () => ({
   tgLog: jest.fn(),
   escTg: (s: any) => String(s ?? ''),
@@ -237,7 +237,7 @@ describe('GET /api/users/:id/services and /user-service/:id (guest)', () => {
   it('authorized: non-owner sees only active, owner sees all statuses', async () => {
     m('userService').findMany.mockResolvedValue([]);
     await request(app).get('/api/users/u-pub/services').set('x-test-user-id', 'stranger');
-    expect(m('userService').findMany.mock.calls[0][0].where).toEqual({ userId: 'u-pub', status: 'active' });
+    expect(m('userService').findMany.mock.calls[0][0].where).toEqual({ userId: 'u-pub', status: { notIn: ['draft', 'archived'] } });
     await request(app).get('/api/users/u-pub/services').set('x-test-user-id', 'u-pub');
     expect(m('userService').findMany.mock.calls[1][0].where).toEqual({ userId: 'u-pub' });
 
@@ -280,8 +280,12 @@ describe('GET /api/users/catalog (guest)', () => {
     _count: { sentConnections: 2, receivedConnections: 1 },
   });
 
-  it('flag on → 200, consent filter, take ≤ 100, whitelist', async () => {
-    m('user').findMany.mockResolvedValue([catalogRow('u-1'), catalogRow('u-2')]);
+  it('flag on → 200, consent filter, take ≤ 100, whitelist (legacy array form)', async () => {
+    m('user').findMany
+      .mockResolvedValueOnce([{ id: 'u-1' }, { id: 'u-2' }])            // id страницы
+      .mockResolvedValueOnce([catalogRow('u-1'), catalogRow('u-2')]);   // строки страницы
+    m('user').count.mockResolvedValue(2);
+    m('review').groupBy.mockResolvedValue([{ targetId: 'u-1', _avg: { rating: 9 }, _count: { _all: 2 } }]);
     const res = await request(app).get('/api/users/catalog?sort=connections');
     expect(res.status).toBe(200);
     expectNoForbiddenKeys(res.body);
@@ -293,6 +297,18 @@ describe('GET /api/users/catalog (guest)', () => {
     const args = m('user').findMany.mock.calls[0][0];
     expect(args.take).toBeLessThanOrEqual(100);
     expect(JSON.stringify(args.where)).toContain('publicConsentAt');
+    // сортировка по связям гостю недоступна — groupBy по connection не вызывается
+    expect(m('connection').groupBy).not.toHaveBeenCalled();
+  });
+
+  it('paginated form { results, pagination } and page depth ≤ 10 for guests', async () => {
+    m('user').findMany.mockResolvedValueOnce([{ id: 'u-1' }]).mockResolvedValueOnce([catalogRow('u-1')]);
+    m('user').count.mockResolvedValue(500);
+    const res = await request(app).get('/api/users/catalog?page=99&limit=50');
+    expect(res.status).toBe(200);
+    expectNoForbiddenKeys(res.body);
+    expect(res.body.pagination.page).toBe(10);
+    expect(res.body.results).toHaveLength(1);
   });
 
   it('flag off → 401 like before (authenticate)', async () => {
@@ -366,9 +382,9 @@ describe('GET /api/artists/:id (guest)', () => {
     expect(res.body.members.map((x: any) => x.id)).not.toContain('u-pend');
   });
 
-  it('authorized owner still gets verification code', async () => {
+  it('authorized owner (confirmed UserArtist.isOwner) still gets verification code', async () => {
     m('artist').findUnique.mockResolvedValue(artistRow('DRAFT'));
-    const res = await request(app).get('/api/artists/a-1').set('x-test-user-id', 'u-owner');
+    const res = await request(app).get('/api/artists/a-1').set('x-test-user-id', 'u-pub');
     expect(res.status).toBe(200);
     expect(res.body.verificationCode).toBe('MOOOZA-ABC123');
   });
@@ -479,10 +495,17 @@ describe('GET /api/posts/feed (guest)', () => {
     const ids = res.body.map((p: any) => p.id);
     expect(ids).toEqual(['p-pub', 'p-artist', 'p-order', 'p-repost']);
     const pub = res.body[0];
+    // та же форма поста, что у авторизованной ленты dev (decoratePosts)
     expect(pub.comments).toEqual([]);
-    expect(pub.commentsCount).toBe(1);
-    expect(pub.reactions).toEqual([]);
-    expect(pub.reactionCounts).toEqual([{ emoji: '🔥', count: 2 }]);
+    expect(pub._count.comments).toBe(1);
+    expect(pub).not.toHaveProperty('reactions');
+    expect(pub.reactionSummary).toEqual([{ emoji: '🔥', count: 2 }]);
+    expect(pub.myReaction).toBeNull();
+    expect(pub.myVote).toBeNull();
+    expect(pub.isLiked).toBe(false);
+    expect(pub.isSaved).toBe(false);
+    expect(pub.likes).toEqual([]);
+    expect(pub.pollVotes).toEqual([]);
     expect(pub.content).toContain('[контакт — после входа]');
     expect(pub.links).toEqual(['https://music.yandex.ru/album/1']);
     expect(pub.mentions[0]).toEqual({ id: null, type: 'user', name: 'Участник Moooza' });
@@ -515,6 +538,68 @@ describe('GET /api/posts/feed (guest)', () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual([]);
     expect(m('post').findMany).not.toHaveBeenCalled();
+  });
+
+  it('cursor mode: { items, nextCursor } like dev, opaque guest cursor, depth ≤ 200', async () => {
+    const rows = Array.from({ length: 3 }, (_, i) => ({
+      ...basePost(`p-${i}`, person('u-pub')), createdAt: new Date(Date.UTC(2026, 0, 3 - i)),
+    }));
+    m('post').findMany.mockResolvedValue(rows);
+    let res = await request(app).get('/api/posts/feed?limit=2&cursor=');
+    expect(res.status).toBe(200);
+    expectNoForbiddenKeys(res.body);
+    expect(res.body.items).toHaveLength(2);
+    expect(res.body.nextCursor).toBe(`g2:${rows[1].createdAt.toISOString()}|p-1`);
+    expect(m('post').findMany.mock.calls[0][0].take).toBe(3);
+
+    // следующая страница — keyset по (createdAt,id) + глубина в курсоре
+    m('post').findMany.mockClear();
+    m('post').findMany.mockResolvedValue([rows[2]]);
+    res = await request(app).get(`/api/posts/feed?limit=2&cursor=${encodeURIComponent(`g2:${rows[1].createdAt.toISOString()}|p-1`)}`);
+    expect(res.body.items.map((p: any) => p.id)).toEqual(['p-2']);
+    expect(res.body.nextCursor).toBeNull();
+    expect(JSON.stringify(m('post').findMany.mock.calls[0][0].where)).toContain('"lt"');
+
+    // глубина исчерпана — пусто без запроса в БД
+    m('post').findMany.mockClear();
+    res = await request(app).get('/api/posts/feed?cursor=g200');
+    expect(res.body).toEqual({ items: [], nextCursor: null });
+    expect(m('post').findMany).not.toHaveBeenCalled();
+  });
+
+  it('ranked sort with cursor slices one shared snapshot', async () => {
+    const cands = Array.from({ length: 5 }, (_, i) => ({
+      id: `r-${i}`, createdAt: new Date(Date.UTC(2026, 0, 10 - i)), authorId: `a-${i}`,
+      _count: { likes: i, reactions: 0, comments: 0, savedBy: 0 },
+    }));
+    m('post').findMany.mockImplementation(async (args: any) => {
+      if (args?.take === 600) return cands; // кандидаты для ранжирования
+      const ids: string[] = args?.where?.AND?.[0]?.id?.in ?? [];
+      return ids.map((id) => ({ ...basePost(id, person('u-pub')) }));
+    });
+    const res = await request(app).get('/api/posts/feed?sort=popular&limit=2&cursor=');
+    expect(res.status).toBe(200);
+    expect(res.body.items.map((p: any) => p.id)).toEqual(['r-4', 'r-3']);
+    expect(res.body.nextCursor).toBe('g2');
+    const res2 = await request(app).get('/api/posts/feed?sort=popular&limit=2&cursor=g2');
+    expect(res2.body.items.map((p: any) => p.id)).toEqual(['r-2', 'r-1']);
+  });
+
+  it('HTML content: mentions of people without consent are anonymized, contact links lose href', async () => {
+    const html = '<p>Привет <span class="post-mention" data-type="mention" data-id="u-np" data-label="Скрытый">@Скрытый</span> '
+      + 'и <span class="post-mention" data-type="mention" data-id="u-pub" data-label="Публичный">@Публичный</span>, '
+      + 'пиши <a href="https://t.me/secret_handle">сюда</a> или 8 916 123-45-67, трек <a href="https://music.yandex.ru/album/1">тут</a></p>';
+    m('post').findMany.mockResolvedValue([{ ...basePost('p-html', person('u-pub')), content: html, mentions: [{ id: 'u-np', type: 'user', name: 'Скрытый' }, { id: 'u-pub', type: 'user', name: 'Публичный' }] }]);
+    m('user').findMany.mockResolvedValue([{ id: 'u-pub' }]);
+    const res = await request(app).get('/api/posts/feed');
+    const content: string = res.body[0].content;
+    expect(content).not.toContain('u-np');
+    expect(content).not.toContain('Скрытый');
+    expect(content).toContain('@Участник Moooza');
+    expect(content).toContain('data-id="u-pub"');
+    expect(content).not.toContain('t.me');
+    expect(content).not.toContain('916');
+    expect(content).toContain('href="https://music.yandex.ru/album/1"');
   });
 
   it('works with guestBrowsingEnabled=false too (feed was public before), still guest-safe', async () => {
@@ -556,11 +641,19 @@ describe('GET /api/posts/:id', () => {
     expect(res.status).toBe(404);
   });
 
-  it('flag off → 401 like before (authenticate)', async () => {
+  it('flag off → still guest-safe (в dev /posts/:id уже публичный, как лента)', async () => {
     setGuestBrowsing(false);
+    m('post').findFirst.mockResolvedValue(post);
     const res = await request(app).get('/api/posts/p-1');
-    expect(res.status).toBe(401);
-    expect(m('post').findFirst).not.toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expectNoForbiddenKeys(res.body);
+  });
+
+  it('GET /api/posts/:id/comments → guest gets an empty page (comments only as a count)', async () => {
+    const res = await request(app).get('/api/posts/p-1/comments');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ items: [], nextCursor: null, guestHidden: true });
+    expect(m('comment').findMany).not.toHaveBeenCalled();
   });
 });
 
@@ -680,7 +773,8 @@ describe('references (guest)', () => {
     expect(res.status).toBe(200);
     expectNoForbiddenKeys(res.body);
     expect(res.body[0]).not.toHaveProperty('ymData');
-    expect(res.body[0].socialLinks).not.toHaveProperty('phone');
+    expect(res.body[0]).not.toHaveProperty('socialLinks');
+    expect(res.body[0].listeners).toBe(5);
     expect(m('artist').findMany.mock.calls[0][0].take).toBeLessThanOrEqual(100);
   });
 
@@ -744,14 +838,13 @@ describe('site settings: guestBrowsingEnabled', () => {
     });
   });
 
-  it('flag off: previously public endpoints stay public (guest-safe), previously private → 401', async () => {
+  it('flag off: previously public endpoints stay public (guest-safe), catalog (был authenticate) → 401', async () => {
     setGuestBrowsing(false);
     m('user').findFirst.mockResolvedValue(profileRow('u-pub'));
     const profile = await request(app).get('/api/users/u-pub');
     expect(profile.status).toBe(200);
     expectNoForbiddenKeys(profile.body);
     expect((await request(app).get('/api/users/catalog')).status).toBe(401);
-    expect((await request(app).get('/api/posts/p-1')).status).toBe(401);
   });
 });
 

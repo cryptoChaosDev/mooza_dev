@@ -9,6 +9,7 @@ import { DEALS_ENABLED } from '../lib/features';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { useScrollLock } from '../lib/scrollLock';
+import { maskDateInput, maskedToMskEndOfDayIso, isMaskedDatePast } from '../lib/mskDate';
 
 interface DuplicateValues {
   title?: string;
@@ -36,11 +37,14 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
   const userAge = user?.birthDate
     ? Math.floor((Date.now() - new Date(user.birthDate).getTime()) / (365.25 * 24 * 3600 * 1000))
     : null;
-  const canCreateDeal = userAge === null || userAge >= 18;
+  // Сервер требует 18+ и указанную дату рождения (без неё сделки недоступны).
+  const ageUnknown = userAge === null;
+  const canCreateDeal = !ageUnknown && userAge >= 18;
 
   const [title, setTitle] = useState(initialValues?.title ?? (serviceName ? `Сделка: ${serviceName}` : ''));
   const [dealType, setDealType] = useState<'process' | 'event'>('process');
   const [price, setPrice] = useState(initialValues?.price != null ? String(initialValues.price) : '');
+  // Даты — маска ДД.ММ.ГГГГ (как в OrderForm/профиле), срок = конец дня по МСК.
   const [deadline, setDeadline] = useState('');
   const [acceptDeadline, setAcceptDeadline] = useState('');
   const [revisionCount, setRevisionCount] = useState(initialValues?.revisionCount != null ? String(initialValues.revisionCount) : '3');
@@ -59,13 +63,13 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
       dealType,
       ...(dealType === 'event'
         ? {
-            eventDate: eventDate || undefined,
+            eventDate: maskedToMskEndOfDayIso(eventDate) ?? undefined,
             deposit: deposit ? Number(deposit) : undefined,
           }
         : {
-            deadline: deadline || undefined,
-            acceptDeadline: acceptDeadline || undefined,
-            revisionCount: Number(revisionCount) || 3,
+            deadline: maskedToMskEndOfDayIso(deadline) ?? undefined,
+            acceptDeadline: maskedToMskEndOfDayIso(acceptDeadline) ?? undefined,
+            revisionCount: revisionCount.trim() === '' ? 3 : Number(revisionCount),
           }),
     }),
     onSuccess: (res: any) => {
@@ -76,7 +80,27 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось оформить сделку')),
   });
 
-  const canSubmit = title.trim().length >= 3 && (dealType !== 'event' || !!eventDate);
+  // Валидация дат: существующая дата, не в прошлом, приёмка позже сдачи.
+  const dateError = (v: string, label: string): string | null => {
+    if (!v) return null;
+    if (v.length < 10 || !maskedToMskEndOfDayIso(v)) return `${label}: введите существующую дату ДД.ММ.ГГГГ`;
+    if (isMaskedDatePast(v)) return `${label} не может быть в прошлом`;
+    return null;
+  };
+  const deadlineErr = dealType === 'process' ? dateError(deadline, 'Срок сдачи') : null;
+  let acceptErr = dealType === 'process' ? dateError(acceptDeadline, 'Срок приёмки') : null;
+  if (!acceptErr && !deadlineErr && dealType === 'process' && deadline && acceptDeadline) {
+    const d = maskedToMskEndOfDayIso(deadline)!; const a = maskedToMskEndOfDayIso(acceptDeadline)!;
+    if (a <= d) acceptErr = 'Срок приёмки должен быть позже срока сдачи';
+  }
+  const eventErr = dealType === 'event' ? dateError(eventDate, 'Дата события') : null;
+  const revisionsNum = Number(revisionCount);
+  const revisionsErr = dealType === 'process' && revisionCount.trim() !== ''
+    && (!Number.isInteger(revisionsNum) || revisionsNum < 0 || revisionsNum > 20)
+    ? 'Количество правок — от 0 до 20' : null;
+  const formError = deadlineErr || acceptErr || eventErr || revisionsErr;
+  const canSubmit = title.trim().length >= 3 && (dealType !== 'event' || !!eventDate) && !formError;
+  const dateInputCls = 'w-full min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500';
 
   // Deal creation is temporarily disabled — never render the form (belt-and-suspenders
   // alongside the gated entry points). Re-enable via DEALS_ENABLED.
@@ -160,22 +184,30 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
                 <div className="min-w-0">
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Срок сдачи</label>
                   <input
-                    type="date"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="ДД.ММ.ГГГГ"
+                    maxLength={10}
                     value={deadline}
-                    onChange={e => setDeadline(e.target.value)}
-                    className="w-full min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    onChange={e => setDeadline(maskDateInput(e.target.value))}
+                    className={dateInputCls}
                   />
                 </div>
                 <div className="min-w-0">
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Срок приёмки</label>
                   <input
-                    type="date"
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="ДД.ММ.ГГГГ"
+                    maxLength={10}
                     value={acceptDeadline}
-                    onChange={e => setAcceptDeadline(e.target.value)}
-                    className="w-full min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                    onChange={e => setAcceptDeadline(maskDateInput(e.target.value))}
+                    className={dateInputCls}
                   />
                 </div>
               </div>
+              {(deadlineErr || acceptErr) && <p className="text-[11px] text-red-400 -mt-2">{deadlineErr || acceptErr}</p>}
+              <p className="text-[10px] text-slate-600 -mt-2">Сроки — до конца дня по Москве. Если срок приёмки не указан, на приёмку даётся 3 дня после сдачи работы.</p>
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Количество правок</label>
                 <input
@@ -186,6 +218,7 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
                   max={20}
                   className="w-full min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
                 />
+                {revisionsErr && <p className="text-[11px] text-red-400 mt-1">{revisionsErr}</p>}
               </div>
             </>
           ) : (
@@ -193,12 +226,15 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Дата события *</label>
                 <input
-                  type="date"
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="ДД.ММ.ГГГГ"
+                  maxLength={10}
                   value={eventDate}
-                  onChange={e => setEventDate(e.target.value)}
-                  min={new Date().toISOString().split('T')[0]}
-                  className="w-full min-w-0 px-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                  onChange={e => setEventDate(maskDateInput(e.target.value))}
+                  className={dateInputCls}
                 />
+                {eventErr && <p className="text-[11px] text-red-400 mt-1">{eventErr}</p>}
               </div>
               <div>
                 <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Невозвратный депозит (₽)</label>
@@ -231,7 +267,9 @@ export default function DealCreateModal({ executorId, executorName, serviceId, u
         <div className="px-5 pb-5 border-t border-slate-800 pt-4 flex-shrink-0 space-y-3">
           {!canCreateDeal && (
             <div className="text-sm text-amber-400 bg-amber-400/10 border border-amber-400/20 rounded-2xl px-4 py-3">
-              🔞 Сделки доступны пользователям от 18 лет
+              {ageUnknown
+                ? '🔞 Сделки доступны с 18 лет — укажите дату рождения в профиле'
+                : '🔞 Сделки доступны пользователям от 18 лет'}
             </div>
           )}
           <div className="flex gap-2.5">

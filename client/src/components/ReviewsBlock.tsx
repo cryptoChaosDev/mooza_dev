@@ -36,8 +36,10 @@ function Stars({ rating, size = 10 }: { rating: number; size?: number }) {
   );
 }
 
+// Подписи типов отзыва. Неизвестный тип (мусор из БД) не выводим «сырым».
 const TYPE_LABELS: Record<string, string> = {
   connection: 'Связь',
+  deal: 'Сделка',
   service: 'Услуга',
   collaboration: 'Сотрудничество',
 };
@@ -149,7 +151,9 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
               <div className="space-y-1">
                 <Stars rating={selected.rating} size={16} />
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs text-slate-500">{TYPE_LABELS[selected.type] ?? selected.type}</span>
+                  {TYPE_LABELS[selected.type] && (
+                    <span className="text-xs text-slate-500">{TYPE_LABELS[selected.type]}</span>
+                  )}
                   {selected.service && (
                     <span className="text-xs text-primary-400 font-medium">{selected.service.name}</span>
                   )}

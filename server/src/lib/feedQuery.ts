@@ -1,7 +1,7 @@
 /**
- * Фильтры ленты (GET /api/posts/feed) → Prisma where. Вынесено из routes/posts.ts,
- * чтобы авторизованная лента, гостевая лента (lib/publicData) и будущие
- * SEO-снимки (Ф4) строили выборку одинаково.
+ * Фильтры ленты (GET /api/posts/feed) → Prisma where для гостевой ленты
+ * (lib/publicData) и будущих SEO-снимков (Ф4). Повторяет правила фильтров
+ * авторизованной ленты из routes/posts.ts.
  */
 
 // System team account — its posts are pinned to the top of the feed for brand-new users.
@@ -24,45 +24,54 @@ export interface FeedWhereResult {
   periodStr: string;
 }
 
+const EMPLOYMENT_STATUSES = ['open', 'considering', 'closed'];
+const ARTIST_TYPES = ['SOLO', 'GROUP', 'COVER_GROUP', 'DUET', 'TRIBUTE', 'CHOIR', 'ENSEMBLE', 'ORCHESTRA'];
+
+function qstr(v: unknown): string {
+  if (v === undefined || v === null) return '';
+  return String(v);
+}
+
 /**
- * Build the where clause from feed filters.
+ * Build the where clause from feed filters — те же правила, что у ленты в
+ * routes/posts.ts (dev): валидация employment/artistType, потолки длины списков.
  *   type       — post type (blog | question | poll | service | employment | …), comma list
- *   authorKind — all | resident (profile) | channel | artist | mine
+ *   authorKind — all | resident (profile) | channel | artist | mine (гостю mine → all)
  *   period     — today | yesterday | 3days | week | month | 3months | year | all
  *   city       — comma-separated list, exact match on stored names
  *   employment / artistType / genre — contextual filters (E4)
+ * Видимость авторов (блокировки, согласие) сюда НЕ входит — её добавляет вызывающий.
  */
 export function buildFeedWhere(
   q: FeedFilterQuery,
   opts: { viewerId?: string | null; teamUserId: string | null },
 ): FeedWhereResult {
   const { type, authorKind, period, city, employment, artistType, genre } = q;
-  const kind = authorKind ? String(authorKind) : 'all';
+  const kindRaw = authorKind ? qstr(authorKind) : 'all';
+  const kind = kindRaw === 'mine' && !opts.viewerId ? 'all' : kindRaw;
   const teamUserId = opts.teamUserId;
 
   const where: any = {};
-  if (type && type !== 'all') {
-    const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
-    if (types.length) where.type = types.length > 1 ? { in: types } : types[0];
-  }
+  const typeStr = qstr(type);
+  const typeTypes = typeStr && typeStr !== 'all'
+    ? typeStr.split(',').map(t => t.trim()).filter(Boolean).slice(0, 20)
+    : [];
+  if (typeTypes.length) where.type = typeTypes.length > 1 ? { in: typeTypes } : typeTypes[0];
   if (kind === 'resident') { where.channelId = null; where.artistId = null; }
   else if (kind === 'channel') where.channelId = { not: null };
   else if (kind === 'artist') where.artistId = { not: null };
-  else if (kind === 'mine') where.authorId = opts.viewerId ?? undefined;
+  else if (kind === 'mine') where.authorId = opts.viewerId;
   else if (teamUserId) where.authorId = { not: teamUserId }; // exclude team from default/other views
 
-  // Hide «Услуга» posts whose offering is no longer active (archived/draft) — an
-  // archived/unpublished service must not show in the feed. Also hide degenerate
-  // structured service posts whose linked offering was deleted (serviceId null):
-  // those would render as an empty «Услуга» card with no data. Non-service posts
-  // are unaffected.
+  // Hide «Услуга» posts whose offering is no longer active (archived/draft) and
+  // degenerate service posts whose offering was deleted (serviceId null).
   where.NOT = [
     { type: 'service', service: { status: { not: 'active' } } },
     { type: 'service', serviceId: null },
   ];
 
   // period — date lower bound on createdAt (server-computed)
-  const periodStr = period ? String(period) : 'all';
+  const periodStr = period ? qstr(period) : 'all';
   if (periodStr && periodStr !== 'all') {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -74,40 +83,37 @@ export function buildFeedWhere(
       where.createdAt = { gte: startOfYesterday, lt: startOfToday };
     } else {
       const since = new Date(now);
+      let known = true;
       switch (periodStr) {
         case '3days': since.setDate(since.getDate() - 3); break;
         case 'week': since.setDate(since.getDate() - 7); break;
         case 'month': since.setMonth(since.getMonth() - 1); break;
         case '3months': since.setMonth(since.getMonth() - 3); break;
         case 'year': since.setFullYear(since.getFullYear() - 1); break;
-        default: break;
+        default: known = false; break;
       }
-      where.createdAt = { gte: since };
+      if (known) where.createdAt = { gte: since };
     }
   }
 
   // city — comma-separated list, exact match on stored names
   if (city) {
-    const cityNames = String(city)
-      .split(',')
-      .map(c => c.trim())
-      .filter(Boolean);
+    const cityNames = qstr(city).split(',').map(c => c.trim()).filter(Boolean).slice(0, 50);
     if (cityNames.length > 0) where.city = { in: cityNames };
   }
 
   // ── Contextual filters (E4) ──────────────────────────────────────────────
-  // Employment status — filter by the post author's occupancy status
-  // (shown in UI for «Резидент» author or «Апдейт занятости» type).
-  if (employment && employment !== 'all') {
-    where.author = { ...(where.author || {}), occupancyStatus: String(employment) };
+  const employmentStr = qstr(employment);
+  if (employmentStr && employmentStr !== 'all' && EMPLOYMENT_STATUSES.includes(employmentStr)) {
+    where.author = { ...(where.author || {}), occupancyStatus: employmentStr };
   }
-  // Artist type — only artist posts have an artist relation (shown for «Артист»).
-  if (artistType && artistType !== 'all') {
-    where.artist = { ...(where.artist || {}), type: String(artistType) };
+  const artistTypeStr = qstr(artistType);
+  if (artistTypeStr && artistTypeStr !== 'all' && ARTIST_TYPES.includes(artistTypeStr)) {
+    where.artist = { ...(where.artist || {}), type: artistTypeStr };
   }
-  // Genre — artist posts whose artist is tagged with the given genre.
-  if (genre && genre !== 'all') {
-    where.artist = { ...(where.artist || {}), genres: { some: { genre: { name: String(genre) } } } };
+  const genreStr = qstr(genre);
+  if (genreStr && genreStr !== 'all') {
+    where.artist = { ...(where.artist || {}), genres: { some: { genre: { name: genreStr.slice(0, 100) } } } };
   }
 
   return { where, kind, periodStr };

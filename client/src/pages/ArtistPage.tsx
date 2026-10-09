@@ -1,19 +1,20 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, ExternalLink,
   Camera, Navigation, Edit3, X, Loader2,
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
-  UserPlus, Trash2, Search,
+  UserPlus, Trash2,
   Settings, Link2, Tag, Crown, Shield, UserCog, UserCheck, UserX, Star,
   UserRound, Users, Disc3, Clapperboard, Briefcase, Activity, ChevronRight,
 } from 'lucide-react';
-import { artistAPI, referenceAPI, groupAPI, friendshipAPI, releaseAPI, clipAPI, vacancyAPI } from '../lib/api';
+import { artistAPI, releaseAPI, clipAPI, vacancyAPI } from '../lib/api';
 import { workFormatLabel } from '../lib/vacancyOptions';
 import { useScrollLock } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
-import { yoNorm } from '../lib/search';
+import { safeHref, copyText } from '../lib/artistUtils';
 import { SocialIconRow } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
 import SelectSheet from '../components/SelectSheet';
@@ -83,13 +84,6 @@ export default function ArtistPage() {
   const [proofUrl, setProofUrl] = useState('');
   const [verifyUnmet, setVerifyUnmet] = useState<string[]>([]);
 
-  // Invite member state (legacy friend-invite flow)
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [inviteFriendId, setInviteFriendId] = useState('');
-  const [inviteProfessionId, setInviteProfessionId] = useState('');
-  const [inviteFriendSearch, setInviteFriendSearch] = useState('');
-  const [inviteProfSearch, setInviteProfSearch] = useState('');
-
   // ── Phase 5b state ─────────────────────────────────────────────────────────
   // Нижний лист «Управление артистом» (шестерёнка)
   const [showManageSheet, setShowManageSheet] = useState(false);
@@ -118,7 +112,7 @@ export default function ArtistPage() {
 
   // iOS: любой открытый нижний лист/оверлей страницы блокирует фон.
   // (RolePicker/SelectSheet/ConfirmDialog лочат скролл сами — лок ref-counted.)
-  useScrollLock(showInviteModal || showOwnerPicker || showAdminPicker || showManageSheet);
+  useScrollLock(showOwnerPicker || showAdminPicker || showManageSheet);
 
   const { data: artist, isLoading, isError } = useQuery({
     queryKey: ['artist', id],
@@ -160,29 +154,9 @@ export default function ArtistPage() {
     enabled: !!id && !!(artist as any)?.viewerIsAdmin,
   });
 
-  const isOwner = !!currentUser && (
-    artist?.submittedById === currentUser.id ||
-    artist?.members?.some((m: any) => m.id === currentUser.id && m.isOwner)
-  );
-
-  const { data: friendsList = [] } = useQuery({
-    queryKey: ['friends-list'],
-    queryFn: async () => {
-      const { data } = await friendshipAPI.getFriends();
-      return (data as { friendshipId: string; user: { id: string; firstName: string; lastName: string; avatar?: string } }[])
-        .map(f => f.user);
-    },
-    enabled: showInviteModal && isOwner,
-  });
-
-  const { data: allProfessions = [] } = useQuery({
-    queryKey: ['all-professions'],
-    queryFn: async () => {
-      const { data } = await referenceAPI.getAllReferences();
-      return (data?.professions ?? []) as { id: string; name: string }[];
-    },
-    enabled: showInviteModal && isOwner,
-  });
+  // Права — ТОЛЬКО по флагам сервера (подтверждённый владелец/админ артиста;
+  // владелец ≥ админ). Никаких выводов из submittedById / legacy members[].
+  const canAdminArtist = !!(artist as any)?.viewerIsAdmin || !!(artist as any)?.viewerIsOwner;
 
   const favInvalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['artist', id] });
@@ -242,22 +216,13 @@ export default function ArtistPage() {
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось отозвать заявку')),
   });
 
-  const inviteMut = useMutation({
-    mutationFn: () => groupAPI.invite(id!, inviteFriendId, inviteProfessionId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['artist', id] });
-      setShowInviteModal(false);
-      setInviteFriendId('');
-      setInviteProfessionId('');
-      setInviteFriendSearch('');
-      setInviteProfSearch('');
-    },
-  });
-
+  // Заявки на вступление — только тем, кто может их решать (владелец/админ):
+  // остальным запрос не шлём вовсе (раньше у приглашённых участников был 403 в консоли).
   const { data: pendingMembers = [] } = useQuery<any[]>({
     queryKey: ['artist-pending-members', id],
     queryFn: () => artistAPI.pendingMemberships(id!).then((r: any) => r.data),
-    enabled: !!id && isOwner,
+    enabled: !!id && canAdminArtist,
+    retry: false,
   });
 
   const approveMemberMut = useMutation({
@@ -270,7 +235,10 @@ export default function ArtistPage() {
   });
   const rejectMemberMut = useMutation({
     mutationFn: (membershipId: string) => artistAPI.rejectMembership(membershipId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist-pending-members', id] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['artist', id] });
+      queryClient.invalidateQueries({ queryKey: ['artist-pending-members', id] });
+    },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить заявку')),
   });
 
@@ -334,21 +302,6 @@ export default function ArtistPage() {
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось снять администратора')),
   });
 
-  // Filtered lists for invite modal — must be before early returns
-  const filteredFriends = useMemo(() => {
-    const memberIds = new Set((artist?.members ?? []).map((m: any) => m.id));
-    const q = yoNorm(inviteFriendSearch);
-    return friendsList.filter((f: any) =>
-      !memberIds.has(f.id) &&
-      yoNorm(`${f.firstName} ${f.lastName}`).includes(q)
-    );
-  }, [friendsList, artist?.members, inviteFriendSearch]);
-
-  const filteredProfessions = useMemo(() => {
-    const q = yoNorm(inviteProfSearch);
-    return allProfessions.filter((p: any) => yoNorm(p.name).includes(q));
-  }, [allProfessions, inviteProfSearch]);
-
   if (isLoading) {
     return (
       <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex items-center justify-center">
@@ -366,13 +319,6 @@ export default function ArtistPage() {
     );
   }
 
-  const isMemberOfArtist = artist.members?.some(
-    (m: { id: string; inviteStatus: string }) => m.id === currentUser?.id && m.inviteStatus === 'ACCEPTED'
-  );
-  const isAdminOfArtist = !!currentUser && (
-    artist.submittedById === currentUser.id ||
-    artist.members?.some((m: any) => m.id === currentUser.id && (m.isAdmin || m.isOwner))
-  );
   const hasSocialLinks =
     artist.socialLinks && Object.values(artist.socialLinks as Record<string, string>).some(Boolean);
 
@@ -385,13 +331,13 @@ export default function ArtistPage() {
   const viewerIsAdmin: boolean = !!artist.viewerIsAdmin || viewerIsOwner;
 
   const confirmedMembers: any[] = artist.confirmedMembers ?? [];
+  // Подтверждённый участник (любой) — для звезды «в избранное» (своих не добавляют).
+  const isMemberOfArtist = !!currentUser && confirmedMembers.some((m) => m.user?.id === currentUser.id);
   const pendingMembers5b: any[] = artist.pendingMembers ?? [];
   const activeMembers = confirmedMembers.filter((m) => m.participationStatus === 'ACTIVE_MEMBER');
   const formerMembers = confirmedMembers.filter((m) => m.participationStatus === 'FORMER_MEMBER');
-  // Owner = the member flagged isOwner, else the artist's creator (submittedById)
-  // — legacy/alternate-created artists often have no isOwner flag on any member.
-  const ownerMember = confirmedMembers.find((m) => m.isOwner)
-    ?? confirmedMembers.find((m) => m.user?.id === artist.submittedById) ?? null;
+  // Owner = the confirmed member flagged isOwner (единственный источник истины).
+  const ownerMember = confirmedMembers.find((m) => m.isOwner) ?? null;
   const adminMembers = confirmedMembers.filter((m) => m.isAdmin);
   // Viewer is an active confirmed member (used to gate the gear button)
   const viewerIsActiveMember = !!currentUser && confirmedMembers.some(
@@ -409,18 +355,19 @@ export default function ArtistPage() {
         <AvatarComponent src={m.user.avatar} name={memberName(m)} size={40} />
       </button>
       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => navigate(`/profile/${m.user.id}`)}>
-        <p className="text-sm font-medium text-white truncate flex items-center gap-1.5">
-          {memberName(m)}
-          {(m.isOwner || m.user?.id === artist.submittedById) && <Crown size={12} className="text-amber-400 flex-shrink-0" />}
-          {m.isAdmin && !m.isOwner && m.user?.id !== artist.submittedById && <Shield size={11} className="text-sky-400 flex-shrink-0" />}
+        <p className="text-sm font-medium text-white flex items-center gap-1.5 min-w-0">
+          <span className="truncate min-w-0">{memberName(m)}</span>
+          {m.isOwner && <Crown size={12} className="text-amber-400 flex-shrink-0" />}
+          {m.isAdmin && !m.isOwner && <Shield size={11} className="text-sky-400 flex-shrink-0" />}
         </p>
         <p className="text-xs text-slate-500 truncate">{roleText(m) || '—'}</p>
       </div>
       {pending && (
         <span className="text-[10px] px-1.5 py-0.5 bg-amber-500/15 text-amber-400 rounded-md flex-shrink-0">ожидает</span>
       )}
-      {/* Admin controls (visible to artist admins) */}
-      {!pending && viewerIsAdmin && (
+      {/* Admin controls (visible to artist admins). Строки других админов и
+          владельца меняет только владелец — как на сервере. */}
+      {!pending && viewerIsAdmin && (viewerIsOwner || (!m.isAdmin && !m.isOwner)) && (
         <div className="flex items-center gap-1 flex-shrink-0">
           {/* Toggle participation */}
           <button
@@ -462,23 +409,27 @@ export default function ArtistPage() {
 
   return (
     <div className="min-h-screen bg-slate-950 pb-24">
+     {/* Десктоп: страница по центру, как остальные (не растягивается на всю ширину). */}
+     <div className="lg:max-w-3xl lg:mx-auto">
       {/* ── Header banner ── */}
       <div className="relative w-full h-32 bg-gradient-to-br from-slate-800 to-slate-900 overflow-hidden">
         {bannerSrc && (
           <img src={bannerSrc} alt="banner" className="w-full h-full object-cover" />
         )}
 
-        {/* Back button — fixed so it stays visible on scroll */}
+        {/* Back button — fixed so it stays visible on scroll; на десктопе — правее
+            бокового меню (Layout: lg:w-64). */}
         <button
           onClick={() => navigate(-1)}
-          className="fixed left-4 z-30 w-9 h-9 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center shadow-lg"
+          aria-label="Назад"
+          className="fixed left-4 lg:left-[17rem] z-30 w-9 h-9 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center shadow-lg"
           style={{ top: 'calc(72px + env(safe-area-inset-top, 0px))' }}
         >
           <ArrowLeft size={18} className="text-white" />
         </button>
 
         {/* Banner camera button */}
-        {isOwner && (
+        {viewerIsAdmin && (
           <>
             <button
               onClick={() => bannerInputRef.current?.click()}
@@ -513,7 +464,7 @@ export default function ArtistPage() {
               </span>
             )}
           </div>
-          {isMemberOfArtist && (
+          {viewerIsAdmin && (
             <>
               <button
                 onClick={() => avatarInputRef.current?.click()}
@@ -558,7 +509,7 @@ export default function ArtistPage() {
             iconSize={16}
             className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
           />
-          {isOwner && (
+          {viewerIsAdmin && (
             <button
               onClick={() => navigate(`/artist/${id}/edit`)}
               title="Редактировать основную информацию"
@@ -620,7 +571,7 @@ export default function ArtistPage() {
         )}
 
         {/* Status description (owner/admin) — what the current status means + next step. */}
-        {isAdminOfArtist && ARTIST_STATUS_DESC[artist.status] && (
+        {viewerIsAdmin && ARTIST_STATUS_DESC[artist.status] && (
           <p className="text-xs text-slate-400 leading-relaxed mb-1.5">
             {ARTIST_STATUS_DESC[artist.status]}
           </p>
@@ -646,7 +597,7 @@ export default function ArtistPage() {
 
 
         {/* Verification panel for admins */}
-        {isAdminOfArtist && (
+        {viewerIsAdmin && (
           <>
             {/* DRAFT / REJECTED — request (or re-request) verification */}
             {(artist.status === 'DRAFT' || artist.status === 'REJECTED') && (() => {
@@ -675,7 +626,11 @@ export default function ArtistPage() {
                       {artist.verificationCode}
                     </code>
                     <button
-                      onClick={() => artist.verificationCode && navigator.clipboard.writeText(artist.verificationCode)}
+                      onClick={async () => {
+                        if (!artist.verificationCode) return;
+                        if (await copyText(artist.verificationCode)) toast.success('Код скопирован');
+                        else toast.error('Не удалось скопировать — выделите код вручную');
+                      }}
                       className="text-slate-500 hover:text-white text-xs px-2 py-0.5 bg-slate-800 rounded transition-colors"
                     >
                       Копировать
@@ -823,9 +778,9 @@ export default function ArtistPage() {
               )}
             </div>
             <div className="p-3">
-              {artist.bandLink && (
+              {safeHref(artist.bandLink) && (
                 <a
-                  href={artist.bandLink}
+                  href={safeHref(artist.bandLink)}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 text-primary-400 text-sm hover:underline mb-2"
@@ -842,8 +797,8 @@ export default function ArtistPage() {
           </div>
         )}
 
-        {/* Запросы на участие — только для владельца */}
-        {isOwner && pendingMembers.length > 0 && (
+        {/* Запросы на участие — владельцу и админам (решают их тоже они) */}
+        {viewerIsAdmin && pendingMembers.length > 0 && (
           <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden mb-3">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
               <UserPlus size={14} className="text-amber-400" />
@@ -942,7 +897,7 @@ export default function ArtistPage() {
               <div className="mb-3">
                 <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Действующие участники</p>
                 <div className="space-y-2">
-                  {activeMembers.map((m: any) => <MemberCard key={m.membershipId} m={m} />)}
+                  {activeMembers.map((m: any) => <MemberCard key={m.membershipId ?? m.user?.id} m={m} />)}
                 </div>
               </div>
             ) : viewerIsAdmin ? (
@@ -954,7 +909,7 @@ export default function ArtistPage() {
               <div className="mb-3">
                 <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider mb-2">Бывшие участники</p>
                 <div className="space-y-2">
-                  {formerMembers.map((m: any) => <MemberCard key={m.membershipId} m={m} />)}
+                  {formerMembers.map((m: any) => <MemberCard key={m.membershipId ?? m.user?.id} m={m} />)}
                 </div>
               </div>
             )}
@@ -1032,129 +987,7 @@ export default function ArtistPage() {
         )}
 
       </div>
-
-      {/* ── Invite member sheet (нижний лист; z ниже RolePicker/SelectSheet z-60) ── */}
-      {showInviteModal && (
-        <>
-        <div className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm" onClick={() => setShowInviteModal(false)} />
-        <div
-          className="fixed inset-x-0 bottom-0 z-[56] bg-slate-900 border-t border-slate-800 rounded-t-3xl max-h-[85dvh] flex flex-col"
-          style={{ paddingBottom: 'max(1.5rem, env(safe-area-inset-bottom))' }}
-        >
-          {/* Drag handle */}
-          <div className="w-10 h-1 bg-slate-700 rounded-full mx-auto mt-3 flex-shrink-0" />
-          {/* Top bar */}
-          <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-800 flex-shrink-0">
-            <h2 className="text-base font-semibold text-white flex-1">Пригласить участника</h2>
-            <button
-              onClick={() => inviteMut.mutate()}
-              disabled={!inviteFriendId || !inviteProfessionId || inviteMut.isPending}
-              className="px-4 py-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:text-slate-500 text-white rounded-xl text-sm font-semibold transition-all flex items-center gap-2"
-            >
-              {inviteMut.isPending && <Loader2 size={14} className="animate-spin" />}
-              Пригласить
-            </button>
-            <button onClick={() => setShowInviteModal(false)} className="p-1.5 hover:bg-slate-800 rounded-xl transition-colors">
-              <X size={18} className="text-slate-400" />
-            </button>
-          </div>
-
-          <div className="flex-1 min-h-0 overflow-y-auto">
-
-            {/* Step 1: Choose friend */}
-            <div className="px-4 pt-4 pb-2">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">1. Выберите друга</p>
-              <div className="relative mb-2">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input
-                  value={inviteFriendSearch}
-                  onChange={e => setInviteFriendSearch(e.target.value)}
-                  placeholder="Поиск по имени..."
-                  className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 outline-none focus:border-primary-500"
-                />
-              </div>
-              {filteredFriends.length === 0 ? (
-                <p className="text-xs text-slate-600 italic py-2">Нет друзей для приглашения</p>
-              ) : (
-                <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                  {filteredFriends.map((f: any) => (
-                    <button
-                      key={f.id}
-                      onClick={() => setInviteFriendId(f.id)}
-                      className={`w-full flex items-center gap-3 p-2.5 rounded-xl border transition-colors text-left ${
-                        inviteFriendId === f.id
-                          ? 'bg-primary-500/10 border-primary-500/40'
-                          : 'bg-slate-900 border-slate-800 hover:border-slate-700'
-                      }`}
-                    >
-                      <AvatarComponent src={f.avatar} name={`${f.firstName} ${f.lastName}`} size={36} />
-                      <span className="text-sm text-white">{f.firstName} {f.lastName}</span>
-                      {inviteFriendId === f.id && <CheckCircle2 size={16} className="text-primary-400 ml-auto flex-shrink-0" />}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Divider */}
-            <div className="px-4 py-3">
-              <div className="h-px bg-slate-800" />
-            </div>
-
-            {/* Step 2: Choose role (profession) */}
-            <div className="px-4 pb-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">2. Выберите роль</p>
-              <div className="relative mb-2">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                <input
-                  value={inviteProfSearch}
-                  onChange={e => setInviteProfSearch(e.target.value)}
-                  placeholder="Поиск роли (гитарист, вокалист...)..."
-                  className="w-full pl-9 pr-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 outline-none focus:border-primary-500"
-                />
-              </div>
-              <div className="space-y-1 max-h-56 overflow-y-auto">
-                {filteredProfessions.slice(0, 40).map((p: any) => (
-                  <button
-                    key={p.id}
-                    onClick={() => setInviteProfessionId(p.id)}
-                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl border transition-colors text-left ${
-                      inviteProfessionId === p.id
-                        ? 'bg-primary-500/10 border-primary-500/40 text-primary-300'
-                        : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700'
-                    }`}
-                  >
-                    <span className="text-sm">{p.name}</span>
-                    {inviteProfessionId === p.id && <CheckCircle2 size={15} className="text-primary-400 flex-shrink-0" />}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Summary footer */}
-          {(inviteFriendId || inviteProfessionId) && (
-            <div className="px-4 py-3 border-t border-slate-800 bg-slate-900/80 flex-shrink-0 text-sm text-slate-400">
-              {inviteFriendId && (
-                <span className="text-white font-medium">
-                  {friendsList.find((f: any) => f.id === inviteFriendId)?.firstName}
-                </span>
-              )}
-              {inviteFriendId && inviteProfessionId && <span className="mx-1">—</span>}
-              {inviteProfessionId && (
-                <span>{allProfessions.find((p: any) => p.id === inviteProfessionId)?.name}</span>
-              )}
-            </div>
-          )}
-
-          {inviteMut.isError && (
-            <p className="px-4 py-2 text-sm text-red-400 bg-red-500/5 border-t border-red-500/20 flex-shrink-0">
-              Ошибка. Попробуйте снова.
-            </p>
-          )}
-        </div>
-        </>
-      )}
+     </div>
 
       {/* RolePicker for editing a member's roles */}
       {roleEditMembershipId && (
@@ -1168,7 +1001,7 @@ export default function ArtistPage() {
       )}
 
       {/* ── Phase 5b: Owner picker (transfer owner) — нижний лист ── */}
-      {showOwnerPicker && (
+      {showOwnerPicker && createPortal(
         <>
         <div className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm" onClick={() => setShowOwnerPicker(false)} />
         <div
@@ -1202,11 +1035,12 @@ export default function ArtistPage() {
             )}
           </div>
         </div>
-        </>
+        </>,
+        document.body,
       )}
 
       {/* ── Phase 5b: Администраторы — нижний лист (текущие + добавить; бывший center-picker) ── */}
-      {showAdminPicker && (
+      {showAdminPicker && createPortal(
         <>
         <div className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm" onClick={() => setShowAdminPicker(false)} />
         <div
@@ -1230,12 +1064,12 @@ export default function ArtistPage() {
               ) : (
                 <div className="space-y-2">
                   {adminMembers.map((m: any) => (
-                    <div key={m.membershipId} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
+                    <div key={m.membershipId ?? m.user?.id} className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-800/60 border border-slate-700">
                       <AvatarComponent src={m.user.avatar} name={memberName(m)} size={36} />
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white truncate flex items-center gap-1.5">
-                          {m.isOwner ? <Crown size={12} className="text-amber-400" /> : <Shield size={11} className="text-sky-400" />}
-                          {memberName(m)}
+                        <p className="text-sm font-medium text-white flex items-center gap-1.5 min-w-0">
+                          {m.isOwner ? <Crown size={12} className="text-amber-400 flex-shrink-0" /> : <Shield size={11} className="text-sky-400 flex-shrink-0" />}
+                          <span className="truncate min-w-0">{memberName(m)}</span>
                         </p>
                       </div>
                       {viewerIsOwner && !m.isOwner && (
@@ -1277,11 +1111,12 @@ export default function ArtistPage() {
             )}
           </div>
         </div>
-        </>
+        </>,
+        document.body,
       )}
 
       {/* ── Нижний лист «Управление артистом» (шестерёнка) ── */}
-      {showManageSheet && canSeeGear && (
+      {showManageSheet && canSeeGear && createPortal(
         <>
         <div className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-sm" onClick={() => setShowManageSheet(false)} />
         <div
@@ -1352,7 +1187,8 @@ export default function ArtistPage() {
             </button>
           </div>
         </div>
-        </>
+        </>,
+        document.body,
       )}
 
       {/* Activity status sheet */}

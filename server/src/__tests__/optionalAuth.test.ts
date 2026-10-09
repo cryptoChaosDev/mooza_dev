@@ -59,19 +59,28 @@ describe('optionalAuthenticate', () => {
     expect(res.body.userId).toBeNull();
   });
 
-  it('temporarily blocked (blockedUntil in future) → guest; expired block → user', async () => {
+  it('temporarily blocked (blockedUntil in future) → guest; expired temporary block → user; isBlocked stays permanent', async () => {
     mockPrisma.user.findUnique.mockResolvedValue({
       passwordChangedAt: null, isBlocked: true, blockedUntil: new Date(Date.now() + 3600_000),
     });
     let res = await request(app).get('/probe').set('Authorization', `Bearer ${generateToken({ userId: USER })}`);
     expect(res.body.userId).toBeNull();
 
+    // Истёкшая временная блокировка → снова пользователь.
+    invalidateAuthCache();
+    mockPrisma.user.findUnique.mockResolvedValue({
+      passwordChangedAt: null, isBlocked: false, blockedUntil: new Date(Date.now() - 3600_000),
+    });
+    res = await request(app).get('/probe').set('Authorization', `Bearer ${generateToken({ userId: USER })}`);
+    expect(res.body.userId).toBe(USER);
+
+    // isBlocked — бессрочная админская блокировка: истёкший blockedUntil её не снимает.
     invalidateAuthCache();
     mockPrisma.user.findUnique.mockResolvedValue({
       passwordChangedAt: null, isBlocked: true, blockedUntil: new Date(Date.now() - 3600_000),
     });
     res = await request(app).get('/probe').set('Authorization', `Bearer ${generateToken({ userId: USER })}`);
-    expect(res.body.userId).toBe(USER);
+    expect(res.body.userId).toBeNull();
   });
 
   it('password changed after token issue → guest', async () => {

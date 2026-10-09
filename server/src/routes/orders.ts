@@ -3,9 +3,11 @@ import fs from 'fs';
 import path from 'path';
 import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
-import { notify } from '../utils/notify';
+import { notify, notifyMany } from '../utils/notify';
 import { uploadOrderMedia } from '../middleware/upload';
 import { matchesLinkSource } from '../lib/materialLinks';
+import { parseDeadlineField } from '../lib/mskDate';
+import { checkDealParticipantsAge, withAdvisoryLock } from '../lib/dealHelpers';
 import { guestReadLimiter } from '../middleware/rateLimiter';
 import { sendPublic } from '../middleware/guest';
 import { getPublicOrder } from '../lib/publicData';
@@ -15,6 +17,39 @@ const router = Router();
 const MAX_REFERENCES_BYTES = 20 * 1024 * 1024; // 20MB total per order
 // done = «Выполнен»: заказ завершён исполнителем; пост остаётся в ленте с бейджем.
 const VALID_STATUS = new Set(['active', 'draft', 'archived', 'done']);
+
+// Детали ошибок (Prisma и т.п.) — только в лог, клиенту общий текст.
+function serverError(res: any, where: string, e: any) {
+  console.error(`[orders] ${where}`, e);
+  return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+}
+
+// Бюджет: пусто → null, иначе целое ≥ 0. undefined → поле не передано.
+function parseBudget(v: unknown): number | null | undefined | 'invalid' {
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
+  const n = Number(v);
+  return Number.isInteger(n) && n >= 0 ? n : 'invalid';
+}
+
+/**
+ * Проверка перехода в статус. Возвращает текст ошибки (409) или null.
+ *  - active: срок не должен быть в прошлом — иначе планировщик через минуту
+ *    снова отправит заказ в архив («Опубликовать» не работало);
+ *  - done («Выполнен»): только при выбранном исполнителе.
+ */
+function statusTransitionError(
+  target: string,
+  order: { deadline: Date | null; executorId: string | null },
+): string | null {
+  if (target === 'active' && order.deadline && order.deadline.getTime() < Date.now()) {
+    return 'Срок выполнения заказа истёк — укажите новый срок, чтобы опубликовать заказ';
+  }
+  if (target === 'done' && !order.executorId) {
+    return 'Отметить заказ выполненным можно только после выбора исполнителя';
+  }
+  return null;
+}
 
 // Full order shape returned to the author / single-order view.
 const ORDER_INCLUDE = {
@@ -69,24 +104,37 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     const meId = req.userId!;
     const {
       title, serviceId, budgetFrom, budgetTo, deadline, description,
-      customFilterValueIds, status, referenceLinks, referenceFileIds,
+      customFilterValueIds, status, referenceLinks,
     } = req.body;
 
     if (!title || !String(title).trim()) return res.status(400).json({ error: 'title required' });
     if (!serviceId) return res.status(400).json({ error: 'serviceId required' });
-    const st = VALID_STATUS.has(status) ? status : 'draft';
+    // «Выполнен» при создании невозможен (нет исполнителя) — такой статус → черновик.
+    const st = VALID_STATUS.has(status) && status !== 'done' ? status : 'draft';
     const cfvIds: string[] = Array.isArray(customFilterValueIds) ? customFilterValueIds : [];
-    const fileIds: string[] = Array.isArray(referenceFileIds) ? referenceFileIds : [];
     const links: Array<{ url: string; title?: string; source: string }> = Array.isArray(referenceLinks) ? referenceLinks : [];
+
+    const bFrom = parseBudget(budgetFrom);
+    const bTo = parseBudget(budgetTo);
+    if (bFrom === 'invalid' || bTo === 'invalid') return res.status(400).json({ error: 'Некорректный бюджет' });
+    if (bFrom != null && bTo != null && bFrom > bTo) return res.status(400).json({ error: '«Бюджет от» не может быть больше «Бюджет до»' });
+    // Срок — календарный день, хранится как конец дня по МСК.
+    const dl = parseDeadlineField(deadline);
+    if (dl === 'invalid') return res.status(400).json({ error: 'Некорректная дата срока' });
+    if (st === 'active' && dl && dl.getTime() < Date.now()) {
+      return res.status(400).json({ error: 'Срок выполнения не может быть в прошлом' });
+    }
+    const svc = await prisma.service.findUnique({ where: { id: String(serviceId) }, select: { id: true } });
+    if (!svc) return res.status(400).json({ error: 'Раздел каталога не найден' });
 
     const order = await prisma.order.create({
       data: {
         authorId: meId,
-        serviceId,
+        serviceId: svc.id,
         title: String(title).slice(0, 50),
-        budgetFrom: budgetFrom != null && budgetFrom !== '' ? Number(budgetFrom) : null,
-        budgetTo: budgetTo != null && budgetTo !== '' ? Number(budgetTo) : null,
-        deadline: deadline ? new Date(deadline) : null,
+        budgetFrom: bFrom ?? null,
+        budgetTo: bTo ?? null,
+        deadline: dl ?? null,
         description: description || null,
         status: st,
         selectedCustomFilterValues: { connect: cfvIds.map((id) => ({ id })) },
@@ -98,13 +146,9 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
       },
     });
 
-    // Attach any pre-uploaded reference files to this order.
-    if (fileIds.length) {
-      await prisma.orderReferenceFile.updateMany({
-        where: { id: { in: fileIds }, orderId: order.id },
-        data: {},
-      });
-    }
+    // Файлы-референсы загружаются отдельным запросом POST /:id/references уже
+    // после создания заказа (у OrderReferenceFile обязательный orderId — «заранее
+    // загруженных» файлов не бывает), поэтому здесь их не привязываем.
 
     if (st === 'active') {
       await syncOrderPost(order.id, meId, order.title, order.description);
@@ -113,8 +157,7 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     const full = await prisma.order.findUnique({ where: { id: order.id }, include: ORDER_INCLUDE });
     res.status(201).json(full);
   } catch (e: any) {
-    console.error('[orders] POST /', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'POST /', e);
   }
 });
 
@@ -125,27 +168,58 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res) => {
     const order = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!order || order.authorId !== meId) return res.status(404).json({ error: 'Not found' });
 
-    // Editing is blocked once the order has any response — you can't change the terms
-    // out from under people who already replied. Any status is otherwise editable
-    // directly (no more «move to draft first»).
-    const respCount = await prisma.orderResponse.count({ where: { orderId: order.id } });
-    if (respCount > 0) {
-      return res.status(409).json({ error: 'Нельзя редактировать заказ — на него уже есть отклики.' });
-    }
-
     const {
       title, serviceId, budgetFrom, budgetTo, deadline, description,
       customFilterValueIds, status, referenceLinks,
     } = req.body;
 
+    // Editing is blocked once the order has any response — you can't change the terms
+    // out from under people who already replied. Исключение — срок: его можно
+    // продлить (иначе заказ с откликами, ушедший в архив по сроку, нельзя было
+    // опубликовать снова: «Опубликовать» → 409/повторный автоархив). Any status is
+    // otherwise editable directly (no more «move to draft first»).
+    const respCount = await prisma.orderResponse.count({ where: { orderId: order.id } });
+    if (respCount > 0) {
+      const otherFields = { title, serviceId, budgetFrom, budgetTo, description, customFilterValueIds, status, referenceLinks };
+      const touchesOther = Object.values(otherFields).some((v) => v !== undefined);
+      if (touchesOther || deadline === undefined) {
+        return res.status(409).json({ error: 'Нельзя редактировать заказ — на него уже есть отклики. Можно изменить только срок.' });
+      }
+    }
+
     const data: any = {};
     if (title !== undefined) data.title = String(title).slice(0, 50);
-    if (serviceId !== undefined) data.serviceId = serviceId;
-    if (budgetFrom !== undefined) data.budgetFrom = budgetFrom !== '' && budgetFrom != null ? Number(budgetFrom) : null;
-    if (budgetTo !== undefined) data.budgetTo = budgetTo !== '' && budgetTo != null ? Number(budgetTo) : null;
-    if (deadline !== undefined) data.deadline = deadline ? new Date(deadline) : null;
+    if (serviceId !== undefined) {
+      const svc = await prisma.service.findUnique({ where: { id: String(serviceId) }, select: { id: true } });
+      if (!svc) return res.status(400).json({ error: 'Раздел каталога не найден' });
+      data.serviceId = svc.id;
+    }
+    const bFrom = parseBudget(budgetFrom);
+    const bTo = parseBudget(budgetTo);
+    if (bFrom === 'invalid' || bTo === 'invalid') return res.status(400).json({ error: 'Некорректный бюджет' });
+    if (bFrom !== undefined) data.budgetFrom = bFrom;
+    if (bTo !== undefined) data.budgetTo = bTo;
+    const effFrom = bFrom !== undefined ? bFrom : order.budgetFrom;
+    const effTo = bTo !== undefined ? bTo : order.budgetTo;
+    if (effFrom != null && effTo != null && effFrom > effTo) {
+      return res.status(400).json({ error: '«Бюджет от» не может быть больше «Бюджет до»' });
+    }
+    const dl = parseDeadlineField(deadline);
+    if (dl === 'invalid') return res.status(400).json({ error: 'Некорректная дата срока' });
+    if (dl !== undefined) data.deadline = dl;
     if (description !== undefined) data.description = description || null;
     if (status !== undefined && VALID_STATUS.has(status)) data.status = status;
+
+    // Итоговое состояние не должно сразу же уйти в автоархив / стать «Выполнен» без исполнителя.
+    const effStatus: string = data.status ?? order.status;
+    const effDeadline: Date | null = dl !== undefined ? dl : order.deadline;
+    if (dl && dl.getTime() < Date.now() && (effStatus === 'active' || respCount > 0)) {
+      return res.status(400).json({ error: 'Срок выполнения не может быть в прошлом' });
+    }
+    if (data.status !== undefined && data.status !== order.status) {
+      const err = statusTransitionError(data.status, { deadline: effDeadline, executorId: order.executorId });
+      if (err) return res.status(409).json({ error: err });
+    }
     if (Array.isArray(customFilterValueIds)) {
       data.selectedCustomFilterValues = { set: [], connect: customFilterValueIds.map((id: string) => ({ id })) };
     }
@@ -168,8 +242,7 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res) => {
 
     res.json(updated);
   } catch (e: any) {
-    console.error('[orders] PATCH /:id', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'PATCH /:id', e);
   }
 });
 
@@ -181,6 +254,10 @@ router.patch('/:id/status', authenticate, async (req: AuthRequest, res) => {
     if (!VALID_STATUS.has(status)) return res.status(400).json({ error: 'Invalid status' });
     const order = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!order || order.authorId !== meId) return res.status(404).json({ error: 'Not found' });
+    if (status !== order.status) {
+      const err = statusTransitionError(status, order);
+      if (err) return res.status(409).json({ error: err });
+    }
 
     const updated = await prisma.order.update({
       where: { id: order.id },
@@ -199,8 +276,7 @@ router.patch('/:id/status', authenticate, async (req: AuthRequest, res) => {
 
     res.json(updated);
   } catch (e: any) {
-    console.error('[orders] PATCH /:id/status', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'PATCH /:id/status', e);
   }
 });
 
@@ -225,8 +301,7 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res) => {
     await prisma.order.delete({ where: { id: order.id } });
     res.json({ ok: true });
   } catch (e: any) {
-    console.error('[orders] DELETE /:id', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'DELETE /:id', e);
   }
 });
 
@@ -256,8 +331,7 @@ router.get('/for-service/:serviceId', authenticate, async (req: AuthRequest, res
     });
     res.json(orders);
   } catch (e: any) {
-    console.error('[orders] GET /for-service/:serviceId', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'GET /for-service/:serviceId', e);
   }
 });
 
@@ -275,8 +349,7 @@ router.get('/mine', authenticate, async (req: AuthRequest, res) => {
     });
     res.json(orders);
   } catch (e: any) {
-    console.error('[orders] GET /mine', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'GET /mine', e);
   }
 });
 
@@ -303,8 +376,7 @@ router.get('/responses/incoming', authenticate, async (req: AuthRequest, res) =>
       })),
     );
   } catch (e: any) {
-    console.error('[orders] GET /responses/incoming', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'GET /responses/incoming', e);
   }
 });
 
@@ -336,10 +408,29 @@ router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthReque
     if (!isOwner && !post) return res.status(404).json({ error: 'Not found' });
 
     const { responses, ...rest } = order;
-    res.json({ ...rest, isOwner, postId: post?.id ?? null, responses: isOwner ? responses : undefined });
+    // Откликнувшемуся отдаём ЕГО отклик — иначе после перезагрузки снова
+    // показывалась кнопка «Откликнуться».
+    const myResponse = !isOwner && meId
+      ? (() => {
+        const r = responses.find((x) => x.executorId === meId);
+        return r ? { id: r.id, price: r.price, comment: r.comment, createdAt: r.createdAt } : null;
+      })()
+      : undefined;
+    // Кому автор уже предложил заказ (дедуп «Предложить заказ» переживает перезагрузку).
+    const offeredExecutorIds = isOwner
+      ? [...new Set((await prisma.notification.findMany({
+        where: { type: 'order_offered', link: `/orders/${order.id}`, actorId: meId },
+        select: { userId: true },
+      })).map((n) => n.userId))]
+      : undefined;
+    res.json({
+      ...rest, isOwner, postId: post?.id ?? null,
+      responses: isOwner ? responses : undefined,
+      myResponse,
+      offeredExecutorIds,
+    });
   } catch (e: any) {
-    console.error('[orders] GET /:id', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'GET /:id', e);
   }
 });
 
@@ -480,8 +571,7 @@ router.get('/:id/matches', authenticate, async (req: AuthRequest, res) => {
       pagination: { page: pageNum, limit: limitNum, totalCount: 0, totalPages: 0 },
     });
   } catch (e: any) {
-    console.error('[orders] GET /:id/matches', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'GET /:id/matches', e);
   }
 });
 
@@ -493,6 +583,11 @@ router.post('/:id/responses', authenticate, async (req: AuthRequest, res) => {
     if (price == null || price === '' || Number.isNaN(Number(price))) {
       return res.status(400).json({ error: 'price required' });
     }
+    const priceNum = Number(price);
+    if (!Number.isInteger(priceNum) || priceNum < 0) {
+      return res.status(400).json({ error: 'Цена — целое неотрицательное число' });
+    }
+    const commentText = typeof comment === 'string' && comment.trim() ? comment.trim().slice(0, 2000) : null;
     const order = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!order) return res.status(404).json({ error: 'Not found' });
     if (order.authorId === meId) return res.status(400).json({ error: 'Cannot respond to your own order' });
@@ -510,10 +605,14 @@ router.post('/:id/responses', authenticate, async (req: AuthRequest, res) => {
     const post = await prisma.post.findFirst({ where: { orderId: order.id, type: 'order' }, select: { id: true } });
     if (!post) return res.status(404).json({ error: 'Not found' });
 
+    const existing = await prisma.orderResponse.findUnique({
+      where: { orderId_executorId: { orderId: order.id, executorId: meId } },
+      select: { id: true },
+    });
     const response = await prisma.orderResponse.upsert({
       where: { orderId_executorId: { orderId: order.id, executorId: meId } },
-      create: { orderId: order.id, executorId: meId, price: Number(price), comment: comment || null },
-      update: { price: Number(price), comment: comment || null },
+      create: { orderId: order.id, executorId: meId, price: priceNum, comment: commentText },
+      update: { price: priceNum, comment: commentText },
     });
 
     const name = await authorName(meId);
@@ -521,15 +620,16 @@ router.post('/:id/responses', authenticate, async (req: AuthRequest, res) => {
       userId: order.authorId,
       actorId: meId,
       type: 'order_response',
-      title: 'Отклик на заказ',
-      body: `${name} откликнулся на заказ «${order.title}»`,
+      title: existing ? 'Отклик на заказ изменён' : 'Отклик на заказ',
+      body: existing
+        ? `${name} изменил(а) отклик на заказ «${order.title}»`
+        : `${name} откликнулся на заказ «${order.title}»`,
       link: `/orders/${order.id}`,
     });
 
     res.status(201).json(response);
   } catch (e: any) {
-    console.error('[orders] POST /:id/responses', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'POST /:id/responses', e);
   }
 });
 
@@ -546,8 +646,7 @@ router.get('/:id/responses', authenticate, async (req: AuthRequest, res) => {
     });
     res.json(responses);
   } catch (e: any) {
-    console.error('[orders] GET /:id/responses', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'GET /:id/responses', e);
   }
 });
 
@@ -556,10 +655,31 @@ router.post('/:id/offer', authenticate, async (req: AuthRequest, res) => {
   try {
     const meId = req.userId!;
     const { executorId } = req.body;
-    if (!executorId) return res.status(400).json({ error: 'executorId required' });
+    if (!executorId || typeof executorId !== 'string') return res.status(400).json({ error: 'executorId required' });
     const order = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!order || order.authorId !== meId) return res.status(404).json({ error: 'Not found' });
     if (executorId === meId) return res.status(400).json({ error: 'Cannot offer to yourself' });
+    // Предлагать можно только открытый опубликованный заказ — иначе исполнитель
+    // получит уведомление, а откликнуться не сможет.
+    if (order.status !== 'active') return res.status(409).json({ error: 'Заказ не опубликован — предложить его нельзя' });
+    if (order.executorId) return res.status(409).json({ error: 'Исполнитель уже выбран' });
+    const post = await prisma.post.findFirst({ where: { orderId: order.id, type: 'order' }, select: { id: true } });
+    if (!post) return res.status(409).json({ error: 'Заказ не опубликован — предложить его нельзя' });
+    const target = await prisma.user.findUnique({ where: { id: executorId }, select: { id: true } });
+    if (!target) return res.status(404).json({ error: 'Пользователь не найден' });
+    const responded = await prisma.orderResponse.findUnique({
+      where: { orderId_executorId: { orderId: order.id, executorId } },
+      select: { id: true },
+    });
+    if (responded) return res.status(409).json({ error: 'Этот исполнитель уже откликнулся на заказ' });
+
+    // Дедуп: повторное «Предложить заказ» тому же исполнителю не шлёт уведомление
+    // снова (защита от спама). Факт предложения — уведомление order_offered.
+    const already = await prisma.notification.findFirst({
+      where: { userId: executorId, type: 'order_offered', link: `/orders/${order.id}` },
+      select: { id: true },
+    });
+    if (already) return res.json({ ok: true, alreadyOffered: true });
 
     const name = await authorName(meId);
     await notify({
@@ -573,8 +693,7 @@ router.post('/:id/offer', authenticate, async (req: AuthRequest, res) => {
 
     res.json({ ok: true });
   } catch (e: any) {
-    console.error('[orders] POST /:id/offer', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'POST /:id/offer', e);
   }
 });
 
@@ -587,22 +706,52 @@ router.post('/:id/responses/:responseId/deal', authenticate, async (req: AuthReq
     const response = await prisma.orderResponse.findUnique({ where: { id: req.params.responseId } });
     if (!response || response.orderId !== order.id) return res.status(404).json({ error: 'Response not found' });
     if (response.executorId === meId) return res.status(400).json({ error: 'Cannot create deal with yourself' });
+    // Сделка — только по открытому заказу и, если исполнитель уже выбран, только с ним.
+    if (order.status !== 'active') return res.status(409).json({ error: 'Заказ не активен — оформить сделку нельзя' });
+    if (order.executorId && order.executorId !== response.executorId) {
+      return res.status(409).json({ error: 'По заказу уже выбран другой исполнитель' });
+    }
+    if (order.deadline && order.deadline.getTime() < Date.now()) {
+      return res.status(409).json({ error: 'Срок заказа истёк — продлите срок, чтобы оформить сделку' });
+    }
+    // Финансовые операции — 18+ (обе стороны; без даты рождения — нельзя).
+    const ageErr = await checkDealParticipantsAge(meId, response.executorId);
+    if (ageErr) return res.status(ageErr.status).json(ageErr.body);
 
-    const deal = await prisma.deal.create({
-      data: {
-        title: order.title,
-        customerId: meId,
-        executorId: response.executorId,
-        serviceId: order.serviceId,
-        price: response.price,
-        dealType: 'process',
-        deadline: order.deadline ?? null,
-      },
-      include: {
-        customer: { select: { id: true, firstName: true, lastName: true, avatar: true } },
-        executor: { select: { id: true, firstName: true, lastName: true, avatar: true } },
-      },
+    const dealInclude = {
+      customer: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+      executor: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+    };
+    // Идемпотентность: повторный клик/гонка не создаёт дубль — если по этому
+    // заказу уже есть незавершённая сделка с этим исполнителем, возвращаем её.
+    const { deal, created } = await withAdvisoryLock(`order-deal:${order.id}:${response.executorId}`, async (tx) => {
+      const existing = await tx.deal.findFirst({
+        where: {
+          customerId: meId,
+          executorId: response.executorId,
+          serviceId: order.serviceId,
+          title: order.title,
+          status: { notIn: ['COMPLETED', 'CANCELLED'] },
+        },
+        include: dealInclude,
+        orderBy: { createdAt: 'desc' },
+      });
+      if (existing) return { deal: existing, created: false };
+      const d = await tx.deal.create({
+        data: {
+          title: order.title,
+          customerId: meId,
+          executorId: response.executorId,
+          serviceId: order.serviceId,
+          price: response.price,
+          dealType: 'process',
+          deadline: order.deadline ?? null,
+        },
+        include: dealInclude,
+      });
+      return { deal: d, created: true };
     });
+    if (!created) return res.json({ deal, existing: true });
 
     const name = await authorName(meId);
     await notify({
@@ -616,8 +765,7 @@ router.post('/:id/responses/:responseId/deal', authenticate, async (req: AuthReq
 
     res.status(201).json({ deal });
   } catch (e: any) {
-    console.error('[orders] POST /:id/responses/:responseId/deal', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'POST /:id/responses/:responseId/deal', e);
   }
 });
 
@@ -630,18 +778,23 @@ router.post('/:id/responses/:responseId/choose', authenticate, async (req: AuthR
     const order = await prisma.order.findUnique({ where: { id: req.params.id } });
     if (!order || order.authorId !== meId) return res.status(404).json({ error: 'Not found' });
     if (order.executorId) return res.status(409).json({ error: 'Исполнитель уже выбран' });
+    // Выбор — только в активном заказе (архив/черновик/выполнен: сначала опубликуйте,
+    // при истёкшем сроке — продлите его). Клиент показывает кнопку только в active.
+    if (order.status !== 'active') {
+      return res.status(409).json({ error: 'Выбрать исполнителя можно только в активном заказе — опубликуйте его снова' });
+    }
     const response = await prisma.orderResponse.findUnique({
       where: { id: req.params.responseId },
       include: { executor: { select: { id: true, firstName: true, lastName: true, avatar: true } } },
     });
     if (!response || response.orderId !== order.id) return res.status(404).json({ error: 'Response not found' });
 
-    // Атомарно против гонки двойного выбора (executorId ещё пуст)
+    // Атомарно против гонки двойного выбора (executorId ещё пуст) и автоархива.
     const updated = await prisma.order.updateMany({
-      where: { id: order.id, executorId: null },
+      where: { id: order.id, executorId: null, status: 'active' },
       data: { executorId: response.executorId, executorChosenAt: new Date() },
     });
-    if (updated.count === 0) return res.status(409).json({ error: 'Исполнитель уже выбран' });
+    if (updated.count === 0) return res.status(409).json({ error: 'Исполнитель уже выбран или заказ больше не активен' });
 
     const name = await authorName(meId);
     await notify({
@@ -652,12 +805,23 @@ router.post('/:id/responses/:responseId/choose', authenticate, async (req: AuthR
       body: `${name} выбрал(а) вас исполнителем заказа «${order.title}». Обсудите детали в сообщениях.`,
       link: `/orders/${order.id}`,
     });
+    // Остальным откликнувшимся — что отклики закрыты (иначе они ждут ответа вечно).
+    const others = await prisma.orderResponse.findMany({
+      where: { orderId: order.id, executorId: { not: response.executorId } },
+      select: { executorId: true },
+    });
+    await notifyMany(others.map((o) => o.executorId), {
+      actorId: meId,
+      type: 'order_executor_chosen_other',
+      title: 'Исполнитель по заказу выбран',
+      body: `По заказу «${order.title}» выбран другой исполнитель. Спасибо за отклик!`,
+      link: `/orders/${order.id}`,
+    });
 
     const fresh = await prisma.order.findUnique({ where: { id: order.id }, include: ORDER_INCLUDE });
     res.json(fresh);
   } catch (e: any) {
-    console.error('[orders] POST /:id/responses/:responseId/choose', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'POST /:id/responses/:responseId/choose', e);
   }
 });
 
@@ -704,8 +868,7 @@ router.post('/:id/references', authenticate, uploadOrderMedia.array('files'), as
 
     res.status(201).json(created);
   } catch (e: any) {
-    console.error('[orders] POST /:id/references', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'POST /:id/references', e);
   }
 });
 
@@ -726,8 +889,7 @@ router.delete('/:id/references/:fileId', authenticate, async (req: AuthRequest, 
     await prisma.orderReferenceFile.delete({ where: { id: file.id } });
     res.json({ ok: true });
   } catch (e: any) {
-    console.error('[orders] DELETE /:id/references/:fileId', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'DELETE /:id/references/:fileId', e);
   }
 });
 

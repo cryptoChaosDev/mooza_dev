@@ -1,10 +1,13 @@
 import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { emitToUser } from '../socket';
+import { notify } from '../utils/notify';
 import { tgEvent } from '../utils/telegram';
 
 const router = Router();
+
+// Повторное «добавил(а) вас в Избранное» от того же пользователя — не чаще раза в 30 дней.
+const FAVORITE_RENOTIFY_MS = 30 * 24 * 60 * 60 * 1000;
 
 const TARGET_SELECT = {
   id: true, firstName: true, lastName: true, avatar: true,
@@ -53,22 +56,30 @@ router.post('/:targetId', authenticate, async (req: AuthRequest, res: Response) 
       create: { userId: meId, targetId },
       update: {},
     });
-    // Notify only on first add (not on re-add)
-    if (!existing) {
+    // Notify only on first add (not on re-add). Цикл «добавить → удалить →
+    // добавить» не должен каждый раз слать уведомление и событие в TG: если
+    // такое уведомление от этого пользователя уже было недавно — молчим.
+    const recentlyNotified = !existing && await prisma.notification.findFirst({
+      where: {
+        userId: targetId,
+        actorId: meId,
+        type: 'favorite_added',
+        createdAt: { gte: new Date(Date.now() - FAVORITE_RENOTIFY_MS) },
+      },
+      select: { id: true },
+    });
+    if (!existing && !recentlyNotified) {
       try {
         const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
         const target = await prisma.user.findUnique({ where: { id: targetId }, select: { firstName: true, lastName: true } });
-        const notification = await prisma.notification.create({
-          data: {
-            userId: targetId,
-            actorId: meId,
-            type: 'favorite_added',
-            title: `${me?.firstName} ${me?.lastName} добавил(а) вас в Избранное`,
-            body: 'Вы появились в избранном у нового пользователя',
-            link: `/profile/${meId}`,
-          },
+        await notify({
+          userId: targetId,
+          actorId: meId,
+          type: 'favorite_added',
+          title: `${me?.firstName} ${me?.lastName} добавил(а) вас в Избранное`,
+          body: 'Вы появились в избранном у нового пользователя',
+          link: `/profile/${meId}`,
         });
-        emitToUser(targetId, 'new_notification', notification);
         tgEvent.favorite(`${me?.firstName} ${me?.lastName}`, `${target?.firstName} ${target?.lastName}`);
       } catch {}
     }

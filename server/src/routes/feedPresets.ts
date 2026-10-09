@@ -16,12 +16,15 @@ function normalizeName(raw: unknown): string | null {
   return name;
 }
 
-/** True if `filters` is a plain object (not null / array). */
+const FILTERS_MAX_JSON = 4000;
+
+/** True if `filters` is a plain object (not null / array) of sane size. */
 function isFiltersObject(filters: unknown): boolean {
   return (
     typeof filters === 'object' &&
     filters !== null &&
-    !Array.isArray(filters)
+    !Array.isArray(filters) &&
+    JSON.stringify(filters).length <= FILTERS_MAX_JSON
   );
 }
 
@@ -69,14 +72,19 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
     if (!user) return res.status(401).json({ error: 'Пользователь не найден' });
 
     const cap = limitsFor(user).feedPresets;
-    const count = await prisma.feedPreset.count({ where: { userId } });
-    if (count >= cap) {
+    // count → create под блокировкой строки пользователя: параллельные запросы
+    // не обходят лимит Free (раньше два одновременных POST создавали 2 пресета).
+    const created = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id" = ${userId} FOR UPDATE`;
+      const count = await tx.feedPreset.count({ where: { userId } });
+      if (count >= cap) return null;
+      return tx.feedPreset.create({
+        data: { userId, name, filters, sortOrder: count },
+      });
+    });
+    if (!created) {
       return res.status(400).json({ error: 'Лимит пресетов исчерпан. Несколько пресетов доступны в Pro' });
     }
-
-    const created = await prisma.feedPreset.create({
-      data: { userId, name, filters, sortOrder: count },
-    });
     res.json(created);
   } catch (e: any) {
     res.status(500).json({ error: e.message });

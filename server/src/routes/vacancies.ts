@@ -3,9 +3,12 @@ import fs from 'fs';
 import path from 'path';
 import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
-import { notify } from '../utils/notify';
+import { notify, notifyMany } from '../utils/notify';
 import { uploadVacancyMedia } from '../middleware/upload';
 import { matchesLinkSource, detectLinkSource, isAllowedLinkUrl } from '../lib/materialLinks';
+import { parseCalendarDay, endOfDayMsk } from '../lib/mskDate';
+import { withAdvisoryLock } from '../lib/dealHelpers';
+import { artistAdminIds, isArtistAdmin } from '../lib/artistAccess';
 import { guestReadLimiter } from '../middleware/rateLimiter';
 import { sendPublic } from '../middleware/guest';
 import { getPublicVacancy } from '../lib/publicData';
@@ -61,19 +64,42 @@ async function artistName(artistId: string): Promise<string> {
   return a?.name ?? '';
 }
 
-// Gate create/edit on artist ownership: only an ACCEPTED owner of the artist may
-// manage its vacancies. Returns true when allowed.
+/**
+ * Текущие управляющие артиста: ACCEPTED-участники с isOwner || isAdmin
+ * (lib/artistAccess — единственный источник прав на артиста). Доступ к
+ * вакансиям/откликам и уведомления идут им, а НЕ Vacancy.authorId (после
+ * передачи владения бывший владелец видел отклики с портфолио, а
+ * совладелец/админ — вакансию «как чужой»). Artist.submittedById прав не даёт:
+ * легаси-артистам без строки владельца его проставила миграция
+ * 20261009030600_artist_owner_backfill.
+ */
+async function artistManagerIds(artistId: string): Promise<string[]> {
+  if (!artistId) return [];
+  return artistAdminIds(artistId);
+}
+
+// Gate create/edit/view-responses on artist management rights. Returns true when allowed.
 async function assertArtistOwner(userId: string, artistId: string): Promise<boolean> {
-  if (!artistId) return false;
-  // The creator (Artist.submittedById) is always an owner, even without a
-  // UserArtist owner row (matches the artist page's ownership semantics).
-  const artist = await prisma.artist.findUnique({ where: { id: artistId }, select: { submittedById: true } });
-  if (artist?.submittedById === userId) return true;
-  const link = await prisma.userArtist.findFirst({
-    where: { userId, artistId, isOwner: true, inviteStatus: 'ACCEPTED' },
-    select: { id: true },
-  });
-  return !!link;
+  if (!userId || !artistId) return false;
+  return isArtistAdmin(artistId, userId);
+}
+
+// Отклик «полный»: если вакансия требует портфолио — есть хотя бы файл или ссылка.
+// Неполный отклик (файлы ещё не догрузились) управляющим не показывается.
+function isResponseComplete(
+  vacancy: { requirePortfolio: boolean },
+  r: { portfolioFiles?: unknown[]; portfolioLinks?: unknown[]; _count?: { portfolioFiles: number; portfolioLinks: number } },
+): boolean {
+  if (!vacancy.requirePortfolio) return true;
+  const files = r._count ? r._count.portfolioFiles : (r.portfolioFiles?.length ?? 0);
+  const links = r._count ? r._count.portfolioLinks : (r.portfolioLinks?.length ?? 0);
+  return files + links > 0;
+}
+
+// Детали ошибок — в лог, клиенту общий текст.
+function serverError(res: any, where: string, e: any) {
+  console.error(`[vacancies] ${where}`, e);
+  return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
 }
 
 // Build/refresh the post that mirrors a vacancy in the feed. The vacancy post
@@ -165,8 +191,7 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     const full = await prisma.vacancy.findUnique({ where: { id: vacancy.id }, include: VACANCY_INCLUDE });
     res.status(201).json(full);
   } catch (e: any) {
-    console.error('[vacancies] POST /', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'POST /', e);
   }
 });
 
@@ -239,8 +264,7 @@ router.patch('/:id', authenticate, async (req: AuthRequest, res) => {
 
     res.json(updated);
   } catch (e: any) {
-    console.error('[vacancies] PATCH /:id', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'PATCH /:id', e);
   }
 });
 
@@ -270,8 +294,7 @@ router.patch('/:id/status', authenticate, async (req: AuthRequest, res) => {
 
     res.json(updated);
   } catch (e: any) {
-    console.error('[vacancies] PATCH /:id/status', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'PATCH /:id/status', e);
   }
 });
 
@@ -304,8 +327,7 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res) => {
     await prisma.vacancy.delete({ where: { id: vacancy.id } });
     res.json({ ok: true });
   } catch (e: any) {
-    console.error('[vacancies] DELETE /:id', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'DELETE /:id', e);
   }
 });
 
@@ -326,8 +348,7 @@ router.get('/mine', authenticate, async (req: AuthRequest, res) => {
     });
     res.json(vacancies);
   } catch (e: any) {
-    console.error('[vacancies] GET /mine', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'GET /mine', e);
   }
 });
 
@@ -360,8 +381,7 @@ router.get('/my-offers', authenticate, async (req: AuthRequest, res) => {
       createdAt: o.createdAt,
     })));
   } catch (e: any) {
-    console.error('[vacancies] GET /my-offers', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'GET /my-offers', e);
   }
 });
 
@@ -369,20 +389,25 @@ router.get('/my-offers', authenticate, async (req: AuthRequest, res) => {
 router.get('/responses/incoming', authenticate, async (req: AuthRequest, res) => {
   try {
     const meId = req.userId!;
-    // Vacancies I own = those whose artist has an owner UserArtist membership = me.
+    // Vacancies I manage = artist has me as an ACCEPTED owner/admin (pending/
+    // declined invites don't count). Artist.submittedById gives no rights.
     const owned = await prisma.vacancy.findMany({
-      where: { artist: { userArtists: { some: { userId: meId, isOwner: true } } } },
+      where: {
+        artist: { userArtists: { some: { userId: meId, inviteStatus: 'ACCEPTED', OR: [{ isOwner: true }, { isAdmin: true }] } } },
+      },
       select: { id: true },
     });
     const vacancyIds = owned.map((v) => v.id);
-    const responses = await prisma.vacancyResponse.findMany({
+    const all = await prisma.vacancyResponse.findMany({
       where: { vacancyId: { in: vacancyIds } },
       orderBy: { createdAt: 'desc' },
       include: {
-        vacancy: { select: { id: true, title: true } },
+        vacancy: { select: { id: true, title: true, requirePortfolio: true } },
         applicant: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+        _count: { select: { portfolioFiles: true, portfolioLinks: true } },
       },
     });
+    const responses = all.filter((r) => r.applicantId !== meId && isResponseComplete(r.vacancy, r));
     res.json(responses.map((r) => ({
       id: r.id,
       vacancy: { id: r.vacancy.id, title: r.vacancy.title },
@@ -396,16 +421,15 @@ router.get('/responses/incoming', authenticate, async (req: AuthRequest, res) =>
       createdAt: r.createdAt,
     })));
   } catch (e: any) {
-    console.error('[vacancies] GET /responses/incoming', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'GET /responses/incoming', e);
   }
 });
 
 // ── GET /api/vacancies/:id — full vacancy ──────────────────────────────────────
 router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
-    // Гость: draft / без поста / артист REJECTED → 404; материалы и отклики
-    // скрыты, автором показывается артист.
+    // Гость: draft / без поста / артист REJECTED → 404; материалы, отклики и
+    // контакт (contactUserId) скрыты, автором показывается артист.
     if (!req.userId) {
       return sendPublic(res, await getPublicVacancy(req.params.id), 'Not found');
     }
@@ -422,7 +446,9 @@ router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthReque
     });
     if (!vacancy) return res.status(404).json({ error: 'Not found' });
 
-    const isOwner = !!meId && vacancy.authorId === meId;
+    // «Владелец» = текущий owner/admin артиста (не автор вакансии): после
+    // передачи владения бывший владелец больше не видит отклики с портфолио.
+    const isOwner = !!meId && (await assertArtistOwner(meId, vacancy.artistId));
     if (!isOwner) {
       // Non-owners may only view a vacancy that has a published feed post.
       const post = await prisma.post.findFirst({ where: { vacancyId: vacancy.id, type: 'vacancy' }, select: { id: true } });
@@ -442,18 +468,29 @@ router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthReque
     res.json({
       ...rest,
       isOwner,
-      responses: isOwner ? responses : undefined,
+      responses: isOwner ? responses.filter((r) => isResponseComplete(vacancy, r)) : undefined,
       myResponse,
+      // Отклик создан, но обязательное портфолио не догрузилось — управляющие его
+      // не видят; клиент предлагает прикрепить портфолио и отправить снова.
+      myResponseIncomplete: myResponse ? !isResponseComplete(vacancy, myResponse) : undefined,
       offeredCandidateIds,
+      // Кому писать по вакансии: текущий владелец артиста (а не автор вакансии,
+      // который после передачи владения мог уйти из артиста).
+      contactUserId: isOwner ? undefined : await (async () => {
+        const owner = await prisma.userArtist.findFirst({
+          where: { artistId: vacancy.artistId, isOwner: true, inviteStatus: 'ACCEPTED' },
+          select: { userId: true },
+        });
+        return owner?.userId ?? (await artistManagerIds(vacancy.artistId))[0] ?? vacancy.authorId;
+      })(),
     });
   } catch (e: any) {
-    console.error('[vacancies] GET /:id', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'GET /:id', e);
   }
 });
 
 // ── GET /api/vacancies/:id/matches — matching candidates (residents) ──────────
-// Только владелец вакансии (автор или owner артиста) — раньше стоял
+// Только владелец/админ артиста (как isOwner в GET /:id) — раньше стоял
 // optionalAuthenticate, и подборка кандидатов утекала кому угодно.
 router.get('/:id/matches', authenticate, async (req: AuthRequest, res) => {
   try {
@@ -462,9 +499,7 @@ router.get('/:id/matches', authenticate, async (req: AuthRequest, res) => {
       include: { selectedCustomFilterValues: { select: { id: true, filterId: true } } },
     });
     if (!vacancy) return res.status(404).json({ error: 'Not found' });
-    if (vacancy.authorId !== req.userId && !(await assertArtistOwner(req.userId!, vacancy.artistId))) {
-      return res.status(403).json({ error: 'Forbidden' });
-    }
+    if (!(await assertArtistOwner(req.userId!, vacancy.artistId))) return res.status(403).json({ error: 'Forbidden' });
 
     const pageNum = parseInt(String(req.query.page ?? '1'), 10) || 1;
     const limitNum = parseInt(String(req.query.limit ?? '5'), 10) || 5;
@@ -486,8 +521,10 @@ router.get('/:id/matches', authenticate, async (req: AuthRequest, res) => {
       gs.map((g) => ({ selectedCustomFilterValues: { some: { id: { in: g.ids } } } }));
 
     // A user matches if they have the required profession satisfying `extra` filters.
+    // Сами управляющие артиста кандидатами не предлагаются.
+    const excludeIds = [...new Set([vacancy.authorId, ...(await artistManagerIds(vacancy.artistId))])];
     const userWhere = (groups: { ids: string[] }[]) => ({
-      id: { not: vacancy.authorId },
+      id: { notIn: excludeIds },
       userProfessions: { some: { professionId, ...(groups.length ? { AND: groupClauses(groups) } : {}) } },
     });
 
@@ -559,8 +596,7 @@ router.get('/:id/matches', authenticate, async (req: AuthRequest, res) => {
       pagination: { page: pageNum, limit: limitNum, totalCount: 0, totalPages: 0 },
     });
   } catch (e: any) {
-    console.error('[vacancies] GET /:id/matches', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'GET /:id/matches', e);
   }
 });
 
@@ -571,7 +607,10 @@ router.post('/:id/responses', authenticate, async (req: AuthRequest, res) => {
     const { comment, portfolioLinks } = req.body;
     const vacancy = await prisma.vacancy.findUnique({ where: { id: req.params.id } });
     if (!vacancy) return res.status(404).json({ error: 'Not found' });
-    if (vacancy.authorId === meId) return res.status(400).json({ error: 'Cannot respond to your own vacancy' });
+    const managerIds = await artistManagerIds(vacancy.artistId);
+    if (vacancy.authorId === meId || managerIds.includes(meId)) {
+      return res.status(400).json({ error: 'Cannot respond to your own vacancy' });
+    }
     // Отклики принимаются только на активную вакансию: архивная остаётся
     // видимой (пост в ленте сохраняется), но отклики закрыты.
     if (vacancy.status !== 'active') {
@@ -590,18 +629,23 @@ router.post('/:id/responses', authenticate, async (req: AuthRequest, res) => {
     if (vacancy.requireComment && (!comment || !String(comment).trim())) {
       return res.status(400).json({ error: 'Комментарий обязателен' });
     }
+    // Портфолио проверяется по данным сервера, клиентскому флагу не доверяем.
+    // Файлы догружаются отдельным запросом (нужен id отклика), поэтому при
+    // hasPortfolioFiles отклик создаётся «неполным»: управляющие его не видят и
+    // уведомление уходит только когда файлы реально загрузятся (POST …/portfolio).
+    let portfolioPending = false;
     if (vacancy.requirePortfolio) {
       const existing = await prisma.vacancyResponse.findUnique({
         where: { vacancyId_applicantId: { vacancyId: vacancy.id, applicantId: meId } },
         select: { _count: { select: { portfolioFiles: true } } },
       });
-      // Files are uploaded by a separate follow-up request, so trust the client's
-      // hasPortfolioFiles flag (set when the applicant attached files) in addition
-      // to already-stored files and incoming links.
-      const hasFiles = (existing?._count.portfolioFiles ?? 0) > 0 || req.body.hasPortfolioFiles === true;
+      const hasStoredFiles = (existing?._count.portfolioFiles ?? 0) > 0;
       const hasLinks = links.filter((l) => l && l.url && isAllowedLinkUrl(l.url)).length > 0;
-      if (!hasFiles && !hasLinks) {
-        return res.status(400).json({ error: 'Портфолио обязательно' });
+      if (!hasStoredFiles && !hasLinks) {
+        if (req.body.hasPortfolioFiles !== true) {
+          return res.status(400).json({ error: 'Портфолио обязательно' });
+        }
+        portfolioPending = true;
       }
     }
 
@@ -629,20 +673,20 @@ router.post('/:id/responses', authenticate, async (req: AuthRequest, res) => {
       include: RESPONSE_INCLUDE,
     });
 
-    const name = await userName(meId);
-    await notify({
-      userId: vacancy.authorId,
-      actorId: meId,
-      type: 'vacancy_response',
-      title: 'Отклик на вакансию',
-      body: `${name} откликнулся на вакансию «${vacancy.title}»`,
-      link: `/vacancies/${vacancy.id}`,
-    });
+    if (!portfolioPending) {
+      const name = await userName(meId);
+      await notifyMany(managerIds, {
+        actorId: meId,
+        type: 'vacancy_response',
+        title: 'Отклик на вакансию',
+        body: `${name} откликнулся на вакансию «${vacancy.title}»`,
+        link: `/vacancies/${vacancy.id}`,
+      });
+    }
 
-    res.status(201).json(response);
+    res.status(201).json({ ...response, portfolioPending });
   } catch (e: any) {
-    console.error('[vacancies] POST /:id/responses', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'POST /:id/responses', e);
   }
 });
 
@@ -672,6 +716,17 @@ router.post('/:id/responses/:responseId/portfolio', authenticate, uploadVacancyM
       return res.status(400).json({ error: 'Суммарный размер портфолио превышает 20 МБ' });
     }
 
+    // Был ли отклик «неполным» (обязательное портфолио ещё не приложено)?
+    const vacancy = await prisma.vacancy.findUnique({
+      where: { id: response.vacancyId },
+      select: { id: true, title: true, artistId: true, requirePortfolio: true },
+    });
+    const [linksBefore, filesBefore] = await Promise.all([
+      prisma.vacancyResponseLink.count({ where: { responseId: response.id } }),
+      prisma.vacancyResponseFile.count({ where: { responseId: response.id } }),
+    ]);
+    const wasIncomplete = !!vacancy?.requirePortfolio && linksBefore === 0 && filesBefore === 0;
+
     const created = await prisma.$transaction(
       files.map((f) =>
         prisma.vacancyResponseFile.create({
@@ -686,10 +741,21 @@ router.post('/:id/responses/:responseId/portfolio', authenticate, uploadVacancyM
       ),
     );
 
+    // Портфолио догрузилось — теперь отклик полный: уведомляем управляющих.
+    if (wasIncomplete && vacancy) {
+      const name = await userName(meId);
+      await notifyMany(await artistManagerIds(vacancy.artistId), {
+        actorId: meId,
+        type: 'vacancy_response',
+        title: 'Отклик на вакансию',
+        body: `${name} откликнулся на вакансию «${vacancy.title}»`,
+        link: `/vacancies/${vacancy.id}`,
+      });
+    }
+
     res.status(201).json(created);
   } catch (e: any) {
-    console.error('[vacancies] POST /:id/responses/:responseId/portfolio', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'POST /:id/responses/:responseId/portfolio', e);
   }
 });
 
@@ -712,8 +778,7 @@ router.delete('/:id/responses/:responseId/portfolio/:fileId', authenticate, asyn
     await prisma.vacancyResponseFile.delete({ where: { id: file.id } });
     res.json({ ok: true });
   } catch (e: any) {
-    console.error('[vacancies] DELETE /:id/responses/:responseId/portfolio/:fileId', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'DELETE /:id/responses/:responseId/portfolio/:fileId', e);
   }
 });
 
@@ -723,7 +788,8 @@ router.get('/:id/responses', authenticate, async (req: AuthRequest, res) => {
     const meId = req.userId!;
     const vacancy = await prisma.vacancy.findUnique({ where: { id: req.params.id } });
     if (!vacancy) return res.status(404).json({ error: 'Not found' });
-    if (vacancy.authorId !== meId && !(await assertArtistOwner(meId, vacancy.artistId))) {
+    // Только текущие owner/admin артиста (бывший автор после передачи — нет).
+    if (!(await assertArtistOwner(meId, vacancy.artistId))) {
       return res.status(404).json({ error: 'Not found' });
     }
     const responses = await prisma.vacancyResponse.findMany({
@@ -731,10 +797,9 @@ router.get('/:id/responses', authenticate, async (req: AuthRequest, res) => {
       orderBy: { createdAt: 'desc' },
       include: RESPONSE_INCLUDE,
     });
-    res.json(responses);
+    res.json(responses.filter((r) => isResponseComplete(vacancy, r)));
   } catch (e: any) {
-    console.error('[vacancies] GET /:id/responses', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'GET /:id/responses', e);
   }
 });
 
@@ -748,6 +813,11 @@ router.post('/:id/offer', authenticate, async (req: AuthRequest, res) => {
     if (!vacancy) return res.status(404).json({ error: 'Not found' });
     if (!(await assertArtistOwner(meId, vacancy.artistId))) return res.status(403).json({ error: 'Forbidden' });
     if (candidateId === meId) return res.status(400).json({ error: 'Cannot offer to yourself' });
+    // Предлагать можно только опубликованную активную вакансию (иначе кандидат
+    // получит уведомление, а откликнуться не сможет).
+    if (vacancy.status !== 'active') return res.status(409).json({ error: 'Вакансия не активна — предложить её нельзя' });
+    const candidate = await prisma.user.findUnique({ where: { id: String(candidateId) }, select: { id: true } });
+    if (!candidate) return res.status(404).json({ error: 'Пользователь не найден' });
 
     // Persist the nudge (idempotent) so «Предложено» survives reloads; notify the
     // candidate only the first time they are offered this vacancy.
@@ -770,8 +840,7 @@ router.post('/:id/offer', authenticate, async (req: AuthRequest, res) => {
 
     res.json({ ok: true });
   } catch (e: any) {
-    console.error('[vacancies] POST /:id/offer', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'POST /:id/offer', e);
   }
 });
 
@@ -785,23 +854,49 @@ router.post('/:id/responses/:responseId/cooperation', authenticate, async (req: 
     if (!(await assertArtistOwner(meId, vacancy.artistId))) return res.status(403).json({ error: 'Forbidden' });
     const response = await prisma.vacancyResponse.findUnique({ where: { id: req.params.responseId } });
     if (!response || response.vacancyId !== vacancy.id) return res.status(404).json({ error: 'Response not found' });
+    // Предложение — только по активной вакансии (архив = набор закрыт).
+    if (vacancy.status !== 'active') {
+      return res.status(409).json({ error: vacancy.status === 'archived' ? 'Вакансия в архиве — предложение отправить нельзя' : 'Вакансия не опубликована' });
+    }
 
     if (!startDate) return res.status(400).json({ error: 'startDate required' });
-    if (!conditions || !String(conditions).trim()) return res.status(400).json({ error: 'conditions required' });
-    if (!compensation || !String(compensation).trim()) return res.status(400).json({ error: 'compensation required' });
+    // Строгий разбор: «31.02» → ошибка (а не 3 марта), «13-й месяц» → 400 (а не 500).
+    const startDay = parseCalendarDay(startDate);
+    if (!startDay) return res.status(400).json({ error: 'Некорректная дата начала' });
+    if (endOfDayMsk(startDay).getTime() < Date.now()) return res.status(400).json({ error: 'Дата начала не может быть в прошлом' });
+    const conditionsText = typeof conditions === 'string' ? conditions.trim() : '';
+    const compensationText = typeof compensation === 'string' ? compensation.trim() : '';
+    if (!conditionsText) return res.status(400).json({ error: 'conditions required' });
+    if (!compensationText) return res.status(400).json({ error: 'compensation required' });
+    if (conditionsText.length > 2000 || compensationText.length > 500
+      || (typeof extraDetails === 'string' && extraDetails.length > 2000)) {
+      return res.status(400).json({ error: 'Слишком длинный текст предложения' });
+    }
 
-    const offer = await prisma.vacancyOffer.create({
-      data: {
-        vacancyId: vacancy.id,
-        responseId: response.id,
-        applicantId: response.applicantId,
-        startDate: new Date(startDate),
-        conditions: String(conditions),
-        compensation: String(compensation),
-        extraDetails: extraDetails || null,
-        status: 'pending',
-      },
+    // Не плодим офферы на каждый сабмит: пока есть ожидающий ответа или уже
+    // принятый оффер этому кандидату — новый не создаём (под advisory-блокировкой).
+    const offer = await withAdvisoryLock(`vacancy-offer:${response.id}`, async (tx) => {
+      const open = await tx.vacancyOffer.findFirst({
+        where: { responseId: response.id, status: { in: ['pending', 'accepted'] } },
+        select: { id: true },
+      });
+      if (open) return null;
+      return tx.vacancyOffer.create({
+        data: {
+          vacancyId: vacancy.id,
+          responseId: response.id,
+          applicantId: response.applicantId,
+          // Календарный день храним полуночью UTC этого дня (отображается одинаково
+          // во всех часовых поясах РФ).
+          startDate: new Date(Date.UTC(startDay.y, startDay.m - 1, startDay.d)),
+          conditions: conditionsText,
+          compensation: compensationText,
+          extraDetails: typeof extraDetails === 'string' && extraDetails.trim() ? extraDetails.trim() : null,
+          status: 'pending',
+        },
+      });
     });
+    if (!offer) return res.status(409).json({ error: 'Кандидату уже отправлено предложение' });
 
     await notify({
       userId: response.applicantId,
@@ -814,8 +909,7 @@ router.post('/:id/responses/:responseId/cooperation', authenticate, async (req: 
 
     res.status(201).json({ offer });
   } catch (e: any) {
-    console.error('[vacancies] POST /:id/responses/:responseId/cooperation', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'POST /:id/responses/:responseId/cooperation', e);
   }
 });
 
@@ -825,18 +919,21 @@ router.post('/offers/:offerId/accept', authenticate, async (req: AuthRequest, re
     const meId = req.userId!;
     const offer = await prisma.vacancyOffer.findUnique({
       where: { id: req.params.offerId },
-      include: { vacancy: { select: { id: true, title: true, authorId: true } } },
+      include: { vacancy: { select: { id: true, title: true, authorId: true, artistId: true } } },
     });
     if (!offer || offer.applicantId !== meId) return res.status(404).json({ error: 'Not found' });
 
-    const updated = await prisma.vacancyOffer.update({
-      where: { id: offer.id },
+    // Атомарно и только из pending: принятый нельзя «переотклонить» и наоборот,
+    // повторный клик не шлёт повторных уведомлений.
+    const tr = await prisma.vacancyOffer.updateMany({
+      where: { id: offer.id, status: 'pending' },
       data: { status: 'accepted' },
     });
+    if (tr.count === 0) return res.status(409).json({ error: 'Предложение уже обработано' });
+    const updated = await prisma.vacancyOffer.findUnique({ where: { id: offer.id } });
 
     const name = await userName(meId);
-    await notify({
-      userId: offer.vacancy.authorId,
+    await notifyMany(await artistManagerIds(offer.vacancy.artistId), {
       actorId: meId,
       type: 'vacancy_offer_accepted',
       title: 'Предложение принято',
@@ -846,8 +943,7 @@ router.post('/offers/:offerId/accept', authenticate, async (req: AuthRequest, re
 
     res.json({ offer: updated, vacancyId: offer.vacancy.id });
   } catch (e: any) {
-    console.error('[vacancies] POST /offers/:offerId/accept', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'POST /offers/:offerId/accept', e);
   }
 });
 
@@ -857,18 +953,19 @@ router.post('/offers/:offerId/reject', authenticate, async (req: AuthRequest, re
     const meId = req.userId!;
     const offer = await prisma.vacancyOffer.findUnique({
       where: { id: req.params.offerId },
-      include: { vacancy: { select: { id: true, title: true, authorId: true } } },
+      include: { vacancy: { select: { id: true, title: true, authorId: true, artistId: true } } },
     });
     if (!offer || offer.applicantId !== meId) return res.status(404).json({ error: 'Not found' });
 
-    const updated = await prisma.vacancyOffer.update({
-      where: { id: offer.id },
+    const tr = await prisma.vacancyOffer.updateMany({
+      where: { id: offer.id, status: 'pending' },
       data: { status: 'rejected' },
     });
+    if (tr.count === 0) return res.status(409).json({ error: 'Предложение уже обработано' });
+    const updated = await prisma.vacancyOffer.findUnique({ where: { id: offer.id } });
 
     const name = await userName(meId);
-    await notify({
-      userId: offer.vacancy.authorId,
+    await notifyMany(await artistManagerIds(offer.vacancy.artistId), {
       actorId: meId,
       type: 'vacancy_offer_rejected',
       title: 'Предложение отклонено',
@@ -878,8 +975,7 @@ router.post('/offers/:offerId/reject', authenticate, async (req: AuthRequest, re
 
     res.json({ offer: updated, vacancyId: offer.vacancy.id });
   } catch (e: any) {
-    console.error('[vacancies] POST /offers/:offerId/reject', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'POST /offers/:offerId/reject', e);
   }
 });
 
@@ -925,8 +1021,7 @@ router.post('/:id/references', authenticate, uploadVacancyMedia.array('files'), 
 
     res.status(201).json(created);
   } catch (e: any) {
-    console.error('[vacancies] POST /:id/references', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'POST /:id/references', e);
   }
 });
 
@@ -947,8 +1042,7 @@ router.delete('/:id/references/:fileId', authenticate, async (req: AuthRequest, 
     await prisma.vacancyReferenceFile.delete({ where: { id: file.id } });
     res.json({ ok: true });
   } catch (e: any) {
-    console.error('[vacancies] DELETE /:id/references/:fileId', e);
-    res.status(500).json({ error: e.message });
+    return serverError(res, 'DELETE /:id/references/:fileId', e);
   }
 });
 

@@ -1,8 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Mail, Lock, Eye, EyeOff, AlertCircle, Loader2, Check, Send } from 'lucide-react';
-import { authAPI, siteSettingsAPI } from '../lib/api';
+import { Mail, Lock, Eye, EyeOff, Loader2, Check, Send, ArrowLeft } from 'lucide-react';
+import { authAPI, siteSettingsAPI, AUTH_NOTICE_KEY } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
+import { isTourDone } from '../lib/authHelpers';
 import VkLoginButton from '../components/VkLoginButton';
 
 // Temporarily hide VK login/registration. Set back to true to restore.
@@ -11,17 +14,17 @@ const SHOW_VK = false;
 // Согласие с документами теперь спрашивается один раз — при регистрации.
 // На входе осталась только справочная сноска со ссылками (/terms, /privacy).
 
+const TG_POLL_TIMEOUT_MS = 120_000;
+
 export default function LoginPage() {
   useEffect(() => { document.title = 'Вход — Moooza'; }, []);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   // email verification
   const [pendingEmail, setPendingEmail] = useState<string | null>(null);
   const [verifyCode, setVerifyCode] = useState('');
-  const [verifyError, setVerifyError] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -35,22 +38,40 @@ export default function LoginPage() {
       .catch(() => {});
   }, []);
 
-  // Handle VK server-side OAuth callback: ?vk_token=JWT or ?vk_error=reason
+  // Message left by a forced logout (expired session, blocked account, …).
   useEffect(() => {
-    const vkToken = searchParams.get('vk_token');
+    try {
+      const notice = sessionStorage.getItem(AUTH_NOTICE_KEY);
+      if (notice) {
+        sessionStorage.removeItem(AUTH_NOTICE_KEY);
+        toast.info(notice);
+      }
+    } catch { /* storage unavailable */ }
+  }, []);
+
+  // Handle VK server-side OAuth callback: #vk_token=JWT (legacy: ?vk_token=) or ?vk_error=reason
+  useEffect(() => {
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+    const vkToken = hash.get('vk_token') || searchParams.get('vk_token');
     const vkError = searchParams.get('vk_error');
+    const isNew = (hash.get('is_new') || searchParams.get('is_new')) === '1';
+    // The JWT must not stay in the address bar / history (screenshots, shared links).
+    if (vkToken || vkError) window.history.replaceState(null, '', '/login');
     if (vkToken) {
-      const isNew = searchParams.get('is_new') === '1';
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:4000';
       fetch(`${apiUrl}/api/users/me`, { headers: { Authorization: `Bearer ${vkToken}` } })
-        .then(r => r.json())
+        .then(async r => {
+          const body = await r.json().catch(() => ({}));
+          if (!r.ok) throw new Error(body?.error || 'Ошибка авторизации через ВКонтакте');
+          return body;
+        })
         .then(u => {
           setAuth(u, vkToken);
           setUser(u);
           localStorage.setItem('termsAgreed', '1');
           navigate((isNew || !u?.onboardingCompletedAt) ? '/vk-setup' : '/');
         })
-        .catch(() => setError('Ошибка авторизации через ВКонтакте'));
+        .catch((e: any) => toast.error(e?.message || 'Ошибка авторизации через ВКонтакте'));
     } else if (vkError) {
       const msgs: Record<string, string> = {
         cancelled: 'Вы отменили авторизацию через ВКонтакте',
@@ -58,8 +79,11 @@ export default function LoginPage() {
         token: 'VK не выдал токен. Попробуйте ещё раз',
         userinfo: 'Не удалось получить данные профиля VK',
         server: 'Ошибка сервера при входе через ВКонтакте',
+        closed: 'Регистрация сейчас доступна только по приглашению',
+        login_disabled: 'Вход временно отключён. Попробуйте позже.',
+        blocked: 'Аккаунт заблокирован. Обратитесь в поддержку.',
       };
-      setError(msgs[vkError] || 'Ошибка входа через ВКонтакте');
+      toast.error(msgs[vkError] || 'Ошибка входа через ВКонтакте');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -71,58 +95,71 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
   }, [setAuth, navigate]);
 
   const handleSocialError = (msg: string) => {
-    if (msg) setError(msg);
+    if (msg) toast.error(msg);
   };
 
   // ── Вход через Telegram: deep-link на бота + поллинг подтверждения ─────────
   const [tgWaiting, setTgWaiting] = useState(false);
   const tgTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const tgInFlightRef = useRef(false);
   useEffect(() => () => { if (tgTimerRef.current) clearInterval(tgTimerRef.current); }, []);
   const finishLogin = useCallback((user: any, token: string) => {
     setAuth(user, token);
     localStorage.setItem('termsAgreed', '1');
-    const tourDone = user.onboardingCompletedAt || localStorage.getItem('mooza_tour_done');
+    const tourDone = isTourDone(user);
     if (tourDone) localStorage.setItem('mooza_tour_done', '1');
     navigate(tourDone ? '/' : '/onboarding');
   }, [setAuth, navigate]);
 
   const stopTgPoll = () => {
     if (tgTimerRef.current) { clearInterval(tgTimerRef.current); tgTimerRef.current = null; }
+    tgInFlightRef.current = false;
     setTgWaiting(false);
   };
 
   const tgLogin = async () => {
-    setError('');
     try {
       const { data } = await authAPI.telegramToken();
-      if (!data?.url) { setError('Вход через Telegram временно недоступен'); return; }
+      if (!data?.url) { toast.error('Вход через Telegram временно недоступен'); return; }
       window.open(data.url, '_blank', 'noopener');
       setTgWaiting(true);
       const startedAt = Date.now();
       tgTimerRef.current = setInterval(async () => {
-        if (Date.now() - startedAt > 120_000) { stopTgPoll(); return; }
+        if (Date.now() - startedAt > TG_POLL_TIMEOUT_MS) {
+          stopTgPoll();
+          toast.error('Время ожидания подтверждения в Telegram истекло — попробуйте ещё раз');
+          return;
+        }
+        // Не накладываем запросы друг на друга, если сеть медленная.
+        if (tgInFlightRef.current) return;
+        tgInFlightRef.current = true;
         try {
           const { data: p } = await authAPI.telegramPoll(data.token);
-          if (p?.status === 'ok') {
+          if (p?.status === 'ok' && tgTimerRef.current) {
             stopTgPoll();
             finishLogin(p.user, p.token);
           }
         } catch (e: any) {
           const st = e?.response?.status;
-          if (st === 403 || st === 404) {
+          if (st === 429) {
             stopTgPoll();
-            setError(e.response?.data?.error || (st === 404 ? 'Ссылка устарела — попробуйте ещё раз' : 'Вход через Telegram недоступен'));
+            toast.error(getApiError(e, 'Слишком много попыток входа через Telegram. Подождите несколько минут.'));
+          } else if (st === 403 || st === 404) {
+            stopTgPoll();
+            toast.error(getApiError(e, st === 404 ? 'Ссылка устарела — попробуйте ещё раз' : 'Вход через Telegram недоступен'));
           }
+          // Таймаут отдельного запроса / обрыв сети — временно, продолжаем ждать.
+        } finally {
+          tgInFlightRef.current = false;
         }
       }, 2500);
-    } catch {
-      setError('Не удалось начать вход через Telegram');
+    } catch (e) {
+      toast.error(getApiError(e, 'Не удалось начать вход через Telegram'));
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
     setLoading(true);
 
     try {
@@ -130,18 +167,19 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
       setAuth(data.user, data.token);
       localStorage.setItem('termsAgreed', '1');
 
-      // Show onboarding on first login — server-side flag wins, localStorage is fallback
-      const tourDone = data.user.onboardingCompletedAt || localStorage.getItem('mooza_tour_done');
+      // Show onboarding on first login — server-side flag is the source of truth
+      const tourDone = isTourDone(data.user);
       if (tourDone) localStorage.setItem('mooza_tour_done', '1');
       navigate(tourDone ? '/' : '/onboarding');
     } catch (err: any) {
       const errData = err.response?.data;
       if (errData?.error === 'EMAIL_NOT_VERIFIED' && errData?.email) {
+        // Код при входе НЕ отправляется — даём запросить его сразу, без таймера.
         setPendingEmail(errData.email);
-        setResendCooldown(60);
-        const interval = setInterval(() => setResendCooldown(c => { if (c <= 1) { clearInterval(interval); return 0; } return c - 1; }), 1000);
+        setVerifyCode('');
+        setResendCooldown(0);
       } else {
-        setError(errData?.error || 'Ошибка входа');
+        toast.error(getApiError(err, 'Ошибка входа'));
       }
     } finally {
       setLoading(false);
@@ -151,7 +189,6 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
   const handleVerify = async () => {
     if (!pendingEmail || verifyCode.length < 8) return;
     setLoading(true);
-    setVerifyError('');
     try {
       const { data } = await authAPI.verifyEmail(pendingEmail, verifyCode.trim());
       setAuth(data.user, data.token);
@@ -166,7 +203,7 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
         window.location.href = '/onboarding';
       }
     } catch (err: any) {
-      setVerifyError(err.response?.data?.error || 'Неверный код');
+      toast.error(getApiError(err, 'Неверный код'));
     } finally {
       setLoading(false);
     }
@@ -176,11 +213,11 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
     if (!pendingEmail || resendCooldown > 0) return;
     try {
       await authAPI.resendVerification(pendingEmail);
+      toast.success('Код отправлен — проверьте почту');
       setResendCooldown(60);
       const interval = setInterval(() => setResendCooldown(c => { if (c <= 1) { clearInterval(interval); return 0; } return c - 1; }), 1000);
     } catch (err: any) {
-      const msg = err.response?.data?.error;
-      setError(msg || 'Не удалось отправить код. Попробуйте позже.');
+      toast.error(getApiError(err, 'Не удалось отправить код. Попробуйте позже.'));
     }
   };
 
@@ -194,8 +231,8 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
             </div>
             <h2 className="text-xl font-bold text-white mb-2">Подтвердите email</h2>
             <p className="text-slate-400 text-sm">
-              Мы отправили 8-значный код на<br />
-              <span className="text-white font-medium">{pendingEmail}</span>
+              Email <span className="text-white font-medium">{pendingEmail}</span> ещё не подтверждён.<br />
+              Введите 8-значный код из письма или запросите новый.
             </p>
           </div>
           <div className="mb-4">
@@ -210,12 +247,6 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
               autoFocus
             />
           </div>
-          {verifyError && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-red-400 text-sm">
-              <AlertCircle size={14} className="flex-shrink-0" />
-              {verifyError}
-            </div>
-          )}
           <button
             onClick={handleVerify}
             disabled={loading || verifyCode.length < 8}
@@ -229,7 +260,13 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
             disabled={resendCooldown > 0}
             className="w-full py-2 text-sm text-slate-400 hover:text-white disabled:opacity-50 transition-colors"
           >
-            {resendCooldown > 0 ? `Повторный код через ${resendCooldown}с` : 'Отправить код повторно'}
+            {resendCooldown > 0 ? `Повторный код через ${resendCooldown}с` : 'Отправить код'}
+          </button>
+          <button
+            onClick={() => { setPendingEmail(null); setVerifyCode(''); }}
+            className="w-full py-2 text-sm text-slate-500 hover:text-white transition-colors flex items-center justify-center gap-1.5"
+          >
+            <ArrowLeft size={14} /> Назад ко входу
           </button>
           <p className="mt-4 text-center text-xs text-slate-600 leading-relaxed">
             Код не приходит?{' '}
@@ -257,13 +294,6 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
 
         <div className="bg-slate-900/60 backdrop-blur-xl rounded-3xl p-6 sm:p-8 border border-slate-800/50 shadow-xl">
           <h2 className="text-2xl font-semibold text-white mb-6">С возвращением</h2>
-
-          {error && (
-            <div className="bg-red-500/10 border border-red-500/20 text-red-400 px-4 py-3 rounded-xl mb-4 flex items-center gap-2">
-              <AlertCircle size={18} />
-              <span>{error}</span>
-            </div>
-          )}
 
           {/* Social login — VK (temporarily disabled; flip SHOW_VK to restore) */}
           {SHOW_VK && (

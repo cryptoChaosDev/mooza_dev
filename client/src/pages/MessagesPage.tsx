@@ -3,7 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { MessageCircle, Search, Plus, X, Check, User, Briefcase, Users, Crown, Ban, Pin, Archive, ArchiveX, Trash2, MoreHorizontal, FolderKanban, Bookmark } from 'lucide-react';
 import { messageAPI, friendshipAPI, userAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
-import { getSocket } from '../lib/socket';
+import { createPortal } from 'react-dom';
+import { useSocket } from '../lib/socket';
+import { useBadgeStore } from '../stores/badgeStore';
 import { yoIncludes } from '../lib/search';
 import { DEALS_ENABLED } from '../lib/features';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -57,11 +59,17 @@ export default function MessagesPage() {
 
   useScrollLock(showNewGroup);
 
+  // Спиннер — только при первой загрузке; обновления по сокету/возврату из
+  // фона идут «тихо» (раньше список мигал скелетоном на каждое сообщение).
+  const loadedOnceRef = useRef(false);
   const loadConversations = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!loadedOnceRef.current) setLoading(true);
       const res = await messageAPI.getConversations();
       setConversations(res.data);
+      loadedOnceRef.current = true;
+      // Бейдж «Чат» — серверный счётчик непрочитанных
+      void useBadgeStore.getState().refreshMessages();
     } catch (err) {
       console.error('Failed to load conversations:', err);
     } finally {
@@ -72,6 +80,21 @@ export default function MessagesPage() {
   useEffect(() => {
     loadConversations();
   }, [loadConversations]);
+
+  // Пачка событий (несколько сообщений подряд) → одно обновление списка
+  const refreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRefresh = useCallback(() => {
+    if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current);
+    refreshTimerRef.current = setTimeout(() => { void loadConversations(); }, 300);
+  }, [loadConversations]);
+  useEffect(() => () => { if (refreshTimerRef.current) clearTimeout(refreshTimerRef.current); }, []);
+
+  // Возврат из фона: события, пришедшие пока вкладка/PWA спали, могли не дойти
+  useEffect(() => {
+    const onVis = () => { if (document.visibilityState === 'visible') scheduleRefresh(); };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [scheduleRefresh]);
 
   // «печатает…» в списке чатов: conversationId -> timestamp, живёт ~3.5с
   const [typingConvs, setTypingConvs] = useState<Record<string, number>>({});
@@ -89,21 +112,27 @@ export default function MessagesPage() {
     return () => clearInterval(t);
   }, [hasTypingConvs]);
 
+  // useSocket: при прямом открытии /messages сокет создаётся позже (эффект App),
+  // слушатели вешаются, как только он появится.
+  const socket = useSocket();
   useEffect(() => {
-    const socket = getSocket();
     if (!socket) return;
-    const refresh = () => loadConversations();
+    const refresh = () => scheduleRefresh();
     const onTyping = ({ conversationId }: { conversationId: string }) =>
       setTypingConvs(prev => ({ ...prev, [conversationId]: Date.now() }));
     socket.on('new_message', refresh);
     socket.on('group_created', refresh);
+    socket.on('group_deleted', refresh);
+    socket.on('connect', refresh); // реконнект — догрузить пропущенное
     socket.on('user_typing', onTyping);
     return () => {
       socket.off('new_message', refresh);
       socket.off('group_created', refresh);
+      socket.off('group_deleted', refresh);
+      socket.off('connect', refresh);
       socket.off('user_typing', onTyping);
     };
-  }, [loadConversations]);
+  }, [socket, scheduleRefresh]);
 
   const openNewGroup = async () => {
     setShowNewGroup(true);
@@ -295,15 +324,15 @@ export default function MessagesPage() {
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
                 placeholder="Поиск по имени..."
-                className="w-full bg-slate-900 border border-slate-800 text-sm text-white placeholder-slate-500 pl-8 pr-3 py-2 rounded-xl outline-none focus:border-primary-600 transition-colors"
+                className="w-full bg-slate-900 border border-slate-800 text-base sm:text-sm text-white placeholder-slate-500 pl-8 pr-3 py-2 rounded-xl outline-none focus:border-primary-600 transition-colors"
               />
             </div>
           </div>
         </div>
 
         {/* Context menu overlay */}
-        {convMenu && (
-          <div className="fixed inset-0 z-50" onClick={() => setConvMenu(null)}>
+        {convMenu && createPortal(
+          <div className="fixed inset-0 z-[60]" onClick={() => setConvMenu(null)}>
             <div
               className="absolute bg-slate-800 border border-slate-700 rounded-2xl py-1.5 shadow-2xl min-w-[180px]"
               style={{
@@ -346,7 +375,8 @@ export default function MessagesPage() {
                 Удалить чат
               </button>
             </div>
-          </div>
+          </div>,
+          document.body,
         )}
 
         <div className="pb-24">
@@ -508,8 +538,8 @@ export default function MessagesPage() {
       </div>
 
       {/* New Group Modal */}
-      {showNewGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+      {showNewGroup && createPortal(
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
           <div className="w-full max-w-md bg-slate-900 rounded-2xl border border-slate-800 shadow-2xl mb-20">
             <div className="flex items-center justify-between p-4 border-b border-slate-800">
               <div className="flex items-center gap-2">
@@ -527,7 +557,7 @@ export default function MessagesPage() {
                 value={groupName}
                 onChange={e => setGroupName(e.target.value)}
                 placeholder="Название проекта..."
-                className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
+                className="w-full px-4 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-base sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
               />
 
               {/* Поиск участников — любой пользователь Moooza, не только друзья */}
@@ -538,7 +568,7 @@ export default function MessagesPage() {
                   value={memberSearch}
                   onChange={e => setMemberSearch(e.target.value)}
                   placeholder="Найти людей по имени..."
-                  className="w-full pl-8 pr-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
+                  className="w-full pl-8 pr-3 py-2.5 bg-slate-800 border border-slate-700 rounded-xl text-base sm:text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
                 />
               </div>
 
@@ -613,7 +643,8 @@ export default function MessagesPage() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
 
       <ConfirmDialog

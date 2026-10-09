@@ -1,4 +1,12 @@
 import { test, expect } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
+
+// Deal creation entry points (Оформить сделку / Дублировать) are hidden in the client
+// while client/src/lib/features.ts has DEALS_ENABLED = false.
+const DEALS_UI_ENABLED = /DEALS_ENABLED:\s*boolean\s*=\s*true/.test(
+  fs.readFileSync(path.join(__dirname, '../../client/src/lib/features.ts'), 'utf8'),
+);
 import { createTestUser, loginUI, skipOnboarding, apiCall } from './helpers';
 
 let alice: Awaited<ReturnType<typeof createTestUser>>;
@@ -97,7 +105,8 @@ test.describe('Deal detail page (/deals/:id)', () => {
     await page.waitForTimeout(1000);
     await page.goto('/deals/' + dealId);
     await page.waitForTimeout(1000);
-    const backBtn = page.locator('button').filter({ has: page.locator('svg') }).first();
+    // Updated: first svg-button is the (desktop) sidebar; target the ArrowLeft back button.
+    const backBtn = page.locator('button:has(svg.lucide-arrow-left):visible').first();
     await backBtn.click();
     await page.waitForURL(/\/deals($|\/)/, { timeout: 8000 });
     await expect(page).toHaveURL(/\/deals($|\/[^/]+)/);
@@ -105,6 +114,7 @@ test.describe('Deal detail page (/deals/:id)', () => {
 
   test('duplicate (copy) button opens deal create modal with prefilled title', async ({ page }) => {
     test.setTimeout(30000);
+    test.skip(!DEALS_UI_ENABLED, 'DEALS_ENABLED=false — deal create/duplicate UI is hidden');
     if (!dealId) test.skip(true, 'Deal creation failed in beforeAll');
     await loginUI(page, alice.email, alice.password);
     await skipOnboarding(page);
@@ -175,6 +185,7 @@ test.describe('Deal detail page (/deals/:id)', () => {
 test.describe('Deal create modal', () => {
   test('service page shows Оформить сделку button opening modal with title field', async ({ page }) => {
     test.setTimeout(40000);
+    test.skip(!DEALS_UI_ENABLED, 'DEALS_ENABLED=false — «Оформить сделку» is hidden');
     // Bob views alice's profile to find her services
     await loginUI(page, bob.email, bob.password);
     await skipOnboarding(page);
@@ -281,7 +292,8 @@ test.describe('Search / Catalog page (/search)', () => {
     await skipOnboarding(page);
     await page.goto('/search');
     await expect(page).toHaveURL(/\/search/);
-    await expect(page.getByText(/каталог/i).first()).toBeVisible({ timeout: 10000 });
+    // Updated: getByText(/каталог/).first() hit the (hidden on mobile) sidebar link.
+    await expect(page.getByRole('heading', { name: 'Каталог' })).toBeVisible({ timeout: 10000 });
   });
 
   test('search input is present', async ({ page }) => {

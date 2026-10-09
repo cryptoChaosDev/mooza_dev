@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import path from 'path';
+import multer from 'multer';
 import { PrismaClient } from '@prisma/client';
 import { initSocket } from './socket';
 import { startScheduler } from './scheduler';
@@ -215,6 +216,23 @@ app.use('/api/support', supportRoutes);
 // для людей с согласием отдают SEO-снимки (Ф4), для остальных — 404-заглушка.
 app.get('/api/og/profile/:userId', legacyOgProfileRedirect);
 
+// Слишком большой файл/тело запроса — понятный 413 вместо «Внутренняя ошибка
+// сервера» 500 (MulterError не несёт status). Прочие ошибки multer — 400.
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err instanceof multer.MulterError) {
+    logger.warn(`Upload rejected: ${err.code} ${req.method} ${req.url}`);
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'Файл слишком большой', code: err.code });
+    }
+    return res.status(400).json({ error: 'Не удалось загрузить файл', code: err.code });
+  }
+  if (err?.type === 'entity.too.large' || err?.status === 413 || err?.statusCode === 413) {
+    logger.warn(`Request entity too large: ${req.method} ${req.url}`);
+    return res.status(413).json({ error: 'Слишком большой запрос' });
+  }
+  next(err);
+});
+
 // Error handling middleware
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   // Логируем детали ошибки
@@ -227,15 +245,22 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     userAgent: req.get('user-agent'),
   });
 
+  // 4xx (multer/fileFilter, body-parser и т.п.) — это ошибка запроса, её текст
+  // нужен пользователю и в production; 5xx — только общий текст.
+  const httpStatus = Number(err.status || err.statusCode) || 500;
+  const isClientError = httpStatus >= 400 && httpStatus < 500;
+
   // В production не показываем детали ошибки
   if (process.env.NODE_ENV === 'production') {
-    res.status(err.status || 500).json({
-      error: 'Внутренняя ошибка сервера',
-      message: 'Произошла непредвиденная ошибка. Пожалуйста, попробуйте позже.',
-    });
+    res.status(httpStatus).json(isClientError
+      ? { error: err.message || 'Некорректный запрос' }
+      : {
+          error: 'Внутренняя ошибка сервера',
+          message: 'Произошла непредвиденная ошибка. Пожалуйста, попробуйте позже.',
+        });
   } else {
     // В development показываем детали для отладки
-    res.status(err.status || 500).json({
+    res.status(httpStatus).json({
       error: err.message || 'Something went wrong',
       stack: err.stack,
       details: err,

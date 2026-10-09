@@ -2,6 +2,48 @@ import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
 
+// Расширение сохраняемого файла берём из ПРОВЕРЕННОГО fileFilter'ом mimetype,
+// а не из originalname: иначе «картинка» могла лечь на диск как .html/.svg и
+// отдаваться /uploads с соответствующим Content-Type.
+const MIME_EXT: Record<string, string> = {
+  'image/jpeg': '.jpg',
+  'image/jpg': '.jpg',
+  'image/png': '.png',
+  'image/gif': '.gif',
+  'image/webp': '.webp',
+  'application/pdf': '.pdf',
+  'application/msword': '.doc',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+  'application/vnd.ms-excel': '.xls',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': '.xlsx',
+  'audio/mpeg': '.mp3',
+  'audio/mp3': '.mp3',
+  'audio/wav': '.wav',
+  'audio/wave': '.wav',
+  'audio/x-wav': '.wav',
+  'audio/ogg': '.ogg',
+  'audio/flac': '.flac',
+  'audio/mp4': '.m4a',
+  'audio/x-m4a': '.m4a',
+  'audio/aac': '.aac',
+  'audio/x-aac': '.aac',
+  'audio/3gpp': '.3gp',
+  'audio/3gpp2': '.3g2',
+};
+
+function extFromMime(mimetype: string): string {
+  return MIME_EXT[mimetype] ?? '';
+}
+
+/** Ошибка валидации загрузки — 400 (а не 500) с понятным текстом. */
+function uploadError(file: { mimetype?: string }, fallback: string): Error {
+  // HEIC/HEIF (фото с iPhone/части Android) сервер не конвертирует — нет sharp.
+  const msg = /^image\/hei[cf]/.test(file.mimetype ?? '')
+    ? 'Формат HEIC не поддерживается — выберите JPEG или PNG'
+    : fallback;
+  return Object.assign(new Error(msg), { status: 400 });
+}
+
 // Ensure uploads directory exists
 const uploadsDir = path.join(process.cwd(), 'uploads', 'avatars');
 if (!fs.existsSync(uploadsDir)) {
@@ -15,7 +57,7 @@ const storage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
+    const ext = extFromMime(file.mimetype);
     cb(null, `avatar-${uniqueSuffix}${ext}`);
   },
 });
@@ -27,7 +69,7 @@ const fileFilter = (req: any, file: any, cb: any) => {
   if (allowedTypes.includes(file.mimetype)) {
     cb(null, true);
   } else {
-    cb(new Error('Invalid file type. Only JPEG, PNG, GIF and WebP are allowed.'), false);
+    cb(uploadError(file, 'Поддерживаются только JPEG, PNG, GIF и WebP'), false);
   }
 };
 
@@ -53,7 +95,7 @@ const bannerStorage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
+    const ext = extFromMime(file.mimetype);
     cb(null, `cover-${uniqueSuffix}${ext}`);
   },
 });
@@ -79,7 +121,7 @@ const portfolioStorage = multer.diskStorage({
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
+    const ext = extFromMime(file.mimetype);
     cb(null, `portfolio-${uniqueSuffix}${ext}`);
   },
 });
@@ -91,12 +133,13 @@ const portfolioFileFilter = (req: any, file: any, cb: any) => {
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+    // SVG не принимаем: это активный контент (скрипты), а не «картинка».
+    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
     'audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/mp4', 'audio/aac',
     'audio/flac', 'audio/x-wav', 'audio/x-m4a',
   ];
   if (!allowedMimes.includes(file.mimetype)) {
-    return cb(new Error('Неподдерживаемый тип файла'), false);
+    return cb(uploadError(file, 'Неподдерживаемый тип файла'), false);
   }
   cb(null, true);
 };
@@ -124,7 +167,7 @@ const channelAvatarStorage = multer.diskStorage({
   destination: (req, file, cb) => { cb(null, channelAvatarDir); },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
+    const ext = extFromMime(file.mimetype);
     cb(null, `channel-${uniqueSuffix}${ext}`);
   },
 });
@@ -146,7 +189,7 @@ const postMediaStorage = multer.diskStorage({
   destination: (req, file, cb) => { cb(null, postMediaDir); },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
+    const ext = extFromMime(file.mimetype);
     cb(null, `post-${uniqueSuffix}${ext}`);
   },
 });
@@ -182,7 +225,7 @@ const orderMediaStorage = multer.diskStorage({
   destination: (req, file, cb) => { cb(null, orderMediaDir); },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
+    const ext = extFromMime(file.mimetype);
     cb(null, `order-${uniqueSuffix}${ext}`);
   },
 });
@@ -217,7 +260,7 @@ const vacancyMediaStorage = multer.diskStorage({
   destination: (req, file, cb) => { cb(null, vacancyMediaDir); },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
+    const ext = extFromMime(file.mimetype);
     cb(null, `vacancy-${uniqueSuffix}${ext}`);
   },
 });
@@ -294,7 +337,7 @@ const artistAvatarStorage = multer.diskStorage({
   destination: (req, file, cb) => { cb(null, artistAvatarDir); },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
+    const ext = extFromMime(file.mimetype);
     cb(null, `artist-avatar-${uniqueSuffix}${ext}`);
   },
 });
@@ -316,7 +359,7 @@ const artistBannerStorage = multer.diskStorage({
   destination: (req, file, cb) => { cb(null, artistBannerDir); },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
+    const ext = extFromMime(file.mimetype);
     cb(null, `artist-banner-${uniqueSuffix}${ext}`);
   },
 });

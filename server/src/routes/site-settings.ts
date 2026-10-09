@@ -14,8 +14,8 @@ const DEFAULTS: Record<string, string> = {
   guestBrowsingEnabled: 'false',
 };
 
-// Только эти ключи можно менять через PUT /api/admin/site-settings и только
-// они отдаются в GET /api/site-settings.
+// Только эти ключи отдаются в GET /api/site-settings (менять через
+// PUT /api/admin/site-settings можно только их же — allowlist SITE_SETTING_FLAGS в admin.ts).
 export const ALLOWED_SITE_SETTING_KEYS = Object.keys(DEFAULTS);
 
 // Короткий кэш флагов: guestBrowsingEnabled проверяется на каждом гостевом
@@ -63,24 +63,6 @@ router.get('/', async (_req, res) => {
     res.status(500).json({ error: 'Failed to load settings' });
   }
 });
-
-/**
- * Валидирует тело PUT /api/admin/site-settings: только ключи из allowlist,
- * значения — 'true' | 'false' (boolean приводится к строке).
- * Возвращает нормализованные обновления или текст ошибки.
- */
-export function sanitizeSiteSettingsUpdate(body: unknown): { updates: Record<string, string> } | { error: string } {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) return { error: 'Ожидается объект настроек' };
-  const updates: Record<string, string> = {};
-  for (const [key, raw] of Object.entries(body as Record<string, unknown>)) {
-    if (!ALLOWED_SITE_SETTING_KEYS.includes(key)) return { error: `Неизвестная настройка: ${key}` };
-    const value = typeof raw === 'boolean' ? String(raw) : raw;
-    if (value !== 'true' && value !== 'false') return { error: `Недопустимое значение для ${key}` };
-    updates[key] = value;
-  }
-  if (Object.keys(updates).length === 0) return { error: 'Нет настроек для обновления' };
-  return { updates };
-}
 
 // PUT /api/site-settings — admin only (called via admin routes)
 export async function updateSiteSettings(updates: Record<string, string>) {

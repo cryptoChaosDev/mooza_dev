@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { BriefcaseBusiness, LogOut } from 'lucide-react';
@@ -14,6 +15,25 @@ import { useAuthStore } from '../stores/authStore';
  */
 const PROFESSION_REQUIRED_SINCE = '2026-07-16T15:00:00Z';
 
+/**
+ * Задуманный поток для новичка: гейт «Укажите профессию» → /professions/new →
+ * слайды /onboarding → профиль. Форма профессии после сохранения уводит на
+ * /profile, и раньше слайды так и не показывались (onboardingCompletedAt
+ * оставался пустым). Флаг ставится при уходе из гейта на выбор профессии и
+ * снимается, когда профессия сохранена: тогда гейт сам ведёт на /onboarding.
+ */
+const GATE_ONBOARDING_KEY = 'mooza_gate_onboarding';
+
+function readGateFlag(): boolean {
+  try { return sessionStorage.getItem(GATE_ONBOARDING_KEY) === '1'; } catch { return false; }
+}
+function setGateFlag(on: boolean) {
+  try {
+    if (on) sessionStorage.setItem(GATE_ONBOARDING_KEY, '1');
+    else sessionStorage.removeItem(GATE_ONBOARDING_KEY);
+  } catch { /* storage unavailable — onboarding prompt in the feed stays as a fallback */ }
+}
+
 export default function ProfessionGate() {
   const { user, logout } = useAuthStore();
   const location = useLocation();
@@ -29,6 +49,19 @@ export default function ProfessionGate() {
     enabled: maybeGated,
     staleTime: 60_000,
   });
+
+  // Профессия выбрана из гейта → показать слайды онбординга (один раз).
+  const hasProfession = (me?.userProfessions?.length ?? 0) > 0 || (user?.userProfessions?.length ?? 0) > 0;
+  const onboardingDone = !!(me?.onboardingCompletedAt || user?.onboardingCompletedAt);
+  useEffect(() => {
+    if (!user || !readGateFlag() || !hasProfession) return;
+    // Ещё на форме профессии — ждём, пока она сохранит и уведёт со страницы.
+    if (location.pathname.startsWith('/professions')) return;
+    setGateFlag(false);
+    if (!onboardingDone && location.pathname !== '/onboarding') {
+      navigate('/onboarding', { replace: true });
+    }
+  }, [user, hasProfession, onboardingDone, location.pathname, navigate]);
 
   if (!maybeGated || !me) return null;
   if ((me.userProfessions?.length ?? 0) > 0) return null;
@@ -54,13 +87,17 @@ export default function ProfessionGate() {
         одну профессию, чтобы вас могли найти в каталоге, — и продолжайте.
       </p>
       <button
-        onClick={() => navigate('/professions/new')}
+        onClick={() => {
+          // Новичок ещё не видел слайдов — после сохранения профессии покажем их.
+          if (!me.onboardingCompletedAt) setGateFlag(true);
+          navigate('/professions/new');
+        }}
         className="w-full max-w-xs py-3 rounded-2xl bg-primary-600 hover:bg-primary-500 text-white text-sm font-semibold transition-colors"
       >
         Выбрать профессию
       </button>
       <button
-        onClick={() => { logout(); navigate('/login'); }}
+        onClick={() => { setGateFlag(false); logout(); navigate('/login'); }}
         className="flex items-center gap-1.5 mt-4 text-xs text-slate-500 hover:text-slate-300 transition-colors"
       >
         <LogOut size={12} /> Выйти из аккаунта

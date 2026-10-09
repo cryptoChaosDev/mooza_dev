@@ -55,7 +55,7 @@ jest.mock('../middleware/auth', () => ({
   },
   invalidateAuthCache: () => {},
 }));
-jest.mock('../socket', () => ({ emitToUser: jest.fn(), notifyUser: jest.fn(), isUserOnline: jest.fn(() => false) }));
+jest.mock('../socket', () => ({ emitToUser: jest.fn(), notifyUser: jest.fn(), isUserOnline: jest.fn(() => false), disconnectUserSockets: jest.fn() }));
 jest.mock('../utils/telegram', () => ({
   tgLog: jest.fn(),
   escTg: (s: any) => String(s ?? ''),
@@ -70,6 +70,7 @@ jest.mock('../utils/mailer', () => ({
   sendVerificationEmail: jest.fn(async () => {}),
   sendPasswordResetEmail: jest.fn(async () => {}),
   sendWelcomeEmail: jest.fn(async () => {}),
+  sendEmailChangeCode: jest.fn(async () => {}),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -243,45 +244,51 @@ describe('prompt for public consent', () => {
   });
 });
 
-describe('registration consents → ConsentEvent', () => {
-  it('register stores consents in the pending payload; verify-email writes pd/terms/marketing grants', async () => {
-    m('user').findUnique.mockResolvedValue(null);
-    m('user').findFirst.mockResolvedValue(null);
-    const reg = await request(app).post('/api/auth/register').send({
-      email: 'new@moooza-test.ru', password: 'Passw0rd!', firstName: 'Иван', lastName: 'Петров',
-      consentPd: true, consentMarketing: true,
-    });
-    expect(reg.status).toBe(201);
-    const payload = m('pendingRegistration').upsert.mock.calls[0][0].create.payload;
-    expect(payload.consentPd).toBe(true);
-    expect(payload.consentMarketing).toBe(true);
-    expect(payload._consentMeta).toBeDefined();
+describe('registration consents → ConsentEvent (поток dev: consentPd обязателен)', () => {
+  const body = (over: Record<string, unknown> = {}) => ({
+    email: 'new@moooza-test.ru', password: 'Secret_2026!', firstName: 'Иван', lastName: 'Петров',
+    birthDate: '15.05.2000', consentPd: true, userProfessions: [{ professionId: 'prof-1' }],
+    ...over,
+  });
 
+  async function registerAndVerify(over: Record<string, unknown>) {
+    m('profession').count.mockResolvedValue(1);
+    const reg = await request(app).post('/api/auth/register').send(body(over));
+    expect(reg.status).toBe(201);
+    const payload = m('pendingRegistration').create.mock.calls[0][0].data.payload;
     m('pendingRegistration').findUnique.mockResolvedValue({
       email: 'new@moooza-test.ru', passwordHash: 'hash', code: '12345678', expiresAt: new Date(Date.now() + 60_000), payload,
     });
-    m('user').create.mockResolvedValue({ id: 'new-user', email: 'new@moooza-test.ru', firstName: 'Иван', lastName: 'Петров', city: null });
-    m('pendingRegistration').delete.mockResolvedValue({});
-
+    m('user').create.mockResolvedValue({ id: 'new-user', email: 'new@moooza-test.ru', firstName: 'Иван', lastName: 'Петров' });
     const ver = await request(app).post('/api/auth/verify-email').send({ email: 'new@moooza-test.ru', code: '12345678' });
     expect(ver.status).toBe(200);
-    const events = m('consentEvent').create.mock.calls.map((c: any[]) => `${c[0].data.type}:${c[0].data.action}:${c[0].data.source}`);
-    expect(events.sort()).toEqual(['marketing:grant:register', 'pd:grant:register', 'terms:grant:register']);
+    return payload;
+  }
+
+  const events = () => m('consentEvent').create.mock.calls
+    .map((c: any[]) => `${c[0].data.type}:${c[0].data.action}:${c[0].data.source}`)
+    .sort();
+
+  it('pd + terms + marketing → three grant events; IP/UA captured at /register', async () => {
+    const payload = await registerAndVerify({ consentMarketing: true });
+    expect(payload.consentPdAt).toBeTruthy();
+    expect(payload.consentMarketingAt).toBeTruthy();
+    expect(payload._consentMeta).toBeDefined();
+    expect(events()).toEqual(['marketing:grant:register', 'pd:grant:register', 'terms:grant:register']);
+    const pd = m('consentEvent').create.mock.calls.find((c: any[]) => c[0].data.type === 'pd')[0].data;
+    expect(pd.version).toBe('2026-05-31');
+    expect(pd.userId).toBe('new-user');
   });
 
-  it('old client without consent flags still registers (no events)', async () => {
-    m('user').findUnique.mockResolvedValue(null);
-    const reg = await request(app).post('/api/auth/register').send({
-      email: 'old@moooza-test.ru', password: 'Passw0rd!', firstName: 'Иван', lastName: 'Петров',
-    });
-    expect(reg.status).toBe(201);
-    const payload = m('pendingRegistration').upsert.mock.calls[0][0].create.payload;
-    m('pendingRegistration').findUnique.mockResolvedValue({
-      email: 'old@moooza-test.ru', passwordHash: 'hash', code: '12345678', expiresAt: new Date(Date.now() + 60_000), payload,
-    });
-    m('user').create.mockResolvedValue({ id: 'old-user', email: 'old@moooza-test.ru', firstName: 'Иван', lastName: 'Петров', city: null });
-    const ver = await request(app).post('/api/auth/verify-email').send({ email: 'old@moooza-test.ru', code: '12345678' });
-    expect(ver.status).toBe(200);
-    expect(m('consentEvent').create).not.toHaveBeenCalled();
+  it('without marketing → only pd + terms', async () => {
+    await registerAndVerify({});
+    expect(events()).toEqual(['pd:grant:register', 'terms:grant:register']);
+  });
+
+  it('ConsentEvent failure does not break verification', async () => {
+    m('consentEvent').create.mockRejectedValue(new Error('db down'));
+    const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    await registerAndVerify({});
+    spy.mockRestore();
   });
 });

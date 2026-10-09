@@ -20,6 +20,7 @@
  */
 
 import type { Prisma } from '@prisma/client';
+import sanitizeHtml from 'sanitize-html';
 import { prisma } from '../index';
 import { maskContacts, maskContactsDeep, stripLinksForGuest, CONTACT_MASK } from './maskContacts';
 import { buildFeedWhere, diversifyByAuthor, clampInt, TEAM_EMAIL, FeedFilterQuery } from './feedQuery';
@@ -262,7 +263,7 @@ export function onPublicDataChanged(cb: PublicDataListener): () => void {
 
 /** Сообщить об изменении (отзыв/выдача согласия, запрет индексации…). */
 export function notifyPublicDataChanged(change: PublicDataChange): void {
-  guestFeedCache.clear();
+  clearGuestFeedCache();
   for (const cb of publicDataListeners) {
     try { cb(change); } catch (err) { console.error('[publicData] listener failed:', err); }
   }
@@ -296,12 +297,6 @@ function idName(x: { id: string; name: string } | null | undefined) {
 function effectivePro(u: { isPro?: boolean | null; proUntil?: Date | null }): boolean {
   if (u.isPro) return true;
   return !!(u.proUntil && new Date(u.proUntil).getTime() > Date.now());
-}
-
-function ymArtistIdFromUrl(url: unknown): string | null {
-  if (!url) return null;
-  const m = /music\.yandex\.(?:ru|com)\/artist\/(\d+)/i.exec(String(url));
-  return m ? m[1] : null;
 }
 
 // ── Услуга (UserService) ─────────────────────────────────────────────────────
@@ -738,7 +733,6 @@ export async function getPublicArtist(artistId: string): Promise<PublicResult<an
   );
 
   const confirmedMembers = publicMembers.map((ua: any) => ({
-    membershipId: ua.id,
     isOwner: !!ua.isOwner,
     participationStatus: ua.participationStatus,
     user: toPublicPerson(ua.user),
@@ -749,7 +743,6 @@ export async function getPublicArtist(artistId: string): Promise<PublicResult<an
   const members = publicMembers.map((ua: any) => {
     const p = toPublicPerson(ua.user);
     return {
-      membershipId: ua.id,
       id: p.id,
       firstName: p.firstName,
       lastName: p.lastName,
@@ -775,15 +768,15 @@ export async function getPublicArtist(artistId: string): Promise<PublicResult<an
   let ymData = pickYmData(artist.ymData);
   const similar: any[] = Array.isArray(ymData?.similarArtists) ? ymData.similarArtists : [];
   if (similar.length > 0) {
-    const ours = await prisma.artist.findMany({
-      where: { status: { in: ['VERIFIED', 'APPROVED'] }, NOT: { id: artist.id } },
-      select: { id: true, socialLinks: true },
-    });
-    const ymToMooza = new Map<string, string>();
-    for (const a of ours) {
-      const oid = ymArtistIdFromUrl(((a.socialLinks as any) ?? {}).yandex_music);
-      if (oid) ymToMooza.set(oid, a.id);
-    }
+    // Похожие с ЯМ, которые есть на Moooza, — по индексируемой колонке ymId (как в dev-ветке артиста).
+    const similarIds = [...new Set(similar.map((x: any) => String(x?.ymId ?? '')).filter((x) => /^\d+$/.test(x)))];
+    const ours: Array<{ id: string; ymId: string | null }> = similarIds.length
+      ? await prisma.artist.findMany({
+          where: { ymId: { in: similarIds }, status: { in: ['VERIFIED', 'APPROVED'] }, NOT: { id: artist.id } },
+          select: { id: true, ymId: true },
+        })
+      : [];
+    const ymToMooza = new Map<string, string>((ours ?? []).map((a) => [String(a.ymId), a.id]));
     ymData = {
       ...ymData,
       similarArtists: similar.map((s: any) => ({ ...s, moozaArtistId: ymToMooza.get(String(s?.ymId)) ?? null })),
@@ -841,7 +834,7 @@ export async function getPublicArtistReleases(artistId: string): Promise<PublicR
   if (!artist) return notFound();
   const rows: any[] = await prisma.release.findMany({
     where: { artistId: artist.id },
-    orderBy: [{ releaseDate: 'desc' }, { createdAt: 'desc' }],
+    orderBy: [{ releaseDate: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
     select: { id: true, title: true, coverUrl: true, platform: true, url: true, releaseDate: true, updatedAt: true },
   });
   const data = rows.map((r) => ({
@@ -1051,17 +1044,28 @@ export async function getPublicVacancy(vacancyId: string): Promise<PublicResult<
 // ─────────────────────────────────────────────────────────────────────────────
 // Лента и пост
 // ─────────────────────────────────────────────────────────────────────────────
+//
+// Форма поста — ТА ЖЕ, что у авторизованной ленты (routes/posts.ts → decoratePosts):
+// isLiked/isSaved/myVote/myReaction/reactionSummary, `_count`, `comments`. Для гостя:
+// comments: [] (только число в _count.comments), likes/savedBy/pollVotes: [],
+// myReaction/myVote: null, автор — публичная персона, контакты в тексте маскируются.
+// Ответ: массив (легаси ?offset) или { items, nextCursor } (?cursor), как у dev.
 
 export const GUEST_FEED_MAX_LIMIT = 20;
-/** Глубина гостевой ленты: дальше offset 200 — «стена» «войдите». */
+/** Глубина гостевой ленты: дальше 200 постов — «стена» «войдите». */
 export const GUEST_FEED_MAX_DEPTH = 200;
 const GUEST_FEED_CACHE_TTL_MS = 60 * 1000;
 const GUEST_FEED_CACHE_MAX = 300;
-const guestFeedCache = new Map<string, { at: number; data: any[] }>();
+const guestFeedCache = new Map<string, { at: number; data: any }>();
+// Ранжированный список (popular/discussed/smart) у всех гостей общий — снапшот
+// на набор фильтров; страницы курсора режутся из одного и того же списка.
+const GUEST_RANK_TTL_MS = 5 * 60 * 1000;
+const guestRankCache = new Map<string, { at: number; ids: string[] }>();
 
 /** Сбросить микрокэш гостевой ленты (тесты / после изменений). */
 export function clearGuestFeedCache() {
   guestFeedCache.clear();
+  guestRankCache.clear();
 }
 
 /**
@@ -1095,6 +1099,7 @@ const REPOST_SELECT = {
   images: true,
   audioUrl: true,
   audioName: true,
+  mentions: true,
   createdAt: true,
   artistId: true,
   author: { select: PERSON_SELECT },
@@ -1122,7 +1127,11 @@ export const GUEST_POST_SELECT = {
   repostComment: true,
   repostDeleted: true,
   repostOfId: true,
+  channelId: true,
   artistId: true,
+  serviceId: true,
+  orderId: true,
+  vacancyId: true,
   createdAt: true,
   updatedAt: true,
   author: { select: PERSON_SELECT },
@@ -1211,6 +1220,67 @@ function sanitizeMentions(mentions: unknown, publicUserIds: Set<string>): any[] 
     });
 }
 
+const GUEST_HTML_TAGS = ['p', 'br', 'strong', 'b', 'em', 'i', 's', 'strike', 'del', 'u', 'ul', 'ol', 'li', 'blockquote', 'a', 'span'];
+
+function looksLikeHtml(s: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(s);
+}
+
+/**
+ * Контент поста для гостя. HTML (TipTap) — тот же whitelist тегов, что у dev,
+ * плюс: упоминания людей без согласия → «@Участник Moooza» без data-id; ссылки
+ * на контакты (t.me, wa.me, mailto…) теряют href; контакты в тексте маскируются.
+ * Plain-text (легаси) — просто maskContacts.
+ */
+export function guestPostContent(raw: string | null | undefined, publicUserIds: Set<string>): string {
+  const text = raw ?? '';
+  if (!text) return '';
+  if (!looksLikeHtml(text)) return maskContacts(text);
+  return sanitizeHtml(text, {
+    allowedTags: GUEST_HTML_TAGS,
+    allowedAttributes: {
+      a: ['href', 'target', 'rel'],
+      span: ['class', 'data-type', 'data-id', 'data-label', 'data-mention-suggestion-char'],
+    },
+    allowedClasses: { span: ['post-mention'] },
+    allowedSchemes: ['http', 'https'],
+    allowedSchemesAppliedToAttributes: ['href'],
+    allowProtocolRelative: false,
+    disallowedTagsMode: 'discard',
+    transformTags: {
+      a: (_tag, attribs): sanitizeHtml.Tag => {
+        const href = attribs.href;
+        const attrs: sanitizeHtml.Attributes = {};
+        if (href && maskContacts(href) === href) {
+          attrs.href = href;
+          attrs.target = '_blank';
+          attrs.rel = 'noopener noreferrer nofollow';
+        }
+        return { tagName: 'a', attribs: attrs };
+      },
+      span: (_tag, attribs): sanitizeHtml.Tag => {
+        const isMention = attribs['data-type'] === 'mention' || /(^|\s)post-mention(\s|$)/.test(attribs.class || '');
+        if (!isMention) return { tagName: 'span', attribs: {} };
+        const id = attribs['data-id'] || '';
+        if (id && publicUserIds.has(id)) return { tagName: 'span', attribs };
+        return { tagName: 'span', attribs: {}, text: `@${ANON_PERSON_NAME}` };
+      },
+    },
+    textFilter: (t) => maskContacts(t),
+  });
+}
+
+function collectMentionIds(p: any, into: Set<string>) {
+  if (Array.isArray(p?.mentions)) {
+    for (const m of p.mentions as any[]) {
+      if (m && (m.type ?? 'user') === 'user' && m.id) into.add(String(m.id));
+    }
+  }
+  if (typeof p?.content === 'string') {
+    for (const mm of p.content.matchAll(/data-id="([\w-]{1,64})"/g)) into.add(mm[1]);
+  }
+}
+
 function serializePoll(pollOptions: unknown): any[] | null {
   if (!Array.isArray(pollOptions)) return null;
   return pollOptions.map((o: any) => ({
@@ -1219,31 +1289,37 @@ function serializePoll(pollOptions: unknown): any[] | null {
   }));
 }
 
-function serializeRepost(r: any) {
+function serializeRepost(r: any, publicUserIds: Set<string>) {
   return {
     id: r.id,
     type: r.type,
     title: maskContacts(r.title ?? null),
-    content: maskContacts(r.content ?? ''),
+    content: guestPostContent(r.content, publicUserIds),
     imageUrl: r.imageUrl ?? null,
     images: r.images ?? [],
     audioUrl: r.audioUrl ?? null,
     audioName: r.audioName ?? null,
+    mentions: sanitizeMentions(r.mentions, publicUserIds),
     createdAt: r.createdAt,
+    artistId: r.artist && r.artist.status !== 'REJECTED' ? r.artistId ?? null : null,
     author: toPublicPerson(r.author, r.type === 'order' ? ANON_CUSTOMER_NAME : ANON_PERSON_NAME),
     artist: r.artist ? { id: r.artist.id, name: r.artist.name, avatar: r.artist.avatar ?? null } : null,
   };
 }
 
-function serializeGuestPost(p: any, reactionCounts: Map<string, Array<{ emoji: string; count: number }>>, publicUserIds: Set<string>) {
+function serializeGuestPost(
+  p: any,
+  reactionSummary: Map<string, Array<{ emoji: string; count: number }>>,
+  publicUserIds: Set<string>,
+) {
   const author = toPublicPerson(p.author, p.type === 'order' ? ANON_CUSTOMER_NAME : ANON_PERSON_NAME);
-  const repostVisible = p.repostOf && isPostVisibleToGuest(p.repostOf);
+  const repostVisible = !!p.repostOf && isPostVisibleToGuest(p.repostOf);
   const counts = p._count ?? {};
   return {
     id: p.id,
     type: p.type,
     title: maskContacts(p.title ?? null),
-    content: maskContacts(p.content ?? ''),
+    content: guestPostContent(p.content, publicUserIds),
     category: p.category ?? null,
     city: p.city ?? null,
     imageUrl: p.imageUrl ?? null,
@@ -1259,8 +1335,13 @@ function serializeGuestPost(p: any, reactionCounts: Map<string, Array<{ emoji: s
     repostComment: maskContacts(p.repostComment ?? null),
     repostDeleted: !!p.repostDeleted,
     repostOfId: repostVisible ? p.repostOfId : null,
-    repostOf: repostVisible ? serializeRepost(p.repostOf) : null,
+    repostOf: repostVisible ? serializeRepost(p.repostOf, publicUserIds) : null,
     repostHidden: !!p.repostOfId && !repostVisible,
+    channelId: p.channelId ?? null,
+    artistId: p.artistId ?? null,
+    serviceId: p.serviceId ?? null,
+    orderId: p.orderId ?? null,
+    vacancyId: p.vacancyId ?? null,
     author,
     channel: p.channel ? { id: p.channel.id, name: p.channel.name, avatar: p.channel.avatar ?? null } : null,
     artist: p.artist ? { id: p.artist.id, name: p.artist.name, avatar: p.artist.avatar ?? null } : null,
@@ -1287,6 +1368,7 @@ function serializeGuestPost(p: any, reactionCounts: Map<string, Array<{ emoji: s
           budgetTo: p.order.budgetTo ?? null,
           deadline: p.order.deadline ?? null,
           status: p.order.status,
+          // вместо executorId (id человека) — только признак
           hasExecutor: !!p.order.executorId,
           service: p.order.service
             ? { name: p.order.service.name, section: p.order.service.section ? { name: p.order.service.section.name } : null }
@@ -1305,26 +1387,30 @@ function serializeGuestPost(p: any, reactionCounts: Map<string, Array<{ emoji: s
           profession: p.vacancy.profession ? { name: p.vacancy.profession.name } : null,
         }
       : null,
-    // Комментарии гостю не показываются — только их число.
+    // Комментарии гостю не показываются — только их число (_count.comments).
     comments: [],
-    commentsCount: counts.comments ?? 0,
-    // Реакции — только агрегатом (без userId). `reactions` пуст для совместимости
-    // со старым клиентом, который считает реакции по массиву.
-    reactions: [],
-    reactionCounts: reactionCounts.get(p.id) ?? [],
+    likes: [],
+    savedBy: [],
+    pollVotes: [],
     _count: {
       likes: counts.likes ?? 0,
       comments: counts.comments ?? 0,
       savedBy: counts.savedBy ?? 0,
-      reposts: counts.reposts ?? 0,
       reactions: counts.reactions ?? 0,
+      reposts: counts.reposts ?? 0,
     },
     isLiked: false,
     isSaved: false,
+    myVote: null,
+    myReaction: null,
+    // Реакции — только агрегатом по эмодзи (без userId), как в dev.
+    reactionSummary: reactionSummary.get(p.id) ?? [],
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   };
 }
+
+const REACTION_ORDER = ['👍', '👎', '👌', '😢', '😂', '🔥', '❤️'];
 
 async function serializeGuestPosts(rawPosts: any[]): Promise<any[]> {
   // Видимость задана в where; повторяем проверку в памяти (defense in depth).
@@ -1337,33 +1423,33 @@ async function serializeGuestPosts(rawPosts: any[]): Promise<any[]> {
     where: { postId: { in: ids } },
     _count: { _all: true },
   });
-  const reactionCounts = new Map<string, Array<{ emoji: string; count: number }>>();
+  const summary = new Map<string, Array<{ emoji: string; count: number }>>();
   for (const g of grouped ?? []) {
-    const list = reactionCounts.get(g.postId) ?? [];
+    const list = summary.get(g.postId) ?? [];
     list.push({ emoji: g.emoji, count: g._count?._all ?? 0 });
-    reactionCounts.set(g.postId, list);
+    summary.set(g.postId, list);
   }
-  for (const list of reactionCounts.values()) list.sort((a, b) => b.count - a.count);
+  for (const list of summary.values()) {
+    list.sort((a, b) => b.count - a.count || REACTION_ORDER.indexOf(a.emoji) - REACTION_ORDER.indexOf(b.emoji));
+  }
 
   const mentionIds = new Set<string>();
   for (const p of posts) {
-    if (!Array.isArray(p.mentions)) continue;
-    for (const m of p.mentions as any[]) {
-      if (m && (m.type ?? 'user') === 'user' && m.id) mentionIds.add(String(m.id));
-    }
+    collectMentionIds(p, mentionIds);
+    if (p.repostOf) collectMentionIds(p.repostOf, mentionIds);
   }
   let publicUserIds = new Set<string>();
   if (mentionIds.size > 0) {
     const rows = await prisma.user.findMany({
-      where: { AND: [{ id: { in: [...mentionIds] } }, publicPersonWhere()] },
+      where: { AND: [{ id: { in: [...mentionIds].slice(0, 500) } }, publicPersonWhere()] },
       select: { id: true },
     });
     publicUserIds = new Set((rows ?? []).map((r: any) => r.id));
   }
-  return posts.map((p) => serializeGuestPost(p, reactionCounts, publicUserIds));
+  return posts.map((p) => serializeGuestPost(p, summary, publicUserIds));
 }
 
-/** Пост по id для гостя (те же правила видимости, что в ленте). */
+/** Пост по id для гостя (те же правила видимости и та же форма, что в ленте). */
 export async function getPublicPost(postId: string): Promise<PublicResult<any>> {
   if (!postId) return notFound();
   const post = await prisma.post.findFirst({
@@ -1386,38 +1472,28 @@ export interface PublicFeedParams extends FeedFilterQuery {
   sort?: unknown;
   limit?: unknown;
   offset?: unknown;
+  /** undefined — легаси-ответ массивом; строка ('' — первая страница) — { items, nextCursor }. */
+  cursor?: unknown;
 }
 
-/**
- * Страница гостевой ленты: limit ≤ 20, глубина ≤ 200 (offset ≥ 200 → []),
- * фильтры — как у авторизованной ленты (lib/feedQuery), видимость —
- * guestPostVisibilityWhere, без комментариев, реакции агрегатом.
- * sort: new (по умолчанию) | popular | discussed | smart (глобальный тренд без
- * персонализации). Микрокэш 60 с на набор параметров.
- */
-export async function getPublicFeedPage(params: PublicFeedParams = {}): Promise<PublicResult<any[]>> {
-  const offset = clampInt(params.offset, 0, 0, Number.MAX_SAFE_INTEGER);
-  if (offset >= GUEST_FEED_MAX_DEPTH) return found([], null, true);
-  const limit = Math.min(clampInt(params.limit, GUEST_FEED_MAX_LIMIT, 1, GUEST_FEED_MAX_LIMIT), GUEST_FEED_MAX_DEPTH - offset);
-  const sortRaw = params.sort ? String(params.sort) : 'new';
-  const sort = ['new', 'popular', 'discussed', 'smart'].includes(sortRaw) ? sortRaw : 'new';
-  if (params.authorKind && String(params.authorKind) === 'mine') return found([], null, true);
+const GUEST_FEED_SORTS = ['new', 'popular', 'discussed', 'smart'];
+const ISO_ID_CURSOR_RE = /^g(\d{1,4}):(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z)\|([\w-]{1,64})$/;
+const DEPTH_CURSOR_RE = /^g(\d{1,4})$/;
 
-  const cacheKey = JSON.stringify([
-    sort, offset, limit,
-    String(params.type ?? ''), String(params.authorKind ?? ''), String(params.period ?? ''), String(params.city ?? ''),
-    String(params.employment ?? ''), String(params.artistType ?? ''), String(params.genre ?? ''),
-  ]);
-  const nowMs = Date.now();
-  const cached = guestFeedCache.get(cacheKey);
-  if (cached && nowMs - cached.at < GUEST_FEED_CACHE_TTL_MS) return found(cached.data, null, true);
-
-  const team = await prisma.user.findUnique({ where: { email: TEAM_EMAIL }, select: { id: true } });
-  const { where: filterWhere } = buildFeedWhere(params, { viewerId: null, teamUserId: team?.id ?? null });
-  const where: Prisma.PostWhereInput = { AND: [filterWhere, guestPostVisibilityWhere()] };
-
-  let posts: any[];
-  if (sort === 'popular' || sort === 'smart') {
+async function guestRankedIds(sort: string, where: Prisma.PostWhereInput, key: string): Promise<string[]> {
+  const now = Date.now();
+  const hit = guestRankCache.get(key);
+  if (hit && now - hit.at < GUEST_RANK_TTL_MS) return hit.ids;
+  let ids: string[];
+  if (sort === 'discussed') {
+    const rows: any[] = await prisma.post.findMany({
+      where,
+      select: { id: true },
+      orderBy: [{ comments: { _count: 'desc' } }, { createdAt: 'desc' }, { id: 'desc' }],
+      take: GUEST_FEED_MAX_DEPTH,
+    });
+    ids = rows.map((r) => r.id);
+  } else {
     const cands: any[] = await prisma.post.findMany({
       where,
       select: {
@@ -1427,9 +1503,8 @@ export async function getPublicFeedPage(params: PublicFeedParams = {}): Promise<
       orderBy: { createdAt: 'desc' },
       take: 600,
     });
-    let orderedIds: string[];
     if (sort === 'popular') {
-      orderedIds = cands
+      ids = cands
         .map((p) => ({
           id: p.id,
           t: new Date(p.createdAt).getTime(),
@@ -1438,30 +1513,111 @@ export async function getPublicFeedPage(params: PublicFeedParams = {}): Promise<
         .sort((a, b) => b.s - a.s || b.t - a.t)
         .map((x) => x.id);
     } else {
+      // smart для гостя — глобальный тренд без персонализации (как dev для гостя).
       const HALF_LIFE_H = 20;
       const scored = cands.map((p) => {
-        const ageH = Math.max(0, (nowMs - new Date(p.createdAt).getTime()) / 3_600_000);
+        const ageH = Math.max(0, (now - new Date(p.createdAt).getTime()) / 3_600_000);
         const freshness = Math.pow(0.5, ageH / HALF_LIFE_H);
         const c = p._count;
         const eng = Math.log1p(c.reactions + 2 * c.comments + 0.5 * c.likes + 1.5 * c.savedBy);
         return { id: p.id, authorId: p.authorId, score: freshness * (1 + 0.6 * eng) };
       });
       scored.sort((a, b) => b.score - a.score);
-      orderedIds = diversifyByAuthor(scored).map((x) => x.id);
+      ids = diversifyByAuthor(scored).map((x) => x.id);
     }
-    const pageIds = orderedIds.slice(offset, offset + limit);
+  }
+  ids = ids.slice(0, GUEST_FEED_MAX_DEPTH);
+  if (guestRankCache.size >= GUEST_FEED_CACHE_MAX) guestRankCache.clear();
+  guestRankCache.set(key, { at: now, ids });
+  return ids;
+}
+
+/**
+ * Страница гостевой ленты: limit ≤ 20, глубина ≤ 200 (дальше — пусто, nextCursor
+ * null), фильтры — как у авторизованной ленты (lib/feedQuery), видимость —
+ * guestPostVisibilityWhere, без комментариев, реакции агрегатом.
+ * sort: new (по умолчанию) | popular | discussed | smart (глобальный тренд).
+ * Пагинация: ?offset (ответ — массив) или ?cursor (ответ — { items, nextCursor },
+ * курсор непрозрачный: `g<глубина>[:<ISO>|<id>]`). Микрокэш 60 с.
+ */
+export async function getPublicFeedPage(params: PublicFeedParams = {}): Promise<PublicResult<any>> {
+  const useCursor = params.cursor !== undefined && params.cursor !== null;
+  const cursorStr = useCursor ? String(params.cursor) : '';
+  const limitRaw = clampInt(params.limit, GUEST_FEED_MAX_LIMIT, 1, GUEST_FEED_MAX_LIMIT);
+  const sortRaw = params.sort ? String(params.sort) : 'new';
+  const sort = GUEST_FEED_SORTS.includes(sortRaw) ? sortRaw : 'new';
+
+  // Глубина (сколько постов уже пролистано) и позиция keyset-курсора.
+  let depth = 0;
+  let keyset: { at: Date; id: string } | null = null;
+  if (useCursor) {
+    const m1 = ISO_ID_CURSOR_RE.exec(cursorStr);
+    const m2 = DEPTH_CURSOR_RE.exec(cursorStr);
+    if (m1) {
+      depth = Number(m1[1]);
+      const at = new Date(m1[2]);
+      if (!Number.isNaN(at.getTime())) keyset = { at, id: m1[3] };
+    } else if (m2) {
+      depth = Number(m2[1]);
+    }
+  } else {
+    depth = clampInt(params.offset, 0, 0, Number.MAX_SAFE_INTEGER);
+  }
+  const empty = useCursor ? { items: [], nextCursor: null } : [];
+  if (depth >= GUEST_FEED_MAX_DEPTH) return found(empty, null, true);
+  const limit = Math.min(limitRaw, GUEST_FEED_MAX_DEPTH - depth);
+
+  const filterKey = JSON.stringify([
+    String(params.type ?? ''), String(params.authorKind ?? ''), String(params.period ?? ''), String(params.city ?? ''),
+    String(params.employment ?? ''), String(params.artistType ?? ''), String(params.genre ?? ''),
+  ]);
+  const cacheKey = JSON.stringify([sort, useCursor ? `c:${cursorStr}` : `o:${depth}`, limit, filterKey]);
+  const nowMs = Date.now();
+  const cached = guestFeedCache.get(cacheKey);
+  if (cached && nowMs - cached.at < GUEST_FEED_CACHE_TTL_MS) return found(cached.data, null, true);
+
+  const team = await prisma.user.findUnique({ where: { email: TEAM_EMAIL }, select: { id: true } });
+  const { where: filterWhere } = buildFeedWhere(params, { viewerId: null, teamUserId: team?.id ?? null });
+  const where: Prisma.PostWhereInput = { AND: [filterWhere, guestPostVisibilityWhere()] };
+
+  let posts: any[];
+  let nextCursor: string | null = null;
+  if (sort !== 'new') {
+    const ids = await guestRankedIds(sort, where, `${sort}|${filterKey}`);
+    const pageIds = ids.slice(depth, depth + limit);
     posts = pageIds.length
       ? await prisma.post.findMany({ where: { AND: [{ id: { in: pageIds } }, guestPostVisibilityWhere()] }, select: GUEST_POST_SELECT })
       : [];
     const orderMap = new Map(pageIds.map((id, i) => [id, i]));
     posts.sort((a, b) => (orderMap.get(a.id)! - orderMap.get(b.id)!));
+    if (depth + limit < ids.length) nextCursor = `g${depth + limit}`;
+  } else if (useCursor) {
+    const keysetWhere: Prisma.PostWhereInput | null = keyset
+      ? { OR: [{ createdAt: { lt: keyset.at } }, { createdAt: keyset.at, id: { lt: keyset.id } }] }
+      : null;
+    const rows: any[] = await prisma.post.findMany({
+      where: keysetWhere ? { AND: [where, keysetWhere] } : where,
+      select: GUEST_POST_SELECT,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+    });
+    posts = rows.slice(0, limit);
+    const last = posts[posts.length - 1];
+    if (rows.length > limit && last && depth + limit < GUEST_FEED_MAX_DEPTH) {
+      nextCursor = `g${depth + limit}:${new Date(last.createdAt).toISOString()}|${last.id}`;
+    }
   } else {
-    const orderBy: Prisma.PostOrderByWithRelationInput[] =
-      sort === 'discussed' ? [{ comments: { _count: 'desc' } }, { createdAt: 'desc' }] : [{ createdAt: 'desc' }];
-    posts = await prisma.post.findMany({ where, select: GUEST_POST_SELECT, orderBy, take: limit, skip: offset });
+    posts = await prisma.post.findMany({
+      where,
+      select: GUEST_POST_SELECT,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit,
+      skip: depth,
+    });
   }
 
-  const data = await serializeGuestPosts(posts);
+  const items = await serializeGuestPosts(posts);
+  const data = useCursor ? { items, nextCursor } : items;
   if (guestFeedCache.size >= GUEST_FEED_CACHE_MAX) guestFeedCache.clear();
   guestFeedCache.set(cacheKey, { at: nowMs, data });
   return found(data, null, true);

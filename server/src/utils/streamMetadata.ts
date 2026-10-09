@@ -1,24 +1,30 @@
 // streamMetadata.ts — best-effort prefill of release/clip metadata from a public URL.
 //
 // This is PREFILL ONLY: the user can always edit the fields manually. Every fetch
-// uses a short timeout (AbortController) and fails SOFT — on ANY error we return {}.
+// fails SOFT — on ANY error we return {}.
 //
 // NOTE ON RU PROD: the production host (moooza.ru) is in Russia and may be unable to
 // reach some platforms (Spotify / Apple Music / YouTube can be geo-blocked or slow).
 // That is fine — this util never throws and never blocks; if the request fails the
 // caller simply gets an empty object and the user fills the fields by hand.
+//
+// SSRF / DoS (POST /api/releases|clips/metadata — любой авторизованный):
+//  * ходим ТОЛЬКО на домены стримингов из lib/mediaPlatforms (платформа
+//    определяется по ссылке на сервере, клиентскому platform не верим);
+//  * каждый хоп редиректа — вручную, с повторной проверкой домена и того, что
+//    DNS указывает только на публичные адреса;
+//  * общий дедлайн на ВСЮ операцию (включая чтение тела) и потоковое чтение с
+//    лимитом байт — бесконечное/огромное тело не держит соединение и память.
 
 import dns from 'dns/promises';
 import net from 'net';
+import { detectMediaPlatform, type MediaKind } from '../lib/mediaPlatforms';
+import { safeImportedCover } from '../lib/mediaItems';
 
-const TIMEOUT_MS = 5000;
-
-// ── SSRF guard ──────────────────────────────────────────────────────────────
-// tryOpenGraph() fetches a user-supplied URL on the server, so it must never be
-// pointed at internal infrastructure (localhost, the DB, cloud metadata at
-// 169.254.169.254, the private LAN, …). We reject the URL up front AND re-check
-// after every redirect hop, so a public host that 30x-redirects to an internal
-// one can't slip through.
+const DEADLINE_MS = 6000;       // на всю операцию, включая редиректы и тело
+const MAX_HTML_BYTES = 512_000; // OG-теги — в <head>, больше не нужно
+const MAX_JSON_BYTES = 64_000;  // oEmbed-ответ
+const MAX_REDIRECTS = 4;
 
 function ipIsPrivate(ip: string): boolean {
   if (net.isIPv4(ip)) {
@@ -29,6 +35,7 @@ function ipIsPrivate(ip: string): boolean {
       (a === 172 && b >= 16 && b <= 31) ||           // private
       (a === 192 && b === 168) ||                    // private
       (a === 100 && b >= 64 && b <= 127) ||          // CGNAT
+      (a === 198 && (b === 18 || b === 19)) ||       // benchmarking
       a >= 224                                       // multicast / reserved
     );
   }
@@ -41,107 +48,150 @@ function ipIsPrivate(ip: string): boolean {
   );
 }
 
-// Returns a normalized URL if it is http(s) and resolves only to public IPs,
-// otherwise throws. Resolving DNS here also blocks DNS-based bypasses.
-async function assertPublicUrl(raw: string): Promise<URL> {
+// URL допустим, если это http(s) на домен стриминга нужного вида и DNS
+// указывает только на публичные адреса. Иначе — исключение.
+async function assertAllowedUrl(raw: string, kind: MediaKind): Promise<URL> {
   const u = new URL(raw);
   if (u.protocol !== 'http:' && u.protocol !== 'https:') throw new Error('bad scheme');
+  if (u.username || u.password) throw new Error('credentials in url');
+  if (u.port && u.port !== '80' && u.port !== '443') throw new Error('bad port');
+  if (!detectMediaPlatform(kind, u.toString())) throw new Error('host not allowed');
   const host = u.hostname;
-  if (net.isIP(host)) {
-    if (ipIsPrivate(host)) throw new Error('private ip');
-    return u;
-  }
+  if (net.isIP(host)) throw new Error('ip literal');
   const addrs = await dns.lookup(host, { all: true });
   if (!addrs.length || addrs.some((a) => ipIsPrivate(a.address))) throw new Error('private ip');
   return u;
 }
 
-// Fetch an HTML page following up to 4 redirects, re-validating the target host
-// at every hop. Returns null on any policy violation / error.
-async function safeFetchHtml(rawUrl: string): Promise<Response | null> {
+// Тело ответа потоком, не больше maxBytes; превышение — обрезаем и закрываем.
+async function readLimited(res: Response, maxBytes: number): Promise<string | null> {
+  const body = res.body;
+  if (!body) return null;
+  const reader = body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      const room = maxBytes - total;
+      if (value.byteLength >= room) {
+        chunks.push(value.subarray(0, room));
+        total += room;
+        break;
+      }
+      chunks.push(value);
+      total += value.byteLength;
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+  return Buffer.concat(chunks.map((c) => Buffer.from(c.buffer, c.byteOffset, c.byteLength))).toString('utf8');
+}
+
+const UA = 'Mozilla/5.0 (compatible; MooozaBot/1.0; +https://moooza.ru)';
+
+// GET с ручными редиректами (каждый хоп — повторная проверка) под общим
+// AbortSignal; тело читается потоком с лимитом. Любая ошибка → null.
+async function fetchText(
+  rawUrl: string,
+  signal: AbortSignal,
+  maxBytes: number,
+  check: (url: string) => Promise<URL>,
+  accept: RegExp,
+): Promise<string | null> {
   let current = rawUrl;
-  for (let i = 0; i < 4; i++) {
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     let u: URL;
     try {
-      u = await assertPublicUrl(current);
+      u = await check(current);
     } catch {
       return null;
     }
-    const res = await fetchWithTimeout(u.toString(), { redirect: 'manual' });
-    if (!res) return null;
+    let res: Response;
+    try {
+      res = await fetch(u.toString(), { redirect: 'manual', signal, headers: { 'User-Agent': UA } });
+    } catch {
+      return null;
+    }
     if (res.status >= 300 && res.status < 400) {
       const loc = res.headers.get('location');
-      if (!loc) return res;
-      current = new URL(loc, u).toString();
+      res.body?.cancel().catch(() => {});
+      if (!loc) return null;
+      try {
+        current = new URL(loc, u).toString();
+      } catch {
+        return null;
+      }
       continue;
     }
-    return res;
+    if (!res.ok) {
+      res.body?.cancel().catch(() => {});
+      return null;
+    }
+    const ctype = res.headers.get('content-type') ?? '';
+    if (!accept.test(ctype)) {
+      res.body?.cancel().catch(() => {});
+      return null;
+    }
+    const len = Number(res.headers.get('content-length') ?? '0');
+    if (len > maxBytes * 4) {
+      res.body?.cancel().catch(() => {});
+      return null;
+    }
+    try {
+      return await readLimited(res, maxBytes);
+    } catch {
+      return null;
+    }
   }
   return null; // too many redirects
 }
 
-async function fetchWithTimeout(url: string, init?: RequestInit): Promise<Response | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
-  try {
-    const res = await fetch(url, {
-      ...init,
-      signal: controller.signal,
-      headers: {
-        // A real-ish UA helps some sites return proper OG tags.
-        'User-Agent':
-          'Mozilla/5.0 (compatible; MooozaBot/1.0; +https://moooza.ru)',
-        ...(init?.headers ?? {}),
-      },
-    });
-    return res;
-  } catch {
-    return null;
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
 type Meta = { title?: string; coverUrl?: string; releaseDate?: string };
 
-// Try an oEmbed endpoint that returns { title, thumbnail_url }.
-async function tryOEmbed(endpoint: string): Promise<Meta> {
-  const res = await fetchWithTimeout(endpoint);
-  if (!res || !res.ok) return {};
+function cleanMeta(title: unknown, cover: unknown): Meta {
+  const out: Meta = {};
+  if (typeof title === 'string' && title.trim()) out.title = title.trim().slice(0, 300);
+  const safeCover = safeImportedCover(cover);
+  if (safeCover) out.coverUrl = safeCover;
+  return out;
+}
+
+// oEmbed-эндпоинты — фиксированные хосты платформ (пользовательский URL идёт
+// только параметром запроса).
+const OEMBED_HOSTS = new Set(['www.youtube.com', 'rutube.ru', 'open.spotify.com']);
+async function assertOEmbedUrl(raw: string): Promise<URL> {
+  const u = new URL(raw);
+  if (u.protocol !== 'https:' || !OEMBED_HOSTS.has(u.hostname)) throw new Error('host not allowed');
+  return u;
+}
+
+async function tryOEmbed(endpoint: string, signal: AbortSignal): Promise<Meta> {
+  const text = await fetchText(endpoint, signal, MAX_JSON_BYTES, assertOEmbedUrl, /json/i);
+  if (!text) return {};
   try {
-    const data: any = await res.json();
-    return {
-      title: typeof data?.title === 'string' ? data.title : undefined,
-      coverUrl: typeof data?.thumbnail_url === 'string' ? data.thumbnail_url : undefined,
-    };
+    const data: any = JSON.parse(text);
+    return cleanMeta(data?.title, data?.thumbnail_url);
   } catch {
     return {};
   }
 }
 
 // Best-effort Open Graph scrape: fetch the HTML and regex out og:title / og:image.
-async function tryOpenGraph(url: string): Promise<Meta> {
-  // SSRF-guarded fetch: rejects internal/loopback/link-local targets and
-  // re-checks the host after each redirect.
-  const res = await safeFetchHtml(url);
-  if (!res || !res.ok) return {};
-  let html = '';
-  try {
-    html = await res.text();
-  } catch {
-    return {};
-  }
-  // Limit work on huge pages.
-  if (html.length > 500_000) html = html.slice(0, 500_000);
+async function tryOpenGraph(url: string, kind: MediaKind, signal: AbortSignal): Promise<Meta> {
+  const html = await fetchText(url, signal, MAX_HTML_BYTES, (u) => assertAllowedUrl(u, kind), /text\/html|application\/xhtml/i);
+  if (!html) return {};
 
   const pick = (prop: string): string | undefined => {
     // Match both attribute orders: property="..." content="..." and reverse.
     const re1 = new RegExp(
-      `<meta[^>]+(?:property|name)=["']${prop}["'][^>]*content=["']([^"']+)["']`,
+      `<meta[^>]{0,500}?(?:property|name)=["']${prop}["'][^>]{0,500}?content=["']([^"']{1,2000})["']`,
       'i',
     );
     const re2 = new RegExp(
-      `<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name)=["']${prop}["']`,
+      `<meta[^>]{0,500}?content=["']([^"']{1,2000})["'][^>]{0,500}?(?:property|name)=["']${prop}["']`,
       'i',
     );
     const m = html.match(re1) ?? html.match(re2);
@@ -156,48 +206,48 @@ async function tryOpenGraph(url: string): Promise<Meta> {
       .replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>');
 
-  return {
-    title: decode(pick('og:title')),
-    coverUrl: decode(pick('og:image')),
-  };
+  return cleanMeta(decode(pick('og:title')), decode(pick('og:image')));
 }
 
 /**
  * Best-effort metadata fetch for a streaming/video URL. Never throws; returns {} on failure.
+ * Платформа определяется по ссылке (lib/mediaPlatforms); ссылка не на
+ * стриминг нужного вида → {} без единого сетевого запроса.
  *
  * Strategy per platform:
- *  - YouTube     → oEmbed https://www.youtube.com/oembed
- *  - RuTube      → oEmbed https://rutube.ru/api/oembed/
- *  - SoundCloud  → oEmbed https://soundcloud.com/oembed
- *  - Spotify     → oEmbed https://open.spotify.com/oembed
+ *  - YouTube  → oEmbed https://www.youtube.com/oembed
+ *  - RuTube   → oEmbed https://rutube.ru/api/oembed/
+ *  - Spotify  → oEmbed https://open.spotify.com/oembed
  *  - VK / VK_VIDEO / YANDEX_MUSIC / APPLE_MUSIC → Open Graph meta scrape (og:title / og:image)
  *
  * releaseDate is generally NOT available from oEmbed/OG → left undefined (manual entry).
  */
-export async function fetchStreamMetadata(
-  platform: string,
-  url: string,
-): Promise<Meta> {
+export async function fetchStreamMetadata(kind: MediaKind, url: string): Promise<Meta> {
   if (!url || typeof url !== 'string') return {};
-  const enc = encodeURIComponent(url.trim());
-  const p = (platform || '').toUpperCase();
+  const raw = url.trim();
+  const platform = detectMediaPlatform(kind, raw);
+  if (!platform) return {};
+  const enc = encodeURIComponent(raw);
 
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DEADLINE_MS);
   try {
-    switch (p) {
+    switch (platform) {
       case 'YOUTUBE':
-        return await tryOEmbed(`https://www.youtube.com/oembed?url=${enc}&format=json`);
+        return await tryOEmbed(`https://www.youtube.com/oembed?url=${enc}&format=json`, controller.signal);
       case 'RUTUBE':
-        return await tryOEmbed(`https://rutube.ru/api/oembed/?url=${enc}&format=json`);
-      case 'SOUNDCLOUD':
-        return await tryOEmbed(`https://soundcloud.com/oembed?format=json&url=${enc}`);
+        return await tryOEmbed(`https://rutube.ru/api/oembed/?url=${enc}&format=json`, controller.signal);
       case 'SPOTIFY':
-        return await tryOEmbed(`https://open.spotify.com/oembed?url=${enc}`);
-      // VK, VK_VIDEO, YANDEX_MUSIC, APPLE_MUSIC and anything else → OG scrape.
+        return await tryOEmbed(`https://open.spotify.com/oembed?url=${enc}`, controller.signal);
+      // VK, VK_VIDEO, YANDEX_MUSIC, APPLE_MUSIC → OG scrape (только домены стримингов).
       default:
-        return await tryOpenGraph(url.trim());
+        return await tryOpenGraph(raw, kind, controller.signal);
     }
   } catch {
     // Absolute belt-and-suspenders: never throw.
     return {};
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
   }
 }

@@ -35,18 +35,21 @@ export async function tgLog(text: string): Promise<void> {
 
 /**
  * Typed helpers for major platform events.
- * Every interpolated argument is user-controlled (names, emails, post/message
- * text, service/artist titles, …) so each is wrapped in escTg() — the static
- * <b> labels stay as real formatting.
+ * Every interpolated argument is user-controlled (names, post/message text,
+ * service/artist titles, …) so each is wrapped in escTg() — the static <b>
+ * labels stay as real formatting.
+ *
+ * Аккаунтные события (регистрация, вход, сброс пароля, waitlist) — БЕЗ email и
+ * ФИО: в мониторинговый чат уходят только событие и id/счётчик (ПДн не логируем).
  */
 const e = escTg;
 export const tgEvent = {
-  register: (name: string, email: string, city?: string | null) =>
-    tgLog(`🆕 <b>Регистрация</b>\n👤 ${e(name)}\n📧 ${e(email)}\n🌍 ${e(city || '—')}`),
-  login: (name: string, email: string) =>
-    tgLog(`🔑 <b>Вход</b>\n👤 ${e(name)}\n📧 ${e(email)}`),
-  passwordReset: (email: string) =>
-    tgLog(`🔓 <b>Сброс пароля</b>\n📧 ${e(email)}`),
+  register: (userId: string) =>
+    tgLog(`🆕 <b>Новый пользователь</b>\n🆔 ${e(userId)}`),
+  login: (userId: string) =>
+    tgLog(`🔑 <b>Вход в аккаунт</b>\n🆔 ${e(userId)}`),
+  passwordReset: (userId: string) =>
+    tgLog(`🔓 <b>Сброс пароля</b>\n🆔 ${e(userId)}`),
   post: (author: string, type: string, preview: string) =>
     tgLog(`📝 <b>Пост</b> (${e(type)})\n👤 ${e(author)}\n${e(preview)}`),
   postLike: (liker: string, author: string) =>
@@ -58,16 +61,17 @@ export const tgEvent = {
   pollVote: (voter: string, option: string) =>
     tgLog(`📊 <b>Голос в опросе</b>\n${e(voter)} → «${e(option)}»`),
   postSave: (saver: string) => tgLog(`⭐ <b>Сохранён пост</b>\n${e(saver)}`),
-  message: (from: string, to: string, preview: string) =>
-    tgLog(`💬 <b>Сообщение</b>\n${e(from)} → ${e(to)}\n«${e(preview.slice(0, 80))}»`),
-  friendRequest: (from: string, to: string) =>
-    tgLog(`👋 <b>Запрос дружбы</b>\n${e(from)} → ${e(to)}`),
-  friendAccept: (a: string, b: string) =>
-    tgLog(`🤝 <b>Подружились</b>\n${e(a)} ↔ ${e(b)}`),
-  connectionRequest: (from: string, to: string, services: string) =>
-    tgLog(`🔗 <b>Запрос связи</b>\n${e(from)} → ${e(to)}\n📋 ${e(services)}`),
-  connectionAccept: (a: string, b: string) =>
-    tgLog(`✅ <b>Связь установлена</b>\n${e(a)} ↔ ${e(b)}`),
+  // Переписка (личная и групповая) в лог команды НЕ уходит вообще — ни текст,
+  // ни ФИО участников (тайна переписки / 152-ФЗ). Социальные события ниже —
+  // только факт события без ПДн: кто с кем дружит/связан — тоже персональные данные.
+  friendRequest: () =>
+    tgLog(`👋 <b>Запрос дружбы</b>`),
+  friendAccept: () =>
+    tgLog(`🤝 <b>Подружились</b>`),
+  connectionRequest: (services: string) =>
+    tgLog(`🔗 <b>Запрос связи</b>${services ? `\n📋 ${e(services)}` : ''}`),
+  connectionAccept: () =>
+    tgLog(`✅ <b>Связь установлена</b>`),
   favorite: (from: string, to: string) =>
     tgLog(`💛 <b>В избранное</b>\n${e(from)} → ${e(to)}`),
   service: (action: string, owner: string, name: string) =>
@@ -82,8 +86,8 @@ export const tgEvent = {
     tgLog(`🚨 <b>Жалоба</b> (риск ${risk}/100)\n${e(reporter)} → ${e(targetType)}\n📋 ${e(category)}`),
   block: (admin: string, target: string, until: string) =>
     tgLog(`🚫 <b>Блокировка</b>\nАдмин: ${e(admin)}\nКого: ${e(target)}\nДо: ${e(until)}`),
-  waitlist: (email: string, type: string) =>
-    tgLog(`📋 <b>Заявка (waitlist)</b>\n📧 ${e(email)}\n📌 ${e(type)}`),
+  waitlist: (type: string, total: number) =>
+    tgLog(`📋 <b>Заявка (waitlist)</b>\n📌 ${e(type)}\n🔢 Всего заявок: ${total}`),
   professionRequest: (user: string, profession: string, comment?: string) =>
     tgLog(`➕ <b>Запрос на добавление профессии</b>\n👤 ${e(user)}\n🧩 «${e(profession)}»${comment ? `\n💬 ${e(comment)}` : ''}`),
 };

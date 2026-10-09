@@ -32,8 +32,12 @@ router.post('/', waitlistLimiter, async (req, res) => {
       create: { email: data.email as string, type: data.type, consentPd: true, consentMarketing: true },
     });
     // Notify the monitor bot only on the first sign-up (created == updated).
+    // Без email: в мониторинговый чат уходят только событие, тип и счётчик (ПДн не логируем).
     if (entry.createdAt.getTime() === entry.updatedAt.getTime()) {
-      try { tgEvent.waitlist(entry.email, entry.type); } catch {}
+      try {
+        const total = await prisma.waitlistEntry.count();
+        tgEvent.waitlist(entry.type, total);
+      } catch {}
     }
     return res.json({ ok: true });
   } catch (err) {

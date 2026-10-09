@@ -4,17 +4,55 @@ import { yoNorm } from '../utils/search';
 import { optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { guestReadLimiter } from '../middleware/rateLimiter';
 import { setGuestCacheHeaders } from '../middleware/guest';
-import { publicPersonWhere } from '../lib/publicData';
-import { maskContacts, maskContactsDeep, stripLinksForGuest } from '../lib/maskContacts';
-import { clampInt } from '../lib/feedQuery';
+import { maskContacts, maskContactsDeep } from '../lib/maskContacts';
 
-// Лимиты выдачи поиска: гостю — меньше и неглубоко (защита от выкачивания базы).
-const SEARCH_LIMIT_MAX = 100;
-const GUEST_SEARCH_LIMIT_MAX = 50;
+// Гостевой режим: поиск открыт без входа, но неглубоко (защита от выкачивания
+// базы) и с белым списком полей; контакты в свободном тексте маскируются.
 const GUEST_SEARCH_PAGE_MAX = 10;
 const GUEST_ARTISTS_TAKE = 100;
 
 const router = Router();
+
+/** page ≥ 1, limit 1..50; мусор (page=abc) → значения по умолчанию, а не 500. */
+function parsePaging(page: unknown, limit: unknown, defLimit = 20) {
+  const pageNum = Math.max(1, parseInt(String(page ?? '1'), 10) || 1);
+  const limitNum = Math.min(50, Math.max(1, parseInt(String(limit ?? defLimit), 10) || defLimit));
+  return { pageNum, limitNum, skip: (pageNum - 1) * limitNum };
+}
+
+/**
+ * Пользователь, которого можно показывать в публичной выдаче: не заблокирован
+ * (ни навсегда, ни до даты в будущем) и дал согласие на распространение ПД
+ * (152-ФЗ ст. 10.1) — без него данные не публикуются в открытом каталоге.
+ */
+function publicProviderWhere() {
+  return {
+    isBlocked: false,
+    publicConsentAt: { not: null },
+    OR: [{ blockedUntil: null }, { blockedUntil: { lte: new Date() } }],
+  };
+}
+
+/**
+ * Группирует значения характеристик по их фильтру (группе): внутри группы —
+ * OR («Рок» или «Джаз»), между группами — AND («Жанр» и «Уровень»).
+ * Неизвестные id образуют собственные группы (и ничего не находят — как раньше).
+ */
+async function groupFilterValues(ids: string[]): Promise<string[][]> {
+  if (ids.length === 0) return [];
+  const rows = await prisma.customFilterValue.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, filterId: true },
+  });
+  const byFilter = new Map<string, string[]>();
+  for (const r of rows) {
+    if (!byFilter.has(r.filterId)) byFilter.set(r.filterId, []);
+    byFilter.get(r.filterId)!.push(r.id);
+  }
+  const known = new Set(rows.map((r) => r.id));
+  const unknown = ids.filter((id) => !known.has(id)).map((id) => [id]);
+  return [...byFilter.values(), ...unknown];
+}
 
 // Get all fields of activity — only those with users other than excludeUserId
 router.get('/fields-of-activity', async (req, res) => {
@@ -154,10 +192,12 @@ router.get('/professions', async (req, res) => {
       // добавленные вручную по запросам пользователей БЕЗ кастомных
       // фильтров, были невидимы в выборе (кейс «Бузукист», 2026-07-20).
     } else {
-      // Default: only professions with actual users
-      where.userServices = excludeUserId
+      // Default: only professions with actual users — через услугу ИЛИ через
+      // профессию в профиле (у пользователя может не быть услуги).
+      const usersFilter = excludeUserId
         ? { some: { userId: { not: excludeUserId as string } } }
         : { some: {} };
+      where.OR = [{ userServices: usersFilter }, { userProfessions: usersFilter }];
     }
     if (directionId) where.directionId = directionId as string;
     if (search) where.nameNorm = { contains: yoNorm(search as string) };
@@ -167,13 +207,14 @@ router.get('/professions', async (req, res) => {
       include: {
         direction: { select: { id: true, name: true, fieldOfActivityId: true } },
         userServices: { select: { userId: true } },
+        userProfessions: { select: { userId: true } },
       },
       orderBy: { name: 'asc' },
     });
 
     res.json(professions.map(p => {
       const uniqueUsers = new Set(
-        p.userServices
+        [...p.userServices, ...p.userProfessions]
           .map((us: any) => us.userId)
           .filter((uid: string) => !excludeUserId || uid !== (excludeUserId as string))
       );
@@ -458,19 +499,22 @@ router.get('/search', optionalAuthenticate, guestReadLimiter, async (req: AuthRe
       priceMin,
       priceMax,
       query,
-      page = '1',
-      limit = '20',
     } = req.query;
 
-    const pageNum = clampInt(page, 1, 1, isGuest ? GUEST_SEARCH_PAGE_MAX : 100000);
-    const limitNum = clampInt(limit, 20, 1, isGuest ? GUEST_SEARCH_LIMIT_MAX : SEARCH_LIMIT_MAX);
-    const skip = (pageNum - 1) * limitNum;
+    const { pageNum, limitNum, skip } = parsePaging(
+      isGuest ? Math.min(GUEST_SEARCH_PAGE_MAX, Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1)) : req.query.page,
+      req.query.limit,
+    );
 
-    // Custom filter value ids (comma-separated)
+    // Custom filter value ids (comma-separated); OR внутри группы, AND между группами.
     const cfvIds = String(req.query.customFilterValueIds || '')
       .split(',')
       .map(s => s.trim())
       .filter(Boolean);
+    const cfvGroups = await groupFilterValues(cfvIds);
+    const anyValueOfEachGroup = cfvGroups.map((ids) => ({
+      selectedCustomFilterValues: { some: { id: { in: ids } } },
+    }));
 
     // Build UserService filter (service-level constraints + legacy independent filters)
     const userServiceWhere: any = {};
@@ -481,38 +525,42 @@ router.get('/search', optionalAuthenticate, guestReadLimiter, async (req: AuthRe
     if (skillLevelId) userServiceWhere.skillLevels = { some: { id: skillLevelId } };
     if (availabilityId) userServiceWhere.availabilities = { some: { id: availabilityId } };
     if (geographyId) userServiceWhere.geographies = { some: { id: geographyId } };
-    if (priceMin) userServiceWhere.priceFrom = { gte: parseInt(priceMin as string, 10) };
-    if (priceMax) userServiceWhere.priceTo = { lte: parseInt(priceMax as string, 10) };
+    const priceMinNum = priceMin ? parseInt(priceMin as string, 10) : NaN;
+    const priceMaxNum = priceMax ? parseInt(priceMax as string, 10) : NaN;
+    if (Number.isFinite(priceMinNum)) userServiceWhere.priceFrom = { gte: priceMinNum };
+    if (Number.isFinite(priceMaxNum)) userServiceWhere.priceTo = { lte: priceMaxNum };
 
     const userWhere: any = {};
-    const andClauses: any[] = [];
+    // Публичная выдача: только не заблокированные и давшие согласие 152-ФЗ.
+    const andClauses: any[] = [publicProviderWhere()];
 
     // Profession is first-class: match via userProfessions.
     // When cfvIds are given with a professionId, require a matching UserProfession row
-    // that also carries at least one of those selected filter values.
+    // that also carries a value from EVERY selected filter group.
     if (professionId) {
       userWhere.userProfessions = {
         some: {
           professionId,
-          ...(cfvIds.length ? { selectedCustomFilterValues: { some: { id: { in: cfvIds } } } } : {}),
+          ...(anyValueOfEachGroup.length ? { AND: anyValueOfEachGroup } : {}),
         },
       };
     } else if (cfvIds.length && serviceId) {
       // cfvIds apply to the service when a serviceId is present (and no professionId).
-      userServiceWhere.selectedCustomFilterValues = { some: { id: { in: cfvIds } } };
+      userServiceWhere.AND = anyValueOfEachGroup;
     } else if (cfvIds.length) {
       // Only cfvIds given (no professionId/serviceId): match users having EITHER a
-      // UserProfession OR a UserService carrying one of those selected filter values.
+      // UserProfession OR a UserService carrying values of every selected group.
       andClauses.push({
         OR: [
-          { userProfessions: { some: { selectedCustomFilterValues: { some: { id: { in: cfvIds } } } } } },
-          { userServices: { some: { selectedCustomFilterValues: { some: { id: { in: cfvIds } } } } } },
+          { userProfessions: { some: { AND: anyValueOfEachGroup } } },
+          { userServices: { some: { AND: anyValueOfEachGroup } } },
         ],
       });
     }
 
     if (Object.keys(userServiceWhere).length > 0) {
-      userWhere.userServices = { some: userServiceWhere };
+      // Черновики и архив в публичной выдаче не участвуют.
+      userWhere.userServices = { some: { ...userServiceWhere, status: { notIn: ['draft', 'archived'] } } };
     }
 
     if (query) {
@@ -526,9 +574,6 @@ router.get('/search', optionalAuthenticate, guestReadLimiter, async (req: AuthRe
         ],
       });
     }
-
-    // Гость видит только людей с согласием на публичное распространение ПДн.
-    if (isGuest) andClauses.push(publicPersonWhere());
 
     if (andClauses.length > 0) {
       userWhere.AND = andClauses;
@@ -544,6 +589,7 @@ router.get('/search', optionalAuthenticate, guestReadLimiter, async (req: AuthRe
       fieldOfActivity: { select: { id: true, name: true } },
       userProfessions: { select: { id: true, profession: { select: { id: true, name: true } } } },
       userServices: {
+        where: { status: { notIn: ['draft', 'archived'] } },
         include: {
           service: { select: { id: true, name: true } },
           genres: { select: { id: true, name: true } },
@@ -557,7 +603,7 @@ router.get('/search', optionalAuthenticate, guestReadLimiter, async (req: AuthRe
     };
 
     const [users, totalCount] = await Promise.all([
-      prisma.user.findMany({ where: userWhere, select: userSelect, skip, take: limitNum, orderBy: { createdAt: 'desc' } }),
+      prisma.user.findMany({ where: userWhere, select: userSelect, skip, take: limitNum, orderBy: [{ createdAt: 'desc' }, { id: 'asc' }] }),
       prisma.user.count({ where: userWhere }),
     ]);
 
@@ -619,11 +665,12 @@ router.get('/service-search', optionalAuthenticate, guestReadLimiter, async (req
     const isGuest = !req.userId;
     const {
       serviceId, sectionId, customFilterValueIds, query, location, priceMin, priceMax,
-      deadlineMax, ratingMin, sort, page = '1', limit = '20',
+      deadlineMax, ratingMin, sort,
     } = req.query;
-    const pageNum = clampInt(page, 1, 1, isGuest ? GUEST_SEARCH_PAGE_MAX : 100000);
-    const limitNum = clampInt(limit, 20, 1, isGuest ? GUEST_SEARCH_LIMIT_MAX : SEARCH_LIMIT_MAX);
-    const skip = (pageNum - 1) * limitNum;
+    const { pageNum, limitNum, skip } = parsePaging(
+      isGuest ? Math.min(GUEST_SEARCH_PAGE_MAX, Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1)) : req.query.page,
+      req.query.limit,
+    );
     const cfvIds = String(customFilterValueIds || '').split(',').map(s => s.trim()).filter(Boolean);
     const cities = String(location || '').split(',').map(s => s.trim()).filter(Boolean).map(c => yoNorm(c));
     const priceMinNum = priceMin != null && priceMin !== '' ? parseInt(priceMin as string, 10) : null;
@@ -633,16 +680,17 @@ router.get('/service-search', optionalAuthenticate, guestReadLimiter, async (req
     const sortMode = ['date', 'price_asc', 'price_desc', 'rating'].includes(String(sort)) ? String(sort) : 'date';
 
     // Show every created/submitted offering — only hide unfinished drafts and archived ones.
-    // Гостю — только active и только исполнители с согласием (PUBLIC_PERSON_WHERE).
+    // Гостю — строго active.
     const where: any = isGuest ? { status: 'active' } : { status: { notIn: ['draft', 'archived'] } };
-    const andConds: any[] = [];
+    // Исполнитель не заблокирован и дал согласие на публичное размещение (152-ФЗ).
+    const andConds: any[] = [{ user: publicProviderWhere() }];
     if (serviceId) where.serviceId = String(serviceId);
     if (sectionId) where.service = { sectionId: String(sectionId) };
-    if (cfvIds.length) where.selectedCustomFilterValues = { some: { id: { in: cfvIds } } };
-    if (cities.length) where.user = { cityNorm: { in: cities } };
-    if (isGuest) {
-      where.user = { AND: [where.user ?? {}, publicPersonWhere()] };
+    // Характеристики: OR внутри группы (фильтра), AND между группами.
+    for (const ids of await groupFilterValues(cfvIds)) {
+      andConds.push({ selectedCustomFilterValues: { some: { id: { in: ids } } } });
     }
+    if (cities.length) andConds.push({ user: { cityNorm: { in: cities } } });
     // Price range: keep offerings whose advertised range overlaps [priceMinNum, priceMaxNum].
     // «Договорная» (обе цены пусты) при заданном диапазоне отсеивается — иначе фильтр
     // выглядит неработающим.
@@ -676,7 +724,7 @@ router.get('/service-search', optionalAuthenticate, guestReadLimiter, async (req
         ],
       });
     }
-    if (andConds.length) where.AND = andConds;
+    where.AND = andConds;
 
     const select = {
       id: true,
@@ -692,11 +740,8 @@ router.get('/service-search', optionalAuthenticate, guestReadLimiter, async (req
       selectedCustomFilterValues: { select: { id: true, value: true, filter: { select: { id: true, name: true } } } },
     } as const;
 
-    let totalCount = await prisma.userService.count({ where });
-
-    // Compute provider ratings; needed both for "rating" sort and for display.
-    const attachRatings = async (rows: any[]) => {
-      const userIds = [...new Set(rows.map(i => i.user?.id).filter(Boolean) as string[])];
+    // Provider ratings (avg + count) aggregated in the DB.
+    const ratingsFor = async (userIds: string[]) => {
       const ratings = userIds.length
         ? await prisma.review.groupBy({
             by: ['targetId'],
@@ -705,7 +750,10 @@ router.get('/service-search', optionalAuthenticate, guestReadLimiter, async (req
             _count: { _all: true },
           })
         : [];
-      const ratingByUser = new Map(ratings.map(r => [r.targetId, { avg: r._avg.rating, count: r._count._all }]));
+      return new Map(ratings.map(r => [r.targetId, { avg: r._avg.rating, count: r._count._all }]));
+    };
+    const attachRatings = async (rows: any[]) => {
+      const ratingByUser = await ratingsFor([...new Set(rows.map(i => i.user?.id).filter(Boolean) as string[])]);
       return rows.map(i => ({
         ...i,
         user: i.user ? { ...i.user, rating: ratingByUser.get(i.user.id) ?? null } : i.user,
@@ -713,42 +761,59 @@ router.get('/service-search', optionalAuthenticate, guestReadLimiter, async (req
     };
 
     let results: any[];
-    if (sortMode === 'rating' || (ratingMinNum != null && !Number.isNaN(ratingMinNum))) {
-      // Rating is computed post-query, so DB-side ordering/filtering isn't possible.
-      // Fetch all matching rows (capped), attach ratings, filter/sort, then paginate.
-      const all = await prisma.userService.findMany({ where, orderBy: { createdAt: 'desc' }, take: 500, select });
-      let withRatings = await attachRatings(all);
-      if (ratingMinNum != null && !Number.isNaN(ratingMinNum)) {
-        withRatings = withRatings.filter(i => i.user?.rating?.count > 0 && Number(i.user.rating.avg) >= ratingMinNum);
-        totalCount = withRatings.length;
+    let totalCount: number;
+    const ratingFilter = ratingMinNum != null && !Number.isNaN(ratingMinNum);
+    if (sortMode === 'rating' || ratingFilter) {
+      // Рейтинг — агрегат по отзывам исполнителя. Берём лёгкие строки ВСЕХ
+      // подходящих услуг (без потолка take:500), считаем рейтинги groupBy в БД,
+      // фильтруем/сортируем и только потом режем страницу и грузим её целиком.
+      const light = await prisma.userService.findMany({
+        where,
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+        select: { id: true, userId: true, priceFrom: true },
+      });
+      const ratingByUser = await ratingsFor([...new Set(light.map(l => l.userId))]);
+      const avgOf = (userId: string) => {
+        const r = ratingByUser.get(userId);
+        return r && r.count > 0 && r.avg != null ? Number(r.avg) : null;
+      };
+      let rows = light;
+      if (ratingFilter) {
+        rows = rows.filter(l => { const a = avgOf(l.userId); return a != null && a >= ratingMinNum!; });
       }
       if (sortMode === 'rating') {
-        withRatings.sort((a, b) => {
-          const ra = a.user?.rating?.count > 0 ? Number(a.user.rating.avg) : -1;
-          const rb = b.user?.rating?.count > 0 ? Number(b.user.rating.avg) : -1;
-          return rb - ra;
-        });
+        rows = [...rows].sort((a, b) => (avgOf(b.userId) ?? -1) - (avgOf(a.userId) ?? -1));
       } else if (sortMode === 'price_asc' || sortMode === 'price_desc') {
         const dir = sortMode === 'price_asc' ? 1 : -1;
-        withRatings.sort((a, b) => {
+        rows = [...rows].sort((a, b) => {
           if (a.priceFrom == null && b.priceFrom == null) return 0;
           if (a.priceFrom == null) return 1;
           if (b.priceFrom == null) return -1;
           return (a.priceFrom - b.priceFrom) * dir;
         });
       }
-      results = withRatings.slice(skip, skip + limitNum);
+      totalCount = rows.length;
+      const pageIds = rows.slice(skip, skip + limitNum).map(r => r.id);
+      const items = pageIds.length
+        ? await prisma.userService.findMany({ where: { id: { in: pageIds } }, select })
+        : [];
+      const byId = new Map(items.map(i => [i.id, i]));
+      results = await attachRatings(pageIds.map(id => byId.get(id)).filter(Boolean) as any[]);
     } else {
       const orderBy =
-        sortMode === 'price_asc' ? [{ priceFrom: { sort: 'asc', nulls: 'last' } as any }, { createdAt: 'desc' as const }]
-        : sortMode === 'price_desc' ? [{ priceFrom: { sort: 'desc', nulls: 'last' } as any }, { createdAt: 'desc' as const }]
-        : [{ createdAt: 'desc' as const }];
-      const items = await prisma.userService.findMany({ where, skip, take: limitNum, orderBy, select });
+        sortMode === 'price_asc' ? [{ priceFrom: { sort: 'asc', nulls: 'last' } as any }, { createdAt: 'desc' as const }, { id: 'asc' as const }]
+        : sortMode === 'price_desc' ? [{ priceFrom: { sort: 'desc', nulls: 'last' } as any }, { createdAt: 'desc' as const }, { id: 'asc' as const }]
+        : [{ createdAt: 'desc' as const }, { id: 'asc' as const }];
+      const [items, count] = await Promise.all([
+        prisma.userService.findMany({ where, skip, take: limitNum, orderBy, select }),
+        prisma.userService.count({ where }),
+      ]);
+      totalCount = count;
       results = await attachRatings(items);
     }
 
     if (isGuest) {
-      // Белый список уже задан select'ом; контакты в свободном тексте — маскируются.
+      // Белый список уже задан select'ом; дублируем явно + маскируем контакты в тексте.
       setGuestCacheHeaders(res);
       results = results.map((r: any) => ({
         id: r.id,
@@ -770,9 +835,13 @@ router.get('/service-search', optionalAuthenticate, guestReadLimiter, async (req
               rating: r.user.rating ?? null,
             }
           : null,
-        service: r.service ?? null,
-        profession: r.profession ?? null,
-        selectedCustomFilterValues: r.selectedCustomFilterValues ?? [],
+        service: r.service
+          ? { id: r.service.id, name: r.service.name, section: r.service.section ? { id: r.service.section.id, name: r.service.section.name } : null }
+          : null,
+        profession: r.profession ? { id: r.profession.id, name: r.profession.name } : null,
+        selectedCustomFilterValues: (r.selectedCustomFilterValues ?? []).map((v: any) => ({
+          id: v.id, value: v.value, filter: v.filter ? { id: v.filter.id, name: v.filter.name } : null,
+        })),
       }));
     }
 
@@ -793,7 +862,8 @@ router.get('/service-cities', async (req, res) => {
   try {
     const { q } = req.query;
     const rows = await prisma.userService.findMany({
-      where: { status: { notIn: ['draft', 'archived'] }, user: { city: { not: null } } },
+      // Те же условия видимости исполнителя, что и в /service-search.
+      where: { status: { notIn: ['draft', 'archived'] }, user: { city: { not: null }, ...publicProviderWhere() } },
       select: { user: { select: { city: true, cityNorm: true } } },
       distinct: ['userId'],
       take: 2000,
@@ -919,8 +989,9 @@ router.get('/artists', optionalAuthenticate, guestReadLimiter, async (req: AuthR
       : sort === 'listeners'
       ? { listeners: 'desc' as const }
       : { createdAt: 'desc' as const };
-    // Белый список полей для ВСЕХ: без verificationCode/verificationProofUrl,
-    // rejectionReason, submittedById и тяжёлого ymData (раньше уходили полные строки).
+    // Public catalog — explicit card fields only. Never verificationCode /
+    // verificationProofUrl / rejectionReason / submittedById /
+    // verificationRequestedById / ymData (moderation data and a heavy snapshot).
     const artists = await prisma.artist.findMany({
       where,
       orderBy,
@@ -930,53 +1001,30 @@ router.get('/artists', optionalAuthenticate, guestReadLimiter, async (req: AuthR
         name: true,
         type: true,
         city: true,
-        tourReady: true,
-        description: true,
-        socialLinks: true,
-        bandLink: true,
         avatar: true,
-        banner: true,
         listeners: true,
-        listenersDelta: true,
-        activityStatus: true,
         status: true,
+        activityStatus: true,
         createdAt: true,
-        updatedAt: true,
-        genres: { select: { artistId: true, genreId: true, genre: { select: { id: true, name: true } } } },
+        genres: { select: { genre: { select: { id: true, name: true } } } },
       },
     });
-    const listenersNum = (v: any) => (v !== undefined && v !== null ? Number(v) : v);
     if (isGuest) {
       setGuestCacheHeaders(res);
-      return res.json(artists.map((a: any) => {
-        const { links, contactsAvailable } = stripLinksForGuest(a.socialLinks, 'artist');
-        return {
-          id: a.id,
-          name: a.name,
-          type: a.type ?? null,
-          city: a.city ?? null,
-          tourReady: a.tourReady ?? null,
-          description: maskContacts(a.description ?? null),
-          socialLinks: links,
-          contactsAvailable,
-          bandLink: a.bandLink ?? null,
-          avatar: a.avatar ?? null,
-          banner: a.banner ?? null,
-          listeners: listenersNum(a.listeners),
-          listenersDelta: a.listenersDelta ?? null,
-          activityStatus: a.activityStatus,
-          status: a.status,
-          createdAt: a.createdAt,
-          updatedAt: a.updatedAt,
-          genres: (a.genres ?? []).map((g: any) => ({
-            artistId: g.artistId,
-            genreId: g.genreId,
-            genre: g.genre ? { id: g.genre.id, name: g.genre.name } : null,
-          })),
-        };
-      }));
+      return res.json(artists.map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        type: a.type ?? null,
+        city: a.city ?? null,
+        avatar: a.avatar ?? null,
+        listeners: Number(a.listeners ?? 0),
+        status: a.status,
+        activityStatus: a.activityStatus,
+        createdAt: a.createdAt,
+        genres: (a.genres ?? []).map((g: any) => ({ genre: g.genre ? { id: g.genre.id, name: g.genre.name } : null })),
+      })));
     }
-    res.json(artists.map((a: any) => ({ ...a, listeners: listenersNum(a.listeners) })));
+    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners) })));
   } catch (error) {
     console.error('Get artists error:', error);
     res.status(500).json({ error: 'Failed to get artists' });

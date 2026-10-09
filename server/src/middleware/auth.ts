@@ -38,19 +38,13 @@ export function invalidateAuthCache(userId?: string) {
 }
 
 /**
- * Те же правила, что в authenticate: несуществующий пользователь, активная
- * блокировка (blockedUntil в будущем или isBlocked без истёкшего срока) и токен,
- * выданный до смены пароля, — недействительны.
+ * Те же правила, что в authenticate: несуществующий пользователь, блокировка
+ * (isBlocked — бессрочная; blockedUntil в будущем — временная, см.
+ * accountBlockMessage) и токен, выданный до смены пароля, — недействительны.
  */
 function isTokenUsable(state: AuthState, iat: number): boolean {
   if (!state) return false;
-  const now = Date.now();
-  if (state.blockedUntil) {
-    if (new Date(state.blockedUntil).getTime() >= now) return false;
-    // срок блокировки истёк — authenticate сам снимет isBlocked при первом запросе
-  } else if (state.isBlocked) {
-    return false;
-  }
+  if (accountBlockMessage(state)) return false;
   if (state.passwordChangedAt && iat < Math.floor(new Date(state.passwordChangedAt).getTime() / 1000)) {
     return false;
   }
@@ -90,7 +84,8 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
     if (!token) {
       return res.status(401).json({
         error: 'Требуется аутентификация',
-        message: 'Токен доступа не предоставлен'
+        message: 'Токен доступа не предоставлен',
+        code: 'TOKEN_MISSING'
       });
     }
 
@@ -106,18 +101,22 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
       return res.status(401).json({ error: 'Токен недействителен', code: 'TOKEN_INVALID' });
     }
 
-    // If blockedUntil has passed — auto-unblock
-    if (user.blockedUntil && new Date(user.blockedUntil) < new Date()) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { blockedUntil: null, isBlocked: false },
-      });
-    } else if (user.blockedUntil && new Date(user.blockedUntil) >= new Date()) {
-      return res.status(403).json({ error: `Account blocked until ${user.blockedUntil}` });
+    // Блокировки (правило согласовано с модерацией):
+    //  • isBlocked=true — бессрочная админская блокировка, снимает ТОЛЬКО админ;
+    //  • blockedUntil>now — временная блокировка (жалобы / срочная админская).
+    // Автоснятие по истечении чистит ТОЛЬКО blockedUntil и никогда не трогает
+    // isBlocked — иначе постоянный бан «сгорал» после временного (4 жалобы).
+    const blockMsg = accountBlockMessage(user);
+    if (blockMsg) {
+      return res.status(403).json({ error: blockMsg, code: 'ACCOUNT_BLOCKED' });
     }
-
-    if (user.isBlocked) {
-      return res.status(401).json({ error: 'Токен недействителен', code: 'TOKEN_INVALID' });
+    if (user.blockedUntil) {
+      // Срок истёк — подчищаем поле. Условие blockedUntil<now в where защищает
+      // от гонки с админом, который в этот момент ставит новую блокировку.
+      prisma.user.updateMany({
+        where: { id: user.id, blockedUntil: { lt: new Date() } },
+        data: { blockedUntil: null },
+      }).catch(() => {});
     }
     if (user.passwordChangedAt && decoded.iat < Math.floor(user.passwordChangedAt.getTime() / 1000)) {
       return res.status(401).json({ error: 'Пароль был изменён. Войдите заново.', code: 'TOKEN_INVALID' });
@@ -162,7 +161,26 @@ export const authenticate = async (req: AuthRequest, res: Response, next: NextFu
 
     return res.status(401).json({
       error: 'Ошибка аутентификации',
-      message: 'Неизвестная ошибка при проверке токена'
+      message: 'Неизвестная ошибка при проверке токена',
+      code: 'AUTH_FAILED'
     });
   }
 };
+
+/**
+ * Сообщение о блокировке аккаунта или null, если вход разрешён.
+ * Общая проверка для authenticate и для всех точек входа (/auth/login, Telegram, VK).
+ */
+export function accountBlockMessage(user: { isBlocked?: boolean | null; blockedUntil?: Date | string | null }): string | null {
+  if (user.isBlocked) return 'Аккаунт заблокирован. Обратитесь в поддержку.';
+  if (user.blockedUntil) {
+    const until = new Date(user.blockedUntil);
+    if (until.getTime() > Date.now()) {
+      const fmt = until.toLocaleString('ru-RU', {
+        timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+      });
+      return `Аккаунт временно заблокирован до ${fmt} (МСК). Обратитесь в поддержку.`;
+    }
+  }
+  return null;
+}

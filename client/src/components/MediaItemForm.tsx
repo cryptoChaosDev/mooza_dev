@@ -6,8 +6,10 @@ import { releaseAPI, clipAPI, userAPI, roleAPI, artistAPI } from '../lib/api';
 import { detectMediaPlatform, MEDIA_PLATFORM_LABELS, allowedPlatformLabels } from '../lib/mediaPlatforms';
 import { lockScroll, unlockScroll } from '../lib/scrollLock';
 import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 import AvatarComponent from './Avatar';
 import RolePicker from './RolePicker';
+import ConfirmDialog from './ConfirmDialog';
 
 export interface MediaItemInitial {
   id: string;
@@ -51,6 +53,17 @@ interface Props {
 function isoToMasked(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
   return m ? `${m[3]}.${m[2]}.${m[1]}` : '';
+}
+
+// Реальная календарная дата (не 31.02) не раньше 1900 года.
+function isRealDate(iso: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return false;
+  const y = Number(m[1]);
+  const mo = Number(m[2]);
+  const d = Number(m[3]);
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  return y >= 1900 && dt.getUTCFullYear() === y && dt.getUTCMonth() === mo - 1 && dt.getUTCDate() === d;
 }
 
 export default function MediaItemForm({ kind, artistId, initial, onClose, onSaved, asPage = false }: Props) {
@@ -185,6 +198,27 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
     setMembersSeeded(true);
   }, [editing, membersSeeded, artistForSeed, rolesFetched, roleCategories, isRelease, releaseCatFetched, releaseCatalogForSeed]);
 
+  // Снимок исходных значений — чтобы не закрывать форму тапом по фону, когда
+  // есть несохранённые изменения (спросить подтверждение).
+  const snapshotOf = (v: { url: string; title: string; coverUrl: string; date: string; participants: DraftParticipant[] }) =>
+    JSON.stringify({
+      url: v.url.trim(),
+      title: v.title.trim(),
+      coverUrl: v.coverUrl.trim(),
+      date: v.date,
+      participants: v.participants.map((p) => [p.userId, [...p.roleIds].sort()]),
+    });
+  const initialSnapshot = useRef<string>(snapshotOf({
+    url: initial?.url ?? '',
+    title: initial?.title ?? '',
+    coverUrl: initial?.coverUrl ?? '',
+    date: initial?.releaseDate ? isoToMasked(initial.releaseDate.slice(0, 10)) : '',
+    participants: (initial?.participants ?? []).map((p) => ({
+      userId: p.userId, name: '', roleIds: (p.roles ?? []).map((r) => r.id),
+    })),
+  }));
+  const [confirmClose, setConfirmClose] = useState(false);
+
   // Participant search
   const [search, setSearch] = useState('');
   const [searchResults, setSearchResults] = useState<
@@ -242,7 +276,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
 
   // ── Metadata prefill ──────────────────────────────────────────────────────
   const metaMut = useMutation({
-    mutationFn: () => api.fetchMetadata(detectedPlatform ?? '', url.trim()),
+    mutationFn: () => api.fetchMetadata(url.trim()),
     onSuccess: (res: any) => {
       const data = res?.data ?? {};
       const filledTitle = data.title ?? '';
@@ -300,13 +334,39 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
         participants: participantsPayload,
       } as any);
     },
-    onSuccess: (res: any) => {
-      queryClient.invalidateQueries({ queryKey: [`${kind}s`, 'artist', artistId] });
-      if (editing) queryClient.invalidateQueries({ queryKey: [kind, initial!.id] });
-      onSaved?.(res?.data?.id ?? initial?.id);
+    onSuccess: async (res: any) => {
+      const saved = res?.data;
+      const listKey = [`${kind}s`, 'artist', artistId];
+      // Новый элемент сразу кладём в кэш списка артиста — страница артиста
+      // покажет его без перезагрузки, даже до завершения рефетча.
+      if (saved?.id) {
+        queryClient.setQueryData(listKey, (old: any) => {
+          if (!Array.isArray(old)) return old;
+          const tile = {
+            id: saved.id, title: saved.title, coverUrl: saved.coverUrl ?? null,
+            platform: saved.platform, url: saved.url,
+            ...(isRelease ? { releaseDate: saved.releaseDate ?? null } : {}),
+          };
+          return editing
+            ? old.map((it: any) => (it.id === saved.id ? { ...it, ...tile } : it))
+            : [tile, ...old.filter((it: any) => it.id !== saved.id)];
+        });
+      }
+      // refetchType 'all' — обновить и неактивные запросы (страница артиста
+      // сейчас размонтирована, пока открыта форма).
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: listKey, refetchType: 'all' }),
+        queryClient.invalidateQueries({ queryKey: ['artist', artistId], refetchType: 'all' }),
+        editing ? queryClient.invalidateQueries({ queryKey: [kind, initial!.id] }) : Promise.resolve(),
+      ]).catch(() => {});
+      onSaved?.(saved?.id ?? initial?.id);
       onClose();
     },
-    onError: (err: any) => setSaveError(err?.response?.data?.error ?? 'Не удалось сохранить.'),
+    onError: (err: any) => {
+      const msg = getApiError(err, 'Не удалось сохранить.');
+      setSaveError(msg);
+      toast.error(msg);
+    },
   });
 
   const handleSave = () => {
@@ -318,7 +378,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
       toast.error('Дата релиза — в формате ДД.ММ.ГГГГ');
       return;
     }
-    if (isRelease && releaseDate && isNaN(new Date(releaseDate).getTime())) {
+    if (isRelease && releaseDate && !isRealDate(releaseDate)) {
       toast.error('Некорректная дата релиза');
       return;
     }
@@ -330,6 +390,14 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
     saveMut.mutate();
   };
   const saveDisabled = saveMut.isPending || !title.trim() || !detectedPlatform;
+
+  // Закрытие листа (фон / крестик): при несохранённых правках — подтверждение.
+  const requestClose = () => {
+    if (saveMut.isPending) return;
+    const now = snapshotOf({ url, title, coverUrl: coverUrl ?? '', date: releaseDateInput, participants });
+    if (now !== initialSnapshot.current) setConfirmClose(true);
+    else onClose();
+  };
 
   const addParticipant = (u: {
     id: string;
@@ -417,9 +485,9 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
           onChange={(e) => setCoverUrl(e.target.value)}
           placeholder="https://..."
         />
-        {coverUrl?.trim() && (
+        {/^https:\/\//i.test(coverUrl?.trim() ?? '') && (
           <img
-            src={coverUrl}
+            src={coverUrl.trim()}
             alt="cover preview"
             className="mt-2 w-24 h-24 rounded-xl object-cover border border-slate-700"
             onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
@@ -593,7 +661,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
   return (
     <>
       {createPortal(
-        <div className="fixed inset-0 z-50 bg-black/70" onClick={onClose}>
+        <div className="fixed inset-0 z-50 bg-black/70" onClick={requestClose}>
           <div
             className="absolute bottom-0 left-0 right-0 bg-slate-900 rounded-t-3xl flex flex-col"
             style={{
@@ -609,7 +677,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
 
             {/* Header */}
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
-              <button onClick={onClose} className="p-2 text-slate-400 hover:text-white">
+              <button onClick={requestClose} className="p-2 text-slate-400 hover:text-white" aria-label="Закрыть">
                 <X size={20} />
               </button>
               <span className="font-semibold text-white text-sm">
@@ -635,6 +703,14 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
       )}
 
       {rolePickerEl}
+
+      <ConfirmDialog
+        open={confirmClose}
+        message="Закрыть без сохранения? Изменения будут потеряны."
+        confirmLabel="Закрыть"
+        onConfirm={() => { setConfirmClose(false); onClose(); }}
+        onCancel={() => setConfirmClose(false)}
+      />
     </>
   );
 }
