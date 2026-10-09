@@ -26,6 +26,8 @@ import { useScrollLock } from '../lib/scrollLock';
 import { limitsFor, isProActive } from '../lib/proLimits';
 import ShareButton from '../components/ShareButton';
 import ReviewsBlock from '../components/ReviewsBlock';
+import ConfirmedCredits from '../components/ConfirmedCredits';
+import { ResponseBadgePill } from '../components/ResponseBadge';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
 import CoverImage from '../components/CoverImage';
 import ProfileProgressBar, { profileCompletion } from '../components/ProfileProgressBar';
@@ -762,6 +764,7 @@ export default function ProfilePage() {
                 {profile?.isPremium && <BadgeTooltip label="Premium"><Crown size={18} className="text-amber-400" /></BadgeTooltip>}
                 {(profile?._count?.referrals ?? 0) >= 100 && <BadgeTooltip label="Амбасадор Moooza"><Star size={18} className="text-orange-400" /></BadgeTooltip>}
                 {profile?.isBlocked && <BadgeTooltip label="Заблокирован"><Ban size={18} className="text-red-500" /></BadgeTooltip>}
+                <ResponseBadgePill value={profile?.responseBadge} />
               </div>
               <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-slate-400 mb-2">
                 {profile?.nickname && <span className="text-slate-500">@{profile.nickname}</span>}
@@ -976,6 +979,9 @@ export default function ProfilePage() {
               </div>
               </div>
             </div>
+
+            {/* ── Подтверждённый опыт (кредиты из релизов/клипов; пусто — блока нет) ── */}
+            {profile?.id && <ConfirmedCredits userId={profile.id} />}
 
             {/* ── Professions card — акцент фуксия (отличен от фиолетовых услуг) ── */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">

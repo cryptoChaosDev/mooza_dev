@@ -708,6 +708,14 @@ model User {
   // Release / Clip participation
   releaseParticipations ReleaseParticipant[]
   clipParticipations    ClipParticipant[]
+
+  // «Отвечает быстро» (lib/responseBadge.ts, пересчёт раз в сутки): медиана
+  // первых ответов на входящие первые сообщения в личных диалогах за 90 дней
+  // (не меньше 5 диалогов). responseBadge: 'fast' (≤ 60 мин) | 'day' (≤ 24 ч) | null.
+  // Минуты гостю не отдаются никогда — только категория responseBadge.
+  responseBadge         String?
+  responseBadgeAt       DateTime?
+  responseMedianMinutes Int?
   lastSeenAt            DateTime?
   termsAgreedAt         DateTime?
   onboardingCompletedAt DateTime?
@@ -1041,6 +1049,7 @@ model ReleaseParticipant {
   roles   ReleaseParticipantRole[]
 
   @@unique([releaseId, userId])
+  @@index([userId, confirmStatus])
 }
 
 model ReleaseParticipantRole {
@@ -1103,6 +1112,7 @@ model ClipParticipant {
   roles ClipParticipantRole[]
 
   @@unique([clipId, userId])
+  @@index([userId, confirmStatus])
 }
 
 model ClipParticipantRole {

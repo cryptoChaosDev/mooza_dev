@@ -519,6 +519,33 @@ describe('GET /seo/render — профиль, заказ, прочее', () => {
     expect(publicData.findGuestForbiddenKeys(ld)).toEqual([]);
   });
 
+  it('профиль с подтверждённым опытом → Person.subjectOf (MusicAlbum) и список релизов; REJECTED/PENDING — нет', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    require('../lib/profileSignals').clearCreditsCache();
+    m('user').findFirst.mockResolvedValue(profileRow('u-cred'));
+    m('deal').count.mockResolvedValue(0);
+    const art = (id: string, status: string) => ({ id, slug: `art-${id}`, name: `Группа ${id}`, avatar: null, listeners: BigInt(40_000), status });
+    m('releaseParticipant').findMany.mockResolvedValue([
+      { confirmStatus: 'ACCEPTED', roles: [{ role: { name: 'Барабаны' } }], release: { id: 'r-ok', title: 'Альбом', coverUrl: null, releaseDate: NOW, createdAt: NOW, artist: art('a1', 'VERIFIED') } },
+      { confirmStatus: 'PENDING', roles: [], release: { id: 'r-pend', title: 'Ожидает', coverUrl: null, releaseDate: NOW, createdAt: NOW, artist: art('a2', 'VERIFIED') } },
+      { confirmStatus: 'ACCEPTED', roles: [], release: { id: 'r-rej', title: 'Отклонён', coverUrl: null, releaseDate: NOW, createdAt: NOW, artist: art('a3', 'REJECTED') } },
+    ]);
+    const res = await request(app).get('/seo/render/profile/u-cred');
+    expect(res.status).toBe(200);
+    const ld = jsonLdOf(res.text);
+    expect(typesOf(ld)).toEqual(['ProfilePage', 'BreadcrumbList']);
+    const albums = ld['@graph'][0].mainEntity.subjectOf;
+    expect(albums).toEqual([{
+      '@type': 'MusicAlbum', name: 'Альбом', url: 'https://moooza.test/releases/r-ok',
+      byArtist: { '@type': 'MusicGroup', name: 'Группа a1', url: 'https://moooza.test/artist/art-a1' },
+    }]);
+    expect(res.text).toContain('href="/releases/r-ok"');
+    expect(res.text).not.toContain('r-pend');
+    expect(res.text).not.toContain('r-rej');
+    expect(res.text).toContain('Барабаны');
+    expect(publicData.findGuestForbiddenKeys(ld)).toEqual([]);
+  });
+
   it('закрытый заказ → 200 + noindex; черновик → 404', async () => {
     const order = (status: string) => ({
       id: 'o-1', title: 'Сведение трека', budgetFrom: 1000, budgetTo: 5000, deadline: null, description: 'Пишите на a@b.ru',

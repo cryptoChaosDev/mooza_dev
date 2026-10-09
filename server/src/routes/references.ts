@@ -5,6 +5,8 @@ import { optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { guestReadLimiter } from '../middleware/rateLimiter';
 import { setGuestCacheHeaders } from '../middleware/guest';
 import { maskContacts, maskContactsDeep } from '../lib/maskContacts';
+import { toPublicCatalogSignals } from '../lib/publicData';
+import { loadCatalogExtras } from '../lib/profileSignals';
 
 // Гостевой режим: поиск открыт без входа, но неглубоко (защита от выкачивания
 // базы) и с белым списком полей; контакты в свободном тексте маскируются.
@@ -734,7 +736,13 @@ router.get('/service-search', optionalAuthenticate, guestReadLimiter, async (req
       priceItems: true,
       description: true,
       createdAt: true,
-      user: { select: { id: true, firstName: true, lastName: true, avatar: true, city: true, isPremium: true, isVerified: true } },
+      user: {
+        select: {
+          id: true, firstName: true, lastName: true, avatar: true, city: true, isPremium: true, isVerified: true,
+          // «Отвечает быстро» — наружу только категория (toPublicCatalogSignals)
+          responseBadge: true, responseBadgeAt: true,
+        },
+      },
       service: { select: { id: true, name: true, section: { select: { id: true, name: true } } } },
       profession: { select: { id: true, name: true } },
       selectedCustomFilterValues: { select: { id: true, value: true, filter: { select: { id: true, name: true } } } },
@@ -752,12 +760,26 @@ router.get('/service-search', optionalAuthenticate, guestReadLimiter, async (req
         : [];
       return new Map(ratings.map(r => [r.targetId, { avg: r._avg.rating, count: r._count._all }]));
     };
+    // Рейтинг исполнителя + сигналы карточки (мини-бейдж «N релизов», аудиодемо,
+    // «Отвечает быстро») — фиксированным числом запросов на страницу.
     const attachRatings = async (rows: any[]) => {
-      const ratingByUser = await ratingsFor([...new Set(rows.map(i => i.user?.id).filter(Boolean) as string[])]);
-      return rows.map(i => ({
-        ...i,
-        user: i.user ? { ...i.user, rating: ratingByUser.get(i.user.id) ?? null } : i.user,
-      }));
+      const userIds = [...new Set(rows.map(i => i.user?.id).filter(Boolean) as string[])];
+      const [ratingByUser, extras] = await Promise.all([ratingsFor(userIds), loadCatalogExtras(userIds)]);
+      return rows.map(i => {
+        if (!i.user) return i;
+        const { responseBadge, responseBadgeAt, ...u } = i.user;
+        const signals = toPublicCatalogSignals(extras.get(u.id), { responseBadge, responseBadgeAt });
+        return {
+          ...i,
+          user: {
+            ...u,
+            rating: ratingByUser.get(u.id) ?? null,
+            releasesCount: signals.releasesCount,
+            demo: signals.demo,
+            responseBadge: signals.responseBadge,
+          },
+        };
+      });
     };
 
     let results: any[];
@@ -833,6 +855,10 @@ router.get('/service-search', optionalAuthenticate, guestReadLimiter, async (req
               isPremium: !!r.user.isPremium,
               isVerified: !!r.user.isVerified,
               rating: r.user.rating ?? null,
+              // уже собраны белым списком toPublicCatalogSignals (минут ответа нет)
+              releasesCount: r.user.releasesCount ?? 0,
+              demo: r.user.demo ? { url: r.user.demo.url, title: r.user.demo.title } : null,
+              responseBadge: r.user.responseBadge ?? null,
             }
           : null,
         service: r.service

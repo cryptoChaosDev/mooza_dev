@@ -6,9 +6,11 @@ import { upload, uploadBanner, uploadPortfolio } from '../middleware/upload';
 import { codeLimiter, guestReadLimiter } from '../middleware/rateLimiter';
 import { requireAuthUnlessGuestBrowsing, sendPublic, setGuestCacheHeaders } from '../middleware/guest';
 import {
-  getPublicProfile, getPublicUserServices, getPublicService,
-  publicPersonWhere, notifyPublicDataChanged,
+  getPublicProfile, getPublicUserServices, getPublicService, getPublicCredits,
+  publicPersonWhere, notifyPublicDataChanged, toPublicCredits, toPublicCatalogSignals,
 } from '../lib/publicData';
+import { getCreditsSummary, loadCatalogExtras } from '../lib/profileSignals';
+import { effectiveResponse, recomputeResponseBadges } from '../lib/responseBadge';
 import { recordConsentEvent, requestMeta, sanitizeConsentSource, CONSENT_VERSIONS } from '../lib/consentEvents';
 import { maskContacts } from '../lib/maskContacts';
 import { yoNorm } from '../utils/search';
@@ -21,6 +23,16 @@ import fs from 'fs';
 import crypto from 'crypto';
 
 const router = Router();
+
+// ── «Отвечает быстро»: пересчёт бейджей раз в сутки (первый — через 5 минут
+// после старта). Таймеры unref — не держат процесс. recomputeResponseBadges
+// идемпотентна: если её подключит и scheduler, двойной вызов безвреден.
+const RESPONSE_BADGE_FIRST_RUN_MS = 5 * 60 * 1000;
+const RESPONSE_BADGE_INTERVAL_MS = 24 * 60 * 60 * 1000;
+if (process.env.NODE_ENV !== 'test') {
+  setTimeout(() => { void recomputeResponseBadges(); }, RESPONSE_BADGE_FIRST_RUN_MS).unref?.();
+  setInterval(() => { void recomputeResponseBadges(); }, RESPONSE_BADGE_INTERVAL_MS).unref?.();
+}
 
 const userServiceInclude = {
   profession: {
@@ -203,6 +215,11 @@ const publicUserSelect = {
   birthDateVisible: true,
   contactsVisible: true,
   contactsVisibility: true,
+  // «Отвечает быстро»: кэш пересчёта, вырезается в toPublicUser (наружу —
+  // категория responseBadge; минуты — только вошедшим, как avgResponseMinutes)
+  responseBadge: true,
+  responseBadgeAt: true,
+  responseMedianMinutes: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, title: true, size: true, mimeType: true, sortOrder: true, createdAt: true }, orderBy: { sortOrder: 'asc' as const } },
   portfolioLinks: { select: { id: true, type: true, url: true, title: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
@@ -287,9 +304,14 @@ function stripContactLinks(socialLinks: any): any {
  * срок Pro (proUntil) не раскрывается — отдаётся только итоговый isPro.
  */
 async function toPublicUser(user: any, viewerId: string | null | undefined) {
-  const { birthDateVisible, contactsVisible, contactsVisibility, proUntil, isPro, ...publicUser } = user;
+  const {
+    birthDateVisible, contactsVisible, contactsVisibility, proUntil, isPro,
+    responseBadge, responseBadgeAt, responseMedianMinutes,
+    ...publicUser
+  } = user;
   if (!birthDateVisible) publicUser.birthDate = null;
   publicUser.isPro = isProActive({ isPro, proUntil });
+  publicUser.responseBadge = effectiveResponse({ responseBadge, responseBadgeAt }).badge;
   const showContacts = await canViewContacts(
     { id: publicUser.id, contactsVisibility, contactsVisible },
     viewerId,
@@ -339,7 +361,8 @@ router.get('/me', authenticate, async (req: AuthRequest, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.userId },
-      select: userSelect,
+      // «Отвечает быстро» — кэш пересчёта, наружу через effectiveResponse
+      select: { ...userSelect, responseBadge: true, responseBadgeAt: true, responseMedianMinutes: true },
     });
 
     if (!user) {
@@ -347,7 +370,14 @@ router.get('/me', authenticate, async (req: AuthRequest, res) => {
     }
 
     const shouldPromptPublicConsent = await computeShouldPromptPublicConsent(user as any);
-    res.json({ ...user, shouldPromptPublicConsent });
+    const { responseBadgeAt, responseMedianMinutes, ...me } = user as any;
+    const response = effectiveResponse({ responseBadge: me.responseBadge, responseBadgeAt, responseMedianMinutes });
+    res.json({
+      ...me,
+      responseBadge: response.badge,
+      avgResponseMinutes: response.medianMinutes,
+      shouldPromptPublicConsent,
+    });
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user' });
@@ -1444,6 +1474,9 @@ router.get('/catalog', optionalAuthenticate, requireAuthUnlessGuestBrowsing, gue
             isPremium: true,
             isVerified: true,
             createdAt: true,
+            // «Отвечает быстро» — наружу только категория (toPublicCatalogSignals)
+            responseBadge: true,
+            responseBadgeAt: true,
             fieldOfActivity: { select: { id: true, name: true } },
             userServices: {
               where: { status: { notIn: HIDDEN_SERVICE_STATUSES } },
@@ -1471,6 +1504,8 @@ router.get('/catalog', optionalAuthenticate, requireAuthUnlessGuestBrowsing, gue
         })
       : [];
     const ratingByUser = new Map(ratingRows.map((r) => [r.targetId, r]));
+    // Мини-бейдж «N релизов» и аудиодемо — три запроса на всю страницу.
+    const extras = await loadCatalogExtras(pageIds);
 
     const byId = new Map(users.map((u) => [u.id, u]));
     const results = pageIds
@@ -1481,7 +1516,17 @@ router.get('/catalog', optionalAuthenticate, requireAuthUnlessGuestBrowsing, gue
         const reviewsCount = r?._count._all ?? 0;
         const ratingAvg = reviewsCount > 0 && r?._avg.rating != null ? Number(r._avg.rating) : null;
         const connectionsCount = (u._count?.sentConnections ?? 0) + (u._count?.receivedConnections ?? 0);
-        return { ...u, ratingAvg, reviewsCount, connectionsCount };
+        const { responseBadge, responseBadgeAt, ...rest } = u as typeof u & { responseBadge?: string | null; responseBadgeAt?: Date | null };
+        const signals = toPublicCatalogSignals(extras.get(u.id), { responseBadge, responseBadgeAt });
+        return {
+          ...rest,
+          ratingAvg,
+          reviewsCount,
+          connectionsCount,
+          releasesCount: signals.releasesCount,
+          demo: signals.demo,
+          responseBadge: signals.responseBadge,
+        };
       });
 
     if (isGuest) {
@@ -1509,6 +1554,10 @@ router.get('/catalog', optionalAuthenticate, requireAuthUnlessGuestBrowsing, gue
         })),
         ratingAvg: u.ratingAvg,
         reviewsCount: u.reviewsCount,
+        // уже собраны белым списком toPublicCatalogSignals (минут ответа нет)
+        releasesCount: u.releasesCount,
+        demo: u.demo ? { url: u.demo.url, title: u.demo.title } : null,
+        responseBadge: u.responseBadge ?? null,
         isPublic: true,
       }));
       if (!paginated) return res.json(guestResults);
@@ -1626,6 +1675,21 @@ router.get('/:id/services', optionalAuthenticate, guestReadLimiter, async (req: 
   }
 });
 
+// ── GET /api/users/:id/credits ── «Подтверждённый опыт» ─────────────────────
+// Кредиты из релизов/клипов: только подтверждённые участия, артисты не REJECTED.
+// Гость — только при согласии на публичность (иначе 404, как профиль).
+router.get('/:id/credits', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
+  try {
+    if (!req.userId) {
+      return sendPublic(res, await getPublicCredits(req.params.id), 'Not found');
+    }
+    return res.json(toPublicCredits(await getCreditsSummary(req.params.id)));
+  } catch (err) {
+    console.error('[users] GET /:id/credits', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
 // ── GET /api/users/user-service/:serviceId ────────────────────────────────────
 router.get('/user-service/:serviceId', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
@@ -1697,45 +1761,10 @@ router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthReque
       },
     });
 
-    // Compute average response time (in minutes) for this user
-    // Look at recent personal conversations where someone wrote and this user replied
-    let avgResponseMinutes: number | null = null;
-    try {
-      const myConvs = await prisma.conversationMember.findMany({
-        where: { userId: req.params.id, deletedAt: null },
-        select: { conversationId: true },
-        take: 30,
-      });
-      const convIds = myConvs.map(m => m.conversationId);
-      if (convIds.length > 0) {
-        const msgs = await prisma.message.findMany({
-          where: { conversationId: { in: convIds }, deletedAt: null },
-          orderBy: [{ conversationId: 'asc' }, { createdAt: 'asc' }],
-          select: { conversationId: true, senderId: true, createdAt: true },
-          take: 500,
-        });
-        // For each transition "other → this user", measure delay
-        const deltas: number[] = [];
-        const byConv = new Map<string, typeof msgs>();
-        for (const m of msgs) {
-          if (!byConv.has(m.conversationId ?? '')) byConv.set(m.conversationId ?? '', []);
-          byConv.get(m.conversationId ?? '')!.push(m);
-        }
-        for (const list of byConv.values()) {
-          for (let i = 1; i < list.length; i++) {
-            const prev = list[i - 1];
-            const cur = list[i];
-            if (prev.senderId !== req.params.id && cur.senderId === req.params.id) {
-              const dt = (cur.createdAt.getTime() - prev.createdAt.getTime()) / 60000;
-              if (dt > 0 && dt < 60 * 24 * 7) deltas.push(dt); // ignore > 7 days
-            }
-          }
-        }
-        if (deltas.length >= 3) {
-          avgResponseMinutes = Math.round(deltas.reduce((a, b) => a + b, 0) / deltas.length);
-        }
-      }
-    } catch {}
+    // Время ответа — медиана первых ответов в личных диалогах за 90 дней
+    // (≥ 5 диалогов), из кэша суточного пересчёта (lib/responseBadge). Только
+    // вошедшим; гостю — лишь категория responseBadge.
+    const avgResponseMinutes = effectiveResponse(user as any).medianMinutes;
 
     // Hide birthDate from other users unless the owner opted to show it, and
     // contact links (phone / email / telegram) unless the viewer is allowed by

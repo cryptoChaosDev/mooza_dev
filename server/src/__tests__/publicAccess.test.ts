@@ -143,7 +143,8 @@ describe('GUEST_FORBIDDEN_KEYS', () => {
   it('contains the plan list', () => {
     for (const k of ['email', 'phone', 'password', 'telegramId', 'vkId', 'birthDate', 'lastSeenAt', 'notificationPrefs',
       'isBlocked', 'blockedUntil', 'isAdmin', 'verificationCode', 'verificationProofUrl', 'rejectionReason', 'submittedById',
-      'contactsVisibility', 'termsAgreedAt', 'referrerId', 'avgResponseMinutes', 'responses', 'userId']) {
+      'contactsVisibility', 'termsAgreedAt', 'referrerId', 'avgResponseMinutes', 'responseMedianMinutes', 'responseBadgeAt',
+      'responses', 'userId']) {
       expect(GUEST_FORBIDDEN_KEYS).toContain(k);
     }
     // префиксы friendship* / reference* / referrer*
@@ -190,6 +191,35 @@ describe('GET /api/users/:id (guest)', () => {
       bodies.push(res.body);
     }
     expect(new Set(bodies.map((b) => JSON.stringify(b))).size).toBe(1);
+  });
+
+  it('«Отвечает быстро»: guest gets only the category (fresh cache), never minutes', async () => {
+    m('user').findFirst.mockResolvedValue({ ...profileRow('u-pub'), responseBadge: 'fast', responseBadgeAt: new Date(), responseMedianMinutes: 12 });
+    let res = await request(app).get('/api/users/u-pub');
+    expect(res.status).toBe(200);
+    expectNoForbiddenKeys(res.body);
+    expect(res.body.responseBadge).toBe('fast');
+    expect(res.body).not.toHaveProperty('avgResponseMinutes');
+    expect(res.body).not.toHaveProperty('responseMedianMinutes');
+
+    // протухший кэш (пересчёт сломан) — бейджа нет
+    m('user').findFirst.mockResolvedValue({ ...profileRow('u-pub'), responseBadge: 'fast', responseBadgeAt: new Date(Date.now() - 8 * 86400_000) });
+    res = await request(app).get('/api/users/u-pub');
+    expect(res.body.responseBadge).toBeNull();
+  });
+
+  it('authorized viewer: responseBadge + avgResponseMinutes from the cached median (no per-request scan of messages)', async () => {
+    m('user').findUnique.mockResolvedValue({
+      id: 'u-pub', birthDateVisible: false, contactsVisibility: 'ALL', socialLinks: {},
+      responseBadge: 'day', responseBadgeAt: new Date(), responseMedianMinutes: 180,
+    });
+    const res = await request(app).get('/api/users/u-pub').set('x-test-user-id', 'viewer');
+    expect(res.status).toBe(200);
+    expect(res.body.responseBadge).toBe('day');
+    expect(res.body.avgResponseMinutes).toBe(180);
+    expect(res.body).not.toHaveProperty('responseBadgeAt');
+    expect(res.body).not.toHaveProperty('responseMedianMinutes');
+    expect(m('message').findMany).not.toHaveBeenCalled();
   });
 
   it('searchIndexingOptOut → still visible, indexable=false', async () => {
@@ -273,6 +303,55 @@ describe('GET /api/users/:id/services and /user-service/:id (guest)', () => {
   });
 });
 
+describe('GET /api/users/:id/credits — «Подтверждённый опыт» (guest)', () => {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  beforeEach(() => require('../lib/profileSignals').clearCreditsCache());
+
+  const art = (id: string, status = 'VERIFIED', listeners = 20_000) => ({
+    id, slug: `s-${id}`, name: `Артист ${id}`, avatar: null, listeners: BigInt(listeners), status,
+    verificationCode: 'MOOOZA-X', rejectionReason: 'r', submittedById: 'u-owner',
+  });
+  const rel = (id: string, a: any, confirmStatus = 'ACCEPTED') => ({
+    id: `p-${id}`, userId: 'u-pub', confirmStatus, user: person('u-pub'),
+    roles: [{ role: { id: 'role-1', name: 'Барабаны' } }],
+    release: { id, title: `Релиз ${id}`, coverUrl: null, releaseDate: NOW, createdAt: NOW, artistId: a.id, artist: a, tracklist: [] },
+  });
+
+  it('consent → 200: confirmed credits only, REJECTED artists excluded, whitelist, two queries', async () => {
+    m('user').findFirst.mockResolvedValue(person('u-pub'));
+    m('releaseParticipant').findMany.mockResolvedValue([
+      rel('r-1', art('a-1')), rel('r-2', art('a-2')),
+      rel('r-pend', art('a-3'), 'PENDING'), rel('r-rej', art('a-rej', 'REJECTED', 1_000_000)),
+    ]);
+    m('clipParticipant').findMany.mockResolvedValue([]);
+    const res = await request(app).get('/api/users/u-pub/credits');
+    expect(res.status).toBe(200);
+    expectNoForbiddenKeys(res.body);
+    expectGuestHeaders(res);
+    expect(res.body.releasesCount).toBe(2);
+    expect(res.body.releases.map((r: any) => r.id).sort()).toEqual(['r-1', 'r-2']);
+    expect(res.body.artists.map((a: any) => a.id).sort()).toEqual(['a-1', 'a-2']);
+    expect(res.body.listenersTotal).toBe(40_000);
+    expect(res.body.roles).toEqual(['Барабаны']);
+    expect(JSON.stringify(res.body)).not.toMatch(/verificationCode|MOOOZA-X|secret@mail/);
+    expect(m('releaseParticipant').findMany).toHaveBeenCalledTimes(1);
+    expect(m('clipParticipant').findMany).toHaveBeenCalledTimes(1);
+    const where = m('releaseParticipant').findMany.mock.calls[0][0].where;
+    expect(where.confirmStatus).toBe('ACCEPTED');
+    expect(JSON.stringify(where)).toContain('REJECTED');
+    expect(callArgsJson(m('user').findFirst)).toContain('publicConsentAt');
+  });
+
+  it('no consent / blocked / missing → 404 without loading credits', async () => {
+    for (const row of [person('u-np', { consent: false }), person('u-bl', { blocked: true }), null]) {
+      m('user').findFirst.mockResolvedValueOnce(row);
+      const res = await request(app).get('/api/users/x/credits');
+      expect(res.status).toBe(404);
+    }
+    expect(m('releaseParticipant').findMany).not.toHaveBeenCalled();
+  });
+});
+
 describe('GET /api/users/catalog (guest)', () => {
   const catalogRow = (id: string) => ({
     ...person(id), bio: 'пишите @catalog_user', city: 'Москва', country: 'Россия', occupancyStatus: 'open', createdAt: NOW,
@@ -311,6 +390,43 @@ describe('GET /api/users/catalog (guest)', () => {
     expectNoForbiddenKeys(res.body);
     expect(res.body.pagination.page).toBe(10);
     expect(res.body.results).toHaveLength(1);
+  });
+
+  it('card signals: releases badge, /uploads audio demo only, response category without minutes', async () => {
+    m('user').findMany
+      .mockResolvedValueOnce([{ id: 'u-1' }, { id: 'u-2' }])
+      .mockResolvedValueOnce([
+        { ...catalogRow('u-1'), responseBadge: 'fast', responseBadgeAt: new Date(), responseMedianMinutes: 9 },
+        { ...catalogRow('u-2'), responseBadge: 'day', responseBadgeAt: new Date(Date.now() - 30 * 86400_000) },
+      ]);
+    m('user').count.mockResolvedValue(2);
+    m('releaseParticipant').groupBy.mockResolvedValue([{ userId: 'u-1', _count: { _all: 12 } }]);
+    m('portfolioFile').findMany.mockResolvedValue([
+      { id: 'pf-doc', userId: 'u-1', url: '/uploads/portfolio/cv.pdf', mimeType: 'application/pdf', originalName: 'cv.pdf', title: null, sortOrder: 0, createdAt: NOW },
+      { id: 'pf-a', userId: 'u-1', url: '/uploads/portfolio/demo.mp3', mimeType: 'audio/mpeg', originalName: 'demo.mp3', title: 'Демо, тг @demo_owner', sortOrder: 1, createdAt: NOW },
+      { id: 'pf-ext', userId: 'u-2', url: 'https://evil.example/x.mp3', mimeType: 'audio/mpeg', originalName: 'x.mp3', title: null, sortOrder: 0, createdAt: NOW },
+    ]);
+    m('portfolioLink').findMany.mockResolvedValue([
+      { id: 'pl-ym', userId: 'u-2', type: 'audio', url: 'https://music.yandex.ru/album/1', title: 'ЯМ', createdAt: NOW },
+    ]);
+    const res = await request(app).get('/api/users/catalog?page=1');
+    expect(res.status).toBe(200);
+    expectNoForbiddenKeys(res.body);
+    const [u1, u2] = res.body.results;
+    expect(u1.releasesCount).toBe(12);
+    expect(u1.demo.url).toBe('/uploads/portfolio/demo.mp3');
+    expect(u1.demo.title).not.toContain('@demo_owner');
+    expect(u1.responseBadge).toBe('fast');
+    expect(u2.releasesCount).toBe(0);
+    expect(u2.demo).toBeNull();          // внешний файл и стриминг не проигрываем
+    expect(u2.responseBadge).toBeNull(); // кэш старше недели
+    for (const u of res.body.results) {
+      expect(u).not.toHaveProperty('avgResponseMinutes');
+      expect(u).not.toHaveProperty('responseMedianMinutes');
+    }
+    const gb = m('releaseParticipant').groupBy.mock.calls[0][0];
+    expect(gb.where.confirmStatus).toBe('ACCEPTED');
+    expect(JSON.stringify(gb.where)).toContain('REJECTED');
   });
 
   it('flag off → 401 like before (authenticate)', async () => {
@@ -802,6 +918,27 @@ describe('references (guest)', () => {
     expect(args.where.status).toBe('active');
     expect(JSON.stringify(args.where)).toContain('publicConsentAt');
     expect(res.body.results[0].description).toContain('[контакт — после входа]');
+  });
+
+  it('GET /api/references/service-search → provider signals (releases, /uploads demo, response category) for guests', async () => {
+    m('userService').count.mockResolvedValue(1);
+    m('userService').findMany.mockResolvedValue([
+      serviceRow('s-1', 'active', { ...person('u-pub'), responseBadge: 'fast', responseBadgeAt: new Date(), responseMedianMinutes: 4 }),
+    ]);
+    m('review').groupBy.mockResolvedValue([]);
+    m('releaseParticipant').groupBy.mockResolvedValue([{ userId: 'u-pub', _count: { _all: 3 } }]);
+    m('portfolioFile').findMany.mockResolvedValue([
+      { userId: 'u-pub', url: '/uploads/portfolio/a.ogg', mimeType: 'audio/ogg', originalName: 'a.ogg', title: null, sortOrder: 0, createdAt: NOW },
+    ]);
+    const res = await request(app).get('/api/references/service-search');
+    expect(res.status).toBe(200);
+    expectNoForbiddenKeys(res.body);
+    const u = res.body.results[0].user;
+    expect(u.releasesCount).toBe(3);
+    expect(u.demo).toEqual({ url: '/uploads/portfolio/a.ogg', title: 'a.ogg' });
+    expect(u.responseBadge).toBe('fast');
+    expect(u).not.toHaveProperty('avgResponseMinutes');
+    expect(u).not.toHaveProperty('responseMedianMinutes');
   });
 
   it('GET /api/references/search (people) → consent filter for guests', async () => {
