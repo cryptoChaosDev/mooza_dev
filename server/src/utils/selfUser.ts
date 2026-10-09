@@ -43,7 +43,7 @@ export const SELF_USER_SELECT = {
       profession: { include: { direction: { select: { id: true, name: true } } } },
     },
   },
-  userArtists: { where: { inviteStatus: 'ACCEPTED' as const }, include: { artist: { select: { id: true, name: true } } } },
+  userArtists: { where: { inviteStatus: 'ACCEPTED' as const }, include: { artist: { select: { id: true, slug: true, name: true } } } },
   employerId: true,
   employer: { select: { id: true, name: true, inn: true, ogrn: true } },
   socialLinks: true,

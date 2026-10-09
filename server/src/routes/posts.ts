@@ -283,7 +283,7 @@ router.get('/my-authors', authenticate, async (req: AuthRequest, res) => {
     });
     const artistMemberships = await prisma.userArtist.findMany({
       where: { userId: meId, isOwner: true, inviteStatus: 'ACCEPTED' },
-      include: { artist: { select: { id: true, name: true, avatar: true } } },
+      include: { artist: { select: { id: true, slug: true, name: true, avatar: true } } },
     });
     res.json({
       user,
@@ -308,7 +308,7 @@ const buildFeedInclude = (userId: string | undefined) => {
     select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true }
   },
   channel: { select: { id: true, name: true, avatar: true } },
-  artist: { select: { id: true, name: true, avatar: true } },
+  artist: { select: { id: true, slug: true, name: true, avatar: true } },
   // Structured «Услуга» post — the linked offering, used to render the feed card
   // (title, section, price) and power the «Детали услуги»/«Написать»/«Сделка» buttons.
   service: {
@@ -1024,7 +1024,7 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
       include: {
         author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true } },
         channel: { select: { id: true, name: true, avatar: true } },
-        artist: { select: { id: true, name: true, avatar: true } },
+        artist: { select: { id: true, slug: true, name: true, avatar: true } },
         service: {
           select: {
             id: true,

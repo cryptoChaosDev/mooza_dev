@@ -103,7 +103,7 @@ const userSelect = {
   // «Мои артисты» берёт groupAPI.getMyGroups).
   userArtists: {
     where: { inviteStatus: 'ACCEPTED' as const },
-    include: { artist: { select: { id: true, name: true, avatar: true } } },
+    include: { artist: { select: { id: true, slug: true, name: true, avatar: true } } },
   },
   socialLinks: true,
   channel: {
@@ -185,7 +185,7 @@ const publicUserSelect = {
   // Чужой профиль — только подтверждённые участия (не PENDING/DECLINED).
   userArtists: {
     where: { inviteStatus: 'ACCEPTED' as const },
-    include: { artist: { select: { id: true, name: true, avatar: true } } },
+    include: { artist: { select: { id: true, slug: true, name: true, avatar: true } } },
   },
   socialLinks: true,
   lastSeenAt: true,
