@@ -32,6 +32,7 @@ import { canPreviewInline, openInNewTab } from '../lib/docPreview';
 import { useAuthGate, AuthGatePanel } from '../components/AuthGateModal';
 import { useSeo, seoTitle, seoDescription, robotsFor } from '../lib/seo';
 import { trackGuestView } from '../lib/metrika';
+import { artistHref } from '../lib/artistUtils';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -637,7 +638,7 @@ export default function UserProfilePage() {
                       return (
                         <Link
                           key={ua.artistId ?? ua.artist?.id}
-                          to={'/artist/' + (ua.artist?.id ?? ua.artistId)}
+                          to={artistHref(ua.artist, ua.artistId)}
                           className="flex flex-col gap-1.5 flex-shrink-0 text-left group"
                           style={{ width: 'calc((100% - 24px) / 3.5)' }}
                         >

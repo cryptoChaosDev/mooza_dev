@@ -28,6 +28,7 @@ import { plural } from '../lib/plural';
 import { useSeo, seoTitle, seoDescription, robotsFor } from '../lib/seo';
 import { hiddenMaterialsCount } from '../lib/publicPerson';
 import { trackGuestView } from '../lib/metrika';
+import { artistHref } from '../lib/artistUtils';
 
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp)$/i;
 
@@ -388,7 +389,7 @@ export default function VacancyDetailPage() {
 
           {/* Автор вакансии — артист (в т.ч. для гостя) */}
           {vacancy.artist?.name && (
-            <Link to={`/artist/${vacancy.artist.id ?? vacancy.artistId}`} className="flex items-center gap-2 w-fit min-w-0 group">
+            <Link to={artistHref(vacancy.artist, vacancy.artistId)} className="flex items-center gap-2 w-fit min-w-0 group">
               <AvatarComponent src={vacancy.artist.avatar} name={vacancy.artist.name} size={24} />
               <span className="text-sm text-slate-300 group-hover:text-white transition-colors truncate">{vacancy.artist.name}</span>
             </Link>

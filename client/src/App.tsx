@@ -236,7 +236,8 @@ function AppRoutes() {
             <Route path="/profile/:userId/services" element={<PublicRoute><ServicesPage /></PublicRoute>} />
             <Route path="/profile/:userId/reviews" element={<PublicRoute><ReviewsPage /></PublicRoute>} />
             <Route path="/professions/:userId/:professionId" element={<PublicRoute><ProfessionPage /></PublicRoute>} />
-            <Route path="/artist/:id"       element={<PublicRoute><ArtistPage /></PublicRoute>} />
+            {/* /artist/<slug> — канонический адрес; /artist/<uuid> и прежние слаги страница сама заменяет на слаг */}
+            <Route path="/artist/:idOrSlug" element={<PublicRoute><ArtistPage /></PublicRoute>} />
             <Route path="/releases/:id"     element={<PublicRoute><ReleasePage /></PublicRoute>} />
             <Route path="/clips/:id"        element={<PublicRoute><ClipPage /></PublicRoute>} />
             <Route path="/services/:serviceId" element={<PublicRoute><ServicePage /></PublicRoute>} />

@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, ExternalLink,
@@ -14,7 +14,7 @@ import { artistAPI, releaseAPI, clipAPI, vacancyAPI } from '../lib/api';
 import { workFormatLabel } from '../lib/vacancyOptions';
 import { useScrollLock } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
-import { safeHref, copyText } from '../lib/artistUtils';
+import { safeHref, copyText, artistHref } from '../lib/artistUtils';
 import { SocialIconRow } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
 import SelectSheet from '../components/SelectSheet';
@@ -80,8 +80,13 @@ function pluralMembers(n: number): string {
 }
 
 export default function ArtistPage() {
-  const { id } = useParams<{ id: string }>();
+  // Адрес — /artist/<slug> (человекочитаемый) или /artist/<uuid> (старые ссылки):
+  // сервер принимает оба и прежние слаги, а страница после загрузки меняет адрес
+  // на канонический /artist/<slug>. Подстраницы (/artist/:id/edit и т.п.) и все
+  // запросы к API — по id из ответа.
+  const { idOrSlug } = useParams<{ idOrSlug: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { user: currentUser } = useAuthStore();
 
@@ -126,13 +131,29 @@ export default function ArtistPage() {
   useScrollLock(showOwnerPicker || showAdminPicker || showManageSheet);
 
   const { data: artist, isLoading, isError } = useQuery({
-    queryKey: ['artist', id],
+    queryKey: ['artist', idOrSlug],
     queryFn: async () => {
-      const { data } = await artistAPI.getArtist(id!);
+      const { data } = await artistAPI.getArtist(idOrSlug!);
       return data;
     },
-    enabled: !!id,
+    enabled: !!idOrSlug,
     retry: (count, e: any) => e?.response?.status !== 404 && count < 1,
+  });
+  const id: string | undefined = artist?.id;
+
+  // Открыт по uuid или прежнему слагу → заменить адрес на /artist/<slug>
+  // (без новой записи в истории; данные уже в кэше под новым ключом).
+  useEffect(() => {
+    const slug: string | null | undefined = artist?.slug;
+    if (!slug || !idOrSlug || idOrSlug === slug) return;
+    queryClient.setQueryData(['artist', slug], artist);
+    navigate(`${artistHref(artist)}${location.search}${location.hash}`, { replace: true, state: location.state });
+  }, [artist, idOrSlug, location.search, location.hash, location.state, navigate, queryClient]);
+
+  // Кэш карточки лежит под ключом из адреса (слаг) — сбрасываем и его, и ключ по id
+  // (страницы редактирования /artist/:id/… работают с ['artist', id]).
+  const invalidateArtist = () => queryClient.invalidateQueries({
+    predicate: (q) => q.queryKey[0] === 'artist' && (q.queryKey[1] === idOrSlug || q.queryKey[1] === id),
   });
 
   const gate = useAuthGate();
@@ -146,7 +167,7 @@ export default function ArtistPage() {
       ? seoDescription(artist.description)
         || seoDescription(`${artist.name} — ${(artistTypeLabel ?? 'артист').toLowerCase()}${artist.city ? ` из города ${artist.city}` : ''}${(artist.genres?.length ?? 0) > 0 ? `. Жанры: ${artist.genres.map((g: any) => g.name).join(', ')}` : ''}. Состав, релизы и клипы на Moooza.`)
       : null,
-    canonical: `/artist/${id}`,
+    canonical: artist ? artistHref(artist) : `/artist/${idOrSlug}`,
     // DRAFT/PENDING — с бейджем, но noindex (план, раздел A).
     robots: robotsFor(artist, artistIndexable),
   });
@@ -187,7 +208,7 @@ export default function ArtistPage() {
   const canAdminArtist = !!(artist as any)?.viewerIsAdmin || !!(artist as any)?.viewerIsOwner;
 
   const favInvalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['artist', id] });
+    invalidateArtist();
     queryClient.invalidateQueries({ queryKey: ['followed-artists'] });
   };
   const followMut = useMutation({
@@ -204,7 +225,7 @@ export default function ArtistPage() {
 
   const uploadAvatarMut = useMutation({
     mutationFn: (file: File) => artistAPI.uploadAvatar(id!, file),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onSuccess: () => invalidateArtist(),
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось загрузить аватар')),
   });
 
@@ -213,7 +234,7 @@ export default function ArtistPage() {
   const patchMut = useMutation({
     mutationFn: (payload: Record<string, unknown>) => artistAPI.updateArtist(id!, payload),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['artist', id] });
+      invalidateArtist();
       setEditingAbout(false);
     },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить')),
@@ -221,13 +242,13 @@ export default function ArtistPage() {
 
   const uploadBannerMut = useMutation({
     mutationFn: (file: File) => artistAPI.uploadBanner(id!, file),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onSuccess: () => invalidateArtist(),
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось загрузить обложку')),
   });
 
   const requestVerifyMut = useMutation({
     mutationFn: () => artistAPI.requestVerification(id!, proofUrl),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['artist', id] }); setProofUrl(''); setVerifyUnmet([]); },
+    onSuccess: () => { invalidateArtist(); setProofUrl(''); setVerifyUnmet([]); },
     onError: (err: any) => {
       const data = err?.response?.data;
       if (data?.error === 'CONDITIONS_NOT_MET' && Array.isArray(data.unmet)) {
@@ -240,7 +261,7 @@ export default function ArtistPage() {
 
   const withdrawMut = useMutation({
     mutationFn: () => artistAPI.withdrawVerification(id!),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['artist', id] }),
+    onSuccess: () => invalidateArtist(),
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось отозвать заявку')),
   });
 
@@ -256,7 +277,7 @@ export default function ArtistPage() {
   const approveMemberMut = useMutation({
     mutationFn: (membershipId: string) => artistAPI.approveMembership(membershipId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['artist', id] });
+      invalidateArtist();
       queryClient.invalidateQueries({ queryKey: ['artist-pending-members', id] });
     },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось подтвердить заявку')),
@@ -264,13 +285,12 @@ export default function ArtistPage() {
   const rejectMemberMut = useMutation({
     mutationFn: (membershipId: string) => artistAPI.rejectMembership(membershipId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['artist', id] });
+      invalidateArtist();
       queryClient.invalidateQueries({ queryKey: ['artist-pending-members', id] });
     },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить заявку')),
   });
 
-  const invalidateArtist = () => queryClient.invalidateQueries({ queryKey: ['artist', id] });
 
   // ── Phase 5b: mutations ────────────────────────────────────────────────────
   // The viewer's own pending invitation: confirm / decline.
@@ -545,7 +565,7 @@ export default function ArtistPage() {
             </button>
           )}
           <ShareButton
-            url={`/artist/${id}`}
+            url={artistHref(artist)}
             title={artist?.name}
             iconSize={16}
             className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"

@@ -1,6 +1,19 @@
 // Мелкие хелперы страниц артиста/медиа.
 
 /**
+ * Адрес страницы артиста: /artist/<slug>, если слаг известен, иначе /artist/<id>
+ * (страница и сервер сами заменят его на канонический /artist/<slug>).
+ * Подстраницы (/artist/:id/edit и т.п.) строятся по id, не через этот хелпер.
+ */
+export function artistHref(
+  a: { id?: string | null; slug?: string | null } | null | undefined,
+  fallbackId?: string | null,
+): string {
+  const key = a?.slug || a?.id || fallbackId || '';
+  return `/artist/${encodeURIComponent(key)}`;
+}
+
+/**
  * Безопасная ссылка для href: только http(s). Всё остальное (javascript:, data:,
  * vbscript:, «голый» текст) → undefined — <a> без href не исполняет скрипт.
  * Данные приходят от пользователей и из внешних каталогов — доверять нельзя.

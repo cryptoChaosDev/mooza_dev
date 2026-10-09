@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import ImageLightbox from './ImageLightbox';
 import { toast } from '../stores/toastStore';
-import { safeHref, copyText } from '../lib/artistUtils';
+import { safeHref, copyText, artistHref } from '../lib/artistUtils';
 
 /**
  * Блоки карточки Артиста с данными Яндекс.Музыки (Artist.ymData из ночного
@@ -15,7 +15,7 @@ import { safeHref, copyText } from '../lib/artistUtils';
  */
 
 interface YmLink { title: string; href: string; type: string; socialNetwork: string | null }
-interface YmSimilar { ymId: string; name: string; cover: string | null; genres?: string[]; moozaArtistId?: string | null }
+interface YmSimilar { ymId: string; name: string; cover: string | null; genres?: string[]; moozaArtistId?: string | null; moozaArtistSlug?: string | null }
 interface YmTrack { id: string; title: string; durationMs: number | null }
 interface YmPlaylist { title: string; trackCount: number | null; url: string }
 export interface YmData {
@@ -220,7 +220,7 @@ export default function ArtistYandexBlocks({
               return (
                 <div key={s.ymId} className="flex-shrink-0 w-16">
                   {onMoooza ? (
-                    <button onClick={() => navigate(`/artist/${s.moozaArtistId}`)} className="block w-full">
+                    <button onClick={() => navigate(artistHref({ id: s.moozaArtistId, slug: s.moozaArtistSlug }))} className="block w-full">
                       {avatar}
                       <p className="text-[11px] text-slate-300 text-center mt-1.5 truncate">{s.name}</p>
                       <p className="text-[10px] text-primary-400 text-center truncate">на Moooza</p>

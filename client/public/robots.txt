@@ -1,36 +1,58 @@
-User-agent: *
-Allow: /$
-Allow: /login
-Allow: /register
-Allow: /assets/
-Allow: /favicon.png
-Allow: /apple-touch-icon.png
-Allow: /icon.svg
-Allow: /logo.png
-Allow: /logo.jpg
-Allow: /pwa-192x192.png
-Allow: /pwa-512x512.png
+# Moooza — robots.txt (план «Moooza доступна без регистрации», раздел E).
+# Публичные страницы (артисты, релизы, клипы, профили с согласием, услуги,
+# заказы, вакансии, лента, каталог) открыты; приватные разделы закрыты.
+# /api/ и /uploads/ не закрываем: их ответы помечены X-Robots-Tag: noindex
+# (кроме аватаров и обложек), иначе робот не увидит картинки страниц.
+# AI-краулеры (GPTBot, ClaudeBot, PerplexityBot и др.) разрешены — решение
+# владельца от 2026-10-09; отдельных секций для них нет.
 
+User-agent: *
+Allow: /
+
+# Личное и действия — только после входа
 Disallow: /messages
 Disallow: /chat
-Disallow: /profile
-Disallow: /profile/
-Disallow: /search
 Disallow: /friends
+Disallow: /connection
 Disallow: /deals
 Disallow: /create-post
-Disallow: /flow-settings
 Disallow: /invite
-Disallow: /pro
-Disallow: /onboarding
-Disallow: /connection
-Disallow: /connections
-Disallow: /artist
-Disallow: /releases
-Disallow: /clips
-Disallow: /services
-Disallow: /vk-setup
+Disallow: /settings
+Disallow: /pro$
+Disallow: /pro?
 Disallow: /admin
+Disallow: /onboarding
+Disallow: /vk-setup
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /profile$
+Disallow: /profile?
+Disallow: /profile/*/connections
 
-Host: moooza.ru
+# Формы создания и редактирования
+Disallow: /artist/create
+Disallow: /artist/*/edit
+Disallow: /artist/*/releases/new
+Disallow: /artist/*/clips/new
+Disallow: /artist/*/vacancies/new
+Disallow: /artist/*/members/
+Disallow: /artist/*/invite
+Disallow: /artist/*/contacts
+Disallow: /artist/*/genres
+Disallow: /artists/
+Disallow: /services/new
+Disallow: /services/edit/
+Disallow: /orders$
+Disallow: /orders?
+Disallow: /orders/new
+Disallow: /orders/edit/
+Disallow: /professions/new
+Disallow: /professions/edit/
+
+# Яндекс: параметры, не меняющие содержимое страницы
+Clean-param: utm_source&utm_medium&utm_campaign&utm_content&utm_term&utm_referrer
+Clean-param: yclid&gclid&fbclid&ysclid&_openstat&openstat&from&ref
+Clean-param: post /feed
+Clean-param: q&city&genre&type&sort&section&service&profession&price&priceFrom&priceTo&page /search
+
 Sitemap: https://moooza.ru/sitemap.xml

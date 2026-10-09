@@ -11,7 +11,7 @@ import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { MEDIA_PLATFORM_LABELS } from '../lib/mediaPlatforms';
 import { ymGenreLabel, RELEASE_TYPE_LABELS } from '../lib/ymGenres';
-import { safeHref, formatReleaseDate } from '../lib/artistUtils';
+import { safeHref, formatReleaseDate, artistHref } from '../lib/artistUtils';
 import { personName, personHref } from '../lib/publicPerson';
 import { openAuthGate } from '../components/AuthGateModal';
 import { useSeo, seoTitle, seoDescription, robotsFor } from '../lib/seo';
@@ -92,7 +92,7 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
           queryClient.invalidateQueries({ queryKey: listKey, refetchType: 'all' }),
           queryClient.invalidateQueries({ queryKey: ['artist', item.artistId], refetchType: 'all' }),
         ]).catch(() => {});
-        navigate(`/artist/${item.artistId}`);
+        navigate(artistHref(item.artist, item.artistId));
       } else {
         navigate(-1);
       }
@@ -209,7 +209,7 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
         <h1 className="text-2xl font-bold text-white text-center mb-1 break-words [overflow-wrap:anywhere]">{item.title}</h1>
         {item.artist?.name && (
           <p className="text-center text-sm mb-1">
-            <Link to={`/artist/${item.artist.id ?? item.artistId}`} className="text-primary-300 hover:text-primary-200 transition-colors">{item.artist.name}</Link>
+            <Link to={artistHref(item.artist, item.artistId)} className="text-primary-300 hover:text-primary-200 transition-colors">{item.artist.name}</Link>
           </p>
         )}
 

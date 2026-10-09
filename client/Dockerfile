@@ -19,6 +19,13 @@ COPY . .
 # Build the app
 RUN npm run build
 
+# SEO-снимки (server/src/seo) подставляют разметку между маркерами в index.html —
+# сборка без маркеров (минификатор/плагин вырезал комментарии) должна падать здесь,
+# а не молча отдавать роботам пустой SPA.
+RUN grep -q '<!--seo:head-->' dist/index.html \
+ && grep -q '<!--/seo:head-->' dist/index.html \
+ && grep -q '<!--seo:body-->' dist/index.html
+
 # Production stage with nginx
 FROM nginx:alpine
 

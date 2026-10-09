@@ -33,6 +33,7 @@ import { PublicProfileIntro, useGivePublicConsent } from '../components/PublicCo
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { canPreviewInline, openInNewTab } from '../lib/docPreview';
+import { artistHref } from '../lib/artistUtils';
 
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -954,7 +955,7 @@ export default function ProfilePage() {
                   return (
                     <button
                       key={g.id}
-                      onClick={() => navigate('/artist/' + g.id)}
+                      onClick={() => navigate(artistHref(g))}
                       className="flex flex-col gap-1.5 flex-shrink-0 text-left group"
                       style={{ width: 'calc((100% - 24px) / 3.5)' }}
                     >
