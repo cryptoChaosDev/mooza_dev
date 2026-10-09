@@ -76,11 +76,14 @@ export default function ArtistYandexBlocks({
   listenersDelta,
   listenersHistory,
   ymData,
+  hideConcerts = false,
 }: {
   listeners?: number | null;
   listenersDelta?: number | null;
   listenersHistory?: HistoryPoint[];
   ymData?: YmData | null;
+  /** Концерты уже показаны выше (визитка: «Ближайшие концерты»). */
+  hideConcerts?: boolean;
 }) {
   const navigate = useNavigate();
   const [photoOpen, setPhotoOpen] = useState<string | null>(null);
@@ -89,7 +92,7 @@ export default function ArtistYandexBlocks({
   const tracks = ymData.popularTracks ?? [];
   const similar = ymData.similarArtists ?? [];
   const photos = ymData.photos ?? [];
-  const concerts = ymData.concerts ?? [];
+  const concerts = hideConcerts ? [] : ymData.concerts ?? [];
   const hasStats = (listeners ?? 0) > 0 || (ymData.likesCount ?? 0) > 0;
   const history = listenersHistory ?? [];
   const delta = listenersDelta ?? 0;

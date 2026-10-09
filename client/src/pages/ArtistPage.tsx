@@ -1,24 +1,23 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useParams, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  ArrowLeft, MapPin, ExternalLink,
+  ArrowLeft, MapPin,
   Camera, Navigation, Edit3, X, Loader2,
   ShieldCheck, Clock, ShieldX, CheckCircle2, Send,
   UserPlus, Trash2,
-  Settings, Link2, Tag, Crown, Shield, UserCog, UserCheck, UserX, Star,
+  Settings, Link2, Tag, Crown, Shield, UserCog, UserCheck, UserX,
   UserRound, Users, Disc3, Clapperboard, Briefcase, Activity, ChevronRight, Lock,
 } from 'lucide-react';
 import { artistAPI, releaseAPI, clipAPI, vacancyAPI } from '../lib/api';
 import { workFormatLabel } from '../lib/vacancyOptions';
 import { useScrollLock } from '../lib/scrollLock';
 import { avatarUrl } from '../lib/avatar';
-import { safeHref, copyText, artistHref } from '../lib/artistUtils';
-import { SocialIconRow } from '../components/SocialLinks';
+import { copyText, artistHref } from '../lib/artistUtils';
+import { SocialIconRow, CONTACT_KEYS } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
 import SelectSheet from '../components/SelectSheet';
-import ShareButton from '../components/ShareButton';
 import RolePicker from '../components/RolePicker';
 import ConfirmDialog from '../components/ConfirmDialog';
 import MediaRail from '../components/MediaRail';
@@ -31,8 +30,15 @@ import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { useAuthGate, openAuthGate } from '../components/AuthGateModal';
 import { personName, personHref } from '../lib/publicPerson';
-import { useSeo, seoTitle, seoDescription, robotsFor } from '../lib/seo';
+import { useSeo, seoTitle, seoDescription, robotsFor, SITE_ORIGIN } from '../lib/seo';
 import { trackGuestView } from '../lib/metrika';
+import { collectArtistLinks } from '../components/artist/linkPlatforms';
+import { trackArtistViewOnce } from '../components/artist/artistTracking';
+import { ArtistListenBlock, ArtistSocialRow, ArtistLatestRelease, type ReleaseLite } from '../components/artist/ArtistListen';
+import ArtistConcerts from '../components/artist/ArtistConcerts';
+import ArtistCtaRow from '../components/artist/ArtistCtaRow';
+import ArtistQrModal from '../components/artist/ArtistQrModal';
+import ArtistBioStats from '../components/artist/ArtistBioStats';
 
 const ACTIVITY_OPTIONS = [
   { id: 'ACTIVE',    name: 'Действующий' },
@@ -127,6 +133,9 @@ export default function ArtistPage() {
   // Activity status sheet
   const [activitySheetOpen, setActivitySheetOpen] = useState(false);
 
+  // Визитка: модалка QR-кода страницы артиста
+  const [showQr, setShowQr] = useState(false);
+
   // iOS: любой открытый нижний лист/оверлей страницы блокирует фон.
   // (RolePicker/SelectSheet/ConfirmDialog лочат скролл сами — лок ref-counted.)
   useScrollLock(showOwnerPicker || showAdminPicker || showManageSheet);
@@ -178,7 +187,8 @@ export default function ArtistPage() {
     queryKey: ['releases', 'artist', id],
     queryFn: async () => {
       const { data } = await releaseAPI.listByArtist(id!);
-      return data as { id: string; title: string; coverUrl?: string | null }[];
+      // Сервер отдаёт свежие сверху (по дате релиза, без даты — в конце).
+      return data as ReleaseLite[];
     },
     enabled: !!id,
   });
@@ -207,6 +217,18 @@ export default function ArtistPage() {
   // Права — ТОЛЬКО по флагам сервера (подтверждённый владелец/админ артиста;
   // владелец ≥ админ). Никаких выводов из submittedById / legacy members[].
   const canAdminArtist = !!(artist as any)?.viewerIsAdmin || !!(artist as any)?.viewerIsOwner;
+
+  // Статистика визитки: просмотр — один на сессию вкладки; свои заходы админов
+  // артиста не считаем.
+  useEffect(() => {
+    if (id && !canAdminArtist) trackArtistViewOnce(id);
+  }, [id, canAdminArtist]);
+
+  // Площадки «Слушать» и соцсети — из socialLinks/bandLink (контакты не входят).
+  const bioLinks = useMemo(
+    () => collectArtistLinks(artist?.socialLinks, artist?.bandLink),
+    [artist?.socialLinks, artist?.bandLink],
+  );
 
   const favInvalidate = () => {
     invalidateArtist();
@@ -368,11 +390,19 @@ export default function ArtistPage() {
     );
   }
 
-  const hasSocialLinks =
-    artist.socialLinks && Object.values(artist.socialLinks as Record<string, string>).some(Boolean);
+  // Карточка «Контакты» — только контактные ключи (телефон/почта/Telegram для
+  // связи); площадки и соцсети — в блоках визитки выше. Гостю контакты сервер
+  // не отдаёт (только флаг contactsAvailable).
+  const contactLinks: Record<string, string> = Object.fromEntries(
+    Object.entries((artist.socialLinks ?? {}) as Record<string, unknown>)
+      .filter(([k, v]) => (CONTACT_KEYS as string[]).includes(k) && typeof v === 'string' && !!v.trim()),
+  ) as Record<string, string>;
+  const hasContactLinks = Object.keys(contactLinks).length > 0;
 
   const bannerSrc = resolveUrl(artist.banner);
   const avatarSrc = avatarUrl(artist.avatar);
+  // Публичный адрес визитки — для «Поделиться», QR и шапки профиля в соцсетях.
+  const bioUrl = `${SITE_ORIGIN}${artistHref(artist)}`;
 
   // ── Phase 5b derived data ──────────────────────────────────────────────────
   // Owner/admin gating from the backend (preferred over legacy member-flag scan).
@@ -550,33 +580,15 @@ export default function ArtistPage() {
           )}
         </div>
 
-        {/* Actions under the cover: favorite star + share */}
+        {/* Действия под обложкой — только управление; «Подписаться»/«Поделиться»/
+            QR — в CTA-ряду визитки ниже. */}
         <div className="flex items-center gap-2 pb-1">
-          {!isMemberOfArtist && (
-            <button
-              onClick={() => gate.ensure('follow', { type: 'artist' }, () => {
-                if (artist.isFollowed) unfollowMut.mutate();
-                else followMut.mutate();
-              })}
-              disabled={followMut.isPending || unfollowMut.isPending}
-              aria-label={artist.isFollowed ? 'Убрать из избранного' : 'В избранное'}
-              title={artist.isFollowed ? 'В избранном' : 'В избранное'}
-              className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center transition-colors disabled:opacity-60"
-            >
-              <Star size={17} className={artist.isFollowed ? 'text-amber-400 fill-amber-400' : 'text-slate-300'} />
-            </button>
-          )}
-          <ShareButton
-            url={artistHref(artist)}
-            title={artist?.name}
-            iconSize={16}
-            className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
-          />
           {viewerIsAdmin && (
             <button
               onClick={() => navigate(`/artist/${id}/edit`)}
               title="Редактировать основную информацию"
-              className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
+              aria-label="Редактировать основную информацию"
+              className="w-11 h-11 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
             >
               <Edit3 size={16} />
             </button>
@@ -585,7 +597,8 @@ export default function ArtistPage() {
             <button
               onClick={() => setShowManageSheet(true)}
               title="Управление артистом"
-              className="w-9 h-9 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
+              aria-label="Управление артистом"
+              className="w-11 h-11 rounded-full bg-slate-800 border border-slate-700 hover:border-slate-600 flex items-center justify-center text-slate-300 hover:text-white transition-colors"
             >
               <Settings size={16} />
             </button>
@@ -663,6 +676,31 @@ export default function ArtistPage() {
             )}
           </div>
         )}
+
+        {/* ── Визитка («ссылка в био»): Слушать → CTA → релиз → соцсети → концерты.
+            Главный сценарий — переход из шапки ВК/Telegram на телефоне: площадки
+            и CTA помещаются на первый экран. ── */}
+        <div className="mt-4">
+          <ArtistListenBlock
+            artistId={artist.id}
+            links={bioLinks.listen}
+            canEdit={viewerIsAdmin}
+            onEditLinks={() => navigate(`/artist/${id}/contacts`)}
+          />
+          <ArtistCtaRow
+            artistId={artist.id}
+            artistName={artist.name}
+            shareUrl={bioUrl}
+            isMember={isMemberOfArtist}
+            isFollowed={!!artist.isFollowed}
+            followPending={followMut.isPending || unfollowMut.isPending}
+            onToggleFollow={() => (artist.isFollowed ? unfollowMut.mutate() : followMut.mutate())}
+            onOpenQr={() => setShowQr(true)}
+          />
+          <ArtistLatestRelease artistId={artist.id} release={releases[0]} />
+          <ArtistSocialRow artistId={artist.id} links={bioLinks.social} />
+          <ArtistConcerts artistId={artist.id} artistName={artist.name} concerts={artist.ymData?.concerts} />
+        </div>
 
 
         {/* Verification panel for admins */}
@@ -746,6 +784,9 @@ export default function ArtistPage() {
             )}
           </>
         )}
+
+        {/* Статистика визитки + подсказка «поставьте ссылку в шапку» — только админам */}
+        {viewerIsAdmin && <ArtistBioStats artistId={artist.id} bioUrl={bioUrl} />}
 
         {/* Об артисте — редактируется прямо в карточке (как «О себе» в Профиле) */}
         {(artist.description || viewerIsAdmin) && (
@@ -831,8 +872,9 @@ export default function ArtistPage() {
           </div>
         )}
 
-        {/* Контакты — просмотр; карандаш ведёт на страницу /artist/:id/contacts */}
-        {(hasSocialLinks || artist.bandLink || viewerIsAdmin || (isGuest && artist.contactsAvailable)) && (
+        {/* Контакты — просмотр; карандаш ведёт на страницу /artist/:id/contacts
+            (там же ссылки на площадки и соцсети для блоков визитки). */}
+        {(hasContactLinks || viewerIsAdmin || (isGuest && artist.contactsAvailable)) && (
           <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden mb-3">
             <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
               <Link2 size={14} className="text-primary-400" />
@@ -847,18 +889,7 @@ export default function ArtistPage() {
               )}
             </div>
             <div className="p-3">
-              {safeHref(artist.bandLink) && (
-                <a
-                  href={safeHref(artist.bandLink)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 text-primary-400 text-sm hover:underline mb-2"
-                >
-                  <ExternalLink size={14} className="flex-shrink-0" />
-                  <span className="truncate min-w-0">{artist.bandLink}</span>
-                </a>
-              )}
-              {hasSocialLinks && <SocialIconRow links={(artist.socialLinks as Record<string, string>) || {}} labeled />}
+              {hasContactLinks && <SocialIconRow links={contactLinks} labeled only={CONTACT_KEYS} />}
               {/* Гостю контактные ключи socialLinks сервер не отдаёт — только флаг. */}
               {isGuest && artist.contactsAvailable && (
                 <button
@@ -868,7 +899,7 @@ export default function ArtistPage() {
                   <Lock size={12} className="text-slate-400" /> Показать контакты
                 </button>
               )}
-              {!hasSocialLinks && !artist.bandLink && !(isGuest && artist.contactsAvailable) && (
+              {!hasContactLinks && !(isGuest && artist.contactsAvailable) && (
                 <p className="text-sm text-slate-600 italic">Контакты не указаны</p>
               )}
             </div>
@@ -1049,6 +1080,7 @@ export default function ArtistPage() {
           listenersDelta={artist.listenersDelta}
           listenersHistory={artist.listenersHistory}
           ymData={artist.ymData}
+          hideConcerts
         />
 
         {/* ── Vacancies rail (owner/admin only) — same look as Releases/Clips ── */}
@@ -1319,6 +1351,16 @@ export default function ArtistPage() {
         onConfirm={() => { if (removeAdminUserId) removeAdminMut.mutate(removeAdminUserId); }}
         onCancel={() => setRemoveAdminUserId(null)}
       />
+
+      {/* ── Визитка: QR-код страницы артиста ── */}
+      {showQr && (
+        <ArtistQrModal
+          url={bioUrl}
+          title={artist.name}
+          fileName={`moooza-${artist.slug || artist.id}-qr.png`}
+          onClose={() => setShowQr(false)}
+        />
+      )}
 
       {/* ── Phase 7: avatar / banner cropping ── */}
       {cropAvatarFile && (
