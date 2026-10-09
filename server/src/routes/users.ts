@@ -1,11 +1,16 @@
 import { Router } from 'express';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { upload, uploadBanner, uploadPortfolio } from '../middleware/upload';
+import { codeLimiter } from '../middleware/rateLimiter';
 import { yoNorm } from '../utils/search';
 import { isProActive, limitsFor } from '../utils/pro';
+import { getJwtSecret } from '../utils/jwt';
+import { sendVerificationEmail } from '../utils/mailer';
 import path from 'path';
 import fs from 'fs';
+import crypto from 'crypto';
 
 const router = Router();
 
@@ -32,10 +37,13 @@ const userServiceInclude = {
       },
     },
   },
+  // section нужен форме редактирования услуги (подпись раздела каталога) и
+  // группировке услуг по разделам в профиле — без него sectionName пустой.
   service: {
     select: {
       id: true,
       name: true,
+      section: { select: { id: true, name: true } },
     },
   },
   genres:          { select: { id: true, name: true } },
@@ -101,6 +109,8 @@ const userSelect = {
   contactsVisible: true,
   contactsVisibility: true,
   notificationPrefs: true,
+  // Новый email, ожидающий подтверждения кодом (сам код наружу не отдаётся).
+  pendingEmail: true,
   lastSeenAt: true,
   termsAgreedAt: true,
   publicConsentAt: true,
@@ -119,7 +129,11 @@ const userSelect = {
   },
 } as const;
 
-// Public profile select — no email/phone/isAdmin
+// Статусы услуг, видимые посторонним: черновики и архив — только владельцу.
+const HIDDEN_SERVICE_STATUSES = ['draft', 'archived'];
+
+// Public profile select — no email/phone/isAdmin/isBlocked/notificationPrefs.
+// proUntil выбирается только для вычисления isPro и вырезается в toPublicUser.
 const publicUserSelect = {
   id: true,
   firstName: true,
@@ -135,11 +149,13 @@ const publicUserSelect = {
   isPro: true,
   proUntil: true,
   isVerified: true,
-  isBlocked: true,
   genres: true,
   fieldOfActivityId: true,
   fieldOfActivity: { select: { id: true, name: true } },
-  userServices: { include: userServiceInclude },
+  userServices: {
+    where: { status: { notIn: HIDDEN_SERVICE_STATUSES } },
+    include: userServiceInclude,
+  },
   userProfessions: {
     include: {
       profession: {
@@ -169,7 +185,6 @@ const publicUserSelect = {
   birthDateVisible: true,
   contactsVisible: true,
   contactsVisibility: true,
-  notificationPrefs: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, title: true, size: true, mimeType: true, sortOrder: true, createdAt: true }, orderBy: { sortOrder: 'asc' as const } },
   portfolioLinks: { select: { id: true, type: true, url: true, title: true, createdAt: true }, orderBy: { createdAt: 'asc' as const } },
@@ -181,6 +196,14 @@ const publicUserSelect = {
     }
   },
 } as const;
+
+/** Пользователь «скрыт» из выдачи: заблокирован навсегда или до даты в будущем. */
+function visibleUserWhere() {
+  return {
+    isBlocked: false,
+    OR: [{ blockedUntil: null }, { blockedUntil: { lte: new Date() } }],
+  };
+}
 
 // Contact links that are gated by the contacts-visibility setting.
 const CONTACT_LINK_KEYS = ['phone', 'email', 'tg_profile'];
@@ -240,17 +263,39 @@ function stripContactLinks(socialLinks: any): any {
   return links;
 }
 
+/**
+ * Приводит строку publicUserSelect к виду для постороннего зрителя:
+ * дата рождения — только если владелец разрешил, контакты — по contactsVisibility,
+ * срок Pro (proUntil) не раскрывается — отдаётся только итоговый isPro.
+ */
+async function toPublicUser(user: any, viewerId: string | null | undefined) {
+  const { birthDateVisible, contactsVisible, contactsVisibility, proUntil, isPro, ...publicUser } = user;
+  if (!birthDateVisible) publicUser.birthDate = null;
+  publicUser.isPro = isProActive({ isPro, proUntil });
+  const showContacts = await canViewContacts(
+    { id: publicUser.id, contactsVisibility, contactsVisible },
+    viewerId,
+  );
+  if (!showContacts) {
+    publicUser.socialLinks = stripContactLinks(publicUser.socialLinks);
+  }
+  return publicUser;
+}
+
 // Public: resolve user by nickname or UUID — no auth required
 router.get('/handle/:handle', optionalAuthenticate, async (req: AuthRequest, res) => {
   try {
     const { handle } = req.params;
     // Try nickname first (strip leading @ if present)
-    const cleanHandle = handle.startsWith('@') ? handle.slice(1) : handle;
+    const cleanHandle = (handle.startsWith('@') ? handle.slice(1) : handle).trim();
+    if (!cleanHandle) return res.status(404).json({ error: 'Пользователь не найден' });
 
+    // Никнейм ищем по нормализованной колонке (lower + ё→е) — так же, как
+    // проверяется уникальность: «@Алёна» и «@алена» — один пользователь.
     const user = await prisma.user.findFirst({
       where: {
         OR: [
-          { nickname: { equals: cleanHandle, mode: 'insensitive' } },
+          { nickname: { not: null }, nicknameNorm: yoNorm(cleanHandle) },
           { id: cleanHandle },
         ],
       },
@@ -260,16 +305,7 @@ router.get('/handle/:handle', optionalAuthenticate, async (req: AuthRequest, res
     if (!user) return res.status(404).json({ error: 'Пользователь не найден' });
 
     // Respect the same privacy gates as GET /:id.
-    const { birthDateVisible, contactsVisible, contactsVisibility, ...publicUser } = user as any;
-    if (!birthDateVisible) publicUser.birthDate = null;
-    const showContacts = await canViewContacts(
-      { id: publicUser.id, contactsVisibility, contactsVisible },
-      req.userId,
-    );
-    if (!showContacts) {
-      publicUser.socialLinks = stripContactLinks(publicUser.socialLinks);
-    }
-    res.json(publicUser);
+    res.json(await toPublicUser(user, req.userId));
   } catch (error) {
     console.error('Get by handle error:', error);
     res.status(500).json({ error: 'Failed to get user' });
@@ -428,16 +464,39 @@ router.post('/me/banner', authenticate, uploadBanner.single('banner'), async (re
   }
 });
 
+// ── Смена email: код подтверждения на НОВЫЙ адрес ────────────────────────────
+// Email — логин и ключ привязки VK-входа, поэтому без подтверждения его менять
+// нельзя (иначе можно «занять» чужой адрес). Новое значение лежит в pendingEmail,
+// в БД хранится только HMAC кода (сам код в ответы API не попадает), и
+// применяется после POST /me/email/confirm.
+const EMAIL_CODE_TTL_MS = 15 * 60 * 1000;
+const EMAIL_CODE_COOLDOWN_MS = 60 * 1000;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function hashEmailCode(userId: string, email: string, code: string): string {
+  return crypto.createHmac('sha256', getJwtSecret()).update(`${userId}:${email}:${code}`).digest('hex');
+}
+
+function sendEmailChangeCode(to: string, code: string) {
+  // Отдельного шаблона «смена email» в mailer пока нет — используем письмо
+  // с кодом подтверждения адреса. Ошибку SMTP не пробрасываем: код можно
+  // запросить повторно (POST /me/email/resend).
+  sendVerificationEmail(to, code).catch((err) => console.error('[users] email change code send failed:', err));
+}
+
 // Update current user
 router.put('/me', authenticate, async (req: AuthRequest, res) => {
   try {
+    // artistIds намеренно не принимается: участием в артистах управляет раздел
+    // артистов (заявка на вступление / приглашение), а не профиль — иначе через
+    // PUT /me можно было вступить в любой коллектив без одобрения.
     const {
       firstName, lastName, nickname, bio, country, city, role, genres,
       socialLinks, birthDate,
       _birthDateISO,
       birthDateVisible,
       fieldOfActivityId,
-      userProfessions, artistIds,
+      userProfessions,
       occupancyStatus,
       email, phone,
       contactsVisible,
@@ -559,18 +618,36 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
     }
     if (occupancyStatus !== undefined) updateData.occupancyStatus = occupancyStatus || null;
 
-    // Email — optional set with format + uniqueness check (both fields are @unique)
+    // Email — НЕ меняется напрямую: новый адрес уходит в pendingEmail, на него
+    // отправляется код; применение — только через POST /me/email/confirm.
+    let emailCodeToSend: { to: string; code: string } | null = null;
     if (email !== undefined && email !== null && String(email).trim() !== '') {
       const normEmail = String(email).trim().toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normEmail)) {
+      if (!EMAIL_RE.test(normEmail)) {
         return res.status(400).json({ error: 'Некорректный email' });
       }
-      const clash = await prisma.user.findFirst({
-        where: { email: normEmail, NOT: { id: req.userId } },
-        select: { id: true },
+      const current = await prisma.user.findUnique({
+        where: { id: req.userId },
+        select: { email: true, pendingEmail: true, pendingEmailExpires: true, lastCodeSentAt: true },
       });
-      if (clash) return res.status(409).json({ error: 'Этот email уже используется другим аккаунтом' });
-      updateData.email = normEmail;
+      const alreadyPending = current?.pendingEmail === normEmail
+        && !!current?.pendingEmailExpires && current.pendingEmailExpires > new Date();
+      if (normEmail !== current?.email && !alreadyPending) {
+        const clash = await prisma.user.findFirst({
+          where: { email: normEmail, NOT: { id: req.userId } },
+          select: { id: true },
+        });
+        if (clash) return res.status(409).json({ error: 'Этот email уже используется другим аккаунтом' });
+        if (current?.lastCodeSentAt && Date.now() - current.lastCodeSentAt.getTime() < EMAIL_CODE_COOLDOWN_MS) {
+          return res.status(429).json({ error: 'Подождите минуту перед повторной отправкой кода' });
+        }
+        const code = String(crypto.randomInt(10000000, 100000000));
+        updateData.pendingEmail = normEmail;
+        updateData.pendingEmailCodeHash = hashEmailCode(req.userId!, normEmail, code);
+        updateData.pendingEmailExpires = new Date(Date.now() + EMAIL_CODE_TTL_MS);
+        updateData.lastCodeSentAt = new Date();
+        emailCodeToSend = { to: normEmail, code };
+      }
     }
 
     // Phone — optional; empty string clears it, otherwise normalize + uniqueness check
@@ -589,62 +666,53 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
       }
     }
 
-    // Handle userProfessions: delete old, create new
+    // userProfessions: полный список профессий. Замена (deleteMany + create) и
+    // обновление полей пользователя — в одной транзакции: ошибка на любой
+    // профессии откатывает всё, а не оставляет пользователя без профессий.
+    let professionRows: Array<{ professionId: string; features: string[]; cfvIds: string[] }> | null = null;
     if (userProfessions !== undefined) {
-      await prisma.userProfession.deleteMany({ where: { userId: req.userId } });
-      if (userProfessions.length > 0) {
-        for (const up of userProfessions as Array<{ professionId: string; features?: string[]; selectedCustomFilterValueIds?: string[] }>) {
-          await (prisma.userProfession as any).create({
+      if (!Array.isArray(userProfessions)) {
+        return res.status(400).json({ error: 'userProfessions должен быть массивом' });
+      }
+      const byProfession = new Map<string, { professionId: string; features: string[]; cfvIds: string[] }>();
+      for (const up of userProfessions as Array<{ professionId?: unknown; features?: unknown; selectedCustomFilterValueIds?: unknown }>) {
+        if (!up || typeof up.professionId !== 'string' || !up.professionId) {
+          return res.status(400).json({ error: 'Не указана профессия' });
+        }
+        const features = Array.isArray(up.features) ? up.features.filter((f): f is string => typeof f === 'string') : [];
+        const cfvIds = Array.isArray(up.selectedCustomFilterValueIds)
+          ? up.selectedCustomFilterValueIds.filter((id): id is string => typeof id === 'string' && !!id)
+          : [];
+        // Дубль профессии в списке → последняя запись (уникальность userId+professionId).
+        byProfession.set(up.professionId, { professionId: up.professionId, features, cfvIds });
+      }
+      professionRows = [...byProfession.values()];
+    }
+
+    const user = await prisma.$transaction(async (tx) => {
+      if (professionRows) {
+        await tx.userProfession.deleteMany({ where: { userId: req.userId } });
+        for (const up of professionRows) {
+          await tx.userProfession.create({
             data: {
               userId: req.userId!,
               professionId: up.professionId,
-              features: up.features || [],
-              selectedCustomFilterValues: up.selectedCustomFilterValueIds?.length
-                ? { connect: up.selectedCustomFilterValueIds.map((id: string) => ({ id })) }
+              features: up.features,
+              selectedCustomFilterValues: up.cfvIds.length
+                ? { connect: up.cfvIds.map((id) => ({ id })) }
                 : undefined,
             },
           });
         }
       }
-    }
-
-    // Handle artists — NON-DESTRUCTIVE reconcile. The legacy `artistIds` flow must
-    // never wipe memberships owned by the artist system: owner/admin status, admin
-    // invites, role-bound and invite-link memberships are managed on the artist
-    // page, not through the profile. We only add newly-picked artists and drop the
-    // plain self-memberships the user actually deselected. (Previously this did a
-    // blanket deleteMany + recreate, which silently stripped roles/owner/admin and
-    // erased invite-link memberships on any profile save.)
-    if (artistIds !== undefined) {
-      const current = await prisma.userArtist.findMany({
-        where: { userId: req.userId },
-        select: {
-          id: true, artistId: true, isOwner: true, isAdmin: true,
-          invitedById: true, _count: { select: { roles: true } },
-        },
+      return tx.user.update({
+        where: { id: req.userId },
+        data: updateData,
+        select: userSelect,
       });
-      const have = new Set(current.map((c) => c.artistId));
-      const toRemove = current
-        .filter((c) =>
-          !c.isOwner && !c.isAdmin && !c.invitedById && c._count.roles === 0 &&
-          !artistIds.includes(c.artistId))
-        .map((c) => c.id);
-      if (toRemove.length > 0) {
-        await prisma.userArtist.deleteMany({ where: { id: { in: toRemove } } });
-      }
-      const toAdd = artistIds.filter((id: string) => !have.has(id));
-      if (toAdd.length > 0) {
-        updateData.userArtists = {
-          create: toAdd.map((artistId: string) => ({ artistId })),
-        };
-      }
-    }
-
-    const user = await prisma.user.update({
-      where: { id: req.userId },
-      data: updateData,
-      select: userSelect,
     });
+
+    if (emailCodeToSend) sendEmailChangeCode(emailCodeToSend.to, emailCodeToSend.code);
 
     res.json(user);
   } catch (error: any) {
@@ -657,78 +725,249 @@ router.put('/me', authenticate, async (req: AuthRequest, res) => {
       }
       return res.status(409).json({ error: 'Значение уже занято' });
     }
+    // Несуществующая профессия / значение фильтра.
+    if (error?.code === 'P2003' || error?.code === 'P2025') {
+      return res.status(400).json({ error: 'Профессия или характеристика не найдена' });
+    }
     console.error('Update user error:', error);
     res.status(500).json({ error: 'Failed to update user' });
   }
 });
 
-// Update user services (profession → service → filter axes)
+// ── POST /me/email/confirm — применить pendingEmail по коду из письма ───────
+router.post('/me/email/confirm', codeLimiter, authenticate, async (req: AuthRequest, res) => {
+  try {
+    const code = String(req.body?.code ?? '').trim();
+    if (!code) return res.status(400).json({ error: 'Введите код из письма' });
+    const me = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { pendingEmail: true, pendingEmailCodeHash: true, pendingEmailExpires: true },
+    });
+    if (!me?.pendingEmail || !me.pendingEmailCodeHash) {
+      return res.status(400).json({ error: 'Нет email, ожидающего подтверждения' });
+    }
+    if (!me.pendingEmailExpires || me.pendingEmailExpires < new Date()) {
+      return res.status(400).json({ error: 'Срок действия кода истёк — запросите новый' });
+    }
+    const expected = Buffer.from(me.pendingEmailCodeHash, 'hex');
+    const actual = Buffer.from(hashEmailCode(req.userId!, me.pendingEmail, code), 'hex');
+    if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
+      return res.status(400).json({ error: 'Неверный код' });
+    }
+    // Адрес могли занять, пока код шёл письмом.
+    const clash = await prisma.user.findFirst({
+      where: { email: me.pendingEmail, NOT: { id: req.userId } },
+      select: { id: true },
+    });
+    if (clash) return res.status(409).json({ error: 'Этот email уже используется другим аккаунтом' });
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data: {
+        email: me.pendingEmail,
+        emailVerified: true,
+        pendingEmail: null,
+        pendingEmailCodeHash: null,
+        pendingEmailExpires: null,
+      },
+      select: userSelect,
+    });
+    res.json(user);
+  } catch (error: any) {
+    if (error?.code === 'P2002') return res.status(409).json({ error: 'Этот email уже используется другим аккаунтом' });
+    console.error('Confirm email change error:', error);
+    res.status(500).json({ error: 'Не удалось подтвердить email' });
+  }
+});
+
+// ── POST /me/email/resend — новый код на pendingEmail ─────────────────────────
+router.post('/me/email/resend', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const me = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { pendingEmail: true, lastCodeSentAt: true },
+    });
+    if (!me?.pendingEmail) return res.status(400).json({ error: 'Нет email, ожидающего подтверждения' });
+    if (me.lastCodeSentAt && Date.now() - me.lastCodeSentAt.getTime() < EMAIL_CODE_COOLDOWN_MS) {
+      return res.status(429).json({ error: 'Подождите минуту перед повторной отправкой кода' });
+    }
+    const code = String(crypto.randomInt(10000000, 100000000));
+    await prisma.user.update({
+      where: { id: req.userId },
+      data: {
+        pendingEmailCodeHash: hashEmailCode(req.userId!, me.pendingEmail, code),
+        pendingEmailExpires: new Date(Date.now() + EMAIL_CODE_TTL_MS),
+        lastCodeSentAt: new Date(),
+      },
+    });
+    sendEmailChangeCode(me.pendingEmail, code);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error('Resend email change code error:', error);
+    res.status(500).json({ error: 'Не удалось отправить код' });
+  }
+});
+
+// ── DELETE /me/email/pending — отменить смену email ───────────────────────────
+router.delete('/me/email/pending', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data: { pendingEmail: null, pendingEmailCodeHash: null, pendingEmailExpires: null },
+      select: userSelect,
+    });
+    res.json(user);
+  } catch (error) {
+    console.error('Cancel email change error:', error);
+    res.status(500).json({ error: 'Не удалось отменить смену email' });
+  }
+});
+
+const SERVICE_STATUSES = new Set(['draft', 'active', 'archived']);
+
+/** Публикация услуги (status active) требует согласия 152-ФЗ ст. 10.1. */
+const PUBLIC_CONSENT_REQUIRED = {
+  error: 'Чтобы опубликовать услугу, дайте согласие на распространение персональных данных',
+  code: 'PUBLIC_CONSENT_REQUIRED',
+};
+
+/** Целое неотрицательное число или null; undefined — значение некорректно. */
+function toOptionalInt(v: unknown): number | null | undefined {
+  if (v === undefined || v === null || v === '') return null;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n < 0 || n > 2_000_000_000) return undefined;
+  return Math.trunc(n);
+}
+
+const toIdList = (v: unknown): string[] =>
+  Array.isArray(v) ? [...new Set(v.filter((id): id is string => typeof id === 'string' && !!id))] : [];
+
+// Update user services (profession → service → filter axes).
+// Контракт — полный список услуг пользователя; элемент может нести `id`
+// существующей услуги. Существующие услуги ОБНОВЛЯЮТСЯ на месте (по id, иначе
+// по serviceId), новые создаются, удаляются только отсутствующие в списке —
+// поэтому id не меняются и не отваливаются посты-услуги в ленте, сделки
+// (userServiceId) и ссылки /services/:id.
 router.put('/me/services', authenticate, async (req: AuthRequest, res) => {
   try {
     if (!req.userId) {
       return res.status(401).json({ error: 'User not authenticated' });
     }
+    const userId = req.userId;
 
-    const services: Array<{
-      professionId: string;
-      serviceId: string;
-      genreIds?: string[];
-      workFormatIds?: string[];
-      employmentTypeIds?: string[];
-      skillLevelIds?: string[];
-      availabilityIds?: string[];
-      geographyIds?: string[];
-      priceFrom?: number;
-      priceTo?: number;
-      customFilterValueIds?: string[];
-    }> = req.body;
-
+    const services: any[] = req.body;
     if (!Array.isArray(services)) {
       return res.status(400).json({ error: 'Body must be an array of service entries' });
     }
 
-    const toConnect = (ids: string[] = []) => ids.map((id) => ({ id }));
+    const existing = await prisma.userService.findMany({
+      where: { userId },
+      select: { id: true, serviceId: true, status: true },
+    });
+    const byId = new Map(existing.map((e) => [e.id, e]));
+    const byServiceId = new Map(existing.map((e) => [e.serviceId, e]));
 
-    // Delete and recreate in a transaction to prevent data loss on error.
-    // No admin moderation — services go live (active) by default.
-    const VALID_STATUS = new Set(['draft', 'active', 'archived']);
+    type Existing = (typeof existing)[number];
+    type Entry = { match: Existing | null; status: string; data: Record<string, unknown>; rel: Record<string, string[]> };
+    const entries: Entry[] = [];
+    const seenServices = new Set<string>();
+    const seenMatches = new Set<string>();
+    for (const us of services) {
+      if (!us || typeof us.professionId !== 'string' || !us.professionId || typeof us.serviceId !== 'string' || !us.serviceId) {
+        return res.status(400).json({ error: 'Укажите профессию и услугу каталога' });
+      }
+      if (seenServices.has(us.serviceId)) {
+        return res.status(400).json({ error: 'Одна и та же услуга каталога указана дважды' });
+      }
+      seenServices.add(us.serviceId);
+
+      const match = (typeof us.id === 'string' && byId.get(us.id)) || byServiceId.get(us.serviceId) || null;
+      if (match) {
+        if (seenMatches.has(match.id)) {
+          return res.status(400).json({ error: 'Одна и та же услуга указана дважды' });
+        }
+        seenMatches.add(match.id);
+      }
+
+      const nums = {
+        priceFrom: toOptionalInt(us.priceFrom),
+        priceTo: toOptionalInt(us.priceTo),
+        deadlineFrom: toOptionalInt(us.deadlineFrom),
+        deadlineTo: toOptionalInt(us.deadlineTo),
+      };
+      if (Object.values(nums).some((n) => n === undefined)) {
+        return res.status(400).json({ error: 'Некорректная стоимость или срок' });
+      }
+      // Статус не передан → у существующей услуги сохраняется прежний.
+      const status: string = SERVICE_STATUSES.has(us.status) ? us.status : (match?.status ?? 'active');
+
+      entries.push({
+        match,
+        status,
+        data: {
+          professionId: us.professionId,
+          serviceId: us.serviceId,
+          status,
+          name: us.name ? String(us.name).slice(0, 50) : null,
+          ...nums,
+          description: us.description ? String(us.description) : null,
+          priceItems: Array.isArray(us.priceItems) && us.priceItems.length > 0 ? us.priceItems : Prisma.DbNull,
+        },
+        rel: {
+          genres: toIdList(us.genreIds),
+          workFormats: toIdList(us.workFormatIds),
+          employmentTypes: toIdList(us.employmentTypeIds),
+          skillLevels: toIdList(us.skillLevelIds),
+          availabilities: toIdList(us.availabilityIds),
+          geographies: toIdList(us.geographyIds),
+          selectedCustomFilterValues: toIdList(us.customFilterValueIds),
+        },
+      });
+    }
+
+    // Новая публикация (не была active → стала active) — только с согласием.
+    if (entries.some((e) => e.status === 'active' && e.match?.status !== 'active')) {
+      const me = await prisma.user.findUnique({ where: { id: userId }, select: { publicConsentAt: true } });
+      if (!me?.publicConsentAt) return res.status(403).json(PUBLIC_CONSENT_REQUIRED);
+    }
+
+    const toDelete = existing.filter((e) => !seenMatches.has(e.id)).map((e) => e.id);
+    const relData = (rel: Record<string, string[]>, mode: 'set' | 'connect') =>
+      Object.fromEntries(Object.entries(rel).map(([k, ids]) => [k, { [mode]: ids.map((id) => ({ id })) }]));
+
     await prisma.$transaction(async (tx) => {
-      await tx.userService.deleteMany({ where: { userId: req.userId } });
-      for (const us of services) {
-        const status = VALID_STATUS.has((us as any).status) ? (us as any).status : 'active';
-        await tx.userService.create({
-          data: {
-            userId: req.userId!,
-            professionId: us.professionId,
-            serviceId: us.serviceId,
-            status,
-            genres:          { connect: toConnect(us.genreIds) },
-            workFormats:     { connect: toConnect(us.workFormatIds) },
-            employmentTypes: { connect: toConnect(us.employmentTypeIds) },
-            skillLevels:     { connect: toConnect(us.skillLevelIds) },
-            availabilities:  { connect: toConnect(us.availabilityIds) },
-            geographies:                 { connect: toConnect(us.geographyIds) },
-            name:                        (us as any).name ? String((us as any).name).slice(0, 50) : null,
-            priceFrom:                   us.priceFrom ?? null,
-            priceTo:                     us.priceTo ?? null,
-            deadlineFrom:                (us as any).deadlineFrom != null ? Number((us as any).deadlineFrom) : null,
-            deadlineTo:                  (us as any).deadlineTo  != null ? Number((us as any).deadlineTo)  : null,
-            description:                 (us as any).description ?? null,
-            priceItems:                  (us as any).priceItems ?? null,
-            selectedCustomFilterValues:  { connect: toConnect(us.customFilterValueIds) },
-          },
-        });
+      if (toDelete.length > 0) {
+        // Как DELETE /me/services/:id — посты «Услуга» без услуги не оставляем.
+        await tx.post.deleteMany({ where: { serviceId: { in: toDelete } } });
+        await tx.userService.deleteMany({ where: { id: { in: toDelete }, userId } });
+      }
+      for (const e of entries) {
+        if (e.match) {
+          await tx.userService.update({
+            where: { id: e.match.id },
+            data: { ...e.data, ...relData(e.rel, 'set') } as Prisma.UserServiceUncheckedUpdateInput,
+          });
+        } else {
+          await tx.userService.create({
+            data: { userId, ...e.data, ...relData(e.rel, 'connect') } as Prisma.UserServiceUncheckedCreateInput,
+          });
+        }
       }
     });
 
     // Return updated user services
     const userServices = await prisma.userService.findMany({
-      where: { userId: req.userId },
+      where: { userId },
       include: userServiceInclude,
     });
 
     res.json(userServices);
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === 'P2002') {
+      return res.status(409).json({ error: 'Эта услуга каталога уже добавлена' });
+    }
+    if (error?.code === 'P2003' || error?.code === 'P2025') {
+      return res.status(400).json({ error: 'Услуга, профессия или характеристика не найдена' });
+    }
     console.error('Update user services error:', error);
     res.status(500).json({ error: 'Failed to update user services' });
   }
@@ -764,9 +1003,13 @@ router.patch('/me/services/:serviceId', authenticate, async (req: AuthRequest, r
 router.patch('/me/services/:serviceId/status', authenticate, async (req: AuthRequest, res) => {
   try {
     const { status } = req.body;
-    if (!['active', 'draft', 'archived'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+    if (!SERVICE_STATUSES.has(status)) return res.status(400).json({ error: 'Invalid status' });
     const us = await prisma.userService.findUnique({ where: { id: req.params.serviceId } });
     if (!us || us.userId !== req.userId) return res.status(404).json({ error: 'Not found' });
+    if (status === 'active' && us.status !== 'active') {
+      const me = await prisma.user.findUnique({ where: { id: req.userId }, select: { publicConsentAt: true } });
+      if (!me?.publicConsentAt) return res.status(403).json(PUBLIC_CONSENT_REQUIRED);
+    }
     const updated = await prisma.userService.update({
       where: { id: req.params.serviceId },
       data: { status },
@@ -785,7 +1028,7 @@ router.post('/services/:serviceId/inquire', authenticate, async (req: AuthReques
       where: { id: req.params.serviceId },
       include: { service: { select: { name: true } }, user: { select: { id: true, firstName: true, lastName: true } } },
     });
-    if (!us) return res.status(404).json({ error: 'Not found' });
+    if (!us || HIDDEN_SERVICE_STATUSES.includes(us.status)) return res.status(404).json({ error: 'Not found' });
     if (us.userId === req.userId) return res.status(400).json({ error: 'Cannot inquire own service' });
     const actor = await prisma.user.findUnique({ where: { id: req.userId! }, select: { firstName: true, lastName: true } });
     const actorName = `${actor?.firstName ?? ''} ${actor?.lastName ?? ''}`.trim();
@@ -822,6 +1065,8 @@ router.delete('/me/services/:serviceId', authenticate, async (req: AuthRequest, 
 });
 
 // ─── GET /catalog — all users with filters, for catalog page ─────────────────
+// Пагинация: ?page=N[&limit=M] → { results, pagination }. Без page — прежний
+// контракт (массив первых 100) для мест, где нужен быстрый поиск людей (чат).
 router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
   try {
     const { query, fieldOfActivityId, directionId, professionId, serviceId, customFilterValueIds: customFilterValueIdsRaw } = req.query;
@@ -840,9 +1085,26 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
     const sort = ['date', 'rating', 'connections', 'alpha'].includes(sortRaw) ? sortRaw : 'date';
     const alphaDir = String(req.query.alphaDir ?? 'asc') === 'desc' ? 'desc' : 'asc';
 
+    const paginated = req.query.page !== undefined;
+    const pageNum = paginated ? Math.max(1, parseInt(String(req.query.page), 10) || 1) : 1;
+    const limitNum = paginated
+      ? Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? '20'), 10) || 20))
+      : 100;
+    const skip = (pageNum - 1) * limitNum;
+
     const where: any = { id: { not: req.userId } };
 
-    const andClauses: any[] = [];
+    // Заблокированные (навсегда или до даты в будущем) в каталоге не показываются.
+    const andClauses: any[] = [visibleUserWhere()];
+
+    // Профессия у пользователя может быть и без услуги (UserProfession) — такие
+    // тоже должны находиться и поиском, и фильтрами.
+    const byProfession = (professionWhere: any) => ({
+      OR: [
+        { userServices: { some: { profession: professionWhere } } },
+        { userProfessions: { some: { profession: professionWhere } } },
+      ],
+    });
 
     if (query) {
       const words = (query as string).trim().split(/\s+/).filter(Boolean);
@@ -864,6 +1126,11 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
             { userServices: { some: { service: { nameNorm: { contains: w } } } } },
             { userServices: { some: { profession: { direction: { nameNorm: { contains: w } } } } } },
             { userServices: { some: { profession: { direction: { fieldOfActivity: { nameNorm: { contains: w } } } } } } },
+            // Professions without a service
+            { userProfessions: { some: { profession: { nameNorm: { contains: w } } } } },
+            { userProfessions: { some: { profession: { direction: { nameNorm: { contains: w } } } } } },
+            { userProfessions: { some: { profession: { direction: { fieldOfActivity: { nameNorm: { contains: w } } } } } } },
+            { userProfessions: { some: { selectedCustomFilterValues: { some: { valueNorm: { contains: w } } } } } },
             // Service filters
             { userServices: { some: { genres: { some: { nameNorm: { contains: w } } } } } },
             { userServices: { some: { workFormats: { some: { nameNorm: { contains: w } } } } } },
@@ -888,13 +1155,11 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
 
     // Filter by profession/direction (most→least specific)
     if (professionId) {
-      andClauses.push({ userServices: { some: { professionId: professionId as string } } });
+      andClauses.push(byProfession({ id: professionId as string }));
     } else if (directionId && !serviceId) {
-      andClauses.push({ userServices: { some: { profession: { directionId: directionId as string } } } });
+      andClauses.push(byProfession({ directionId: directionId as string }));
     } else if (fieldOfActivityId) {
-      andClauses.push({
-        userServices: { some: { profession: { direction: { fieldOfActivityId: fieldOfActivityId as string } } } },
-      });
+      andClauses.push(byProfession({ direction: { fieldOfActivityId: fieldOfActivityId as string } }));
     }
 
     if (customFilterValueIds.length > 0) {
@@ -921,85 +1186,135 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
     }
 
     if (professionFilter.length > 0) {
-      andClauses.push({ userServices: { some: { professionId: { in: professionFilter } } } });
+      andClauses.push(byProfession({ id: { in: professionFilter } }));
     }
 
     if (occupancy.length > 0) {
       andClauses.push({ occupancyStatus: { in: occupancy } });
     }
 
-    if (andClauses.length > 0) {
-      where.AND = andClauses;
-    }
-
-    // DB-level ordering for the cheap sorts; rating/connections are sorted in JS
-    // after computing aggregates below.
-    let orderBy: any;
-    if (sort === 'alpha') {
-      orderBy = [{ lastName: alphaDir }, { firstName: alphaDir }];
-    } else {
-      // 'date' (default) — newest first; also a stable base for rating/connections.
-      orderBy = [{ createdAt: 'desc' }];
-    }
-
-    const users = await prisma.user.findMany({
-      where,
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        nickname: true,
-        avatar: true,
-        bio: true,
-        city: true,
-        country: true,
-        occupancyStatus: true,
-        isPremium: true,
-        isVerified: true,
-        isBlocked: true,
-        createdAt: true,
-        fieldOfActivity: { select: { id: true, name: true } },
-        userServices: {
-          select: { profession: { select: { id: true, name: true } } },
-          distinct: ['professionId'],
-        },
-        reviewsReceived: { select: { rating: true } },
-        _count: {
-          select: {
-            sentConnections: { where: { status: 'ACCEPTED' } },
-            receivedConnections: { where: { status: 'ACCEPTED' } },
-          },
-        },
-      },
-      orderBy,
-      take: 500,
-    });
-
-    // Compute per-user aggregates: avg rating, reviews count, connection count.
-    let enriched = users.map((u: any) => {
-      const reviews = u.reviewsReceived ?? [];
-      const reviewsCount = reviews.length;
-      const ratingAvg = reviewsCount > 0
-        ? reviews.reduce((s: number, r: any) => s + r.rating, 0) / reviewsCount
-        : null;
-      const connectionsCount =
-        (u._count?.sentConnections ?? 0) + (u._count?.receivedConnections ?? 0);
-      const { reviewsReceived, ...rest } = u;
-      return { ...rest, ratingAvg, reviewsCount, connectionsCount };
-    });
-
-    // «Только с отзывами» — aggregate-based, so filtered post-query.
+    // «Только с отзывами» — фильтр в БД (раньше — после take:500 в JS).
     if (withReviews) {
-      enriched = enriched.filter((u: any) => u.reviewsCount > 0);
+      andClauses.push({ reviewsReceived: { some: {} } });
     }
 
-    if (sort === 'rating') {
-      enriched.sort((a: any, b: any) => (b.ratingAvg ?? -1) - (a.ratingAvg ?? -1));
-    } else if (sort === 'connections') {
-      enriched.sort((a: any, b: any) => b.connectionsCount - a.connectionsCount);
+    where.AND = andClauses;
+
+    // ── Порядок и страница ───────────────────────────────────────────────────
+    // date/alpha — сортировка и пагинация в БД. rating/connections — агрегаты
+    // считаются в БД (groupBy) по ВСЕМ подходящим id, затем сортировка и срез
+    // страницы; строки грузятся только для страницы.
+    let pageIds: string[];
+    let totalCount: number;
+    if (sort === 'rating' || sort === 'connections') {
+      const all = await prisma.user.findMany({
+        where,
+        select: { id: true },
+        orderBy: [{ createdAt: 'desc' }, { id: 'asc' }],
+      });
+      const ids = all.map((u) => u.id);
+      totalCount = ids.length;
+      const score = new Map<string, number>();
+      if (ids.length > 0 && sort === 'rating') {
+        const ratings = await prisma.review.groupBy({
+          by: ['targetId'],
+          where: { targetId: { in: ids } },
+          _avg: { rating: true },
+        });
+        for (const r of ratings) score.set(r.targetId, Number(r._avg.rating ?? -1));
+      } else if (ids.length > 0) {
+        const [sent, received] = await Promise.all([
+          prisma.connection.groupBy({
+            by: ['requesterId'],
+            where: { status: 'ACCEPTED', requesterId: { in: ids } },
+            _count: { _all: true },
+          }),
+          prisma.connection.groupBy({
+            by: ['receiverId'],
+            where: { status: 'ACCEPTED', receiverId: { in: ids } },
+            _count: { _all: true },
+          }),
+        ]);
+        for (const r of sent) score.set(r.requesterId, (score.get(r.requesterId) ?? 0) + r._count._all);
+        for (const r of received) score.set(r.receiverId, (score.get(r.receiverId) ?? 0) + r._count._all);
+      }
+      // Array.prototype.sort стабилен: при равных значениях остаётся «новые первыми».
+      const fallback = sort === 'rating' ? -1 : 0;
+      ids.sort((a, b) => (score.get(b) ?? fallback) - (score.get(a) ?? fallback));
+      pageIds = ids.slice(skip, skip + limitNum);
+    } else {
+      const orderBy: any = sort === 'alpha'
+        ? [{ lastName: alphaDir }, { firstName: alphaDir }, { id: 'asc' }]
+        : [{ createdAt: 'desc' }, { id: 'asc' }];
+      const [rows, count] = await Promise.all([
+        prisma.user.findMany({ where, select: { id: true }, orderBy, skip, take: limitNum }),
+        prisma.user.count({ where }),
+      ]);
+      pageIds = rows.map((r) => r.id);
+      totalCount = count;
     }
 
-    res.json(enriched);
+    const users = pageIds.length > 0
+      ? await prisma.user.findMany({
+          where: { id: { in: pageIds } },
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            nickname: true,
+            avatar: true,
+            bio: true,
+            city: true,
+            country: true,
+            occupancyStatus: true,
+            isPremium: true,
+            isVerified: true,
+            createdAt: true,
+            fieldOfActivity: { select: { id: true, name: true } },
+            userServices: {
+              where: { status: { notIn: HIDDEN_SERVICE_STATUSES } },
+              select: { profession: { select: { id: true, name: true } } },
+              distinct: ['professionId'],
+            },
+            userProfessions: { select: { profession: { select: { id: true, name: true } } } },
+            _count: {
+              select: {
+                sentConnections: { where: { status: 'ACCEPTED' } },
+                receivedConnections: { where: { status: 'ACCEPTED' } },
+              },
+            },
+          },
+        })
+      : [];
+
+    // Агрегаты отзывов — groupBy в БД только для пользователей страницы.
+    const ratingRows = pageIds.length > 0
+      ? await prisma.review.groupBy({
+          by: ['targetId'],
+          where: { targetId: { in: pageIds } },
+          _avg: { rating: true },
+          _count: { _all: true },
+        })
+      : [];
+    const ratingByUser = new Map(ratingRows.map((r) => [r.targetId, r]));
+
+    const byId = new Map(users.map((u) => [u.id, u]));
+    const results = pageIds
+      .map((id) => byId.get(id))
+      .filter((u): u is NonNullable<typeof u> => !!u)
+      .map((u) => {
+        const r = ratingByUser.get(u.id);
+        const reviewsCount = r?._count._all ?? 0;
+        const ratingAvg = reviewsCount > 0 && r?._avg.rating != null ? Number(r._avg.rating) : null;
+        const connectionsCount = (u._count?.sentConnections ?? 0) + (u._count?.receivedConnections ?? 0);
+        return { ...u, ratingAvg, reviewsCount, connectionsCount };
+      });
+
+    if (!paginated) return res.json(results);
+    res.json({
+      results,
+      pagination: { page: pageNum, limit: limitNum, totalCount, totalPages: Math.ceil(totalCount / limitNum) },
+    });
   } catch (error) {
     console.error('[catalog] GET /catalog error:', error);
     res.status(500).json({ error: 'Failed to get catalog' });
@@ -1082,8 +1397,13 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
 // ── GET /api/users/:id/services ──────────────────────────────────────────────
 router.get('/:id/services', optionalAuthenticate, async (req: AuthRequest, res) => {
   try {
+    // Черновики и архив видит только владелец.
+    const isOwner = !!req.userId && req.userId === req.params.id;
     const services = await prisma.userService.findMany({
-      where: { userId: req.params.id },
+      where: {
+        userId: req.params.id,
+        ...(isOwner ? {} : { status: { notIn: HIDDEN_SERVICE_STATUSES } }),
+      },
       include: userServiceInclude,
       orderBy: [{ professionId: 'asc' }],
     });
@@ -1104,7 +1424,10 @@ router.get('/user-service/:serviceId', optionalAuthenticate, async (req: AuthReq
         user: { select: { id: true, firstName: true, lastName: true, avatar: true, nickname: true } },
       },
     });
-    if (!us) return res.status(404).json({ error: 'Not found' });
+    // Черновик/архив посторонним — как несуществующая услуга.
+    if (!us || (us.userId !== req.userId && HIDDEN_SERVICE_STATUSES.includes(us.status))) {
+      return res.status(404).json({ error: 'Not found' });
+    }
     return res.json(us);
   } catch (err) {
     console.error('[users] GET /user-service/:serviceId', err);
@@ -1191,20 +1514,11 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
       }
     } catch {}
 
-    // Hide birthDate from other users unless the owner opted to show it.
+    // Hide birthDate from other users unless the owner opted to show it, and
+    // contact links (phone / email / telegram) unless the viewer is allowed by
+    // the owner's 3-level contactsVisibility (ALL / REGISTERED / FRIENDS).
     // (The owner views their own profile through /users/me, which is unaffected.)
-    const { birthDateVisible, contactsVisible, contactsVisibility, ...publicUser } = user as any;
-    if (!birthDateVisible) publicUser.birthDate = null;
-
-    // Hide contact links (phone / email / telegram) unless the viewer is allowed
-    // by the owner's 3-level contactsVisibility (ALL / REGISTERED / FRIENDS).
-    const showContacts = await canViewContacts(
-      { id: publicUser.id, contactsVisibility, contactsVisible },
-      req.userId,
-    );
-    if (!showContacts) {
-      publicUser.socialLinks = stripContactLinks(publicUser.socialLinks);
-    }
+    const publicUser = await toPublicUser(user, req.userId);
 
     // Authoritative flag (from the VIEWER's DB record) for whether the viewer has
     // completed their own profile. Used by the client instead of a stale cached

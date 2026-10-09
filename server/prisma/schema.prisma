@@ -546,6 +546,11 @@ model User {
   passwordResetExpires   DateTime?
   passwordChangedAt      DateTime?
   lastCodeSentAt         DateTime?
+  // Смена email: новый адрес применяется только после кода, отправленного на него.
+  // Хранится HMAC кода (не сам код) — он не утечёт через ответы API.
+  pendingEmail           String?
+  pendingEmailCodeHash   String?
+  pendingEmailExpires    DateTime?
   genres    String[]
   professions String[] // legacy flat list, kept for backward compat
 
