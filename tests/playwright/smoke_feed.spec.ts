@@ -190,8 +190,15 @@ test('smoke: feed — posts (text, image, poll), like/reaction, comment, save, r
       await page.goto(`/?post=${id}`);
       const card = page.locator(`#post-${id}`);
       await expect(card).toBeVisible({ timeout: 15_000 });
-      await card.locator('button:has(svg.lucide-ellipsis), button:has(svg.lucide-more-horizontal)').first().click();
-      await page.getByRole('button', { name: 'Удалить пост' }).click();
+      // The feed re-centres a deep-linked post a few times after load (lazy images shift
+      // the layout); a menu opened mid-scroll can close again — reopen if needed.
+      const menuItem = page.getByRole('button', { name: 'Удалить пост' });
+      for (let attempt = 0; attempt < 3 && !(await menuItem.isVisible().catch(() => false)); attempt++) {
+        await page.waitForTimeout(800);
+        await card.locator('button:has(svg.lucide-ellipsis), button:has(svg.lucide-more-horizontal)').first().click();
+        await menuItem.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => {});
+      }
+      await menuItem.click();
       await page.getByRole('button', { name: /^Удалить$/ }).click();
       await expect.poll(async () => (await apiCall('GET', `/posts/${id}`, undefined, a.token)).status, { timeout: 10_000 }).toBe(404);
     }

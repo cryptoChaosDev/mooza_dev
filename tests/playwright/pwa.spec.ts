@@ -168,19 +168,12 @@ test.describe('Cross-platform functional parity', () => {
     await loginUI(page, user);
     await skipOnboarding(page);
 
-    // Messages tab
-    const messagesLink = page.locator('a[href="/messages"], button').filter({ hasText: /сообщен/i }).first();
-    const navItem = page.locator('nav a[href="/messages"]').first();
-    const target = await navItem.isVisible({ timeout: 2000 }).catch(() => false)
-      ? navItem
-      : messagesLink;
-
-    if (await target.isVisible({ timeout: 2000 }).catch(() => false)) {
-      await target.click();
-      await expect(page).toHaveURL(/messages/, { timeout: 8000 });
-    } else {
-      test.skip(true, 'Nav item not found by href or text');
-    }
+    // Updated: both navs are in the DOM (mobile bottom bar = icons only, desktop sidebar =
+    // icon + text, one of them hidden by CSS) — take the visible /messages link.
+    const target = page.locator('nav a[href="/messages"]:visible').first();
+    await expect(target, 'visible /messages link in the bottom nav or sidebar').toBeVisible({ timeout: 10000 });
+    await target.click();
+    await expect(page).toHaveURL(/messages/, { timeout: 8000 });
   });
 
   test('modal opens and dismisses without layout shift', async ({ page }) => {
