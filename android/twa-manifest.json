@@ -1,0 +1,71 @@
+{
+  "packageId": "ru.moooza.app",
+  "host": "moooza.ru",
+  "name": "Moooza",
+  "launcherName": "Moooza",
+  "display": "standalone",
+  "themeColor": "#020617",
+  "themeColorDark": "#020617",
+  "navigationColor": "#020617",
+  "navigationColorDark": "#020617",
+  "navigationDividerColor": "#020617",
+  "navigationDividerColorDark": "#020617",
+  "backgroundColor": "#000000",
+  "enableNotifications": true,
+  "startUrl": "/?app=android",
+  "iconUrl": "https://moooza.ru/pwa-512x512.png",
+  "maskableIconUrl": "https://moooza.ru/app-icons/maskable-512.png",
+  "monochromeIconUrl": "https://moooza.ru/app-icons/monochrome-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "moooza-release.jks",
+    "alias": "moooza"
+  },
+  "appVersionCode": 1,
+  "appVersion": "2.3",
+  "appVersionName": "2.3",
+  "shortcuts": [
+    {
+      "name": "Сообщения",
+      "shortName": "Сообщения",
+      "url": "https://moooza.ru/messages",
+      "chosenIconUrl": "https://moooza.ru/app-icons/shortcut-messages.png"
+    },
+    {
+      "name": "Ищу музыканта",
+      "shortName": "Найти",
+      "url": "https://moooza.ru/find",
+      "chosenIconUrl": "https://moooza.ru/app-icons/shortcut-find.png"
+    },
+    {
+      "name": "Каталог",
+      "shortName": "Каталог",
+      "url": "https://moooza.ru/search",
+      "chosenIconUrl": "https://moooza.ru/app-icons/shortcut-search.png"
+    },
+    {
+      "name": "Лайнапы",
+      "shortName": "Лайнапы",
+      "url": "https://moooza.ru/lineups",
+      "chosenIconUrl": "https://moooza.ru/app-icons/shortcut-lineups.png"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://moooza.ru/manifest.webmanifest",
+  "fallbackType": "webview",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": false,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://moooza.ru/",
+  "minSdkVersion": 21,
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "protocolHandlers": [],
+  "fileHandlers": []
+}

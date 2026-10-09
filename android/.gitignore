@@ -1,0 +1,7 @@
+# Проект Gradle генерирует Bubblewrap из twa-manifest.json (build.sh) — в git только исходные файлы.
+# Ключ подписи (*.jks) хранится вне репозитория: ~/.moooza-android/.
+*
+!.gitignore
+!README.md
+!build.sh
+!twa-manifest.json
