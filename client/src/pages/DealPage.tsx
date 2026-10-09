@@ -11,6 +11,12 @@ import { useAuthStore } from '../stores/authStore';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import AvatarComponent from '../components/Avatar';
+import { formatDateMsk, maskDateInput, maskedToMskEndOfDayIso, isMaskedDatePast } from '../lib/mskDate';
+
+// Отмена разрешена только до сдачи работы/события (сервер проверяет то же).
+const CANCELLABLE_STATUSES = ['PENDING', 'AWAITING_PAYMENT', 'IN_PROGRESS', 'AWAITING_EVENT'];
+// Изменение условий — процессные сделки после принятия и до завершения.
+const EDITABLE_STATUSES = ['AWAITING_PAYMENT', 'IN_PROGRESS', 'REVIEW', 'REVISION'];
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: any }> = {
   PENDING:           { label: 'На согласовании',  color: 'text-amber-400',   icon: Clock },
@@ -39,7 +45,7 @@ export default function DealPage() {
   const [reviewText, setReviewText] = useState('');
   const [reviewSent, setReviewSent] = useState(false);
   const [showEditForm, setShowEditForm] = useState(false);
-  const [editDeadline, setEditDeadline] = useState('');
+  const [editDeadline, setEditDeadline] = useState(''); // маска ДД.ММ.ГГГГ
   const [editRevisions, setEditRevisions] = useState('');
 
   const { data: deal, isLoading } = useQuery({
@@ -48,7 +54,11 @@ export default function DealPage() {
     enabled: !!dealId,
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['deal', dealId] });
+  // Обновляем и карточку, и список «Мои сделки».
+  const invalidate = () => {
+    qc.invalidateQueries({ queryKey: ['deal', dealId] });
+    qc.invalidateQueries({ queryKey: ['deals'] });
+  };
 
   const reviewMut = useMutation({
     mutationFn: () => reviewAPI.create({
@@ -58,7 +68,7 @@ export default function DealPage() {
       type: 'deal',
       dealId: dealId!,
     }),
-    onSuccess: () => { setReviewSent(true); qc.invalidateQueries({ queryKey: ['reviews', partner?.id] }); },
+    onSuccess: () => { setReviewSent(true); qc.invalidateQueries({ queryKey: ['reviews', partner?.id] }); qc.invalidateQueries({ queryKey: ['deal', dealId] }); },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить оценку')),
   });
 
@@ -73,7 +83,7 @@ export default function DealPage() {
 
   const requestEditMut = useMutation({
     mutationFn: () => dealAPI.requestEdit(dealId!, {
-      deadline: editDeadline || undefined,
+      deadline: editDeadline ? (maskedToMskEndOfDayIso(editDeadline) ?? undefined) : undefined,
       revisionCount: editRevisions ? Number(editRevisions) : undefined,
     }),
     onSuccess: () => { invalidate(); setShowEditForm(false); setEditDeadline(''); setEditRevisions(''); },
@@ -111,6 +121,13 @@ export default function DealPage() {
   const myRole = isCustomer ? 'Заказчик' : 'Исполнитель';
   const isDone = ['COMPLETED', 'CANCELLED'].includes(deal.status);
   const pendingEdit = deal.editRequests?.[0];
+  // Отзыв по сделке: флаг с сервера (переживает перезагрузку) + локальный после отправки.
+  const reviewDone = reviewSent || !!deal.myReviewSent;
+  const editDeadlineInvalid = editDeadline.trim() !== '' && (editDeadline.length < 10 || !maskedToMskEndOfDayIso(editDeadline));
+  const editDeadlinePast = !editDeadlineInvalid && editDeadline.length === 10 && isMaskedDatePast(editDeadline);
+  const editRevisionsNum = Number(editRevisions);
+  const editRevisionsInvalid = editRevisions.trim() !== ''
+    && (!Number.isInteger(editRevisionsNum) || editRevisionsNum < (deal.revisionsUsed ?? 0) || editRevisionsNum > 20);
 
   return (
     <div className="min-h-screen bg-slate-950 pb-32">
@@ -188,7 +205,7 @@ export default function DealPage() {
           {deal.dealType === 'event' && deal.eventDate && (
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Дата события</span>
-              <span className="text-white font-semibold">{new Date(deal.eventDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+              <span className="text-white font-semibold">{formatDateMsk(deal.eventDate, { day: 'numeric', month: 'long', year: 'numeric' })}</span>
             </div>
           )}
           {deal.dealType === 'event' && deal.deposit != null && (
@@ -200,13 +217,13 @@ export default function DealPage() {
           {deal.dealType !== 'event' && deal.deadline && (
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Срок сдачи</span>
-              <span className="text-white">{new Date(deal.deadline).toLocaleDateString('ru')}</span>
+              <span className="text-white">{formatDateMsk(deal.deadline)}</span>
             </div>
           )}
           {deal.dealType !== 'event' && deal.acceptDeadline && (
             <div className="flex justify-between text-sm">
               <span className="text-slate-400">Срок приёмки</span>
-              <span className="text-white">{new Date(deal.acceptDeadline).toLocaleDateString('ru')}</span>
+              <span className="text-white">{formatDateMsk(deal.acceptDeadline)}</span>
             </div>
           )}
           {deal.dealType !== 'event' && deal.revisionCount > 0 && (
@@ -232,7 +249,7 @@ export default function DealPage() {
 
         {/* Review block — shown when COMPLETED */}
         {deal.status === 'COMPLETED' && (
-          reviewSent ? (
+          reviewDone ? (
             <div className="flex items-center gap-2 text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl px-4 py-3">
               <Check size={15} />Оценка отправлена
             </div>
@@ -359,10 +376,10 @@ export default function DealPage() {
                 <p className="text-sm font-semibold text-amber-300">Запрос на изменение условий</p>
                 <div className="space-y-1 text-sm">
                   {pendingEdit.changes?.deadline && (
-                    <p className="text-slate-300">Новый срок сдачи: {new Date(pendingEdit.changes.deadline).toLocaleDateString('ru-RU')}</p>
+                    <p className="text-slate-300">Новый срок сдачи: {formatDateMsk(pendingEdit.changes.deadline)}</p>
                   )}
                   {pendingEdit.changes?.acceptDeadline && (
-                    <p className="text-slate-300">Новый срок приёмки: {new Date(pendingEdit.changes.acceptDeadline).toLocaleDateString('ru-RU')}</p>
+                    <p className="text-slate-300">Новый срок приёмки: {formatDateMsk(pendingEdit.changes.acceptDeadline)}</p>
                   )}
                   {pendingEdit.changes?.revisionCount != null && (
                     <p className="text-slate-300">Новое кол-во правок: {pendingEdit.changes.revisionCount}</p>
@@ -385,24 +402,28 @@ export default function DealPage() {
             )}
 
             {/* Edit conditions — either party, only when in active progress statuses */}
-            {!isDone && !pendingEdit && ['IN_PROGRESS', 'REVIEW', 'REVISION'].includes(deal.status) && (
+            {!isDone && !pendingEdit && deal.dealType !== 'event' && EDITABLE_STATUSES.includes(deal.status) && (
               showEditForm ? (
                 <div className="space-y-2 border border-slate-700/60 rounded-2xl p-4">
                   <p className="text-sm font-semibold text-white mb-2">Запросить изменение условий</p>
                   <div>
                     <label className="text-xs text-slate-400 mb-1 block">Новый срок сдачи</label>
-                    <input type="date" value={editDeadline} onChange={e => setEditDeadline(e.target.value)}
-                      className="w-full min-w-0 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white" />
+                    <input type="text" inputMode="numeric" placeholder="ДД.ММ.ГГГГ" maxLength={10}
+                      value={editDeadline} onChange={e => setEditDeadline(maskDateInput(e.target.value))}
+                      className={`w-full min-w-0 px-3 py-2 bg-slate-800 border rounded-xl text-sm text-white placeholder-slate-500 ${editDeadlineInvalid || editDeadlinePast ? 'border-red-500/60' : 'border-slate-700'}`} />
+                    {editDeadlineInvalid && <p className="text-[11px] text-red-400 mt-1">Введите существующую дату ДД.ММ.ГГГГ</p>}
+                    {editDeadlinePast && <p className="text-[11px] text-red-400 mt-1">Срок не может быть в прошлом</p>}
                   </div>
                   <div>
                     <label className="text-xs text-slate-400 mb-1 block">Новое количество правок</label>
                     <input type="number" value={editRevisions} onChange={e => setEditRevisions(e.target.value)}
                       placeholder={String(deal.revisionCount)}
                       className="w-full min-w-0 px-3 py-2 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white" />
+                    {editRevisionsInvalid && <p className="text-[11px] text-red-400 mt-1">От {deal.revisionsUsed ?? 0} (уже использовано) до 20</p>}
                   </div>
                   <div className="flex gap-2 pt-1">
                     <button onClick={() => setShowEditForm(false)} className="flex-1 py-2 text-sm text-slate-400 border border-slate-700 rounded-xl hover:text-white transition-colors">Отмена</button>
-                    <button onClick={() => requestEditMut.mutate()} disabled={requestEditMut.isPending || (!editDeadline && !editRevisions)}
+                    <button onClick={() => requestEditMut.mutate()} disabled={requestEditMut.isPending || (!editDeadline && !editRevisions) || editDeadlineInvalid || editDeadlinePast || editRevisionsInvalid}
                       className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 text-white rounded-xl font-semibold transition-colors disabled:opacity-50">Отправить</button>
                   </div>
                 </div>
@@ -415,7 +436,7 @@ export default function DealPage() {
             )}
 
             {/* Cancel */}
-            {!['COMPLETED', 'CANCELLED', 'REVIEW'].includes(deal.status) && (
+            {CANCELLABLE_STATUSES.includes(deal.status) && (
               showCancelInput ? (
                 <div className="space-y-2">
                   <input
