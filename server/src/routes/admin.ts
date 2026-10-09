@@ -8,7 +8,7 @@ import { yoNorm } from '../utils/search';
 import { grantProMonth, isProActive } from '../utils/pro';
 import logger from '../utils/logger';
 import { artistAdminIds } from '../lib/artistAccess';
-import * as socketModule from '../socket';
+import { disconnectUserSockets } from '../socket';
 
 const router = Router();
 
@@ -41,14 +41,11 @@ function pageParams(req: { query: any }) {
   return { page, limit, skip: (page - 1) * limit };
 }
 
-// Разорвать живые сокеты пользователя (блокировка, смена пароля).
-// TODO(интеграция с зоной чата): после мержа заменить на прямой импорт
-//   import { disconnectUserSockets } from '../socket';  disconnectUserSockets(userId);
-// Пока функции в socket.ts нет — вызываем её, только если она экспортирована.
-function kickUserSockets(userId: string) {
+// Разорвать живые сокеты пользователя (блокировка, смена пароля админом,
+// удаление): JWT/сессия уже недействительны, а открытый сокет жил бы до реконнекта.
+function kickUserSockets(userId: string, reason = 'revoked') {
   try {
-    const fn = (socketModule as any).disconnectUserSockets;
-    if (typeof fn === 'function') fn(userId);
+    disconnectUserSockets(userId, reason);
   } catch (e: any) {
     logger.warn(`[admin] disconnectUserSockets failed for ${userId}: ${e?.message}`);
   }
@@ -1057,7 +1054,7 @@ router.patch('/users/:id', async (req: AuthRequest, res) => {
         city: true, country: true, bio: true, phone: true,
       },
     });
-    if (passwordChanged) kickUserSockets(user.id);
+    if (passwordChanged) kickUserSockets(user.id, 'password_changed');
     res.json(user);
   } catch (e: any) {
     // TOCTOU on nickname: a concurrent change can pass the pre-check and trip the
@@ -1170,7 +1167,7 @@ router.patch('/users/:id/block', async (req: AuthRequest, res) => {
       data: value ? { isBlocked: true } : { isBlocked: false, blockedUntil: null },
       select: { id: true, isBlocked: true, blockedUntil: true },
     });
-    if (value) kickUserSockets(updated.id);
+    if (value) kickUserSockets(updated.id, 'blocked');
     res.json(updated);
   } catch (e: any) { return adminError(res, 'PATCH /users/:id/block', e); }
 });

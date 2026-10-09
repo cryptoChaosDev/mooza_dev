@@ -4,7 +4,7 @@ import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { tgEvent } from '../utils/telegram';
 import logger from '../utils/logger';
-import * as socketModule from '../socket';
+import { disconnectUserSockets } from '../socket';
 
 const router = Router();
 
@@ -48,14 +48,11 @@ function serverError(res: any, where: string, e: any) {
   return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
 }
 
-// Разорвать живые сокеты заблокированного пользователя.
-// TODO(интеграция с зоной чата): после мержа заменить на прямой импорт
-//   import { disconnectUserSockets } from '../socket';  disconnectUserSockets(userId);
-// Пока функции в socket.ts нет — вызываем её, только если она экспортирована.
+// Разорвать живые сокеты заблокированного пользователя (любая блокировка —
+// временная и бессрочная): иначе открытый чат продолжает работать до реконнекта.
 function kickUserSockets(userId: string) {
   try {
-    const fn = (socketModule as any).disconnectUserSockets;
-    if (typeof fn === 'function') fn(userId);
+    disconnectUserSockets(userId, 'blocked');
   } catch (e: any) {
     logger.warn(`[complaints] disconnectUserSockets failed for ${userId}: ${e?.message}`);
   }
