@@ -88,8 +88,9 @@ export function ArtistListenBlock({
               >
                 <Icon className="w-[18px] h-[18px]" />
               </span>
-              <span className="flex-1 min-w-0 text-sm font-semibold text-white truncate">{l.title}</span>
-              <Play size={14} className="flex-shrink-0 text-slate-500 group-hover:text-white fill-current transition-colors" />
+              <span className="flex-1 min-w-0 text-sm font-semibold text-white leading-tight line-clamp-2 break-words">{l.title}</span>
+              {/* на узких экранах стрелку прячем — иначе «Яндекс Музыка» обрезается до «Яндекс Му…» */}
+              <Play size={14} className="hidden min-[400px]:block flex-shrink-0 text-slate-500 group-hover:text-white fill-current transition-colors" />
             </a>
           );
         })}
