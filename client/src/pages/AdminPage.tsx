@@ -3373,7 +3373,7 @@ function WaitlistTab() {
         <div className="text-slate-500 text-sm py-8 text-center">Заявок пока нет</div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-800">
-          <table className="w-full min-w-[760px] text-sm">
+          <table className="w-full min-w-[980px] text-sm">
             <thead className="bg-slate-900 text-slate-400 text-xs">
               <tr>
                 <th className="px-3 py-2 w-8">
@@ -3386,12 +3386,12 @@ function WaitlistTab() {
                     className="w-4 h-4 accent-primary-500 align-middle"
                   />
                 </th>
-                <th className="text-left px-3 py-2">Email</th>
-                <th className="text-left px-3 py-2">Тип</th>
+                <th className="text-left px-3 py-2 min-w-[220px]">Email</th>
+                <th className="text-left px-3 py-2 whitespace-nowrap">Тип</th>
                 <th className="text-left px-3 py-2">Статус</th>
                 <th className="text-left px-3 py-2 whitespace-nowrap">Согласия</th>
                 <th className="text-left px-3 py-2 whitespace-nowrap">Дата</th>
-                <th className="text-right px-3 py-2">Действия</th>
+                <th className="text-right px-3 py-2 whitespace-nowrap">Действия</th>
               </tr>
             </thead>
             <tbody>
@@ -3412,7 +3412,7 @@ function WaitlistTab() {
                         />
                       )}
                     </td>
-                    <td className="px-3 py-2 break-all">{r.email}</td>
+                    <td className="px-3 py-2 min-w-[220px] max-w-[300px] break-words [overflow-wrap:anywhere]">{r.email}</td>
                     <td className="px-3 py-2 whitespace-nowrap">{WAITLIST_TYPE_LABEL[r.type] || r.type}</td>
                     <td className="px-3 py-2"><WaitlistStatusBadge r={r} /></td>
                     <td className="px-3 py-2 whitespace-nowrap text-xs">{r.consentPd ? '✓' : '✗'} ПДн · {r.consentMarketing ? '✓' : '✗'} рекл.</td>
