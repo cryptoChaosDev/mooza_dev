@@ -485,6 +485,34 @@ describe('GET /seo/render — артист', () => {
     expect(metaRobots(res.text)).toBe('noindex, nofollow');
   });
 
+  it('визитка: «Ближайшие концерты» — только будущие, по дате, ссылки на билеты только http(s)', async () => {
+    const day = 24 * 60 * 60 * 1000;
+    const iso = (deltaDays: number) => new Date(Date.now() + deltaDays * day).toISOString();
+    mockArtist(artistRow({
+      ymData: {
+        similarArtists: [],
+        concerts: [
+          { datetime: iso(20), city: 'Казань', place: 'Клуб <b>Б</b>', afishaUrl: 'javascript:alert(1)' },
+          { datetime: iso(-3), city: 'Прошедший город', place: 'Зал', afishaUrl: 'https://afisha.yandex.ru/old' },
+          { datetime: iso(5), city: 'Москва', place: 'Клуб А', afishaUrl: 'https://afisha.yandex.ru/moscow' },
+          { date: 'не дата', city: 'Битый' },
+        ],
+      },
+    }));
+    cache.invalidateSeoCache('test');
+    const res = await request(app).get('/seo/render/artist/gruppa');
+    expect(res.status).toBe(200);
+    const page = res.text;
+    expect(page).toContain('<h2>Ближайшие концерты</h2>');
+    expect(page).toContain('href="https://afisha.yandex.ru/moscow" rel="nofollow noopener"');
+    expect(page.indexOf('Москва — Клуб А')).toBeGreaterThan(-1);
+    expect(page.indexOf('Москва — Клуб А')).toBeLessThan(page.indexOf('Казань'));
+    expect(page).toContain('Клуб &lt;b&gt;Б&lt;/b&gt;');
+    expect(page).not.toContain('Прошедший город');
+    expect(page).not.toContain('Битый');
+    expect(page).not.toContain('javascript:alert');
+  });
+
   it('ETag → 304 на повторный запрос', async () => {
     mockArtist(artistRow());
     const first = await request(app).get('/seo/render/artist/gruppa');

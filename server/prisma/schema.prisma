@@ -423,6 +423,7 @@ model Artist {
   listenersSnapshots ArtistListenersSnapshot[]
   dismissedMedia     DismissedMediaItem[]
   slugHistory        ArtistSlugHistory[]
+  pageStats          ArtistPageStat[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -463,6 +464,24 @@ model ArtistListenersSnapshot {
   artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
   @@index([artistId, createdAt])
+}
+
+// Статистика визитки артиста (/artist/<slug> как «ссылка в био»): агрегаты за
+// календарный день по МСК. Без ПДн — ни IP, ни userId, ни User-Agent: только
+// счётчики. Пишется POST /api/artists/:id/track (lib/artistPageStats), читается
+// админами артиста — GET /api/artists/:id/stats.
+model ArtistPageStat {
+  artistId  String
+  day       DateTime @db.Date
+  views     Int      @default(0)
+  // Переходы по ссылкам визитки: { "<target>": n } — ключи из белого списка
+  // (yandex_music, vk_music, …, release, tickets).
+  clicks    Json     @default("{}")
+  updatedAt DateTime @default(now()) @updatedAt
+
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@id([artistId, day])
 }
 
 model ArtistFollower {

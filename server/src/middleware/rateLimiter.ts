@@ -207,6 +207,23 @@ export const seoLimiter = rateLimit({
   },
 });
 
+/**
+ * Статистика визитки артиста (POST /api/artists/:id/track, без авторизации):
+ * 60 событий в минуту с IP. Живой посетитель шлёт 1 просмотр + несколько
+ * переходов; запас — на общий IP мобильного оператора (CGNAT). IP — только в
+ * памяти лимитера, в БД не пишется. Превышение — 429 без тела-ошибки для UI
+ * (клиент шлёт трекинг «выстрелил и забыл»).
+ */
+export const artistTrackLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ error: 'Слишком много запросов' });
+  },
+});
+
 export const messageLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 минута
   max: 120, // 120 сообщений в минуту с одного IP (несколько активных чатов за NAT)
