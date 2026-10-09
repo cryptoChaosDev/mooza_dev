@@ -378,3 +378,21 @@ describe('правки поверх разбора и чипы', () => {
     expect(buildTitle({ ...r, professionIds: [] }, dict, 'x'.repeat(80)).length).toBeLessThanOrEqual(50);
   });
 });
+
+describe('двуязычные названия жанров как в БД PROD («Метал, Metal»)', () => {
+  // Регресс: в БД жанры названы «Рус, Eng»; разбор делил названия только по «/»
+  // и не находил ни одного жанра на живых данных.
+  const prodGenres = ['Метал, Metal', 'Рок, Rock', 'Хип-хоп / Рэп, Hip-Hop / Rap', 'Электронная музыка, Electronic', 'Панк / Хардкор, Punk / Hardcore'];
+  const prodDict = { ...dict, genres: prodGenres.map((name) => ({ id: `g:${name}`, name })) };
+  const p = (text: string) => parseRequestText(text, prodDict, NOW);
+
+  it.each([
+    ['нужен барабанщик на концерт, метал', 'Метал, Metal'],
+    ['ищу гитариста в рок-группу', 'Рок, Rock'],
+    ['нужен битмейкер, хип-хоп', 'Хип-хоп / Рэп, Hip-Hop / Rap'],
+    ['барабанщик в панк группу', 'Панк / Хардкор, Punk / Hardcore'],
+    ['нужен вокалист, metal', 'Метал, Metal'],
+  ])('%s → %s', (text, genre) => {
+    expect(p(text).genreIds).toContain(`g:${genre}`);
+  });
+});

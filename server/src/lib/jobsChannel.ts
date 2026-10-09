@@ -214,7 +214,8 @@ function countLetters(s: string): number {
 export function toHashtag(raw: string | null | undefined): string | null {
   if (raw == null) return null;
   let s = String(raw).replace(/\([^)]*\)/g, ' ');
-  const parts = s.split('/').map((p) => p.trim()).filter(Boolean);
+  // «Вокалист / Вокалистка», двуязычные жанры из БД «Метал, Metal» → первый вариант
+  const parts = s.split(/[\/,]/).map((p) => p.trim()).filter(Boolean);
   if (parts.length > 1 && countLetters(parts[0]) >= 3) s = parts[0];
   s = s.toLowerCase().replace(/&/g, 'n').replace(/[^\p{L}\p{N}_]+/gu, '');
   if (!s || !/\p{L}/u.test(s)) return null;
@@ -222,7 +223,7 @@ export function toHashtag(raw: string | null | undefined): string | null {
 }
 
 /** Значения-«заглушки», которые не делаем жанровым тегом. */
-const GENRE_SKIP_TAGS = new Set(['#любойжанр', '#openformat', '#любой', '#другое', '#другой']);
+const GENRE_SKIP_TAGS = new Set(['#любойжанр', '#любыежанры', '#openformat', '#любой', '#другое', '#другой']);
 const GENRE_FILTER_RE = /жанр/i;
 const WORK_FORMAT_FILTER_RE = /формат/i;
 const REMOTE_VALUE_RE = /удал[её]нн|онлайн/i;

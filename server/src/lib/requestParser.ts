@@ -357,7 +357,8 @@ export function professionNameVariants(name: string): string[] {
     if (inner && !inner.includes('/')) out.push(inner);
   }
   const main = name.replace(/\([^)]*\)/g, ' ');
-  for (const part of main.split('/')) {
+  // «Вокалист / Вокалистка», двуязычные «Метал, Metal» — каждый вариант отдельно
+  for (const part of main.split(/[\/,]/)) {
     const p = part.trim().replace(/\s+/g, ' ');
     if (p) out.push(p);
   }
@@ -408,7 +409,8 @@ function compile(dict: RequestDictionaries): CompiledDict {
 
   const genreAlias = new Map<string, string[]>();
   for (const g of dict.genres) {
-    const variants = [g.name, ...g.name.split('/')].map((v) => joinWords(v)).filter(Boolean);
+    // В БД жанры двуязычные через запятую: «Метал, Metal», «Хип-хоп / Рэп, Hip-Hop / Rap»
+    const variants = [g.name, ...g.name.split(/[\/,]/)].map((v) => joinWords(v)).filter(Boolean);
     for (const key of new Set(variants)) {
       const list = genreAlias.get(key) ?? [];
       if (!list.includes(g.id)) list.push(g.id);

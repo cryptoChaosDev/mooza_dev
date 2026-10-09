@@ -757,3 +757,13 @@ describe('POST /api/admin/jobs-channel/test', () => {
     expect(res.body).toMatchObject({ configured: true, channelId: '@moooza_jobs', enabled: true });
   });
 });
+
+describe('toHashtag: двуязычные названия из БД («Метал, Metal»)', () => {
+  it.each([
+    ['Метал, Metal', '#метал'],
+    ['Хип-хоп / Рэп, Hip-Hop / Rap', '#хипхоп'],
+    ['Электронная музыка, Electronic', '#электроннаямузыка'],
+  ])('%s → %s', (raw, tag) => {
+    expect(jc.toHashtag(raw)).toBe(tag);
+  });
+});
