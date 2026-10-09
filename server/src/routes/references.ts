@@ -518,7 +518,7 @@ router.get('/search', async (req, res) => {
     if (Number.isFinite(priceMaxNum)) userServiceWhere.priceTo = { lte: priceMaxNum };
 
     const userWhere: any = {};
-    // Публичная выдача: без заблокированных и без давших согласие 152-ФЗ.
+    // Публичная выдача: только не заблокированные и давшие согласие 152-ФЗ.
     const andClauses: any[] = [publicProviderWhere()];
 
     // Profession is first-class: match via userProfessions.
