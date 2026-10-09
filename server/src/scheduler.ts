@@ -165,7 +165,7 @@ export async function processOrderDeadlines() {
 export async function processUserUnblocks() {
   const now = new Date();
   const tr = await prisma.user.updateMany({
-    where: { blockedUntil: { lt: now, not: null } },
+    where: { blockedUntil: { lte: now, not: null } },
     data: { blockedUntil: null },
   });
   if (tr.count > 0) logger.info(`[scheduler] Expired temporary blocks cleared: ${tr.count}`);

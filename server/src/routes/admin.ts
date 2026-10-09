@@ -904,17 +904,44 @@ router.post('/custom-filters', async (req, res) => {
 router.put('/custom-filters/:id', async (req, res) => {
   try {
     const { name, values } = req.body;
-    const data: any = {};
-    if (name !== undefined) data.name = name;
+    if (values !== undefined && !Array.isArray(values)) return res.status(400).json({ error: 'values должен быть массивом' });
+    const filterId = req.params.id;
+    const exists = await prisma.customFilter.findUnique({ where: { id: filterId }, select: { id: true } });
+    if (!exists) return res.status(404).json({ error: 'Запись не найдена' });
+
+    // Значения обновляем ДИФФОМ, сохраняя id: раньше deleteMany+create при любой
+    // правке пересоздавал все значения с новыми id — и у всех пользователей,
+    // заказов и вакансий молча пропадали выбранные значения этого фильтра.
+    const ops: any[] = [];
     if (values !== undefined) {
-      data.values = {
-        deleteMany: {},
-        create: (values as string[]).map((v, i) => ({ value: v, sortOrder: i })),
-      };
+      const incoming = (values as unknown[]).map(v => String(v ?? '').trim()).filter(Boolean);
+      const existing = await prisma.customFilterValue.findMany({ where: { filterId }, orderBy: { sortOrder: 'asc' } });
+      const used = new Set<string>();
+      const plan: Array<{ id?: string; value: string; sortOrder: number }> = incoming.map((value, sortOrder) => ({ value, sortOrder }));
+      // 1) точное совпадение текста — то же значение;
+      for (const item of plan) {
+        const ex = existing.find(e => !used.has(e.id) && e.value === item.value);
+        if (ex) { item.id = ex.id; used.add(ex.id); }
+      }
+      // 2) на той же позиции свободное старое значение — это переименование.
+      for (const item of plan) {
+        if (item.id) continue;
+        const ex = existing[item.sortOrder];
+        if (ex && !used.has(ex.id)) { item.id = ex.id; used.add(ex.id); }
+      }
+      const toDelete = existing.filter(e => !used.has(e.id)).map(e => e.id);
+      if (toDelete.length) ops.push(prisma.customFilterValue.deleteMany({ where: { id: { in: toDelete } } }));
+      for (const item of plan) {
+        ops.push(item.id
+          ? prisma.customFilterValue.update({ where: { id: item.id }, data: { value: item.value, sortOrder: item.sortOrder } })
+          : prisma.customFilterValue.create({ data: { filterId, value: item.value, sortOrder: item.sortOrder } }));
+      }
     }
-    const filter = await prisma.customFilter.update({
-      where: { id: req.params.id },
-      data,
+    if (name !== undefined) ops.push(prisma.customFilter.update({ where: { id: filterId }, data: { name } }));
+    if (ops.length) await prisma.$transaction(ops);
+
+    const filter = await prisma.customFilter.findUnique({
+      where: { id: filterId },
       include: { values: { orderBy: { sortOrder: 'asc' } } },
     });
     res.json(filter);
