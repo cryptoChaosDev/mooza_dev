@@ -70,11 +70,20 @@ export default function OnboardingPage() {
   const isLast = current === SLIDES.length - 1;
   const slide = SLIDES[current];
 
+  // Завершение И пропуск одинаково отмечают онбординг пройденным на сервере —
+  // слайды показываются новичку один раз. Серверный флаг — источник истины
+  // (localStorage-флаг на общем устройстве мог остаться от другого аккаунта),
+  // поэтому при сбое сети пробуем ещё раз.
   const finish = (toProfile = false) => {
     localStorage.setItem(TOUR_KEY, '1');
     if (user && !user.onboardingCompletedAt) {
-      userAPI.completeOnboarding()
-        .then(({ data }) => setUser({ ...user, onboardingCompletedAt: data.onboardingCompletedAt }))
+      const markDone = () => userAPI.completeOnboarding()
+        .then(({ data }) => {
+          const current = useAuthStore.getState().user;
+          if (current) setUser({ ...current, onboardingCompletedAt: data.onboardingCompletedAt });
+        });
+      markDone()
+        .catch(() => new Promise((r) => setTimeout(r, 2000)).then(markDone))
         .catch(() => {});
     }
     navigate(toProfile ? '/profile' : '/');
