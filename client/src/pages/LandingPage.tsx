@@ -3,12 +3,13 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { m, AnimatePresence, LazyMotion, MotionConfig, useReducedMotion } from 'framer-motion';
 import {
-  ArrowRight, BadgeCheck, CalendarDays, FileText, Headphones, IdCard, Search, Send, Zap,
+  ArrowRight, BadgeCheck, CalendarDays, FileText, Headphones, IdCard, Search, Send, Smartphone, Zap,
 } from 'lucide-react';
 import { siteSettingsAPI, referenceAPI } from '../lib/api';
 import LegalDocsModal from '../components/LegalDocsModal';
 import { useSeo } from '../lib/seo';
-import { trackGuestView } from '../lib/metrika';
+import { trackGuestView, reachGoal } from '../lib/metrika';
+import { ANDROID_APK_URL, isAndroidBrowser } from '../lib/androidApp';
 import { openAuthGate } from '../components/AuthGateModal';
 import Bento from '../components/landing/Bento';
 import HowItWorks from '../components/landing/HowItWorks';
@@ -157,6 +158,8 @@ export default function LandingPage() {
   const loginEnabled = settings?.loginEnabled !== 'false';
   const registrationEnabled = settings?.registrationEnabled !== 'false';
   const guestBrowsingEnabled = settings?.guestBrowsingEnabled === 'true';
+  // APK — только в браузере на Android и только когда админ включил ссылку.
+  const offerApk = settings?.androidApkEnabled === 'true' && isAndroidBrowser();
   const profCount = professions?.length ?? 126;
 
   const openWaitlist = (from: string) => openAuthGate('generic', { from }, undefined, 'waitlist');
@@ -282,6 +285,15 @@ export default function LandingPage() {
                     <button type="button" onClick={() => navigate('/login')} className={textLink}>У&nbsp;меня есть аккаунт</button>
                   )}
                 </div>
+                {offerApk && (
+                  <a
+                    href={ANDROID_APK_URL}
+                    onClick={() => reachGoal('android_apk_click', { from: 'landing_hero' })}
+                    className="mt-3 inline-flex items-center gap-1.5 min-h-[44px] px-3 text-sm font-medium text-slate-300 hover:text-white transition-colors"
+                  >
+                    <Smartphone size={16} /> Приложение для Android
+                  </a>
+                )}
                 {!registrationEnabled && (
                   <p className="mt-2 text-[13px] leading-relaxed text-slate-500 max-w-xs sm:max-w-sm mx-auto">
                     Вход пока по&nbsp;приглашениям&nbsp;— ленту, артистов и&nbsp;исполнителей можно смотреть уже сейчас.
@@ -409,6 +421,15 @@ export default function LandingPage() {
                   <a href="mailto:support@moooza.ru" className="inline-flex items-center min-h-[44px] px-3 rounded-lg text-slate-400 hover:text-white transition-colors">
                     Поддержка
                   </a>
+                  {offerApk && (
+                    <a
+                      href={ANDROID_APK_URL}
+                      onClick={() => reachGoal('android_apk_click', { from: 'landing_footer' })}
+                      className="inline-flex items-center gap-1.5 min-h-[44px] px-3 rounded-lg text-slate-400 hover:text-white transition-colors"
+                    >
+                      <Smartphone size={14} /> Android-приложение
+                    </a>
+                  )}
                 </nav>
               </div>
               {/* Реквизиты общества */}

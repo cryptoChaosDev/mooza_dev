@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "ru.moooza.app",
+      "sha256_cert_fingerprints": [
+        "41:2E:C2:DB:E6:0C:F7:95:AC:6E:F4:7F:12:7A:9D:51:08:EF:3A:D1:B3:91:9C:E9:C9:FA:A2:9D:F0:B3:3A:31"
+      ]
+    }
+  }
+]

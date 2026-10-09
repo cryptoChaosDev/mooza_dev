@@ -23,5 +23,7 @@ export function useSiteSettings() {
     // Открытый режим индексации (сервер: env SEO_INDEXABLE + гостевой режим).
     // false — легаси-режим «как сейчас на PROD»: /login и /register индексируются.
     seoIndexable: s?.seoIndexable === 'true',
+    // Ссылка на APK для Android (лендинг, бургер-меню) — флаг админки.
+    androidApkEnabled: s?.androidApkEnabled === 'true',
   };
 }

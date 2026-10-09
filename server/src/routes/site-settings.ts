@@ -20,6 +20,9 @@ const DEFAULTS: Record<string, string> = {
   // ссылку-приглашение (lib/waitlist.maybeAutoInviteWaitlistEntry). Работает, только
   // если регистрация по приглашениям включена.
   waitlistAutoInvite: 'false',
+  // Ссылка «Приложение для Android» (APK с сайта, /moooza.apk) в браузерах Android —
+  // лендинг и бургер-меню. Включает админ после проверки сборки на телефоне.
+  androidApkEnabled: 'false',
 };
 
 // Только эти ключи отдаются в GET /api/site-settings (менять через

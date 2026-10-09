@@ -2462,6 +2462,7 @@ function SiteSettingsTab() {
   const referralRegistrationEnabled = settings?.referralRegistrationEnabled === 'true';
   const jobsChannelEnabled = settings?.jobsChannelEnabled === 'true';
   const waitlistAutoInvite = settings?.waitlistAutoInvite === 'true';
+  const androidApkEnabled = settings?.androidApkEnabled === 'true';
 
   if (isLoading) return <div className="text-slate-500 text-sm">Загрузка...</div>;
 
@@ -2471,6 +2472,7 @@ function SiteSettingsTab() {
     { key: 'referralRegistrationEnabled', label: 'Регистрация по реф-ссылкам (когда открытая выкл.)',   value: referralRegistrationEnabled },
     { key: 'jobsChannelEnabled',          label: 'Автопостинг заказов и вакансий в Telegram-канал',     value: jobsChannelEnabled },
     { key: 'waitlistAutoInvite',          label: 'Авто-приглашение из листа ожидания (сразу шлёт ссылку)', value: waitlistAutoInvite },
+    { key: 'androidApkEnabled',           label: 'Ссылка на Android-приложение (APK) на лендинге и в меню', value: androidApkEnabled },
   ];
 
   return (

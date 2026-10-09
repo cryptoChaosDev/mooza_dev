@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Menu, ChevronRight, UserSearch, CalendarDays, Gift, Zap, Settings, ShieldCheck, Info, LifeBuoy,
+  Menu, ChevronRight, UserSearch, CalendarDays, Gift, Zap, Settings, ShieldCheck, Info, LifeBuoy, Smartphone,
 } from 'lucide-react';
 import BottomSheet from './BottomSheet';
 import InfoModal from './InfoModal';
 import { APP_VERSION } from '../lib/changelog';
+import { useSiteSettings } from '../lib/siteSettings';
+import { ANDROID_APK_URL, isAndroidBrowser } from '../lib/androidApp';
+import { reachGoal } from '../lib/metrika';
 
 // Мобильная шапка: второстепенные кнопки (админка, «Информация», «Пригласить»)
 // собраны в бургер, чтобы шапка не была перегружена. Колокольчик остаётся в шапке —
@@ -14,6 +17,8 @@ export default function MobileMenu({ isAdmin }: { isAdmin?: boolean }) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const { androidApkEnabled } = useSiteSettings();
+  const offerApk = androidApkEnabled && isAndroidBrowser();
 
   const go = (path: string) => { setOpen(false); navigate(path); };
 
@@ -24,6 +29,9 @@ export default function MobileMenu({ isAdmin }: { isAdmin?: boolean }) {
     { icon: Zap, label: 'Moooza Pro', onClick: () => go('/pro') },
     { icon: Settings, label: 'Приватность и уведомления', onClick: () => go('/settings/privacy') },
     ...(isAdmin ? [{ icon: ShieldCheck, label: 'Администрирование', onClick: () => go('/admin') }] : []),
+    ...(offerApk ? [{ icon: Smartphone, label: 'Приложение для Android', hint: 'Скачать APK', onClick: () => {
+      setOpen(false); reachGoal('android_apk_click', { from: 'menu' }); window.location.href = ANDROID_APK_URL;
+    } }] : []),
     { icon: Info, label: 'О приложении', hint: `Версия ${APP_VERSION} · что нового`, onClick: () => { setOpen(false); setShowInfo(true); } },
   ];
 

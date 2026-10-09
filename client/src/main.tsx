@@ -6,12 +6,16 @@ import App from './App';
 import { queryClient } from './lib/queryClient';
 import { YM_ID } from './lib/metrika';
 import { reloadOnceForChunkError } from './lib/chunkReload';
+import { detectAndroidApp } from './lib/androidApp';
 import './index.css';
 
 // Prevent browser from restoring scroll position on navigation
 if ('scrollRestoration' in history) {
   history.scrollRestoration = 'manual';
 }
+
+// Android-приложение (TWA) стартует с /?app=android — запоминаем до роутера.
+detectAndroidApp();
 
 // Android Chrome (Adreno/Mali GPU, особенно Xiaomi/MIUI) рендерит «мусорные пиксели»
 // вместо областей под backdrop-filter: blur — известный баг Chromium-композитинга.

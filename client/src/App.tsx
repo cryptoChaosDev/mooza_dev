@@ -18,6 +18,7 @@ import { takeReturnToast } from './lib/authReturn';
 import { reachGoal, setVisitParams } from './lib/metrika';
 import { toast } from './stores/toastStore';
 import NotFoundPage from './pages/NotFoundPage';
+import { isAndroidApp } from './lib/androidApp';
 
 
 const LandingPage        = lazy(() => import('./pages/LandingPage'));
@@ -227,7 +228,8 @@ function AppRoutes() {
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* Публичные */}
-            <Route path="/"                 element={token ? <FeedPage /> : <LandingPage />} />
+            {/* В Android-приложении гость сразу попадает в Поток — лендинг там не нужен */}
+            <Route path="/"                 element={token ? <FeedPage /> : isAndroidApp() ? <Navigate to="/feed" replace /> : <LandingPage />} />
             <Route path="/feed"             element={<FeedPage />} />
             <Route path="/privacy"          element={<PrivacyPolicyPage />} />
             <Route path="/terms"            element={<TermsPage />} />
