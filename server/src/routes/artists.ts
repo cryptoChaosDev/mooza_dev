@@ -1,4 +1,4 @@
-import { Router, Response } from 'express';
+import express, { Router, Response } from 'express';
 import fs from 'fs';
 import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
@@ -18,10 +18,17 @@ import {
   isFkViolation,
 } from '../lib/artistAccess';
 import { validateArtistInvite, acceptArtistInvite, ARTIST_INVITE_TTL_MS } from '../lib/artistInvites';
-import { guestReadLimiter } from '../middleware/rateLimiter';
+import { guestReadLimiter, artistTrackLimiter } from '../middleware/rateLimiter';
 import { sendPublic } from '../middleware/guest';
 import { getPublicArtist } from '../lib/publicData';
 import { artistKeyWhere, findArtistIdBySlugHistory } from '../lib/artistSlug';
+import {
+  isTrackTarget,
+  isBotUserAgent,
+  recordArtistPageEvent,
+  getArtistPageStats,
+  parseStatsDays,
+} from '../lib/artistPageStats';
 
 const router = Router();
 
@@ -891,6 +898,65 @@ router.delete('/:id/follow', authenticate, async (req: AuthRequest, res: Respons
     return res.json({ followed: false });
   } catch (err) {
     console.error('[artists] DELETE /:id/follow', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+});
+
+// ── POST /api/artists/:id/track ──────────────────────────────────────────────
+// Статистика визитки: { event: 'view' | 'click', target? } — без авторизации
+// (страницу артиста открывают гости из шапок ВК/Telegram). Тело — JSON или
+// text/plain с JSON (navigator.sendBeacon без CORS-preflight). Лимит частоты по
+// IP; боты/превью-краулеры не считаются (204 без записи); дедуп просмотра — на
+// клиенте (один на сессию вкладки). В БД — только дневные счётчики, без ПДн.
+router.post(
+  '/:id/track',
+  artistTrackLimiter,
+  express.text({ type: 'text/plain', limit: '2kb' }),
+  async (req: AuthRequest, res: Response) => {
+    try {
+      let body: any = req.body;
+      if (typeof body === 'string') {
+        try { body = JSON.parse(body); } catch { body = null; }
+      }
+      const event = body?.event;
+      if (event !== 'view' && event !== 'click') {
+        return res.status(400).json({ error: 'Некорректное событие' });
+      }
+      const target: string | null = event === 'click' ? body?.target : null;
+      if (event === 'click' && !isTrackTarget(target)) {
+        return res.status(400).json({ error: 'Некорректная цель перехода' });
+      }
+      if (isBotUserAgent(req.get('user-agent'))) return res.status(204).end();
+
+      const id = String(req.params.id ?? '');
+      if (!id || id.length > 64) return res.status(404).json({ error: 'Артист не найден' });
+      const artist = await prisma.artist.findUnique({ where: { id }, select: { id: true, status: true } });
+      if (!artist || artist.status === 'REJECTED') return res.status(404).json({ error: 'Артист не найден' });
+
+      await recordArtistPageEvent(artist.id, event, target);
+      return res.status(204).end();
+    } catch (err) {
+      if (isFkViolation(err)) return res.status(404).json({ error: 'Артист не найден' });
+      console.error('[artists] POST /:id/track', err);
+      return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+    }
+  },
+);
+
+// ── GET /api/artists/:id/stats?days=30 ───────────────────────────────────────
+// Статистика визитки — только подтверждённым админам/владельцу артиста.
+// Ответ — одни агрегаты: { days, from, to, views, clicks, clicksByTarget, series }.
+router.get('/:id/stats', authenticate, async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    if (!(await isArtistAdmin(id, req.userId!))) {
+      return res.status(403).json({ error: 'Статистика доступна только администраторам артиста' });
+    }
+    const stats = await getArtistPageStats(id, parseStatsDays(req.query.days));
+    res.set('Cache-Control', 'no-store');
+    return res.json(stats);
+  } catch (err) {
+    console.error('[artists] GET /:id/stats', err);
     return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 });
