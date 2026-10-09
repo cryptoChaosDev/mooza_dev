@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Download, EllipsisVertical, Globe, Share, SquarePlus, Store, X } from 'lucide-react';
@@ -34,12 +34,13 @@ function AndroidGlyph({ size = 16, className = '' }: GlyphProps) {
   );
 }
 
-const OPTIONS: { id: OptionId; label: string; tag?: string; icon: (p: GlyphProps) => ReactNode; aria: string }[] = [
-  { id: 'web', label: 'Веб-версия', icon: (p) => <Globe {...p} />, aria: 'Открыть Moooza в браузере' },
-  { id: 'ios', label: 'iPhone', tag: 'PWA', icon: (p) => <AppleGlyph {...p} />, aria: 'Установить на iPhone — экран «Домой»' },
-  { id: 'android', label: 'Android', tag: 'PWA', icon: (p) => <AndroidGlyph {...p} />, aria: 'Установить на Android из браузера' },
-  { id: 'apk', label: 'Android', tag: 'APK', icon: (p) => <Download {...p} />, aria: 'Скачать приложение для Android (APK)' },
-  { id: 'rustore', label: 'RuStore', icon: (p) => <Store {...p} />, aria: 'RuStore' },
+// label/tag — «пилюли» на sm+; short/sub — плитки в один ряд на телефоне.
+const OPTIONS: { id: OptionId; label: string; tag?: string; short: string; sub: string; icon: (p: GlyphProps) => ReactNode; aria: string }[] = [
+  { id: 'web', label: 'Веб-версия', short: 'Веб', sub: 'браузер', icon: (p) => <Globe {...p} />, aria: 'Открыть Moooza в браузере' },
+  { id: 'ios', label: 'iPhone', tag: 'PWA', short: 'iPhone', sub: 'PWA', icon: (p) => <AppleGlyph {...p} />, aria: 'Установить на iPhone — экран «Домой»' },
+  { id: 'android', label: 'Android', tag: 'PWA', short: 'Android', sub: 'PWA', icon: (p) => <AndroidGlyph {...p} />, aria: 'Установить на Android из браузера' },
+  { id: 'apk', label: 'Android', tag: 'APK', short: 'Android', sub: 'APK', icon: (p) => <Download {...p} />, aria: 'Скачать приложение для Android (APK)' },
+  { id: 'rustore', label: 'RuStore', short: 'RuStore', sub: 'скоро', icon: (p) => <Store {...p} />, aria: 'RuStore' },
 ];
 
 function recommendedFor(platform: Platform, apkEnabled: boolean): OptionId {
@@ -52,6 +53,7 @@ export default function LaunchOptions({ apkEnabled }: { apkEnabled: boolean }) {
   const [platform] = useState<Platform>(() => detectPlatform());
   const canInstall = useCanInstallPwa();
   const [open, setOpen] = useState<Exclude<OptionId, 'web' | 'rustore'> | null>(null);
+  const close = useCallback(() => setOpen(null), []);
   const recommended = recommendedFor(platform, apkEnabled);
 
   const choose = async (id: OptionId) => {
@@ -73,14 +75,56 @@ export default function LaunchOptions({ apkEnabled }: { apkEnabled: boolean }) {
           ? 'bg-white/[0.09] text-white shadow-[inset_0_0_0_1px_rgba(127,227,245,0.5)] hover:bg-white/[0.12]'
           : 'bg-white/[0.04] text-slate-300 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.18)] hover:text-white hover:bg-white/[0.07]'
     }`;
+  const tileIcon = (active: boolean, disabled: boolean) =>
+    `w-12 h-12 rounded-2xl flex items-center justify-center transition-colors ${
+      disabled
+        ? 'bg-white/[0.025] text-slate-600 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.12)]'
+        : active
+          ? 'bg-white/[0.09] text-[#7fe3f5] shadow-[inset_0_0_0_1px_rgba(127,227,245,0.55)]'
+          : 'bg-white/[0.045] text-slate-200 shadow-[inset_0_0_0_1px_rgba(148,163,184,0.2)]'
+    }`;
+
+  const items = OPTIONS.map((o) => {
+    const soon = o.id === 'rustore' || (o.id === 'apk' && !apkEnabled);
+    return { ...o, soon, active: !soon && o.id === recommended };
+  });
 
   return (
     <div>
       <Eyebrow>Открыть или установить</Eyebrow>
-      <div className="mt-4 flex flex-wrap justify-center gap-2 max-w-2xl mx-auto">
-        {OPTIONS.map((o) => {
-          const soon = o.id === 'rustore' || (o.id === 'apk' && !apkEnabled);
-          const active = !soon && o.id === recommended;
+
+      {/* Телефон: пять плиток в один ряд — все варианты на первом экране */}
+      <div className="mt-4 grid grid-cols-5 gap-1 max-w-sm mx-auto sm:hidden">
+        {items.map(({ soon, active, ...o }) => {
+          const inner = (
+            <>
+              <span className={tileIcon(active, soon)}>{o.icon({ size: 20 })}</span>
+              <span className={`mt-1.5 text-[12px] font-medium leading-tight ${soon ? 'text-slate-500' : active ? 'text-white' : 'text-slate-300'}`}>{o.short}</span>
+              <span className={`text-[10.5px] leading-tight ${active ? 'text-[#7fe3f5]' : 'text-slate-500'}`}>{soon ? 'скоро' : o.sub}</span>
+            </>
+          );
+          const cls = 'flex flex-col items-center py-1.5 rounded-2xl min-w-0';
+          if (o.id === 'web') {
+            return <Link key={o.id} to="/feed" aria-label={o.aria} onClick={() => choose('web')} className={cls}>{inner}</Link>;
+          }
+          return (
+            <button
+              key={o.id}
+              type="button"
+              aria-label={soon ? `${o.aria} — скоро` : o.aria}
+              aria-disabled={soon || undefined}
+              onClick={soon ? undefined : () => { void choose(o.id); }}
+              className={`${cls} ${soon ? 'cursor-default' : ''}`}
+            >
+              {inner}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* sm+: «пилюли» в одну строку */}
+      <div className="mt-4 hidden sm:flex flex-wrap justify-center gap-2 max-w-3xl mx-auto">
+        {items.map(({ soon, active, ...o }) => {
           const content = (
             <>
               {o.icon({ size: 16, className: active ? 'text-[#7fe3f5]' : '' })}
@@ -113,7 +157,7 @@ export default function LaunchOptions({ apkEnabled }: { apkEnabled: boolean }) {
         })}
       </div>
 
-      {open && <InstallDialog option={open} platform={platform} onClose={() => setOpen(null)} />}
+      {open && <InstallDialog option={open} platform={platform} onClose={close} />}
     </div>
   );
 }

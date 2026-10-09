@@ -166,6 +166,14 @@ export default function LandingPage() {
 
   const openWaitlist = (from: string) => openAuthGate('generic', { from }, undefined, 'waitlist');
 
+  // Способы запуска (веб, PWA iPhone/Android, APK, RuStore) — сразу под главными
+  // кнопками, чтобы были на первом экране. В установленном приложении не нужны.
+  const launchOptions = !isInstalledApp() && (
+    <div className="mt-8 sm:mt-10">
+      <LaunchOptions apkEnabled={settings?.androidApkEnabled === 'true'} />
+    </div>
+  );
+
   const primaryBtn = 'group inline-flex items-center justify-center gap-2 min-h-[54px] px-5 sm:px-8 whitespace-nowrap rounded-2xl bg-white text-slate-950 text-[16px] font-semibold hover:bg-slate-100 transition-colors shadow-[0_18px_50px_-18px_rgba(150,108,246,0.85)]';
   const secondaryBtn = 'inline-flex items-center justify-center gap-2 min-h-[54px] px-5 sm:px-7 whitespace-nowrap rounded-2xl text-slate-100 text-[16px] font-semibold bg-white/[0.04] hover:bg-white/[0.08] backdrop-blur-md shadow-[inset_0_0_0_1px_rgba(148,163,184,0.24)] transition-colors';
   const textLinkBase = 'inline-flex items-center min-h-[44px] px-2.5 rounded-lg hover:text-white transition-colors';
@@ -276,7 +284,8 @@ export default function LandingPage() {
                     <Search size={17} /> Найти исполнителя
                   </Link>
                 </div>
-                <div className="mt-4 flex items-center justify-center gap-x-3 flex-wrap text-sm">
+                {launchOptions}
+                <div className="mt-6 flex items-center justify-center gap-x-3 flex-wrap text-sm">
                   <Link to="/search?tab=artists" className={textLink}>Артисты</Link>
                   {registrationEnabled ? (
                     <button type="button" onClick={() => navigate('/register')} className={textLinkAccent}>Создать аккаунт</button>
@@ -316,14 +325,7 @@ export default function LandingPage() {
                 <Link to="/feed" className={textLinkAccent}>Смотреть ленту</Link>
               </m.div>
             )}
-
-            {/* Способы запуска: веб, PWA iPhone/Android, APK, RuStore (скоро). В уже
-                установленном приложении не нужны. */}
-            {!isInstalledApp() && (
-              <m.div {...fadeUp(0.32)} className="mt-10 sm:mt-12">
-                <LaunchOptions apkEnabled={settings?.androidApkEnabled === 'true'} />
-              </m.div>
-            )}
+            {!guestBrowsingEnabled && <m.div {...fadeUp(0.32)}>{launchOptions}</m.div>}
           </div>
         </section>
 
