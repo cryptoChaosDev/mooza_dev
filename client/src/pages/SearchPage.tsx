@@ -16,6 +16,7 @@ import { api, referenceAPI, artistAPI, favoriteAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { plural } from '../lib/plural';
 import { useScrollLock } from '../lib/scrollLock';
+import { artistHref } from '../lib/artistUtils';
 
 type CatalogTab = 'services' | 'artists' | 'people';
 const CATALOG_TABS: CatalogTab[] = ['services', 'artists', 'people'];
@@ -595,8 +596,8 @@ export default function SearchPage() {
     navigate(`/profile/${id}`, { state: { from: location.pathname } });
   };
 
-  const handleNavigateToArtist = (id: string) => {
-    navigate(`/artist/${id}`, { state: { from: location.pathname } });
+  const handleNavigateToArtist = (a: { id: string; slug?: string | null }) => {
+    navigate(artistHref(a), { state: { from: location.pathname } });
   };
 
   // Tapping a service card → its service page (falls back to provider profile).
@@ -733,7 +734,7 @@ export default function SearchPage() {
                   <button
                     key={a.id}
                     onMouseDown={e => e.preventDefault()}
-                    onClick={() => { setSearchFocused(false); handleNavigateToArtist(a.id); }}
+                    onClick={() => { setSearchFocused(false); handleNavigateToArtist(a); }}
                     className="w-full flex items-center gap-2.5 px-3 py-2.5 text-left hover:bg-slate-800/60 transition-colors"
                   >
                     <AvatarComponent src={a.avatar} name={a.name} size={24} className="rounded-lg flex-shrink-0" />
@@ -1194,7 +1195,7 @@ export default function SearchPage() {
                     return (
                       <Link
                         key={artist.id}
-                        to={`/artist/${artist.id}`}
+                        to={artistHref(artist)}
                         state={{ from: location.pathname }}
                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors text-left"
                       >

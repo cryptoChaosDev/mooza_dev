@@ -12,7 +12,9 @@ services:
   web:
     mem_limit: 128m
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ >/dev/null 2>&1 || exit 1"]
+      # /healthz отвечает сам nginx: «/» теперь проксируется в api (SEO-снимок),
+      # и падение api не должно делать web «unhealthy».
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/healthz >/dev/null 2>&1 || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3

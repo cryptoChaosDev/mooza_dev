@@ -233,7 +233,10 @@ router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthReque
     }
     const clip = await prisma.clip.findUnique({
       where: { id: req.params.id },
-      include: { participants: { include: participantInclude } },
+      include: {
+        participants: { include: participantInclude },
+        artist: { select: { id: true, slug: true, name: true, avatar: true } },
+      },
     });
     if (!clip) return res.status(404).json({ error: 'Клип не найден' });
 
@@ -250,6 +253,9 @@ router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthReque
     return res.json({
       id: clip.id,
       artistId: clip.artistId,
+      artist: clip.artist
+        ? { id: clip.artist.id, slug: clip.artist.slug ?? null, name: clip.artist.name, avatar: clip.artist.avatar ?? null }
+        : null,
       title: clip.title,
       coverUrl: clip.coverUrl,
       platform: clip.platform,

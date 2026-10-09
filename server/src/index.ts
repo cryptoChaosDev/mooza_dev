@@ -52,6 +52,9 @@ import orderRoutes from './routes/orders';
 import vacancyRoutes from './routes/vacancies';
 import artistLookupRoutes from './routes/artistLookup';
 import supportRoutes from './routes/support';
+import seoRouter from './seo';
+import { seoCacheMiddleware } from './seo/cache';
+import { artistSlugMiddleware, backfillArtistSlugs } from './lib/artistSlug';
 
 // Load environment variables
 dotenv.config();
@@ -84,6 +87,13 @@ prisma.$use(async (params, next) => {
   return result;
 });
 
+// Слаги артистов (/artist/:slug): назначение при создании и пересчёт при смене
+// имени неверифицированного артиста, прежний слаг → ArtistSlugHistory (301).
+prisma.$use(artistSlugMiddleware);
+// Кэш SEO-снимков/sitemap: сброс на запись в публичные модели (кроме служебных
+// обновлений User вроде lastSeenAt).
+prisma.$use(seoCacheMiddleware);
+
 const PORT = process.env.PORT || 4000;
 
 // Trust proxy - необходимо для корректной работы rate limiting в Docker
@@ -91,6 +101,11 @@ app.set('trust proxy', 1);
 
 // Gzip compression — reduces response size 3-5x
 app.use(compression());
+
+// SEO-снимки и sitemap (Ф4) — ДО helmet: строгий CSP API (script-src 'self')
+// не должен попасть на HTML-страницу (инлайн-скрипты index.html). Ответы
+// /seo/* — только GET, без авторизации (nginx вырезает Authorization/Cookie).
+app.use('/seo', morgan('combined', { stream: morganStream }), seoRouter);
 
 // Middleware
 app.use(helmet({
@@ -159,10 +174,20 @@ app.use(morgan('combined', { stream: morganStream }));
 // and the strict CSP + `sandbox` neutralise any active content (scripts inside
 // SVG/HTML) if such a file is opened directly. Neither header affects normal
 // <img>/<audio> embedding from the SPA.
-app.use('/uploads', express.static(path.join(process.cwd(), 'uploads'), {
-  setHeaders: (res) => {
+//
+// Индексация: картинки витрины (аватары людей и каналов, баннеры профилей,
+// аватары и баннеры артистов) можно индексировать — они в og:image/JSON-LD
+// снимков. Всё остальное (портфолио, медиа постов, материалы заказов и
+// вакансий, вложения чатов) — X-Robots-Tag: noindex.
+const UPLOADS_ROOT = path.join(process.cwd(), 'uploads');
+const INDEXABLE_UPLOAD_DIRS = ['avatars', 'covers', 'channels', path.join('artists', 'avatars'), path.join('artists', 'banners')];
+app.use('/uploads', express.static(UPLOADS_ROOT, {
+  setHeaders: (res, filePath) => {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; sandbox");
+    const rel = path.relative(UPLOADS_ROOT, filePath);
+    const indexable = INDEXABLE_UPLOAD_DIRS.some((dir) => path.dirname(rel) === dir);
+    if (!indexable) res.setHeader('X-Robots-Tag', 'noindex');
   },
 }));
 
@@ -281,6 +306,11 @@ httpServer.listen(PORT, () => {
   startScheduler();
   // Ночной синк с Яндекс.Музыкой (04:30 МСК) — привязанные артисты
   scheduleYandexMusicSync();
+  // Страховка: слаг артистам без него (основное заполнение — миграция
+  // 20261011010000_seo_artist_slug). Идемпотентно, обычно 0.
+  backfillArtistSlugs()
+    .then((n) => { if (n > 0) logger.info(`[artistSlug] backfilled slugs for ${n} artist(s)`); })
+    .catch((err) => logger.error('[artistSlug] backfill failed', { error: err?.message }));
 });
 
 // Graceful shutdown

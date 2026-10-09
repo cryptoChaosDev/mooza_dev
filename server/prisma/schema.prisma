@@ -377,6 +377,10 @@ model Artist {
   id          String       @id @default(uuid())
   name        String
   nameNorm    String? // generated (ё→е, lower) — search only, never written
+  // Человекочитаемый адрес /artist/:slug (транслит имени, [a-z0-9-], ≤ 80).
+  // Назначается lib/artistSlug (Prisma-middleware) при создании и при смене
+  // имени НЕверифицированного артиста; прежний слаг уходит в ArtistSlugHistory (301).
+  slug        String?      @unique
   type        ArtistType?
   city        String?
   tourReady   String?
@@ -418,12 +422,26 @@ model Artist {
   vacancies   Vacancy[]
   listenersSnapshots ArtistListenersSnapshot[]
   dismissedMedia     DismissedMediaItem[]
+  slugHistory        ArtistSlugHistory[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([status])
   @@index([submittedById])
+}
+
+// Прежние слаги артиста: /artist/<старый слаг> → 301 на текущий. Слаг из
+// истории не выдаётся другому артисту (уникален и среди Artist.slug).
+model ArtistSlugHistory {
+  id        String   @id @default(uuid())
+  artistId  String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@index([artistId])
 }
 
 model ArtistGenre {

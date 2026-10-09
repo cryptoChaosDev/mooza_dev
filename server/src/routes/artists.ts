@@ -21,6 +21,7 @@ import { validateArtistInvite, acceptArtistInvite, ARTIST_INVITE_TTL_MS } from '
 import { guestReadLimiter } from '../middleware/rateLimiter';
 import { sendPublic } from '../middleware/guest';
 import { getPublicArtist } from '../lib/publicData';
+import { artistKeyWhere, findArtistIdBySlugHistory } from '../lib/artistSlug';
 
 const router = Router();
 
@@ -214,6 +215,7 @@ router.get('/following', authenticate, async (req: AuthRequest, res: Response) =
 
     const artists = follows.map((f) => ({
       id: f.artist.id,
+      slug: f.artist.slug ?? null,
       name: f.artist.name,
       avatar: f.artist.avatar,
       city: f.artist.city,
@@ -345,41 +347,46 @@ router.get('/join-requests', authenticate, async (req: AuthRequest, res: Respons
   }
 });
 
-// ── GET /api/artists/:id ─────────────────────────────────────────────────────
+// ── GET /api/artists/:idOrSlug ───────────────────────────────────────────────
+// Ключ — UUID или слаг (текущий или прежний из ArtistSlugHistory). Ответ несёт
+// текущий `slug`: клиент сам заменяет адрес на /artist/<slug> (history.replace).
 router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res: Response) => {
   try {
-    const { id } = req.params;
+    const key = req.params.id;
     const currentUserId = req.userId;
 
     // Гость: белый список (без служебных полей верификации и submittedById),
     // REJECTED → 404, состав — только ACCEPTED с согласием + «ещё N».
     if (!currentUserId) {
-      return sendPublic(res, await getPublicArtist(id), 'Артист не найден');
+      return sendPublic(res, await getPublicArtist(key), 'Артист не найден');
     }
 
-    const artist = await prisma.artist.findUnique({
-      where: { id },
-      include: {
-        genres: { include: { genre: true } },
-        _count: { select: { followers: true } },
-        followers: currentUserId
-          ? { where: { userId: currentUserId }, select: { userId: true } }
-          : { take: 0, select: { userId: true } },
-        userArtists: {
-          include: {
-            user: {
-              select: { id: true, firstName: true, lastName: true, avatar: true, nickname: true },
-            },
-            profession: { select: { id: true, name: true } },
-            roles: { include: { role: { select: { id: true, name: true } } } },
+    const keyWhere = artistKeyWhere(key);
+    if (!keyWhere) return res.status(404).json({ error: 'Артист не найден' });
+    const include = {
+      genres: { include: { genre: true } },
+      _count: { select: { followers: true } },
+      followers: { where: { userId: currentUserId }, select: { userId: true } },
+      userArtists: {
+        include: {
+          user: {
+            select: { id: true, firstName: true, lastName: true, avatar: true, nickname: true },
           },
+          profession: { select: { id: true, name: true } },
+          roles: { include: { role: { select: { id: true, name: true } } } },
         },
       },
-    });
+    } satisfies Prisma.ArtistInclude;
+    let artist = await prisma.artist.findUnique({ where: keyWhere, include });
+    if (!artist && !('id' in keyWhere)) {
+      const movedId = await findArtistIdBySlugHistory(key);
+      if (movedId) artist = await prisma.artist.findUnique({ where: { id: movedId }, include });
+    }
 
     if (!artist) {
       return res.status(404).json({ error: 'Артист не найден' });
     }
+    const id = artist.id;
 
     // Служебные поля верификации наружу не отдаём: код/причина отказа/ссылка-
     // доказательство — только админам артиста, submittedById/подавший — никому.
@@ -495,15 +502,18 @@ router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthReque
       const ours = similarIds.length
         ? await prisma.artist.findMany({
             where: { ymId: { in: similarIds }, status: { in: ['VERIFIED', 'APPROVED'] }, NOT: { id } },
-            select: { id: true, ymId: true },
+            select: { id: true, slug: true, ymId: true },
           })
         : [];
-      const ymToMooza = new Map<string, string>(ours.map((a) => [a.ymId as string, a.id]));
+      const ymToMooza = new Map<string, { id: string; slug: string | null }>(
+        ours.map((a) => [a.ymId as string, { id: a.id, slug: a.slug ?? null }]),
+      );
       ymData = {
         ...ymData,
         similarArtists: similar.map((s: any) => ({
           ...s,
-          moozaArtistId: ymToMooza.get(String(s.ymId)) ?? null,
+          moozaArtistId: ymToMooza.get(String(s.ymId))?.id ?? null,
+          moozaArtistSlug: ymToMooza.get(String(s.ymId))?.slug ?? null,
         })),
       };
     }

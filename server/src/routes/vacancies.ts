@@ -28,7 +28,7 @@ const VACANCY_INCLUDE = {
   selectedCustomFilterValues: { select: { id: true, value: true, filter: { select: { id: true, name: true } } } },
   referenceFiles: { orderBy: { createdAt: 'asc' as const } },
   referenceLinks: { orderBy: { createdAt: 'asc' as const } },
-  artist: { select: { id: true, name: true, avatar: true } },
+  artist: { select: { id: true, slug: true, name: true, avatar: true } },
   _count: { select: { responses: true } },
 } as const;
 

@@ -24,6 +24,7 @@ import sanitizeHtml from 'sanitize-html';
 import { prisma } from '../index';
 import { maskContacts, maskContactsDeep, stripLinksForGuest, CONTACT_MASK } from './maskContacts';
 import { buildFeedWhere, diversifyByAuthor, clampInt, TEAM_EMAIL, FeedFilterQuery } from './feedQuery';
+import { artistKeyWhere, findArtistIdBySlugHistory } from './artistSlug';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Результат загрузчика
@@ -447,7 +448,7 @@ const PROFILE_SELECT = {
       id: true,
       isOwner: true,
       participationStatus: true,
-      artist: { select: { id: true, name: true, avatar: true, status: true } },
+      artist: { select: { id: true, slug: true, name: true, avatar: true, status: true } },
     },
   },
   channel: {
@@ -470,10 +471,30 @@ const PROFILE_SELECT = {
   _count: { select: { posts: true } },
 } as const;
 
+/** Минимальная длина «о себе» для порога качества профиля (символов). */
+export const PROFILE_QUALITY_BIO_MIN = 80;
+
+/**
+ * Порог качества профиля для индексации и sitemap (план, раздел E): есть аватар
+ * И (bio ≥ 80 символов, ИЛИ активная услуга, ИЛИ участие в артисте). Ниже
+ * порога профиль виден гостю, но noindex — «малоценные страницы» не плодим.
+ */
+export function meetsProfileQuality(p: {
+  avatar?: string | null;
+  bio?: string | null;
+  servicesCount?: number;
+  artistsCount?: number;
+}): boolean {
+  if (!p.avatar) return false;
+  const bioLen = Array.from(String(p.bio ?? '').trim()).length;
+  return bioLen >= PROFILE_QUALITY_BIO_MIN || (p.servicesCount ?? 0) > 0 || (p.artistsCount ?? 0) > 0;
+}
+
 /**
  * Гостевой профиль. Нет пользователя / нет согласия / заблокирован →
  * not_found (одинаково — существование не раскрывается).
  * `byHandle`: ключ — ник (с «@» или без) или UUID.
+ * indexable = нет запрета индексации И пройден порог качества (meetsProfileQuality).
  */
 export async function getPublicProfile(key: string, opts: { byHandle?: boolean } = {}): Promise<PublicResult<any>> {
   const clean = String(key ?? '').trim().replace(/^@/, '');
@@ -497,6 +518,15 @@ export async function getPublicProfile(key: string, opts: { byHandle?: boolean }
   const { links, contactsAvailable } = stripLinksForGuest(user.socialLinks, 'user');
   const visibility = user.contactsVisibility || 'ALL';
   const services = (user.userServices ?? []).filter((us: any) => us.status === 'active').map(serializeService);
+  const visibleArtists = (user.userArtists ?? []).filter(
+    (ua: any) => (ua.inviteStatus ?? 'ACCEPTED') === 'ACCEPTED' && ua.artist && ua.artist.status !== 'REJECTED',
+  );
+  const indexable = !user.searchIndexingOptOut && meetsProfileQuality({
+    avatar: user.avatar,
+    bio: user.bio,
+    servicesCount: services.length,
+    artistsCount: visibleArtists.length,
+  });
 
   const data = {
     id: user.id,
@@ -531,14 +561,12 @@ export async function getPublicProfile(key: string, opts: { byHandle?: boolean }
       selectedCustomFilterValues: (up.selectedCustomFilterValues ?? []).map(serializeCfv),
     })),
     userServices: services,
-    userArtists: (user.userArtists ?? [])
-      .filter((ua: any) => (ua.inviteStatus ?? 'ACCEPTED') === 'ACCEPTED' && ua.artist && ua.artist.status !== 'REJECTED')
-      .map((ua: any) => ({
+    userArtists: visibleArtists.map((ua: any) => ({
       id: ua.id,
       isOwner: !!ua.isOwner,
       participationStatus: ua.participationStatus,
       artist: ua.artist
-        ? { id: ua.artist.id, name: ua.artist.name, avatar: ua.artist.avatar ?? null, status: ua.artist.status }
+        ? { id: ua.artist.id, slug: ua.artist.slug ?? null, name: ua.artist.name, avatar: ua.artist.avatar ?? null, status: ua.artist.status }
         : null,
     })),
     socialLinks: links,
@@ -567,11 +595,11 @@ export async function getPublicProfile(key: string, opts: { byHandle?: boolean }
     _count: { posts: user._count?.posts ?? 0 },
     dealsCount,
     isPublic: true,
-    indexable: !user.searchIndexingOptOut,
+    indexable,
   };
 
   const lastModified = maxDate(user.updatedAt, ...services.map((s: any) => s.updatedAt));
-  return found(data, lastModified, !user.searchIndexingOptOut);
+  return found(data, lastModified, indexable);
 }
 
 async function findPublicPersonRow(userId: string) {
@@ -686,44 +714,50 @@ function pickYmData(ym: any): any {
  * с бейджем). Состав — только ACCEPTED-участники с согласием, остальные —
  * `hiddenMembersCount` («и ещё N участников — после входа»), id не отдаются.
  */
-export async function getPublicArtist(artistId: string): Promise<PublicResult<any>> {
-  if (!artistId) return notFound();
-  const artist: any = await prisma.artist.findUnique({
-    where: { id: String(artistId) },
-    select: {
-      id: true,
-      name: true,
-      type: true,
-      city: true,
-      tourReady: true,
-      description: true,
-      socialLinks: true,
-      bandLink: true,
-      avatar: true,
-      banner: true,
-      listeners: true,
-      listenersDelta: true,
-      ymData: true,
-      activityStatus: true,
-      status: true,
-      createdAt: true,
-      updatedAt: true,
-      genres: { select: { genre: ID_NAME } },
-      _count: { select: { followers: true } },
-      userArtists: {
-        where: { inviteStatus: 'ACCEPTED' },
-        select: {
-          id: true,
-          isOwner: true,
-          participationStatus: true,
-          user: { select: PERSON_SELECT },
-          profession: ID_NAME,
-          roles: ROLE_SELECT,
-        },
-        orderBy: { createdAt: 'asc' },
+export async function getPublicArtist(artistKey: string): Promise<PublicResult<any>> {
+  // Ключ из адреса — UUID или слаг (текущий или прежний из ArtistSlugHistory).
+  // Ответ всегда несёт текущий `slug`: вызывающий сам решает про 301 / замену URL.
+  const where = artistKeyWhere(artistKey);
+  if (!where) return notFound();
+  const select = {
+    id: true,
+    slug: true,
+    name: true,
+    type: true,
+    city: true,
+    tourReady: true,
+    description: true,
+    socialLinks: true,
+    bandLink: true,
+    avatar: true,
+    banner: true,
+    listeners: true,
+    listenersDelta: true,
+    ymData: true,
+    activityStatus: true,
+    status: true,
+    createdAt: true,
+    updatedAt: true,
+    genres: { select: { genre: ID_NAME } },
+    _count: { select: { followers: true } },
+    userArtists: {
+      where: { inviteStatus: 'ACCEPTED' },
+      select: {
+        id: true,
+        isOwner: true,
+        participationStatus: true,
+        user: { select: PERSON_SELECT },
+        profession: ID_NAME,
+        roles: ROLE_SELECT,
       },
+      orderBy: { createdAt: 'asc' as const },
     },
-  });
+  } as const;
+  let artist: any = await prisma.artist.findUnique({ where, select });
+  if (!artist && !('id' in where)) {
+    const movedId = await findArtistIdBySlugHistory(artistKey);
+    if (movedId) artist = await prisma.artist.findUnique({ where: { id: movedId }, select });
+  }
   if (!artist || artist.status === 'REJECTED') return notFound();
 
   const accepted = (artist.userArtists ?? []).filter((ua: any) => (ua.inviteStatus ?? 'ACCEPTED') === 'ACCEPTED');
@@ -770,16 +804,21 @@ export async function getPublicArtist(artistId: string): Promise<PublicResult<an
   if (similar.length > 0) {
     // Похожие с ЯМ, которые есть на Moooza, — по индексируемой колонке ymId (как в dev-ветке артиста).
     const similarIds = [...new Set(similar.map((x: any) => String(x?.ymId ?? '')).filter((x) => /^\d+$/.test(x)))];
-    const ours: Array<{ id: string; ymId: string | null }> = similarIds.length
+    const ours: Array<{ id: string; slug: string | null; ymId: string | null }> = similarIds.length
       ? await prisma.artist.findMany({
           where: { ymId: { in: similarIds }, status: { in: ['VERIFIED', 'APPROVED'] }, NOT: { id: artist.id } },
-          select: { id: true, ymId: true },
+          select: { id: true, slug: true, ymId: true },
         })
       : [];
-    const ymToMooza = new Map<string, string>((ours ?? []).map((a) => [String(a.ymId), a.id]));
+    const ymToMooza = new Map<string, { id: string; slug: string | null }>(
+      (ours ?? []).map((a) => [String(a.ymId), { id: a.id, slug: a.slug ?? null }]),
+    );
     ymData = {
       ...ymData,
-      similarArtists: similar.map((s: any) => ({ ...s, moozaArtistId: ymToMooza.get(String(s?.ymId)) ?? null })),
+      similarArtists: similar.map((s: any) => {
+        const m = ymToMooza.get(String(s?.ymId));
+        return { ...s, moozaArtistId: m?.id ?? null, moozaArtistSlug: m?.slug ?? null };
+      }),
     };
   }
 
@@ -788,6 +827,7 @@ export async function getPublicArtist(artistId: string): Promise<PublicResult<an
 
   const data = {
     id: artist.id,
+    slug: artist.slug ?? null,
     name: artist.name,
     type: artist.type ?? null,
     city: artist.city ?? null,
@@ -885,7 +925,7 @@ export async function getPublicRelease(releaseId: string): Promise<PublicResult<
       id: true, artistId: true, title: true, coverUrl: true, releaseDate: true, platform: true, url: true,
       releaseType: true, label: true, genre: true, trackCount: true, likesCount: true, tracklist: true,
       createdAt: true, updatedAt: true,
-      artist: { select: { id: true, name: true, avatar: true, status: true } },
+      artist: { select: { id: true, slug: true, name: true, avatar: true, status: true } },
       participants: CREDIT_PARTICIPANTS_SELECT,
     },
   });
@@ -894,7 +934,7 @@ export async function getPublicRelease(releaseId: string): Promise<PublicResult<
   const data = {
     id: r.id,
     artistId: r.artistId,
-    artist: { id: r.artist.id, name: r.artist.name, avatar: r.artist.avatar ?? null, status: r.artist.status },
+    artist: { id: r.artist.id, slug: r.artist.slug ?? null, name: r.artist.name, avatar: r.artist.avatar ?? null, status: r.artist.status },
     title: r.title,
     coverUrl: r.coverUrl ?? null,
     releaseDate: r.releaseDate ?? null,
@@ -921,7 +961,7 @@ export async function getPublicClip(clipId: string): Promise<PublicResult<any>> 
     where: { id: String(clipId) },
     select: {
       id: true, artistId: true, title: true, coverUrl: true, platform: true, url: true, createdAt: true, updatedAt: true,
-      artist: { select: { id: true, name: true, avatar: true, status: true } },
+      artist: { select: { id: true, slug: true, name: true, avatar: true, status: true } },
       participants: CREDIT_PARTICIPANTS_SELECT,
     },
   });
@@ -930,7 +970,7 @@ export async function getPublicClip(clipId: string): Promise<PublicResult<any>> 
   const data = {
     id: c.id,
     artistId: c.artistId,
-    artist: { id: c.artist.id, name: c.artist.name, avatar: c.artist.avatar ?? null, status: c.artist.status },
+    artist: { id: c.artist.id, slug: c.artist.slug ?? null, name: c.artist.name, avatar: c.artist.avatar ?? null, status: c.artist.status },
     title: c.title,
     coverUrl: c.coverUrl ?? null,
     platform: c.platform,
@@ -1008,7 +1048,7 @@ export async function getPublicVacancy(vacancyId: string): Promise<PublicResult<
       createdAt: true, updatedAt: true,
       profession: ID_NAME,
       selectedCustomFilterValues: CFV_SELECT,
-      artist: { select: { id: true, name: true, avatar: true, status: true } },
+      artist: { select: { id: true, slug: true, name: true, avatar: true, status: true } },
       posts: { where: { type: 'vacancy' }, select: { id: true }, take: 1 },
       _count: { select: { responses: true, referenceFiles: true, referenceLinks: true } },
     },
@@ -1031,7 +1071,7 @@ export async function getPublicVacancy(vacancyId: string): Promise<PublicResult<
     updatedAt: v.updatedAt,
     profession: idName(v.profession),
     selectedCustomFilterValues: (v.selectedCustomFilterValues ?? []).map(serializeCfv),
-    artist: { id: v.artist.id, name: v.artist.name, avatar: v.artist.avatar ?? null, status: v.artist.status },
+    artist: { id: v.artist.id, slug: v.artist.slug ?? null, name: v.artist.name, avatar: v.artist.avatar ?? null, status: v.artist.status },
     materialsCount: (v._count?.referenceFiles ?? 0) + (v._count?.referenceLinks ?? 0),
     responsesCount: v._count?.responses ?? 0,
     postId: v.posts[0].id,
@@ -1103,7 +1143,7 @@ const REPOST_SELECT = {
   createdAt: true,
   artistId: true,
   author: { select: PERSON_SELECT },
-  artist: { select: { id: true, name: true, avatar: true, status: true } },
+  artist: { select: { id: true, slug: true, name: true, avatar: true, status: true } },
   order: { select: { status: true } },
 } as const;
 
@@ -1136,7 +1176,7 @@ export const GUEST_POST_SELECT = {
   updatedAt: true,
   author: { select: PERSON_SELECT },
   channel: { select: { id: true, name: true, avatar: true } },
-  artist: { select: { id: true, name: true, avatar: true, status: true } },
+  artist: { select: { id: true, slug: true, name: true, avatar: true, status: true } },
   service: {
     select: {
       id: true,
@@ -1303,7 +1343,7 @@ function serializeRepost(r: any, publicUserIds: Set<string>) {
     createdAt: r.createdAt,
     artistId: r.artist && r.artist.status !== 'REJECTED' ? r.artistId ?? null : null,
     author: toPublicPerson(r.author, r.type === 'order' ? ANON_CUSTOMER_NAME : ANON_PERSON_NAME),
-    artist: r.artist ? { id: r.artist.id, name: r.artist.name, avatar: r.artist.avatar ?? null } : null,
+    artist: r.artist ? { id: r.artist.id, slug: r.artist.slug ?? null, name: r.artist.name, avatar: r.artist.avatar ?? null } : null,
   };
 }
 
@@ -1344,7 +1384,7 @@ function serializeGuestPost(
     vacancyId: p.vacancyId ?? null,
     author,
     channel: p.channel ? { id: p.channel.id, name: p.channel.name, avatar: p.channel.avatar ?? null } : null,
-    artist: p.artist ? { id: p.artist.id, name: p.artist.name, avatar: p.artist.avatar ?? null } : null,
+    artist: p.artist ? { id: p.artist.id, slug: p.artist.slug ?? null, name: p.artist.name, avatar: p.artist.avatar ?? null } : null,
     service: p.service
       ? {
           id: p.service.id,
@@ -1621,4 +1661,259 @@ export async function getPublicFeedPage(params: PublicFeedParams = {}): Promise<
   if (guestFeedCache.size >= GUEST_FEED_CACHE_MAX) guestFeedCache.clear();
   guestFeedCache.set(cacheKey, { at: nowMs, data });
   return found(data, null, true);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Каталоги для SEO-снимка /search (Ф4) — те же правила видимости, что у JSON
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const SEO_CATALOG_LIMIT = 50;
+
+/** Артисты каталога (/search?tab=artists): только VERIFIED — как references/artists. */
+export async function getPublicArtistCatalog(take: number = SEO_CATALOG_LIMIT): Promise<PublicResult<any[]>> {
+  const rows: any[] = await prisma.artist.findMany({
+    where: { status: 'VERIFIED' },
+    orderBy: [{ listeners: 'desc' }, { createdAt: 'desc' }],
+    take: Math.min(Math.max(1, take), 100),
+    select: {
+      id: true, slug: true, name: true, type: true, city: true, avatar: true, status: true, updatedAt: true,
+      genres: { select: { genre: ID_NAME } },
+    },
+  });
+  const data = (rows ?? [])
+    .filter((a) => a && a.status === 'VERIFIED')
+    .map((a) => ({
+      id: a.id,
+      slug: a.slug ?? null,
+      name: a.name,
+      type: a.type ?? null,
+      city: a.city ?? null,
+      avatar: a.avatar ?? null,
+      genres: (a.genres ?? []).map((g: any) => idName(g.genre)).filter(Boolean),
+    }));
+  return found(data, maxDate(...(rows ?? []).map((a) => a.updatedAt)), true);
+}
+
+/** Люди каталога (/search?tab=people): согласие, без запрета индексации, с аватаром. */
+export async function getPublicPeopleCatalog(take: number = SEO_CATALOG_LIMIT): Promise<PublicResult<any[]>> {
+  const rows: any[] = await prisma.user.findMany({
+    where: { AND: [publicPersonWhere(), { searchIndexingOptOut: false }, { avatar: { not: null } }] },
+    orderBy: { createdAt: 'desc' },
+    take: Math.min(Math.max(1, take), 100),
+    select: {
+      ...PERSON_SELECT,
+      city: true,
+      searchIndexingOptOut: true,
+      userProfessions: { select: { profession: { select: { name: true } } }, take: 3 },
+    },
+  });
+  const visible = (rows ?? []).filter((u) => isPublicPerson(u) && !u.searchIndexingOptOut);
+  const data = visible.map((u) => ({
+    ...toPublicPerson(u),
+    city: u.city ?? null,
+    professions: (u.userProfessions ?? []).map((up: any) => up?.profession?.name).filter(Boolean),
+  }));
+  return found(data, null, true);
+}
+
+/** Услуги каталога (/search): active, исполнитель с согласием и без запрета индексации. */
+export async function getPublicServiceCatalog(take: number = SEO_CATALOG_LIMIT): Promise<PublicResult<any[]>> {
+  const rows: any[] = await prisma.userService.findMany({
+    where: { status: 'active', user: { AND: [publicPersonWhere(), { searchIndexingOptOut: false }] } },
+    orderBy: { updatedAt: 'desc' },
+    take: Math.min(Math.max(1, take), 100),
+    select: {
+      id: true, name: true, priceFrom: true, priceTo: true, status: true, updatedAt: true,
+      profession: { select: { name: true } },
+      service: { select: { name: true, section: { select: { name: true } } } },
+      user: { select: { ...PERSON_SELECT, city: true, searchIndexingOptOut: true } },
+    },
+  });
+  const visible = (rows ?? []).filter((r) => r && r.status === 'active' && isPublicPerson(r.user) && !r.user.searchIndexingOptOut);
+  const data = visible.map((r) => ({
+    id: r.id,
+    name: maskContacts(r.name ?? null),
+    priceFrom: r.priceFrom ?? null,
+    priceTo: r.priceTo ?? null,
+    profession: r.profession?.name ?? null,
+    service: r.service?.name ?? null,
+    section: r.service?.section?.name ?? null,
+    user: { ...toPublicPerson(r.user), city: r.user.city ?? null },
+  }));
+  return found(data, maxDate(...visible.map((r) => r.updatedAt)), true);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Sitemap (Ф4, план раздел E) — только адреса и даты, только индексируемое
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SitemapEntry {
+  /** Путь от корня сайта: /artist/<slug>, /releases/<id>… */
+  path: string;
+  /** null — без <lastmod> (профили, статика). */
+  lastmod: Date | null;
+}
+
+/** Потолок строк на тип (защита памяти); нарезка по 45 000 — в seo/sitemap.ts. */
+export const SITEMAP_MAX_ROWS = 450_000;
+/** Профиль попадает в sitemap не раньше, чем через 14 дней после согласия (план, раздел F). */
+export const PROFILE_SITEMAP_DELAY_DAYS = 14;
+
+const SITEMAP_ARTIST_STATUSES = ['VERIFIED', 'APPROVED'] as const;
+
+async function pagedFindMany<T extends { id: string }>(
+  fetchPage: (cursor: string | null, take: number) => Promise<T[]>,
+  pageSize = 5_000,
+): Promise<T[]> {
+  const out: T[] = [];
+  let cursor: string | null = null;
+  while (out.length < SITEMAP_MAX_ROWS) {
+    const page: T[] = (await fetchPage(cursor, pageSize)) ?? [];
+    out.push(...page);
+    if (page.length < pageSize) break;
+    cursor = page[page.length - 1].id;
+  }
+  return out.slice(0, SITEMAP_MAX_ROWS);
+}
+
+function cursorArgs(cursor: string | null): { cursor?: { id: string }; skip?: number } {
+  return cursor ? { cursor: { id: cursor }, skip: 1 } : {};
+}
+
+/** Артисты VERIFIED/APPROVED «с контентом» (релиз, клип или описание); адрес — по слагу. */
+export async function listSitemapArtists(): Promise<SitemapEntry[]> {
+  const rows = await pagedFindMany<any>((cursor, take) => prisma.artist.findMany({
+    where: {
+      status: { in: [...SITEMAP_ARTIST_STATUSES] },
+      OR: [
+        { releases: { some: {} } },
+        { clips: { some: {} } },
+        { AND: [{ description: { not: null } }, { NOT: { description: '' } }] },
+      ],
+    },
+    select: {
+      id: true, slug: true, status: true, updatedAt: true,
+      releases: { select: { updatedAt: true }, orderBy: { updatedAt: 'desc' }, take: 1 },
+      clips: { select: { updatedAt: true }, orderBy: { updatedAt: 'desc' }, take: 1 },
+    },
+    orderBy: { id: 'asc' },
+    take,
+    ...cursorArgs(cursor),
+  }));
+  return rows
+    .filter((a) => (SITEMAP_ARTIST_STATUSES as readonly string[]).includes(a.status))
+    .map((a) => ({
+      path: `/artist/${encodeURIComponent(a.slug || a.id)}`,
+      lastmod: maxDate(a.updatedAt, a.releases?.[0]?.updatedAt, a.clips?.[0]?.updatedAt),
+    }));
+}
+
+/** Релизы индексируемых артистов (VERIFIED/APPROVED). */
+export async function listSitemapReleases(): Promise<SitemapEntry[]> {
+  const rows = await pagedFindMany<any>((cursor, take) => prisma.release.findMany({
+    where: { artist: { status: { in: [...SITEMAP_ARTIST_STATUSES] } } },
+    select: { id: true, updatedAt: true },
+    orderBy: { id: 'asc' },
+    take,
+    ...cursorArgs(cursor),
+  }));
+  return rows.map((r) => ({ path: `/releases/${encodeURIComponent(r.id)}`, lastmod: r.updatedAt ?? null }));
+}
+
+/** Клипы индексируемых артистов (VERIFIED/APPROVED). */
+export async function listSitemapClips(): Promise<SitemapEntry[]> {
+  const rows = await pagedFindMany<any>((cursor, take) => prisma.clip.findMany({
+    where: { artist: { status: { in: [...SITEMAP_ARTIST_STATUSES] } } },
+    select: { id: true, updatedAt: true },
+    orderBy: { id: 'asc' },
+    take,
+    ...cursorArgs(cursor),
+  }));
+  return rows.map((c) => ({ path: `/clips/${encodeURIComponent(c.id)}`, lastmod: c.updatedAt ?? null }));
+}
+
+/**
+ * Профили: согласие (не раньше 14 дней назад), не заблокирован, без запрета
+ * индексации, порог качества (meetsProfileQuality). Без lastmod: updatedAt
+ * пользователя меняется от служебных полей (lastSeenAt) и ничего не говорит о странице.
+ */
+export async function listSitemapProfiles(now: Date = new Date()): Promise<SitemapEntry[]> {
+  const consentBefore = new Date(now.getTime() - PROFILE_SITEMAP_DELAY_DAYS * 86_400_000);
+  const rows = await pagedFindMany<any>((cursor, take) => prisma.user.findMany({
+    where: {
+      AND: [
+        publicPersonWhere(now),
+        { publicConsentAt: { lte: consentBefore } },
+        { searchIndexingOptOut: false },
+        { avatar: { not: null } },
+      ],
+    },
+    select: {
+      id: true, avatar: true, bio: true, publicConsentAt: true, isBlocked: true, blockedUntil: true,
+      searchIndexingOptOut: true,
+      _count: {
+        select: {
+          userServices: { where: { status: 'active' } },
+          userArtists: { where: { inviteStatus: 'ACCEPTED', artist: { status: { not: 'REJECTED' } } } },
+        },
+      },
+    },
+    orderBy: { id: 'asc' },
+    take,
+    ...cursorArgs(cursor),
+  }));
+  return rows
+    .filter((u) => isPublicPerson(u, now) && !u.searchIndexingOptOut)
+    .filter((u) => !u.publicConsentAt || new Date(u.publicConsentAt) <= consentBefore)
+    .filter((u) => meetsProfileQuality({
+      avatar: u.avatar,
+      bio: u.bio,
+      servicesCount: u._count?.userServices ?? 0,
+      artistsCount: u._count?.userArtists ?? 0,
+    }))
+    .map((u) => ({ path: `/profile/${encodeURIComponent(u.id)}`, lastmod: null }));
+}
+
+/** Активные услуги исполнителей с согласием и без запрета индексации. */
+export async function listSitemapServices(): Promise<SitemapEntry[]> {
+  const rows = await pagedFindMany<any>((cursor, take) => prisma.userService.findMany({
+    where: { status: 'active', user: { AND: [publicPersonWhere(), { searchIndexingOptOut: false }] } },
+    select: { id: true, updatedAt: true },
+    orderBy: { id: 'asc' },
+    take,
+    ...cursorArgs(cursor),
+  }));
+  return rows.map((s) => ({ path: `/services/${encodeURIComponent(s.id)}`, lastmod: s.updatedAt ?? null }));
+}
+
+/** Активные вакансии с постом в ленте у индексируемых артистов. */
+export async function listSitemapVacancies(): Promise<SitemapEntry[]> {
+  const rows = await pagedFindMany<any>((cursor, take) => prisma.vacancy.findMany({
+    where: {
+      status: 'active',
+      posts: { some: { type: 'vacancy' } },
+      artist: { status: { in: [...SITEMAP_ARTIST_STATUSES] } },
+    },
+    select: { id: true, updatedAt: true },
+    orderBy: { id: 'asc' },
+    take,
+    ...cursorArgs(cursor),
+  }));
+  return rows.map((v) => ({ path: `/vacancies/${encodeURIComponent(v.id)}`, lastmod: v.updatedAt ?? null }));
+}
+
+/** Активные заказы с постом в ленте, автор не заблокирован. */
+export async function listSitemapOrders(): Promise<SitemapEntry[]> {
+  const rows = await pagedFindMany<any>((cursor, take) => prisma.order.findMany({
+    where: {
+      status: 'active',
+      posts: { some: { type: 'order' } },
+      author: notBlockedWhere(),
+    },
+    select: { id: true, updatedAt: true },
+    orderBy: { id: 'asc' },
+    take,
+    ...cursorArgs(cursor),
+  }));
+  return rows.map((o) => ({ path: `/orders/${encodeURIComponent(o.id)}`, lastmod: o.updatedAt ?? null }));
 }

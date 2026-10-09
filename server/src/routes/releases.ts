@@ -240,7 +240,10 @@ router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthReque
     }
     const release = await prisma.release.findUnique({
       where: { id: req.params.id },
-      include: { participants: { include: participantInclude } },
+      include: {
+        participants: { include: participantInclude },
+        artist: { select: { id: true, slug: true, name: true, avatar: true } },
+      },
     });
     if (!release) return res.status(404).json({ error: 'Релиз не найден' });
 
@@ -257,6 +260,9 @@ router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthReque
     return res.json({
       id: release.id,
       artistId: release.artistId,
+      artist: release.artist
+        ? { id: release.artist.id, slug: release.artist.slug ?? null, name: release.artist.name, avatar: release.artist.avatar ?? null }
+        : null,
       title: release.title,
       coverUrl: release.coverUrl,
       releaseDate: release.releaseDate,

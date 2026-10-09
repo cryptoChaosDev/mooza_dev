@@ -36,6 +36,7 @@ import { loadFilters, DEFAULT_FILTERS, FlowFilters, FLOW_FILTERS_KEY } from './F
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useScrollLock } from '../lib/scrollLock';
 import { htmlToText } from '../lib/htmlText';
+import { artistHref } from '../lib/artistUtils';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -555,7 +556,7 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
       <div className="flex items-start justify-between gap-2 mb-3">
         <div className="flex items-center gap-3 min-w-0">
           {(vacancyArtist || authorHref) ? (
-            <Link to={vacancyArtist ? `/artist/${vacancyArtist.id}` : authorHref!} className="flex-shrink-0">
+            <Link to={vacancyArtist ? artistHref(vacancyArtist) : authorHref!} className="flex-shrink-0">
               <Avatar user={vacancyArtist ? { firstName: vacancyArtist.name, lastName: '', avatar: vacancyArtist.avatar } : post.author} size={10} />
             </Link>
           ) : (
@@ -564,7 +565,7 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
           <div className="min-w-0">
             <div className="flex items-center gap-1.5 flex-wrap">
               {(vacancyArtist || authorHref) ? (
-                <Link to={vacancyArtist ? `/artist/${vacancyArtist.id}` : authorHref!} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate">
+                <Link to={vacancyArtist ? artistHref(vacancyArtist) : authorHref!} className="text-sm font-semibold text-white hover:text-primary-400 transition-colors truncate">
                   {vacancyArtist ? vacancyArtist.name : authorName}
                 </Link>
               ) : (

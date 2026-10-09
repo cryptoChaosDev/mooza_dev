@@ -6,7 +6,7 @@ import { artistAPI, referenceAPI, roleAPI, releaseAPI, clipAPI } from '../lib/ap
 import MediaImportList from '../components/MediaImportList';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
-import { copyText } from '../lib/artistUtils';
+import { copyText, artistHref } from '../lib/artistUtils';
 import { avatarUrl } from '../lib/avatar';
 import SelectSheet from '../components/SelectSheet';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
@@ -545,7 +545,7 @@ export default function ArtistCreatePage() {
                 разместите код в профиле артиста в соцсетях и отправьте заявку на верификацию.
               </p>
               <button
-                onClick={() => navigate(`/artist/${created.id}`, { replace: true })}
+                onClick={() => navigate(artistHref(created), { replace: true })}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-sm font-semibold transition-colors"
               >
                 <ShieldCheck size={16} /> Перейти на страницу артиста

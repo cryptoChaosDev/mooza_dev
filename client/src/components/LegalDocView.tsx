@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft, Loader2 } from 'lucide-react';
+import { useSeo, seoTitle, ROBOTS_INDEX } from '../lib/seo';
 
 // Full-page view of a legal document, rendered from the single source of truth
 // in /public/legal/*.html (same files the footer «Документы» popup uses).
@@ -19,7 +20,9 @@ export default function LegalDocView({ slug, title }: { slug: string; title: str
     return () => { alive = false; };
   }, [slug]);
 
-  useEffect(() => { document.title = `${title} — Moooza`; }, [title]);
+  // /privacy и /terms индексируются в обоих режимах (как сейчас на PROD) — явный
+  // index вместо сброса useSeo «noindex, follow» от предыдущей страницы при SPA-переходе.
+  useSeo({ title: seoTitle(title), robots: ROBOTS_INDEX });
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-300">

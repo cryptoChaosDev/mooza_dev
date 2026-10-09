@@ -20,5 +20,8 @@ export function useSiteSettings() {
     registrationEnabled: s?.registrationEnabled !== 'false',
     loginEnabled: s?.loginEnabled !== 'false',
     referralRegistrationEnabled: s?.referralRegistrationEnabled === 'true',
+    // Открытый режим индексации (сервер: env SEO_INDEXABLE + гостевой режим).
+    // false — легаси-режим «как сейчас на PROD»: /login и /register индексируются.
+    seoIndexable: s?.seoIndexable === 'true',
   };
 }

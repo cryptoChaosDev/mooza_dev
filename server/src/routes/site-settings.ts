@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../index';
+import { seoIndexable } from '../seo/config';
 
 const router = Router();
 
@@ -56,9 +57,14 @@ export async function isGuestBrowsingEnabled(): Promise<boolean> {
 }
 
 // GET /api/site-settings — public
+// seoIndexable — вычисляемый (не из БД, менять через PUT нельзя): открытый режим
+// индексации = env SEO_INDEXABLE и гостевой режим. Клиент по нему выбирает meta
+// robots для /login и /register (в легаси-режиме — как сейчас, index).
 router.get('/', async (_req, res) => {
   try {
-    res.json(await getSettings());
+    const settings = await getSettings();
+    const seoIndexableNow = seoIndexable() && settings.guestBrowsingEnabled === 'true';
+    res.json({ ...settings, seoIndexable: seoIndexableNow ? 'true' : 'false' });
   } catch (error) {
     res.status(500).json({ error: 'Failed to load settings' });
   }

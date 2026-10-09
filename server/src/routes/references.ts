@@ -998,6 +998,7 @@ router.get('/artists', optionalAuthenticate, guestReadLimiter, async (req: AuthR
       take: isGuest ? GUEST_ARTISTS_TAKE : 200,
       select: {
         id: true,
+        slug: true,
         name: true,
         type: true,
         city: true,
@@ -1013,6 +1014,7 @@ router.get('/artists', optionalAuthenticate, guestReadLimiter, async (req: AuthR
       setGuestCacheHeaders(res);
       return res.json(artists.map((a: any) => ({
         id: a.id,
+        slug: a.slug ?? null,
         name: a.name,
         type: a.type ?? null,
         city: a.city ?? null,

@@ -53,10 +53,15 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Moooza" />
 
-    <!-- SEO -->
+    <!--
+      SEO: блок между маркерами seo:head заменяет SEO-снимок (server/src/seo,
+      план Ф4) — title/description/canonical/robots/OG/Twitter/JSON-LD страницы.
+      Маркеры НЕ удалять и не переименовывать: их наличие проверяет client/Dockerfile.
+      canonical здесь нет: его ставит снимок или useSeo (lib/seo.ts) для текущего URL.
+    -->
+    <!--seo:head-->
     <meta name="description" content="Moooza — социальная сеть для музыкантов" />
     <title>Moooza — Музыкальная социальная сеть</title>
-    <link rel="canonical" href="https://moooza.ru/" />
     <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
 
     <!-- Open Graph -->
@@ -76,8 +81,9 @@
     <meta name="twitter:title"       content="Moooza — Платформа для музыкантов" />
     <meta name="twitter:description" content="Находите коллег, заказчиков и исполнителей. Создавайте проекты и стройте карьеру в музыкальной индустрии." />
     <meta name="twitter:image"       content="https://moooza.ru/pwa-512x512.png" />
+    <!--/seo:head-->
 
-    <!-- Structured data (JSON-LD) -->
+    <!-- Structured data (JSON-LD): организация и сайт — общие для всех страниц -->
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
@@ -99,15 +105,7 @@
           "name": "Moooza",
           "url": "https://moooza.ru/",
           "inLanguage": "ru-RU",
-          "publisher": { "@id": "https://moooza.ru/#organization" },
-          "potentialAction": {
-            "@type": "SearchAction",
-            "target": {
-              "@type": "EntryPoint",
-              "urlTemplate": "https://moooza.ru/search?q={search_term_string}"
-            },
-            "query-input": "required name=search_term_string"
-          }
+          "publisher": { "@id": "https://moooza.ru/#organization" }
         }
       ]
     }
@@ -116,7 +114,7 @@
   <body>
     <!-- Yandex.Metrika noscript fallback -->
     <noscript><div><img src="https://mc.yandex.ru/watch/109562743" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
-    <div id="root"></div>
+    <div id="root"><!--seo:body--></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

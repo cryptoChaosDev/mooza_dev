@@ -26,6 +26,7 @@ router.get('/my', authenticate, async (req: AuthRequest, res: Response) => {
       where: { userArtists: { some: { userId: meId, inviteStatus: 'ACCEPTED' } } },
       select: {
         id: true,
+        slug: true,
         name: true,
         type: true,
         city: true,
