@@ -179,6 +179,7 @@ function AppRoutes() {
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/"                 element={<FeedPage />} />
+            <Route path="/feed"             element={<FeedPage />} />
             <Route path="/profile"          element={<ProfilePage />} />
             <Route path="/settings/privacy" element={<PrivacySettingsPage />} />
             <Route path="/profile/:userId"  element={<UserProfilePage />} />

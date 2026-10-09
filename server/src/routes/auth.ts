@@ -11,6 +11,7 @@ import { tgEvent } from '../utils/telegram';
 import { applyReferralProGrants } from '../utils/pro';
 import { findSelfUser } from '../utils/selfUser';
 import { yoNorm } from '../utils/search';
+import { disconnectUserSockets } from '../socket';
 
 // ─── Telegram bot-based auth (deep link + polling) ───────────────────────────
 // Map: token → { telegramId, firstName, lastName, username, photoUrl, resolvedAt }
@@ -1411,6 +1412,8 @@ router.post('/reset-password', codeLimiter, authLimiter, async (req, res) => {
       },
     });
 
+    // Old JWTs are now rejected (passwordChangedAt) — drop live sockets too.
+    disconnectUserSockets(user.id, 'password_changed');
     // No email in the monitoring chat — event + id only.
     tgEvent.passwordReset(user.id);
     return res.json({ ok: true });
