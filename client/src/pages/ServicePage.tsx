@@ -10,6 +10,7 @@ import { userAPI, messageAPI, orderAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { useAuthStore } from '../stores/authStore';
 import ConfirmDialog from '../components/ConfirmDialog';
+import PublicConsentGate from '../components/PublicConsentGate';
 import AvatarComponent from '../components/Avatar';
 import ChatPicker from '../components/ChatPicker';
 import DealCreateModal from '../components/DealCreateModal';
@@ -48,6 +49,7 @@ export default function ServicePage() {
   const [customText, setCustomText] = useState('');
   const [showDeal, setShowDeal] = useState(false);
   const [postDialogOpen, setPostDialogOpen] = useState(false);
+  const [needConsent, setNeedConsent] = useState(false);
 
   useScrollLock(showTemplates || postDialogOpen);
 
@@ -65,20 +67,39 @@ export default function ServicePage() {
     enabled: !!us?.serviceId && !!me?.id && us?.user?.id === me.id,
   });
 
+  // Сервер принимает только active | draft | archived (pending_review — устаревший
+  // статус модерации, которой больше нет: он давал 400).
   const statusMut = useMutation({
-    mutationFn: (status: 'active' | 'draft' | 'archived' | 'pending_review') => userAPI.setServiceStatus(serviceId!, status),
+    mutationFn: (status: 'active' | 'draft' | 'archived') => userAPI.setServiceStatus(serviceId!, status),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['user-service', serviceId] });
       queryClient.invalidateQueries({ queryKey: ['profile'] });
       queryClient.invalidateQueries({ queryKey: ['user-services'] });
+      queryClient.invalidateQueries({ queryKey: ['service-card-search'] });
     },
-    onError: (e: any) => toast.error(getApiError(e, 'Не удалось изменить статус услуги')),
+    onError: (e: any) => {
+      // Публикация без согласия 152-ФЗ — сервер отвечает 403, показываем гейт.
+      if (e?.response?.data?.code === 'PUBLIC_CONSENT_REQUIRED') setNeedConsent(true);
+      else toast.error(getApiError(e, 'Не удалось изменить статус услуги'));
+    },
   });
+
+  const acceptConsent = async () => {
+    try { await userAPI.givePublicConsent(); } catch (e: any) {
+      toast.error(getApiError(e, 'Не удалось сохранить согласие'));
+      return;
+    }
+    setNeedConsent(false);
+    queryClient.invalidateQueries({ queryKey: ['profile'] });
+    statusMut.mutate('active');
+  };
 
   const deleteMut = useMutation({
     mutationFn: () => userAPI.deleteService(serviceId!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: ['user-services'] });
+      queryClient.invalidateQueries({ queryKey: ['service-card-search'] });
       navigate(-1);
     },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить услугу')),
@@ -483,6 +504,10 @@ export default function ServicePage() {
           </div>
         </div>,
         document.body
+      )}
+
+      {needConsent && (
+        <PublicConsentGate onAccept={acceptConsent} onClose={() => setNeedConsent(false)} />
       )}
 
       <ConfirmDialog

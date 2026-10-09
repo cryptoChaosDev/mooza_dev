@@ -14,9 +14,12 @@ const labelCls = 'block text-xs font-semibold mb-1 text-slate-400';
 const onlyDigits = (v: string) => v.replace(/[^\d]/g, '');
 const isLevelFilter = (f: { name: string }) => f.name.trim().toLowerCase() === 'уровень';
 
-// Серверная услуга → payload-элемент PUT /users/me/services (для «остальных» услуг списка)
+// Серверная услуга → payload-элемент PUT /users/me/services (для «остальных» услуг списка).
+// id обязателен: по нему сервер обновляет услугу на месте, не пересоздавая её
+// (иначе меняется id — отваливаются посты-услуги, сделки и ссылки /services/:id).
 function serverToPayload(us: any) {
   return {
+    id: us.id,
     professionId: us.professionId,
     serviceId: us.serviceId,
     name: us.name || undefined,
@@ -182,6 +185,7 @@ export default function ServiceFormPage() {
       // форма их не редактирует, но терять их нельзя.
       const orig = (me.userServices ?? []).find((us: any) => us.serviceId === chosen.serviceId);
       const entryPayload = {
+        id: orig?.id,
         professionId: chosen.professionId,
         serviceId: chosen.serviceId,
         name: name || undefined,
@@ -206,6 +210,10 @@ export default function ServiceFormPage() {
       const { data } = await userAPI.updateServices([...others, entryPayload] as any);
       qc.invalidateQueries({ queryKey: ['profile'] });
       qc.invalidateQueries({ queryKey: ['service-form-me'] });
+      // Список услуг, карточка услуги и каталог тоже показывают эти данные.
+      qc.invalidateQueries({ queryKey: ['user-services'] });
+      qc.invalidateQueries({ queryKey: ['user-service'] });
+      qc.invalidateQueries({ queryKey: ['service-card-search'] });
       if (mode === 'draft') {
         toast.success('Сохранено в черновики');
         navigate('/profile');
@@ -214,7 +222,13 @@ export default function ServiceFormPage() {
       const saved = Array.isArray(data) ? data.find((s: any) => s.serviceId === chosen.serviceId || s.service?.id === chosen.serviceId) : null;
       setPostDialog({ userServiceId: saved?.id ?? null });
     } catch (e: any) {
-      toast.error(getApiError(e, 'Не удалось сохранить услугу'));
+      // Сервер не публикует услугу без согласия 152-ФЗ — показываем гейт.
+      if (e?.response?.data?.code === 'PUBLIC_CONSENT_REQUIRED') {
+        setLocallyConsented(false);
+        setNeedConsent(true);
+      } else {
+        toast.error(getApiError(e, 'Не удалось сохранить услугу'));
+      }
     } finally {
       setSaving(false);
     }
@@ -223,9 +237,15 @@ export default function ServiceFormPage() {
   const hasConsent = !!me?.publicConsentAt || locallyConsented;
   const publish = () => { if (hasConsent) doSave('publish'); else setNeedConsent(true); };
   const acceptConsent = async () => {
-    try { await userAPI.givePublicConsent(); } catch { /* best-effort */ }
+    // Согласие проверяется сервером при публикации — без успешной записи
+    // публиковать бессмысленно (получим 403).
+    try { await userAPI.givePublicConsent(); } catch (e: any) {
+      toast.error(getApiError(e, 'Не удалось сохранить согласие'));
+      return;
+    }
     setLocallyConsented(true);
     setNeedConsent(false);
+    qc.invalidateQueries({ queryKey: ['profile'] });
     doSave('publish');
   };
 
