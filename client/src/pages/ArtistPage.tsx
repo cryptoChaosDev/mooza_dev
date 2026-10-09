@@ -473,7 +473,8 @@ export default function ArtistPage() {
      {/* Десктоп: страница по центру, как остальные (не растягивается на всю ширину). */}
      <div className="lg:max-w-3xl lg:mx-auto">
       {/* ── Header banner ── */}
-      <div className="relative w-full h-32 bg-gradient-to-br from-slate-800 to-slate-900 overflow-hidden">
+      {/* Обложка 3:1 — как при обрезке (ImageCropModal aspect={3}); на десктопе — по колонке */}
+      <div className="relative aspect-[3/1] sm:mx-4 sm:mt-3 sm:rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 overflow-hidden">
         {bannerSrc && (
           <img src={bannerSrc} alt="banner" className="w-full h-full object-cover" />
         )}
