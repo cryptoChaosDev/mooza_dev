@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Briefcase, DollarSign, Calendar, MessageCircle,
   Archive, Loader2, Send, Link2, Users, Sparkles, HandshakeIcon, Share2,
-  Pencil,
+  Pencil, Check,
 } from 'lucide-react';
 import { orderAPI, messageAPI } from '../lib/api';
 import { avatarUrl } from '../lib/avatar';
@@ -15,6 +15,7 @@ import AvatarComponent from '../components/Avatar';
 import OrderStatusChip from '../components/OrderStatusChip';
 import ChatPicker from '../components/ChatPicker';
 import ConfirmDialog from '../components/ConfirmDialog';
+import { formatDateMsk, maskDateInput, maskedToMskEndOfDayIso, isMaskedDatePast, isoToMaskedMsk } from '../lib/mskDate';
 
 // Budget «от X ₽ до Y ₽» / «По договорённости»
 function formatBudget(from?: number | null, to?: number | null): string {
@@ -25,8 +26,9 @@ function formatBudget(from?: number | null, to?: number | null): string {
   ].filter(Boolean).join(' ');
 }
 
+// Срок — календарный день по МСК (хранится как конец дня 23:59:59 МСК).
 function formatDeadline(deadline?: string | null): string {
-  return deadline ? new Date(deadline).toLocaleDateString('ru-RU') : 'Срок не ограничен';
+  return deadline ? formatDateMsk(deadline) : 'Срок не ограничен';
 }
 
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp)$/i;
@@ -40,6 +42,10 @@ export default function OrderDetailPage() {
   const [shareOpen, setShareOpen] = useState(false);
   const [respondPrice, setRespondPrice] = useState('');
   const [respondComment, setRespondComment] = useState('');
+  const [confirmDone, setConfirmDone] = useState(false);
+  const [offeredIds, setOfferedIds] = useState<Set<string>>(new Set());
+  const [deadlineEditOpen, setDeadlineEditOpen] = useState(false);
+  const [deadlineInput, setDeadlineInput] = useState('');
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['order', orderId],
@@ -48,6 +54,11 @@ export default function OrderDetailPage() {
   });
 
   const isOwner = !!order?.isOwner;
+
+  // «Предложено» переживает перезагрузку: сервер отдаёт, кому автор уже предлагал заказ.
+  useEffect(() => {
+    if (order?.offeredExecutorIds) setOfferedIds(new Set(order.offeredExecutorIds));
+  }, [order?.offeredExecutorIds]);
 
   // «Подходящие исполнители» (author only) — page of 5, «Показать больше» loads next.
   const {
@@ -87,8 +98,24 @@ export default function OrderDetailPage() {
 
   const offerMut = useMutation({
     mutationFn: (executorId: string) => orderAPI.offer(orderId!, executorId),
-    onSuccess: () => toast.success('Заказ предложен исполнителю'),
+    onSuccess: (res: any, executorId) => {
+      setOfferedIds(prev => { const n = new Set(prev); n.add(executorId); return n; });
+      toast.success(res?.data?.alreadyOffered ? 'Заказ уже был предложен этому исполнителю' : 'Заказ предложен исполнителю');
+    },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось предложить заказ')),
+  });
+
+  // Изменение срока доступно и при откликах (сервер разрешает менять только срок):
+  // иначе заказ, ушедший в архив по сроку, нельзя было опубликовать снова.
+  const deadlineMut = useMutation({
+    mutationFn: (deadline: string | null) => orderAPI.update(orderId!, { deadline }),
+    onSuccess: () => {
+      setDeadlineEditOpen(false);
+      qc.invalidateQueries({ queryKey: ['order', orderId] });
+      qc.invalidateQueries({ queryKey: ['orders', 'mine'] });
+      toast.success('Срок обновлён');
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось изменить срок')),
   });
 
   const respondMut = useMutation({
@@ -100,9 +127,15 @@ export default function OrderDetailPage() {
       setShowRespond(false);
       setRespondPrice('');
       setRespondComment('');
+      // Перечитать заказ — сервер отдаёт мой отклик (myResponse), кнопка
+      // «Откликнуться» не появится снова.
+      qc.invalidateQueries({ queryKey: ['order', orderId] });
       toast.success('Отклик отправлен');
     },
-    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить отклик')),
+    onError: (e: any) => {
+      qc.invalidateQueries({ queryKey: ['order', orderId] });
+      toast.error(getApiError(e, 'Не удалось отправить отклик'));
+    },
   });
 
   const dealMut = useMutation({
@@ -161,6 +194,22 @@ export default function OrderDetailPage() {
 
   // Editing is disabled once the order has responses (server-enforced too).
   const hasResponses = responses.length > 0;
+  const deadlineExpired = !!order.deadline && new Date(order.deadline).getTime() < Date.now();
+  const myResponse = order.myResponse ?? null;
+  // «Выполнен» — когда исполнитель выбран: и в активном, и в архивном заказе.
+  const canMarkDone = !!order.executorId && (order.status === 'active' || order.status === 'archived');
+  const doneBtn = canMarkDone ? (
+    <button
+      onClick={() => setConfirmDone(true)}
+      disabled={statusMut.isPending}
+      className="flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl transition-colors disabled:opacity-50"
+    >
+      {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : '✓'}
+      Выполнен
+    </button>
+  ) : null;
+  const deadlineInvalid = deadlineInput.trim() !== '' && maskedToMskEndOfDayIso(deadlineInput) === null;
+  const deadlinePast = !deadlineInvalid && deadlineInput.length === 10 && isMaskedDatePast(deadlineInput);
   const editBtn = (
     <button
       onClick={() => hasResponses
@@ -312,19 +361,58 @@ export default function OrderDetailPage() {
         {isOwner ? (
           <>
             {/* Status actions */}
+            {/* Срок истёк / изменение срока при откликах */}
+            {order.status !== 'done' && order.status !== 'draft' && (deadlineExpired || hasResponses) && (
+              <div className={`rounded-2xl border p-3 space-y-2 ${deadlineExpired ? 'border-amber-500/30 bg-amber-500/5' : 'border-slate-800/60 bg-slate-900/60'}`}>
+                <div className="flex items-center gap-2">
+                  <Calendar size={14} className={deadlineExpired ? 'text-amber-400' : 'text-slate-500'} />
+                  <p className={`text-xs flex-1 ${deadlineExpired ? 'text-amber-300' : 'text-slate-400'}`}>
+                    {deadlineExpired
+                      ? (order.executorId ? 'Срок выполнения истёк.' : 'Срок выполнения истёк — чтобы опубликовать заказ снова, укажите новый срок.')
+                      : 'На заказ есть отклики — можно изменить только срок.'}
+                  </p>
+                  {!deadlineEditOpen && (
+                    <button
+                      onClick={() => { setDeadlineInput(isoToMaskedMsk(order.deadline)); setDeadlineEditOpen(true); }}
+                      className="text-xs font-semibold text-primary-400 hover:text-primary-300 flex-shrink-0"
+                    >
+                      Изменить срок
+                    </button>
+                  )}
+                </div>
+                {deadlineEditOpen && (
+                  <div className="space-y-2">
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      placeholder="ДД.ММ.ГГГГ"
+                      maxLength={10}
+                      value={deadlineInput}
+                      onChange={e => setDeadlineInput(maskDateInput(e.target.value))}
+                      className={`w-full min-w-0 px-3 py-2 bg-slate-800 border rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-1 focus:ring-primary-500 ${deadlineInvalid || deadlinePast ? 'border-red-500/60' : 'border-slate-700'}`}
+                    />
+                    {deadlineInvalid && <p className="text-[11px] text-red-400">Введите существующую дату в формате ДД.ММ.ГГГГ</p>}
+                    {deadlinePast && <p className="text-[11px] text-red-400">Срок уже прошёл — укажите будущую дату</p>}
+                    <div className="flex gap-2">
+                      <button onClick={() => setDeadlineEditOpen(false)} className="flex-1 py-2 text-xs text-slate-400 border border-slate-700 rounded-xl hover:text-white transition-colors">Отмена</button>
+                      <button
+                        onClick={() => deadlineMut.mutate(deadlineInput.trim() ? maskedToMskEndOfDayIso(deadlineInput) : null)}
+                        disabled={deadlineMut.isPending || deadlineInvalid || deadlinePast || (deadlineInput.trim() !== '' && deadlineInput.length < 10)}
+                        className="flex-1 py-2 text-xs font-semibold bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white rounded-xl flex items-center justify-center gap-1.5 transition-colors"
+                      >
+                        {deadlineMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Check size={13} />}
+                        {deadlineInput.trim() ? 'Сохранить срок' : 'Без срока'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {order.status === 'active' && (
               <div className="flex gap-2">
                 {editBtn}
-                {order.executorId && (
-                  <button
-                    onClick={() => statusMut.mutate('done')}
-                    disabled={statusMut.isPending}
-                    className="flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl transition-colors disabled:opacity-50"
-                  >
-                    {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : '✓'}
-                    Выполнен
-                  </button>
-                )}
+                {doneBtn}
                 <button
                   onClick={() => statusMut.mutate('archived')}
                   disabled={statusMut.isPending}
@@ -346,7 +434,9 @@ export default function OrderDetailPage() {
                   Редактировать
                 </button>
                 <button
-                  onClick={() => statusMut.mutate('active')}
+                  onClick={() => deadlineExpired
+                    ? toast.error('Срок выполнения истёк — измените срок в редактировании заказа')
+                    : statusMut.mutate('active')}
                   disabled={statusMut.isPending}
                   className="flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-2xl transition-colors disabled:opacity-50"
                 >
@@ -359,13 +449,16 @@ export default function OrderDetailPage() {
             {order.status === 'archived' && (
               <div className="flex gap-2">
                 <button
-                  onClick={() => statusMut.mutate('active')}
+                  onClick={() => deadlineExpired
+                    ? toast.error('Срок выполнения истёк — сначала укажите новый срок')
+                    : statusMut.mutate('active')}
                   disabled={statusMut.isPending}
                   className="flex-1 py-3 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 text-white rounded-2xl transition-colors disabled:opacity-50"
                 >
                   {statusMut.isPending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
                   Опубликовать
                 </button>
+                {doneBtn}
                 {editBtn}
               </div>
             )}
@@ -417,13 +510,19 @@ export default function OrderDetailPage() {
                             </p>
                           </div>
                         </button>
-                        <button
-                          onClick={() => offerMut.mutate(u.id)}
-                          disabled={offerMut.isPending}
-                          className="flex-shrink-0 px-3 py-1.5 text-xs font-medium bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors disabled:opacity-50"
-                        >
-                          Предложить заказ
-                        </button>
+                        {offeredIds.has(u.id) ? (
+                          <span className="flex-shrink-0 px-3 py-1.5 text-xs font-medium text-green-400 flex items-center gap-1">
+                            <Check size={13} /> Предложено
+                          </span>
+                        ) : order.status === 'active' && !order.executorId ? (
+                          <button
+                            onClick={() => offerMut.mutate(u.id)}
+                            disabled={offerMut.isPending}
+                            className="flex-shrink-0 px-3 py-1.5 text-xs font-medium bg-primary-600 hover:bg-primary-500 text-white rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            Предложить заказ
+                          </button>
+                        ) : null}
                       </div>
                     );
                   })}
@@ -484,7 +583,7 @@ export default function OrderDetailPage() {
                           >
                             <MessageCircle size={13} />Написать
                           </button>
-                          {!order.executorId && (
+                          {!order.executorId && order.status === 'active' && (
                             <button
                               onClick={() => setConfirmChoose({ responseId: r.id, name })}
                               disabled={chooseMut.isPending}
@@ -525,6 +624,28 @@ export default function OrderDetailPage() {
                   <p className="text-xs text-slate-400">Отклики на этот заказ закрыты.</p>
                 </div>
               </div>
+            ) : myResponse && !showRespond ? (
+              /* Я уже откликнулся — показываем мой отклик (с сервера, переживает перезагрузку) */
+              <div className="border border-slate-800/60 bg-slate-900/60 rounded-2xl p-4 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Check size={15} className="text-emerald-400 flex-shrink-0" />
+                  <p className="text-sm font-semibold text-white flex-1">Ваш отклик отправлен</p>
+                  <span className="text-xs text-teal-400 font-semibold flex-shrink-0">{Number(myResponse.price).toLocaleString('ru')} ₽</span>
+                </div>
+                {myResponse.comment && (
+                  <p className="text-sm text-slate-300 leading-relaxed whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{myResponse.comment}</p>
+                )}
+                {order.status === 'active' ? (
+                  <button
+                    onClick={() => { setRespondPrice(String(myResponse.price ?? '')); setRespondComment(myResponse.comment ?? ''); setShowRespond(true); }}
+                    className="text-xs font-semibold text-primary-400 hover:text-primary-300 transition-colors"
+                  >
+                    Изменить отклик
+                  </button>
+                ) : (
+                  <p className="text-xs text-slate-500">{order.status === 'done' ? 'Заказ выполнен' : 'Заказ в архиве'} — отклики закрыты.</p>
+                )}
+              </div>
             ) : order.status !== 'active' ? (
               /* Архив/выполнен/черновик — отклики закрыты (сервер тоже гейтит) */
               <div className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-slate-800/40 border border-slate-700/40">
@@ -538,7 +659,7 @@ export default function OrderDetailPage() {
               </div>
             ) : showRespond ? (
               <div className="space-y-3 border border-primary-500/20 bg-primary-500/5 rounded-2xl p-4">
-                <p className="text-sm font-semibold text-white">Откликнуться на заказ</p>
+                <p className="text-sm font-semibold text-white">{myResponse ? 'Изменить отклик' : 'Откликнуться на заказ'}</p>
                 <div>
                   <label className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1.5 block">Цена (₽)</label>
                   <input
@@ -563,11 +684,11 @@ export default function OrderDetailPage() {
                   <button onClick={() => setShowRespond(false)} className="flex-1 py-2 text-sm text-slate-400 border border-slate-700 rounded-xl hover:text-white transition-colors">Отмена</button>
                   <button
                     onClick={() => respondMut.mutate()}
-                    disabled={respondMut.isPending || !respondPrice || Number.isNaN(Number(respondPrice))}
+                    disabled={respondMut.isPending || !respondPrice || !Number.isInteger(Number(respondPrice)) || Number(respondPrice) < 0}
                     className="flex-1 py-2 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-semibold rounded-xl flex items-center justify-center gap-1.5 transition-colors"
                   >
                     {respondMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
-                    Отправить отклик
+                    {myResponse ? 'Сохранить' : 'Отправить отклик'}
                   </button>
                 </div>
               </div>
@@ -582,6 +703,14 @@ export default function OrderDetailPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmDone}
+        message="Отметить заказ выполненным? Он перейдёт во «Выполненные», отклики будут закрыты."
+        confirmLabel="Выполнен"
+        onConfirm={() => statusMut.mutate('done')}
+        onCancel={() => setConfirmDone(false)}
+      />
 
       <ConfirmDialog
         open={!!confirmChoose}

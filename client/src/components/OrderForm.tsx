@@ -9,6 +9,7 @@ import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { yoNorm } from '../lib/search';
 import { isAllowedLinkUrl, detectLinkSource } from '../lib/materialLinks';
+import { maskDateInput, maskedToMskEndOfDayIso, isMaskedDatePast, isoToMaskedMsk } from '../lib/mskDate';
 
 function formatBytes(n?: number): string {
   if (!n) return '';
@@ -148,24 +149,25 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
     setRefLinks(prev => prev.map((l, idx) => idx === i ? { ...l, ...patch } : l));
   const removeRefLink = (i: number) => setRefLinks(prev => prev.filter((_, idx) => idx !== i));
 
-  // ДД.ММ.ГГГГ (masked text input, like the profile birth date) → ISO midnight UTC.
+  // ДД.ММ.ГГГГ (masked text input, like the profile birth date) → ISO конца этого
+  // дня по МСК (23:59:59 МСК), а не полночь UTC — иначе «срок 15.10» истекал
+  // 15.10 в 03:00 МСК. Строгий разбор: 31.02 → невалидно (а не 3 марта).
   const parseDeadline = (): string | null => {
     if (!deadlineEnabled || !deadlineDate) return null;
-    const m = deadlineDate.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-    if (!m) return null;
-    const [, d, mo, y] = m;
-    const iso = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d)));
-    return isNaN(iso.getTime()) ? null : iso.toISOString();
+    return maskedToMskEndOfDayIso(deadlineDate);
   };
 
   const budgetFromNum = budgetFrom !== '' ? Number(budgetFrom) : undefined;
   const budgetToNum = budgetTo !== '' ? Number(budgetTo) : undefined;
   const budgetInvalid = budgetFromNum != null && budgetToNum != null && budgetFromNum > budgetToNum;
   const deadlineInvalid = deadlineEnabled && deadlineDate.trim() !== '' && parseDeadline() === null;
+  // Срок в прошлом: опубликовать нельзя (заказ сразу ушёл бы в архив); черновик — можно.
+  const deadlinePast = deadlineEnabled && !deadlineInvalid && isMaskedDatePast(deadlineDate);
 
   const titleOk = title.trim().length > 0 && title.length <= 50;
   const serviceOk = !!serviceId;
   const canSave = titleOk && serviceOk && !budgetInvalid && !deadlineInvalid;
+  const canPublish = canSave && !deadlinePast;
 
   // True when the form holds something worth keeping as a draft.
   const hasMeaningfulData = () =>
@@ -210,8 +212,7 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
     setBudgetTo(order.budgetTo != null ? String(order.budgetTo) : '');
     if (order.deadline) {
       setDeadlineEnabled(true);
-      const iso = String(order.deadline).slice(0, 10); // YYYY-MM-DD
-      setDeadlineDate(`${iso.slice(8, 10)}.${iso.slice(5, 7)}.${iso.slice(0, 4)}`); // → ДД.ММ.ГГГГ
+      setDeadlineDate(isoToMaskedMsk(order.deadline)); // день по МСК → ДД.ММ.ГГГГ
     }
     setDescription(order.description ?? '');
     setRefLinks((order.referenceLinks || []).map((l: any) => ({ url: l.url, title: l.title, source: l.source })));
@@ -266,7 +267,7 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
   };
 
   const publish = async () => {
-    if (!canSave || submitting) return;
+    if (!canPublish || submitting) return;
     if (!refLinksValid()) return;
     handledRef.current = true;
     autosaveDoneRef.current = true;
@@ -320,6 +321,10 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
   // longer routes through a draft, so there's no «move to draft» here.
   const saveEdit = async () => {
     if (!canSave || submitting) return;
+    if (deadlinePast && (order?.status ?? 'active') === 'active') {
+      toast.error('Срок выполнения не может быть в прошлом');
+      return;
+    }
     if (!refLinksValid()) return;
     handledRef.current = true;
     autosaveDoneRef.current = true;
@@ -508,15 +513,14 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
               value={deadlineDate}
               placeholder="ДД.ММ.ГГГГ"
               maxLength={10}
-              onChange={e => {
-                let v = e.target.value.replace(/\D/g, '');
-                if (v.length >= 3) v = v.slice(0, 2) + '.' + v.slice(2);
-                if (v.length >= 6) v = v.slice(0, 5) + '.' + v.slice(5);
-                setDeadlineDate(v.slice(0, 10));
-              }}
-              className={`w-full pl-8 pr-3 py-2.5 bg-slate-800/60 border rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 transition ${deadlineInvalid ? 'border-red-500/60' : 'border-slate-700/50'}`}
+              onChange={e => setDeadlineDate(maskDateInput(e.target.value))}
+              className={`w-full pl-8 pr-3 py-2.5 bg-slate-800/60 border rounded-xl text-sm text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary-500 transition ${deadlineInvalid || deadlinePast ? 'border-red-500/60' : 'border-slate-700/50'}`}
             />
-            {deadlineInvalid && <p className="text-[11px] text-red-400 mt-1">Введите дату в формате ДД.ММ.ГГГГ</p>}
+            {deadlineInvalid && <p className="text-[11px] text-red-400 mt-1">Введите существующую дату в формате ДД.ММ.ГГГГ</p>}
+            {deadlinePast && <p className="text-[11px] text-red-400 mt-1">Срок уже прошёл — укажите будущую дату</p>}
+            {!deadlineInvalid && !deadlinePast && deadlineDate.length === 10 && (
+              <p className="text-[11px] text-slate-500 mt-1">Срок — до конца этого дня (23:59 по Москве).</p>
+            )}
           </div>
         ) : (
           <p className="text-[11px] text-slate-500">Без срока заказ будет помечен как «Срок не ограничен».</p>
@@ -641,7 +645,7 @@ export default function OrderForm({ onClose, order }: { onClose: () => void; ord
           </div>
           <button
             onClick={publish}
-            disabled={!canSave || submitting}
+            disabled={!canPublish || submitting}
             className="w-full py-2.5 rounded-lg bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:hover:bg-primary-500 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
           >
             {submitting ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}

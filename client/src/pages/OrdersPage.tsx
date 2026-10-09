@@ -6,6 +6,8 @@ import { orderAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import OrderStatusChip from '../components/OrderStatusChip';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { formatDateMsk } from '../lib/mskDate';
 
 type Tab = 'active' | 'done' | 'archived' | 'draft';
 
@@ -23,14 +25,16 @@ const EMPTY_LABEL: Record<Tab, string> = {
   draft: 'Нет черновиков',
 };
 
+// Срок — календарный день по МСК (хранится как конец дня 23:59:59 МСК).
 function formatDeadline(deadline?: string | null): string {
-  return deadline ? new Date(deadline).toLocaleDateString('ru-RU') : 'Срок не ограничен';
+  return deadline ? formatDateMsk(deadline) : 'Срок не ограничен';
 }
 
 export default function OrdersPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('active');
+  const [confirmDone, setConfirmDone] = useState<{ id: string; title: string } | null>(null);
 
   const { data: allOrders = [], isLoading } = useQuery<any[]>({
     queryKey: ['orders', 'mine'],
@@ -46,8 +50,9 @@ export default function OrdersPage() {
 
   const statusMut = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) => orderAPI.setStatus(id, status),
-    onSuccess: () => {
+    onSuccess: (_res, vars) => {
       qc.invalidateQueries({ queryKey: ['orders', 'mine'] });
+      qc.invalidateQueries({ queryKey: ['order', vars.id] });
     },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось изменить статус заказа')),
   });
@@ -108,6 +113,18 @@ export default function OrdersPage() {
               Редактировать
             </button>
           );
+          // «Выполнен» — при выбранном исполнителе и в активном, и в архивном заказе;
+          // с подтверждением (действие необратимо для откликов).
+          const doneBtn = order.executorId ? (
+            <button
+              onClick={() => setConfirmDone({ id: order.id, title: order.title })}
+              disabled={statusMut.isPending}
+              className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors disabled:opacity-50"
+            >
+              {statusMut.isPending ? <Loader2 size={13} className="animate-spin" /> : '✓'}
+              Выполнен
+            </button>
+          ) : null;
           return (
             <div key={order.id} className="p-4 bg-slate-900/60 border border-slate-800/60 rounded-2xl space-y-3">
               <button onClick={() => navigate(`/orders/${order.id}`)} className="w-full text-left">
@@ -132,16 +149,7 @@ export default function OrdersPage() {
                 {tab === 'active' && (
                   <>
                     {editBtn}
-                    {order.executorId && (
-                      <button
-                        onClick={() => statusMut.mutate({ id: order.id, status: 'done' })}
-                        disabled={statusMut.isPending}
-                        className="flex-1 py-2 flex items-center justify-center gap-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg transition-colors disabled:opacity-50"
-                      >
-                        {statusMut.isPending ? <Loader2 size={13} className="animate-spin" /> : '✓'}
-                        Выполнен
-                      </button>
-                    )}
+                    {doneBtn}
                     <button
                       onClick={() => statusMut.mutate({ id: order.id, status: 'archived' })}
                       disabled={statusMut.isPending}
@@ -183,6 +191,7 @@ export default function OrdersPage() {
                       {statusMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />}
                       Опубликовать
                     </button>
+                    {doneBtn}
                     {editBtn}
                   </>
                 )}
@@ -192,6 +201,13 @@ export default function OrdersPage() {
         })}
       </div>
 
+      <ConfirmDialog
+        open={!!confirmDone}
+        message={`Отметить заказ «${confirmDone?.title ?? ''}» выполненным? Отклики будут закрыты.`}
+        confirmLabel="Выполнен"
+        onConfirm={() => { if (confirmDone) statusMut.mutate({ id: confirmDone.id, status: 'done' }); }}
+        onCancel={() => setConfirmDone(null)}
+      />
     </div>
   );
 }
