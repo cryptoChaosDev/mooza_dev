@@ -14,6 +14,9 @@ import VkLoginButton from '../components/VkLoginButton';
 // Temporarily hide VK login/registration. Set back to true to restore.
 const SHOW_VK = false;
 import { useAuthStore } from '../stores/authStore';
+import { consumeReturnTo } from '../lib/authReturn';
+import { reachGoal } from '../lib/metrika';
+import { useSeo, ROBOTS_NOINDEX } from '../lib/seo';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -225,7 +228,7 @@ export default function RegisterPage() {
   // Already-logged-in visitors get an accept screen instead of the signup form.
   const isAuthed = !!localStorage.getItem('token');
 
-  useEffect(() => { document.title = 'Регистрация — Moooza'; }, []);
+  useSeo({ title: 'Регистрация — Moooza', robots: ROBOTS_NOINDEX });
 
   // Черновик шагов (без пароля) — читаем один раз при монтировании.
   const [draft] = useState(() => (isAuthed ? null : loadDraft(refCode, artistInvite)));
@@ -317,7 +320,7 @@ export default function RegisterPage() {
   const [acceptError, setAcceptError] = useState('');
   // A logged-in user who lands on /register without an invite has nothing here.
   useEffect(() => {
-    if (isAuthed && !artistInvite) navigate('/', { replace: true });
+    if (isAuthed && !artistInvite) navigate(consumeReturnTo() ?? '/', { replace: true });
   }, [isAuthed, artistInvite, navigate]);
 
   const handleAcceptInvite = async () => {
@@ -532,12 +535,15 @@ export default function RegisterPage() {
 
   // ── VK auth ───────────────────────────────────────────────────────────────
   const handleVkAuth = useCallback((vkUser: any, token: string, isNew?: boolean) => {
-    setAuth(vkUser, token);
-    localStorage.setItem('termsAgreed', '1');
     // Show the VK setup wizard for brand-new users AND for any VK account that
     // hasn't finished onboarding yet (e.g. created earlier but never completed).
+    // VkSetup/онбординг вернут на сохранённую страницу в конце.
     const needsSetup = isNew || !vkUser?.onboardingCompletedAt;
-    navigate(needsSetup ? '/vk-setup' : '/');
+    const target = needsSetup ? '/vk-setup' : (consumeReturnTo() ?? '/');
+    setAuth(vkUser, token);
+    localStorage.setItem('termsAgreed', '1');
+    reachGoal(isNew ? 'register_success' : 'login_success', { source: 'vk' });
+    navigate(target);
   }, [setAuth, navigate]);
   const handleVkError = (msg: string) => { if (msg) setError(msg); };
 
@@ -584,6 +590,8 @@ export default function RegisterPage() {
         startCooldown();
       } else {
         setAuth(data.user, data.token);
+        reachGoal('register_success', { source: 'email' });
+        // Онбординг в конце сам заберёт возврат (consumeReturnTo).
         navigate('/onboarding');
       }
     } catch (err: any) {
@@ -658,9 +666,13 @@ export default function RegisterPage() {
       const { data } = await authAPI.verifyEmail(pendingEmail, verifyCode.trim());
       clearDraft();
       setAuth(data.user, data.token);
-      // Hard navigation: bypasses React Router concurrent-mode race condition where
-      // the router resolves the URL during Zustand state transition and ends up at '/'.
-      window.location.href = '/onboarding';
+      reachGoal('register_success', { source: 'email' });
+      // Раньше — жёсткий переход (window.location.href): обход гонки двух деревьев
+      // маршрутов, когда роутер разрешал URL до перерисовки с новым токеном и
+      // уводил на '/'. Дерево теперь одно (App.tsx), /onboarding существует при
+      // любом токене; setAuth и navigate попадают в один рендер. Онбординг в
+      // конце сам заберёт возврат (consumeReturnTo).
+      navigate('/onboarding', { replace: true });
     } catch (err: any) {
       toast.error(getApiError(err, 'Неверный код'));
       if (err?.response?.data?.code === 'ALREADY_VERIFIED') {

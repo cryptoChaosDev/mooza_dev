@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Loader2, ShieldCheck } from 'lucide-react';
 import { useScrollLock } from '../lib/scrollLock';
@@ -7,11 +7,17 @@ interface Props {
   // Records the consent on the server and runs the gated action.
   onAccept: () => Promise<void> | void;
   onClose: () => void;
+  // Необязательные тексты — для карточки/разового окна «Сделайте профиль
+  // публичным» (Ф3). Чекбокс согласия всегда снят по умолчанию.
+  title?: string;
+  intro?: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
 }
 
 // Shown the first time a user publishes data for public distribution (service
 // card / portfolio / public contacts) — 152-ФЗ ст. 10.1 consent. One-time.
-export default function PublicConsentGate({ onAccept, onClose }: Props) {
+export default function PublicConsentGate({ onAccept, onClose, title, intro, confirmLabel, cancelLabel }: Props) {
   const [checked, setChecked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   useScrollLock(true);
@@ -28,15 +34,17 @@ export default function PublicConsentGate({ onAccept, onClose }: Props) {
       <div className="relative w-full sm:max-w-md bg-slate-900 border border-slate-800 rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
         <div className="flex items-center gap-2 px-5 pt-5 pb-4 border-b border-slate-800">
           <ShieldCheck size={18} className="text-primary-400 flex-shrink-0" />
-          <h3 className="text-base font-semibold text-white flex-1">Публичное размещение</h3>
+          <h3 className="text-base font-semibold text-white flex-1">{title ?? 'Публичное размещение'}</h3>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-slate-800 transition-colors" aria-label="Закрыть">
             <X size={18} />
           </button>
         </div>
         <div className="px-5 py-4 space-y-3">
-          <p className="text-sm text-slate-300 leading-relaxed">
-            Эти данные станут доступны неограниченному кругу лиц. Для публичного размещения нужно ваше согласие на обработку персональных данных, разрешённых для распространения.
-          </p>
+          {intro ?? (
+            <p className="text-sm text-slate-300 leading-relaxed">
+              Эти данные станут доступны неограниченному кругу лиц. Для публичного размещения нужно ваше согласие на обработку персональных данных, разрешённых для распространения.
+            </p>
+          )}
           <label className="flex items-start gap-2.5 cursor-pointer">
             <input
               type="checkbox"
@@ -54,14 +62,14 @@ export default function PublicConsentGate({ onAccept, onClose }: Props) {
         </div>
         <div className="flex gap-2 px-5 py-4 border-t border-slate-800">
           <button onClick={onClose} className="flex-1 py-2.5 text-sm text-slate-400 border border-slate-700 rounded-xl hover:text-white transition-colors">
-            Отмена
+            {cancelLabel ?? 'Отмена'}
           </button>
           <button
             onClick={confirm}
             disabled={!checked || submitting}
             className="flex-1 py-2.5 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-1.5"
           >
-            {submitting && <Loader2 size={15} className="animate-spin" />} Подтвердить
+            {submitting && <Loader2 size={15} className="animate-spin" />} {confirmLabel ?? 'Подтвердить'}
           </button>
         </div>
       </div>

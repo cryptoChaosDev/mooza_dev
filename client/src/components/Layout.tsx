@@ -1,13 +1,66 @@
 import { ReactNode, useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, X, Info, LifeBuoy, Gift } from 'lucide-react';
+import { Home, Search, Users, User, MessageCircle, Bell, ShieldCheck, X, Info, LifeBuoy, Gift, Zap, LogIn } from 'lucide-react';
 import { APP_VERSION } from '../lib/changelog';
 import BottomNav from './BottomNav';
 import NotificationBell from './NotificationBell';
 import InfoModal from './InfoModal';
 import ProfessionGate from './ProfessionGate';
+import PublicConsentPrompt from './PublicConsentPrompt';
 import { useAuthStore } from '../stores/authStore';
 import { enablePush } from '../lib/push';
+import { saveReturnTo } from '../lib/authReturn';
+import { openAuthGate } from './AuthGateModal';
+import { useSiteSettings } from '../lib/siteSettings';
+
+const GUEST_BANNER_KEY = 'mooza_guest_banner_dismissed';
+
+/** «Войти» из шапки/меню: запоминаем текущую страницу для возврата. */
+export function useGoToLogin() {
+  const navigate = useNavigate();
+  return () => {
+    saveReturnTo(undefined, 'page');
+    navigate('/login');
+  };
+}
+
+// Плашка «Вы смотрите как гость» над нижним меню. Закрытие — до конца сессии
+// вкладки (sessionStorage). Высота пробрасывается в CSS-переменную
+// --guest-banner-h, чтобы плавающие кнопки страниц (FAB, «Наверх») не перекрывались.
+function GuestBanner() {
+  const goToLogin = useGoToLogin();
+  const navigate = useNavigate();
+  const { registrationEnabled } = useSiteSettings();
+  const [dismissed, setDismissed] = useState(() => {
+    try { return sessionStorage.getItem(GUEST_BANNER_KEY) === '1'; } catch { return false; }
+  });
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--guest-banner-h', dismissed ? '0px' : '44px');
+    return () => { root.style.setProperty('--guest-banner-h', '0px'); };
+  }, [dismissed]);
+  if (dismissed) return null;
+  const close = () => {
+    setDismissed(true);
+    try { sessionStorage.setItem(GUEST_BANNER_KEY, '1'); } catch { /* ignore */ }
+  };
+  const getAccess = () => {
+    if (registrationEnabled) { saveReturnTo(undefined, 'page'); navigate('/register'); }
+    else openAuthGate('page', { from: 'guest_banner' }, undefined, 'waitlist');
+  };
+  return (
+    <div className="fixed left-0 right-0 lg:left-64 z-[45] bottom-[calc(60px_+_env(safe-area-inset-bottom,0px))] lg:bottom-0 h-11 bg-slate-900/95 backdrop-blur border-t border-slate-800 flex items-center gap-2 px-4 text-xs">
+      <span className="text-slate-400 truncate min-w-0">Вы смотрите как гость</span>
+      <span className="text-slate-700">·</span>
+      <button onClick={goToLogin} className="text-primary-400 hover:text-primary-300 font-semibold flex-shrink-0">Войти</button>
+      <span className="text-slate-700">·</span>
+      <button onClick={getAccess} className="text-primary-400 hover:text-primary-300 font-semibold flex-shrink-0">Получить доступ</button>
+      <button onClick={close} aria-label="Скрыть" className="ml-auto p-1 text-slate-500 hover:text-white flex-shrink-0">
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
 
 interface LayoutProps {
   children: ReactNode;
@@ -18,12 +71,14 @@ export default function Layout({ children }: LayoutProps) {
   const [showInfo, setShowInfo] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user } = useAuthStore();
+  const { user, token } = useAuthStore();
+  const isGuest = !token;
+  const goToLogin = useGoToLogin();
 
   // The open chat thread is a fixed-overlay whose top is pinned to the plain header
   // height — the notification banner would grow the header and overlap the chat.
   const isChatThread = /^\/(messages|chat)\/[^/]+/.test(location.pathname);
-  const notifPending = 'Notification' in window && Notification.permission === 'default' && !notifDismissed && !isChatThread;
+  const notifPending = !isGuest && 'Notification' in window && Notification.permission === 'default' && !notifDismissed && !isChatThread;
 
   // Вызывается из клика (жест пользователя) — только так iOS/Safari/Firefox
   // показывают запрос разрешения. После «Разрешить» сразу подписываемся на
@@ -37,19 +92,25 @@ export default function Layout({ children }: LayoutProps) {
     window.scrollTo(0, 0);
   }, [location.pathname]);
 
-  const navItems = [
-    { path: '/', icon: Home, label: 'Главная' },
-    { path: '/search', icon: Search, label: 'Каталог' },
-    { path: '/messages', icon: MessageCircle, label: 'Сообщения' },
-    { path: '/friends', icon: Users, label: 'Отношения' },
-    { path: '/profile', icon: User, label: 'Профиль' },
-  ];
+  const navItems = isGuest
+    ? [
+        { path: '/feed', icon: Zap, label: 'Поток' },
+        { path: '/search', icon: Search, label: 'Каталог' },
+      ]
+    : [
+        { path: '/', icon: Home, label: 'Главная' },
+        { path: '/search', icon: Search, label: 'Каталог' },
+        { path: '/messages', icon: MessageCircle, label: 'Сообщения' },
+        { path: '/friends', icon: Users, label: 'Отношения' },
+        { path: '/profile', icon: User, label: 'Профиль' },
+      ];
 
   const isActive = (path: string) => location.pathname === path;
 
-  // Full-screen pages bypass all Layout chrome
-  const FULLSCREEN_PATHS = ['/onboarding'];
-  if (FULLSCREEN_PATHS.includes(location.pathname)) {
+  // Full-screen pages bypass all Layout chrome: онбординг, экраны входа и
+  // лендинг гостя (у них своя вёрстка на весь экран).
+  const FULLSCREEN_PATHS = ['/onboarding', '/login', '/register', '/forgot-password'];
+  if (FULLSCREEN_PATHS.includes(location.pathname) || (isGuest && location.pathname === '/')) {
     return <>{children}</>;
   }
 
@@ -90,6 +151,14 @@ export default function Layout({ children }: LayoutProps) {
             <LifeBuoy size={15} strokeWidth={2.5} />
             <span className="text-xs font-semibold leading-none">Помощь</span>
           </a>
+          {isGuest ? (
+            <button
+              onClick={goToLogin}
+              className="flex items-center gap-1.5 text-sm font-semibold text-primary-300 hover:text-white transition-colors"
+            >
+              <LogIn size={17} strokeWidth={2.25} /> Войти
+            </button>
+          ) : (
           <div className="flex items-center gap-3">
             <NotificationBell />
             {user?.isAdmin && (
@@ -116,6 +185,7 @@ export default function Layout({ children }: LayoutProps) {
               <Gift size={20} strokeWidth={2} />
             </button>
           </div>
+          )}
           {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
         </header>
       </div>
@@ -127,6 +197,7 @@ export default function Layout({ children }: LayoutProps) {
             <img src="/logo.png" alt="Moooza" className="h-14 w-auto" />
             <span className="text-[10px] font-bold tracking-wider text-primary-400 bg-primary-500/15 border border-primary-500/30 rounded px-1.5 py-0.5 leading-none">BETA</span>
           </Link>
+          {!isGuest && (
           <div className="flex items-center justify-around mt-4">
             <NotificationBell />
             <button onClick={() => setShowInfo(true)} aria-label="Информация" className="text-slate-500 hover:text-slate-300 transition-colors">
@@ -136,6 +207,7 @@ export default function Layout({ children }: LayoutProps) {
               <Gift size={20} strokeWidth={2} />
             </button>
           </div>
+          )}
           {/* Blinking help link — visible on every page */}
           <a
             href="https://t.me/mooozahelpbot"
@@ -167,7 +239,16 @@ export default function Layout({ children }: LayoutProps) {
               </Link>
             );
           })}
-          {user?.isAdmin && (
+          {isGuest && (
+            <button
+              onClick={goToLogin}
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all duration-200"
+            >
+              <LogIn size={22} strokeWidth={2} />
+              <span className="font-medium">Войти</span>
+            </button>
+          )}
+          {!isGuest && user?.isAdmin && (
             <Link
               to="/admin"
               className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
@@ -191,7 +272,7 @@ export default function Layout({ children }: LayoutProps) {
       </aside>
 
       {/* Main Content */}
-      <main className="lg:ml-64 min-h-screen min-h-[100dvh]">
+      <main className="lg:ml-64 min-h-screen min-h-[100dvh]" style={isGuest ? { paddingBottom: 'var(--guest-banner-h, 0px)' } : undefined}>
         <div className="max-w-7xl mx-auto">
           {children}
         </div>
@@ -204,8 +285,14 @@ export default function Layout({ children }: LayoutProps) {
         </div>
       )}
 
+      {/* Гостю — плашка «Вы смотрите как гость» */}
+      {isGuest && <GuestBanner />}
+
       {/* Обязательный выбор профессии для новых аккаунтов без неё */}
-      <ProfessionGate />
+      {!isGuest && <ProfessionGate />}
+
+      {/* Разовое окно «Сделайте профиль публичным» (Ф3) */}
+      {!isGuest && <PublicConsentPrompt />}
     </div>
   );
 }

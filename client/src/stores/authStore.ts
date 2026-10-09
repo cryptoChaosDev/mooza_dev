@@ -42,6 +42,14 @@ interface User {
   birthDate?: string | null;
   isPro?: boolean;
   proUntil?: string | null;
+  createdAt?: string;
+  // Согласие на публичное распространение ПДн (152-ФЗ ст. 10.1) и его отзыв.
+  publicConsentAt?: string | null;
+  publicConsentRevokedAt?: string | null;
+  // Запрет индексации профиля поисковиками (PATCH /users/me/search-indexing).
+  searchIndexingOptOut?: boolean;
+  // Сервер просит показать разовое окно согласия (не чаще раза в 30 дней, ≤ 3 раз).
+  shouldPromptPublicConsent?: boolean;
 }
 
 interface AuthState {
@@ -58,8 +66,10 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       token: null,
       setAuth: (user, token) => {
-        // Новый вход — кэш предыдущей сессии не должен «просочиться»
-        if (get().user?.id && get().user?.id !== user.id) queryClient.clear();
+        // Новый вход — кэш предыдущей сессии не должен «просочиться». Сюда же —
+        // переход гость → вошедший: гостевые ответы (обезличенные люди, без
+        // isLiked/isFollowed, без комментариев) лежат под теми же ключами.
+        if (get().token !== token || (get().user?.id && get().user?.id !== user.id)) queryClient.clear();
         localStorage.setItem('token', token);
         set({ user, token });
       },

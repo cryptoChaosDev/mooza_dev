@@ -4,6 +4,7 @@ import { BrowserRouter, useLocation } from 'react-router-dom';
 import { QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import { queryClient } from './lib/queryClient';
+import { YM_ID } from './lib/metrika';
 import './index.css';
 
 // Prevent browser from restoring scroll position on navigation
@@ -65,7 +66,7 @@ class ErrorBoundary extends React.Component<
 
 // Yandex.Metrika SPA pageview tracking: `init` (in index.html) counts the first
 // view; each subsequent route change fires a `hit` so navigations are counted too.
-const YM_ID = 109562743;
+// Номер счётчика — lib/metrika.ts (YM_ID), тот же, что в index.html.
 function MetrikaTracker() {
   const location = useLocation();
   const firstRun = useRef(true);
