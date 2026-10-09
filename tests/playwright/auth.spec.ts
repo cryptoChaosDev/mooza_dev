@@ -91,11 +91,12 @@ test.describe('Login page', () => {
     await expect(page.getByRole('button', { name: /^войти$/i })).toBeVisible();
   });
 
-  test('submit button is disabled when user has not agreed to terms', async ({ page }) => {
-    // Login page: agreed=false on fresh browser → button disabled
+  test('submit button is enabled on a fresh browser (terms are a footnote now, no checkbox)', async ({ page }) => {
+    // Updated: the login form no longer has a terms checkbox — consent is given at
+    // registration, login only shows a reference footnote.
     const submitBtn = page.getByRole('button', { name: /^войти$/i });
-    const disabled = await submitBtn.isDisabled();
-    expect(disabled).toBeTruthy();
+    await expect(submitBtn).toBeEnabled();
+    await expect(page.getByText(/Входя, вы подтверждаете согласие/)).toBeVisible();
   });
 
   test('wrong credentials show error message (after agreeing to terms)', async ({ page }) => {
@@ -135,6 +136,10 @@ test.describe('Login page', () => {
   });
 
   test('"Зарегистрироваться" link navigates to /register', async ({ page }) => {
+    // Hidden when registration is closed site-wide.
+    if (!(await page.getByRole('link', { name: /зарегистрироваться/i }).isVisible().catch(() => false))) {
+      test.skip(true, 'Registration closed — no «Зарегистрироваться» link on /login');
+    }
     const link = page.getByRole('link', { name: /зарегистрироваться/i });
     await expect(link).toBeVisible();
     await link.click();
@@ -159,7 +164,10 @@ test.describe('Register page', () => {
   test.beforeEach(async ({ page }) => {
     await dismissCookies(page);
     await page.goto('/register');
-    await page.waitForTimeout(800);
+    await page.waitForTimeout(1500);
+    // Site setting registrationEnabled=false: /register (without a valid invite)
+    // redirects to /login. The registration wizard is then unreachable.
+    test.skip(/\/login/.test(page.url()), 'Registration is closed on this stand (registrationEnabled=false → /register redirects to /login)');
   });
 
   test('step 0: email and password fields are visible', async ({ page }) => {
@@ -224,13 +232,12 @@ test.describe('Register page', () => {
 // Onboarding page
 // ─────────────────────────────────────────────────────────────────────────────
 test.describe('Onboarding page', () => {
-  test('unauthenticated user is redirected away from /onboarding', async ({ page }) => {
+  test('unauthenticated user can open /onboarding (route is public by design now)', async ({ page }) => {
+    // Updated: App.tsx deliberately mounts /onboarding in the unauthenticated tree
+    // too (needed right after e-mail verification / VK setup), so no redirect.
     await dismissCookies(page);
     await page.goto('/onboarding');
-    await page.waitForTimeout(2000);
-    // App wraps unauthenticated routes: /* → Navigate to /
-    // /onboarding is NOT in the unauthenticated route list, so it redirects to /
-    expect(page.url()).not.toMatch(/\/onboarding/);
+    await expect(page.getByRole('button', { name: /далее/i })).toBeVisible({ timeout: 10000 });
   });
 
   test('authenticated user can open /onboarding and sees dots + "Далее"', async ({ page }) => {
@@ -289,64 +296,21 @@ test.describe('Onboarding page', () => {
     expect(page.url()).toMatch(/\/$/);
   });
 
-  test('last slide has terms checkbox; "Начать работу" disabled without it', async ({ page }) => {
+  test('last slide shows «Перейти в профиль» (no terms checkbox anymore) and it opens /profile', async ({ page }) => {
+    // Updated: the terms checkbox / «Начать работу» button were removed from the tour.
     test.setTimeout(60000);
     await dismissCookies(page);
     const user = await createTestUser('onb4');
     await loginUI(page, user);
-
     await page.goto('/onboarding');
-    await page.waitForTimeout(1000);
-
-    // Navigate to last slide (7 clicks through 8 total slides)
-    for (let i = 0; i < 7; i++) {
-      const btn = page.getByRole('button', { name: /далее/i });
-      const visible = await btn.isVisible({ timeout: 3000 }).catch(() => false);
-      if (!visible) break;
-      await btn.click();
-      await page.waitForTimeout(350);
+    for (let i = 0; i < 10; i++) {
+      const toProfile = page.getByRole('button', { name: /перейти в профиль/i });
+      if (await toProfile.isVisible().catch(() => false)) break;
+      await page.getByRole('button', { name: /далее/i }).click();
     }
-
-    // On last slide: checkbox for terms
-    const checkbox = page.locator('input[type="checkbox"]').first();
-    await expect(checkbox).toBeVisible({ timeout: 5000 });
-
-    // "Начать работу" button should be effectively disabled (opacity-40 class)
-    const startBtn = page.getByRole('button', { name: /начать работу/i });
-    await expect(startBtn).toBeVisible({ timeout: 5000 });
-
-    const cls = await startBtn.getAttribute('class') || '';
-    const isDisabled = await startBtn.isDisabled();
-    expect(isDisabled || cls.includes('opacity-40')).toBeTruthy();
-  });
-
-  test('checking terms checkbox enables "Начать работу"', async ({ page }) => {
-    test.setTimeout(60000);
-    await dismissCookies(page);
-    const user = await createTestUser('onb5');
-    await loginUI(page, user);
-
-    await page.goto('/onboarding');
-    await page.waitForTimeout(1000);
-
-    // Go to last slide
-    for (let i = 0; i < 7; i++) {
-      const btn = page.getByRole('button', { name: /далее/i });
-      const visible = await btn.isVisible({ timeout: 3000 }).catch(() => false);
-      if (!visible) break;
-      await btn.click();
-      await page.waitForTimeout(350);
-    }
-
-    const checkbox = page.locator('input[type="checkbox"]').first();
-    await expect(checkbox).toBeVisible({ timeout: 5000 });
-    await checkbox.check();
-    await page.waitForTimeout(300);
-
-    const startBtn = page.getByRole('button', { name: /начать работу/i });
-    const cls = await startBtn.getAttribute('class') || '';
-    const isDisabled = await startBtn.isDisabled();
-    expect(isDisabled || cls.includes('opacity-40')).toBeFalsy();
+    await expect(page.locator('input[type="checkbox"]')).toHaveCount(0);
+    await page.getByRole('button', { name: /перейти в профиль/i }).click();
+    await expect(page).toHaveURL(/\/profile$/, { timeout: 10000 });
   });
 });
 
