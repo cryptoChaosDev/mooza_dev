@@ -657,6 +657,15 @@ model User {
   // Obtained once, at the first public action (service/portfolio/public contacts).
   publicConsentAt       DateTime?
   publicConsentVersion  String?
+  // Гостевой режим (Ф3): когда согласие отозвано последний раз (DELETE /users/me/public-consent).
+  publicConsentRevokedAt DateTime?
+  // Запрет индексации профиля поисковиками (видимость гостям не меняет — только noindex/sitemap).
+  searchIndexingOptOut   Boolean   @default(false)
+  // Окно «Сделайте профиль публичным»: не чаще раза в 30 дней и не больше 3 раз.
+  publicConsentPromptAt    DateTime?
+  publicConsentPromptCount Int       @default(0)
+  // Журнал выдачи/отзыва согласий (ПДн, публичные ПДн, реклама, соглашение).
+  consentEvents         ConsentEvent[]
 
   // Release / Clip participation
   releaseParticipations ReleaseParticipant[]
@@ -674,6 +683,23 @@ model User {
   @@index([fieldOfActivityId])
   @@index([employerId])
   @@index([referrerId])
+}
+
+// Журнал согласий (152-ФЗ): каждая выдача и отзыв — отдельная запись.
+model ConsentEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  type      String   // pd_public | pd | marketing | terms
+  action    String   // grant | revoke
+  version   String?  // редакция документа (напр. 2026-05-31)
+  source    String?  // откуда: register | profile | prompt | onboarding | settings | migration …
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }
 
 model Review {
