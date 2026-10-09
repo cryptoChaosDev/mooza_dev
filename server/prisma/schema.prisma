@@ -1609,6 +1609,12 @@ model Order {
   referenceLinks OrderReferenceLink[]
   responses      OrderResponse[]
   posts          Post[]
+  // Автопостинг в Telegram-канал заказов и вакансий (lib/jobsChannel): id сообщения
+  // в канале, момент публикации (ставится ДО отправки — «застолбить», защита от
+  // дублей) и момент пометки «⛔ Закрыто». Публикуется один раз.
+  telegramMessageId Int?
+  telegramPostedAt  DateTime?
+  telegramClosedAt  DateTime?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([authorId])
@@ -1676,6 +1682,10 @@ model Vacancy {
   requireComment   Boolean @default(false)
   requirePortfolio Boolean @default(false)
   status         String   @default("active")    // active | archived | draft
+  // Автопостинг в Telegram-канал (lib/jobsChannel) — как у Order.
+  telegramMessageId Int?
+  telegramPostedAt  DateTime?
+  telegramClosedAt  DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   artist     Artist     @relation(fields: [artistId], references: [id], onDelete: Cascade)

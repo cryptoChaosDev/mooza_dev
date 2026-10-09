@@ -112,6 +112,53 @@ export async function sendBotMessage(
   } catch { /* best-effort */ }
 }
 
+// ── Произвольный метод Bot API с разбором ответа ─────────────────────────────
+export type BotApiResult<T = any> =
+  | { ok: true; result: T }
+  | {
+      ok: false;
+      /** Текст ошибки Telegram (description) или сети — для логов и админки. */
+      description: string;
+      /** error_code Telegram / HTTP-статус; нет — сбой сети/релея. */
+      errorCode?: number;
+      /** 429: через сколько секунд можно повторить. */
+      retryAfter?: number;
+      /** true — запрос не дошёл / ответ не получен (сеть, релей, таймаут). */
+      network?: boolean;
+    };
+
+/**
+ * Вызов метода Bot API основным ботом через тот же релей TELEGRAM_API_BASE.
+ * В отличие от sendBotMessage возвращает результат (message_id) и текст ошибки
+ * Telegram — нужно автопостингу в канал (lib/jobsChannel). Не бросает.
+ * Токен и адрес читаются при вызове (тесты/перезапуск с новым env).
+ */
+export async function callBotApi<T = any>(
+  method: string, payload: Record<string, unknown>, timeoutMs = 15000,
+): Promise<BotApiResult<T>> {
+  const token = process.env.TELEGRAM_BOT_TOKEN || '';
+  if (!token) return { ok: false, description: 'TELEGRAM_BOT_TOKEN не задан' };
+  const base = (process.env.TELEGRAM_API_BASE || 'https://api.telegram.org').replace(/\/+$/, '');
+  try {
+    const r = await fetch(`${base}/bot${token}/${method}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const d: any = await r.json().catch(() => null);
+    if (d?.ok) return { ok: true, result: d.result as T };
+    return {
+      ok: false,
+      description: String(d?.description || `HTTP ${r.status}`),
+      errorCode: Number(d?.error_code) || r.status,
+      ...(d?.parameters?.retry_after ? { retryAfter: Number(d.parameters.retry_after) } : {}),
+    };
+  } catch (e: any) {
+    return { ok: false, description: String(e?.message || 'network error'), network: true };
+  }
+}
+
 /** Вызывается Prisma-middleware'ом на каждый notification.create. */
 export async function tgNotifyFromRow(notif: { userId: string; title?: string | null; body?: string | null; link?: string | null }): Promise<void> {
   try {

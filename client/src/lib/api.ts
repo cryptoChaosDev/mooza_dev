@@ -642,6 +642,11 @@ export const adminAPI = {
     api.post(`${adminBase}/donations/${id}/activate`, body ?? {}),
   grantProMonth: (userId: string) =>
     api.post(`${adminBase}/users/${userId}/grant-pro-month`),
+  // Автопостинг заказов/вакансий в Telegram-канал (флаг — siteSettingsAPI.update)
+  jobsChannel: {
+    status: () => api.get(`${adminBase}/jobs-channel/status`),
+    test: () => api.post(`${adminBase}/jobs-channel/test`),
+  },
 };
 
 // Moooza Pro API (user-facing donation flow)
