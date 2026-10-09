@@ -205,17 +205,17 @@ export default function LandingPage() {
         </div>
 
         <div className="relative z-10 max-w-3xl mx-auto">
-          <motion.div {...fadeUp(0)} className="flex justify-center mb-8">
-            <img src="/logo.png" alt="Moooza" className="h-32 sm:h-40 md:h-48 w-auto drop-shadow-[0_0_40px_rgba(99,102,241,0.3)]" />
+          <motion.div {...fadeUp(0)} className="flex justify-center mb-5 sm:mb-8">
+            <img src="/logo.png" alt="Moooza" className="h-16 sm:h-40 md:h-48 w-auto drop-shadow-[0_0_40px_rgba(99,102,241,0.3)]" />
           </motion.div>
 
-          <motion.h1 {...fadeUp(0.15)} className="text-4xl sm:text-5xl md:text-6xl font-extrabold leading-tight tracking-tight mb-5">
+          <motion.h1 {...fadeUp(0.15)} className="text-3xl sm:text-5xl md:text-6xl font-extrabold leading-tight tracking-tight mb-4 sm:mb-5">
             Платформа для
             <br />
             <AnimatedProfession />
           </motion.h1>
 
-          <motion.p {...fadeUp(0.25)} className="text-slate-400 text-lg sm:text-xl max-w-xl mx-auto mb-10 leading-relaxed">
+          <motion.p {...fadeUp(0.25)} className="text-slate-400 text-base sm:text-xl max-w-xl mx-auto mb-7 sm:mb-10 leading-relaxed">
             Находите работу, создавайте проекты и стройте карьеру вместе с теми, кто живёт музыкой.
           </motion.p>
 
