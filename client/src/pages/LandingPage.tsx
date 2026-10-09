@@ -180,7 +180,7 @@ export default function LandingPage() {
       {/* ── HEADER: гостю сразу видно, куда идти без регистрации ─────────── */}
       <header className="fixed top-0 inset-x-0 z-40 bg-slate-950/80 backdrop-blur border-b border-slate-800/60" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
         <div className="max-w-5xl mx-auto h-14 px-4 flex items-center justify-between gap-3">
-          <Link to="/" className="flex-shrink-0"><img src="/logo.png" alt="Moooza" className="h-7 w-auto" /></Link>
+          <Link to="/" className="flex-shrink-0"><img src="/logo.png" alt="Moooza" className="h-9 sm:h-10 w-auto" /></Link>
           <nav className="flex items-center gap-1 sm:gap-2 min-w-0">
             {guestBrowsingEnabled && (
               <>
