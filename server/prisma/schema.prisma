@@ -389,12 +389,19 @@ model Artist {
   // Из ночного синка Яндекс.Музыки:
   listenersDelta Int?  // изменение слушателей за месяц (может быть отрицательным)
   ymData         Json? // снапшот витрины: links, similarArtists, popularTracks, photos, concerts, bestPlaylist, counts, likesCount
+  // id артиста ЯМ из socialLinks.yandex_music (денормализация): уникален между
+  // артистами (чужую дискографию не привязать) и индексирован для «похожих».
+  ymId           String? @unique
 
   activityStatus       ArtistActivityStatus @default(ACTIVE)
 
   status               ArtistStatus @default(DRAFT)
   submittedById        String?
   submittedByUser      User?        @relation("ArtistSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+  // Кто отправил текущую заявку на верификацию. НЕ даёт прав на артиста —
+  // права только у UserArtist (isOwner / isAdmin).
+  verificationRequestedById String?
+  verificationRequestedBy   User?   @relation("ArtistVerificationRequester", fields: [verificationRequestedById], references: [id], onDelete: SetNull)
   rejectionReason      String?
   verificationCode     String?      @unique
   verificationProofUrl String?
@@ -410,6 +417,7 @@ model Artist {
   invites     ArtistInvite[]
   vacancies   Vacancy[]
   listenersSnapshots ArtistListenersSnapshot[]
+  dismissedMedia     DismissedMediaItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -564,6 +572,7 @@ model User {
   groupInvitesSent UserArtist[] @relation("GroupInviter")
   artistFollows    ArtistFollower[]
   submittedArtists Artist[]        @relation("ArtistSubmitter")
+  verificationRequestedArtists Artist[] @relation("ArtistVerificationRequester")
 
   // Connections
   sentConnections     Connection[] @relation("ConnectionRequester")
@@ -860,7 +869,10 @@ model UserArtist {
   isOwner             Boolean                   @default(false)
   isAdmin             Boolean                   @default(false)
   professionId        String?
-  inviteStatus        GroupInviteStatus         @default(ACCEPTED)
+  // Без явного статуса — заявка, не подтверждённое участие (см. миграцию
+  // 20261009030400_artist_membership_unique). Не больше одной PENDING/ACCEPTED
+  // строки на пару userId+artistId — частичный уникальный индекс в той же миграции.
+  inviteStatus        GroupInviteStatus         @default(PENDING)
   participationStatus MemberParticipationStatus @default(ACTIVE_MEMBER)
   // True when the member was demoted to FORMER automatically because the artist
   // left ACTIVE. Lets reactivation restore exactly those members (and not the
@@ -890,6 +902,11 @@ model ArtistInvite {
   participationStatus MemberParticipationStatus @default(ACTIVE_MEMBER)
   createdById         String?
   createdAt           DateTime                  @default(now())
+  // Срок действия и лимит использований (NULL — без ограничения). Новые ссылки
+  // сервер создаёт с expiresAt = +30 дней; проверка — validateArtistInvite().
+  expiresAt           DateTime?
+  maxUses             Int?
+  usedCount           Int                       @default(0)
 
   artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
 
@@ -942,12 +959,18 @@ model Release {
   trackCount  Int?
   likesCount  Int?
   tracklist   Json?   // [{ id, title, durationMs, artists: string[] }]
+  // Происхождение импортированного релиза (синк/импорт): 'yandex_music' + albumId.
+  // У ручных релизов NULL. Уникальность (artistId, externalSource, externalId)
+  // не даёт синку плодить дубли.
+  externalSource String?
+  externalId     String?
   createdAt   DateTime          @default(now())
   updatedAt   DateTime          @updatedAt
 
   artist       Artist               @relation(fields: [artistId], references: [id], onDelete: Cascade)
   participants ReleaseParticipant[]
 
+  @@unique([artistId, externalSource, externalId])
   @@index([artistId])
 }
 
@@ -985,13 +1008,32 @@ model Clip {
   coverUrl  String?
   platform  ClipPlatform
   url       String
+  // Происхождение импортированного клипа ('yandex_music' + 'youtube:<id>' / 'yandex:<id>').
+  externalSource String?
+  externalId     String?
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
   artist       Artist            @relation(fields: [artistId], references: [id], onDelete: Cascade)
   participants ClipParticipant[]
 
+  @@unique([artistId, externalSource, externalId])
   @@index([artistId])
+}
+
+// «Надгробие» импортированного релиза/клипа, удалённого пользователем: синк
+// Яндекс.Музыки не создаёт такой элемент повторно.
+model DismissedMediaItem {
+  id             String   @id @default(uuid())
+  artistId       String
+  kind           String // 'release' | 'clip'
+  externalSource String
+  externalId     String
+  createdAt      DateTime @default(now())
+
+  artist Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([artistId, kind, externalSource, externalId])
 }
 
 model ClipParticipant {
