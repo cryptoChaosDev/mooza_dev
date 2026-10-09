@@ -24,7 +24,7 @@ test.describe('Messages page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/messages');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
     // The page either shows the header h2 or has messages content
     // The nav bar also has "Сообщения" text — check h2 specifically
     await expect(page.locator('h2').filter({ hasText: 'Сообщения' })).toBeVisible({ timeout: 10000 });
@@ -34,7 +34,7 @@ test.describe('Messages page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/messages');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
     await page.waitForTimeout(2000);
 
     const hasList  = await page.locator('[class*="divide-y"]').isVisible().catch(() => false);
@@ -53,7 +53,7 @@ test.describe('Messages page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/messages');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
     await page.waitForTimeout(2000);
 
     const hasConv = await page.locator('text=Тест список чатов').isVisible({ timeout: 5000 }).catch(() => false);
@@ -68,7 +68,7 @@ test.describe('Messages page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/messages');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
     await page.waitForTimeout(2000);
 
     // The conversation item is a button inside a div that has an Avatar (rounded-full)
@@ -93,29 +93,77 @@ test.describe('Chat page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto(`/messages/${convId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
     await expect(page.locator('textarea').last()).toBeVisible({ timeout: 10000 });
   });
 
-  test('send message via Enter — message appears', async ({ page }) => {
+  // Updated: since the audit Enter does NOT send (it inserts a newline, on every device);
+  // the message goes only via the send button.
+  test('Enter does not send the message (newline only), the send button does', async ({ page }) => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto(`/messages/${convId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     const msgText = `Привет тест ${Date.now()}`;
-    const input = page.locator('textarea').last();
+    const input = page.getByPlaceholder('Сообщение...');
     await expect(input).toBeVisible({ timeout: 10000 });
     await input.fill(msgText);
-    await page.keyboard.press('Enter');
-    await expect(page.locator(`text=${msgText}`)).toBeVisible({ timeout: 10000 });
+    await input.press('Enter');
+    await page.waitForTimeout(1000);
+    await expect(input).toHaveValue(new RegExp(`^${msgText}\\n?$`));
+    const before = await apiCall('GET', `/messages/conversations/${convId}?limit=100&markRead=0`, undefined, bob.token);
+    expect(JSON.stringify(before.data?.messages || []), 'nothing sent by Enter').not.toContain(msgText);
+    await page.locator('form button[type="submit"]').click();
+    await expect(page.getByText(msgText).first()).toBeVisible({ timeout: 10000 });
+    await expect(input).toHaveValue('');
+  });
+
+  test('opening /messages/:userId switches the URL to /messages/:conversationId', async ({ page }) => {
+    await loginUI(page, alice);
+    await skipOnboarding(page);
+    await page.goto(`/messages/${bob.id}`);
+    await expect(page.getByPlaceholder('Сообщение...')).toBeVisible({ timeout: 15000 });
+    await expect(page).toHaveURL(new RegExp(`/messages/${convId}$`), { timeout: 10000 });
+  });
+
+  test('history is paginated: older messages load on scrolling up', async ({ page }) => {
+    test.setTimeout(120000);
+    const carol = await createTestUser('mfc');
+    const conv = (await apiCall('GET', `/messages/resolve/${alice.id}`, undefined, carol.token)).data?.conversationId;
+    expect(conv, 'conversation carol↔alice').toBeTruthy();
+    for (let i = 1; i <= 60; i++) {
+      const r = await apiCall('POST', `/messages/conversations/${conv}/messages`, { content: `PW история #${String(i).padStart(2, '0')}` }, carol.token);
+      expect(r.status, `message ${i} → ${JSON.stringify(r.data)}`).toBeLessThan(300);
+    }
+    const first = await apiCall('GET', `/messages/conversations/${conv}?markRead=0`, undefined, alice.token);
+    expect(first.data?.messages?.length, 'first page size').toBe(50);
+    expect(first.data?.hasMore, 'hasMore on the first page').toBe(true);
+
+    await loginUI(page, alice);
+    await skipOnboarding(page);
+    await page.goto(`/messages/${conv}`);
+    await expect(page.getByText('PW история #60').first()).toBeVisible({ timeout: 15000 });
+    await expect(page.getByText('PW история #01')).toHaveCount(0);
+    // Scroll the message list to the top until the oldest page is fetched.
+    for (let i = 0; i < 10 && (await page.getByText('PW история #01').count()) === 0; i++) {
+      await page.getByText('PW история #11').first().scrollIntoViewIfNeeded().catch(() => {});
+      await page.evaluate(() => {
+        for (const el of Array.from(document.querySelectorAll('*'))) {
+          const s = getComputedStyle(el);
+          if ((s.overflowY === 'auto' || s.overflowY === 'scroll') && el.scrollHeight > el.clientHeight + 50) el.scrollTop = 0;
+        }
+      });
+      await page.waitForTimeout(800);
+    }
+    await expect(page.getByText('PW история #01').first()).toBeAttached({ timeout: 10000 });
   });
 
   test('send button (type=submit) submits message', async ({ page }) => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto(`/messages/${convId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     const msgText = `Кнопка ${Date.now()}`;
     const input = page.locator('textarea').last();
@@ -132,7 +180,7 @@ test.describe('Chat page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto(`/messages/${convId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
     await page.waitForTimeout(1000);
 
     // The back button has onClick={() => navigate('/messages')}
@@ -177,11 +225,11 @@ test.describe('Chat page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto(`/messages/${convId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
     await page.waitForTimeout(1500);
 
-    // The Paperclip button is the first type="button" in the form (not inside submit)
-    const attachBtn = page.locator('form button[type="button"]').first();
+    // Updated: the Paperclip button has a title.
+    const attachBtn = page.locator('form button[title="Прикрепить файл"]');
     const hasAttach = await attachBtn.isVisible({ timeout: 5000 }).catch(() => false);
 
     if (!hasAttach) {
@@ -195,11 +243,12 @@ test.describe('Chat page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto(`/messages/${convId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
     await page.waitForTimeout(1500);
 
-    // The Smile button is the last type="button" in the form
-    const smileBtn = page.locator('form button[type="button"]').last();
+    // Updated: with an empty field the last form button is the mic («Записать голосовое»);
+    // the Smile button sits inside the input bubble right after the textarea.
+    const smileBtn = page.locator('form textarea + button[type="button"]');
     const hasSmile = await smileBtn.isVisible({ timeout: 5000 }).catch(() => false);
 
     if (!hasSmile) {
@@ -218,7 +267,7 @@ test.describe('Friends page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/friends');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
     await expect(page.locator('h2').filter({ hasText: 'Отношения' })).toBeVisible({ timeout: 10000 });
   });
 
@@ -226,7 +275,7 @@ test.describe('Friends page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/friends');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     await expect(page.locator('button', { hasText: 'Друзья' }).first()).toBeVisible({ timeout: 8000 });
     await expect(page.locator('button', { hasText: 'Связи' }).first()).toBeVisible();
@@ -238,7 +287,7 @@ test.describe('Friends page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/friends');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     await page.locator('button', { hasText: 'Связи' }).first().click();
     await page.waitForTimeout(500);
@@ -266,7 +315,7 @@ test.describe('Friends page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/friends/requests');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
     await page.waitForTimeout(2000);
 
     const acceptBtn = page.locator('button').filter({ hasText: /Принять/i }).first();
@@ -289,7 +338,7 @@ test.describe('Friends page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/friends');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
     await page.waitForTimeout(2000);
 
     // Any of these texts indicates the friends section loaded
@@ -307,7 +356,7 @@ test.describe('Friend Requests page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/friends/requests');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     await expect(page.locator('h1').filter({ hasText: 'Запросы дружбы' })).toBeVisible({ timeout: 10000 });
     await expect(page.locator('button', { hasText: /Получено/i }).first()).toBeVisible();
@@ -318,7 +367,7 @@ test.describe('Friend Requests page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/friends/requests');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
     await page.waitForTimeout(1500);
 
     // Either "Нет входящих запросов" text or a list of requests (divide-y)
@@ -331,7 +380,7 @@ test.describe('Friend Requests page', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/friends/requests');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     await page.locator('button', { hasText: /Отправлено/i }).first().click();
     await page.waitForTimeout(1000);
@@ -349,7 +398,7 @@ test.describe('Connections section', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/friends');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     await page.locator('button', { hasText: 'Связи' }).first().click();
     await page.waitForTimeout(2000);
@@ -365,7 +414,7 @@ test.describe('Connections section', () => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/friends?tab=connections');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
     await page.waitForTimeout(2000);
 
     await expect(page.locator('text=Запросы связи').first()).toBeVisible({ timeout: 8000 });

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { createTestUser, loginUI, skipOnboarding, apiCall } from './helpers';
+import { createTestUser, loginUI, skipOnboarding, apiCall, createTestArtist } from './helpers';
 import type { TestUser } from './helpers';
 
 let user: Awaited<ReturnType<typeof createTestUser>>;
@@ -98,7 +98,7 @@ test.describe('Notifications', () => {
 
     // Reload to pick up new notification state
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     // Find the bell button in the header
     const bellBtn = page.locator('header button').filter({ has: page.locator('svg') }).first();
@@ -205,7 +205,7 @@ test.describe('Profile settings', () => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto('/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     // The bio section has either "+ Добавить описание" button or a small pencil Edit3 icon.
     // Both lead to the bio textarea (placeholder "Расскажите о себе...") becoming visible.
@@ -315,14 +315,8 @@ test.describe('Artist page', () => {
 
   test.beforeAll(async () => {
     if (!usersReady) return; // global users failed — skip
-    const r = await apiCall('POST', '/artists', { name: 'PW Band', type: 'GROUP' }, user.token);
-    if (r.ok && r.data?.id) {
-      artistId = r.data.id;
-    } else {
-      // Artist may already exist or endpoint returns different shape
-      console.warn('Artist create result:', JSON.stringify(r.data));
-      artistId = r.data?.id || '';
-    }
+    // Updated: POST /artists now requires the creator's role (submitterRoleIds) and a type.
+    artistId = await createTestArtist(user, 'PW Band', 'GROUP');
   });
 
   test('artist page loads and shows name', async ({ page }) => {
@@ -345,7 +339,7 @@ test.describe('Artist page', () => {
     await loginUI(page, user2);
     await skipOnboarding(page);
     await page.goto(`/artist/${artistId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     // Updated: follow is an icon button title «В избранное» / «В избранном».
     const followBtn = page.locator('button[title="В избранное"]');
@@ -369,7 +363,7 @@ test.describe('Artist page', () => {
     await loginUI(page, user2);
     await skipOnboarding(page);
     await page.goto(`/artist/${artistId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     // Make sure we are following first
     // Updated: follow is an icon button title «В избранное» / «В избранном».

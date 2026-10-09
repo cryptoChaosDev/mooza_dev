@@ -58,6 +58,11 @@ test('smoke: feed — posts (text, image, poll), like/reaction, comment, save, r
     await publish();
     ids.text = await findPost(`PW текст ${stamp}`);
     await expect(page.getByText(`PW текст ${stamp}`).first()).toBeVisible({ timeout: 10_000 });
+    // Own post: like is disabled in the UI and rejected by the API (400 since the audit).
+    const own = page.locator(`#post-${ids.text}`);
+    await expect(own.locator('button[title="Нельзя лайкать свой пост"]')).toBeDisabled({ timeout: 10_000 });
+    const selfLike = await apiCall('POST', `/posts/${ids.text}/like`, undefined, a.token);
+    expect(selfLike.status, `self-like → ${JSON.stringify(selfLike.data)}`).toBe(400);
   });
 
   await j.step('F3 create image post (UI upload)', async () => {
@@ -93,11 +98,16 @@ test('smoke: feed — posts (text, image, poll), like/reaction, comment, save, r
     const card = await openPost(ids.text);
     await j.checkOverflow('/?post (reader)', pb);
     await card.locator('button:has(svg.lucide-heart)').first().click();
-    await expect.poll(async () => JSON.stringify((await apiCall('GET', `/posts/${ids.text}`, undefined, b.token)).data || {}), { timeout: 10_000 })
-      .toMatch(/"(isLiked|liked|likedByMe)":true|"_count":\{[^}]*"likes":1/);
+    await expect.poll(async () => (await apiCall('GET', `/posts/${ids.text}`, undefined, b.token)).data?.isLiked, { timeout: 10_000 }).toBe(true);
+    await expect(card.locator('button[aria-label="Убрать лайк"]')).toHaveAttribute('aria-pressed', 'true');
     await card.locator('.ProseMirror, .rte-content, p').filter({ hasText: `PW текст ${stamp}` }).first().dblclick();
     await pb.locator('button[title="🔥"]').first().click();
     await expect(card.getByText('🔥').first()).toBeVisible({ timeout: 10_000 });
+    // Post payload since the audit: reactionSummary / myReaction (no raw reactions[]).
+    await expect.poll(async () => {
+      const d = (await apiCall('GET', `/posts/${ids.text}`, undefined, b.token)).data || {};
+      return `${d.myReaction}|${JSON.stringify(d.reactionSummary || [])}|${'reactions' in d}`;
+    }, { timeout: 10_000 }).toMatch(/^🔥\|.*🔥.*\|false$/);
   });
 
   await j.step('F6 comment (reader, UI)', async () => {
@@ -108,6 +118,25 @@ test('smoke: feed — posts (text, image, poll), like/reaction, comment, save, r
     await ta.locator('xpath=following-sibling::button[1]').click();
     await expect(pb.getByText(`PW коммент ${stamp}`).first()).toBeVisible({ timeout: 10_000 });
     await j.checkOverflow('comments modal', pb);
+    await pb.keyboard.press('Escape').catch(() => {});
+  });
+
+  await j.step('F6b comments: feed carries the last 3, the modal loads the rest (GET /posts/:id/comments)', async () => {
+    expect(ids.text, 'text post exists').toBeTruthy();
+    for (let i = 2; i <= 5; i++) {
+      const r = await apiCall('POST', `/posts/${ids.text}/comments`, { content: `PW коммент#${i} ${stamp}` }, b.token);
+      expect(r.status, `comment ${i} → ${JSON.stringify(r.data)}`).toBeLessThan(300);
+    }
+    const feedPost = (await apiCall('GET', `/posts/${ids.text}`, undefined, b.token)).data || {};
+    expect((feedPost.comments || []).length, 'embedded comments are capped at 3').toBeLessThanOrEqual(3);
+    expect(feedPost._count?.comments, '_count.comments counts all').toBe(5);
+    const all = await apiCall('GET', `/posts/${ids.text}/comments?limit=20`, undefined, b.token);
+    expect((all.data?.items || []).length, 'GET /posts/:id/comments returns all top-level comments').toBe(5);
+    const card = await openPost(ids.text);
+    await card.locator('button:has(svg.lucide-message-circle)').first().click();
+    // The oldest comment is outside the embedded 3 → must be fetched by the modal.
+    await expect(pb.getByText(`PW коммент ${stamp}`).first()).toBeVisible({ timeout: 10_000 });
+    await expect(pb.getByText(`PW коммент#5 ${stamp}`).first()).toBeVisible({ timeout: 10_000 });
     await pb.keyboard.press('Escape').catch(() => {});
   });
 
@@ -135,13 +164,23 @@ test('smoke: feed — posts (text, image, poll), like/reaction, comment, save, r
     expect((await resp).status()).toBeLessThan(300);
   });
 
-  j.skip('F10 repost to chat', 'Нет такой функции в UI: на карточке поста нет «отправить в чат» (ChatPicker используется только в чате/заказе/услуге); «Поделиться» копирует ссылку /post/<id>, а маршрута /post/:id в App.tsx нет', 'NOT RUN');
+  j.skip('F10 repost to chat', 'Нет такой функции в UI: на карточке поста нет «отправить в чат» (ChatPicker используется только в чате/заказе/услуге)', 'NOT RUN');
 
-  await j.step('F11 «Поделиться» link opens the post', async () => {
-    // ShareButton copies `${origin}/post/<id>`; check that this URL actually shows the post.
-    await pb.goto(`/post/${ids.text}`);
-    await pb.waitForTimeout(2000);
-    await expect(pb.locator(`#post-${ids.text}`), `/post/${ids.text} → ${pb.url()}`).toBeVisible({ timeout: 8_000 });
+  await j.step('F11 «Поделиться» shares /feed?post=<id> and that link opens the post', async () => {
+    // Since the audit ShareButton shares `${origin}/feed?post=<id>` (was /post/<id>, a dead route).
+    // Capture what the button hands to navigator.share / the clipboard, then open it.
+    const card = await openPost(ids.text);
+    await pb.evaluate(() => {
+      (window as any).__pwShared = '';
+      const grab = (u: string) => { (window as any).__pwShared = u; };
+      try { Object.defineProperty(navigator, 'share', { configurable: true, value: async (d: any) => grab(d?.url || '') }); } catch { /* ignore */ }
+      try { Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (t: string) => grab(t) } }); } catch { /* ignore */ }
+    });
+    await card.locator('button[title="Поделиться"]').first().click();
+    await expect.poll(() => pb.evaluate(() => (window as any).__pwShared), { timeout: 5_000 }).toContain(`/feed?post=${ids.text}`);
+    const shared: string = await pb.evaluate(() => (window as any).__pwShared);
+    await pb.goto(new URL(shared).pathname + new URL(shared).search);
+    await expect(pb.locator(`#post-${ids.text}`), `${shared} → ${pb.url()}`).toBeVisible({ timeout: 15_000 });
   });
 
   await j.step('F12 delete own posts (author, UI menu)', async () => {

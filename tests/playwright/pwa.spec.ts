@@ -81,7 +81,7 @@ test.describe('PWA manifest & meta-tags', () => {
 
   test('service worker registers successfully', async ({ page }) => {
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     const swRegistered = await page.evaluate(async () => {
       if (!('serviceWorker' in navigator)) return false;
@@ -109,7 +109,7 @@ test.describe('PWA manifest & meta-tags', () => {
 test.describe('Safe-area & fixed layout', () => {
   test('bottom nav does not overlap system home indicator area', async ({ page }) => {
     await page.goto('/login');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     // The bottom nav (if present on landing/login) should use safe-area-inset-bottom
     // We can verify it's applied via CSS — check the computed paddingBottom
@@ -131,7 +131,7 @@ test.describe('Safe-area & fixed layout', () => {
     await page.goto('/');
     await page.evaluate(() => localStorage.removeItem('mooza_cookie_consent'));
     await page.reload();
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     const banner = page.locator('[class*="fixed"][class*="bottom"]').first();
     if (await banner.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -191,7 +191,7 @@ test.describe('Cross-platform functional parity', () => {
 
     // Open a modal (cookie banner shows once) and close it
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     // Try to open InfoModal
     const infoBtn = page.locator('button[title*="info"], button[aria-label*="info"], button').filter({ has: page.locator('svg') }).last();
@@ -208,7 +208,7 @@ test.describe('Cross-platform functional parity', () => {
   test('form inputs work (no zoom on iOS)', async ({ page }) => {
     // iOS Safari zooms into inputs with font-size < 16px — verify inputs are readable
     await page.goto('/login');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     const emailInput = page.locator('input[type="email"], input[placeholder*="email" i]').first();
     if (await emailInput.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -226,7 +226,7 @@ test.describe('Cross-platform functional parity', () => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto('/messages');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     // Scrollable area should exist
     const scrollable = await page.evaluate(() => {
@@ -243,7 +243,7 @@ test.describe('Cross-platform functional parity', () => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     // Check for broken images
     const brokenImages = await page.evaluate(() => {
@@ -267,7 +267,7 @@ test.describe('Platform-specific PWA behaviour', () => {
       });
     });
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
     await page.waitForTimeout(2000);
     promptFired = await page.evaluate(() => !!(window as any).__pwaBannerFired);
     // Either the event fired (not yet installed) OR it didn't (already installed / suppressed by app)
@@ -329,7 +329,7 @@ test.describe('Offline & service worker cache', () => {
     // This is a smoke test — we can't fully simulate offline in Playwright without CDP
     // We verify the service worker is controlling the page after load
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
     await page.waitForTimeout(2000); // let SW install
 
     const swControlled = await page.evaluate(async () => {
