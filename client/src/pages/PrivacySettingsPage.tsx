@@ -4,6 +4,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Shield, Bell, Loader2, Send } from 'lucide-react';
 import { userAPI, notificationAPI } from '../lib/api';
 import PublicConsentGate from '../components/PublicConsentGate';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { PublicProfileIntro, useGivePublicConsent } from '../components/PublicConsentPrompt';
+import { useAuthStore } from '../stores/authStore';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 
@@ -48,6 +51,35 @@ export default function PrivacySettingsPage() {
     setConsentAction(null);
     action?.();
   };
+
+  // ── Публичный профиль (Ф3): выдача / отзыв согласия, запрет индексации ──────
+  const giveConsent = useGivePublicConsent();
+  const [publicDialogOpen, setPublicDialogOpen] = useState(false);
+  const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [locallyRevoked, setLocallyRevoked] = useState(false);
+  const isPublic = hasPublicConsent && !locallyRevoked;
+  const revokeMut = useMutation({
+    mutationFn: () => userAPI.revokePublicConsent(),
+    onSuccess: () => {
+      setLocallyRevoked(true);
+      setLocallyConsented(false);
+      const u = useAuthStore.getState().user;
+      if (u) useAuthStore.getState().setUser({ ...u, publicConsentAt: null, publicConsentRevokedAt: new Date().toISOString() });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+      if (u?.id) queryClient.invalidateQueries({ queryKey: ['user', u.id] });
+      toast.success('Профиль больше не публичный');
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отозвать согласие')),
+  });
+  const indexingMut = useMutation({
+    mutationFn: (optOut: boolean) => userAPI.setSearchIndexingOptOut(optOut),
+    onSuccess: (_res, optOut) => {
+      const u = useAuthStore.getState().user;
+      if (u) useAuthStore.getState().setUser({ ...u, searchIndexingOptOut: optOut });
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить настройку')),
+  });
 
   // ── Дублирование уведомлений в Telegram (та же механика, что в колокольчике;
   // queryKey общий — статус синхронизирован) ──────────────────────────────────
@@ -134,6 +166,63 @@ export default function PrivacySettingsPage() {
       <div className="max-w-lg mx-auto px-4 pt-4 space-y-3">
         {tab === 'privacy' && (
           <>
+            {/* Публичный профиль — согласие на распространение ПДн (152-ФЗ ст. 10.1) */}
+            <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-800/60">
+                <p className="text-sm font-semibold text-white">Публичный профиль</p>
+                <p className="text-xs text-slate-500">Видимость профиля без регистрации и в поисковиках</p>
+              </div>
+              <div className="px-4">
+                <div className="flex items-center gap-3 py-3 border-b border-slate-800/40">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white">Публичный профиль</p>
+                    <p className="text-xs text-slate-500">
+                      {isPublic
+                        ? 'Профиль, профессии и услуги видны гостям. Контакты — только вошедшим.'
+                        : 'Гости видят заглушку «Профиль доступен после входа».'}
+                    </p>
+                    {(profile as any)?.id && (
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/profile/${(profile as any).id}?as=guest`)}
+                        className="mt-1 text-xs text-primary-400 hover:text-primary-300"
+                      >
+                        Как видят гости
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={isPublic}
+                    aria-label="Публичный профиль"
+                    disabled={revokeMut.isPending}
+                    onClick={() => (isPublic ? setConfirmRevoke(true) : setPublicDialogOpen(true))}
+                    className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-60 ${isPublic ? 'bg-primary-600' : 'bg-slate-700'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${isPublic ? 'translate-x-4' : ''}`} />
+                  </button>
+                </div>
+                <div className="flex items-center gap-3 py-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-white">Не показывать мой профиль в поисковиках</p>
+                    <p className="text-xs text-slate-500">Яндекс и Google не будут индексировать профиль; по прямой ссылке он останется доступен гостям</p>
+                  </div>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={!!(profile as any).searchIndexingOptOut}
+                    aria-label="Не показывать мой профиль в поисковиках"
+                    disabled={indexingMut.isPending}
+                    onClick={() => indexingMut.mutate(!(profile as any).searchIndexingOptOut)}
+                    className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 disabled:opacity-60 ${(profile as any).searchIndexingOptOut ? 'bg-primary-600' : 'bg-slate-700'}`}
+                  >
+                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white transition-transform ${(profile as any).searchIndexingOptOut ? 'translate-x-4' : ''}`} />
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {/* Кто видит контакты */}
             <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-800/60">
@@ -289,6 +378,35 @@ export default function PrivacySettingsPage() {
       {consentAction && (
         <PublicConsentGate onAccept={handleConsentAccept} onClose={() => setConsentAction(null)} />
       )}
+
+      {publicDialogOpen && (
+        <PublicConsentGate
+          title="Сделайте профиль публичным"
+          intro={<PublicProfileIntro userId={(profile as any)?.id} />}
+          confirmLabel="Сделать публичным"
+          onClose={() => setPublicDialogOpen(false)}
+          onAccept={async () => {
+            try {
+              await giveConsent();
+              setLocallyConsented(true);
+              setLocallyRevoked(false);
+              setPublicDialogOpen(false);
+              toast.success('Профиль стал публичным');
+            } catch (e) {
+              toast.error(getApiError(e, 'Не удалось сохранить согласие'));
+            }
+          }}
+        />
+      )}
+
+      {/* Отзыв согласия — с объяснением последствий */}
+      <ConfirmDialog
+        open={confirmRevoke}
+        message="Отозвать согласие на публичный профиль? Гости и поисковики перестанут видеть профиль (для них он станет недоступен сразу), контакты «Все» переключатся на «Только зарегистрированные». Копии в кэше поисковиков могут исчезнуть не сразу."
+        confirmLabel="Отозвать"
+        onConfirm={() => { setConfirmRevoke(false); revokeMut.mutate(); }}
+        onCancel={() => setConfirmRevoke(false)}
+      />
     </div>
   );
 }

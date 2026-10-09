@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence, type Transition } from 'framer-motion';
 import {
@@ -9,6 +9,8 @@ import {
 } from 'lucide-react';
 import { siteSettingsAPI, referenceAPI } from '../lib/api';
 import LegalDocsModal from '../components/LegalDocsModal';
+import { useSeo } from '../lib/seo';
+import { trackGuestView } from '../lib/metrika';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const fadeUp = (delay = 0) => ({
@@ -106,7 +108,12 @@ export default function LandingPage() {
   const [activeFeature, setActiveFeature] = useState(0);
   const [legalOpen, setLegalOpen] = useState(false);
 
-  useEffect(() => { document.title = 'Moooza — Музыкальная социальная сеть'; }, []);
+  useSeo({
+    title: 'Moooza — Музыкальная социальная сеть',
+    description: 'Moooza — социальная сеть для музыкантов: находите коллег, заказчиков и исполнителей, создавайте проекты и стройте карьеру в музыкальной индустрии.',
+    canonical: '/',
+  });
+  useEffect(() => { trackGuestView('landing'); }, []);
 
   const { data: settings } = useQuery({
     queryKey: ['site-settings'],
@@ -122,6 +129,7 @@ export default function LandingPage() {
 
   const loginEnabled = settings?.loginEnabled !== 'false';
   const registrationEnabled = settings?.registrationEnabled !== 'false';
+  const guestBrowsingEnabled = settings?.guestBrowsingEnabled === 'true';
   const profCount = professions?.length ?? 126;
 
   const FEATURES = [
@@ -218,6 +226,17 @@ export default function LandingPage() {
               )}
             </motion.div>
           )}
+
+          {/* Гостевой режим: витрина доступна без регистрации */}
+          <motion.div {...fadeUp(0.4)} className="flex items-center justify-center gap-4 flex-wrap -mt-8 mb-12 text-sm">
+            <Link to="/feed" className="text-primary-300 hover:text-primary-200 underline-offset-4 hover:underline">Смотреть ленту</Link>
+            {guestBrowsingEnabled && (
+              <>
+                <Link to="/search" className="text-primary-300 hover:text-primary-200 underline-offset-4 hover:underline">Каталог услуг</Link>
+                <Link to="/search?tab=artists" className="text-primary-300 hover:text-primary-200 underline-offset-4 hover:underline">Артисты</Link>
+              </>
+            )}
+          </motion.div>
 
           {/* mini stats */}
           <motion.div {...fadeUp(0.45)} className="flex items-center justify-center gap-6 flex-wrap text-center">

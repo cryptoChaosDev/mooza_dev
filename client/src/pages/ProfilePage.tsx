@@ -29,6 +29,7 @@ import ReviewsBlock from '../components/ReviewsBlock';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
 import ProfileProgressBar, { profileCompletion } from '../components/ProfileProgressBar';
 import PublicConsentGate from '../components/PublicConsentGate';
+import { PublicProfileIntro, useGivePublicConsent } from '../components/PublicConsentPrompt';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { canPreviewInline, openInNewTab } from '../lib/docPreview';
@@ -394,6 +395,21 @@ export default function ProfilePage() {
     const action = consentAction;
     setConsentAction(null);
     action?.();
+  };
+
+  // Ф3: карточка «Сделайте профиль публичным» — то же согласие (152-ФЗ ст. 10.1),
+  // но с объяснением, что увидят гости и поисковики. Отзыв — в настройках приватности.
+  const [publicCardOpen, setPublicCardOpen] = useState(false);
+  const givePublicConsent = useGivePublicConsent();
+  const acceptPublicCard = async () => {
+    try {
+      await givePublicConsent();
+      setLocallyConsented(true);
+      setPublicCardOpen(false);
+      toast.success('Профиль стал публичным');
+    } catch (e) {
+      toast.error(getApiError(e, 'Не удалось сохранить согласие'));
+    }
   };
 
   if (isLoading) {
@@ -779,6 +795,46 @@ export default function ProfilePage() {
 
             {/* Profile completion meter (own profile only) */}
             <ProfileProgressBar profile={profile} />
+
+            {/* ── Публичный профиль (Ф3): согласие + «Как видят гости» ── */}
+            {!hasPublicConsent ? (
+              <div className="bg-gradient-to-br from-primary-600/15 to-violet-600/10 border border-primary-500/30 rounded-2xl p-4 space-y-3">
+                <div className="flex items-start gap-2.5">
+                  <Globe size={18} className="text-primary-300 flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white">Сделайте профиль публичным — вас найдут заказчики в Яндексе</p>
+                    <p className="text-xs text-slate-400 mt-1 leading-relaxed">
+                      Профиль, профессии и услуги станут видны без регистрации. Контакты гости не увидят.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setPublicCardOpen(true)}
+                    className="px-3.5 py-2 bg-primary-600 hover:bg-primary-500 text-white text-xs font-semibold rounded-xl transition-colors"
+                  >
+                    Сделать публичным
+                  </button>
+                  <button
+                    onClick={() => profile?.id && navigate(`/profile/${profile.id}?as=guest`)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium rounded-xl transition-colors"
+                  >
+                    <Eye size={13} /> Как видят гости
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl px-4 py-3 flex items-center gap-2.5">
+                <Globe size={15} className="text-emerald-400 flex-shrink-0" />
+                <p className="text-xs text-slate-300 flex-1 min-w-0">Профиль публичный — его видят гости и поисковики</p>
+                <button
+                  onClick={() => profile?.id && navigate(`/profile/${profile.id}?as=guest`)}
+                  className="text-xs text-primary-400 hover:text-primary-300 font-medium flex-shrink-0"
+                >
+                  Как видят гости
+                </button>
+              </div>
+            )}
 
             {/* Новый email ждёт подтверждения кодом из письма */}
             {profile?.pendingEmail && (
@@ -1431,6 +1487,16 @@ export default function ProfilePage() {
 
     {consentAction && (
       <PublicConsentGate onAccept={handleConsentAccept} onClose={() => setConsentAction(null)} />
+    )}
+
+    {publicCardOpen && (
+      <PublicConsentGate
+        title="Сделайте профиль публичным"
+        intro={<PublicProfileIntro userId={profile?.id} />}
+        confirmLabel="Сделать публичным"
+        onAccept={acceptPublicCard}
+        onClose={() => setPublicCardOpen(false)}
+      />
     )}
 
     {/* Publish-to-Поток dialog — after a NEW service is saved. */}
