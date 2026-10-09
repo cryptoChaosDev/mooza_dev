@@ -3,6 +3,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { tgEvent } from '../utils/telegram';
+import { notifyMany } from '../utils/notify';
 import logger from '../utils/logger';
 import { disconnectUserSockets } from '../socket';
 
@@ -139,18 +140,13 @@ router.post('/', authenticate, complaintLimiter, async (req: AuthRequest, res) =
     // Notify admins
     const admins = await prisma.user.findMany({ where: { isAdmin: true }, select: { id: true } });
     const severity = riskScore >= 70 ? '🚨' : riskScore >= 40 ? '⚠️' : '📋';
-    await Promise.all(admins.map(admin =>
-      prisma.notification.create({
-        data: {
-          userId: admin.id,
-          actorId: meId,
-          type: 'complaint',
-          title: `${severity} Жалоба (риск: ${riskScore}/100)`,
-          body: `${targetType === 'user' ? 'Пользователь' : targetType === 'post' ? 'Публикация' : 'Отзыв'} — ${category.trim()}. ${cleanText.slice(0, 100)}`,
-          link: targetType === 'user' ? `/profile/${targetId}` : '/admin',
-        }
-      }).catch(() => null)
-    ));
+    await notifyMany(admins.map(admin => admin.id), {
+      actorId: meId,
+      type: 'complaint',
+      title: `${severity} Жалоба (риск: ${riskScore}/100)`,
+      body: `${targetType === 'user' ? 'Пользователь' : targetType === 'post' ? 'Публикация' : 'Отзыв'} — ${category.trim()}. ${cleanText.slice(0, 100)}`,
+      link: targetType === 'user' ? `/profile/${targetId}` : '/admin',
+    });
 
     // Auto-action for very high score: temporary block user for 24h — только при
     // жалобах от ≥3 РАЗНЫХ аккаунтов старше 7 дней и никогда на администратора.

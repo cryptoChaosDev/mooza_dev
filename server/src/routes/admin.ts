@@ -1265,19 +1265,13 @@ router.patch('/user-services/:id/approve', async (req, res) => {
       data: { status: 'active' },
       select: { id: true, userId: true, service: { select: { name: true } } },
     });
-    try {
-      const notif = await prisma.notification.create({
-        data: {
-          userId: us.userId,
-          type: 'service_approved_ready_to_post',
-          title: 'Услуга опубликована',
-          body: `Ваша услуга «${us.service.name}» прошла модерацию и теперь видна в каталоге`,
-          link: `/services/${us.id}?showPostDialog=1`,
-        },
-      });
-      const { emitToUser } = await import('../socket');
-      emitToUser(us.userId, 'new_notification', notif);
-    } catch {}
+    await notify({
+      userId: us.userId,
+      type: 'service_approved_ready_to_post',
+      title: 'Услуга опубликована',
+      body: `Ваша услуга «${us.service.name}» прошла модерацию и теперь видна в каталоге`,
+      link: `/services/${us.id}?showPostDialog=1`,
+    });
     res.json({ ok: true });
   } catch (e: any) { return adminError(res, 'PATCH /user-services/:id/approve', e, 500); }
 });
@@ -1290,19 +1284,13 @@ router.patch('/user-services/:id/reject', async (req, res) => {
       data: { status: 'draft' },
       select: { id: true, userId: true, service: { select: { name: true } } },
     });
-    try {
-      const notif = await prisma.notification.create({
-        data: {
-          userId: us.userId,
-          type: 'service_rejected',
-          title: 'Услуга не прошла модерацию',
-          body: reason ? `«${us.service.name}»: ${reason}` : `Услуга «${us.service.name}» возвращена в черновики`,
-          link: `/services/${us.id}`,
-        },
-      });
-      const { emitToUser } = await import('../socket');
-      emitToUser(us.userId, 'new_notification', notif);
-    } catch {}
+    await notify({
+      userId: us.userId,
+      type: 'service_rejected',
+      title: 'Услуга не прошла модерацию',
+      body: reason ? `«${us.service.name}»: ${reason}` : `Услуга «${us.service.name}» возвращена в черновики`,
+      link: `/services/${us.id}`,
+    });
     res.json({ ok: true });
   } catch (e: any) { return adminError(res, 'PATCH /user-services/:id/reject', e, 500); }
 });
