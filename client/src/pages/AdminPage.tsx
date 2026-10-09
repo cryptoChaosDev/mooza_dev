@@ -1,12 +1,15 @@
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient, QueryClient } from '@tanstack/react-query';
 import { adminAPI, api, siteSettingsAPI, complaintAPI } from '../lib/api';
-import { yoNorm, yoIncludes } from '../lib/search';
+import { yoNorm } from '../lib/search';
 import { Plus, Pencil, Trash2, Check, X, ChevronRight, Copy, Search, Shield, ShieldOff, Crown, Ban, Loader2, ShieldCheck, Clock, Zap, Download, ExternalLink, RefreshCw, BarChart2, AlertTriangle } from 'lucide-react';
 import AvatarComponent from '../components/Avatar';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { useScrollLock } from '../lib/scrollLock';
+import { useAuthStore } from '../stores/authStore';
+import ConfirmDialog from '../components/ConfirmDialog';
 import * as XLSX from 'xlsx';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -22,6 +25,154 @@ function exportToExcel(rows: Record<string, any>[], filename: string) {
   XLSX.writeFile(wb, `${filename}.xlsx`);
 }
 
+// ─── Pagination helpers ─────────────────────────────────────────────────────
+
+interface Paged<T> { items: T[]; total: number; page: number; limit: number }
+
+function Pager({ page, total, limit, onPage }: { page: number; total: number; limit: number; onPage: (p: number) => void }) {
+  const totalPages = Math.max(1, Math.ceil(total / Math.max(1, limit)));
+  if (totalPages <= 1) return null;
+  return (
+    <div className="flex justify-center items-center gap-2">
+      <button disabled={page <= 1} onClick={() => onPage(page - 1)} className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-lg text-sm disabled:opacity-40">←</button>
+      <span className="px-3 py-1.5 text-slate-400 text-sm">{page} / {totalPages}</span>
+      <button disabled={page >= totalPages} onClick={() => onPage(page + 1)} className="px-3 py-1.5 bg-slate-800 text-slate-300 rounded-lg text-sm disabled:opacity-40">→</button>
+    </div>
+  );
+}
+
+// Все страницы пагинированного списка (для Excel-выгрузки — не только текущая страница).
+async function fetchAllPages<T>(url: string, params: Record<string, unknown> = {}): Promise<T[]> {
+  const out: T[] = [];
+  for (let page = 1; page <= 1000; page++) {
+    const { data } = await api.get(url, { params: { ...params, page, limit: 200 } });
+    const items = (data?.items ?? []) as T[];
+    out.push(...items);
+    if (items.length === 0 || out.length >= (data?.total ?? 0)) break;
+  }
+  return out;
+}
+
+// Кнопки действий, раньше видимые только по hover (на таче — недоступны):
+// на устройствах без hover всегда видны, с hover — по наведению/фокусу.
+const HOVER_ACTIONS = 'opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-within:opacity-100 transition-opacity';
+
+// Два вида блокировки: isBlocked — бессрочная (снимает только админ),
+// blockedUntil — временная до даты (снимается сама). Возвращает активную временную.
+function activeTempBlock(u: { isBlocked?: boolean; blockedUntil?: string | null } | null | undefined): Date | null {
+  if (!u || u.isBlocked || !u.blockedUntil) return null;
+  const d = new Date(u.blockedUntil);
+  return d.getTime() > Date.now() ? d : null;
+}
+
+// ─── Delete with impact (dry-run + confirmation) ────────────────────────────
+
+type ImpactPath = 'fields-of-activity' | 'directions' | 'professions' | 'services';
+interface CatalogImpact {
+  users: number; userServices: number; userProfessions: number; profileUsers: number;
+  directions: number; professions: number; orders: number; vacancies: number;
+}
+type ImpactTarget = { path: ImpactPath; id: string; name: string } | null;
+
+// Удаление сферы/направления/профессии/услуги удаляет данные пользователей —
+// сначала показываем, сколько затронет (GET …/impact), при затронутых
+// пользователях требуем ввести точное название (сервер проверяет то же).
+function ImpactDeleteDialog({ target, onClose, onDeleted }: {
+  target: ImpactTarget;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const [typed, setTyped] = useState('');
+  useScrollLock(!!target);
+  useEffect(() => { setTyped(''); }, [target?.id]);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['admin-impact', target?.path, target?.id],
+    queryFn: async () => {
+      const { data } = await api.get(`/admin/${target!.path}/${target!.id}/impact`);
+      return data as { name: string; impact: CatalogImpact };
+    },
+    enabled: !!target,
+    staleTime: 0,
+    gcTime: 0,
+  });
+
+  const delMut = useMutation({
+    mutationFn: () => api.delete(`/admin/${target!.path}/${target!.id}`, { params: typed.trim() ? { confirm: typed.trim() } : undefined }),
+    onSuccess: () => { toast.success('Удалено'); onDeleted(); onClose(); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить')),
+  });
+
+  if (!target) return null;
+  const imp = data?.impact;
+  const name = data?.name ?? target.name;
+  const affectedUsers = imp ? imp.users + imp.profileUsers : 0;
+  const blocked = !!imp && (imp.orders > 0 || imp.vacancies > 0);
+  const needTyped = affectedUsers > 0;
+  const canDelete = !!imp && !blocked && (!needTyped || typed.trim() === name.trim()) && !delMut.isPending;
+  const lines: string[] = imp ? [
+    imp.directions > 0 && target.path === 'fields-of-activity' ? `Направлений будет удалено: ${imp.directions}` : '',
+    imp.professions > 0 && target.path !== 'professions' ? `Профессий будет удалено: ${imp.professions}` : '',
+    imp.userServices > 0 ? `Услуг пользователей будет удалено: ${imp.userServices}` : '',
+    imp.userProfessions > 0 ? `Профессий в профилях пользователей будет удалено: ${imp.userProfessions}` : '',
+    imp.profileUsers > 0 ? `У пользователей будет сброшена сфера деятельности: ${imp.profileUsers}` : '',
+  ].filter(Boolean) : [];
+
+  return createPortal(
+    <>
+      <div className="fixed inset-0 z-[80] bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="fixed inset-x-4 bottom-8 z-[81] max-w-sm mx-auto bg-slate-900 border border-slate-700 rounded-2xl p-5 shadow-2xl space-y-3">
+        <div className="flex items-start gap-3">
+          <div className="p-2 bg-red-500/15 rounded-xl flex-shrink-0">
+            <Trash2 size={18} className="text-red-400" />
+          </div>
+          <div className="min-w-0 pt-1">
+            <p className="text-sm text-slate-200 leading-relaxed break-words">Удалить «{name}»?</p>
+            {isLoading && <p className="text-xs text-slate-500 mt-1">Считаем, что будет затронуто…</p>}
+            {isError && <p className="text-xs text-red-400 mt-1">Не удалось посчитать последствия удаления</p>}
+          </div>
+        </div>
+        {imp && (
+          <div className="text-xs space-y-1 bg-slate-800/60 rounded-xl p-3">
+            {lines.length === 0 && !blocked && <p className="text-slate-400">Пользовательские данные не затронуты.</p>}
+            {lines.map(l => <p key={l} className="text-slate-300">{l}</p>)}
+            {affectedUsers > 0 && <p className="text-amber-400 font-semibold">Затронуто пользователей: {affectedUsers}</p>}
+            {blocked && (
+              <p className="text-red-400">
+                Удаление невозможно: ссылаются {imp.orders > 0 ? `заказы (${imp.orders})` : ''}{imp.orders > 0 && imp.vacancies > 0 ? ' и ' : ''}{imp.vacancies > 0 ? `вакансии (${imp.vacancies})` : ''}. Перенесите их в другой раздел каталога.
+              </p>
+            )}
+          </div>
+        )}
+        {imp && needTyped && !blocked && (
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Введите название «{name}» для подтверждения</label>
+            <input
+              value={typed}
+              onChange={e => setTyped(e.target.value)}
+              className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500"
+            />
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-slate-700 text-slate-300 hover:text-white text-sm font-medium transition-colors">
+            Отмена
+          </button>
+          <button
+            onClick={() => delMut.mutate()}
+            disabled={!canDelete}
+            className="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 text-white text-sm font-semibold transition-colors flex items-center justify-center gap-1.5"
+          >
+            {delMut.isPending && <Loader2 size={14} className="animate-spin" />}
+            Удалить
+          </button>
+        </div>
+      </div>
+    </>,
+    document.body,
+  );
+}
+
 // ─── Simple name-only CRUD table (used in Filters / Orgs tabs) ──────────────
 
 function SimpleTable({
@@ -30,12 +181,15 @@ function SimpleTable({
   apiModule,
   extraFields,
   collapsible = false,
+  impactPath,
 }: {
   title: string;
   queryKey: string;
   apiModule: { list: () => any; create: (d: any) => any; update: (id: string, d: any) => any; remove: (id: string) => any };
   extraFields?: { key: string; label: string; placeholder?: string }[];
   collapsible?: boolean;
+  /** Для справочников с каскадом по данным пользователей — удаление через dry-run. */
+  impactPath?: ImpactPath;
 }) {
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -69,6 +223,12 @@ function SimpleTable({
     onSuccess: invalidate,
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить запись')),
   });
+  const [confirmDel, setConfirmDel] = useState<Item | null>(null);
+  const [impactTarget, setImpactTarget] = useState<ImpactTarget>(null);
+  const askDelete = (item: Item) => {
+    if (impactPath) setImpactTarget({ path: impactPath, id: item.id, name: item.name });
+    else setConfirmDel(item);
+  };
 
   const startEdit = (item: Item) => {
     setEditId(item.id);
@@ -182,9 +342,9 @@ function SimpleTable({
                 {extraFields?.map(ef => (
                   <span key={ef.key} className="text-xs text-slate-500 w-28 truncate">{item[ef.key] ?? '—'}</span>
                 ))}
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className={`flex items-center gap-1 ${HOVER_ACTIONS}`}>
                   <button onClick={() => startEdit(item)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
-                  <button onClick={() => deleteMut.mutate(item.id)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+                  <button onClick={() => askDelete(item)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
                 </div>
               </>
             )}
@@ -198,6 +358,13 @@ function SimpleTable({
         )}
         </div>
       </div>}
+      <ConfirmDialog
+        open={!!confirmDel}
+        message={`Удалить «${confirmDel?.name ?? ''}»? Значение пропадёт у всех пользователей, где оно выбрано.`}
+        onConfirm={() => { if (confirmDel) deleteMut.mutate(confirmDel.id); }}
+        onCancel={() => setConfirmDel(null)}
+      />
+      <ImpactDeleteDialog target={impactTarget} onClose={() => setImpactTarget(null)} onDeleted={invalidate} />
     </div>
   );
 }
@@ -288,11 +455,7 @@ function DirectionNode({ direction, allProfessions, allCustomFilters, allService
     onSuccess: () => { invalidateD(); setEditing(false); },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
-  const deleteMut = useMutation({
-    mutationFn: () => adminAPI.directions.remove(direction.id),
-    onSuccess: invalidateD,
-    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить направление')),
-  });
+  const [impactTarget, setImpactTarget] = useState<ImpactTarget>(null);
   const setFiltersMut = useMutation({
     mutationFn: ({ filterIds, filterTypes }: { filterIds: string[]; filterTypes: string[] }) =>
       adminAPI.directions.setFilters(direction.id, filterIds, filterTypes),
@@ -344,14 +507,15 @@ function DirectionNode({ direction, allProfessions, allCustomFilters, allService
             {attachedProfessions.length > 0 && <span className="text-xs text-slate-500/80 flex-shrink-0">{attachedProfessions.length} проф.</span>}
             {attachedServiceIds.length > 0 && <span className="text-xs text-emerald-500/80 flex-shrink-0">{attachedServiceIds.length} усл.</span>}
             {totalAttached > 0 && <span className="text-xs text-primary-500/80 flex-shrink-0">{totalAttached} ф.</span>}
-            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className={`flex gap-0.5 ${HOVER_ACTIONS}`}>
               <button onClick={onUnlink} className="text-slate-400 hover:text-amber-400 p-1" title="Открепить от сферы"><X size={12} /></button>
               <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={13} /></button>
-              <button onClick={() => deleteMut.mutate()} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={13} /></button>
+              <button onClick={() => setImpactTarget({ path: 'directions', id: direction.id, name: direction.name })} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={13} /></button>
             </div>
           </>
         )}
       </div>
+      <ImpactDeleteDialog target={impactTarget} onClose={() => setImpactTarget(null)} onDeleted={() => { invalidateD(); invalidateP(); }} />
 
       {open && (
         <div className="bg-slate-900/50 divide-y divide-slate-800/60">
@@ -481,11 +645,7 @@ function FieldNode({ field, allDirections, allProfessions, allCustomFilters, all
     onSuccess: () => { invalidateF(); setEditing(false); },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
-  const deleteMut = useMutation({
-    mutationFn: () => adminAPI.fieldsOfActivity.remove(field.id),
-    onSuccess: invalidateF,
-    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить сферу')),
-  });
+  const [impactTarget, setImpactTarget] = useState<ImpactTarget>(null);
   const linkDirMut = useMutation({
     mutationFn: (dirId: string) => adminAPI.directions.setSphere(dirId, field.id),
     onSuccess: () => { invalidateD(); setLinkDirId(''); },
@@ -510,13 +670,18 @@ function FieldNode({ field, allDirections, allProfessions, allCustomFilters, all
             <span className="text-xs text-slate-500 flex-shrink-0">
               {linkedDirections.length} напр. · {profCount} проф.
             </span>
-            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className={`flex gap-0.5 ${HOVER_ACTIONS}`}>
               <button onClick={() => setEditing(true)} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
-              <button onClick={() => deleteMut.mutate()} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+              <button onClick={() => setImpactTarget({ path: 'fields-of-activity', id: field.id, name: field.name })} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
             </div>
           </>
         )}
       </div>
+      <ImpactDeleteDialog
+        target={impactTarget}
+        onClose={() => setImpactTarget(null)}
+        onDeleted={() => { invalidateF(); invalidateD(); qc.invalidateQueries({ queryKey: ['admin-professions'] }); }}
+      />
 
       {open && (
         <div className="p-3 space-y-2">
@@ -702,7 +867,7 @@ function CustomFilterCard({ filter, onUpdate, onDelete, onCopy }: {
               )}
             </div>
             <span className="text-xs text-slate-500 flex-shrink-0">{filter.values.length} зн.</span>
-            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className={`flex gap-0.5 ${HOVER_ACTIONS}`}>
               <button onClick={() => { setEditName(filter.name); setEditingName(true); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
               <button onClick={onCopy} className="text-slate-400 hover:text-sky-400 p-1" title="Копировать фильтр"><Copy size={14} /></button>
               <button onClick={onDelete} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
@@ -730,7 +895,7 @@ function CustomFilterCard({ filter, onUpdate, onDelete, onCopy }: {
                 <>
                   <span className="w-1.5 h-1.5 rounded-full bg-slate-600 flex-shrink-0" />
                   <span className="flex-1 text-sm text-slate-300">{v}</span>
-                  <div className="flex gap-0.5 opacity-0 group-hover/v:opacity-100 transition-opacity">
+                  <div className="flex gap-0.5 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/v:opacity-100 focus-within:opacity-100 transition-opacity">
                     <button onClick={() => { setEditingIdx(idx); setEditingText(v); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={12} /></button>
                     <button onClick={() => deleteValue(idx)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={12} /></button>
                   </div>
@@ -808,6 +973,7 @@ function CustomFiltersSection() {
     onSuccess: invalidate,
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить фильтр')),
   });
+  const [confirmDelFilter, setConfirmDelFilter] = useState<CFilter | null>(null);
 
   return (
     <div className="space-y-3">
@@ -824,7 +990,7 @@ function CustomFiltersSection() {
           key={filter.id}
           filter={filter}
           onUpdate={(name, values) => updateMut.mutate({ id: filter.id, name, values })}
-          onDelete={() => deleteMut.mutate(filter.id)}
+          onDelete={() => setConfirmDelFilter(filter)}
           onCopy={() => createMut.mutate({ name: filter.name + ' (копия)', values: filter.values.map(v => v.value) })}
         />
       ))}
@@ -887,6 +1053,12 @@ function CustomFiltersSection() {
           </button>
         </div>
       )}
+      <ConfirmDialog
+        open={!!confirmDelFilter}
+        message={`Удалить фильтр «${confirmDelFilter?.name ?? ''}»? Его значения пропадут у всех пользователей, заказов и вакансий.`}
+        onConfirm={() => { if (confirmDelFilter) deleteMut.mutate(confirmDelFilter.id); }}
+        onCancel={() => setConfirmDelFilter(null)}
+      />
     </div>
   );
 }
@@ -910,11 +1082,7 @@ function DirectionsTab() {
     onSuccess: () => { invalidate(); setEditId(null); },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
-  const deleteMut = useMutation({
-    mutationFn: (id: string) => adminAPI.directions.remove(id),
-    onSuccess: invalidate,
-    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить направление')),
-  });
+  const [impactTarget, setImpactTarget] = useState<ImpactTarget>(null);
 
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -971,9 +1139,9 @@ function DirectionsTab() {
                     <span className="text-slate-500 ml-1">({dir.fieldOfActivity?.name ?? 'без сферы'})</span>
                   )}
                 </span>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className={`flex items-center gap-1 ${HOVER_ACTIONS}`}>
                   <button onClick={() => { setEditId(dir.id); setEditName(dir.name); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
-                  <button onClick={() => deleteMut.mutate(dir.id)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+                  <button onClick={() => setImpactTarget({ path: 'directions', id: dir.id, name: dir.name })} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
                 </div>
               </>
             )}
@@ -983,6 +1151,11 @@ function DirectionsTab() {
           <div className="px-4 py-4 text-sm text-slate-500 text-center">{search ? 'Ничего не найдено' : 'Нет записей'}</div>
         )}
       </div>
+      <ImpactDeleteDialog
+        target={impactTarget}
+        onClose={() => setImpactTarget(null)}
+        onDeleted={() => { invalidate(); qc.invalidateQueries({ queryKey: ['admin-professions'] }); }}
+      />
     </div>
   );
 }
@@ -1006,11 +1179,7 @@ function ProfessionsTab() {
     onSuccess: () => { invalidate(); setEditId(null); },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
-  const deleteMut = useMutation({
-    mutationFn: (id: string) => adminAPI.professions.remove(id),
-    onSuccess: invalidate,
-    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить профессию')),
-  });
+  const [impactTarget, setImpactTarget] = useState<ImpactTarget>(null);
 
   const [adding, setAdding] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
@@ -1067,9 +1236,9 @@ function ProfessionsTab() {
                     <span className="text-slate-500 ml-1">({p.direction?.name ?? 'без направления'})</span>
                   )}
                 </span>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className={`flex items-center gap-1 ${HOVER_ACTIONS}`}>
                   <button onClick={() => { setEditId(p.id); setEditName(p.name); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
-                  <button onClick={() => deleteMut.mutate(p.id)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+                  <button onClick={() => setImpactTarget({ path: 'professions', id: p.id, name: p.name })} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
                 </div>
               </>
             )}
@@ -1079,6 +1248,7 @@ function ProfessionsTab() {
           <div className="px-4 py-4 text-sm text-slate-500 text-center">{search ? 'Ничего не найдено' : 'Нет записей'}</div>
         )}
       </div>
+      <ImpactDeleteDialog target={impactTarget} onClose={() => setImpactTarget(null)} onDeleted={invalidate} />
     </div>
   );
 }
@@ -1126,11 +1296,7 @@ function ServicesTab() {
     onSuccess: () => { invalidate(); setEditId(null); },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
-  const deleteMut = useMutation({
-    mutationFn: (id: string) => adminAPI.services.remove(id),
-    onSuccess: invalidate,
-    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить услугу')),
-  });
+  const [impactTarget, setImpactTarget] = useState<ImpactTarget>(null);
 
   const q = yoNorm(search);
   const filtered = q ? services.filter(s => yoNorm(s.name).includes(q)) : services;
@@ -1183,9 +1349,9 @@ function ServicesTab() {
                       <span className="ml-2 text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded align-middle">{svc.section.name}</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5 flex-shrink-0">
+                  <div className={`flex items-center gap-1 ${HOVER_ACTIONS} mt-0.5 flex-shrink-0`}>
                     <button onClick={() => { setEditId(svc.id); setEditName(svc.name); }} className="text-slate-400 hover:text-primary-400 p-1"><Pencil size={14} /></button>
-                    <button onClick={() => deleteMut.mutate(svc.id)} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
+                    <button onClick={() => setImpactTarget({ path: 'services', id: svc.id, name: svc.name })} className="text-slate-400 hover:text-red-400 p-1"><Trash2 size={14} /></button>
                   </div>
                 </>
               )}
@@ -1196,6 +1362,7 @@ function ServicesTab() {
           <div className="px-4 py-4 text-sm text-slate-500 text-center">{search ? 'Ничего не найдено' : 'Нет записей'}</div>
         )}
       </div>
+      <ImpactDeleteDialog target={impactTarget} onClose={() => setImpactTarget(null)} onDeleted={invalidate} />
     </div>
   );
 }
@@ -1216,6 +1383,7 @@ interface AdminUser {
   avatar?: string;
   isAdmin: boolean;
   isBlocked: boolean;
+  blockedUntil?: string | null;
   isPremium: boolean;
   isPro: boolean;
   proUntil?: string | null;
@@ -1261,11 +1429,20 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
 
+  // Тумблеры шлют ЯВНОЕ целевое значение — повторный клик/устаревшая карточка
+  // не инвертирует состояние вслепую.
   const toggleMut = useMutation({
-    mutationFn: (field: 'block' | 'premium' | 'pro') => api.patch(`/admin/users/${user.id}/${field}`),
+    mutationFn: ({ field, value }: { field: 'block' | 'premium' | 'pro'; value: boolean }) =>
+      api.patch(`/admin/users/${user.id}/${field}`, { value }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['admin-users'] }); onUpdated(); },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось изменить статус пользователя')),
   });
+  const meId = useAuthStore(s => s.user?.id);
+  const isSelf = !!meId && meId === user.id;
+  const [confirmAction, setConfirmAction] = useState<null | 'block' | 'revokePro'>(null);
+  // Заблокирован бессрочно (isBlocked) или временно (blockedUntil в будущем).
+  const tempBlockedUntil = activeTempBlock(user);
+  const blockedNow = user.isBlocked || !!tempBlockedUntil;
 
   // Effective Pro = manual flag OR unexpired subscription. Expiry shown only for
   // the timed (donation/referral) case; a manual isPro override is permanent.
@@ -1310,7 +1487,8 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
               {proActive && <span title={proExpiry ? `Pro до ${proExpiry}` : 'Pro (вечный)'} className="flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-500/20 text-violet-400 text-[10px] rounded-full border border-violet-500/30"><Zap size={9} />PRO{proExpiry ? ` до ${proExpiry}` : ''}</span>}
               {user.isPremium && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] rounded-full border border-amber-500/30"><Crown size={9} />Premium</span>}
               {user.isAdmin && <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-400 text-[10px] rounded-full border border-purple-500/30">Admin</span>}
-              {user.isBlocked && <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] rounded-full border border-red-500/30">Заблокирован</span>}
+              {user.isBlocked && <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] rounded-full border border-red-500/30">Заблокирован бессрочно</span>}
+              {tempBlockedUntil && <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-[10px] rounded-full border border-red-500/30">Блок до {tempBlockedUntil.toLocaleString('ru-RU')}</span>}
             </div>
             <p className="text-xs text-slate-500 truncate mt-0.5">{user.email || 'без email'}</p>
           </div>
@@ -1320,19 +1498,20 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
         {/* Quick-action toggles */}
         <div className="flex gap-2 px-5 py-3 border-b border-slate-800 flex-shrink-0">
           <button
-            onClick={() => toggleMut.mutate('block')}
-            disabled={toggleMut.isPending}
-            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors border ${
-              user.isBlocked
+            onClick={() => blockedNow ? toggleMut.mutate({ field: 'block', value: false }) : setConfirmAction('block')}
+            disabled={toggleMut.isPending || (isSelf && !blockedNow)}
+            title={tempBlockedUntil ? `Временная блокировка до ${tempBlockedUntil.toLocaleString('ru-RU')}` : undefined}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium transition-colors border disabled:opacity-50 ${
+              blockedNow
                 ? 'bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/30'
                 : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border-slate-700'
             }`}
           >
-            {user.isBlocked ? <ShieldOff size={13} /> : <Shield size={13} />}
-            {user.isBlocked ? 'Разблокировать' : 'Заблокировать'}
+            {blockedNow ? <ShieldOff size={13} /> : <Shield size={13} />}
+            {blockedNow ? 'Разблокировать' : 'Заблокировать'}
           </button>
           <button
-            onClick={() => toggleMut.mutate('premium')}
+            onClick={() => toggleMut.mutate({ field: 'premium', value: !user.isPremium })}
             disabled={toggleMut.isPending}
             title={user.isPremium ? 'Убрать Premium' : 'Выдать Premium'}
             className={`flex items-center justify-center px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
@@ -1342,7 +1521,7 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
             <Crown size={13} />
           </button>
           <button
-            onClick={() => toggleMut.mutate('pro')}
+            onClick={() => proActive ? setConfirmAction('revokePro') : toggleMut.mutate({ field: 'pro', value: true })}
             disabled={toggleMut.isPending}
             title={proActive ? (proExpiry ? `Снять Pro (до ${proExpiry})` : 'Снять Pro') : 'Выдать Pro (вечный)'}
             className={`flex items-center justify-center px-3 py-2 rounded-lg text-xs font-medium transition-colors border ${
@@ -1405,9 +1584,9 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
             <label className="block text-xs text-slate-500 mb-1">О себе</label>
             <textarea rows={2} value={form.bio} onChange={e => set('bio', e.target.value)} className={`${inputCls} resize-none`} />
           </div>
-          <label className="flex items-center gap-2 cursor-pointer select-none py-1">
-            <input type="checkbox" checked={form.isAdmin} onChange={e => set('isAdmin', e.target.checked)} className="w-4 h-4 rounded accent-purple-500" />
-            <span className="text-sm text-slate-300">Права администратора</span>
+          <label className={`flex items-center gap-2 select-none py-1 ${isSelf ? 'opacity-60' : 'cursor-pointer'}`}>
+            <input type="checkbox" checked={form.isAdmin} disabled={isSelf} onChange={e => set('isAdmin', e.target.checked)} className="w-4 h-4 rounded accent-purple-500" />
+            <span className="text-sm text-slate-300">Права администратора{isSelf ? ' (нельзя снять с себя)' : ''}</span>
           </label>
         </div>
 
@@ -1415,7 +1594,9 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
         <div className="px-5 pb-5 pt-3 border-t border-slate-800 flex-shrink-0 flex gap-2">
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-red-500/40 text-red-400 hover:bg-red-500/10 text-sm font-medium transition-colors"
+            disabled={isSelf}
+            title={isSelf ? 'Нельзя удалить самого себя' : undefined}
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-red-500/40 text-red-400 hover:bg-red-500/10 disabled:opacity-40 text-sm font-medium transition-colors"
           >
             <Trash2 size={15} />
             Удалить
@@ -1466,6 +1647,22 @@ function UserDrawer({ user, onClose, onUpdated, onDeleted }: {
           </div>
         </div>
       )}
+
+      {/* Портал всплывает по React-дереву — не даём клику закрыть карточку пользователя. */}
+      <div onClick={e => e.stopPropagation()}>
+      <ConfirmDialog
+        open={!!confirmAction}
+        message={confirmAction === 'block'
+          ? `Заблокировать ${fullName}? Пользователь будет разлогинен и не сможет войти до ручной разблокировки.`
+          : `Снять Pro у ${fullName}? Подписка будет аннулирована (включая оплаченные месяцы).`}
+        confirmLabel={confirmAction === 'block' ? 'Заблокировать' : 'Снять Pro'}
+        onConfirm={() => {
+          if (confirmAction === 'block') toggleMut.mutate({ field: 'block', value: true });
+          if (confirmAction === 'revokePro') toggleMut.mutate({ field: 'pro', value: false });
+        }}
+        onCancel={() => setConfirmAction(null)}
+      />
+      </div>
     </div>
   );
 }
@@ -1588,8 +1785,15 @@ function UsersTab() {
         </div>
         <button
           onClick={async () => {
-            const r = await api.get('/admin/users', { params: { search: '', page: 1, limit: 9999 } });
-            const users = r.data.users as AdminUser[];
+            // Полная выгрузка: /admin/users режет limit до 50, поэтому отдельный эндпоинт.
+            let users: AdminUser[];
+            try {
+              const r = await api.get('/admin/users/export');
+              users = r.data.users as AdminUser[];
+            } catch (e: any) {
+              toast.error(getApiError(e, 'Не удалось выгрузить пользователей'));
+              return;
+            }
             exportToExcel(users.map((u, i) => ({
               '№': i + 1,
               'Имя': `${u.firstName} ${u.lastName}`.trim(),
@@ -1601,7 +1805,7 @@ function UsersTab() {
               'Администратор': u.isAdmin ? 'Да' : 'Нет',
               'Premium': u.isPremium ? 'Да' : 'Нет',
               'Pro': u.isPro ? 'Да' : 'Нет',
-              'Заблокирован': u.isBlocked ? 'Да' : 'Нет',
+              'Заблокирован': u.isBlocked ? 'Да' : (u.blockedUntil && new Date(u.blockedUntil).getTime() > Date.now() ? `До ${new Date(u.blockedUntil).toLocaleString('ru-RU')}` : 'Нет'),
               'Дата регистрации': u.createdAt ? new Date(u.createdAt).toLocaleDateString('ru-RU') : '',
             })), 'Пользователи');
           }}
@@ -1630,7 +1834,7 @@ function UsersTab() {
               {/* Avatar */}
               <div className="relative flex-shrink-0">
                 <AvatarComponent src={u.avatar} name={`${u.firstName} ${u.lastName}`} size={40} />
-                {u.isBlocked && (
+                {(u.isBlocked || !!activeTempBlock(u)) && (
                   <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center">
                     <Ban size={10} className="text-white" />
                   </div>
@@ -1644,7 +1848,8 @@ function UsersTab() {
                   {u.isPro && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-violet-500/20 text-violet-400 text-xs rounded-full border border-violet-500/30"><Zap size={10} />PRO</span>}
                   {u.isPremium && <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-xs rounded-full border border-amber-500/30"><Crown size={10} />Premium</span>}
                   {u.isAdmin && <span className="px-1.5 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full border border-purple-500/30">Admin</span>}
-                  {u.isBlocked && <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full border border-red-500/30">Заблокирован</span>}
+                  {u.isBlocked && <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full border border-red-500/30">Заблокирован бессрочно</span>}
+                  {activeTempBlock(u) && <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 text-xs rounded-full border border-red-500/30">Блок до {activeTempBlock(u)!.toLocaleString('ru-RU')}</span>}
                 </div>
                 <div className="text-xs text-slate-500 truncate mt-0.5">
                   {u.nickname && <span>@{u.nickname} · </span>}
@@ -1797,12 +2002,16 @@ function ServiceModerationTab() {
   const qc = useQueryClient();
   const [rejectId, setRejectId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [page, setPage] = useState(1);
 
-  const { data: pending = [], isLoading } = useQuery<any[]>({
-    queryKey: ['admin-services-pending'],
-    queryFn: () => adminAPI.serviceModeration.pending().then((r: any) => r.data),
+  const { data: pendingPage, isLoading } = useQuery<Paged<any>>({
+    queryKey: ['admin-services-pending', page],
+    queryFn: () => api.get('/admin/user-services/pending', { params: { page, limit: 50 } }).then((r: any) => r.data),
     refetchInterval: 30000,
+    placeholderData: (prev) => prev,
   });
+  const pending: any[] = pendingPage?.items ?? [];
+  const pendingTotal = pendingPage?.total ?? 0;
 
   const approveMut = useMutation({
     mutationFn: (id: string) => adminAPI.serviceModeration.approve(id),
@@ -1820,8 +2029,8 @@ function ServiceModerationTab() {
       <div className="flex items-center gap-2 mb-3">
         <Clock size={15} className="text-amber-400" />
         <h2 className="text-sm font-semibold text-white">Услуги на модерации</h2>
-        {pending.length > 0 && (
-          <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[11px] rounded-full font-semibold">{pending.length}</span>
+        {pendingTotal > 0 && (
+          <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 text-[11px] rounded-full font-semibold">{pendingTotal}</span>
         )}
       </div>
       {isLoading ? (
@@ -1876,6 +2085,7 @@ function ServiceModerationTab() {
           )}
         </div>
       ))}
+      {pendingPage && <Pager page={page} total={pendingPage.total} limit={pendingPage.limit} onPage={setPage} />}
     </div>
   );
 }
@@ -2043,11 +2253,19 @@ function GroupsAdminTab() {
   const [search, setSearch] = useState('');
   const [filterType, setFilterType] = useState<string>('ALL');
   const [filterStatus, setFilterStatus] = useState<string>('ALL');
+  const [page, setPage] = useState(1);
+  const [confirmDelGroup, setConfirmDelGroup] = useState<any | null>(null);
+  useEffect(() => { setPage(1); }, [search, filterType, filterStatus]);
 
-  const { data: groups = [], isLoading } = useQuery<any[]>({
-    queryKey: ['admin-groups'],
-    queryFn: () => adminAPI.groups.list().then((r: any) => r.data),
+  // Серверная пагинация и фильтры (раньше грузился весь каталог артистов).
+  const { data: groupsPage, isLoading } = useQuery<Paged<any>>({
+    queryKey: ['admin-groups', search, filterType, filterStatus, page],
+    queryFn: () => api.get('/admin/groups', {
+      params: { search: search.trim() || undefined, type: filterType, status: filterStatus, page, limit: 50 },
+    }).then((r: any) => r.data),
+    placeholderData: (prev) => prev,
   });
+  const groups: any[] = groupsPage?.items ?? [];
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['admin-groups'] });
 
@@ -2067,15 +2285,7 @@ function GroupsAdminTab() {
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить группу')),
   });
 
-  const filtered = groups.filter(g => {
-    if (search && !yoIncludes(g.name, search)) return false;
-    if (filterType !== 'ALL') {
-      if (filterType === 'NONE' && g.type !== null) return false;
-      if (filterType !== 'NONE' && g.type !== filterType) return false;
-    }
-    if (filterStatus !== 'ALL' && g.status !== filterStatus) return false;
-    return true;
-  });
+  const filtered = groups;
 
   const startEdit = (g: any) => {
     setEditId(g.id);
@@ -2129,7 +2339,7 @@ function GroupsAdminTab() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <h3 className="font-semibold text-white">Каталог артистов</h3>
-            <span className="text-xs text-slate-500">{filtered.length} / {groups.length}</span>
+            <span className="text-xs text-slate-500">{groupsPage?.total ?? 0}</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="relative">
@@ -2189,7 +2399,7 @@ function GroupsAdminTab() {
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button onClick={() => startEdit(g)} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"><Pencil size={14} /></button>
-                    <button onClick={() => { if (confirm(`Удалить группу «${g.name}»?`)) deleteMut.mutate(g.id); }}
+                    <button onClick={() => setConfirmDelGroup(g)}
                       className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors"><Trash2 size={14} /></button>
                   </div>
                 </div>
@@ -2198,6 +2408,17 @@ function GroupsAdminTab() {
           ))}
         </div>
       )}
+      {groupsPage && (
+        <div className="py-3">
+          <Pager page={page} total={groupsPage.total} limit={groupsPage.limit} onPage={setPage} />
+        </div>
+      )}
+      <ConfirmDialog
+        open={!!confirmDelGroup}
+        message={`Удалить артиста «${confirmDelGroup?.name ?? ''}»? Будут удалены его участники, релизы, клипы и вакансии.`}
+        onConfirm={() => { if (confirmDelGroup) deleteMut.mutate(confirmDelGroup.id); }}
+        onCancel={() => setConfirmDelGroup(null)}
+      />
     </div>
   );
 }
@@ -2469,7 +2690,10 @@ function ComplaintsTab() {
                   <ExternalLink size={11} />
                 </a>
                 {c.targetData.isBlocked && (
-                  <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded">заблокирован</span>
+                  <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded">заблокирован бессрочно</span>
+                )}
+                {activeTempBlock(c.targetData) && (
+                  <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded">блок до {activeTempBlock(c.targetData)!.toLocaleString('ru-RU')}</span>
                 )}
               </div>
             ) : c.targetType === 'user' ? (
@@ -2514,9 +2738,9 @@ function ComplaintsTab() {
                 placeholder="Резолюция (необязательно)..."
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-primary-500"
               />
-              {c.targetType === 'user' && (
+              {(c.targetType === 'user' || ((c.targetType === 'post' || c.targetType === 'review') && c.targetData)) && (
                 <div className="flex flex-wrap gap-1.5">
-                  <span className="text-[11px] text-slate-500 self-center">Блок:</span>
+                  <span className="text-[11px] text-slate-500 self-center">{c.targetType === 'user' ? 'Блок:' : 'Блок автора:'}</span>
                   {['', '1', '7', '30', 'forever'].map(d => (
                     <button
                       key={d || 'none'}
@@ -2551,7 +2775,7 @@ function ComplaintsTab() {
                     resolveMut.mutate({
                       id: c.id,
                       data: {
-                        status: actionBlockDays ? 'actioned' : 'reviewed',
+                        status: actionBlockDays || deleteContent ? 'actioned' : 'reviewed',
                         resolution: actionResolution || undefined,
                         blockDays: actionBlockDays
                           ? (actionBlockDays === 'forever' ? 'forever' : Number(actionBlockDays))
@@ -2658,12 +2882,17 @@ function DonationsTab() {
   const qc = useQueryClient();
   const [statusFilter, setStatusFilter] = useState('');
   const [grantId, setGrantId] = useState('');
+  const [page, setPage] = useState(1);
+  const [revokeUser, setRevokeUser] = useState<DonationRow['user'] | null>(null);
+  useEffect(() => { setPage(1); }, [statusFilter]);
 
-  const { data: donations = [], isLoading } = useQuery<DonationRow[]>({
-    queryKey: ['admin-donations', statusFilter],
-    queryFn: () => adminAPI.listDonations(statusFilter || undefined).then((r: any) => r.data),
+  const { data: donationsPage, isLoading } = useQuery<Paged<DonationRow>>({
+    queryKey: ['admin-donations', statusFilter, page],
+    queryFn: () => api.get('/admin/donations', { params: { status: statusFilter || undefined, page, limit: 50 } }).then((r: any) => r.data),
     refetchInterval: 30000,
+    placeholderData: (prev) => prev,
   });
+  const donations: DonationRow[] = donationsPage?.items ?? [];
 
   const activateMut = useMutation({
     mutationFn: (id: string) => adminAPI.activateDonation(id),
@@ -2683,8 +2912,9 @@ function DonationsTab() {
   });
 
   // Annul Pro (e.g. a donation accepted by mistake) — clears isPro + proUntil.
+  // Явное value:false — старый тумблер по устаревшим данным мог выдать вечный Pro.
   const revokeMut = useMutation({
-    mutationFn: (userId: string) => api.patch(`/admin/users/${userId}/pro`),
+    mutationFn: (userId: string) => api.patch(`/admin/users/${userId}/pro`, { value: false }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['admin-donations'] }),
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось снять Pro')),
   });
@@ -2785,7 +3015,7 @@ function DonationsTab() {
                   )}
                   {dProActive && (
                     <button
-                      onClick={() => { if (window.confirm('Снять Pro у пользователя? Подписка будет аннулирована.')) revokeMut.mutate(d.user.id); }}
+                      onClick={() => setRevokeUser(d.user)}
                       disabled={revokeMut.isPending}
                       title="Аннулировать Pro"
                       className="flex items-center gap-1.5 text-xs bg-red-600/80 hover:bg-red-600 disabled:opacity-50 text-white px-3 py-2 rounded-lg transition-colors whitespace-nowrap"
@@ -2803,6 +3033,14 @@ function DonationsTab() {
           })}
         </div>
       )}
+      {donationsPage && <Pager page={page} total={donationsPage.total} limit={donationsPage.limit} onPage={setPage} />}
+      <ConfirmDialog
+        open={!!revokeUser}
+        message={`Снять Pro у ${revokeUser ? userName(revokeUser) : 'пользователя'}? Подписка будет аннулирована.`}
+        confirmLabel="Снять Pro"
+        onConfirm={() => { if (revokeUser) revokeMut.mutate(revokeUser.id); }}
+        onCancel={() => setRevokeUser(null)}
+      />
     </div>
   );
 }
@@ -2823,28 +3061,47 @@ interface WaitlistRow {
 
 function WaitlistTab() {
   const [filter, setFilter] = useState<string>('');
-  const { data: rows = [], isLoading } = useQuery<WaitlistRow[]>({
-    queryKey: ['admin-waitlist', filter],
-    queryFn: () => adminAPI.waitlist.list(filter || undefined).then((r: any) => r.data),
+  const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
+  useEffect(() => { setPage(1); }, [filter]);
+  const { data: rowsPage, isLoading } = useQuery<Paged<WaitlistRow>>({
+    queryKey: ['admin-waitlist', filter, page],
+    queryFn: () => api.get('/admin/waitlist', { params: { type: filter || undefined, page, limit: 100 } }).then((r: any) => r.data),
+    placeholderData: (prev) => prev,
   });
+  const rows: WaitlistRow[] = rowsPage?.items ?? [];
   const TYPES = ['', 'resident_waitlist', 'listener', 'customer', 'company'];
+
+  // Excel — ВСЕ заявки по фильтру, а не только текущая страница.
+  const exportAll = async () => {
+    setExporting(true);
+    try {
+      const all = await fetchAllPages<WaitlistRow>('/admin/waitlist', { type: filter || undefined });
+      exportToExcel(all.map((r, i) => ({
+        '№': i + 1,
+        'Email': r.email,
+        'Тип': WAITLIST_TYPE_LABEL[r.type] || r.type,
+        'Согласие ПДн': r.consentPd ? 'да' : 'нет',
+        'Согласие реклама': r.consentMarketing ? 'да' : 'нет',
+        'Дата': new Date(r.createdAt).toLocaleString('ru-RU'),
+      })), 'waitlist');
+    } catch (e: any) {
+      toast.error(getApiError(e, 'Не удалось выгрузить заявки'));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h2 className="text-sm font-semibold text-white">Waitlist — заявки с лендинга ({rows.length})</h2>
+        <h2 className="text-sm font-semibold text-white">Waitlist — заявки с лендинга ({rowsPage?.total ?? 0})</h2>
         <button
-          onClick={() => exportToExcel(rows.map((r, i) => ({
-            '№': i + 1,
-            'Email': r.email,
-            'Тип': WAITLIST_TYPE_LABEL[r.type] || r.type,
-            'Согласие ПДн': r.consentPd ? 'да' : 'нет',
-            'Согласие реклама': r.consentMarketing ? 'да' : 'нет',
-            'Дата': new Date(r.createdAt).toLocaleString('ru-RU'),
-          })), 'waitlist')}
-          className="flex items-center gap-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2.5 py-1.5 rounded-lg transition-colors"
+          onClick={exportAll}
+          disabled={exporting}
+          className="flex items-center gap-1 text-xs bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-300 px-2.5 py-1.5 rounded-lg transition-colors"
         >
-          <Download size={13} /> Excel
+          {exporting ? <Loader2 size={13} className="animate-spin" /> : <Download size={13} />} Excel
         </button>
       </div>
 
@@ -2890,6 +3147,7 @@ function WaitlistTab() {
           </table>
         </div>
       )}
+      {rowsPage && <Pager page={page} total={rowsPage.total} limit={rowsPage.limit} onPage={setPage} />}
     </div>
   );
 }
@@ -2943,6 +3201,7 @@ export default function AdminPage() {
             title="Сферы деятельности"
             queryKey="admin-fields-of-activity"
             apiModule={adminAPI.fieldsOfActivity}
+            impactPath="fields-of-activity"
           />
         )}
 
