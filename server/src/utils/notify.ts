@@ -1,5 +1,5 @@
 import { prisma } from '../index';
-import { emitToUser } from '../socket';
+import { emitToUserWithVisibleAck } from '../socket';
 import { sendPushToUser } from './webpush';
 import logger from './logger';
 
@@ -21,7 +21,11 @@ export function categoryOfNotification(type: string): NotifCategory | null {
   if (type === 'message') return 'messages';
   if (type.startsWith('order') || type.startsWith('service')) return 'orders';
   if (type.startsWith('vacancy') || type.startsWith('release_') || type.startsWith('clip_')) return 'vacancies';
-  if (type === 'social' || type === 'friend_request' || type === 'post_reply' || type === 'saved' || type.startsWith('review')) return 'social';
+  // «Социальное» в настройках = «Друзья, связи, ответы на посты, отзывы»
+  if (
+    type === 'social' || type === 'post_reply' || type === 'saved' || type.startsWith('review') ||
+    type.startsWith('friend_') || type.startsWith('connection_')
+  ) return 'social';
   return null;
 }
 
@@ -49,7 +53,10 @@ export async function isNotificationEnabled(userId: string, type: string): Promi
  *    real time (same event NotificationBell/App.tsx already listen for).
  * 3. Best-effort web-push fan-out via the existing VAPID mechanism
  *    (sendPushToUser in utils/webpush.ts) so offline/background users are
- *    reached too.
+ *    reached too. Push не шлётся, если открытое на экране окно подтвердило
+ *    получение события (см. emitToUserWithVisibleAck) — так SW показывает
+ *    каждый пришедший push (требование Apple), а активный пользователь не
+ *    получает дублирующий системный баннер.
  *
  * Never throws — notification delivery must never break the caller.
  */
@@ -73,23 +80,30 @@ export async function notify(opts: NotifyOpts): Promise<void> {
       },
     });
 
-    // Real-time in-app update for online clients.
-    try {
-      emitToUser(opts.userId, 'new_notification', notification);
-    } catch (err: any) {
-      logger.warn(`notify: socket emit failed for ${opts.userId}: ${err?.message}`);
-    }
+    // Доставка (сокет с подтверждением → push при необходимости) идёт в фоне:
+    // ожидание ack до ~2.5с не должно задерживать ответ вызывающего запроса.
+    void (async () => {
+      // Real-time in-app update for online clients.
+      let seen = false;
+      try {
+        seen = await emitToUserWithVisibleAck(opts.userId, 'new_notification', notification);
+      } catch (err: any) {
+        logger.warn(`notify: socket emit failed for ${opts.userId}: ${err?.message}`);
+      }
 
-    // Best-effort push — failure must never propagate.
-    try {
-      await sendPushToUser(opts.userId, {
-        title: opts.title,
-        body: opts.body ?? '',
-        link: opts.link,
-      });
-    } catch (err: any) {
-      logger.warn(`notify: push failed for ${opts.userId}: ${err?.message}`);
-    }
+      // Best-effort push — failure must never propagate.
+      if (!seen) {
+        try {
+          await sendPushToUser(opts.userId, {
+            title: opts.title,
+            body: opts.body ?? '',
+            link: opts.link,
+          });
+        } catch (err: any) {
+          logger.warn(`notify: push failed for ${opts.userId}: ${err?.message}`);
+        }
+      }
+    })();
   } catch (err: any) {
     // Even a failed row write must not break the calling request.
     logger.error(`notify: failed to create notification for ${opts.userId}: ${err?.message}`);
@@ -102,4 +116,26 @@ export async function notifyMany(
   opts: Omit<NotifyOpts, 'userId'>,
 ): Promise<void> {
   await Promise.all(userIds.map((userId) => notify({ ...opts, userId })));
+}
+
+// ── Ретеншн уведомлений ──────────────────────────────────────────────────────
+export const NOTIFICATION_RETENTION_DAYS = 90;
+
+/**
+ * Удаляет ПРОЧИТАННЫЕ уведомления старше NOTIFICATION_RETENTION_DAYS дней.
+ * Непрочитанные не трогаем. Идемпотентна — безопасно вызывать из нескольких
+ * мест (таймер в routes/notifications.ts и/или scheduler). Never throws.
+ */
+export async function cleanupOldNotifications(days = NOTIFICATION_RETENTION_DAYS): Promise<number> {
+  try {
+    const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const r = await prisma.notification.deleteMany({
+      where: { read: true, createdAt: { lt: cutoff } },
+    });
+    if (r.count > 0) logger.info(`Notification retention: removed ${r.count} read notifications older than ${days}d`);
+    return r.count;
+  } catch (err: any) {
+    logger.warn(`Notification retention failed: ${err?.message}`);
+    return 0;
+  }
 }

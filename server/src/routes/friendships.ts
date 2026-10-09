@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { emitToUser, notifyUser } from '../socket';
-import { tgLog, tgEvent } from '../utils/telegram';
+import { emitToUser } from '../socket';
+import { tgEvent } from '../utils/telegram';
+import { notify } from '../utils/notify';
 
 const router = Router();
 
@@ -11,13 +12,17 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
   try {
     const { receiverId } = req.body;
 
-    if (!receiverId) {
+    if (!receiverId || typeof receiverId !== 'string') {
       return res.status(400).json({ error: 'Не указан получатель' });
     }
 
     if (receiverId === req.userId) {
       return res.status(400).json({ error: 'Нельзя отправить заявку самому себе' });
     }
+
+    const receiverUser = await prisma.user.findUnique({ where: { id: receiverId }, select: { id: true, isBlocked: true } });
+    if (!receiverUser) return res.status(404).json({ error: 'Пользователь не найден' });
+    if (receiverUser.isBlocked) return res.status(403).json({ error: 'Пользователь заблокирован' });
 
     // Check if request already exists
     const existing = await prisma.friendship.findFirst({
@@ -39,23 +44,30 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
       return res.status(400).json({ error: 'Вы уже отправили заявку этому пользователю' });
     }
 
-    const friendship = await prisma.friendship.create({
-      data: {
-        requesterId: req.userId!,
-        receiverId,
-        status: 'pending',
-      },
-      include: {
-        receiver: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
+    let friendship;
+    try {
+      friendship = await prisma.friendship.create({
+        data: {
+          requesterId: req.userId!,
+          receiverId,
+          status: 'pending',
+        },
+        include: {
+          receiver: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              avatar: true,
+            }
           }
         }
-      }
-    });
+      });
+    } catch (e: any) {
+      // Двойной тап / параллельный запрос — уникальный ключ пары
+      if (e?.code === 'P2002') return res.status(400).json({ error: 'Вы уже отправили заявку этому пользователю' });
+      throw e;
+    }
 
     // Notify receiver about new friend request (include requester info)
     const requester = await prisma.user.findUnique({
@@ -67,30 +79,20 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     await prisma.notification.deleteMany({
       where: { type: 'friend_request', actorId: req.userId!, userId: receiverId },
     });
-    // Save notification to DB
-    const notification = await prisma.notification.create({
-      data: {
-        userId: receiverId,
-        actorId: req.userId!,
-        type: 'friend_request',
-        title: 'Заявка в друзья',
-        body: `${requester?.firstName} ${requester?.lastName} хочет добавить вас в друзья`,
-        link: `/friends/requests`,
-      },
-      include: { actor: { select: { id: true, firstName: true, lastName: true, avatar: true } } },
-    });
-
-    notifyUser(receiverId, 'friend_request', { friendship, requester }, {
+    // Запись + new_notification + push (с учётом настроек) — через notify();
+    // событие friend_request — для живого обновления списков заявок.
+    await notify({
+      userId: receiverId,
+      actorId: req.userId!,
+      type: 'friend_request',
       title: 'Заявка в друзья',
       body: `${requester?.firstName} ${requester?.lastName} хочет добавить вас в друзья`,
-      link: '/friends/requests',
+      link: `/friends/requests`,
     });
-    emitToUser(receiverId, 'new_notification', notification);
+    emitToUser(receiverId, 'friend_request', { friendship, requester });
 
-    try {
-      const recv = await prisma.user.findUnique({ where: { id: receiverId }, select: { firstName: true, lastName: true } });
-      tgEvent.friendRequest(`${requester?.firstName} ${requester?.lastName}`, `${recv?.firstName} ${recv?.lastName}`);
-    } catch {}
+    // В лог команды — без ФИО (ПДн)
+    try { tgEvent.friendRequest(); } catch {}
 
     res.status(201).json(friendship);
   } catch (error) {
@@ -166,9 +168,19 @@ router.put('/:id/accept', authenticate, async (req: AuthRequest, res) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const updated = await prisma.friendship.update({
-      where: { id: req.params.id },
+    if (friendship.status !== 'pending') {
+      return res.status(409).json({ error: 'Заявка уже обработана' });
+    }
+
+    // Условная запись: параллельные accept/отмена не дадут двойных уведомлений
+    const r = await prisma.friendship.updateMany({
+      where: { id: req.params.id, receiverId: req.userId!, status: 'pending' },
       data: { status: 'accepted' },
+    });
+    if (r.count === 0) return res.status(409).json({ error: 'Заявка уже обработана' });
+
+    const updated = await prisma.friendship.findUnique({
+      where: { id: req.params.id },
       include: {
         requester: {
           select: {
@@ -180,33 +192,34 @@ router.put('/:id/accept', authenticate, async (req: AuthRequest, res) => {
         }
       }
     });
+    if (!updated) return res.status(404).json({ error: 'Friend request not found' });
 
-    // Save notification to DB
+    // Заявка обработана — её уведомление у меня больше не «непрочитанное»
+    try {
+      const cleared = await prisma.notification.updateMany({
+        where: { type: 'friend_request', actorId: friendship.requesterId, userId: friendship.receiverId, read: false },
+        data: { read: true },
+      });
+      if (cleared.count > 0) emitToUser(friendship.receiverId, 'notifications_read', { link: '/friends/requests' });
+    } catch {}
+
     const accepter = await prisma.user.findUnique({
       where: { id: req.userId! },
       select: { id: true, firstName: true, lastName: true, avatar: true },
     });
-    const notification = await prisma.notification.create({
-      data: {
-        userId: updated.requester.id,
-        actorId: req.userId!,
-        type: 'friend_accepted',
-        title: 'Вас добавили в друзья',
-        body: `${accepter?.firstName} ${accepter?.lastName} принял(а) вашу заявку`,
-        link: `/profile/${req.userId}`,
-      },
-      include: { actor: { select: { id: true, firstName: true, lastName: true, avatar: true } } },
-    });
-
-    // Notify the original requester that their request was accepted
-    notifyUser(updated.requester.id, 'friend_accepted', { friendship: updated }, {
+    // Notify the original requester (запись + сокет + push через notify)
+    await notify({
+      userId: updated.requester.id,
+      actorId: req.userId!,
+      type: 'friend_accepted',
       title: 'Вас добавили в друзья',
       body: `${accepter?.firstName} ${accepter?.lastName} принял(а) вашу заявку`,
       link: `/profile/${req.userId}`,
     });
-    emitToUser(updated.requester.id, 'new_notification', notification);
+    emitToUser(updated.requester.id, 'friend_accepted', { friendship: updated });
 
-    tgLog(`🤝 <b>Новая дружба</b>\n${accepter?.firstName} ${accepter?.lastName} ↔ ${updated.requester.firstName} ${updated.requester.lastName}`);
+    // В лог команды — без ФИО (ПДн)
+    try { tgEvent.friendAccept(); } catch {}
     res.json(updated);
   } catch (error) {
     console.error('Accept request error:', error);
@@ -231,7 +244,7 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res) => {
 
     // Remove the related friend-request notification(s) so a withdraw + resend
     // does not leave a stale duplicate notification on the receiver.
-    await prisma.notification.deleteMany({
+    const removedNotifs = await prisma.notification.deleteMany({
       where: {
         type: 'friend_request',
         actorId: friendship.requesterId,
@@ -239,9 +252,15 @@ router.delete('/:id', authenticate, async (req: AuthRequest, res) => {
       },
     });
 
-    await prisma.friendship.delete({
+    // deleteMany: повторный/параллельный запрос не падает в 500 (P2025)
+    await prisma.friendship.deleteMany({
       where: { id: req.params.id }
     });
+
+    // Живое обновление у второй стороны (списки заявок/друзей, бейджи)
+    const otherId = friendship.requesterId === req.userId ? friendship.receiverId : friendship.requesterId;
+    emitToUser(otherId, 'friendship_removed', { friendshipId: friendship.id });
+    if (removedNotifs.count > 0) emitToUser(friendship.receiverId, 'notifications_read', { link: '/friends/requests' });
 
     res.status(204).send();
   } catch (error) {

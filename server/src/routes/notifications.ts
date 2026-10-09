@@ -2,8 +2,20 @@ import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import { createNotifySubscribeToken, getBotUsername } from '../utils/telegramNotify';
+import { cleanupOldNotifications } from '../utils/notify';
 
 const router = Router();
+
+// ── Ретеншн: прочитанные уведомления старше 90 дней удаляются раз в сутки ─────
+// (первый проход — через 10 минут после старта). Таймеры unref — не держат
+// процесс. cleanupOldNotifications идемпотентна: если её же подключит
+// scheduler, двойной вызов безвреден.
+const RETENTION_FIRST_RUN_MS = 10 * 60 * 1000;
+const RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
+if (process.env.NODE_ENV !== 'test') {
+  setTimeout(() => { void cleanupOldNotifications(); }, RETENTION_FIRST_RUN_MS).unref?.();
+  setInterval(() => { void cleanupOldNotifications(); }, RETENTION_INTERVAL_MS).unref?.();
+}
 
 // ── Telegram-дублирование уведомлений ────────────────────────────────────────
 
