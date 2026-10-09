@@ -68,6 +68,9 @@ const OrdersPage               = lazy(() => import('./pages/OrdersPage'));
 const OrderDetailPage          = lazy(() => import('./pages/OrderDetailPage'));
 const VacanciesPage            = lazy(() => import('./pages/VacanciesPage'));
 const VacancyDetailPage        = lazy(() => import('./pages/VacancyDetailPage'));
+const LineupsPage              = lazy(() => import('./pages/LineupsPage'));
+const LineupDetailPage         = lazy(() => import('./pages/LineupDetailPage'));
+const LineupFormPage           = lazy(() => import('./pages/LineupFormPage'));
 const OnboardingPage     = lazy(() => import('./pages/OnboardingPage'));
 const VkSetupPage        = lazy(() => import('./pages/VkSetupPage'));
 
@@ -243,6 +246,9 @@ function AppRoutes() {
             <Route path="/services/:serviceId" element={<PublicRoute><ServicePage /></PublicRoute>} />
             <Route path="/orders/:orderId" element={<PublicRoute><OrderDetailPage /></PublicRoute>} />
             <Route path="/vacancies/:vacancyId" element={<PublicRoute><VacancyDetailPage /></PublicRoute>} />
+            {/* «Биржа лайнапов» — /lineups/new и /lineups/:id/edit объявлены ниже (RequireAuth) */}
+            <Route path="/lineups"          element={<PublicRoute><LineupsPage /></PublicRoute>} />
+            <Route path="/lineups/:id"      element={<PublicRoute><LineupDetailPage /></PublicRoute>} />
             {/* Legacy «Группы» routes — collapsed into the unified Artist page */}
             <Route path="/groups/create"    element={<Navigate to="/artist/create" replace />} />
             <Route path="/groups/invites"   element={<Navigate to="/" replace />} />
@@ -290,6 +296,8 @@ function AppRoutes() {
             <Route path="/orders" element={<RequireAuth><OrdersPage /></RequireAuth>} />
             <Route path="/orders/new" element={<RequireAuth reason="create"><OrderFormPage /></RequireAuth>} />
             <Route path="/orders/edit/:orderId" element={<RequireAuth><OrderFormPage /></RequireAuth>} />
+            <Route path="/lineups/new"      element={<RequireAuth reason="create"><LineupFormPage /></RequireAuth>} />
+            <Route path="/lineups/:id/edit" element={<RequireAuth><LineupFormPage /></RequireAuth>} />
             <Route path="/admin"            element={<RequireAuth><AdminRoute /></RequireAuth>} />
 
             <Route path="*"                 element={<NotFoundPage />} />

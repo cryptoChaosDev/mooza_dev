@@ -2,7 +2,8 @@
  * Таблица «путь → рендер» SEO-снимков. Зеркалит публичные маршруты
  * client/src/App.tsx (PublicRoute + /, /feed, /privacy, /terms):
  *   /, /feed, /search, /artist/:idOrSlug, /releases/:id, /clips/:id,
- *   /profile/:userId, /services/:id, /orders/:id, /vacancies/:id, /privacy, /terms.
+ *   /profile/:userId, /services/:id, /orders/:id, /vacancies/:id, /lineups/:id,
+ *   /privacy, /terms.
  *
  * Приватные подпути под публичными префиксами (RequireAuth в App.tsx:
  * /artist/create, /artist/:id/edit…, /services/new, /orders/edit/:id…) —
@@ -19,12 +20,13 @@ import { renderRelease, renderClip } from './render/media';
 import { renderProfile } from './render/profile';
 import { renderService } from './render/service';
 import { renderOrder, renderVacancy } from './render/deals';
+import { renderLineup } from './render/lineup';
 import { renderFeed, renderHome, renderSearch, CATALOG_TABS, CatalogTab } from './render/lists';
 import { renderStaticDoc } from './render/static';
 
 export type SeoRouteKind =
   | 'home' | 'feed' | 'search' | 'artist' | 'release' | 'clip' | 'profile'
-  | 'service' | 'order' | 'vacancy' | 'privacy' | 'terms';
+  | 'service' | 'order' | 'vacancy' | 'lineup' | 'privacy' | 'terms';
 
 export interface SeoRouteMatch {
   kind: SeoRouteKind;
@@ -49,6 +51,8 @@ export const PRIVATE_SUBPATHS: readonly RegExp[] = [
   /^\/orders\/new$/,
   /^\/orders\/edit\/.+$/,
   /^\/profile\/[^/]+\/connections$/,
+  /^\/lineups\/new$/,
+  /^\/lineups\/[^/]+\/.+$/, // /lineups/:id/edit
 ];
 
 /** Параметры, которые не меняют содержимое (Clean-param в robots.txt). */
@@ -77,7 +81,7 @@ function decodeSegment(seg: string): string | null {
   }
 }
 
-type EntityKind = 'artist' | 'release' | 'clip' | 'profile' | 'service' | 'order' | 'vacancy';
+type EntityKind = 'artist' | 'release' | 'clip' | 'profile' | 'service' | 'order' | 'vacancy' | 'lineup';
 
 const ENTITY_ROUTES: Array<{ re: RegExp; kind: EntityKind; render: (key: string) => Promise<RenderOutcome> }> = [
   { re: /^\/artist\/([^/]+)$/, kind: 'artist', render: renderArtist },
@@ -87,6 +91,7 @@ const ENTITY_ROUTES: Array<{ re: RegExp; kind: EntityKind; render: (key: string)
   { re: /^\/services\/([^/]+)$/, kind: 'service', render: renderService },
   { re: /^\/orders\/([^/]+)$/, kind: 'order', render: renderOrder },
   { re: /^\/vacancies\/([^/]+)$/, kind: 'vacancy', render: renderVacancy },
+  { re: /^\/lineups\/([^/]+)$/, kind: 'lineup', render: renderLineup },
 ];
 
 /**

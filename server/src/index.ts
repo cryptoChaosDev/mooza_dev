@@ -241,6 +241,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/vacancies', vacancyRoutes);
 app.use('/api/artist-lookup', artistLookupRoutes);
 app.use('/api/support', supportRoutes);
+app.use('/api/lineups', require('./routes/lineups').default); // «Биржа лайнапов»
 
 // ── Старый OG-эндпоинт профиля ─────────────────────────────────────────────
 // Раньше отдавал HTML с именем/био/аватаром любого пользователя (ПДн без
