@@ -276,7 +276,7 @@ export default function MediaItemForm({ kind, artistId, initial, onClose, onSave
 
   // ── Metadata prefill ──────────────────────────────────────────────────────
   const metaMut = useMutation({
-    mutationFn: () => api.fetchMetadata(detectedPlatform ?? '', url.trim()),
+    mutationFn: () => api.fetchMetadata(url.trim()),
     onSuccess: (res: any) => {
       const data = res?.data ?? {};
       const filledTitle = data.title ?? '';
