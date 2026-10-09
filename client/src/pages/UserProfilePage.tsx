@@ -13,6 +13,7 @@ import { userAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
 import { DEALS_ENABLED } from '../lib/features';
 import { isProActive } from '../lib/proLimits';
 import ComplaintModal from '../components/ComplaintModal';
+import CoverImage from '../components/CoverImage';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { SocialIconRow, CONTACT_KEYS, SOCIAL_KEYS } from '../components/SocialLinks';
 import AvatarComponent from '../components/Avatar';
@@ -286,9 +287,9 @@ export default function UserProfilePage() {
 
         {/* ── HERO ── обложка 3:1, как при обрезке; на десктопе — по колонке карточек */}
         <div className="relative sm:mx-4 sm:mt-3">
-          <div className="aspect-[3/1] overflow-hidden sm:rounded-2xl bg-gradient-to-br from-primary-900 via-purple-900/70 to-slate-900">
+          <div className="relative aspect-[3/1] overflow-hidden sm:rounded-2xl bg-gradient-to-br from-primary-900 via-purple-900/70 to-slate-900">
             {bUrl
-              ? <img src={bUrl} alt="" className="w-full h-full object-cover" />
+              ? <CoverImage src={bUrl} />
               : <div className="absolute inset-0 opacity-40" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(99,102,241,0.8) 0%, transparent 60%), radial-gradient(circle at 80% 20%, rgba(168,85,247,0.7) 0%, transparent 60%)' }} />
             }
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/70 via-transparent to-transparent" />

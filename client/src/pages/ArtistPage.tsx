@@ -26,6 +26,7 @@ import ArtistYandexBlocks from '../components/ArtistYandexBlocks';
 import { useAuthStore } from '../stores/authStore';
 import { classifyUrl, BLOCK_MESSAGE } from '../lib/socialPlatforms';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
+import CoverImage from '../components/CoverImage';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { useAuthGate, openAuthGate } from '../components/AuthGateModal';
@@ -476,7 +477,7 @@ export default function ArtistPage() {
       {/* Обложка 3:1 — как при обрезке (ImageCropModal aspect={3}); на десктопе — по колонке */}
       <div className="relative aspect-[3/1] sm:mx-4 sm:mt-3 sm:rounded-2xl bg-gradient-to-br from-slate-800 to-slate-900 overflow-hidden">
         {bannerSrc && (
-          <img src={bannerSrc} alt="banner" className="w-full h-full object-cover" />
+          <CoverImage src={bannerSrc} alt="banner" />
         )}
 
         {/* Back button — fixed so it stays visible on scroll; на десктопе — правее
