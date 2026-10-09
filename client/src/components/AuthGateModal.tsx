@@ -112,7 +112,8 @@ export function AuthGatePanel({
 }) {
   const navigate = useNavigate();
   const { registrationEnabled, referralRegistrationEnabled } = useSiteSettings();
-  const [mode, setMode] = useState<'main' | 'waitlist' | 'waitlistDone' | 'waitlistRegistered' | 'invite'>(initialMode);
+  const [mode, setMode] = useState<'main' | 'waitlist' | 'waitlistDone' | 'waitlistRegistered' | 'waitlistInvited' | 'invite'>(initialMode);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
 
   // waitlist
   const [email, setEmail] = useState('');
@@ -158,7 +159,13 @@ export function AuthGatePanel({
         setMode('waitlistRegistered');
         return;
       }
-      reachGoal('waitlist_submit', { type: wlType, reason });
+      reachGoal('waitlist_submit', { type: wlType, reason, invited: !!data?.invited });
+      // Временное авто-приглашение: ссылка пришла сразу — можно регистрироваться.
+      if (data?.invited && data.inviteUrl) {
+        setInviteUrl(data.inviteUrl);
+        setMode('waitlistInvited');
+        return;
+      }
       setMode('waitlistDone');
     } catch (err) {
       setError(getApiError(err, 'Не удалось отправить заявку. Попробуйте позже.'));
@@ -194,6 +201,28 @@ export function AuthGatePanel({
         <p className="text-xs text-slate-500 leading-relaxed">Не видите письма — проверьте папку «Спам».</p>
         {variant === 'modal' && (
           <button onClick={onDone} className="w-full py-2.5 text-sm text-slate-400 hover:text-white transition-colors">Закрыть</button>
+        )}
+      </div>
+    );
+  }
+
+  if (mode === 'waitlistInvited' && inviteUrl) {
+    // Ссылка абсолютная (APP_URL) — переходим по пути внутри SPA.
+    let to = inviteUrl;
+    try { const u = new URL(inviteUrl); to = u.pathname + u.search; } catch { /* относительная */ }
+    return (
+      <div className="px-5 pt-6 pb-6 text-center space-y-3">
+        <CheckCircle2 size={36} className="text-emerald-400 mx-auto" />
+        <p className="text-base font-semibold text-white">Доступ открыт!</p>
+        <p className="text-sm text-slate-400 leading-relaxed">
+          Создайте аккаунт прямо сейчас — ссылку-приглашение мы также отправили на{' '}
+          <span className="text-slate-200 break-all">{email.trim().toLowerCase()}</span>.
+        </p>
+        <button onClick={() => { onDone?.(); navigate(to); }} className={btnPrimary}>
+          Создать аккаунт
+        </button>
+        {variant === 'modal' && (
+          <button onClick={onDone} className="w-full py-2.5 text-sm text-slate-400 hover:text-white transition-colors">Позже</button>
         )}
       </div>
     );

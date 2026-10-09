@@ -575,3 +575,50 @@ describe('Pro за waitlist-ссылки не начисляется', () => {
     expect(res.body.map((l: Row) => l.id)).toEqual([mine.id]);
   });
 });
+
+describe('временное авто-приглашение (waitlistAutoInvite)', () => {
+  const body = (over: Row = {}) => ({ email: 'auto@mail.ru', type: 'resident_waitlist', consentPd: true, ...over });
+
+  it('флаг выключен — обычное «Заявка принята», без приглашения', async () => {
+    const res = await request(app).post('/api/waitlist').send(body());
+    expect(res.body).toEqual({ ok: true });
+    expect(mockDb.waitlistEntry[0].status).toBe('new');
+    expect(mailer.sendWaitlistInvite).not.toHaveBeenCalled();
+    expect(mailer.sendWaitlistConfirmation).toHaveBeenCalledTimes(1);
+  });
+
+  it('флаг включён — сразу приглашение: статус invited, ссылка в ответе, письмо-приглашение вместо подтверждения', async () => {
+    mockSettings = { ...mockSettings, waitlistAutoInvite: 'true' };
+    const res = await request(app).post('/api/waitlist').send(body());
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+    expect(res.body.invited).toBe(true);
+    expect(res.body.inviteUrl).toMatch(/\/register\?ref=[^&]+&email=auto%40mail\.ru$/);
+    const e = mockDb.waitlistEntry[0];
+    expect(e.status).toBe('invited');
+    expect(e.invitedById).toBe(ADMIN); // нет team@moooza.ru — старейший админ
+    expect(mailer.sendWaitlistInvite).toHaveBeenCalledTimes(1);
+    expect(mailer.sendWaitlistConfirmation).not.toHaveBeenCalled();
+    const link = mockDb.referralLink.find((l: Row) => l.id === e.referralLinkId);
+    expect(link?.source).toBe('waitlist');
+  });
+
+  it('флаг включён, но регистрация по приглашениям выключена — обычное подтверждение', async () => {
+    mockSettings = { registrationEnabled: 'false', referralRegistrationEnabled: 'false', waitlistAutoInvite: 'true' };
+    const res = await request(app).post('/api/waitlist').send(body());
+    expect(res.body).toEqual({ ok: true });
+    expect(mockDb.waitlistEntry[0].status).toBe('new');
+    expect(mailer.sendWaitlistInvite).not.toHaveBeenCalled();
+    expect(mailer.sendWaitlistConfirmation).toHaveBeenCalledTimes(1);
+  });
+
+  it('флаг включён, письмо-приглашение не ушло — откат и обычное подтверждение', async () => {
+    mockSettings = { ...mockSettings, waitlistAutoInvite: 'true' };
+    (mailer.sendWaitlistInvite as jest.Mock).mockRejectedValueOnce(new Error('smtp down'));
+    const res = await request(app).post('/api/waitlist').send(body());
+    expect(res.body).toEqual({ ok: true });
+    expect(mockDb.waitlistEntry[0].status).toBe('new');
+    expect(mailer.sendWaitlistConfirmation).toHaveBeenCalledTimes(1);
+  });
+});
+

@@ -753,7 +753,7 @@ export const referralAPI = {
 export const waitlistAPI = {
   // alreadyRegistered: на этот email уже есть аккаунт — заявка не создана, предложить войти.
   submit: (data: { email: string; type: 'resident_waitlist' | 'listener' | 'customer' | 'company'; consentPd: true; consentMarketing: boolean }) =>
-    api.post<{ ok: boolean; alreadyRegistered?: boolean }>('/waitlist', data),
+    api.post<{ ok: boolean; alreadyRegistered?: boolean; invited?: boolean; inviteUrl?: string }>('/waitlist', data),
 };
 
 export const siteSettingsAPI = {

@@ -2461,6 +2461,7 @@ function SiteSettingsTab() {
   const registrationEnabled = settings?.registrationEnabled !== 'false';
   const referralRegistrationEnabled = settings?.referralRegistrationEnabled === 'true';
   const jobsChannelEnabled = settings?.jobsChannelEnabled === 'true';
+  const waitlistAutoInvite = settings?.waitlistAutoInvite === 'true';
 
   if (isLoading) return <div className="text-slate-500 text-sm">Загрузка...</div>;
 
@@ -2469,6 +2470,7 @@ function SiteSettingsTab() {
     { key: 'registrationEnabled',         label: 'Открытая регистрация (для всех)',                    value: registrationEnabled },
     { key: 'referralRegistrationEnabled', label: 'Регистрация по реф-ссылкам (когда открытая выкл.)',   value: referralRegistrationEnabled },
     { key: 'jobsChannelEnabled',          label: 'Автопостинг заказов и вакансий в Telegram-канал',     value: jobsChannelEnabled },
+    { key: 'waitlistAutoInvite',          label: 'Авто-приглашение из листа ожидания (сразу шлёт ссылку)', value: waitlistAutoInvite },
   ];
 
   return (

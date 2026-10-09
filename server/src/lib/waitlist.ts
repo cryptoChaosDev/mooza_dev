@@ -265,6 +265,30 @@ export async function inviteWaitlistEntry(id: string, adminId: string): Promise<
   };
 }
 
+/**
+ * Временное авто-приглашение (SiteSetting waitlistAutoInvite='true'): новая заявка
+ * сразу получает ссылку-приглашение от имени аккаунта команды (team@moooza.ru;
+ * если его нет — старейший админ). Возвращает inviteUrl или null, если авто-режим
+ * выключен / регистрация по приглашениям не работает / письмо не ушло — тогда
+ * вызывающий шлёт обычное «Заявка принята».
+ */
+export async function maybeAutoInviteWaitlistEntry(entry: Pick<WaitlistEntry, 'id' | 'status'>): Promise<string | null> {
+  if (entry.status !== 'new') return null;
+  const flag = await prisma.siteSetting.findUnique({ where: { key: 'waitlistAutoInvite' } });
+  if (flag?.value !== 'true') return null;
+  if (!(await waitlistInvitesWork())) return null;
+  const owner =
+    (await prisma.user.findFirst({ where: { email: 'team@moooza.ru' }, select: { id: true } })) ??
+    (await prisma.user.findFirst({ where: { isAdmin: true }, orderBy: { createdAt: 'asc' }, select: { id: true } }));
+  if (!owner) return null;
+  const res = await inviteWaitlistEntry(entry.id, owner.id);
+  if (!res.ok) {
+    logger.warn(`[waitlist] auto-invite skipped for entry ${entry.id}: ${res.reason}`);
+    return null;
+  }
+  return res.inviteUrl;
+}
+
 // Пауза между письмами массовой рассылки — не упираться в лимиты SMTP.
 const BULK_PAUSE_MS = Math.max(0, Number(process.env.WAITLIST_BULK_PAUSE_MS ?? 300) || 0);
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));

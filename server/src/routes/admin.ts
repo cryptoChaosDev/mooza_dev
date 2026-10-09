@@ -1450,7 +1450,7 @@ import { updateSiteSettings } from './site-settings';
 // Разрешённые настройки и их значения. Произвольные ключи/значения больше не
 // пишутся в SiteSetting (раньше PUT принимал что угодно).
 // guestBrowsingEnabled — аварийный выключатель гостевого режима (по умолчанию 'false').
-const SITE_SETTING_FLAGS = new Set(['loginEnabled', 'registrationEnabled', 'referralRegistrationEnabled', 'guestBrowsingEnabled', 'jobsChannelEnabled']);
+const SITE_SETTING_FLAGS = new Set(['loginEnabled', 'registrationEnabled', 'referralRegistrationEnabled', 'guestBrowsingEnabled', 'jobsChannelEnabled', 'waitlistAutoInvite']);
 
 router.put('/site-settings', async (req, res) => {
   try {

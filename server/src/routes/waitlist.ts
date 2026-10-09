@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { prisma } from '../index';
 import { waitlistLimiter } from '../middleware/rateLimiter';
 import { tgEvent } from '../utils/telegram';
-import { WAITLIST_TYPES, markWaitlistRegistered, sendWaitlistConfirmationOnce } from '../lib/waitlist';
+import { WAITLIST_TYPES, markWaitlistRegistered, sendWaitlistConfirmationOnce, maybeAutoInviteWaitlistEntry } from '../lib/waitlist';
 
 const router = Router();
 
@@ -60,6 +60,18 @@ router.post('/', waitlistLimiter, async (req, res) => {
         const total = await prisma.waitlistEntry.count();
         tgEvent.waitlist(entry.type, total);
       } catch {}
+    }
+
+    // Временный авто-режим: сразу приглашаем (письмо со ссылкой + ссылка в ответе,
+    // чтобы человек мог зарегистрироваться не дожидаясь письма). Регистрация всё
+    // равно подтверждает владение email кодом.
+    if (entry.status === 'new') {
+      try {
+        const inviteUrl = await maybeAutoInviteWaitlistEntry(entry);
+        if (inviteUrl) return res.json({ ok: true, invited: true, inviteUrl });
+      } catch (autoErr) {
+        console.error('[waitlist] auto-invite failed:', autoErr);
+      }
     }
 
     // «Заявка принята» — транзакционное письмо, не зависит от consentMarketing.

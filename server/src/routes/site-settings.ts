@@ -16,6 +16,10 @@ const DEFAULTS: Record<string, string> = {
   // Автопостинг новых заказов/вакансий в Telegram-канал (lib/jobsChannel). Включает
   // админ после создания канала; без env TELEGRAM_JOBS_CHANNEL_ID флаг ни на что не влияет.
   jobsChannelEnabled: 'false',
+  // Временное авто-приглашение: новая заявка из листа ожидания сразу получает
+  // ссылку-приглашение (lib/waitlist.maybeAutoInviteWaitlistEntry). Работает, только
+  // если регистрация по приглашениям включена.
+  waitlistAutoInvite: 'false',
 };
 
 // Только эти ключи отдаются в GET /api/site-settings (менять через
