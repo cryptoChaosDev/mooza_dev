@@ -11,6 +11,7 @@ import { siteSettingsAPI, referenceAPI } from '../lib/api';
 import LegalDocsModal from '../components/LegalDocsModal';
 import { useSeo } from '../lib/seo';
 import { trackGuestView } from '../lib/metrika';
+import { openAuthGate } from '../components/AuthGateModal';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const fadeUp = (delay = 0) => ({
@@ -176,6 +177,25 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 overflow-x-hidden">
 
+      {/* ── HEADER: гостю сразу видно, куда идти без регистрации ─────────── */}
+      <header className="fixed top-0 inset-x-0 z-40 bg-slate-950/80 backdrop-blur border-b border-slate-800/60" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
+        <div className="max-w-5xl mx-auto h-14 px-4 flex items-center justify-between gap-3">
+          <Link to="/" className="flex-shrink-0"><img src="/logo.png" alt="Moooza" className="h-7 w-auto" /></Link>
+          <nav className="flex items-center gap-1 sm:gap-2 min-w-0">
+            {guestBrowsingEnabled && (
+              <>
+                <Link to="/feed" className="px-2 sm:px-3 py-1.5 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors">Лента</Link>
+                <Link to="/search" className="px-2 sm:px-3 py-1.5 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors">Каталог</Link>
+                <Link to="/search?tab=artists" className="hidden sm:inline-block px-3 py-1.5 rounded-lg text-sm text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors">Артисты</Link>
+              </>
+            )}
+            {loginEnabled && (
+              <Link to="/login" className="ml-1 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-slate-800 hover:bg-slate-700 transition-colors">Войти</Link>
+            )}
+          </nav>
+        </div>
+      </header>
+
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <section className="relative flex flex-col items-center justify-center min-h-screen min-h-[100dvh] px-4 text-center">
         {/* ambient */}
@@ -199,13 +219,48 @@ export default function LandingPage() {
             Находите работу, создавайте проекты и стройте карьеру вместе с теми, кто живёт музыкой.
           </motion.p>
 
-          {!registrationEnabled && (
+          {!registrationEnabled && !guestBrowsingEnabled && (
             <motion.div {...fadeUp(0.3)} className="mx-auto max-w-md mb-8 px-4 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-sm leading-relaxed">
               Регистрация временно закрыта. Если у вас уже есть аккаунт — войдите.
             </motion.div>
           )}
 
-          {(registrationEnabled || loginEnabled) && (
+          {/* Гостевой режим: главный путь — посмотреть платформу без регистрации */}
+          {guestBrowsingEnabled && (
+            <motion.div {...fadeUp(0.35)} className="flex flex-col items-center gap-4 mb-12">
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 w-full">
+                <Link
+                  to="/feed"
+                  className="group w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-500 transition-all flex items-center justify-center gap-2"
+                >
+                  Смотреть без регистрации
+                  <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+                </Link>
+                <Link
+                  to="/search"
+                  className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-slate-200 hover:text-white border border-slate-700 hover:border-slate-500 transition-all flex items-center justify-center gap-2"
+                >
+                  <Search size={16} /> Найти исполнителя
+                </Link>
+              </div>
+              <div className="flex items-center justify-center gap-x-4 gap-y-2 flex-wrap text-sm text-slate-400">
+                <Link to="/search?tab=artists" className="text-primary-300 hover:text-primary-200 underline-offset-4 hover:underline">Артисты</Link>
+                {registrationEnabled ? (
+                  <button onClick={() => navigate('/register')} className="text-primary-300 hover:text-primary-200 underline-offset-4 hover:underline">Создать аккаунт</button>
+                ) : (
+                  <button onClick={() => openAuthGate('generic', { from: 'landing' }, undefined, 'waitlist')} className="text-primary-300 hover:text-primary-200 underline-offset-4 hover:underline">Получить доступ</button>
+                )}
+                {loginEnabled && (
+                  <button onClick={() => navigate('/login')} className="text-slate-400 hover:text-white underline-offset-4 hover:underline">У меня есть аккаунт</button>
+                )}
+              </div>
+              {!registrationEnabled && (
+                <p className="text-xs text-slate-500 max-w-sm">Регистрация пока по приглашениям — смотреть ленту, артистов и исполнителей можно уже сейчас.</p>
+              )}
+            </motion.div>
+          )}
+
+          {!guestBrowsingEnabled && (registrationEnabled || loginEnabled) && (
             <motion.div {...fadeUp(0.35)} className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-12">
               {registrationEnabled && (
                 <button
@@ -227,16 +282,11 @@ export default function LandingPage() {
             </motion.div>
           )}
 
-          {/* Гостевой режим: витрина доступна без регистрации */}
-          <motion.div {...fadeUp(0.4)} className="flex items-center justify-center gap-4 flex-wrap -mt-8 mb-12 text-sm">
-            <Link to="/feed" className="text-primary-300 hover:text-primary-200 underline-offset-4 hover:underline">Смотреть ленту</Link>
-            {guestBrowsingEnabled && (
-              <>
-                <Link to="/search" className="text-primary-300 hover:text-primary-200 underline-offset-4 hover:underline">Каталог услуг</Link>
-                <Link to="/search?tab=artists" className="text-primary-300 hover:text-primary-200 underline-offset-4 hover:underline">Артисты</Link>
-              </>
-            )}
-          </motion.div>
+          {!guestBrowsingEnabled && (
+            <motion.div {...fadeUp(0.4)} className="flex items-center justify-center gap-4 flex-wrap -mt-8 mb-12 text-sm">
+              <Link to="/feed" className="text-primary-300 hover:text-primary-200 underline-offset-4 hover:underline">Смотреть ленту</Link>
+            </motion.div>
+          )}
 
           {/* mini stats */}
           <motion.div {...fadeUp(0.45)} className="flex items-center justify-center gap-6 flex-wrap text-center">
@@ -423,6 +473,25 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* ── FINAL CTA (гость, регистрация по приглашениям) ────────────────── */}
+      {guestBrowsingEnabled && !registrationEnabled && (
+        <section className="py-24 px-4">
+          <div className="max-w-2xl mx-auto text-center rounded-3xl border border-slate-800 bg-slate-900/60 px-8 py-14">
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-4 text-white">Загляните внутрь</h2>
+            <p className="text-slate-400 mb-8 max-w-sm mx-auto">Лента, артисты и исполнители открыты для просмотра. Писать и откликаться — после входа.</p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+              <Link to="/feed" className="group w-full sm:w-auto inline-flex items-center justify-center gap-2 px-8 py-3.5 rounded-xl font-semibold text-white bg-primary-600 hover:bg-primary-500 transition-all">
+                Смотреть без регистрации
+                <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" />
+              </Link>
+              <button onClick={() => openAuthGate('generic', { from: 'landing_bottom' }, undefined, 'waitlist')} className="w-full sm:w-auto px-8 py-3.5 rounded-xl font-semibold text-slate-200 border border-slate-700 hover:border-slate-500 transition-all">
+                Получить доступ
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── FINAL CTA ────────────────────────────────────────────────────── */}
       {registrationEnabled && (
