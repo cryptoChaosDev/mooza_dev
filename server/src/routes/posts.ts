@@ -423,13 +423,21 @@ const smartCache = new Map<string, { ids: string[]; at: number }>();
 // курсор `s:<token>:<index>` листает один и тот же список, поэтому
 // refetch/новые реакции не дают дублей и пропусков между страницами.
 const SNAPSHOT_TTL_MS = 15 * 60 * 1000;
+// Первая страница в пределах этого окна переиспользует снапшот того же
+// зрителя+фильтров (refetchInterval клиента не плодит новые снапшоты).
+const SNAPSHOT_REUSE_MS = 2 * 60 * 1000;
+const SNAPSHOT_MAX = 300; // ≤ 300 × ~600 id — ограничение памяти
 const rankSnapshots = new Map<string, { ids: string[]; at: number }>();
+const snapshotTokenByKey = new Map<string, string>();
 
 function putSnapshot(token: string, ids: string[]) {
   const now = Date.now();
-  if (rankSnapshots.size > 2000) {
-    for (const [k, v] of rankSnapshots) if (now - v.at > SNAPSHOT_TTL_MS) rankSnapshots.delete(k);
-    if (rankSnapshots.size > 2000) rankSnapshots.clear();
+  for (const [k, v] of rankSnapshots) if (now - v.at > SNAPSHOT_TTL_MS) rankSnapshots.delete(k);
+  // Map хранит порядок вставки — вытесняем самые старые.
+  while (rankSnapshots.size >= SNAPSHOT_MAX) {
+    const oldest = rankSnapshots.keys().next().value;
+    if (oldest === undefined) break;
+    rankSnapshots.delete(oldest);
   }
   rankSnapshots.set(token, { ids, at: now });
 }
@@ -581,7 +589,7 @@ async function computeRankedIds(ctx: RankCtx): Promise<string[]> {
     where: ctx.where,
     select: { id: true },
     orderBy: [{ comments: { _count: 'desc' } }, { createdAt: 'desc' }, { id: 'desc' }],
-    take: 1000,
+    take: 600,
   });
   return rows.map((r) => r.id);
 }
@@ -720,10 +728,20 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
           if (snap) ids = snap;
           else { ids = await computeRankedIds(ctx); putSnapshot(token, ids); }
         } else {
-          token = crypto.randomUUID();
           start = 0;
-          ids = await computeRankedIds(ctx);
-          putSnapshot(token, ids);
+          const snapKey = `${sortStr}|${ctx.cacheKey}`;
+          const prevToken = snapshotTokenByKey.get(snapKey);
+          const prev = prevToken ? rankSnapshots.get(prevToken) : undefined;
+          if (prevToken && prev && Date.now() - prev.at < SNAPSHOT_REUSE_MS) {
+            token = prevToken;
+            ids = prev.ids;
+          } else {
+            token = crypto.randomUUID();
+            ids = await computeRankedIds(ctx);
+            putSnapshot(token, ids);
+            if (snapshotTokenByKey.size > 2000) snapshotTokenByKey.clear();
+            snapshotTokenByKey.set(snapKey, token);
+          }
         }
       } else {
         ids = await computeRankedIds(ctx);
