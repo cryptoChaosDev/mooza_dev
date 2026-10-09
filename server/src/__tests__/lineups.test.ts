@@ -588,6 +588,25 @@ describe('PUT / close', () => {
     expect(m('lineupRequestGenre').deleteMany).not.toHaveBeenCalled();
   });
 
+  it('PUT без status — черновик остаётся черновиком; draft→active — приглашение', async () => {
+    m('lineupRequest').findUnique
+      .mockResolvedValueOnce(lineupRow({ status: 'draft' }))
+      .mockResolvedValueOnce(lineupRow({ status: 'draft' }));
+    m('lineupRequest').updateMany.mockResolvedValue({ count: 1 });
+    const keep = await request(app).put('/api/lineups/l-1').set('x-test-user-id', AUTHOR).send(body());
+    expect(keep.status).toBe(200);
+    expect(m('lineupRequest').updateMany.mock.calls[0][0].data.status).toBe('draft');
+
+    m('lineupRequest').findUnique
+      .mockResolvedValueOnce(lineupRow({ status: 'draft' }))
+      .mockResolvedValueOnce(lineupRow({ status: 'active' }));
+    m('artist').findUnique.mockResolvedValue({ id: 'a-1', name: 'Группа', status: 'VERIFIED' });
+    const pub = await request(app).put('/api/lineups/l-1').set('x-test-user-id', AUTHOR).send({ ...body(), status: 'active', inviteArtistId: 'a-1' });
+    expect(pub.status).toBe(200);
+    expect(pub.body.invite).toBe('sent');
+    expect(m('lineupRequestGenre').createMany).toHaveBeenCalled();
+  });
+
   it('close: только автор; повторное закрытие → 409', async () => {
     m('lineupRequest').findUnique.mockResolvedValue({ id: 'l-1', authorId: AUTHOR });
     expect((await request(app).patch('/api/lineups/l-1/close').set('x-test-user-id', STRANGER)).status).toBe(403);

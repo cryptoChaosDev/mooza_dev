@@ -541,6 +541,8 @@ router.put('/:id', authenticate, async (req: AuthRequest, res) => {
     const parsed = lineupSchema.safeParse(req.body ?? {});
     if (!parsed.success) return zodFail(res, parsed.error);
     const v = parsed.data;
+    // Статус не передан — остаётся прежним (черновик не публикуется молча).
+    const nextStatus: 'active' | 'draft' = req.body?.status === undefined ? existing.status : v.status;
 
     const city = await resolveCity(v.cityName);
     if (!city) return res.status(400).json({ error: 'Выберите город из списка', field: 'cityName' });
@@ -564,7 +566,7 @@ router.put('/:id', authenticate, async (req: AuthRequest, res) => {
             feeAmount: v.feeType === 'fixed' || v.feeType === 'percent' ? (v.feeAmount ?? null) : null,
             description: v.description,
             requirements: v.requirements,
-            status: v.status,
+            status: nextStatus,
           },
         });
         if (!upd?.count) throw new LineupConflict();
