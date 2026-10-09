@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Loader2, Check, X, Search, ArrowRight, ArrowLeft, Globe, Mail } from 'lucide-react';
 import { useAuthStore } from '../stores/authStore';
 import { userAPI, authAPI, referenceAPI } from '../lib/api';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
+import { isValidEmail, isTourDone } from '../lib/authHelpers';
 import CityPicker from '../components/CityPicker';
 
 interface SelectedProfession {
@@ -108,6 +111,36 @@ function Field({ label, required, hint, children }: { label: string; required?: 
 
 const TOTAL_STEPS = 4;
 
+// ── Shell with progress + back button ──────────────────────────────────────
+// Вынесен из VkSetupPage: компонент, объявленный внутри рендера, на каждое
+// нажатие клавиши создавался заново — React перемонтировал поля, и ввод терял
+// фокус (на iOS ещё и закрывалась клавиатура).
+function Shell({ step, onBack, children }: { step: number; onBack: () => void; children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen bg-slate-950 flex flex-col">
+      <div className="flex items-center justify-between px-5 pt-5 pb-2 flex-shrink-0">
+        {step > 0 ? (
+          <button onClick={onBack} className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
+            <ArrowLeft size={18} />
+          </button>
+        ) : <div className="w-9" />}
+        <div className="flex gap-1.5">
+          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+            <div key={i} className={`rounded-full transition-all duration-300 ${
+              i === step ? 'w-5 h-2 bg-primary-500' :
+              i < step ? 'w-2 h-2 bg-primary-500/50' : 'w-2 h-2 bg-slate-700'
+            }`} />
+          ))}
+        </div>
+        <div className="w-9" />
+      </div>
+      <div className="flex-1 flex flex-col items-center justify-center px-5 pb-8">
+        <div className="w-full max-w-sm">{children}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function VkSetupPage() {
   const navigate = useNavigate();
   const { user, setUser } = useAuthStore();
@@ -115,10 +148,8 @@ export default function VkSetupPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Skip onboarding if user already completed it (server-side flag or local fallback)
-  const nextAfterSetup = (user?.onboardingCompletedAt || localStorage.getItem('mooza_tour_done'))
-    ? '/'
-    : '/onboarding';
+  // Skip onboarding if user already completed it (server-side flag is the source of truth)
+  const nextAfterSetup = isTourDone(user) ? '/' : '/onboarding';
 
   // Step 0: Name
   const [firstName, setFirstName] = useState(user?.firstName || '');
@@ -227,7 +258,7 @@ export default function VkSetupPage() {
   };
 
   const step0Valid = firstName.trim().length > 0 && lastName.trim().length > 0 && !nicknameTaken;
-  const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+  const emailValid = isValidEmail(email);
 
   const goBack = () => { setError(''); setStep(s => Math.max(0, s - 1)); };
 
@@ -242,7 +273,7 @@ export default function VkSetupPage() {
       setUser(data);
       setStep(1);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Ошибка сохранения');
+      toast.error(getApiError(err, 'Ошибка сохранения'));
     } finally { setLoading(false); }
   };
 
@@ -260,7 +291,12 @@ export default function VkSetupPage() {
       });
       setUser(data);
       setStep(2);
-    } catch { setStep(2); }
+    } catch (err: any) {
+      // Не молчим: профессию можно будет выбрать позже (ProfessionGate), но
+      // пользователь должен знать, что она не сохранилась.
+      toast.error(getApiError(err, 'Не удалось сохранить профессию — её можно добавить позже в профиле'));
+      setStep(2);
+    }
     finally { setLoading(false); }
   };
 
@@ -279,34 +315,9 @@ export default function VkSetupPage() {
       setUser(data);
       navigate(nextAfterSetup);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Не удалось сохранить данные');
+      toast.error(getApiError(err, 'Не удалось сохранить данные'));
     } finally { setLoading(false); }
   };
-
-  // ── Shell with progress + back button ──────────────────────────────────────
-  const Shell = ({ children }: { children: React.ReactNode }) => (
-    <div className="min-h-screen bg-slate-950 flex flex-col">
-      <div className="flex items-center justify-between px-5 pt-5 pb-2 flex-shrink-0">
-        {step > 0 ? (
-          <button onClick={goBack} className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 hover:text-white transition-colors">
-            <ArrowLeft size={18} />
-          </button>
-        ) : <div className="w-9" />}
-        <div className="flex gap-1.5">
-          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-            <div key={i} className={`rounded-full transition-all duration-300 ${
-              i === step ? 'w-5 h-2 bg-primary-500' :
-              i < step ? 'w-2 h-2 bg-primary-500/50' : 'w-2 h-2 bg-slate-700'
-            }`} />
-          ))}
-        </div>
-        <div className="w-9" />
-      </div>
-      <div className="flex-1 flex flex-col items-center justify-center px-5 pb-8">
-        <div className="w-full max-w-sm">{children}</div>
-      </div>
-    </div>
-  );
 
   const errorBox = error && (
     <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-red-400 text-sm">
@@ -316,7 +327,7 @@ export default function VkSetupPage() {
 
   // Step 0 — Name / Nickname
   if (step === 0) return (
-    <Shell>
+    <Shell step={step} onBack={goBack}>
       <div className="mb-8">
         <div className="text-4xl mb-3">👋</div>
         <h1 className="text-2xl font-bold text-white mb-2">Добро пожаловать!</h1>
@@ -380,7 +391,7 @@ export default function VkSetupPage() {
 
   // Step 1 — Profession
   if (step === 1) return (
-    <Shell>
+    <Shell step={step} onBack={goBack}>
       <div className="mb-6">
         <div className="text-4xl mb-3">🎸</div>
         <h1 className="text-2xl font-bold text-white mb-2">Ваша профессия</h1>
@@ -465,7 +476,7 @@ export default function VkSetupPage() {
 
   // Step 2 — Location
   if (step === 2) return (
-    <Shell>
+    <Shell step={step} onBack={goBack}>
       <div className="mb-6">
         <div className="text-4xl mb-3">📍</div>
         <h1 className="text-2xl font-bold text-white mb-2 leading-tight">Где вы находитесь?</h1>
@@ -500,7 +511,7 @@ export default function VkSetupPage() {
 
   // Step 3 — Email (required) + phone (optional)
   return (
-    <Shell>
+    <Shell step={step} onBack={goBack}>
       <div className="mb-6">
         <div className="text-4xl mb-3">✉️</div>
         <h1 className="text-2xl font-bold text-white mb-2 leading-tight">Контактные данные</h1>

@@ -3,11 +3,15 @@ import { logSecurity } from '../utils/logger';
 
 /**
  * Skip rate limiting for RFC-2606 reserved `.test` addresses used by the E2E suite.
- * Safe: `*.test` can never resolve to a real mail server, so such accounts can never
- * receive a verification code through normal means — zero real-world abuse vector.
  * Only the dedicated `@moooza.test` domain is exempted (narrow scope).
+ *
+ * ВАЖНО: только вне production. Поле email в теле запроса задаёт сам клиент, так
+ * что в проде обход позволял бы брутфорсить вход/коды без лимита (а /login и
+ * /verify-email по `x@moooza.test` — это ровно тот же эндпоинт, что и для живых
+ * аккаунтов). Проверяем NODE_ENV на каждый запрос, а не при загрузке модуля.
  */
 const isE2ETestEmail = (req: any): boolean => {
+  if (process.env.NODE_ENV === 'production') return false;
   const email = String(req.body?.email || '').toLowerCase();
   return email.endsWith('@moooza.test');
 };
@@ -38,6 +42,24 @@ export const authLimiter = rateLimit({
       message: 'Пожалуйста, подождите 15 минут перед следующей попыткой',
       retryAfter: '15 minutes'
     });
+  },
+});
+
+/**
+ * Отдельный мягкий лимитер для поллинга входа через Telegram
+ * (GET /auth/telegram/poll/:token). Клиент опрашивает его раз в 2.5 с в течение
+ * 2 минут (~50 запросов на одну попытку); раньше он делил authLimiter со входом
+ * по паролю, и пара попыток через Telegram давала 429 на обычный логин.
+ * Поллинг сам по себе безопасен (токен — 96 бит случайности), поэтому лимит
+ * щедрый: ~12 попыток за 15 минут с одного IP.
+ */
+export const tgPollLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 600,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).json({ error: 'Слишком много попыток входа через Telegram. Подождите несколько минут.' });
   },
 });
 

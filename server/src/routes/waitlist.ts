@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../index';
 import { waitlistLimiter } from '../middleware/rateLimiter';
-import { tgEvent } from '../utils/telegram';
+import { tgLog, escTg } from '../utils/telegram';
 
 const router = Router();
 
@@ -32,8 +32,14 @@ router.post('/', waitlistLimiter, async (req, res) => {
       create: { email: data.email as string, type: data.type, consentPd: true, consentMarketing: true },
     });
     // Notify the monitor bot only on the first sign-up (created == updated).
+    // Без email: в мониторинговый чат уходят только событие, тип и счётчик (ПДн не логируем).
     if (entry.createdAt.getTime() === entry.updatedAt.getTime()) {
-      try { tgEvent.waitlist(entry.email, entry.type); } catch {}
+      try {
+        const total = await prisma.waitlistEntry.count();
+        tgLog(`📋 <b>Заявка (waitlist)</b>
+📌 ${escTg(entry.type)}
+🔢 Всего заявок: ${total}`);
+      } catch {}
     }
     return res.json({ ok: true });
   } catch (err) {

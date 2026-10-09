@@ -658,6 +658,12 @@ model User {
   publicConsentAt       DateTime?
   publicConsentVersion  String?
 
+  // Согласия, данные при регистрации по email (152-ФЗ + закон о рекламе):
+  // обработка ПДн (обязательное) и рекламные рассылки (необязательное).
+  consentPdAt           DateTime?
+  consentPdVersion      String?
+  consentMarketingAt    DateTime?
+
   // Release / Clip participation
   releaseParticipations ReleaseParticipant[]
   clipParticipations    ClipParticipant[]

@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { AlertCircle, Loader2, Check, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { authAPI } from '../lib/api';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
+import { isValidEmail, passwordChecks, passwordProblem } from '../lib/authHelpers';
 
 type Stage = 'email' | 'code' | 'password' | 'done';
 
@@ -31,29 +34,41 @@ export default function ForgotPasswordPage() {
       setStage('code');
       startCooldown();
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Ошибка отправки');
+      toast.error(getApiError(err, 'Ошибка отправки'));
     } finally {
       setLoading(false);
     }
   };
 
   const handleEmailSubmit = () => {
-    if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    if (!isValidEmail(email)) {
       setError('Укажите корректный email');
       return;
     }
     sendCode();
   };
 
+  // Требования те же, что при регистрации (сервер проверяет ту же схему).
+  const pw = passwordChecks(password);
+
+  const backToCode = () => { setError(''); setStage('code'); };
+
   const handleReset = async () => {
     setError('');
-    if (password.length < 8) { setError('Пароль минимум 8 символов'); return; }
+    const problem = passwordProblem(password);
+    if (problem) { setError(problem); return; }
     setLoading(true);
     try {
       await authAPI.resetPassword(email.trim().toLowerCase(), code.trim(), password);
       setStage('done');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Ошибка сброса пароля');
+      const errCode = err?.response?.data?.code;
+      toast.error(getApiError(err, 'Ошибка сброса пароля'));
+      // Код неверный/истёк — проверяется только здесь, поэтому возвращаем к вводу кода.
+      if (errCode === 'CODE_INVALID' || errCode === 'CODE_EXPIRED') {
+        setCode('');
+        setStage('code');
+      }
     } finally {
       setLoading(false);
     }
@@ -155,6 +170,13 @@ export default function ForgotPasswordPage() {
               >
                 {resendCooldown > 0 ? `Повторный код через ${resendCooldown} с` : 'Отправить код повторно'}
               </button>
+
+              <button
+                onClick={() => { setError(''); setCode(''); setStage('email'); }}
+                className="w-full py-2 text-sm text-slate-500 hover:text-slate-300 transition-colors"
+              >
+                Изменить email
+              </button>
             </div>
           </>
         )}
@@ -165,7 +187,7 @@ export default function ForgotPasswordPage() {
             <div className="mb-8">
               <div className="text-4xl mb-3">🔒</div>
               <h1 className="text-2xl font-bold text-white mb-2">Новый пароль</h1>
-              <p className="text-slate-400 text-sm">Придумайте надёжный пароль — минимум 6 символов.</p>
+              <p className="text-slate-400 text-sm">Придумайте надёжный пароль: минимум 8 символов, цифра и спецсимвол.</p>
             </div>
 
             <div className="space-y-4">
@@ -187,6 +209,13 @@ export default function ForgotPasswordPage() {
                   {showPassword ? <EyeOff size={17} /> : <Eye size={17} />}
                 </button>
               </div>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 -mt-2">
+                {([['8+ символов', pw.longEnough], ['цифра', pw.hasDigit], ['спецсимвол', pw.hasSpecial]] as [string, boolean][]).map(([lbl, ok]) => (
+                  <span key={lbl} className={`text-[11px] flex items-center gap-1 ${ok ? 'text-green-400' : 'text-slate-500'}`}>
+                    {ok ? <Check size={11} /> : <span className="w-[10px] h-[10px] rounded-full border border-slate-600 inline-block" />}{lbl}
+                  </span>
+                ))}
+              </div>
 
               {error && (
                 <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm">
@@ -195,11 +224,18 @@ export default function ForgotPasswordPage() {
               )}
 
               <button
-                onClick={handleReset} disabled={loading || password.length < 8}
+                onClick={handleReset} disabled={loading || !pw.strong}
                 className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-semibold flex items-center justify-center gap-2 transition-colors"
               >
                 {loading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
                 {loading ? 'Сохраняем...' : 'Сохранить пароль'}
+              </button>
+
+              <button
+                onClick={backToCode} disabled={loading}
+                className="w-full py-2.5 text-sm text-slate-500 hover:text-slate-300 disabled:opacity-50 transition-colors flex items-center justify-center gap-1.5"
+              >
+                <ArrowLeft size={14} /> Назад к коду
               </button>
             </div>
           </>

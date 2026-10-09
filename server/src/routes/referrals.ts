@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
 import crypto from 'crypto';
+import { countProReferrals, REFERRALS_PER_PRO_MONTH } from '../utils/pro';
 
 const router = Router();
 
@@ -13,14 +14,21 @@ function genCode(): string {
 }
 
 // GET /api/referrals/stats — total referrals count
+// count — все приглашённые (вкл. кампании и легаси-ссылки); прогресс Pro считается
+// так же, как реальное начисление (applyReferralProGrants): только по личным
+// одноразовым ссылкам — иначе экран обещал месяцы, которые не будут выданы.
 router.get('/stats', authenticate, async (req: AuthRequest, res) => {
   try {
-    const count = await prisma.user.count({ where: { referrerId: req.userId } });
-    const perMonth = 10;
+    const [count, proCount] = await Promise.all([
+      prisma.user.count({ where: { referrerId: req.userId } }),
+      countProReferrals(req.userId!),
+    ]);
+    const perMonth = REFERRALS_PER_PRO_MONTH;
     res.json({
       count,
-      proMonthsEarned: Math.floor(count / perMonth),
-      towardNext: count % perMonth,
+      proCount,
+      proMonthsEarned: Math.floor(proCount / perMonth),
+      towardNext: proCount % perMonth,
       perMonth,
     });
   } catch (error) {
@@ -119,10 +127,13 @@ router.delete('/links/:id', authenticate, async (req: AuthRequest, res) => {
 // POST /api/referrals/resolve — resolve a ref code to an owner (used on /register).
 // The code can be a single-use ReferralLink.code OR a bare userId (legacy links). Public.
 // Returns `used: true` if the single-use link has already been consumed.
+// Returns `legacy: true` for a bare-userId code: такой код только атрибутирует
+// реферала и НЕ открывает закрытую регистрацию (её открывает лишь ReferralLink
+// или приглашение в артиста) — клиент не должен пускать по нему в форму.
 router.post('/resolve', async (req, res) => {
   try {
     const code = String(req.body?.code ?? '').trim();
-    if (!code) return res.json({ ownerId: null, code: null, used: false });
+    if (!code) return res.json({ ownerId: null, code: null, used: false, legacy: false });
 
     const link = await prisma.referralLink.findUnique({
       where: { code },
@@ -131,21 +142,21 @@ router.post('/resolve', async (req, res) => {
     if (link) {
       if (!link.multiUse && link.usedById) {
         // Одноразовая ссылка уже использована — больше не валидна (кампанию не блокируем)
-        return res.json({ ownerId: null, code, used: true });
+        return res.json({ ownerId: null, code, used: true, legacy: false });
       }
       await prisma.referralLink.update({
         where: { id: link.id },
         data: { clicks: { increment: 1 } },
       }).catch(() => {});
-      return res.json({ ownerId: link.ownerId, code, used: false });
+      return res.json({ ownerId: link.ownerId, code, used: false, legacy: false });
     }
 
-    // Legacy: code is a raw userId (multi-use, kept for backward compatibility)
+    // Legacy: code is a raw userId (attribution only, kept for backward compatibility)
     const user = await prisma.user.findUnique({ where: { id: code }, select: { id: true } });
-    return res.json({ ownerId: user?.id ?? null, code: null, used: false });
+    return res.json({ ownerId: user?.id ?? null, code: null, used: false, legacy: !!user });
   } catch (error) {
     console.error('Resolve referral error:', error);
-    res.json({ ownerId: null, code: null, used: false });
+    res.json({ ownerId: null, code: null, used: false, legacy: false });
   }
 });
 
