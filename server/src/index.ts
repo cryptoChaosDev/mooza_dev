@@ -55,6 +55,8 @@ import supportRoutes from './routes/support';
 import seoRouter from './seo';
 import { seoCacheMiddleware } from './seo/cache';
 import { artistSlugMiddleware, backfillArtistSlugs } from './lib/artistSlug';
+import { jobsChannelMiddleware } from './lib/jobsChannelHook';
+import jobsChannelAdminRoutes from './routes/jobsChannelAdmin';
 
 // Load environment variables
 dotenv.config();
@@ -93,6 +95,10 @@ prisma.$use(artistSlugMiddleware);
 // Кэш SEO-снимков/sitemap: сброс на запись в публичные модели (кроме служебных
 // обновлений User вроде lastSeenAt).
 prisma.$use(seoCacheMiddleware);
+// Автопостинг новых заказов/вакансий в Telegram-канал (lib/jobsChannel): ловит
+// записи Order/Vacancy/их постов из любых мест, отправляет отложенно после
+// коммита. Без TELEGRAM_JOBS_CHANNEL_ID — мгновенный пропуск.
+prisma.$use(jobsChannelMiddleware);
 
 const PORT = process.env.PORT || 4000;
 
@@ -212,6 +218,7 @@ app.use('/api/friendships', friendshipRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/references', referenceRoutes);
 app.use('/api/roles', roleRoutes);
+app.use('/api/admin/jobs-channel', jobsChannelAdminRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/push', pushRoutes);

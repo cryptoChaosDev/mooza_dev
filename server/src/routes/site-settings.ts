@@ -13,6 +13,9 @@ const DEFAULTS: Record<string, string> = {
   // эндпоинты, которые до фичи требовали входа (каталог людей, пост по id),
   // отвечают гостю 401, а клиент не показывает гостевые маршруты.
   guestBrowsingEnabled: 'false',
+  // Автопостинг новых заказов/вакансий в Telegram-канал (lib/jobsChannel). Включает
+  // админ после создания канала; без env TELEGRAM_JOBS_CHANNEL_ID флаг ни на что не влияет.
+  jobsChannelEnabled: 'false',
 };
 
 // Только эти ключи отдаются в GET /api/site-settings (менять через
@@ -72,6 +75,19 @@ router.get('/', async (_req, res) => {
 
 // PUT /api/site-settings — admin only (called via admin routes)
 export async function updateSiteSettings(updates: Record<string, string>) {
+  // Включение автопостинга в канал: запоминаем момент — публикуются только
+  // заказы/вакансии, созданные/опубликованные после него (не «задним числом»).
+  if (updates.jobsChannelEnabled === 'true') {
+    const prev = await prisma.siteSetting.findUnique({ where: { key: 'jobsChannelEnabled' } });
+    if (prev?.value !== 'true') {
+      const value = new Date().toISOString();
+      await prisma.siteSetting.upsert({
+        where: { key: 'jobsChannelEnabledAt' },
+        update: { value },
+        create: { key: 'jobsChannelEnabledAt', value },
+      });
+    }
+  }
   for (const [key, value] of Object.entries(updates)) {
     await prisma.siteSetting.upsert({
       where: { key },

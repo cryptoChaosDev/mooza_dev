@@ -2438,11 +2438,28 @@ function SiteSettingsTab() {
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить настройку')),
   });
 
-  const toggle = (key: string, current: boolean) => mut.mutate({ [key]: current ? 'false' : 'true' });
+  const toggle = (key: string, current: boolean) => mut.mutate({ [key]: current ? 'false' : 'true' }, {
+    onSuccess: () => { if (key === 'jobsChannelEnabled') queryClient.invalidateQueries({ queryKey: ['admin-jobs-channel'] }); },
+  });
+
+  // Автопостинг в Telegram-канал: статус env и тестовый пост
+  const { data: jobsChannel } = useQuery({
+    queryKey: ['admin-jobs-channel'],
+    queryFn: async () => {
+      const { data } = await adminAPI.jobsChannel.status();
+      return data as { configured: boolean; channelId: string | null; botConfigured: boolean; enabled: boolean; enabledAt: string | null };
+    },
+  });
+  const testMut = useMutation({
+    mutationFn: () => adminAPI.jobsChannel.test(),
+    onSuccess: () => toast.success('Тестовый пост отправлен в канал'),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить тестовый пост')),
+  });
 
   const loginEnabled = settings?.loginEnabled !== 'false';
   const registrationEnabled = settings?.registrationEnabled !== 'false';
   const referralRegistrationEnabled = settings?.referralRegistrationEnabled === 'true';
+  const jobsChannelEnabled = settings?.jobsChannelEnabled === 'true';
 
   if (isLoading) return <div className="text-slate-500 text-sm">Загрузка...</div>;
 
@@ -2450,6 +2467,7 @@ function SiteSettingsTab() {
     { key: 'loginEnabled',                label: 'Кнопка «Войти» на лендинге',                         value: loginEnabled },
     { key: 'registrationEnabled',         label: 'Открытая регистрация (для всех)',                    value: registrationEnabled },
     { key: 'referralRegistrationEnabled', label: 'Регистрация по реф-ссылкам (когда открытая выкл.)',   value: referralRegistrationEnabled },
+    { key: 'jobsChannelEnabled',          label: 'Автопостинг заказов и вакансий в Telegram-канал',     value: jobsChannelEnabled },
   ];
 
   return (
@@ -2470,6 +2488,25 @@ function SiteSettingsTab() {
           </button>
         </div>
       ))}
+      <div className="bg-slate-900/60 border border-slate-800 rounded-2xl px-5 py-4 space-y-3">
+        <div className="text-sm text-white">Telegram-канал заказов и вакансий</div>
+        <p className="text-xs text-slate-500">
+          {jobsChannel?.configured
+            ? <>Канал: <span className="text-slate-300">{jobsChannel.channelId}</span>. </>
+            : <>Канал не настроен — нужен env <code className="text-slate-300">TELEGRAM_JOBS_CHANNEL_ID</code> и <code className="text-slate-300">TELEGRAM_BOT_TOKEN</code> на сервере; пока его нет, автопостинг молча выключен. </>}
+          Бот должен быть администратором канала. Публикуются только новые заказы и вакансии —
+          созданные или опубликованные после включения
+          {jobsChannel?.enabled && jobsChannel.enabledAt ? ` (${new Date(jobsChannel.enabledAt).toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })} МСК)` : ''}.
+        </p>
+        <button
+          onClick={() => testMut.mutate()}
+          disabled={testMut.isPending || !jobsChannel?.configured}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm bg-slate-800 hover:bg-slate-700 text-white disabled:opacity-50"
+        >
+          {testMut.isPending && <Loader2 size={14} className="animate-spin" />}
+          Тестовый пост в канал
+        </button>
+      </div>
     </div>
   );
 }
