@@ -5,28 +5,45 @@ import { uploadChannelAvatar } from '../middleware/upload';
 
 const router = Router();
 
-// Shared post include factory
+// Shared post include factory.
+// Комментарии целиком не тянем (DoS/производительность): только 3 последних + _count.
 function postInclude(userId: string) {
   return {
     author: { select: { id: true, firstName: true, lastName: true, avatar: true, role: true } },
     channel: { select: { id: true, name: true, avatar: true, ownerId: true } },
     likes: { where: { userId }, select: { id: true } },
     comments: {
+      where: { parentCommentId: null },
       include: {
         author: { select: { id: true, firstName: true, lastName: true, avatar: true } },
-        reactions: { select: { id: true, emoji: true, userId: true } },
       },
-      orderBy: { createdAt: 'asc' as const },
+      orderBy: { createdAt: 'desc' as const },
+      take: 3,
     },
     reactions: { select: { id: true, emoji: true, userId: true } },
     _count: { select: { likes: true, comments: true } },
   };
 }
 
+const MAX_PAGE = 50;
+function pageParams(q: any): { take: number; skip: number } {
+  const l = parseInt(String(q.limit ?? ''), 10);
+  const o = parseInt(String(q.offset ?? ''), 10);
+  return {
+    take: Number.isFinite(l) && l > 0 ? Math.min(l, MAX_PAGE) : 20,
+    skip: Number.isFinite(o) && o > 0 ? Math.min(o, 100000) : 0,
+  };
+}
+
+// Посты заблокированных авторов не показываем.
+function visibleAuthorWhere() {
+  return { OR: [{ isBlocked: false, blockedUntil: null }, { blockedUntil: { lte: new Date() } }] };
+}
+
 // GET /channels/feed — posts from subscribed channels + own channel (combined)
 router.get('/feed', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { limit = 20, offset = 0 } = req.query;
+    const { take, skip } = pageParams(req.query);
 
     const myChannel = await prisma.channel.findUnique({
       where: { ownerId: req.userId! },
@@ -44,11 +61,11 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
     if (channelIds.length === 0) return res.json([]);
 
     const posts = await prisma.post.findMany({
-      where: { channelId: { in: channelIds } },
+      where: { channelId: { in: channelIds }, author: visibleAuthorWhere() },
       include: postInclude(req.userId!),
-      orderBy: { createdAt: 'desc' },
-      take: Number(limit),
-      skip: Number(offset),
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take,
+      skip,
     });
 
     res.json(posts.map(p => ({ ...p, isLiked: p.likes.length > 0 })));
@@ -61,18 +78,18 @@ router.get('/feed', authenticate, async (req: AuthRequest, res) => {
 // GET /channels/feed/mine — only own channel posts
 router.get('/feed/mine', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { limit = 20, offset = 0 } = req.query;
+    const { take, skip } = pageParams(req.query);
     const myChannel = await prisma.channel.findUnique({
       where: { ownerId: req.userId! },
       select: { id: true },
     });
     if (!myChannel) return res.json([]);
     const posts = await prisma.post.findMany({
-      where: { channelId: myChannel.id },
+      where: { channelId: myChannel.id, author: visibleAuthorWhere() },
       include: postInclude(req.userId!),
-      orderBy: { createdAt: 'desc' },
-      take: Number(limit),
-      skip: Number(offset),
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take,
+      skip,
     });
     res.json(posts.map(p => ({ ...p, isLiked: p.likes.length > 0 })));
   } catch (e) {
@@ -83,7 +100,7 @@ router.get('/feed/mine', authenticate, async (req: AuthRequest, res) => {
 // GET /channels/feed/subscribed — only subscribed channels posts
 router.get('/feed/subscribed', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { limit = 20, offset = 0 } = req.query;
+    const { take, skip } = pageParams(req.query);
     const subs = await prisma.channelSubscription.findMany({
       where: { userId: req.userId! },
       select: { channelId: true },
@@ -91,11 +108,11 @@ router.get('/feed/subscribed', authenticate, async (req: AuthRequest, res) => {
     if (subs.length === 0) return res.json([]);
     const channelIds = subs.map(s => s.channelId);
     const posts = await prisma.post.findMany({
-      where: { channelId: { in: channelIds } },
+      where: { channelId: { in: channelIds }, author: visibleAuthorWhere() },
       include: postInclude(req.userId!),
-      orderBy: { createdAt: 'desc' },
-      take: Number(limit),
-      skip: Number(offset),
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take,
+      skip,
     });
     res.json(posts.map(p => ({ ...p, isLiked: p.likes.length > 0 })));
   } catch (e) {

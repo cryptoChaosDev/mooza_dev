@@ -1,14 +1,257 @@
 import { Router } from 'express';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import multer from 'multer';
+import sanitizeHtml from 'sanitize-html';
+import { Prisma, ArtistType } from '@prisma/client';
 import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
-import { emitToUser, notifyUser } from '../socket';
-import { uploadPostMedia } from '../middleware/upload';
-import { tgLog, tgEvent } from '../utils/telegram';
+import { emitToUser } from '../socket';
+import { notify, isNotificationEnabled } from '../utils/notify';
+import { tgLog, tgEvent, escTg } from '../utils/telegram';
 
 const router = Router();
 
-// Upload post media (image, gif, audio)
-router.post('/upload', authenticate, uploadPostMedia.single('file'), async (req: AuthRequest, res) => {
+// ── Limits ────────────────────────────────────────────────────────────────────
+const MAX_PAGE = 50;                 // hard cap for any ?limit (guests can hit /feed)
+const CONTENT_MAX = 20000;           // post HTML
+const COMMENT_MAX = 2000;
+const REPOST_COMMENT_MAX = 1000;
+const TITLE_MAX = 140;
+const CATEGORY_MAX = 60;
+const POLL_OPTIONS_MIN = 2;
+const POLL_OPTIONS_MAX = 10;
+const POLL_OPTION_LEN = 100;
+const MAX_IMAGES = 10;
+const MAX_LINKS = 10;
+const MAX_TAGS = 20;
+
+// Типы, которые можно создать через POST /posts. «Заказ»/«Вакансия» создаются
+// только из orders.ts / vacancies.ts (с привязкой orderId / vacancyId).
+const CREATABLE_TYPES = ['blog', 'question', 'service', 'employment', 'poll'];
+const EMPLOYMENT_STATUSES = ['open', 'considering', 'closed'];
+const FEED_SORTS = ['new', 'popular', 'discussed', 'smart'];
+// Должен совпадать с REACTION_EMOJIS в client/src/components/ReactionBar.tsx
+const REACTION_EMOJIS = ['👍', '👎', '👌', '😢', '😂', '🔥', '❤️'];
+
+// Только наши загрузки (multer ниже). Иначе `@evil.com/p.png` превращается
+// клиентом в `https://moooza.ru@evil.com/p.png` — внешний хост.
+const POST_IMAGE_RE = /^\/uploads\/posts\/post-[\w-]+\.(jpe?g|png|gif|webp)$/i;
+const POST_AUDIO_RE = /^\/uploads\/posts\/post-[\w-]+\.[a-z0-9]{1,5}$/i;
+const ID_RE = /^[\w-]{1,64}$/;
+
+class HttpError extends Error {
+  constructor(public status: number, message: string) { super(message); }
+}
+
+function parseLimit(v: unknown, def = 20): number {
+  const n = parseInt(String(v ?? ''), 10);
+  if (!Number.isFinite(n) || n <= 0) return def;
+  return Math.min(n, MAX_PAGE);
+}
+
+function parseOffset(v: unknown): number {
+  const n = parseInt(String(v ?? ''), 10);
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 100000) : 0;
+}
+
+function qstr(v: unknown): string {
+  if (v === undefined || v === null) return '';
+  return String(v);
+}
+
+/** (createdAt,id) cursor: `<ISO>|<id>` */
+function parseTimeCursor(raw: string): { at: Date; id: string } | null {
+  const m = /^(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z)\|([\w-]{1,64})$/.exec(raw);
+  if (!m) return null;
+  const at = new Date(m[1]);
+  if (Number.isNaN(at.getTime())) return null;
+  return { at, id: m[2] };
+}
+
+// Автор виден в ленте, если не заблокирован: isBlocked=false и нет активного
+// blockedUntil, либо срок блокировки уже истёк (авто-разблокировка).
+function visibleAuthorWhere(now = new Date()) {
+  return { OR: [{ isBlocked: false, blockedUntil: null }, { blockedUntil: { lte: now } }] };
+}
+
+// ── HTML sanitization (TipTap output) ─────────────────────────────────────────
+// Тот же whitelist, что в client/src/components/PostContent.tsx. class — только
+// post-mention (иначе `<a class="fixed inset-0 z-[100]">` перекрывает экран).
+const POST_ALLOWED_TAGS = ['p', 'br', 'strong', 'b', 'em', 'i', 's', 'strike', 'del', 'u', 'ul', 'ol', 'li', 'blockquote', 'a', 'span'];
+
+function looksLikeHtml(s: string): boolean {
+  return /<\/?[a-z][\s\S]*>/i.test(s);
+}
+
+function isMentionSpan(attribs: Record<string, string>): boolean {
+  return attribs['data-type'] === 'mention' || /(^|\s)post-mention(\s|$)/.test(attribs.class || '');
+}
+
+function baseSanitizeOptions(span: sanitizeHtml.Transformer): sanitizeHtml.IOptions {
+  return {
+    allowedTags: POST_ALLOWED_TAGS,
+    allowedAttributes: {
+      a: ['href', 'target', 'rel'],
+      span: ['class', 'data-type', 'data-id', 'data-label', 'data-mention-suggestion-char'],
+    },
+    allowedClasses: { span: ['post-mention'] },
+    allowedSchemes: ['http', 'https', 'mailto'],
+    allowedSchemesAppliedToAttributes: ['href'],
+    allowProtocolRelative: false,
+    disallowedTagsMode: 'discard',
+    transformTags: {
+      a: (_tag, attribs) => ({
+        tagName: 'a',
+        attribs: {
+          ...(attribs.href ? { href: attribs.href } : {}),
+          target: '_blank',
+          rel: 'noopener noreferrer nofollow',
+        },
+      }),
+      span,
+    },
+  };
+}
+
+function plainText(html: string): string {
+  return sanitizeHtml(html, { allowedTags: [], allowedAttributes: {} })
+    .replace(/&nbsp;/g, ' ')
+    .trim();
+}
+
+type MentionRef = { id: string; type: 'user'; name: string };
+
+/**
+ * Санитизирует HTML поста и перепроверяет упоминания: data-id должен
+ * существовать, подпись перестраивается по реальному имени (подделать
+ * «@Админ» с чужим data-id нельзя). Plain-text (легаси) возвращается как есть —
+ * клиент рендерит его текстом.
+ */
+async function sanitizePostContent(raw: string): Promise<{ html: string; mentions: MentionRef[] }> {
+  if (!raw) return { html: '', mentions: [] };
+  if (!looksLikeHtml(raw)) return { html: raw, mentions: [] };
+
+  const ids = new Set<string>();
+  const firstPass = sanitizeHtml(raw, baseSanitizeOptions((_tag, attribs) => {
+    if (isMentionSpan(attribs)) {
+      const id = attribs['data-id'] || attribs['data-mention-id'] || '';
+      if (ID_RE.test(id)) ids.add(id);
+      return { tagName: 'span', attribs: { ...attribs, 'data-id': id } };
+    }
+    return { tagName: 'span', attribs };
+  }));
+
+  const users = ids.size
+    ? await prisma.user.findMany({
+        where: { id: { in: Array.from(ids).slice(0, 50) } },
+        select: { id: true, firstName: true, lastName: true },
+      })
+    : [];
+  const byId = new Map(users.map((u) => [u.id, `${u.firstName} ${u.lastName}`.trim() || 'user']));
+  const mentions = new Map<string, MentionRef>();
+
+  let html = sanitizeHtml(firstPass, baseSanitizeOptions((_tag, attribs): sanitizeHtml.Tag => {
+    if (!isMentionSpan(attribs)) return { tagName: 'span', attribs: {} };
+    const id = attribs['data-id'] || '';
+    const name = byId.get(id);
+    if (!name) return { tagName: 'span', attribs: {} }; // несуществующий — обычный текст
+    mentions.set(id, { id, type: 'user', name });
+    return {
+      tagName: 'span',
+      attribs: { class: 'post-mention', 'data-type': 'mention', 'data-id': id, 'data-label': name, 'data-mention-suggestion-char': '@' },
+      text: `@${name}`,
+    };
+  })).trim();
+
+  // Все теги вырезаны — оставляем HTML-обёртку, чтобы клиент не показал «&amp;» как текст.
+  if (html && !looksLikeHtml(html)) html = `<p>${html}</p>`;
+  return { html, mentions: Array.from(mentions.values()) };
+}
+
+// ── Field validators ──────────────────────────────────────────────────────────
+function normalizeLink(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim();
+  if (!s || s.length > 500 || /\s/.test(s)) return null;
+  const withScheme = /^https?:\/\//i.test(s) ? s : `https://${s}`;
+  try {
+    const u = new URL(withScheme);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    if (u.username || u.password) return null;
+    if (!u.hostname.includes('.')) return null;
+    return s;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeStringList(raw: unknown, maxItems: number, maxLen: number): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const v of raw) {
+    if (typeof v !== 'string') continue;
+    const s = v.trim().slice(0, maxLen);
+    if (s && !out.includes(s)) out.push(s);
+    if (out.length >= maxItems) break;
+  }
+  return out;
+}
+
+/** Canonical catalog city name, '' for empty input, null if not in catalog. */
+async function resolveCity(raw: unknown): Promise<string | null> {
+  if (raw === undefined || raw === null) return '';
+  if (typeof raw !== 'string') return null;
+  const name = raw.trim();
+  if (!name) return '';
+  const city = await prisma.city.findFirst({
+    where: { name: { equals: name, mode: 'insensitive' } },
+    select: { name: true },
+  });
+  return city ? city.name : null;
+}
+
+// ── Upload ────────────────────────────────────────────────────────────────────
+// Своя конфигурация multer: расширение берётся из mimetype (а не из
+// originalname), чтобы имя файла всегда проходило POST_IMAGE_RE / POST_AUDIO_RE.
+const POST_MEDIA_EXT: Record<string, string> = {
+  'image/jpeg': '.jpg', 'image/jpg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp',
+  'audio/mpeg': '.mp3', 'audio/mp3': '.mp3', 'audio/wav': '.wav', 'audio/wave': '.wav', 'audio/x-wav': '.wav',
+  'audio/ogg': '.ogg', 'audio/flac': '.flac', 'audio/mp4': '.m4a', 'audio/x-m4a': '.m4a', 'audio/aac': '.aac',
+  'audio/x-aac': '.aac', 'audio/3gpp': '.3gp', 'audio/3gpp2': '.3g2',
+};
+const postMediaDir = path.join(process.cwd(), 'uploads', 'posts');
+
+const uploadPostMedia = multer({
+  storage: multer.diskStorage({
+    destination: (_req, _file, cb) => {
+      try { fs.mkdirSync(postMediaDir, { recursive: true }); } catch {}
+      cb(null, postMediaDir);
+    },
+    filename: (_req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      cb(null, `post-${uniqueSuffix}${POST_MEDIA_EXT[file.mimetype] || ''}`);
+    },
+  }),
+  fileFilter: (_req, file, cb) => {
+    if (POST_MEDIA_EXT[file.mimetype]) cb(null, true);
+    else cb(new Error('Unsupported file type'));
+  },
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
+});
+
+// Upload post media (image, gif, audio).
+// Ошибки multer (формат/размер) — понятный 400, а не «Внутренняя ошибка сервера».
+router.post('/upload', authenticate, (req, res, next) => {
+  uploadPostMedia.single('file')(req, res, (err: unknown) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'Файл больше 20 МБ' });
+    }
+    return res.status(400).json({ error: 'Неподдерживаемый формат файла (JPG, PNG, GIF, WebP или аудио)' });
+  });
+}, async (req: AuthRequest, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const isAudio = req.file.mimetype.startsWith('audio/');
@@ -47,8 +290,11 @@ router.get('/my-authors', authenticate, async (req: AuthRequest, res) => {
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
-// Shared post include used by /feed for both regular and pinned (team) posts.
+// Shared post include used by /feed, /:id and /saved/list.
 // Kept as a factory so each query gets its own per-user `where` for likes/savedBy.
+// Комментарии в ленте НЕ тянутся целиком: только _count и 3 последних
+// (полный список — GET /posts/:id/comments при открытии шторки).
+// Реакции — только моя; сводка по эмодзи считается groupBy в decoratePosts().
 const buildFeedInclude = (userId: string | undefined) => {
   // Guest safety: Prisma treats `{ userId: undefined }` as NO filter, which would
   // return ALL likes/savedBy rows and make isLiked/isSaved wrongly true for guests.
@@ -113,30 +359,21 @@ const buildFeedInclude = (userId: string | undefined) => {
     where: { userId: meId },
     select: { id: true }
   },
+  pollVotes: {
+    where: { userId: meId },
+    select: { userId: true, optionIndex: true }
+  },
   comments: {
-    where: { parentCommentId: null } as any,
-    include: {
-      author: {
-        select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true }
-      },
-      reactions: {
-        select: { id: true, emoji: true, userId: true }
-      },
-      replies: {
-        include: {
-          author: {
-            select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true }
-          },
-          reactions: {
-            select: { id: true, emoji: true, userId: true }
-          },
-        },
-        orderBy: { createdAt: 'asc' },
-      },
-    } as any,
-    orderBy: { createdAt: 'asc' },
+    where: { parentCommentId: null },
+    orderBy: { createdAt: 'desc' },
+    take: 3,
+    select: {
+      id: true, content: true, imageUrl: true, createdAt: true,
+      author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true } },
+    },
   },
   reactions: {
+    where: { userId: meId },
     select: { id: true, emoji: true, userId: true }
   },
   _count: {
@@ -144,20 +381,82 @@ const buildFeedInclude = (userId: string | undefined) => {
       likes: true,
       comments: true,
       savedBy: true,
+      reactions: true,
       reposts: { where: { repostDeleted: false } },
     }
   }
-  };
+  } satisfies Prisma.PostInclude;
 };
+
+/** Adds isLiked/isSaved/myVote/myReaction/reactionSummary to posts loaded with buildFeedInclude. */
+async function decoratePosts(posts: any[]): Promise<any[]> {
+  if (posts.length === 0) return [];
+  const ids = posts.map((p) => p.id);
+  const grouped = await prisma.postReaction.groupBy({
+    by: ['postId', 'emoji'],
+    where: { postId: { in: ids } },
+    _count: { _all: true },
+  });
+  const summary = new Map<string, { emoji: string; count: number }[]>();
+  for (const g of grouped) {
+    const list = summary.get(g.postId) ?? [];
+    list.push({ emoji: g.emoji, count: g._count._all });
+    summary.set(g.postId, list);
+  }
+  for (const list of summary.values()) {
+    list.sort((a, b) => b.count - a.count || REACTION_EMOJIS.indexOf(a.emoji) - REACTION_EMOJIS.indexOf(b.emoji));
+  }
+  return posts.map((post) => {
+    const { reactions, ...rest } = post;
+    return {
+      ...rest,
+      isLiked: (post.likes?.length ?? 0) > 0,
+      isSaved: (post.savedBy?.length ?? 0) > 0,
+      myVote: post.pollVotes?.[0]?.optionIndex ?? null,
+      myReaction: reactions?.[0]?.emoji ?? null,
+      reactionSummary: summary.get(post.id) ?? [],
+    };
+  });
+}
 
 // System team account — its posts are pinned to the top of the feed for brand-new users.
 // See server/prisma/seeds/welcome-posts.ts
 const TEAM_EMAIL = 'team@moooza.ru';
 
 // ── Smart feed («Для вас») ───────────────────────────────────────────────────
-// Per-(viewer+filters) ranked id list, cached briefly; paginated by index.
+// Per-(viewer+filters) ranked id list, cached briefly.
 const SMART_TTL_MS = 3 * 60 * 1000;
 const smartCache = new Map<string, { ids: string[]; at: number }>();
+
+// Снапшоты порядка для ранжированных сортировок (smart/popular/discussed):
+// курсор `s:<token>:<index>` листает один и тот же список, поэтому
+// refetch/новые реакции не дают дублей и пропусков между страницами.
+const SNAPSHOT_TTL_MS = 15 * 60 * 1000;
+// Первая страница в пределах этого окна переиспользует снапшот того же
+// зрителя+фильтров (refetchInterval клиента не плодит новые снапшоты).
+const SNAPSHOT_REUSE_MS = 2 * 60 * 1000;
+const SNAPSHOT_MAX = 300; // ≤ 300 × ~600 id — ограничение памяти
+const rankSnapshots = new Map<string, { ids: string[]; at: number }>();
+const snapshotTokenByKey = new Map<string, string>();
+
+function putSnapshot(token: string, ids: string[]) {
+  const now = Date.now();
+  for (const [k, v] of rankSnapshots) if (now - v.at > SNAPSHOT_TTL_MS) rankSnapshots.delete(k);
+  // Map хранит порядок вставки — вытесняем самые старые.
+  while (rankSnapshots.size >= SNAPSHOT_MAX) {
+    const oldest = rankSnapshots.keys().next().value;
+    if (oldest === undefined) break;
+    rankSnapshots.delete(oldest);
+  }
+  rankSnapshots.set(token, { ids, at: now });
+}
+
+function getSnapshot(token: string): string[] | null {
+  const s = rankSnapshots.get(token);
+  if (!s) return null;
+  if (Date.now() - s.at > SNAPSHOT_TTL_MS) { rankSnapshots.delete(token); return null; }
+  return s.ids;
+}
 
 // Greedy author-diversity pass: avoid the same author within `window` slots.
 function diversifyByAuthor<T extends { authorId: string }>(items: T[], window = 4): T[] {
@@ -175,19 +474,153 @@ function diversifyByAuthor<T extends { authorId: string }>(items: T[], window = 
   return out;
 }
 
+interface RankCtx {
+  where: any;
+  sort: string;
+  vid: string | null;
+  cacheKey: string;
+  kind: string;
+  typeTypes: string[];
+  teamUserId: string | null;
+}
+
+async function computeSmartIds(ctx: RankCtx): Promise<string[]> {
+  const { where, vid, kind, teamUserId } = ctx;
+  const nowMs = Date.now();
+  const cached = smartCache.get(ctx.cacheKey);
+  if (cached && nowMs - cached.at <= SMART_TTL_MS) return cached.ids;
+
+  // Viewer affinity signals (empty for guests → global "trending" ranking).
+  let friendIds = new Set<string>(), connIds = new Set<string>(), subChannelIds = new Set<string>(),
+      favUserIds = new Set<string>(), myArtistIds = new Set<string>(), vGenres = new Set<string>();
+  let vCity: string | null = null, vField: string | null = null;
+  if (vid) {
+    const [friendships, connections, subs, favorites, myArtists, viewer] = await Promise.all([
+      prisma.friendship.findMany({ where: { status: 'accepted', OR: [{ requesterId: vid }, { receiverId: vid }] }, select: { requesterId: true, receiverId: true } }),
+      prisma.connection.findMany({ where: { status: { in: ['ACCEPTED', 'BREAK_REQUESTED'] }, OR: [{ requesterId: vid }, { receiverId: vid }] }, select: { requesterId: true, receiverId: true } }),
+      prisma.channelSubscription.findMany({ where: { userId: vid }, select: { channelId: true } }),
+      prisma.favorite.findMany({ where: { userId: vid }, select: { targetId: true } }),
+      prisma.userArtist.findMany({ where: { userId: vid }, select: { artistId: true } }),
+      prisma.user.findUnique({ where: { id: vid }, select: { city: true, genres: true, fieldOfActivityId: true } }),
+    ]);
+    friendIds = new Set(friendships.map((f) => (f.requesterId === vid ? f.receiverId : f.requesterId)));
+    connIds = new Set(connections.map((c) => (c.requesterId === vid ? c.receiverId : c.requesterId)));
+    subChannelIds = new Set(subs.map((s) => s.channelId));
+    favUserIds = new Set(favorites.map((f) => f.targetId));
+    myArtistIds = new Set(myArtists.map((a) => a.artistId));
+    vGenres = new Set(viewer?.genres ?? []);
+    vCity = viewer?.city ?? null;
+    vField = viewer?.fieldOfActivityId ?? null;
+  }
+
+  // Candidate pool: the 600 most-recent posts matching the active filters
+  // (team excluded — handled separately below).
+  const candidates: any[] = await prisma.post.findMany({
+    where,
+    select: {
+      id: true, createdAt: true, authorId: true, channelId: true, artistId: true, city: true, genres: true,
+      author: { select: { fieldOfActivityId: true } },
+      _count: { select: { reactions: true, comments: true, likes: true, savedBy: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 600,
+  });
+
+  // score = freshness × (1 + engagement + affinity + relevance)
+  const HALF_LIFE_H = 20;
+  const scored = candidates.map((p) => {
+    const ageH = Math.max(0, (nowMs - new Date(p.createdAt).getTime()) / 3_600_000);
+    const freshness = Math.pow(0.5, ageH / HALF_LIFE_H);
+    const c = p._count;
+    const eng = Math.log1p(c.reactions + 2 * c.comments + 0.5 * c.likes + 1.5 * c.savedBy);
+    let aff = 0;
+    if (friendIds.has(p.authorId)) aff += 1.2; else if (connIds.has(p.authorId)) aff += 0.8;
+    if (favUserIds.has(p.authorId)) aff += 0.6;
+    if (p.channelId && subChannelIds.has(p.channelId)) aff += 1.0;
+    if (p.artistId && myArtistIds.has(p.artistId)) aff += 1.0;
+    let rel = 0;
+    if (p.city && vCity && p.city === vCity) rel += 0.4;
+    if (vGenres.size && p.genres?.length) {
+      const o = p.genres.filter((g: string) => vGenres.has(g)).length;
+      if (o) rel += Math.min(0.6, 0.3 * o);
+    }
+    if (p.author?.fieldOfActivityId && vField && p.author.fieldOfActivityId === vField) rel += 0.3;
+    return { id: p.id, authorId: p.authorId, score: freshness * (1 + 0.6 * eng + aff + rel) };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  const ranked = diversifyByAuthor(scored);
+
+  // Посты официального аккаунта Moooza закрепляются сверху ТОЛЬКО для новичков
+  // без собственных постов (онбординг, старые→новые) — как и в остальных
+  // сортировках. Для всех прочих они ранжируются наравне со всеми и тонут
+  // по свежести (раньше висели сверху у всех — жалоба «вечно вижу старые посты Музы»).
+  let teamIds: string[] = [];
+  if (teamUserId && kind === 'all' && vid) {
+    const newUser = (await prisma.post.count({ where: { authorId: vid } })) === 0;
+    if (newUser) {
+      const teamWhere: any = { authorId: teamUserId };
+      if (ctx.typeTypes.length) teamWhere.type = ctx.typeTypes.length > 1 ? { in: ctx.typeTypes } : ctx.typeTypes[0];
+      if (where.createdAt) teamWhere.createdAt = where.createdAt;
+      if (where.city) teamWhere.city = where.city;
+      const teamPosts = await prisma.post.findMany({ where: teamWhere, select: { id: true }, orderBy: { createdAt: 'asc' }, take: 25 });
+      teamIds = teamPosts.map((p) => p.id);
+    }
+  }
+  const teamSet = new Set(teamIds);
+  const ids = [...teamIds, ...ranked.filter((p) => !teamSet.has(p.id)).map((p) => p.id)];
+  if (smartCache.size > 1000) smartCache.clear();
+  smartCache.set(ctx.cacheKey, { ids, at: nowMs });
+  return ids;
+}
+
+async function computeRankedIds(ctx: RankCtx): Promise<string[]> {
+  if (ctx.sort === 'smart') return computeSmartIds(ctx);
+  if (ctx.sort === 'popular') {
+    // «Популярные» — суммарная вовлечённость (лайки + реакции + сохранения + чуть комментов).
+    // Prisma не умеет orderBy по сумме relation-count'ов — ранжируем пул из 600
+    // свежих кандидатов в памяти.
+    const cands = await prisma.post.findMany({
+      where: ctx.where,
+      select: { id: true, createdAt: true, _count: { select: { likes: true, reactions: true, comments: true, savedBy: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 600,
+    });
+    const scored = cands.map((p) => ({
+      id: p.id,
+      t: new Date(p.createdAt).getTime(),
+      s: p._count.likes + p._count.reactions + 1.5 * p._count.savedBy + 0.5 * p._count.comments,
+    }));
+    scored.sort((a, b) => b.s - a.s || b.t - a.t);
+    return scored.map((x) => x.id);
+  }
+  // discussed
+  const rows = await prisma.post.findMany({
+    where: ctx.where,
+    select: { id: true },
+    orderBy: [{ comments: { _count: 'desc' } }, { createdAt: 'desc' }, { id: 'desc' }],
+    take: 600,
+  });
+  return rows.map((r) => r.id);
+}
+
 // Get feed (all posts from the social network). Supports:
 //   type       — post type (blog | question | poll | service | employment | …)
 //   authorKind — all | resident (profile) | channel | artist | mine
 //   sort       — new (default) | popular | discussed | smart («Для вас»)
-//   limit/offset — pagination for infinite scroll
+//   cursor     — курсорная пагинация (ответ `{ items, nextCursor }`); '' — первая страница
+//   limit/offset — легаси-пагинация (ответ — массив), для старых клиентов
 router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
   try {
-    const { limit = 20, offset = 0, type, authorKind, period, city, employment, artistType, genre, sort } = req.query;
-    const offsetNum = Number(offset);
-    const limitNum = Number(limit);
-    const kind = authorKind ? String(authorKind) : 'all';
+    const { type, authorKind, period, city, employment, artistType, genre } = req.query;
+    const limitNum = parseLimit(req.query.limit);
+    const offsetNum = parseOffset(req.query.offset);
+    const useCursor = req.query.cursor !== undefined;
+    const cursor = qstr(req.query.cursor);
+    const sortStr = FEED_SORTS.includes(qstr(req.query.sort)) ? qstr(req.query.sort) : 'new';
+    const kindRaw = authorKind ? qstr(authorKind) : 'all';
+    const kind = kindRaw === 'mine' && !req.userId ? 'all' : kindRaw;
 
-    const include = buildFeedInclude(req.userId) as any;
+    const include = buildFeedInclude(req.userId);
 
     // Team welcome account — its posts are pinned for brand-new users and kept
     // out of the normal chronological stream (avoids duplicates across pages).
@@ -199,10 +632,11 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
 
     // Build the where clause from filters.
     const where: any = {};
-    if (type && type !== 'all') {
-      const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
-      if (types.length) where.type = types.length > 1 ? { in: types } : types[0];
-    }
+    const typeStr = qstr(type);
+    const typeTypes = typeStr && typeStr !== 'all'
+      ? typeStr.split(',').map(t => t.trim()).filter(Boolean).slice(0, 20)
+      : [];
+    if (typeTypes.length) where.type = typeTypes.length > 1 ? { in: typeTypes } : typeTypes[0];
     if (kind === 'resident') { where.channelId = null; where.artistId = null; }
     else if (kind === 'channel') where.channelId = { not: null };
     else if (kind === 'artist') where.artistId = { not: null };
@@ -219,8 +653,11 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
       { type: 'service', serviceId: null },
     ];
 
+    // Посты заблокированных авторов в ленту не попадают.
+    where.author = { ...visibleAuthorWhere() };
+
     // period — date lower bound on createdAt (server-computed)
-    const periodStr = period ? String(period) : 'all';
+    const periodStr = period ? qstr(period) : 'all';
     if (periodStr && periodStr !== 'all') {
       const now = new Date();
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -232,188 +669,134 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
         where.createdAt = { gte: startOfYesterday, lt: startOfToday };
       } else {
         const since = new Date(now);
+        let known = true;
         switch (periodStr) {
           case '3days': since.setDate(since.getDate() - 3); break;
           case 'week': since.setDate(since.getDate() - 7); break;
           case 'month': since.setMonth(since.getMonth() - 1); break;
           case '3months': since.setMonth(since.getMonth() - 3); break;
           case 'year': since.setFullYear(since.getFullYear() - 1); break;
-          default: break;
+          default: known = false; break;
         }
-        where.createdAt = { gte: since };
+        if (known) where.createdAt = { gte: since };
       }
     }
 
     // city — comma-separated list, exact match on stored names
     if (city) {
-      const cityNames = String(city)
+      const cityNames = qstr(city)
         .split(',')
         .map(c => c.trim())
-        .filter(Boolean);
+        .filter(Boolean)
+        .slice(0, 50);
       if (cityNames.length > 0) where.city = { in: cityNames };
     }
 
     // ── Contextual filters (E4) ──────────────────────────────────────────────
     // Employment status — filter by the post author's occupancy status
     // (shown in UI for «Резидент» author or «Апдейт занятости» type).
-    if (employment && employment !== 'all') {
-      where.author = { ...(where.author || {}), occupancyStatus: String(employment) };
+    const employmentStr = qstr(employment);
+    if (employmentStr && employmentStr !== 'all' && EMPLOYMENT_STATUSES.includes(employmentStr)) {
+      where.author = { ...where.author, occupancyStatus: employmentStr };
     }
     // Artist type — only artist posts have an artist relation (shown for «Артист»).
-    if (artistType && artistType !== 'all') {
-      where.artist = { ...(where.artist || {}), type: String(artistType) };
+    const artistTypeStr = qstr(artistType);
+    if (artistTypeStr && artistTypeStr !== 'all' && (Object.values(ArtistType) as string[]).includes(artistTypeStr)) {
+      where.artist = { ...(where.artist || {}), type: artistTypeStr };
     }
     // Genre — artist posts whose artist is tagged with the given genre.
-    if (genre && genre !== 'all') {
-      where.artist = { ...(where.artist || {}), genres: { some: { genre: { name: String(genre) } } } };
+    const genreStr = qstr(genre);
+    if (genreStr && genreStr !== 'all') {
+      where.artist = { ...(where.artist || {}), genres: { some: { genre: { name: genreStr.slice(0, 100) } } } };
     }
 
-    // ── Smart feed («Для вас») ──────────────────────────────────────────────
-    if (String(sort) === 'smart') {
-      const vid = req.userId || null;
-      const cacheKey = `${vid || 'guest'}|${String(type || '')}|${kind}|${periodStr}|${String(city || '')}|${String(employment || '')}|${String(artistType || '')}|${String(genre || '')}`;
-      const nowMs = Date.now();
-      let entry = smartCache.get(cacheKey);
-
-      if (!entry || nowMs - entry.at > SMART_TTL_MS) {
-        // Viewer affinity signals (empty for guests → global "trending" ranking).
-        let friendIds = new Set<string>(), connIds = new Set<string>(), subChannelIds = new Set<string>(),
-            favUserIds = new Set<string>(), myArtistIds = new Set<string>(), vGenres = new Set<string>();
-        let vCity: string | null = null, vField: string | null = null;
-        if (vid) {
-          const [friendships, connections, subs, favorites, myArtists, viewer] = await Promise.all([
-            prisma.friendship.findMany({ where: { status: 'accepted', OR: [{ requesterId: vid }, { receiverId: vid }] }, select: { requesterId: true, receiverId: true } }),
-            prisma.connection.findMany({ where: { status: { in: ['ACCEPTED', 'BREAK_REQUESTED'] }, OR: [{ requesterId: vid }, { receiverId: vid }] }, select: { requesterId: true, receiverId: true } }),
-            prisma.channelSubscription.findMany({ where: { userId: vid }, select: { channelId: true } }),
-            prisma.favorite.findMany({ where: { userId: vid }, select: { targetId: true } }),
-            prisma.userArtist.findMany({ where: { userId: vid }, select: { artistId: true } }),
-            prisma.user.findUnique({ where: { id: vid }, select: { city: true, genres: true, fieldOfActivityId: true } }),
-          ]);
-          friendIds = new Set(friendships.map((f) => (f.requesterId === vid ? f.receiverId : f.requesterId)));
-          connIds = new Set(connections.map((c) => (c.requesterId === vid ? c.receiverId : c.requesterId)));
-          subChannelIds = new Set(subs.map((s) => s.channelId));
-          favUserIds = new Set(favorites.map((f) => f.targetId));
-          myArtistIds = new Set(myArtists.map((a) => a.artistId));
-          vGenres = new Set(viewer?.genres ?? []);
-          vCity = viewer?.city ?? null;
-          vField = viewer?.fieldOfActivityId ?? null;
-        }
-
-        // Candidate pool: the 600 most-recent posts matching the active filters
-        // (team excluded — handled separately below).
-        const candidates: any[] = await prisma.post.findMany({
-          where,
-          select: {
-            id: true, createdAt: true, authorId: true, channelId: true, artistId: true, city: true, genres: true,
-            author: { select: { fieldOfActivityId: true } },
-            _count: { select: { reactions: true, comments: true, likes: true, savedBy: true } },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 600,
-        });
-
-        // score = freshness × (1 + engagement + affinity + relevance)
-        const HALF_LIFE_H = 20;
-        const scored = candidates.map((p) => {
-          const ageH = Math.max(0, (nowMs - new Date(p.createdAt).getTime()) / 3_600_000);
-          const freshness = Math.pow(0.5, ageH / HALF_LIFE_H);
-          const c = p._count;
-          const eng = Math.log1p(c.reactions + 2 * c.comments + 0.5 * c.likes + 1.5 * c.savedBy);
-          let aff = 0;
-          if (friendIds.has(p.authorId)) aff += 1.2; else if (connIds.has(p.authorId)) aff += 0.8;
-          if (favUserIds.has(p.authorId)) aff += 0.6;
-          if (p.channelId && subChannelIds.has(p.channelId)) aff += 1.0;
-          if (p.artistId && myArtistIds.has(p.artistId)) aff += 1.0;
-          let rel = 0;
-          if (p.city && vCity && p.city === vCity) rel += 0.4;
-          if (vGenres.size && p.genres?.length) {
-            const o = p.genres.filter((g: string) => vGenres.has(g)).length;
-            if (o) rel += Math.min(0.6, 0.3 * o);
-          }
-          if (p.author?.fieldOfActivityId && vField && p.author.fieldOfActivityId === vField) rel += 0.3;
-          return { id: p.id, authorId: p.authorId, score: freshness * (1 + 0.6 * eng + aff + rel) };
-        });
-        scored.sort((a, b) => b.score - a.score);
-        const ranked = diversifyByAuthor(scored);
-
-        // Посты официального аккаунта Moooza закрепляются сверху ТОЛЬКО для новичков
-        // без собственных постов (онбординг, старые→новые) — как и в остальных
-        // сортировках. Для всех прочих они ранжируются наравне со всеми и тонут
-        // по свежести (раньше висели сверху у всех — жалоба «вечно вижу старые посты Музы»).
-        let teamIds: string[] = [];
-        if (teamUserId && kind === 'all' && vid) {
-          const newUser = (await prisma.post.count({ where: { authorId: vid } })) === 0;
-          if (newUser) {
-            const teamWhere: any = { authorId: teamUserId };
-            if (type && type !== 'all') {
-              const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
-              if (types.length) teamWhere.type = types.length > 1 ? { in: types } : types[0];
-            }
-            if (where.createdAt) teamWhere.createdAt = where.createdAt;
-            if (where.city) teamWhere.city = where.city;
-            const teamPosts = await prisma.post.findMany({ where: teamWhere, select: { id: true }, orderBy: { createdAt: 'asc' }, take: 25 });
-            teamIds = teamPosts.map((p) => p.id);
-          }
-        }
-        const teamSet = new Set(teamIds);
-        const ids = [...teamIds, ...ranked.filter((p) => !teamSet.has(p.id)).map((p) => p.id)];
-        if (smartCache.size > 1000) smartCache.clear();
-        entry = { ids, at: nowMs };
-        smartCache.set(cacheKey, entry);
-      }
-
-      const pageIds = entry.ids.slice(offsetNum, offsetNum + limitNum);
-      if (pageIds.length === 0) { res.json([]); return; }
-      const pagePosts: any[] = await prisma.post.findMany({ where: { id: { in: pageIds } }, include });
-      const orderMap = new Map(pageIds.map((id, i) => [id, i]));
-      pagePosts.sort((a, b) => (orderMap.get(a.id)! - orderMap.get(b.id)!));
-      res.json(pagePosts.map((post) => ({ ...post, isLiked: post.likes.length > 0, isSaved: post.savedBy.length > 0 })));
-      return;
-    }
-
-    // Sort order — newest by default, or by engagement with a chronological tie-breaker.
     let posts: any[];
-    if (sort === 'popular') {
-      // «Популярные» — суммарная вовлечённость (лайки + реакции + сохранения + чуть комментов).
-      // Раньше считались ТОЛЬКО реакции → посты с 0 реакций падали в сортировку по дате,
-      // и свежие собственные посты обгоняли чужие залайканные. Prisma не умеет orderBy по
-      // сумме relation-count'ов — ранжируем пул из 600 свежих кандидатов в памяти.
-      const cands = await prisma.post.findMany({
+    let nextCursor: string | null = null;
+    let isFirstPage: boolean;
+
+    if (sortStr !== 'new') {
+      // ── Ранжированные сортировки: snapshot id-списка ─────────────────────
+      const ctx: RankCtx = {
         where,
-        select: { id: true, createdAt: true, _count: { select: { likes: true, reactions: true, comments: true, savedBy: true } } },
-        orderBy: { createdAt: 'desc' },
-        take: 600,
-      });
-      const scored = cands.map((p) => ({
-        id: p.id,
-        t: new Date(p.createdAt).getTime(),
-        s: p._count.likes + p._count.reactions + 1.5 * p._count.savedBy + 0.5 * p._count.comments,
-      }));
-      scored.sort((a, b) => b.s - a.s || b.t - a.t);
-      const pageIds = scored.slice(offsetNum, offsetNum + limitNum).map((x) => x.id);
-      posts = pageIds.length
-        ? await prisma.post.findMany({ where: { id: { in: pageIds } }, include })
-        : [];
+        sort: sortStr,
+        vid: req.userId || null,
+        cacheKey: `${req.userId || 'guest'}|${typeStr}|${kind}|${periodStr}|${qstr(city)}|${employmentStr}|${artistTypeStr}|${genreStr}`,
+        kind,
+        typeTypes,
+        teamUserId,
+      };
+      let ids: string[];
+      let start: number;
+      let token = '';
+      if (useCursor) {
+        const m = /^s:([\w-]{8,64}):(\d{1,6})$/.exec(cursor);
+        if (m) {
+          token = m[1];
+          start = Number(m[2]);
+          const snap = getSnapshot(token);
+          if (snap) ids = snap;
+          else { ids = await computeRankedIds(ctx); putSnapshot(token, ids); }
+        } else {
+          start = 0;
+          const snapKey = `${sortStr}|${ctx.cacheKey}`;
+          const prevToken = snapshotTokenByKey.get(snapKey);
+          const prev = prevToken ? rankSnapshots.get(prevToken) : undefined;
+          if (prevToken && prev && Date.now() - prev.at < SNAPSHOT_REUSE_MS) {
+            token = prevToken;
+            ids = prev.ids;
+          } else {
+            token = crypto.randomUUID();
+            ids = await computeRankedIds(ctx);
+            putSnapshot(token, ids);
+            if (snapshotTokenByKey.size > 2000) snapshotTokenByKey.clear();
+            snapshotTokenByKey.set(snapKey, token);
+          }
+        }
+      } else {
+        ids = await computeRankedIds(ctx);
+        start = offsetNum;
+      }
+      const pageIds = ids.slice(start, start + limitNum);
+      posts = pageIds.length ? await prisma.post.findMany({ where: { id: { in: pageIds } }, include }) : [];
       const orderMap = new Map(pageIds.map((id, i) => [id, i]));
       posts.sort((a, b) => (orderMap.get(a.id)! - orderMap.get(b.id)!));
+      if (useCursor && start + limitNum < ids.length) nextCursor = `s:${token}:${start + limitNum}`;
+      isFirstPage = start === 0;
+    } else if (useCursor) {
+      // ── «Новые»: курсор (createdAt, id) ──────────────────────────────────
+      const c = parseTimeCursor(cursor);
+      const cursorWhere = c
+        ? { OR: [{ createdAt: { lt: c.at } }, { createdAt: c.at, id: { lt: c.id } }] }
+        : null;
+      const rows = await prisma.post.findMany({
+        where: cursorWhere ? { AND: [where, cursorWhere] } : where,
+        include,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        take: limitNum + 1,
+      });
+      posts = rows.slice(0, limitNum);
+      if (rows.length > limitNum) {
+        const last = posts[posts.length - 1];
+        nextCursor = `${new Date(last.createdAt).toISOString()}|${last.id}`;
+      }
+      isFirstPage = !c;
     } else {
-      const orderBy: any =
-        sort === 'discussed' ? [{ comments: { _count: 'desc' } }, { createdAt: 'desc' }]
-        : [{ createdAt: 'desc' }];
       posts = await prisma.post.findMany({
         where,
         include,
-        orderBy,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
         take: limitNum,
         skip: offsetNum,
       });
+      isFirstPage = offsetNum === 0;
     }
 
     // Pin team welcome posts at the top — only on the first page of the default
     // feed (no type/author filter) and only for users with no posts of their own.
-    let pinnedPosts: typeof posts = [];
-    const isDefaultFeed = (!type || type === 'all') && kind === 'all';
-    if (isDefaultFeed && offsetNum === 0 && req.userId && teamUserId) {
+    // Для «Для вас» они уже в начале снапшота.
+    let pinnedPosts: any[] = [];
+    const isDefaultFeed = typeTypes.length === 0 && kind === 'all';
+    if (sortStr !== 'smart' && isDefaultFeed && isFirstPage && req.userId && teamUserId) {
       const myPostsCount = await prisma.post.count({ where: { authorId: req.userId } });
       if (myPostsCount === 0) {
         pinnedPosts = await prisma.post.findMany({
@@ -426,12 +809,13 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
     }
 
     const pinnedIds = new Set(pinnedPosts.map(p => p.id));
-    const combined = [
+    const items = await decoratePosts([
       ...pinnedPosts,
       ...posts.filter(p => !pinnedIds.has(p.id)),
-    ];
+    ]);
 
-    res.json(combined.map((post: any) => ({ ...post, isLiked: post.likes.length > 0, isSaved: post.savedBy.length > 0 })));
+    if (useCursor) res.json({ items, nextCursor });
+    else res.json(items);
   } catch (error) {
     console.error('Get feed error:', error);
     res.status(500).json({ error: 'Failed to get feed' });
@@ -442,28 +826,112 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
 router.post('/', authenticate, async (req: AuthRequest, res) => {
   try {
     const {
-      content, imageUrl, audioUrl, audioName, type, employmentStatus, pollOptions, pollEndsAt, channelId, artistId,
-      images, tags, genres, links, city, mentions, title, category, serviceId,
+      content, imageUrl, audioUrl, audioName, employmentStatus, pollOptions, pollEndsAt, channelId, artistId,
+      images, tags, genres, links, city, title, category, serviceId,
     } = req.body;
+    const type: string = req.body.type === undefined || req.body.type === null || req.body.type === '' ? 'blog' : req.body.type;
 
-    // Normalize new optional fields
-    const imagesArr: string[] = Array.isArray(images) ? images.slice(0, 10) : [];
-    const tagsArr: string[] = Array.isArray(tags) ? tags : [];
-    const genresArr: string[] = Array.isArray(genres) ? genres : [];
-    const linksArr: string[] = Array.isArray(links) ? links : [];
+    if (typeof type !== 'string' || !CREATABLE_TYPES.includes(type)) {
+      return res.status(400).json({ error: 'Недопустимый тип поста' });
+    }
+    if (content !== undefined && content !== null && typeof content !== 'string') {
+      return res.status(400).json({ error: 'Некорректный текст поста' });
+    }
+    if (typeof content === 'string' && content.length > CONTENT_MAX) {
+      return res.status(400).json({ error: 'Слишком длинный пост' });
+    }
+    if (title !== undefined && title !== null && (typeof title !== 'string' || title.trim().length > TITLE_MAX)) {
+      return res.status(400).json({ error: `Заголовок — не длиннее ${TITLE_MAX} символов` });
+    }
+    if (category !== undefined && category !== null && (typeof category !== 'string' || category.trim().length > CATEGORY_MAX)) {
+      return res.status(400).json({ error: 'Некорректная категория' });
+    }
+
+    // Media — только наши загрузки
+    if (images !== undefined && images !== null && !Array.isArray(images)) {
+      return res.status(400).json({ error: 'Некорректные фото' });
+    }
+    const imagesArr: string[] = Array.isArray(images) ? images : [];
+    if (imagesArr.length > MAX_IMAGES) {
+      return res.status(400).json({ error: `Не больше ${MAX_IMAGES} фото` });
+    }
+    if (imagesArr.some((u) => typeof u !== 'string' || !POST_IMAGE_RE.test(u))) {
+      return res.status(400).json({ error: 'Некорректная ссылка на фото' });
+    }
+    if (imageUrl && (typeof imageUrl !== 'string' || !POST_IMAGE_RE.test(imageUrl))) {
+      return res.status(400).json({ error: 'Некорректная ссылка на фото' });
+    }
+    if (audioUrl && (typeof audioUrl !== 'string' || !POST_AUDIO_RE.test(audioUrl))) {
+      return res.status(400).json({ error: 'Некорректная ссылка на аудио' });
+    }
+    const audioNameStr = typeof audioName === 'string' ? audioName.trim().slice(0, 200) : '';
+
+    // Links — только http(s)
+    if (links !== undefined && links !== null && !Array.isArray(links)) {
+      return res.status(400).json({ error: 'Некорректные ссылки' });
+    }
+    const linksRaw: unknown[] = Array.isArray(links) ? links : [];
+    if (linksRaw.length > MAX_LINKS) {
+      return res.status(400).json({ error: `Не больше ${MAX_LINKS} ссылок` });
+    }
+    const linksArr: string[] = [];
+    for (const l of linksRaw) {
+      const n = normalizeLink(l);
+      if (!n) return res.status(400).json({ error: `Некорректная ссылка: ${String(l).slice(0, 80)}` });
+      if (!linksArr.includes(n)) linksArr.push(n);
+    }
+    const tagsArr = normalizeStringList(tags, MAX_TAGS, 40).map((t) => t.replace(/^#+/, '')).filter(Boolean);
+    const genresArr = normalizeStringList(genres, MAX_TAGS, 60);
+
+    // City — только из каталога
+    const cityName = await resolveCity(city);
+    if (cityName === null) return res.status(400).json({ error: 'Выберите город из списка' });
+
+    if (type === 'employment' && employmentStatus !== undefined && employmentStatus !== null && employmentStatus !== ''
+      && !EMPLOYMENT_STATUSES.includes(employmentStatus)) {
+      return res.status(400).json({ error: 'Некорректный статус занятости' });
+    }
+    const employmentStatusStr: string | null = type === 'employment' && EMPLOYMENT_STATUSES.includes(employmentStatus) ? employmentStatus : null;
+
+    const { html: safeContent, mentions } = await sanitizePostContent(typeof content === 'string' ? content : '');
+    const hasText = plainText(safeContent).length > 0;
 
     const isPoll = type === 'poll';
+    let pollOptionsArr: { text: string; votes: number }[] = [];
+    let pollEndsAtDate: Date | null = null;
     if (isPoll) {
-      if (!Array.isArray(pollOptions) || pollOptions.filter((o: string) => o?.trim()).length < 2) {
+      if (!Array.isArray(pollOptions)) {
         return res.status(400).json({ error: 'Poll requires at least 2 non-empty options' });
       }
+      const opts = pollOptions
+        .filter((o: unknown): o is string => typeof o === 'string')
+        .map((o) => o.trim())
+        .filter(Boolean);
+      if (opts.length < POLL_OPTIONS_MIN) {
+        return res.status(400).json({ error: 'Poll requires at least 2 non-empty options' });
+      }
+      if (opts.length > POLL_OPTIONS_MAX) {
+        return res.status(400).json({ error: `Не больше ${POLL_OPTIONS_MAX} вариантов ответа` });
+      }
+      if (opts.some((o) => o.length > POLL_OPTION_LEN)) {
+        return res.status(400).json({ error: `Вариант ответа — не длиннее ${POLL_OPTION_LEN} символов` });
+      }
+      pollOptionsArr = opts.map((text) => ({ text, votes: 0 }));
+      if (pollEndsAt) {
+        const d = new Date(pollEndsAt);
+        const maxEnd = Date.now() + 366 * 24 * 60 * 60 * 1000;
+        if (Number.isNaN(d.getTime()) || d.getTime() <= Date.now() || d.getTime() > maxEnd) {
+          return res.status(400).json({ error: 'Некорректная дата окончания опроса' });
+        }
+        pollEndsAtDate = d;
+      }
     } else if (type === 'question') {
-      if (!title?.trim() || !content?.trim()) {
+      if (!(typeof title === 'string' && title.trim()) || !hasText) {
         return res.status(400).json({ error: 'Вопрос требует заголовок и текст' });
       }
     } else if (
-      !content && !imageUrl && !audioUrl && imagesArr.length === 0
-      && !(type === 'employment' && employmentStatus)
+      !hasText && !imageUrl && !audioUrl && imagesArr.length === 0
+      && !(type === 'employment' && employmentStatusStr)
       // Структурный пост «Услуга»: карточка услуги — само содержимое,
       // текст-комментарий опционален.
       && !(type === 'service' && serviceId)
@@ -517,16 +985,16 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
       }
     }
     // Employment posts are only from the user (not channel/artist)
-    const effectiveChannelId = type === 'employment' ? null : (channelId || null);
-    const effectiveArtistId = type === 'employment' ? null : (artistId || null);
+    const effectiveChannelId = type === 'employment' ? null : (channelId ? String(channelId) : null);
+    const effectiveArtistId = type === 'employment' ? null : (artistId ? String(artistId) : null);
 
     const post = await prisma.post.create({
       data: {
-        content: content || '',
-        type: type || 'blog',
+        content: safeContent,
+        type,
         imageUrl: imageUrl || null,
         audioUrl: audioUrl || null,
-        audioName: audioName || null,
+        audioName: audioUrl ? (audioNameStr || null) : null,
         authorId: req.userId!,
         channelId: effectiveChannelId,
         artistId: effectiveArtistId,
@@ -534,16 +1002,16 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
         tags: tagsArr,
         genres: genresArr,
         links: linksArr,
-        city: city ?? null,
-        mentions: mentions ?? null,
-        title: title ?? null,
-        category: category ?? null,
+        city: cityName || null,
+        ...(mentions.length ? { mentions } : {}),
+        title: typeof title === 'string' && title.trim() ? title.trim() : null,
+        category: typeof category === 'string' && category.trim() ? category.trim() : null,
         serviceId: linkedServiceId,
         ...(isPoll ? {
-          pollOptions: (pollOptions as string[]).filter(o => o?.trim()).map(text => ({ text, votes: 0 })),
-          pollEndsAt: pollEndsAt ? new Date(pollEndsAt) : null,
+          pollOptions: pollOptionsArr,
+          pollEndsAt: pollEndsAtDate,
         } : {}),
-      } as any,
+      },
       include: {
         author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true } },
         channel: { select: { id: true, name: true, avatar: true } },
@@ -563,17 +1031,17 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
     });
 
     // If employment post — auto-update user's occupancyStatus
-    if (type === 'employment' && employmentStatus && req.userId) {
+    if (type === 'employment' && employmentStatusStr && req.userId) {
       await prisma.user.update({
         where: { id: req.userId },
-        data: { occupancyStatus: employmentStatus },
+        data: { occupancyStatus: employmentStatusStr },
       });
     }
 
+    // В админ-чат — только событие + id/автор (текст поста — HTML TipTap, не шлём).
     const author = post.author;
-    const preview = (content || '').slice(0, 80) + ((content || '').length > 80 ? '…' : '');
-    const media = [imageUrl && '🖼', audioUrl && '🎵'].filter(Boolean).join(' ');
-    tgLog(`📝 <b>Новый пост</b>\n👤 ${author.firstName} ${author.lastName}\n${preview}${media ? '\n' + media : ''}`);
+    const media = [(imageUrl || imagesArr.length) && '🖼', audioUrl && '🎵'].filter(Boolean).join(' ');
+    tgLog(`📝 <b>Новый пост</b> (${escTg(type)})\n👤 ${escTg(`${author.firstName} ${author.lastName}`)}\n🆔 ${escTg(post.id)}${media ? '\n' + media : ''}`);
     res.status(201).json(post);
   } catch (error) {
     console.error('Create post error:', error);
@@ -585,10 +1053,20 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
 router.post('/:id/repost', authenticate, async (req: AuthRequest, res) => {
   try {
     const { comment } = req.body;
+    if (comment !== undefined && comment !== null && typeof comment !== 'string') {
+      return res.status(400).json({ error: 'Некорректный комментарий' });
+    }
+    const commentStr = typeof comment === 'string' ? comment.trim() : '';
+    if (commentStr.length > REPOST_COMMENT_MAX) {
+      return res.status(400).json({ error: `Комментарий — не длиннее ${REPOST_COMMENT_MAX} символов` });
+    }
 
     // Verify the original exists (don't allow reposting a deleted/nonexistent post)
     const original = await prisma.post.findUnique({ where: { id: req.params.id }, select: { id: true } });
     if (!original) return res.status(404).json({ error: 'Post not found' });
+
+    // repostComment рендерится через PostContent — HTML санитизируем так же, как пост.
+    const { html: safeComment } = await sanitizePostContent(commentStr);
 
     const post = await prisma.post.create({
       data: {
@@ -596,8 +1074,8 @@ router.post('/:id/repost', authenticate, async (req: AuthRequest, res) => {
         type: 'blog',
         content: '',
         repostOfId: req.params.id,
-        repostComment: (comment?.trim() || null),
-      } as any,
+        repostComment: safeComment || null,
+      },
       include: {
         author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true } },
         repostOf: {
@@ -615,242 +1093,218 @@ router.post('/:id/repost', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
-// POST /api/posts/:id/save — toggle save post
+// POST /api/posts/:id/save — save / unsave post.
+// Body `{ saved: boolean }` задаёт состояние явно (идемпотентно — двойной клик
+// не переворачивает его обратно); без тела — легаси-переключатель.
 router.post('/:id/save', authenticate, async (req: AuthRequest, res) => {
   try {
     const meId = req.userId!;
-    const existing = await prisma.savedPost.findUnique({
-      where: { userId_postId: { userId: meId, postId: req.params.id } },
-    });
-    if (existing) {
-      await prisma.savedPost.delete({ where: { id: existing.id } });
-      return res.json({ saved: false });
+    const postId = req.params.id;
+    const post = await prisma.post.findUnique({ where: { id: postId }, select: { id: true } });
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+
+    let saved: boolean;
+    if (typeof req.body?.saved === 'boolean') {
+      saved = req.body.saved;
+    } else {
+      const existing = await prisma.savedPost.findUnique({
+        where: { userId_postId: { userId: meId, postId } },
+        select: { id: true },
+      });
+      saved = !existing;
     }
-    await prisma.savedPost.create({ data: { userId: meId, postId: req.params.id } });
-    try {
-      const saver = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
-      tgEvent.postSave(`${saver?.firstName} ${saver?.lastName}`);
-    } catch {}
-    res.json({ saved: true });
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+
+    if (saved) {
+      const created = await prisma.savedPost.createMany({ data: [{ userId: meId, postId }], skipDuplicates: true });
+      if (created.count > 0) {
+        try {
+          const saver = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
+          tgEvent.postSave(`${saver?.firstName} ${saver?.lastName}`);
+        } catch {}
+      }
+    } else {
+      await prisma.savedPost.deleteMany({ where: { userId: meId, postId } });
+    }
+    res.json({ saved });
+  } catch (e: any) {
+    console.error('Save post error:', e);
+    res.status(500).json({ error: 'Failed to save post' });
+  }
 });
 
-// GET /api/posts/saved — list saved posts of current user
+// GET /api/posts/saved/list — saved posts of current user.
+// `?cursor=` (пусто — первая страница) → `{ items, nextCursor }`; без cursor —
+// легаси-массив (не больше 50 последних).
 router.get('/saved/list', authenticate, async (req: AuthRequest, res) => {
   try {
     const meId = req.userId!;
-    const saved = await prisma.savedPost.findMany({
-      where: { userId: meId },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        post: {
-          include: buildFeedInclude(meId) as any,
-        },
+    const useCursor = req.query.cursor !== undefined;
+    const limitNum = parseLimit(req.query.limit, useCursor ? 20 : MAX_PAGE);
+    const c = useCursor ? parseTimeCursor(qstr(req.query.cursor)) : null;
+    const rows = await prisma.savedPost.findMany({
+      where: {
+        userId: meId,
+        ...(c ? { OR: [{ createdAt: { lt: c.at } }, { createdAt: c.at, id: { lt: c.id } }] } : {}),
       },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limitNum + 1,
+      include: { post: { include: buildFeedInclude(meId) } },
     });
-    res.json(saved.map(s => ({
-      ...s.post,
-      savedAt: s.createdAt,
-      isLiked: (s.post as any).likes?.length > 0,
-      isSaved: true,
-    })));
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+    const page = rows.slice(0, limitNum);
+    const decorated = await decoratePosts(page.map((s) => s.post));
+    const items = decorated.map((p, i) => ({ ...p, savedAt: page[i].createdAt, isSaved: true }));
+    if (!useCursor) return res.json(items);
+    const last = page[page.length - 1];
+    res.json({
+      items,
+      nextCursor: rows.length > limitNum && last ? `${last.createdAt.toISOString()}|${last.id}` : null,
+    });
+  } catch (e: any) {
+    console.error('Saved posts error:', e);
+    res.status(500).json({ error: 'Failed to get saved posts' });
+  }
 });
 
 // POST /api/posts/:id/vote — vote in poll
+// Голос и пересчёт — в одной транзакции под блокировкой строки поста: параллельные
+// голоса не затирают счётчики друг друга и не ловят P2002.
 router.post('/:id/vote', authenticate, async (req: AuthRequest, res) => {
   try {
     const meId = req.userId!;
+    const postId = req.params.id;
     const { optionIndex } = req.body;
-    if (typeof optionIndex !== 'number') return res.status(400).json({ error: 'optionIndex required' });
-
-    const post = await prisma.post.findUnique({ where: { id: req.params.id } });
-    if (!post || post.type !== 'poll') return res.status(404).json({ error: 'Poll not found' });
-    if (post.pollEndsAt && new Date(post.pollEndsAt) < new Date()) {
-      return res.status(400).json({ error: 'Poll ended' });
+    if (!Number.isInteger(optionIndex) || optionIndex < 0) {
+      return res.status(400).json({ error: 'optionIndex required' });
     }
 
-    const existing = await prisma.pollVote.findUnique({
-      where: { postId_userId: { postId: post.id, userId: meId } },
-    });
-    if (existing) {
-      await prisma.pollVote.update({ where: { id: existing.id }, data: { optionIndex } });
-    } else {
-      await prisma.pollVote.create({ data: { postId: post.id, userId: meId, optionIndex } });
-    }
+    const result = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT "id" FROM "Post" WHERE "id" = ${postId} FOR UPDATE`;
+      const post = await tx.post.findUnique({
+        where: { id: postId },
+        select: { id: true, type: true, pollOptions: true, pollEndsAt: true },
+      });
+      if (!post || post.type !== 'poll') throw new HttpError(404, 'Poll not found');
+      if (post.pollEndsAt && new Date(post.pollEndsAt) < new Date()) throw new HttpError(400, 'Poll ended');
+      const options = (Array.isArray(post.pollOptions) ? post.pollOptions : []) as any[];
+      if (optionIndex >= options.length) throw new HttpError(400, 'Нет такого варианта');
 
-    // Recalculate vote counts
-    const votes = await prisma.pollVote.findMany({ where: { postId: post.id } });
-    const options = (post.pollOptions as any[]) || [];
-    const updated = options.map((opt: any, i: number) => ({
-      text: opt.text,
-      votes: votes.filter(v => v.optionIndex === i).length,
-    }));
-    await prisma.post.update({
-      where: { id: post.id },
-      data: { pollOptions: updated },
+      await tx.pollVote.upsert({
+        where: { postId_userId: { postId, userId: meId } },
+        update: { optionIndex },
+        create: { postId, userId: meId, optionIndex },
+      });
+      const counts = await tx.pollVote.groupBy({
+        by: ['optionIndex'],
+        where: { postId },
+        _count: { _all: true },
+      });
+      const byIndex = new Map(counts.map((c) => [c.optionIndex, c._count._all]));
+      const updated = options.map((opt: any, i: number) => ({ text: opt?.text ?? '', votes: byIndex.get(i) ?? 0 }));
+      // Raw UPDATE: не трогаем updatedAt (иначе голос помечает пост «Изменена»).
+      await tx.$executeRaw`UPDATE "Post" SET "pollOptions" = ${JSON.stringify(updated)}::jsonb WHERE "id" = ${postId}`;
+      return { options, updated };
     });
 
     try {
       const voter = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
-      tgEvent.pollVote(`${voter?.firstName} ${voter?.lastName}`, options[optionIndex]?.text || `#${optionIndex}`);
+      tgEvent.pollVote(`${voter?.firstName} ${voter?.lastName}`, result.options[optionIndex]?.text || `#${optionIndex}`);
     } catch {}
 
-    res.json({ ok: true, options: updated, myVote: optionIndex });
+    res.json({ ok: true, options: result.updated, myVote: optionIndex });
   } catch (e: any) {
-    res.status(500).json({ error: e.message });
+    if (e instanceof HttpError) return res.status(e.status).json({ error: e.message });
+    console.error('Poll vote error:', e);
+    res.status(500).json({ error: 'Failed to vote' });
   }
 });
 
-// Get post by ID
-router.get('/:id', authenticate, async (req: AuthRequest, res) => {
+// GET /api/posts/:id/comments — комментарии поста постранично (шторка комментариев).
+// Верхний уровень — от старых к новым, курсор `<createdAt>|<id>`; ответы — вложенно.
+router.get('/:id/comments', optionalAuthenticate, async (req: AuthRequest, res) => {
   try {
-    const post = await prisma.post.findUnique({
-      where: { id: req.params.id },
+    const postId = req.params.id;
+    const limitNum = parseLimit(req.query.limit, 20);
+    const post = await prisma.post.findUnique({ where: { id: postId }, select: { id: true } });
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+
+    const c = parseTimeCursor(qstr(req.query.cursor));
+    const authorSelect = { id: true, firstName: true, lastName: true, nickname: true, avatar: true };
+    const reactionSelect = { id: true, emoji: true, userId: true };
+    const rows = await prisma.comment.findMany({
+      where: {
+        postId,
+        parentCommentId: null,
+        ...(c ? { OR: [{ createdAt: { gt: c.at } }, { createdAt: c.at, id: { gt: c.id } }] } : {}),
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      take: limitNum + 1,
       include: {
-        author: {
-          select: {
-            id: true,
-            firstName: true,
-            lastName: true,
-            avatar: true,
-            role: true,
-            isPremium: true,
-            isVerified: true,
-            isBlocked: true,
-          }
+        author: { select: authorSelect },
+        reactions: { select: reactionSelect },
+        replies: {
+          include: { author: { select: authorSelect }, reactions: { select: reactionSelect } },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+          take: 100,
         },
-        likes: {
-          where: {
-            userId: req.userId
-          },
-          select: {
-            id: true
-          }
-        },
-        comments: {
-          where: { parentCommentId: null } as any,
-          include: {
-            author: {
-              select: { id: true, firstName: true, lastName: true, avatar: true }
-            },
-            reactions: {
-              select: { id: true, emoji: true, userId: true }
-            },
-            replies: {
-              include: {
-                author: {
-                  select: { id: true, firstName: true, lastName: true, avatar: true }
-                },
-                reactions: {
-                  select: { id: true, emoji: true, userId: true }
-                },
-              },
-              orderBy: { createdAt: 'asc' },
-            },
-          } as any,
-          orderBy: { createdAt: 'asc' }
-        },
-        savedBy: {
-          where: { userId: req.userId },
-          select: { id: true }
-        },
-        reactions: {
-          select: { id: true, emoji: true, userId: true }
-        },
-        channel: { select: { id: true, name: true, avatar: true } },
-        artist: { select: { id: true, name: true, avatar: true } },
-        service: {
-          select: {
-            id: true,
-            name: true,
-            priceFrom: true,
-            priceTo: true,
-            priceItems: true,
-            service: { select: { name: true, section: { select: { name: true } } } },
-            user: { select: { id: true, firstName: true, lastName: true } },
-          },
-        },
-        order: {
-          select: {
-            id: true,
-            title: true,
-            budgetFrom: true,
-            budgetTo: true,
-            deadline: true,
-            status: true,
-            service: { select: { name: true, section: { select: { name: true } } } },
-          },
-        },
-        vacancy: {
-          select: {
-            id: true,
-            title: true,
-            workFormat: true,
-            geography: true,
-            paymentType: true,
-            compensation: true,
-            status: true,
-            profession: { select: { name: true } },
-          },
-        },
-        _count: {
-          select: { likes: true, comments: true }
-        }
-      }
+        _count: { select: { replies: true } },
+      },
+    });
+    const items = rows.slice(0, limitNum);
+    const last = items[items.length - 1];
+    res.json({
+      items,
+      nextCursor: rows.length > limitNum && last ? `${last.createdAt.toISOString()}|${last.id}` : null,
+    });
+  } catch (error) {
+    console.error('Get comments error:', error);
+    res.status(500).json({ error: 'Failed to get comments' });
+  }
+});
+
+// Get post by ID (deep link ?post=… — доступно и гостю, как лента)
+router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
+  try {
+    const post = await prisma.post.findFirst({
+      where: { id: req.params.id, author: visibleAuthorWhere() },
+      include: buildFeedInclude(req.userId),
     });
 
     if (!post) {
       return res.status(404).json({ error: 'Post not found' });
     }
 
-    // Add isLiked / isSaved properties
-    const postWithLikeStatus = {
-      ...post,
-      isLiked: post.likes.length > 0,
-      isSaved: post.savedBy.length > 0,
-    };
-
-    res.json(postWithLikeStatus);
+    const [decorated] = await decoratePosts([post]);
+    res.json(decorated);
   } catch (error) {
     console.error('Get post error:', error);
     res.status(500).json({ error: 'Failed to get post' });
   }
 });
 
-// Like post
+// Like post (идемпотентно: повторный лайк — не ошибка)
 router.post('/:id/like', authenticate, async (req: AuthRequest, res) => {
   try {
-    // Check if user has already liked this post
-    const existingLike = await prisma.like.findUnique({
-      where: {
-        userId_postId: {
-          userId: req.userId!,
-          postId: req.params.id
-        }
-      }
+    const meId = req.userId!;
+    const post = await prisma.post.findUnique({
+      where: { id: req.params.id },
+      select: { authorId: true, author: { select: { firstName: true, lastName: true } } },
+    });
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+    if (post.authorId === meId) return res.status(400).json({ error: 'Нельзя лайкать свой пост' });
+
+    const created = await prisma.like.createMany({
+      data: [{ userId: meId, postId: req.params.id }],
+      skipDuplicates: true,
     });
 
-    if (existingLike) {
-      return res.status(400).json({ error: 'Post already liked' });
+    if (created.count > 0) {
+      try {
+        const liker = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
+        tgEvent.postLike(`${liker?.firstName} ${liker?.lastName}`, `${post.author.firstName} ${post.author.lastName}`);
+      } catch {}
     }
 
-    const like = await prisma.like.create({
-      data: {
-        userId: req.userId!,
-        postId: req.params.id,
-      }
-    });
-
-    try {
-      const [liker, post] = await Promise.all([
-        prisma.user.findUnique({ where: { id: req.userId! }, select: { firstName: true, lastName: true } }),
-        prisma.post.findUnique({ where: { id: req.params.id }, include: { author: { select: { firstName: true, lastName: true } } } }),
-      ]);
-      tgEvent.postLike(`${liker?.firstName} ${liker?.lastName}`, `${post?.author.firstName} ${post?.author.lastName}`);
-    } catch {}
-
-    res.status(201).json(like);
+    res.status(201).json({ liked: true });
   } catch (error) {
     console.error('Like post error:', error);
     res.status(500).json({ error: 'Failed to like post' });
@@ -860,7 +1314,7 @@ router.post('/:id/like', authenticate, async (req: AuthRequest, res) => {
 // Unlike post
 router.delete('/:id/like', authenticate, async (req: AuthRequest, res) => {
   try {
-    const deleted = await prisma.like.deleteMany({
+    await prisma.like.deleteMany({
       where: {
         userId: req.userId,
         postId: req.params.id,
@@ -875,86 +1329,97 @@ router.delete('/:id/like', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
+function commentPreview(text: string): string {
+  if (!text) return '📷 Картинка';
+  return text.length > 60 ? text.slice(0, 60) + '…' : text;
+}
+
 // Comment on post
 router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
   try {
+    const meId = req.userId!;
+    const postId = req.params.id;
     const { content, parentCommentId, imageUrl } = req.body;
 
-    if (!content && !imageUrl) {
+    if (content !== undefined && content !== null && typeof content !== 'string') {
+      return res.status(400).json({ error: 'Некорректный текст комментария' });
+    }
+    const text = typeof content === 'string' ? content.trim() : '';
+    if (text.length > COMMENT_MAX) {
+      return res.status(400).json({ error: `Комментарий — не длиннее ${COMMENT_MAX} символов` });
+    }
+    if (imageUrl && (typeof imageUrl !== 'string' || !POST_IMAGE_RE.test(imageUrl))) {
+      return res.status(400).json({ error: 'Некорректная картинка' });
+    }
+    if (!text && !imageUrl) {
       return res.status(400).json({ error: 'Нужен текст или картинка' });
     }
 
     const post = await prisma.post.findUnique({
-      where: { id: req.params.id },
+      where: { id: postId },
       select: { authorId: true },
     });
+    if (!post) return res.status(404).json({ error: 'Post not found' });
 
-    const comment = await (prisma.comment as any).create({
+    let parent: { id: string; postId: string; parentCommentId: string | null; authorId: string } | null = null;
+    if (parentCommentId) {
+      parent = await prisma.comment.findUnique({
+        where: { id: String(parentCommentId) },
+        select: { id: true, postId: true, parentCommentId: true, authorId: true },
+      });
+      if (!parent || parent.postId !== postId) {
+        return res.status(400).json({ error: 'Комментарий не найден в этом посте' });
+      }
+      if (parent.parentCommentId) {
+        return res.status(400).json({ error: 'Нельзя ответить на ответ' });
+      }
+    }
+
+    const comment = await prisma.comment.create({
       data: {
-        content: content || '',
+        content: text,
         imageUrl: imageUrl || null,
-        authorId: req.userId!,
-        postId: req.params.id,
-        ...(parentCommentId ? { parentCommentId } : {}),
+        authorId: meId,
+        postId,
+        ...(parent ? { parentCommentId: parent.id } : {}),
       },
       include: {
         author: {
-          select: { id: true, firstName: true, lastName: true, avatar: true }
+          select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true }
         }
       }
     });
 
-    // Notify post author (unless they commented on their own post)
-    if (post && post.authorId !== req.userId && !parentCommentId) {
-      const notification = await prisma.notification.create({
-        data: {
-          userId: post.authorId,
-          actorId: req.userId!,
-          type: 'post_reply',
-          title: 'Новый комментарий',
-          body: `${comment.author.firstName} ${comment.author.lastName}: ${comment.content.length > 60 ? comment.content.slice(0, 60) + '…' : comment.content}`,
-          link: `/?post=${req.params.id}`,
-        },
-        include: { actor: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true } } },
-      });
-      notifyUser(post.authorId, 'post_reply', { comment, postId: req.params.id }, {
-        title: 'Новый комментарий',
-        body: `${comment.author.firstName} ${comment.author.lastName}: ${comment.content.length > 60 ? comment.content.slice(0, 60) + '…' : comment.content}`,
-        link: `/?post=${req.params.id}`,
-      });
-      emitToUser(post.authorId, 'new_notification', notification);
-    }
+    const actorName = `${comment.author.firstName} ${comment.author.lastName}`;
+    const body = `${actorName}: ${commentPreview(text)}`;
+    const link = `/?post=${postId}`;
 
-    // Notify parent comment author if this is a reply
-    if (parentCommentId) {
-      const parentComment = await (prisma.comment as any).findUnique({
-        where: { id: parentCommentId },
-        select: { authorId: true },
-      });
-      if (parentComment && parentComment.authorId !== req.userId) {
-        const notification = await (prisma as any).notification.create({
-          data: {
-            userId: parentComment.authorId,
-            actorId: req.userId!,
-            type: 'post_reply',
-            title: 'Ответ на комментарий',
-            body: `${comment.author.firstName} ${comment.author.lastName}: ${comment.content.length > 60 ? comment.content.slice(0, 60) + '…' : comment.content}`,
-            link: `/?post=${req.params.id}`,
-          },
-          include: { actor: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true } } },
-        });
-        emitToUser(parentComment.authorId, 'new_notification', notification);
+    // Уведомления — через общий notify() (запись + сокет + push, с учётом настроек).
+    if (!parent) {
+      // Notify post author (unless they commented on their own post)
+      if (post.authorId !== meId) {
+        await notify({ userId: post.authorId, actorId: meId, type: 'post_reply', title: 'Новый комментарий', body, link });
+        if (await isNotificationEnabled(post.authorId, 'post_reply')) {
+          emitToUser(post.authorId, 'post_reply', { comment, postId });
+        }
+      }
+    } else {
+      // Автор родительского комментария — об ответе ему
+      if (parent.authorId !== meId) {
+        await notify({ userId: parent.authorId, actorId: meId, type: 'post_reply', title: 'Ответ на комментарий', body, link });
+      }
+      // Автор поста — об ответах в обсуждении под его постом
+      if (post.authorId !== meId && post.authorId !== parent.authorId) {
+        await notify({ userId: post.authorId, actorId: meId, type: 'post_reply', title: 'Новый ответ под вашим постом', body, link });
       }
     }
 
     try {
-      const postAuthor = post?.authorId
-        ? await prisma.user.findUnique({ where: { id: post.authorId }, select: { firstName: true, lastName: true } })
-        : null;
+      const postAuthor = await prisma.user.findUnique({ where: { id: post.authorId }, select: { firstName: true, lastName: true } });
       tgEvent.postComment(
-        `${comment.author.firstName} ${comment.author.lastName}`,
+        actorName,
         `${postAuthor?.firstName ?? '?'} ${postAuthor?.lastName ?? ''}`,
-        content,
+        text || '📷',
       );
     } catch {}
 
@@ -965,22 +1430,74 @@ router.post('/:id/comments', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
-// Edit post
+// Edit post — меняется только то, что передано. images[] поддерживается
+// (удалить/заменить фото); новые фото — только наши загрузки, уже
+// прикреплённые к посту — допускаются как есть (легаси-имена).
 router.put('/:id', authenticate, async (req: AuthRequest, res) => {
   try {
     const post = await prisma.post.findUnique({ where: { id: req.params.id } });
     if (!post) return res.status(404).json({ error: 'Post not found' });
     if (post.authorId !== req.userId) return res.status(403).json({ error: 'Unauthorized' });
 
-    const { content, imageUrl, audioUrl, audioName } = req.body;
+    const { content, imageUrl, images, audioUrl, audioName } = req.body;
+    const existingMedia = new Set<string>([...(post.images || []), ...(post.imageUrl ? [post.imageUrl] : [])]);
+    const okImage = (u: unknown) => typeof u === 'string' && (POST_IMAGE_RE.test(u) || existingMedia.has(u));
+
+    const data: Prisma.PostUpdateInput = {};
+
+    if (content !== undefined) {
+      if (content !== null && typeof content !== 'string') return res.status(400).json({ error: 'Некорректный текст поста' });
+      if (typeof content === 'string' && content.length > CONTENT_MAX) return res.status(400).json({ error: 'Слишком длинный пост' });
+      const { html, mentions } = await sanitizePostContent(content || '');
+      data.content = html;
+      data.mentions = mentions.length ? mentions : Prisma.DbNull;
+    }
+
+    let nextImages = post.images || [];
+    let nextImageUrl = post.imageUrl;
+    if (images !== undefined) {
+      if (!Array.isArray(images)) return res.status(400).json({ error: 'Некорректные фото' });
+      if (images.length > MAX_IMAGES) return res.status(400).json({ error: `Не больше ${MAX_IMAGES} фото` });
+      if (!images.every(okImage)) return res.status(400).json({ error: 'Некорректная ссылка на фото' });
+      nextImages = Array.from(new Set(images as string[]));
+      data.images = nextImages;
+      // Легаси-поле одной картинки держим синхронным с первой из images
+      if (imageUrl === undefined) {
+        nextImageUrl = nextImages[0] ?? null;
+        data.imageUrl = nextImageUrl;
+      }
+    }
+    if (imageUrl !== undefined) {
+      if (imageUrl && !okImage(imageUrl)) return res.status(400).json({ error: 'Некорректная ссылка на фото' });
+      nextImageUrl = imageUrl || null;
+      data.imageUrl = nextImageUrl;
+    }
+    let nextAudio = post.audioUrl;
+    if (audioUrl !== undefined) {
+      if (audioUrl && (typeof audioUrl !== 'string' || !(POST_AUDIO_RE.test(audioUrl) || audioUrl === post.audioUrl))) {
+        return res.status(400).json({ error: 'Некорректная ссылка на аудио' });
+      }
+      nextAudio = audioUrl || null;
+      data.audioUrl = nextAudio;
+      if (!nextAudio) data.audioName = null;
+    }
+    if (audioName !== undefined && nextAudio) {
+      data.audioName = typeof audioName === 'string' && audioName.trim() ? audioName.trim().slice(0, 200) : null;
+    }
+
+    // Обычный пост не должен стать пустым после правки
+    const nextContent = data.content !== undefined ? String(data.content) : post.content;
+    const structured = ['poll', 'service', 'employment', 'order', 'vacancy'].includes(post.type) || !!post.repostOfId;
+    if (!structured && !plainText(nextContent) && nextImages.length === 0 && !nextImageUrl && !nextAudio) {
+      return res.status(400).json({ error: 'Пост не может быть пустым' });
+    }
+    if (post.type === 'question' && !plainText(nextContent)) {
+      return res.status(400).json({ error: 'Вопрос требует текст' });
+    }
+
     const updated = await prisma.post.update({
       where: { id: req.params.id },
-      data: {
-        ...(content !== undefined && { content }),
-        ...(imageUrl !== undefined && { imageUrl: imageUrl || null }),
-        ...(audioUrl !== undefined && { audioUrl: audioUrl || null }),
-        ...(audioName !== undefined && { audioName: audioName || null }),
-      },
+      data,
       include: {
         author: { select: { id: true, firstName: true, lastName: true, nickname: true, avatar: true, role: true, isPremium: true, isVerified: true, isBlocked: true } },
         _count: { select: { likes: true, comments: true } },
@@ -997,7 +1514,10 @@ router.put('/:id', authenticate, async (req: AuthRequest, res) => {
 router.put('/:postId/comments/:commentId', authenticate, async (req: AuthRequest, res) => {
   try {
     const { content } = req.body;
-    if (!content?.trim()) return res.status(400).json({ error: 'Content is required' });
+    if (typeof content !== 'string' || !content.trim()) return res.status(400).json({ error: 'Content is required' });
+    if (content.trim().length > COMMENT_MAX) {
+      return res.status(400).json({ error: `Комментарий — не длиннее ${COMMENT_MAX} символов` });
+    }
 
     const comment = await prisma.comment.findUnique({ where: { id: req.params.commentId } });
     if (!comment) return res.status(404).json({ error: 'Comment not found' });
@@ -1030,8 +1550,8 @@ router.delete('/:postId/comments/:commentId', authenticate, async (req: AuthRequ
     if (!comment) return res.status(404).json({ error: 'Comment not found' });
     if (comment.postId !== req.params.postId) return res.status(400).json({ error: 'Comment does not belong to this post' });
 
-    // Only comment author can delete their comment
-    if (comment.authorId !== req.userId) {
+    // Удалить может автор комментария или автор поста (модерация своего треда)
+    if (comment.authorId !== req.userId && comment.post.authorId !== req.userId) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
@@ -1047,7 +1567,11 @@ router.delete('/:postId/comments/:commentId', authenticate, async (req: AuthRequ
 router.post('/:id/reactions', authenticate, async (req: AuthRequest, res) => {
   try {
     const { emoji } = req.body;
-    if (!emoji) return res.status(400).json({ error: 'Emoji is required' });
+    if (typeof emoji !== 'string' || !REACTION_EMOJIS.includes(emoji)) {
+      return res.status(400).json({ error: 'Недопустимая реакция' });
+    }
+    const post = await prisma.post.findUnique({ where: { id: req.params.id }, select: { id: true } });
+    if (!post) return res.status(404).json({ error: 'Post not found' });
 
     const reaction = await prisma.postReaction.upsert({
       where: { userId_postId: { userId: req.userId!, postId: req.params.id } },
@@ -1061,7 +1585,9 @@ router.post('/:id/reactions', authenticate, async (req: AuthRequest, res) => {
     } catch {}
 
     res.json(reaction);
-  } catch (error) {
+  } catch (error: any) {
+    // Гонка двух первых реакций одного пользователя — запись уже есть.
+    if (error?.code === 'P2002') return res.json({ ok: true });
     console.error('Post reaction error:', error);
     res.status(500).json({ error: 'Failed to react' });
   }
@@ -1084,7 +1610,11 @@ router.delete('/:id/reactions', authenticate, async (req: AuthRequest, res) => {
 router.post('/:postId/comments/:commentId/reactions', authenticate, async (req: AuthRequest, res) => {
   try {
     const { emoji } = req.body;
-    if (!emoji) return res.status(400).json({ error: 'Emoji is required' });
+    if (typeof emoji !== 'string' || !REACTION_EMOJIS.includes(emoji)) {
+      return res.status(400).json({ error: 'Недопустимая реакция' });
+    }
+    const comment = await prisma.comment.findUnique({ where: { id: req.params.commentId }, select: { postId: true } });
+    if (!comment || comment.postId !== req.params.postId) return res.status(404).json({ error: 'Comment not found' });
 
     const reaction = await prisma.commentReaction.upsert({
       where: { userId_commentId: { userId: req.userId!, commentId: req.params.commentId } },
@@ -1093,7 +1623,8 @@ router.post('/:postId/comments/:commentId/reactions', authenticate, async (req: 
     });
 
     res.json(reaction);
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.code === 'P2002') return res.json({ ok: true });
     console.error('Comment reaction error:', error);
     res.status(500).json({ error: 'Failed to react' });
   }

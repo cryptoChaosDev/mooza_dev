@@ -5,7 +5,7 @@ import MentionList, { type MentionItem, type MentionListHandle } from './Mention
 function place(el: HTMLElement, rect: DOMRect | null | undefined) {
   if (!rect) return;
   el.style.position = 'fixed';
-  el.style.left = `${Math.min(rect.left, window.innerWidth - 270)}px`;
+  el.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - 270))}px`;
   const popH = el.offsetHeight || 220;
   const below = window.innerHeight - rect.bottom;
   el.style.top = below < popH + 8 ? `${Math.max(8, rect.top - popH - 6)}px` : `${rect.bottom + 6}px`;
