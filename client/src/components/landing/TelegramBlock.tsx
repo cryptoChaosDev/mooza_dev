@@ -14,7 +14,7 @@ function PostMock() {
       <div className="flex items-center gap-3 px-1">
         <span className="w-10 h-10 rounded-full bg-gradient-to-br from-[#40d6f0] to-[#966cf6] flex items-center justify-center text-[13px] font-bold text-white">M</span>
         <div className="min-w-0">
-          <p className="text-[14px] font-semibold text-white leading-tight">Moooza Jobs</p>
+          <p className="text-[14px] font-semibold text-white leading-tight">MOOOZA | Работа</p>
           <p className="text-[11.5px] text-slate-400">канал · @moooza_jobs</p>
         </div>
       </div>

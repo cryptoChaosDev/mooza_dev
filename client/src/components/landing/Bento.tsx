@@ -323,7 +323,7 @@ export default function Bento({ profCount }: { profCount: number }) {
                   <span className="w-10 h-10 rounded-full flex-shrink-0 bg-gradient-to-br from-[#40d6f0] to-[#966cf6] flex items-center justify-center text-[13px] font-bold text-white">M</span>
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center justify-between gap-2">
-                      <span className="text-[13px] font-semibold text-white truncate">Moooza Jobs</span>
+                      <span className="text-[13px] font-semibold text-white truncate">MOOOZA | Работа</span>
                       <span className="text-[10.5px] text-slate-500 flex-shrink-0">сейчас</span>
                     </span>
                     <span className="block text-[12px] text-slate-400 truncate">Заказ: барабанщик на&nbsp;концерт, Самара</span>
