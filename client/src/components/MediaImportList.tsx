@@ -52,11 +52,11 @@ export default function MediaImportList({
               className={`w-full flex items-center gap-2.5 p-1.5 rounded-lg text-left transition-colors ${sel ? 'bg-emerald-600/20' : 'bg-slate-800/40 hover:bg-slate-800'}`}
             >
               {it.coverUrl
-                ? <img src={it.coverUrl} alt="" className="w-9 h-9 rounded object-cover flex-shrink-0" />
+                ? <img src={it.coverUrl} alt="" loading="lazy" decoding="async" className="w-9 h-9 rounded object-cover flex-shrink-0" />
                 : <div className="w-9 h-9 rounded bg-slate-700 flex-shrink-0" />}
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-white truncate">{it.title}</p>
-                {it.releaseDate && <p className="text-[10px] text-slate-500">{new Date(it.releaseDate).getFullYear()}</p>}
+                {it.releaseDate && <p className="text-[10px] text-slate-500">{new Date(it.releaseDate).getUTCFullYear()}</p>}
               </div>
               <div className={`w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 ${sel ? 'bg-emerald-500 border-emerald-500' : 'border-slate-600'}`}>
                 {sel && <Check size={12} className="text-white" />}

@@ -6,6 +6,7 @@ import { artistAPI, userAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import RolePicker from '../components/RolePicker';
 import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 /**
  * Страница «Добавить участника» — /artist/:id/members/add.
@@ -45,6 +46,7 @@ export default function ArtistMemberAddPage() {
       toast.success('Приглашение отправлено');
       navigate(-1);
     },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить приглашение')),
   });
 
   return (
@@ -141,7 +143,7 @@ export default function ArtistMemberAddPage() {
         </div>
 
         {addMemberMut.isError && (
-          <p className="text-sm text-red-400">{(addMemberMut.error as any)?.response?.data?.error ?? 'Ошибка. Попробуйте снова.'}</p>
+          <p className="text-sm text-red-400">{getApiError(addMemberMut.error, 'Ошибка. Попробуйте снова.')}</p>
         )}
 
         {/* Действия — липкий низ как ArtistEditPage */}

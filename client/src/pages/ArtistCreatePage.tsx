@@ -5,6 +5,8 @@ import { ArrowLeft, Loader2, Camera, Copy, Check, ShieldCheck, Image as ImageIco
 import { artistAPI, referenceAPI, roleAPI, releaseAPI, clipAPI } from '../lib/api';
 import MediaImportList from '../components/MediaImportList';
 import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
+import { copyText } from '../lib/artistUtils';
 import { avatarUrl } from '../lib/avatar';
 import SelectSheet from '../components/SelectSheet';
 import ImageCropModal, { blobToFile } from '../components/ImageCropModal';
@@ -80,19 +82,30 @@ export default function ArtistCreatePage() {
   // ── «Найти артиста» — autofill from external catalogs (Deezer/Apple/MusicBrainz) ──
   useEffect(() => {
     const q = lookupQuery.trim();
-    if (q.length < 2) { setLookupResults([]); return; }
+    if (q.length < 2) { setLookupResults([]); setLookupLoading(false); return; }
+    // Ответ на устаревший запрос (пользователь уже ввёл другое) не должен
+    // перезаписать результаты свежего — флаг alive сбрасывается при смене q.
+    let alive = true;
     setLookupLoading(true);
     const t = setTimeout(async () => {
-      try { const { data } = await artistAPI.lookup(q); setLookupResults(data.candidates || []); }
-      catch { setLookupResults([]); }
-      finally { setLookupLoading(false); }
+      try {
+        const { data } = await artistAPI.lookup(q);
+        if (alive) setLookupResults(data.candidates || []);
+      } catch {
+        if (alive) setLookupResults([]);
+      } finally {
+        if (alive) setLookupLoading(false);
+      }
     }, 450);
-    return () => clearTimeout(t);
+    return () => { alive = false; clearTimeout(t); };
   }, [lookupQuery]);
 
   const applyCandidate = async (c: any) => {
     setApplying(true);
     try {
+      // Подставленное название тоже проверяем на дубль (раньше проверка шла
+      // только при ручном вводе — можно было создать копию существующего артиста).
+      if (c.name) checkDuplicate(c.name);
       setForm(f => ({
         ...f,
         name: c.name || f.name,
@@ -114,7 +127,11 @@ export default function ArtistCreatePage() {
           const { data: blob } = await artistAPI.lookupAvatar(c.imageUrl);
           setAvatarFile(new File([blob], 'avatar.jpg', { type: (blob as any)?.type || 'image/jpeg' }));
           setAvatarPreview(URL.createObjectURL(blob));
-        } catch { /* avatar is best-effort */ }
+        } catch {
+          // Аватар обязателен для создания — не молчим, иначе непонятно, почему
+          // кнопка «Получить код» неактивна.
+          toast.error('Не удалось подставить фото артиста — загрузите его вручную');
+        }
       }
       if (c.itunesId || c.ymId) {
         try {
@@ -132,6 +149,7 @@ export default function ArtistCreatePage() {
   const importReleases = async (selected: any[]) => {
     if (!created) return;
     let ok = 0;
+    let firstError: unknown = null;
     for (const r of selected) {
       try {
         await releaseAPI.create({
@@ -139,14 +157,17 @@ export default function ArtistCreatePage() {
           coverUrl: r.coverUrl || undefined, releaseDate: r.releaseDate || undefined, participants: [],
         });
         ok++;
-      } catch { /* skip a failed one */ }
+      } catch (e) { firstError = firstError ?? e; }
     }
     setFoundReleases([]);
-    if (ok > 0) toast.success(`Импортировано релизов: ${ok}`); else toast.error('Не удалось импортировать релизы');
+    const failed = selected.length - ok;
+    if (ok > 0) toast.success(`Импортировано релизов: ${ok}${failed ? `, не удалось: ${failed}` : ''}`);
+    else toast.error(getApiError(firstError, 'Не удалось импортировать релизы'));
   };
   const importClips = async (selected: any[]) => {
     if (!created) return;
     let ok = 0;
+    let firstError: unknown = null;
     for (const r of selected) {
       try {
         await clipAPI.create({
@@ -154,10 +175,12 @@ export default function ArtistCreatePage() {
           coverUrl: r.coverUrl || undefined, participants: [],
         });
         ok++;
-      } catch { /* skip a failed one */ }
+      } catch (e) { firstError = firstError ?? e; }
     }
     setFoundClips([]);
-    if (ok > 0) toast.success(`Импортировано клипов: ${ok}`); else toast.error('Не удалось импортировать клипы');
+    const failed = selected.length - ok;
+    if (ok > 0) toast.success(`Импортировано клипов: ${ok}${failed ? `, не удалось: ${failed}` : ''}`);
+    else toast.error(getApiError(firstError, 'Не удалось импортировать клипы'));
   };
 
   const { data: genreOptions = [] } = useQuery({
@@ -177,17 +200,27 @@ export default function ArtistCreatePage() {
   const selectedRoleNames = form.submitterRoleIds.map(id => roleNameById.get(id)).filter(Boolean) as string[];
 
 
-  // Debounced duplicate check while typing the name.
-  const handleNameChange = (value: string) => {
-    set('name', value);
+  // Debounced duplicate check (while typing the name AND after «Заполнить»).
+  // Ответ проверки сверяется с последним запрошенным именем — устаревший
+  // (медленный) ответ не перетирает актуальный.
+  const lastCheckedName = useRef('');
+  const checkDuplicate = (value: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (value.trim().length < 2) { setDuplicate(null); return; }
+    const name = value.trim();
+    lastCheckedName.current = name;
+    if (name.length < 2) { setDuplicate(null); return; }
     debounceRef.current = setTimeout(async () => {
       try {
-        const { data } = await artistAPI.checkName(value.trim());
-        setDuplicate(data?.exists ? data.artist : null);
-      } catch { setDuplicate(null); }
+        const { data } = await artistAPI.checkName(name);
+        if (lastCheckedName.current === name) setDuplicate(data?.exists ? data.artist : null);
+      } catch {
+        if (lastCheckedName.current === name) setDuplicate(null);
+      }
     }, 350);
+  };
+  const handleNameChange = (value: string) => {
+    set('name', value);
+    checkDuplicate(value);
   };
 
   const onAvatarPick = (file: File) => {
@@ -213,24 +246,32 @@ export default function ArtistCreatePage() {
         submitterRoleIds: form.submitterRoleIds,
         socialLinks: Object.keys(form.socialLinks).length ? form.socialLinks : undefined,
       });
+      // Артист уже создан — сбой загрузки картинок не отменяет создание, но
+      // и не глотается молча: аватар обязателен для верификации.
       if (avatarFile) {
         try {
           const up = await artistAPI.uploadAvatar(data.id, avatarFile);
           data.avatar = up.data?.avatar ?? data.avatar;
-        } catch { /* non-fatal; user can retry on the artist page */ }
+        } catch (e) {
+          toast.error(getApiError(e, 'Аватар не загрузился — добавьте его на странице артиста'));
+        }
       }
       if (bannerFile) {
         try { await artistAPI.uploadBanner(data.id, bannerFile); }
-        catch { /* non-fatal; user can retry on the artist page */ }
+        catch (e) { toast.error(getApiError(e, 'Обложка не загрузилась — добавьте её на странице артиста')); }
       }
       return data;
     },
     onSuccess: (data) => setCreated(data),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось создать артиста')),
   });
 
-  const copyCode = () => {
+  const copyCode = async () => {
     if (!created?.verificationCode) return;
-    navigator.clipboard.writeText(created.verificationCode);
+    if (!(await copyText(created.verificationCode))) {
+      toast.error('Не удалось скопировать — выделите код вручную');
+      return;
+    }
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -241,7 +282,10 @@ export default function ArtistCreatePage() {
   return (
     <div className="min-h-screen bg-slate-950 pb-24">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800">
+      <div
+        className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800"
+        style={{ paddingTop: 'max(0px, env(safe-area-inset-top))' }}
+      >
         <div className="flex items-center justify-between px-4 py-3">
           <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-slate-400 hover:text-white transition-colors">
             <ArrowLeft size={20} />
@@ -467,7 +511,7 @@ export default function ArtistCreatePage() {
             </button>
 
             {createMut.isError && (
-              <p className="text-xs text-red-400 text-center">Ошибка при создании. Попробуйте ещё раз.</p>
+              <p className="text-xs text-red-400 text-center">{getApiError(createMut.error, 'Ошибка при создании. Попробуйте ещё раз.')}</p>
             )}
           </>
         ) : (

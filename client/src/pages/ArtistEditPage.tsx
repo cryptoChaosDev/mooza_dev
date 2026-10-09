@@ -23,14 +23,13 @@ const TYPE_OPTIONS = [
 
 const TYPE_LABELS: Record<string, string> = Object.fromEntries(TYPE_OPTIONS.map(t => [t.id, t.name]));
 
+// Описание и ссылка на страницу группы редактируются в своих карточках на
+// странице артиста; слушатели приходят только из синка Яндекс Музыки.
 type EditForm = {
   name: string;
   type: string;
   city: string;
   tourReady: string;
-  description: string;
-  bandLink: string;
-  listeners: string;
   genreIds: string[];
   socialLinks: Record<string, string>;
 };
@@ -53,8 +52,7 @@ export default function ArtistEditPage() {
   const queryClient = useQueryClient();
 
   const [form, setForm] = useState<EditForm>({
-    name: '', type: '', city: '', tourReady: '', description: '',
-    bandLink: '', listeners: '', genreIds: [], socialLinks: {},
+    name: '', type: '', city: '', tourReady: '', genreIds: [], socialLinks: {},
   });
   // Форма заполняется один раз после загрузки артиста — рефетчи (например, после
   // загрузки аватара из «Найти артиста») не должны затирать правки пользователя.
@@ -102,9 +100,6 @@ export default function ArtistEditPage() {
         type: artist.type ?? '',
         city: artist.city ?? '',
         tourReady: artist.tourReady ?? '',
-        description: artist.description ?? '',
-        bandLink: artist.bandLink ?? '',
-        listeners: artist.listeners != null ? String(artist.listeners) : '',
         genreIds: (artist.genres ?? []).map((g: { id: string }) => g.id),
         socialLinks: (artist.socialLinks as Record<string, string>) ?? {},
       });
@@ -118,16 +113,17 @@ export default function ArtistEditPage() {
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось загрузить аватар')),
   });
 
+  // Пустое поле отправляем как '' (сервер очищает его в null) — раньше
+  // «|| undefined» означало «не менять», и очистить город/тур было нельзя.
+  // Поля, которых нет на этой странице (описание, ссылка группы), не шлём,
+  // чтобы не перетереть их устаревшей копией.
   const saveMut = useMutation({
     mutationFn: () =>
       artistAPI.updateArtist(id!, {
         name: form.name.trim(),
         type: form.type || undefined,
-        city: form.city.trim() || undefined,
-        tourReady: form.tourReady.trim() || undefined,
-        description: form.description.trim() || undefined,
-        bandLink: form.bandLink.trim() || undefined,
-        listeners: form.listeners !== '' ? Number(form.listeners) : undefined,
+        city: form.city.trim(),
+        tourReady: form.tourReady.trim(),
         genreIds: form.genreIds,
         socialLinks: form.socialLinks,
       }),
@@ -174,9 +170,6 @@ export default function ArtistEditPage() {
           const haveClip = new Set((clips || []).map((r: any) => key(r.url)));
           setFoundReleases((data.releases || []).filter((r: any) => !haveRel.has(key(r.url))));
           setFoundClips((data.clips || []).filter((r: any) => !haveClip.has(key(r.url))));
-          if (data.details?.listeners != null) {
-            setForm(f => ({ ...f, listeners: String(data.details.listeners) }));
-          }
         } catch { /* best-effort */ }
       }
       toast.success('Данные подставлены — проверьте и сохраните');
@@ -187,6 +180,7 @@ export default function ArtistEditPage() {
 
   const importReleases = async (selected: any[]) => {
     let ok = 0;
+    let firstError: unknown = null;
     for (const r of selected) {
       try {
         await releaseAPI.create({
@@ -194,14 +188,17 @@ export default function ArtistEditPage() {
           coverUrl: r.coverUrl || undefined, releaseDate: r.releaseDate || undefined, participants: [],
         });
         ok++;
-      } catch { /* skip a failed one */ }
+      } catch (e) { firstError = firstError ?? e; }
     }
     setFoundReleases([]);
-    queryClient.invalidateQueries({ queryKey: ['releases', 'artist', id] });
-    if (ok > 0) toast.success(`Импортировано релизов: ${ok}`); else toast.error('Не удалось импортировать релизы');
+    queryClient.invalidateQueries({ queryKey: ['releases', 'artist', id], refetchType: 'all' });
+    const failed = selected.length - ok;
+    if (ok > 0) toast.success(`Импортировано релизов: ${ok}${failed ? `, не удалось: ${failed}` : ''}`);
+    else toast.error(getApiError(firstError, 'Не удалось импортировать релизы'));
   };
   const importClips = async (selected: any[]) => {
     let ok = 0;
+    let firstError: unknown = null;
     for (const r of selected) {
       try {
         await clipAPI.create({
@@ -209,11 +206,13 @@ export default function ArtistEditPage() {
           coverUrl: r.coverUrl || undefined, participants: [],
         });
         ok++;
-      } catch { /* skip a failed one */ }
+      } catch (e) { firstError = firstError ?? e; }
     }
     setFoundClips([]);
-    queryClient.invalidateQueries({ queryKey: ['clips', 'artist', id] });
-    if (ok > 0) toast.success(`Импортировано клипов: ${ok}`); else toast.error('Не удалось импортировать клипы');
+    queryClient.invalidateQueries({ queryKey: ['clips', 'artist', id], refetchType: 'all' });
+    const failed = selected.length - ok;
+    if (ok > 0) toast.success(`Импортировано клипов: ${ok}${failed ? `, не удалось: ${failed}` : ''}`);
+    else toast.error(getApiError(firstError, 'Не удалось импортировать клипы'));
   };
 
   const set = (key: keyof EditForm, value: string | string[] | Record<string, string>) =>
@@ -302,19 +301,6 @@ export default function ArtistEditPage() {
             value={form.tourReady}
             onChange={(e) => set('tourReady', e.target.value)}
             placeholder="Готовы к гастролям"
-          />
-        </div>
-
-        {/* Слушатели */}
-        <div>
-          <label className="block text-xs text-slate-500 mb-1">Слушателей в месяц</label>
-          <input
-            type="number"
-            className="w-full min-w-0 bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-primary-500"
-            value={form.listeners}
-            onChange={(e) => set('listeners', e.target.value)}
-            placeholder="0"
-            min="0"
           />
         </div>
 

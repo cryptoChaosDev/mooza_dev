@@ -11,6 +11,7 @@ import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { MEDIA_PLATFORM_LABELS } from '../lib/mediaPlatforms';
 import { ymGenreLabel, RELEASE_TYPE_LABELS } from '../lib/ymGenres';
+import { safeHref, formatReleaseDate } from '../lib/artistUtils';
 
 interface ItemDetail extends MediaItemInitial {
   artistId: string;
@@ -43,20 +44,30 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const { data: item, isLoading, isError } = useQuery({
+  const { data: item, isLoading, isError, error, refetch, isFetching } = useQuery({
     queryKey: [kind, id],
     queryFn: async () => {
       const { data } = await api.get(id!);
       return data as ItemDetail;
     },
     enabled: !!id,
+    // 404 — ответ окончательный, повторять незачем.
+    retry: (count, e: any) => e?.response?.status !== 404 && count < 1,
   });
 
   const removeMut = useMutation({
     mutationFn: () => api.remove(id!),
-    onSuccess: () => {
+    onSuccess: async () => {
+      queryClient.removeQueries({ queryKey: [kind, id] });
       if (item?.artistId) {
-        queryClient.invalidateQueries({ queryKey: [`${kind}s`, 'artist', item.artistId] });
+        const listKey = [`${kind}s`, 'artist', item.artistId];
+        // Сразу убрать плитку из кэша + обновить и неактивные запросы.
+        queryClient.setQueryData(listKey, (old: any) =>
+          Array.isArray(old) ? old.filter((it: any) => it.id !== id) : old);
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: listKey, refetchType: 'all' }),
+          queryClient.invalidateQueries({ queryKey: ['artist', item.artistId], refetchType: 'all' }),
+        ]).catch(() => {});
         navigate(`/artist/${item.artistId}`);
       } else {
         navigate(-1);
@@ -65,14 +76,20 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить')),
   });
 
+  // Своё участие (кредиты): подтверждение/отказ. Обновляем карточку и входящие
+  // «Запросы» (там тоже висят ожидающие участия).
+  const invalidateParticipation = () => {
+    queryClient.invalidateQueries({ queryKey: [kind, id] });
+    queryClient.invalidateQueries({ queryKey: ['req-media'] }); // RequestsSection
+  };
   const confirmMut = useMutation({
     mutationFn: (participantId: string) => api.confirmParticipant(participantId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [kind, id] }),
+    onSuccess: invalidateParticipation,
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось подтвердить участие')),
   });
   const declineMut = useMutation({
     mutationFn: (participantId: string) => api.declineParticipant(participantId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: [kind, id] }),
+    onSuccess: invalidateParticipation,
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось отклонить участие')),
   });
 
@@ -85,29 +102,52 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
   }
 
   if (isError || !item) {
+    // «Не найден» — только на настоящий 404; сеть/500 — «не удалось загрузить» + повтор.
+    const notFound = !isError || (error as any)?.response?.status === 404;
     return (
       <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center gap-4 px-4">
-        <p className="text-slate-400">{isRelease ? 'Релиз не найден' : 'Клип не найден'}</p>
-        <button onClick={() => navigate(-1)} className="text-primary-400 text-sm">Назад</button>
+        <p className="text-slate-400 text-center">
+          {notFound
+            ? (isRelease ? 'Релиз не найден' : 'Клип не найден')
+            : getApiError(error, isRelease ? 'Не удалось загрузить релиз' : 'Не удалось загрузить клип')}
+        </p>
+        <div className="flex items-center gap-4">
+          {!notFound && (
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              className="text-primary-400 text-sm disabled:opacity-50"
+            >
+              {isFetching ? 'Загрузка…' : 'Повторить'}
+            </button>
+          )}
+          <button onClick={() => navigate(-1)} className="text-slate-400 text-sm">Назад</button>
+        </div>
       </div>
     );
   }
 
   const viewerIsAdmin = !!item.viewerIsAdmin;
   const platformLabel = MEDIA_PLATFORM_LABELS[item.platform] ?? item.platform;
+  // Сервер отдаёт приглашённому его собственное PENDING-участие (остальным
+  // посетителям — только подтверждённые), поэтому блок «Подтвердите участие» живой.
   const participants = item.participants ?? [];
   const myPending = currentUser
     ? participants.find((p) => p.userId === currentUser.id && p.confirmStatus === 'PENDING')
     : null;
+  const openHref = safeHref(item.url);
 
   return (
     <div className="min-h-screen bg-slate-950 pb-24">
       {/* Top bar */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 sticky top-0 z-20 bg-slate-950/90 backdrop-blur">
-        <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-slate-400 hover:text-white">
+      <div
+        className="flex items-center gap-2 px-4 py-3 border-b border-slate-800 sticky top-0 z-20 bg-slate-950/90 backdrop-blur"
+        style={{ paddingTop: 'max(0.75rem, calc(env(safe-area-inset-top, 0px) + 0.75rem))' }}
+      >
+        <button onClick={() => navigate(-1)} className="p-2 -ml-2 text-slate-400 hover:text-white" aria-label="Назад">
           <ArrowLeft size={20} />
         </button>
-        <span className="text-base font-semibold text-white flex-1 truncate">
+        <span className="text-base font-semibold text-white flex-1 min-w-0 truncate">
           {isRelease ? 'Релиз' : 'Клип'}
         </span>
         {viewerIsAdmin && (
@@ -130,7 +170,7 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
         )}
       </div>
 
-      <div className="px-4 pt-5">
+      <div className="px-4 pt-5 lg:max-w-2xl lg:mx-auto">
         {/* Cover */}
         <div className="w-full max-w-xs mx-auto aspect-square rounded-2xl overflow-hidden bg-slate-800 border border-slate-700 flex items-center justify-center mb-4">
           {item.coverUrl ? (
@@ -147,7 +187,7 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
         {isRelease && item.releaseDate && (
           <p className="flex items-center justify-center gap-1.5 text-sm text-slate-400 mb-1">
             <Calendar size={13} />
-            {new Date(item.releaseDate).toLocaleDateString('ru-RU')}
+            {formatReleaseDate(item.releaseDate)}
           </p>
         )}
 
@@ -191,10 +231,11 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
                   кроме дефолтной light); без неё трек-лист — белая простыня. */}
               <iframe
                 src={`https://music.yandex.ru/iframe/album/${albumId}?theme=rzt`}
-                className="w-full block"
-                style={{ height: 400 }}
+                className="w-full block h-[min(400px,60vh)]"
                 frameBorder="0"
                 allow="clipboard-write"
+                loading="lazy"
+                referrerPolicy="strict-origin-when-cross-origin"
                 title="Плеер Яндекс.Музыки"
               />
             </div>
@@ -206,9 +247,9 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
             стороннем сайте блокируется браузером. Открываем по кнопке ниже. */}
 
         {/* Open on platform */}
-        {item.url && (
+        {openHref && (
           <a
-            href={item.url}
+            href={openHref}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center justify-center gap-2 w-full max-w-xs mx-auto py-2.5 rounded-xl bg-primary-600 hover:bg-primary-500 text-white text-sm font-semibold transition-colors mb-6"
