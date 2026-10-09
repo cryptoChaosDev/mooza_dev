@@ -11,6 +11,7 @@ import AvatarComponent from '../components/Avatar';
 import { usePresenceStore } from '../stores/presenceStore';
 import { formatLastSeen } from '../lib/lastSeen';
 import { yoNorm } from '../lib/search';
+import { htmlToText } from '../lib/htmlText';
 import ConnectionViewModal from '../components/ConnectionViewModal';
 
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -550,6 +551,8 @@ const { data: myBreakRequests = [] } = useQuery({
                   <div className="divide-y divide-slate-800/60">
                     {savedPosts.map((post: any) => {
                       const thumb = post.images?.[0] ?? post.media?.[0]?.url;
+                      // content — HTML поста: в превью только текст, без тегов.
+                      const preview = htmlToText(post.content).slice(0, 140);
                       return (
                         <div
                           key={post.id}
@@ -568,8 +571,8 @@ const { data: myBreakRequests = [] } = useQuery({
                                 </span>
                               )}
                             </div>
-                            {post.content && (
-                              <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{post.content.slice(0, 140)}</p>
+                            {preview && (
+                              <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{preview}</p>
                             )}
                           </div>
                           {thumb && (
