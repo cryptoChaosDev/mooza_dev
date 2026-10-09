@@ -1,15 +1,11 @@
 import { prisma } from './index';
-import { emitToUser } from './socket';
+import { notify as sendNotification } from './utils/notify';
 import logger from './utils/logger';
 import { ensureDealConnection } from './lib/dealHelpers';
 
-async function notify(userId: string, type: string, title: string, body: string, link: string) {
-  try {
-    const notif = await prisma.notification.create({
-      data: { userId, type, title, body, link },
-    });
-    emitToUser(userId, 'new_notification', notif);
-  } catch {}
+// Системные уведомления о сделках — через utils/notify (сокет + push). Never throws.
+function notify(userId: string, type: string, title: string, body: string, link: string) {
+  return sendNotification({ userId, type, title, body, link });
 }
 
 // Каждый переход — условный updateMany по ожидаемому статусу: если сделку за это

@@ -32,6 +32,7 @@ import EmojiPicker from '../components/EmojiPicker';
 import { loadFilters, DEFAULT_FILTERS, FlowFilters, FLOW_FILTERS_KEY } from './FlowSettingsPage';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useScrollLock } from '../lib/scrollLock';
+import { htmlToText } from '../lib/htmlText';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
@@ -96,16 +97,6 @@ function withMyReaction(p: any, emoji: string | null) {
     else summary.push({ emoji, count: 1 });
   }
   return { ...p, myReaction: emoji, reactionSummary: summary.filter((s) => s.count > 0) };
-}
-
-/** Текст без HTML-тегов (для подписи при «Поделиться»). DOMParser не исполняет скрипты. */
-function htmlToText(html?: string | null): string {
-  if (!html) return '';
-  try {
-    return (new DOMParser().parseFromString(html, 'text/html').body.textContent || '').replace(/\s+/g, ' ').trim();
-  } catch {
-    return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-  }
 }
 
 function dedupeById<T extends { id: string }>(items: T[]): T[] {

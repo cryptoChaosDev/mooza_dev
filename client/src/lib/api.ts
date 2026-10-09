@@ -106,6 +106,8 @@ export const userAPI = {
   updateMe: (data: any) => api.put('/users/me', data),
   givePublicConsent: () => api.post('/users/me/public-consent'),
   updateServices: (services: Array<{
+    // id существующей UserService — сервер сопоставляет по нему (иначе по serviceId).
+    id?: string;
     professionId: string;
     serviceId: string;
     name?: string;
@@ -130,7 +132,7 @@ export const userAPI = {
     deadlineFrom?: number | null; deadlineTo?: number | null; description?: string;
     priceItems?: Array<{name: string; price: string; from?: boolean}> | null;
   }) => api.patch(`/users/me/services/${serviceId}`, data),
-  setServiceStatus: (serviceId: string, status: 'active' | 'draft' | 'archived' | 'pending_review') =>
+  setServiceStatus: (serviceId: string, status: 'active' | 'draft' | 'archived') =>
     api.patch(`/users/me/services/${serviceId}/status`, { status }),
   deleteService: (serviceId: string) =>
     api.delete(`/users/me/services/${serviceId}`),
@@ -441,8 +443,9 @@ export const artistAPI = {
 
 // Release API — Phase 6a (releases on the artist profile)
 export const releaseAPI = {
-  fetchMetadata: (platform: string, url: string) =>
-    api.post('/releases/metadata', { platform, url }),
+  // Платформу сервер определяет по ссылке сам.
+  fetchMetadata: (url: string) =>
+    api.post('/releases/metadata', { url }),
   create: (data: {
     artistId: string;
     platform: 'VK' | 'SPOTIFY' | 'YANDEX_MUSIC' | 'APPLE_MUSIC';
@@ -475,8 +478,9 @@ export const releaseAPI = {
 
 // Clip API — Phase 6a (clips on the artist profile)
 export const clipAPI = {
-  fetchMetadata: (platform: string, url: string) =>
-    api.post('/clips/metadata', { platform, url }),
+  // Платформу сервер определяет по ссылке сам.
+  fetchMetadata: (url: string) =>
+    api.post('/clips/metadata', { url }),
   create: (data: {
     artistId: string;
     platform: 'VK_VIDEO' | 'RUTUBE' | 'YOUTUBE' | 'APPLE_MUSIC';
@@ -528,24 +532,10 @@ export const connectionAPI = {
   getHistory: () => api.get('/connections/history'),
 };
 
+// Легаси /api/groups: на сервере осталась только GET /my (рейл «Артисты» в
+// профиле); всё управление артистом — artistAPI (/api/artists).
 export const groupAPI = {
-  create: (data: { name: string; description?: string; city?: string; type?: string }) =>
-    api.post('/groups', data),
   getMyGroups: () => api.get('/groups/my'),
-  getInvites: () => api.get('/groups/invites'),
-  getGroup: (id: string) => api.get(`/groups/${id}`),
-  update: (id: string, data: object) => api.patch(`/groups/${id}`, data),
-  submit: (id: string) => api.post(`/groups/${id}/submit`),
-  invite: (id: string, friendId: string, professionId: string) =>
-    api.post(`/groups/${id}/invite`, { friendId, professionId }),
-  acceptInvite: (membershipId: string) => api.patch(`/groups/invites/${membershipId}/accept`),
-  declineInvite: (membershipId: string) => api.patch(`/groups/invites/${membershipId}/decline`),
-  removeMember: (groupId: string, membershipId: string) =>
-    api.delete(`/groups/${groupId}/members/${membershipId}`),
-  deleteGroup: (id: string) => api.delete(`/groups/${id}`),
-  transferOwner: (groupId: string, newOwnerMembershipId: string) =>
-    api.patch(`/groups/${groupId}/transfer-owner`, { newOwnerMembershipId }),
-  leave: (groupId: string) => api.delete(`/groups/${groupId}/leave`),
 };
 
 export const favoriteAPI = {

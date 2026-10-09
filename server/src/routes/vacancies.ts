@@ -8,6 +8,7 @@ import { uploadVacancyMedia } from '../middleware/upload';
 import { matchesLinkSource, detectLinkSource, isAllowedLinkUrl } from '../lib/materialLinks';
 import { parseCalendarDay, endOfDayMsk } from '../lib/mskDate';
 import { withAdvisoryLock } from '../lib/dealHelpers';
+import { artistAdminIds, isArtistAdmin } from '../lib/artistAccess';
 
 const router = Router();
 
@@ -61,31 +62,23 @@ async function artistName(artistId: string): Promise<string> {
 }
 
 /**
- * Текущие управляющие артиста: ACCEPTED-участники с isOwner || isAdmin.
- * Доступ к вакансиям/откликам и уведомления идут им, а НЕ Vacancy.authorId
- * (после передачи владения бывший владелец видел отклики с портфолио, а
- * совладелец/админ — вакансию «как чужой»). Artist.submittedById учитывается
- * только как legacy-фолбэк, когда у артиста вообще нет принятого владельца
- * (после передачи владения submittedById в artists.ts не обновляется).
+ * Текущие управляющие артиста: ACCEPTED-участники с isOwner || isAdmin
+ * (lib/artistAccess — единственный источник прав на артиста). Доступ к
+ * вакансиям/откликам и уведомления идут им, а НЕ Vacancy.authorId (после
+ * передачи владения бывший владелец видел отклики с портфолио, а
+ * совладелец/админ — вакансию «как чужой»). Artist.submittedById прав не даёт:
+ * легаси-артистам без строки владельца его проставила миграция
+ * 20261009030600_artist_owner_backfill.
  */
 async function artistManagerIds(artistId: string): Promise<string[]> {
   if (!artistId) return [];
-  const rows = await prisma.userArtist.findMany({
-    where: { artistId, inviteStatus: 'ACCEPTED', OR: [{ isOwner: true }, { isAdmin: true }] },
-    select: { userId: true, isOwner: true },
-  });
-  const ids = new Set(rows.map((r) => r.userId));
-  if (!rows.some((r) => r.isOwner)) {
-    const artist = await prisma.artist.findUnique({ where: { id: artistId }, select: { submittedById: true } });
-    if (artist?.submittedById) ids.add(artist.submittedById);
-  }
-  return [...ids];
+  return artistAdminIds(artistId);
 }
 
 // Gate create/edit/view-responses on artist management rights. Returns true when allowed.
 async function assertArtistOwner(userId: string, artistId: string): Promise<boolean> {
   if (!userId || !artistId) return false;
-  return (await artistManagerIds(artistId)).includes(userId);
+  return isArtistAdmin(artistId, userId);
 }
 
 // Отклик «полный»: если вакансия требует портфолио — есть хотя бы файл или ссылка.
@@ -394,14 +387,10 @@ router.get('/responses/incoming', authenticate, async (req: AuthRequest, res) =>
   try {
     const meId = req.userId!;
     // Vacancies I manage = artist has me as an ACCEPTED owner/admin (pending/
-    // declined invites don't count), or — legacy — I'm the submitter of an artist
-    // without any accepted owner.
+    // declined invites don't count). Artist.submittedById gives no rights.
     const owned = await prisma.vacancy.findMany({
       where: {
-        OR: [
-          { artist: { userArtists: { some: { userId: meId, inviteStatus: 'ACCEPTED', OR: [{ isOwner: true }, { isAdmin: true }] } } } },
-          { artist: { submittedById: meId, userArtists: { none: { isOwner: true, inviteStatus: 'ACCEPTED' } } } },
-        ],
+        artist: { userArtists: { some: { userId: meId, inviteStatus: 'ACCEPTED', OR: [{ isOwner: true }, { isAdmin: true }] } } },
       },
       select: { id: true },
     });

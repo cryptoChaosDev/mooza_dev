@@ -266,6 +266,9 @@ async function markConversationRead(conversationId: string, userId: string): Pro
  * создаётся новая; старые прочитанные записи этой беседы удаляются. Так
  * таблица Notification не растёт на каждое сообщение.
  */
+// Намеренно НЕ через notify(): запись не создаётся, а обновляется (одна на
+// беседу), настройка «Сообщения» проверяется вызывающим кодом, а push по
+// сообщению уже шлёт notifyUser('new_message') — notify() дал бы второй баннер.
 async function upsertMessageNotification(receiverId: string, actorId: string, conversationId: string, title: string, body: string) {
   const link = `/messages/${conversationId}`;
   const include = { actor: { select: { id: true, firstName: true, lastName: true, avatar: true } } };

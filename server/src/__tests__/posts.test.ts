@@ -39,6 +39,7 @@ jest.mock('../utils/notify', () => ({
 jest.mock('../socket', () => ({
   emitToUser: jest.fn(),
   notifyUser: jest.fn(),
+  disconnectUserSockets: jest.fn(),
 }));
 
 const mockPrisma = {

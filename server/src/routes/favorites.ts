@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { emitToUser } from '../socket';
+import { notify } from '../utils/notify';
 import { tgEvent } from '../utils/telegram';
 
 const router = Router();
@@ -72,17 +72,14 @@ router.post('/:targetId', authenticate, async (req: AuthRequest, res: Response) 
       try {
         const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
         const target = await prisma.user.findUnique({ where: { id: targetId }, select: { firstName: true, lastName: true } });
-        const notification = await prisma.notification.create({
-          data: {
-            userId: targetId,
-            actorId: meId,
-            type: 'favorite_added',
-            title: `${me?.firstName} ${me?.lastName} добавил(а) вас в Избранное`,
-            body: 'Вы появились в избранном у нового пользователя',
-            link: `/profile/${meId}`,
-          },
+        await notify({
+          userId: targetId,
+          actorId: meId,
+          type: 'favorite_added',
+          title: `${me?.firstName} ${me?.lastName} добавил(а) вас в Избранное`,
+          body: 'Вы появились в избранном у нового пользователя',
+          link: `/profile/${meId}`,
         });
-        emitToUser(targetId, 'new_notification', notification);
         tgEvent.favorite(`${me?.firstName} ${me?.lastName}`, `${target?.firstName} ${target?.lastName}`);
       } catch {}
     }

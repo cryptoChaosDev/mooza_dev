@@ -7,7 +7,8 @@ import { notify, notifyMany } from '../utils/notify';
 import { yoNorm } from '../utils/search';
 import { grantProMonth, isProActive } from '../utils/pro';
 import logger from '../utils/logger';
-import * as socketModule from '../socket';
+import { artistAdminIds } from '../lib/artistAccess';
+import { disconnectUserSockets } from '../socket';
 
 const router = Router();
 
@@ -40,14 +41,11 @@ function pageParams(req: { query: any }) {
   return { page, limit, skip: (page - 1) * limit };
 }
 
-// Разорвать живые сокеты пользователя (блокировка, смена пароля).
-// TODO(интеграция с зоной чата): после мержа заменить на прямой импорт
-//   import { disconnectUserSockets } from '../socket';  disconnectUserSockets(userId);
-// Пока функции в socket.ts нет — вызываем её, только если она экспортирована.
-function kickUserSockets(userId: string) {
+// Разорвать живые сокеты пользователя (блокировка, смена пароля админом,
+// удаление): JWT/сессия уже недействительны, а открытый сокет жил бы до реконнекта.
+function kickUserSockets(userId: string, reason = 'revoked') {
   try {
-    const fn = (socketModule as any).disconnectUserSockets;
-    if (typeof fn === 'function') fn(userId);
+    disconnectUserSockets(userId, reason);
   } catch (e: any) {
     logger.warn(`[admin] disconnectUserSockets failed for ${userId}: ${e?.message}`);
   }
@@ -781,20 +779,28 @@ async function duplicatesByArtist(
   return map;
 }
 
+// Who is shown in the moderation queue: verificationRequestedBy (who asked for
+// THIS verification) with a fallback to submittedByUser (legacy rows / creator).
+const MODERATION_USER_SELECT = { id: true, firstName: true, lastName: true, avatar: true } as const;
+
 // GET /admin/artists/pending — list artists awaiting moderation
 router.get('/artists/pending', authenticate, requireAdmin, async (_req, res) => {
   try {
     const artists = await prisma.artist.findMany({
       where: { status: 'PENDING' },
       include: {
-        submittedByUser: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+        submittedByUser: { select: MODERATION_USER_SELECT },
+        verificationRequestedBy: { select: MODERATION_USER_SELECT },
         genres: { include: { genre: true } },
         _count: { select: { followers: true } },
       },
       orderBy: { updatedAt: 'asc' },
     });
     const dupMap = await duplicatesByArtist(artists);
-    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre), followersCount: a._count.followers, duplicates: dupMap.get(a.id) || [] })));
+    res.json(artists.map(a => ({
+      ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre), followersCount: a._count.followers, duplicates: dupMap.get(a.id) || [],
+      verificationRequestedBy: a.verificationRequestedBy ?? a.submittedByUser,
+    })));
   } catch (e: any) { return adminError(res, 'GET /artists/pending', e, 500); }
 });
 
@@ -804,22 +810,30 @@ router.get('/artists/verification', authenticate, requireAdmin, async (_req, res
     const artists = await prisma.artist.findMany({
       where: { status: 'PENDING', verificationProofUrl: { not: null } },
       include: {
-        submittedByUser: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+        submittedByUser: { select: MODERATION_USER_SELECT },
+        verificationRequestedBy: { select: MODERATION_USER_SELECT },
         genres: { include: { genre: true } },
       },
       orderBy: { updatedAt: 'asc' },
     });
     const dupMap = await duplicatesByArtist(artists);
-    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre), duplicates: dupMap.get(a.id) || [] })));
+    res.json(artists.map(a => ({
+      ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre), duplicates: dupMap.get(a.id) || [],
+      verificationRequestedBy: a.verificationRequestedBy ?? a.submittedByUser,
+    })));
   } catch (e: any) { return adminError(res, 'GET /artists/verification', e, 500); }
 });
 
-// Helper: recipients to notify about an artist moderation result (owner, submitter, fallback admins).
-async function artistNotifyRecipients(artistId: string, submittedById: string | null): Promise<string[]> {
-  const ids = new Set<string>();
-  const owner = await prisma.userArtist.findFirst({ where: { artistId, isOwner: true }, select: { userId: true } });
-  if (owner) ids.add(owner.userId);
-  if (submittedById) ids.add(submittedById);
+// Recipients of an artist moderation result: the artist's current ACCEPTED owners
+// and admins (rights live only in UserArtist — lib/artistAccess) plus whoever
+// requested this verification. submittedById (the original creator, who may have
+// left the artist long ago) is only a fallback when there is nobody else.
+async function artistNotifyRecipients(artist: {
+  id: string; submittedById: string | null; verificationRequestedById: string | null;
+}): Promise<string[]> {
+  const ids = new Set(await artistAdminIds(artist.id));
+  if (artist.verificationRequestedById) ids.add(artist.verificationRequestedById);
+  if (!ids.size && artist.submittedById) ids.add(artist.submittedById);
   return [...ids];
 }
 
@@ -836,7 +850,7 @@ router.patch('/artists/:id/reject', authenticate, requireAdmin, async (req: Auth
       },
     });
 
-    const recipients = await artistNotifyRecipients(artist.id, artist.submittedById);
+    const recipients = await artistNotifyRecipients(artist);
     const reasonText = reason ? ` Причина: ${reason}.` : '';
     await notifyMany(recipients, {
       actorId: req.userId, type: 'artist_rejected',
@@ -857,7 +871,7 @@ router.patch('/artists/:id/verify', authenticate, requireAdmin, async (req: Auth
       data: { status: 'VERIFIED', moderatedAt: new Date() },
     });
 
-    const recipients = await artistNotifyRecipients(artist.id, artist.submittedById);
+    const recipients = await artistNotifyRecipients(artist);
     await notifyMany(recipients, {
       actorId: req.userId, type: 'artist_verified',
       title: 'Артист верифицирован',
@@ -1040,7 +1054,7 @@ router.patch('/users/:id', async (req: AuthRequest, res) => {
         city: true, country: true, bio: true, phone: true,
       },
     });
-    if (passwordChanged) kickUserSockets(user.id);
+    if (passwordChanged) kickUserSockets(user.id, 'password_changed');
     res.json(user);
   } catch (e: any) {
     // TOCTOU on nickname: a concurrent change can pass the pre-check and trip the
@@ -1153,7 +1167,7 @@ router.patch('/users/:id/block', async (req: AuthRequest, res) => {
       data: value ? { isBlocked: true } : { isBlocked: false, blockedUntil: null },
       select: { id: true, isBlocked: true, blockedUntil: true },
     });
-    if (value) kickUserSockets(updated.id);
+    if (value) kickUserSockets(updated.id, 'blocked');
     res.json(updated);
   } catch (e: any) { return adminError(res, 'PATCH /users/:id/block', e); }
 });
@@ -1251,19 +1265,13 @@ router.patch('/user-services/:id/approve', async (req, res) => {
       data: { status: 'active' },
       select: { id: true, userId: true, service: { select: { name: true } } },
     });
-    try {
-      const notif = await prisma.notification.create({
-        data: {
-          userId: us.userId,
-          type: 'service_approved_ready_to_post',
-          title: 'Услуга опубликована',
-          body: `Ваша услуга «${us.service.name}» прошла модерацию и теперь видна в каталоге`,
-          link: `/services/${us.id}?showPostDialog=1`,
-        },
-      });
-      const { emitToUser } = await import('../socket');
-      emitToUser(us.userId, 'new_notification', notif);
-    } catch {}
+    await notify({
+      userId: us.userId,
+      type: 'service_approved_ready_to_post',
+      title: 'Услуга опубликована',
+      body: `Ваша услуга «${us.service.name}» прошла модерацию и теперь видна в каталоге`,
+      link: `/services/${us.id}?showPostDialog=1`,
+    });
     res.json({ ok: true });
   } catch (e: any) { return adminError(res, 'PATCH /user-services/:id/approve', e, 500); }
 });
@@ -1276,19 +1284,13 @@ router.patch('/user-services/:id/reject', async (req, res) => {
       data: { status: 'draft' },
       select: { id: true, userId: true, service: { select: { name: true } } },
     });
-    try {
-      const notif = await prisma.notification.create({
-        data: {
-          userId: us.userId,
-          type: 'service_rejected',
-          title: 'Услуга не прошла модерацию',
-          body: reason ? `«${us.service.name}»: ${reason}` : `Услуга «${us.service.name}» возвращена в черновики`,
-          link: `/services/${us.id}`,
-        },
-      });
-      const { emitToUser } = await import('../socket');
-      emitToUser(us.userId, 'new_notification', notif);
-    } catch {}
+    await notify({
+      userId: us.userId,
+      type: 'service_rejected',
+      title: 'Услуга не прошла модерацию',
+      body: reason ? `«${us.service.name}»: ${reason}` : `Услуга «${us.service.name}» возвращена в черновики`,
+      link: `/services/${us.id}`,
+    });
     res.json({ ok: true });
   } catch (e: any) { return adminError(res, 'PATCH /user-services/:id/reject', e, 500); }
 });

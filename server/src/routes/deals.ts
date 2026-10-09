@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, AuthRequest } from '../middleware/auth';
-import { emitToUser } from '../socket';
+import { notify as sendNotification } from '../utils/notify';
 import { tgEvent } from '../utils/telegram';
 import logger from '../utils/logger';
 import { parseCalendarDay, endOfDayMsk } from '../lib/mskDate';
@@ -38,13 +38,9 @@ function serverError(res: any, where: string, e: any) {
   return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
 }
 
-async function notify(userId: string, actorId: string | null, type: string, title: string, body: string, link: string) {
-  try {
-    const data: any = { userId, type, title, body, link };
-    if (actorId) data.actorId = actorId;
-    const notif = await prisma.notification.create({ data });
-    emitToUser(userId, 'new_notification', notif);
-  } catch {}
+// Прежняя сигнатура поверх utils/notify (настройки получателя, сокет, push). Never throws.
+function notify(userId: string, actorId: string | null, type: string, title: string, body: string, link: string) {
+  return sendNotification({ userId, actorId, type, title, body, link });
 }
 
 // GET /api/deals — my deals (customer + executor)

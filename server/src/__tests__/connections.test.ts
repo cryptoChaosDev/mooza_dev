@@ -35,6 +35,7 @@ jest.mock('../utils/telegram', () => ({
 jest.mock('../socket', () => ({
   emitToUser: jest.fn(),
   notifyUser: jest.fn(),
+  disconnectUserSockets: jest.fn(),
 }));
 
 // notify() — единая точка уведомлений (запись + сокет + push)

@@ -29,7 +29,10 @@ jest.mock('../utils/telegram', () => ({
   escTg: (s: any) => String(s ?? ''),
   tgEvent: new Proxy({}, { get: () => jest.fn() }),
 }));
-jest.mock('../utils/notify', () => ({ notify: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../utils/notify', () => ({
+  notify: jest.fn().mockResolvedValue(undefined),
+  notifyMany: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock('../utils/logger', () => ({
   __esModule: true,
   default: { info: jest.fn(), warn: jest.fn(), error: jest.fn() },
@@ -177,13 +180,26 @@ describe('POST /api/auth/register', () => {
   });
 
   it('closed registration: an artist invite counts only in referral-only mode', async () => {
-    mockPrisma.artistInvite.findUnique.mockResolvedValue({ id: 'inv-1' });
+    mockPrisma.artistInvite.findUnique.mockResolvedValue({ id: 'inv-1', artistId: 'a1', expiresAt: null, maxUses: null, usedCount: 0, roleIds: [] });
     settings = { registrationEnabled: 'false', referralRegistrationEnabled: 'false' };
-    const off = await request(buildApp()).post('/api/auth/register').send(validBody({ artistInviteToken: 'tok' }));
+    const off = await request(buildApp()).post('/api/auth/register').send(validBody({ artistInviteToken: 'tok-12345' }));
     expect(off.status).toBe(403);
     settings = { registrationEnabled: 'false', referralRegistrationEnabled: 'true' };
-    const on = await request(buildApp()).post('/api/auth/register').send(validBody({ artistInviteToken: 'tok' }));
+    const on = await request(buildApp()).post('/api/auth/register').send(validBody({ artistInviteToken: 'tok-12345' }));
     expect(on.status).toBe(201);
+  });
+
+  it('closed registration: an expired / used-up artist invite is explained (410), not opened', async () => {
+    settings = { registrationEnabled: 'false', referralRegistrationEnabled: 'true' };
+    mockPrisma.artistInvite.findUnique.mockResolvedValue({ id: 'inv-1', artistId: 'a1', expiresAt: new Date(Date.now() - 1000), maxUses: null, usedCount: 0, roleIds: [] });
+    const expired = await request(buildApp()).post('/api/auth/register').send(validBody({ artistInviteToken: 'tok-12345' }));
+    expect(expired.status).toBe(410);
+    expect(expired.body.code).toBe('EXPIRED');
+    mockPrisma.artistInvite.findUnique.mockResolvedValue({ id: 'inv-1', artistId: 'a1', expiresAt: null, maxUses: 3, usedCount: 3, roleIds: [] });
+    const used = await request(buildApp()).post('/api/auth/register').send(validBody({ artistInviteToken: 'tok-12345' }));
+    expect(used.status).toBe(410);
+    expect(used.body.code).toBe('EXHAUSTED');
+    expect(mockPrisma.pendingRegistration.create).not.toHaveBeenCalled();
   });
 });
 

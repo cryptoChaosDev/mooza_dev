@@ -5,6 +5,7 @@ import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/a
 import { upload, uploadBanner, uploadPortfolio } from '../middleware/upload';
 import { codeLimiter } from '../middleware/rateLimiter';
 import { yoNorm } from '../utils/search';
+import { notify } from '../utils/notify';
 import { isProActive, limitsFor } from '../utils/pro';
 import { getJwtSecret } from '../utils/jwt';
 import { sendEmailChangeCode as sendEmailChangeMail } from '../utils/mailer';
@@ -90,7 +91,11 @@ const userSelect = {
       },
     },
   },
+  // Только подтверждённые участия: PENDING-заявки/приглашения и DECLINED в
+  // профиле не показываются (клиент свои PENDING из профиля не использует —
+  // «Мои артисты» берёт groupAPI.getMyGroups).
   userArtists: {
+    where: { inviteStatus: 'ACCEPTED' as const },
     include: { artist: { select: { id: true, name: true, avatar: true } } },
   },
   socialLinks: true,
@@ -166,7 +171,9 @@ const publicUserSelect = {
       },
     },
   },
+  // Чужой профиль — только подтверждённые участия (не PENDING/DECLINED).
   userArtists: {
+    where: { inviteStatus: 'ACCEPTED' as const },
     include: { artist: { select: { id: true, name: true, avatar: true } } },
   },
   socialLinks: true,
@@ -1031,15 +1038,13 @@ router.post('/services/:serviceId/inquire', authenticate, async (req: AuthReques
     if (us.userId === req.userId) return res.status(400).json({ error: 'Cannot inquire own service' });
     const actor = await prisma.user.findUnique({ where: { id: req.userId! }, select: { firstName: true, lastName: true } });
     const actorName = `${actor?.firstName ?? ''} ${actor?.lastName ?? ''}`.trim();
-    await prisma.notification.create({
-      data: {
-        userId: us.userId,
-        actorId: req.userId,
-        type: 'service_inquiry',
-        title: 'Интерес к услуге',
-        body: `${actorName} заинтересовался услугой «${us.service.name}»`,
-        link: `/services/${us.id}`,
-      },
+    await notify({
+      userId: us.userId,
+      actorId: req.userId,
+      type: 'service_inquiry',
+      title: 'Интерес к услуге',
+      body: `${actorName} заинтересовался услугой «${us.service.name}»`,
+      link: `/services/${us.id}`,
     });
     res.json({ ok: true });
   } catch {
@@ -1139,8 +1144,8 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
             { userServices: { some: { geographies: { some: { nameNorm: { contains: w } } } } } },
             // Custom filter values
             { userServices: { some: { selectedCustomFilterValues: { some: { valueNorm: { contains: w } } } } } },
-            // Collectives
-            { userArtists: { some: { artist: { nameNorm: { contains: w } } } } },
+            // Collectives (confirmed memberships only — not pending requests)
+            { userArtists: { some: { inviteStatus: 'ACCEPTED', artist: { nameNorm: { contains: w } } } } },
           ],
         };
       });
