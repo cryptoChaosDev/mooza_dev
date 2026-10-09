@@ -52,6 +52,7 @@ import orderRoutes from './routes/orders';
 import vacancyRoutes from './routes/vacancies';
 import artistLookupRoutes from './routes/artistLookup';
 import supportRoutes from './routes/support';
+import requestRoutes from './routes/requests';
 import seoRouter from './seo';
 import { seoCacheMiddleware } from './seo/cache';
 import { artistSlugMiddleware, backfillArtistSlugs } from './lib/artistSlug';
@@ -242,6 +243,7 @@ app.use('/api/vacancies', vacancyRoutes);
 app.use('/api/artist-lookup', artistLookupRoutes);
 app.use('/api/support', supportRoutes);
 app.use('/api/lineups', require('./routes/lineups').default); // «Биржа лайнапов»
+app.use('/api/requests', requestRoutes);
 
 // ── Старый OG-эндпоинт профиля ─────────────────────────────────────────────
 // Раньше отдавал HTML с именем/био/аватаром любого пользователя (ПДн без

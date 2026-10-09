@@ -19,6 +19,7 @@ import { useScrollLock } from '../lib/scrollLock';
 import { artistHref } from '../lib/artistUtils';
 import CatalogDemoButton from '../components/CatalogDemoButton';
 import CatalogCardSignals from '../components/CatalogCardSignals';
+import FindMusicianButton from '../components/FindMusicianButton';
 
 type CatalogTab = 'services' | 'artists' | 'people';
 const CATALOG_TABS: CatalogTab[] = ['services', 'artists', 'people'];
@@ -1002,6 +1003,8 @@ export default function SearchPage() {
 
       {/* ── Content ── */}
       <div className="max-w-4xl mx-auto px-4 pb-28">
+        {/* «Ищу музыканта» — над каталогом */}
+        <FindMusicianButton variant="banner" />
 
         {/* ══ УСЛУГИ TAB ══ */}
         {activeTab === 'services' && (

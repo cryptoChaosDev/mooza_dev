@@ -73,6 +73,7 @@ const LineupDetailPage         = lazy(() => import('./pages/LineupDetailPage'));
 const LineupFormPage           = lazy(() => import('./pages/LineupFormPage'));
 const OnboardingPage     = lazy(() => import('./pages/OnboardingPage'));
 const VkSetupPage        = lazy(() => import('./pages/VkSetupPage'));
+const FindMusicianPage   = lazy(() => import('./pages/FindMusicianPage'));
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -249,6 +250,7 @@ function AppRoutes() {
             {/* «Биржа лайнапов» — /lineups/new и /lineups/:id/edit объявлены ниже (RequireAuth) */}
             <Route path="/lineups"          element={<PublicRoute><LineupsPage /></PublicRoute>} />
             <Route path="/lineups/:id"      element={<PublicRoute><LineupDetailPage /></PublicRoute>} />
+            <Route path="/find"            element={<PublicRoute><FindMusicianPage /></PublicRoute>} />
             {/* Legacy «Группы» routes — collapsed into the unified Artist page */}
             <Route path="/groups/create"    element={<Navigate to="/artist/create" replace />} />
             <Route path="/groups/invites"   element={<Navigate to="/" replace />} />
