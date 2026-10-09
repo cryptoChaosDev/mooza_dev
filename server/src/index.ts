@@ -262,15 +262,22 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
     userAgent: req.get('user-agent'),
   });
 
+  // 4xx (multer/fileFilter, body-parser и т.п.) — это ошибка запроса, её текст
+  // нужен пользователю и в production; 5xx — только общий текст.
+  const httpStatus = Number(err.status || err.statusCode) || 500;
+  const isClientError = httpStatus >= 400 && httpStatus < 500;
+
   // В production не показываем детали ошибки
   if (process.env.NODE_ENV === 'production') {
-    res.status(err.status || 500).json({
-      error: 'Внутренняя ошибка сервера',
-      message: 'Произошла непредвиденная ошибка. Пожалуйста, попробуйте позже.',
-    });
+    res.status(httpStatus).json(isClientError
+      ? { error: err.message || 'Некорректный запрос' }
+      : {
+          error: 'Внутренняя ошибка сервера',
+          message: 'Произошла непредвиденная ошибка. Пожалуйста, попробуйте позже.',
+        });
   } else {
     // В development показываем детали для отладки
-    res.status(err.status || 500).json({
+    res.status(httpStatus).json({
       error: err.message || 'Something went wrong',
       stack: err.stack,
       details: err,
