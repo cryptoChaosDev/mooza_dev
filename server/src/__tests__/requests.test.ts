@@ -194,6 +194,13 @@ describe('POST /api/requests', () => {
     expect(mockPrisma.$transaction).toHaveBeenCalled();
   });
 
+  it('описание заказа — текст запроса с сохранёнными переносами строк', async () => {
+    const res = await request(buildApp()).post('/api/requests').set(asUser(ME))
+      .send({ text: '  Нужен барабанщик   на концерт\r\n\r\n\r\nв Самаре  ' });
+    expect(res.status).toBe(201);
+    expect(mockPrisma.order.create.mock.calls[0][0].data.description).toBe('Нужен барабанщик на концерт\n\nв Самаре');
+  });
+
   it('лимит 5 запросов в сутки → 429, заказ не создаётся', async () => {
     mockPrisma.musicianRequest.count.mockResolvedValue(5);
     const res = await request(buildApp()).post('/api/requests').set(asUser(ME)).send({ text: TEXT });

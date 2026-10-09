@@ -794,6 +794,8 @@ function matchAt(toks: Tok[], start: number, e: AliasEntry): boolean {
     if (!tk || tk.used) return false;
     if (k > 0 && tk.breakBefore) return false;
     const w = e.words[k];
+    // Падеж меняет окончание, а не начало: без общих двух первых букв совпадения нет.
+    if (tk.t.charCodeAt(0) !== w.charCodeAt(0) || (w.length > 1 && tk.t.charCodeAt(1) !== w.charCodeAt(1))) return false;
     if (e.exactOnly ? !exactishMatches(tk.t, w) : !wordMatches(tk.t, w)) return false;
   }
   return true;

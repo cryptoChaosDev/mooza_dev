@@ -58,8 +58,16 @@ const createLimiter = rateLimit({
   },
 });
 
+// Текст запроса = описание заказа: переносы строк сохраняем, лишние пробелы схлопываем.
 function readText(v: unknown): string {
-  return typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, MAX_REQUEST_TEXT) : '';
+  if (typeof v !== 'string') return '';
+  return v
+    .replace(/\r\n?/g, '\n')
+    .replace(/[^\S\n]+/g, ' ')
+    .replace(/ *\n */g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .slice(0, MAX_REQUEST_TEXT);
 }
 
 function criteriaFrom(r: AppliedRequest, dict: RequestDictionaries, excludeUserId: string | null): MatchCriteria {

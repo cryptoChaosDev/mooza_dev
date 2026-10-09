@@ -364,6 +364,14 @@ describe('правки поверх разбора и чипы', () => {
     expect(formatBudgetLabel(null, null)).toBeNull();
   });
 
+  it('длинный текст (1000 символов) разбирается быстро', () => {
+    const long = `${'Ищу опытного барабанщика и басиста в метал-группу, репетиции в Самаре, бюджет 10 000. '.repeat(12)}`.slice(0, 1000);
+    const t0 = Date.now();
+    const r = parse(long);
+    expect(Date.now() - t0).toBeLessThan(500);
+    expect(r.professionIds).toContain(pid('Барабанщик'));
+  });
+
   it('длинный заголовок укладывается в 50 символов', () => {
     const r = parse('Технический директор концерта в Петропавловске-Камчатском 20 ноября');
     expect(r.title.length).toBeLessThanOrEqual(50);
