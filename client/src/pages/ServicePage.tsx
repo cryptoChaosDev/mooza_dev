@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, Briefcase, DollarSign, MapPin, MessageCircle,
@@ -19,6 +19,10 @@ import { useAuthGate } from '../components/AuthGateModal';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { useScrollLock } from '../lib/scrollLock';
+import ShareButton from '../components/ShareButton';
+import { personName, personHref } from '../lib/publicPerson';
+import { useSeo, seoTitle, seoDescription, robotsFor } from '../lib/seo';
+import { trackGuestView } from '../lib/metrika';
 
 const STATUS_LABEL: Record<string, string> = {
   active: 'Действующая',
@@ -40,7 +44,7 @@ export default function ServicePage() {
   const showPostDialog = searchParams.get('showPostDialog') === '1';
   const me = useAuthStore(s => s.user);
   const queryClient = useQueryClient();
-  const { ensureAuth, authGateModal } = useAuthGate();
+  const gate = useAuthGate();
 
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
@@ -57,6 +61,19 @@ export default function ServicePage() {
     queryKey: ['user-service', serviceId],
     queryFn: async () => { const { data } = await userAPI.getUserService(serviceId!); return data as any; },
     enabled: !!serviceId,
+    retry: (count, e: any) => e?.response?.status !== 404 && count < 1,
+  });
+
+  useEffect(() => { if (serviceId) trackGuestView('service', serviceId); }, [serviceId]);
+  const seoServiceTitle = us ? (us.name?.trim() || us.service?.name || 'Услуга') : null;
+  const seoProvider = us?.user ? personName(us.user, { fallback: '' }) : '';
+  useSeo({
+    title: us ? seoTitle(seoServiceTitle, [seoProvider, us.user?.city].filter(Boolean).join(', ')) : seoTitle('Услуга'),
+    description: us
+      ? seoDescription(us.description) || seoDescription(`${seoServiceTitle}${seoProvider ? ` — ${seoProvider}` : ''}. Цена и условия на Moooza.`)
+      : null,
+    canonical: `/services/${serviceId}`,
+    robots: robotsFor(us, (us?.status ?? 'active') === 'active'),
   });
 
   // «Подходящие заказы» — открытые заказы по той же каталожной услуге (владельцу).
@@ -150,7 +167,9 @@ export default function ServicePage() {
     ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
     : 'По договорённости';
 
-  const authorName = us.user ? `${us.user.firstName ?? ''} ${us.user.lastName ?? ''}`.trim() : null;
+  const authorName = us.user ? personName(us.user, { fallback: '' }) : null;
+  const authorHref = personHref(us.user);
+  const isGuest = !me;
   const authorAvatar = us.user?.avatar ? getAvatarUrl(us.user.avatar) : null;
 
   const customFilterValues: { filterName: string; values: string[] }[] = [];
@@ -190,13 +209,23 @@ export default function ServicePage() {
           <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full flex-shrink-0 ${STATUS_COLOR[status]}`}>
             {STATUS_LABEL[status]}
           </span>
-          <button
-            onClick={() => setShareOpen(true)}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex-shrink-0"
-            title="Отправить в чат"
-          >
-            <Share2 size={14} />
-          </button>
+          {/* «Поделиться» — без входа; вошедшему — «Отправить в чат» */}
+          {isGuest ? (
+            <ShareButton
+              url={`/services/${us.id}`}
+              title={`${us.name?.trim() || us.service?.name || 'Услуга'} — Moooza`}
+              iconSize={14}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex-shrink-0"
+            />
+          ) : (
+            <button
+              onClick={() => setShareOpen(true)}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-all flex-shrink-0"
+              title="Отправить в чат"
+            >
+              <Share2 size={14} />
+            </button>
+          )}
           {isOwner && (
             <button
               onClick={() => {
@@ -232,8 +261,8 @@ export default function ServicePage() {
         )}
 
         {/* Автор (для гостей) — компактной строкой под шапкой */}
-        {us.user && !isOwner && (
-          <button onClick={() => navigate(`/profile/${us.user.id}`)} className="flex items-center gap-2.5 min-w-0 text-left -mt-1">
+        {us.user && !isOwner && authorHref && (
+          <Link to={authorHref} className="flex items-center gap-2.5 min-w-0 w-fit text-left -mt-1">
             <div className="w-7 h-7 rounded-full overflow-hidden bg-slate-800 flex-shrink-0">
               {authorAvatar
                 ? <img src={authorAvatar} alt={authorName ?? ''} className="w-full h-full object-cover" />
@@ -243,7 +272,7 @@ export default function ServicePage() {
             <span className="text-xs text-slate-400 hover:text-white transition-colors truncate">
               {authorName}{us.user.nickname ? ` · @${us.user.nickname}` : ''}
             </span>
-          </button>
+          </Link>
         )}
 
         {/* Main card */}
@@ -419,7 +448,7 @@ export default function ServicePage() {
         {!isOwner && us.user && (
           <div className="space-y-2">
             <button
-              onClick={() => ensureAuth(() => { setCustomText(''); setShowTemplates(true); })}
+              onClick={() => gate.ensure('message', { type: 'service' }, () => { setCustomText(''); setShowTemplates(true); })}
               disabled={writingMessage}
               className="w-full py-3.5 flex items-center justify-center gap-2 text-sm font-semibold bg-primary-600 hover:bg-primary-500 active:bg-primary-700 disabled:opacity-60 text-white rounded-2xl transition-colors"
             >
@@ -428,7 +457,7 @@ export default function ServicePage() {
             </button>
             {DEALS_ENABLED && (
               <button
-                onClick={() => ensureAuth(() => setShowDeal(true))}
+                onClick={() => gate.ensure('deal', { type: 'service' }, () => setShowDeal(true))}
                 className="w-full py-3.5 flex items-center justify-center gap-2 text-sm font-medium border border-primary-500/40 text-primary-300 hover:bg-primary-600/10 rounded-2xl transition-colors"
               >
                 <HandshakeIcon size={16} />
@@ -450,7 +479,7 @@ export default function ServicePage() {
         />
       )}
 
-      {authGateModal}
+
 
       {/* First-message template chooser (bottom sheet) */}
       {showTemplates && createPortal(

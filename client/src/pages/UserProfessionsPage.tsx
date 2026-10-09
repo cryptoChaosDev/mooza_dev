@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, GraduationCap, Plus } from 'lucide-react';
 import { userAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import { useSeo, seoTitle, ROBOTS_NOINDEX_FOLLOW } from '../lib/seo';
 
 /**
  * Все профессии пользователя — /profile/:userId/professions.
@@ -11,6 +12,8 @@ import { useAuthStore } from '../stores/authStore';
  */
 export default function UserProfessionsPage() {
   const { userId } = useParams<{ userId: string }>();
+  // Подстраницы профиля — noindex,follow (план, раздел A).
+  useSeo({ title: seoTitle('Профессии'), robots: ROBOTS_NOINDEX_FOLLOW });
   const navigate = useNavigate();
   const me = useAuthStore(s => s.user);
   const isOwner = !!me?.id && me.id === userId;

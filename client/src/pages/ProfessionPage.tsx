@@ -5,6 +5,7 @@ import { ArrowLeft, GraduationCap, Pencil, Trash2, Loader2, Briefcase } from 'lu
 import { userAPI } from '../lib/api';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
 import { useAuthStore } from '../stores/authStore';
+import { useSeo, seoTitle, ROBOTS_NOINDEX_FOLLOW } from '../lib/seo';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -19,6 +20,8 @@ import GroupedFilterChips from '../components/GroupedFilterChips';
  */
 export default function ProfessionPage() {
   const { userId, professionId } = useParams<{ userId: string; professionId: string }>();
+  // Подстраницы профиля — noindex,follow (план, раздел A).
+  useSeo({ title: seoTitle('Профессия'), robots: ROBOTS_NOINDEX_FOLLOW });
   const navigate = useNavigate();
   const qc = useQueryClient();
   const me = useAuthStore(s => s.user);

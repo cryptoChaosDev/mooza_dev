@@ -12,6 +12,12 @@ import Toaster from './components/Toaster';
 import { IS_TMA, initTelegramApp, twa } from './lib/telegram';
 import { authAPI, messageAPI, userAPI } from './lib/api';
 import { subscribePush } from './lib/push';
+import { RequireAuth, PublicRoute, GuestOnly } from './components/RouteGuards';
+import { AuthGateHost } from './components/AuthGateModal';
+import { takeReturnToast } from './lib/authReturn';
+import { reachGoal, setVisitParams } from './lib/metrika';
+import { toast } from './stores/toastStore';
+import NotFoundPage from './pages/NotFoundPage';
 
 
 const LandingPage        = lazy(() => import('./pages/LandingPage'));
@@ -170,74 +176,122 @@ function TelegramBackButton() {
   return null;
 }
 
+// ─── Тост «Теперь можно …» после возврата с экрана входа ──────────────────────
+// Возврат на страницу действия — consumeReturnTo() (lib/authReturn); само
+// действие повторно не выполняется, пользователь видит подсказку.
+function ReturnToast() {
+  const location = useLocation();
+  const token = useAuthStore((s) => s.token);
+  useEffect(() => {
+    if (!token) return;
+    const msg = takeReturnToast(location.pathname);
+    if (msg) toast.success(msg);
+  }, [location.pathname, token]);
+  return null;
+}
+
+// /admin — только администратору; остальным — как несуществующая страница.
+function AdminRoute() {
+  const user = useAuthStore((s) => s.user);
+  if (!user?.isAdmin) return <NotFoundPage />;
+  return <AdminPage />;
+}
+
+// /register у вошедшего — только экран принятия приглашения в артиста.
+const registerAllowedWhenAuthed = (sp: URLSearchParams) => sp.has('artistInvite');
+
+/**
+ * Единое дерево маршрутов для гостя и вошедшего (план, раздел A). Уровень
+ * доступа задаётся обёрткой маршрута: PublicRoute (гостю — урезанный вид, если
+ * включён guestBrowsingEnabled), RequireAuth (экран «Войдите, чтобы…» с
+ * возвратом после входа), GuestOnly (вход/регистрация/сброс пароля).
+ *
+ * Раньше было два дерева (`if (!token)` + AppRoutes), и Register/Login, вызывая
+ * setAuth() + navigate() синхронно, попадали в гонку: роутер разрешал адрес
+ * раньше, чем React перерисовывал дерево с новым токеном, и /onboarding или
+ * /vk-setup проваливались в catch-all на ленту — поэтому их дублировали в
+ * гостевом дереве. Теперь дерево одно: маршрут существует при любом токене,
+ * а RequireAuth читает тот же стор, обновлённый в том же батче рендера.
+ */
 function AppRoutes() {
-  const { user } = useAuthStore();
+  const token = useAuthStore((s) => s.token);
   return (
     <Layout>
-      <BadgeClearer />
+      {token && <BadgeClearer />}
       {IS_TMA && <TelegramBackButton />}
+      <ReturnToast />
         <Suspense fallback={<PageLoader />}>
           <Routes>
-            <Route path="/"                 element={<FeedPage />} />
+            {/* Публичные */}
+            <Route path="/"                 element={token ? <FeedPage /> : <LandingPage />} />
             <Route path="/feed"             element={<FeedPage />} />
-            <Route path="/profile"          element={<ProfilePage />} />
-            <Route path="/settings/privacy" element={<PrivacySettingsPage />} />
-            <Route path="/profile/:userId"  element={<UserProfilePage />} />
-            <Route path="/artist/create"     element={<ArtistCreatePage />} />
-            <Route path="/artist/:id"       element={<ArtistPage />} />
-            <Route path="/artist/:id/edit"  element={<ArtistEditPage />} />
-            <Route path="/artist/:id/releases/new" element={<ArtistMediaFormPage kind="release" />} />
-            <Route path="/artist/:id/clips/new"    element={<ArtistMediaFormPage kind="clip" />} />
-            <Route path="/artist/:id/vacancies/new" element={<ArtistVacancyNewPage />} />
-            <Route path="/artist/:id/members/add"  element={<ArtistMemberAddPage />} />
-            <Route path="/artist/:id/invite"       element={<ArtistInvitePage />} />
-            <Route path="/artist/:id/contacts"     element={<ArtistContactsPage />} />
-            <Route path="/artist/:id/genres"       element={<ArtistGenresPage />} />
-            <Route path="/releases/:id"     element={<ReleasePage />} />
-            <Route path="/clips/:id"        element={<ClipPage />} />
+            <Route path="/privacy"          element={<PrivacyPolicyPage />} />
+            <Route path="/terms"            element={<TermsPage />} />
+
+            {/* Публичные с урезанным гостевым видом (гейт guestBrowsingEnabled) */}
+            <Route path="/flow-settings"    element={<PublicRoute><FlowSettingsPage /></PublicRoute>} />
+            <Route path="/search"           element={<PublicRoute><SearchPage /></PublicRoute>} />
+            <Route path="/profile/:userId"  element={<PublicRoute><UserProfilePage /></PublicRoute>} />
+            <Route path="/profile/:userId/professions" element={<PublicRoute><UserProfessionsPage /></PublicRoute>} />
+            <Route path="/profile/:userId/services" element={<PublicRoute><ServicesPage /></PublicRoute>} />
+            <Route path="/profile/:userId/reviews" element={<PublicRoute><ReviewsPage /></PublicRoute>} />
+            <Route path="/professions/:userId/:professionId" element={<PublicRoute><ProfessionPage /></PublicRoute>} />
+            <Route path="/artist/:id"       element={<PublicRoute><ArtistPage /></PublicRoute>} />
+            <Route path="/releases/:id"     element={<PublicRoute><ReleasePage /></PublicRoute>} />
+            <Route path="/clips/:id"        element={<PublicRoute><ClipPage /></PublicRoute>} />
+            <Route path="/services/:serviceId" element={<PublicRoute><ServicePage /></PublicRoute>} />
+            <Route path="/orders/:orderId" element={<PublicRoute><OrderDetailPage /></PublicRoute>} />
+            <Route path="/vacancies/:vacancyId" element={<PublicRoute><VacancyDetailPage /></PublicRoute>} />
             {/* Legacy «Группы» routes — collapsed into the unified Artist page */}
             <Route path="/groups/create"    element={<Navigate to="/artist/create" replace />} />
             <Route path="/groups/invites"   element={<Navigate to="/" replace />} />
             <Route path="/groups/:id"       element={<GroupRedirect />} />
-            <Route path="/search"           element={<SearchPage />} />
-            <Route path="/friends"          element={<FriendsPage />} />
-            <Route path="/messages"         element={<MessagesPage />} />
-            <Route path="/messages/:id"     element={<ChatPage />} />
-            <Route path="/chat/:id"         element={<ChatPage />} />
-            <Route path="/flow-settings"    element={<FlowSettingsPage />} />
-            <Route path="/create-post"      element={<CreatePostPage />} />
-            <Route path="/invite"           element={<InvitePage />} />
-            <Route path="/pro"              element={<ProPage />} />
-            <Route path="/onboarding"       element={<OnboardingPage />} />
-            <Route path="/vk-setup"         element={<VkSetupPage />} />
-            {/* Logged-in visitors who open an artist invite link land here too;
-                RegisterPage shows an accept screen (or bounces home if no invite). */}
-            <Route path="/register"         element={<RegisterPage />} />
-            <Route path="/services/new" element={<ServiceFormPage />} />
-            <Route path="/services/edit/:serviceId" element={<ServiceFormPage />} />
-            <Route path="/services/:serviceId" element={<ServicePage />} />
-            <Route path="/professions/new" element={<ProfessionFormPage />} />
-            <Route path="/professions/edit/:professionId" element={<ProfessionFormPage />} />
-            <Route path="/professions/:userId/:professionId" element={<ProfessionPage />} />
-            <Route path="/profile/:userId/professions" element={<UserProfessionsPage />} />
-            <Route path="/profile/:userId/services" element={<ServicesPage />} />
-            <Route path="/profile/:userId/connections" element={<ConnectionsPage />} />
-            <Route path="/profile/:userId/reviews" element={<ReviewsPage />} />
-            <Route path="/friends/requests" element={<FriendRequestsPage />} />
-            <Route path="/connections/requests" element={<ConnectionRequestsPage />} />
-            <Route path="/connection/:partnerId" element={<ConnectionPage />} />
-            <Route path="/deals" element={<DealsPage />} />
-            <Route path="/deals/:dealId" element={<DealPage />} />
-            <Route path="/orders" element={<OrdersPage />} />
-            <Route path="/orders/new" element={<OrderFormPage />} />
-            <Route path="/orders/edit/:orderId" element={<OrderFormPage />} />
-            <Route path="/orders/:orderId" element={<OrderDetailPage />} />
-            <Route path="/artists/:artistId/vacancies" element={<VacanciesPage />} />
-            <Route path="/vacancies/:vacancyId" element={<VacancyDetailPage />} />
-            <Route path="/privacy"          element={<PrivacyPolicyPage />} />
-            <Route path="/terms"            element={<TermsPage />} />
-            {user?.isAdmin && <Route path="/admin" element={<AdminPage />} />}
-            <Route path="*"                 element={<Navigate to="/" replace />} />
+
+            {/* Только для гостя */}
+            <Route path="/login"            element={<GuestOnly><LoginPage /></GuestOnly>} />
+            {/* Вошедший, открывший ссылку-приглашение в артиста, попадает сюда же:
+                RegisterPage показывает экран принятия приглашения. */}
+            <Route path="/register"         element={<GuestOnly allowAuthed={registerAllowedWhenAuthed}><RegisterPage /></GuestOnly>} />
+            <Route path="/forgot-password"  element={<GuestOnly><ForgotPasswordPage /></GuestOnly>} />
+
+            {/* Приватные */}
+            <Route path="/profile"          element={<RequireAuth><ProfilePage /></RequireAuth>} />
+            <Route path="/settings/privacy" element={<RequireAuth><PrivacySettingsPage /></RequireAuth>} />
+            <Route path="/artist/create"     element={<RequireAuth reason="create"><ArtistCreatePage /></RequireAuth>} />
+            <Route path="/artist/:id/edit"  element={<RequireAuth><ArtistEditPage /></RequireAuth>} />
+            <Route path="/artist/:id/releases/new" element={<RequireAuth><ArtistMediaFormPage kind="release" /></RequireAuth>} />
+            <Route path="/artist/:id/clips/new"    element={<RequireAuth><ArtistMediaFormPage kind="clip" /></RequireAuth>} />
+            <Route path="/artist/:id/vacancies/new" element={<RequireAuth><ArtistVacancyNewPage /></RequireAuth>} />
+            <Route path="/artist/:id/members/add"  element={<RequireAuth><ArtistMemberAddPage /></RequireAuth>} />
+            <Route path="/artist/:id/invite"       element={<RequireAuth><ArtistInvitePage /></RequireAuth>} />
+            <Route path="/artist/:id/contacts"     element={<RequireAuth><ArtistContactsPage /></RequireAuth>} />
+            <Route path="/artist/:id/genres"       element={<RequireAuth><ArtistGenresPage /></RequireAuth>} />
+            <Route path="/artists/:artistId/vacancies" element={<RequireAuth><VacanciesPage /></RequireAuth>} />
+            <Route path="/friends"          element={<RequireAuth><FriendsPage /></RequireAuth>} />
+            <Route path="/friends/requests" element={<RequireAuth><FriendRequestsPage /></RequireAuth>} />
+            <Route path="/messages"         element={<RequireAuth reason="message"><MessagesPage /></RequireAuth>} />
+            <Route path="/messages/:id"     element={<RequireAuth reason="message"><ChatPage /></RequireAuth>} />
+            <Route path="/chat/:id"         element={<RequireAuth reason="message"><ChatPage /></RequireAuth>} />
+            <Route path="/create-post"      element={<RequireAuth reason="create"><CreatePostPage /></RequireAuth>} />
+            <Route path="/invite"           element={<RequireAuth><InvitePage /></RequireAuth>} />
+            <Route path="/pro"              element={<RequireAuth><ProPage /></RequireAuth>} />
+            <Route path="/onboarding"       element={<RequireAuth><OnboardingPage /></RequireAuth>} />
+            <Route path="/vk-setup"         element={<RequireAuth><VkSetupPage /></RequireAuth>} />
+            <Route path="/services/new" element={<RequireAuth reason="create"><ServiceFormPage /></RequireAuth>} />
+            <Route path="/services/edit/:serviceId" element={<RequireAuth><ServiceFormPage /></RequireAuth>} />
+            <Route path="/professions/new" element={<RequireAuth><ProfessionFormPage /></RequireAuth>} />
+            <Route path="/professions/edit/:professionId" element={<RequireAuth><ProfessionFormPage /></RequireAuth>} />
+            <Route path="/profile/:userId/connections" element={<RequireAuth><ConnectionsPage /></RequireAuth>} />
+            <Route path="/connections/requests" element={<RequireAuth><ConnectionRequestsPage /></RequireAuth>} />
+            <Route path="/connection/:partnerId" element={<RequireAuth reason="connect"><ConnectionPage /></RequireAuth>} />
+            <Route path="/deals" element={<RequireAuth reason="deal"><DealsPage /></RequireAuth>} />
+            <Route path="/deals/:dealId" element={<RequireAuth reason="deal"><DealPage /></RequireAuth>} />
+            <Route path="/orders" element={<RequireAuth><OrdersPage /></RequireAuth>} />
+            <Route path="/orders/new" element={<RequireAuth reason="create"><OrderFormPage /></RequireAuth>} />
+            <Route path="/orders/edit/:orderId" element={<RequireAuth><OrderFormPage /></RequireAuth>} />
+            <Route path="/admin"            element={<RequireAuth><AdminRoute /></RequireAuth>} />
+
+            <Route path="*"                 element={<NotFoundPage />} />
           </Routes>
         </Suspense>
     </Layout>
@@ -253,7 +307,8 @@ function TelegramAutoLogin({ onDone }: { onDone: () => void }) {
     initTelegramApp();
     const initData = twa()?.initData || '';
     authAPI.telegramMiniApp(initData)
-      .then(({ data }) => { setAuth(data.user, data.token); onDone(); })
+      // Автологин Mini App остаётся на открытом адресе (диплинк) — возврат не нужен.
+      .then(({ data }) => { setAuth(data.user, data.token); reachGoal('login_success', { source: 'telegram_miniapp' }); onDone(); })
       .catch(() => setError('Не удалось войти через Telegram'));
   }, []);
 
@@ -282,6 +337,11 @@ function App() {
   // Initialize TG SDK for already-authenticated users
   useEffect(() => {
     if (IS_TMA && token) initTelegramApp();
+  }, [token]);
+
+  // Метрика: параметр визита guest:true/false (план, раздел B).
+  useEffect(() => {
+    setVisitParams({ guest: !token });
   }, [token]);
 
   // Refresh the cached user from the server on load, so changes made elsewhere
@@ -516,36 +576,10 @@ function App() {
     return <TelegramAutoLogin onDone={() => setTmaLoading(false)} />;
   }
 
-  if (!token) {
-    return (
-      <ErrorBoundary>
-        <Suspense fallback={<PageLoader />}>
-          <Routes>
-            <Route path="/"         element={<LandingPage />} />
-            <Route path="/feed"     element={<FeedPage />} />
-            <Route path="/login"    element={<LoginPage />} />
-            <Route path="/register"        element={<RegisterPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-            <Route path="/privacy"  element={<PrivacyPolicyPage />} />
-            <Route path="/terms"    element={<TermsPage />} />
-            {/* /onboarding and /vk-setup must be available in the unauthenticated tree too:
-                Register/Login call setAuth() + navigate() synchronously, and the router
-                resolves the route before React re-renders with the new token. Without these
-                entries the navigation falls through to the catch-all and lands on the feed. */}
-            <Route path="/onboarding" element={<OnboardingPage />} />
-            <Route path="/vk-setup"   element={<VkSetupPage />} />
-            <Route path="*"         element={<Navigate to="/" replace />} />
-          </Routes>
-        </Suspense>
-        <CookieConsent />
-        <Toaster />
-      </ErrorBoundary>
-    );
-  }
-
   return (
     <ErrorBoundary>
       <AppRoutes />
+      <AuthGateHost />
       <CookieConsent />
       <Toaster />
     </ErrorBoundary>

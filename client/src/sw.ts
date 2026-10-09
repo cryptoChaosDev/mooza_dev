@@ -14,6 +14,13 @@ clientsClaim();
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
+// ВАЖНО (гостевой режим + SEO-снимки, docs/public-access-plan.md, раздел B):
+// навигации НЕ кэшируем и NavigationRoute/createHandlerBoundToURL('/index.html')
+// НЕ добавляем. HTML страницы всегда идёт с сервера: гость и робот получают
+// серверный снимок, вошедший — свежий index.html с актуальными хешами. Кэш
+// навигаций отдал бы гостевой снимок после входа (или вошедшую оболочку гостю)
+// и старый HTML после деплоя. index.html и так исключён из precache (vite.config.ts).
+
 // ── Push notifications ────────────────────────────────────────────────────────
 
 self.addEventListener('push', (event) => {

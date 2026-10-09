@@ -7,8 +7,10 @@ import {
   ArrowDownUp,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
+import { useSeo, seoTitle } from '../lib/seo';
+import { trackGuestView } from '../lib/metrika';
 import { usePresenceStore } from '../stores/presenceStore';
 import { api, referenceAPI, artistAPI, favoriteAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
@@ -16,6 +18,14 @@ import { plural } from '../lib/plural';
 import { useScrollLock } from '../lib/scrollLock';
 
 type CatalogTab = 'services' | 'artists' | 'people';
+const CATALOG_TABS: CatalogTab[] = ['services', 'artists', 'people'];
+const isCatalogTab = (v: string | null): v is CatalogTab => !!v && (CATALOG_TABS as string[]).includes(v);
+
+const TAB_SEO: Record<CatalogTab, { title: string; description: string }> = {
+  services: { title: 'Услуги музыкантов и специалистов индустрии', description: 'Каталог услуг Moooza: запись, сведение, аранжировка, выступления, обучение и другие услуги музыкантов с ценами и отзывами.' },
+  artists: { title: 'Артисты и группы', description: 'Каталог артистов и групп на Moooza: составы, жанры, релизы и клипы.' },
+  people: { title: 'Музыканты и специалисты', description: 'Музыканты, звукорежиссёры, продюсеры и другие специалисты музыкальной индустрии на Moooza.' },
+};
 
 // Страница выдачи каталога (услуги / люди): сервер отдаёт по 20 и общий счётчик.
 const CATALOG_PAGE_SIZE = 20;
@@ -67,8 +77,12 @@ function ShowMoreButton({ loading, onClick }: { loading: boolean; onClick: () =>
 // `user` is a flat user object (People tab / userAPI.catalog).
 // `searchProfile` is the optional searchMusicians payload that carries
 // professions/services for the "Каталог" tab result cards.
-function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; searchProfile?: any; onNavigate: (id: string) => void }) {
+function ExpandableUserRow({ user, searchProfile }: { user: any; searchProfile?: any }) {
   const [expanded, setExpanded] = useState(false);
+  const routerLocation = useLocation();
+  // <Link>, а не onClick-navigate: ссылка видна краулеру и открывается в новой вкладке.
+  const profileTo = `/profile/${user.id}`;
+  const linkState = { from: routerLocation.pathname };
   const isOnline = usePresenceStore((s) => s.onlineUsers.has(user.id));
   // Connections: catalog now returns a flat `connectionsCount`; fall back to _count.
   const connCount = user.connectionsCount
@@ -91,18 +105,19 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
       {/* ── Collapsed row (always visible) ── */}
       <div className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/30 transition-colors">
         {/* Avatar — click navigates to profile */}
-        <div
+        <Link
+          to={profileTo}
+          state={linkState}
           className="relative flex-shrink-0 cursor-pointer"
-          onClick={() => onNavigate(user.id)}
         >
           <AvatarComponent src={user.avatar} name={`${user.lastName ?? ''} ${user.firstName ?? ''}`} size={44} className="rounded-xl" />
           {isOnline && (
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-slate-950 rounded-full" />
           )}
-        </div>
+        </Link>
 
         {/* Info — click navigates to profile. Surname first per spec. */}
-        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => onNavigate(user.id)}>
+        <Link to={profileTo} state={linkState} className="flex-1 min-w-0 cursor-pointer">
           <div className="flex items-center gap-1.5 flex-wrap">
             <span className="text-sm font-semibold text-white min-w-0 break-words [overflow-wrap:anywhere]">
               {user.lastName} {user.firstName}
@@ -120,7 +135,7 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
               {connCount} {plural(connCount, 'связь', 'связи', 'связей')}
             </span>
           </div>
-        </div>
+        </Link>
 
         {/* Expand toggle — a visible bordered pill (a bare chevron read as non-clickable) */}
         <button
@@ -178,12 +193,13 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
           </div>
 
           {/* Перейти в профиль */}
-          <button
-            onClick={() => onNavigate(user.id)}
-            className="w-full mt-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors"
+          <Link
+            to={profileTo}
+            state={linkState}
+            className="block text-center w-full mt-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white rounded-xl text-sm font-semibold transition-colors"
           >
             Перейти в профиль
-          </button>
+          </Link>
         </div>
       )}
     </div>
@@ -196,8 +212,32 @@ export default function SearchPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user: currentUser } = useAuthStore();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState<CatalogTab>('services');
+  // Вкладка — в адресе (?tab=…): у каждой вкладки свой индексируемый URL (план, раздел A).
+  const [activeTab, setActiveTabState] = useState<CatalogTab>(() => {
+    const t = searchParams.get('tab');
+    return isCatalogTab(t) ? t : 'services';
+  });
+  const setActiveTab = (tab: CatalogTab) => {
+    setActiveTabState(tab);
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (tab === 'services') next.delete('tab'); else next.set('tab', tab);
+      return next;
+    }, { replace: true });
+  };
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    const urlTab: CatalogTab = isCatalogTab(t) ? t : 'services';
+    setActiveTabState((cur) => (cur === urlTab ? cur : urlTab));
+  }, [searchParams]);
+  useEffect(() => { trackGuestView('catalog'); }, []);
+  useSeo({
+    title: seoTitle(TAB_SEO[activeTab].title, 'каталог'),
+    description: TAB_SEO[activeTab].description,
+    canonical: activeTab === 'services' ? '/search' : `/search?tab=${activeTab}`,
+  });
   // Звёздочка «Избранное» — на вкладках «Артисты»/«Люди» показывает избранные (подписки/favorites)
   const [showFavorites, setShowFavorites] = useState(false);
 
@@ -584,7 +624,8 @@ export default function SearchPage() {
           <div className="flex items-center gap-2">
             <Search size={20} className="text-primary-400 flex-shrink-0" />
             <h2 className="text-lg font-bold text-white">Каталог</h2>
-            {activeTab !== 'services' && (
+            {/* «Избранное» — личный список, гостю не показываем */}
+            {activeTab !== 'services' && !!currentUser && (
               <button
                 onClick={() => setShowFavorites((s) => !s)}
                 className={`ml-auto flex items-center px-2.5 py-1.5 rounded-xl transition-colors ${showFavorites ? 'text-amber-300 bg-amber-500/10' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
@@ -1039,10 +1080,14 @@ export default function SearchPage() {
                     } else if (card.priceTo != null) {
                       priceLabel = `до ${Number(card.priceTo).toLocaleString('ru-RU')} ₽`;
                     }
+                    // <Link> — ссылка на услугу видна краулеру (фолбэк — профиль исполнителя).
+                    const cardHref = card?.id ? `/services/${card.id}` : cardUser?.id ? `/profile/${cardUser.id}` : null;
+                    if (!cardHref) return null;
                     return (
-                      <button
+                      <Link
                         key={card.id}
-                        onClick={() => handleNavigateToServiceCard(card)}
+                        to={cardHref}
+                        state={{ from: location.pathname }}
                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors text-left"
                       >
                         <AvatarComponent
@@ -1073,7 +1118,7 @@ export default function SearchPage() {
                         </div>
                         <span className="text-xs font-semibold text-primary-300 flex-shrink-0 whitespace-nowrap">{priceLabel}</span>
                         <ChevronRight size={16} className="text-slate-600 flex-shrink-0" />
-                      </button>
+                      </Link>
                     );
                   })}
                 </div>
@@ -1147,9 +1192,10 @@ export default function SearchPage() {
                     const genreNames = artist.genres?.map((g: any) => g.genre?.name).filter(Boolean).slice(0, 3) ?? [];
                     const typeLabel = artist.type === 'SOLO' ? 'Соло' : artist.type === 'GROUP' ? 'Группа' : artist.type === 'COVER_GROUP' ? 'Кавербэнд' : '';
                     return (
-                      <button
+                      <Link
                         key={artist.id}
-                        onClick={() => handleNavigateToArtist(artist.id)}
+                        to={`/artist/${artist.id}`}
+                        state={{ from: location.pathname }}
                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors text-left"
                       >
                         <AvatarComponent src={artist.avatar} name={artist.name} size={44} className="rounded-xl flex-shrink-0" />
@@ -1177,7 +1223,7 @@ export default function SearchPage() {
                           </div>
                         </div>
                         <ChevronRight size={16} className="text-slate-600 flex-shrink-0" />
-                      </button>
+                      </Link>
                     );
                   })}
                 </div>
@@ -1221,7 +1267,6 @@ export default function SearchPage() {
                   <ExpandableUserRow
                     key={user.id}
                     user={user}
-                    onNavigate={handleNavigateToProfile}
                   />
                 ))}
               </div>

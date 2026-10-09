@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowLeft, MapPin, MessageCircle,
@@ -7,7 +7,7 @@ import {
   Headphones, FileText, FileSpreadsheet, FileArchive, Download, Briefcase, GraduationCap,
   Link2, Star, UserPlus, UserCheck, UserX, Clock, Music2, UserRound,
   Globe, ChevronRight, Flag, Phone, Calendar,
-  MoreHorizontal, Share2, Check,
+  MoreHorizontal, Share2, Check, Eye, Lock,
 } from 'lucide-react';
 import { userAPI, connectionAPI, favoriteAPI, friendshipAPI } from '../lib/api';
 import { DEALS_ENABLED } from '../lib/features';
@@ -29,6 +29,9 @@ import { usePresenceStore } from '../stores/presenceStore';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { canPreviewInline, openInNewTab } from '../lib/docPreview';
+import { useAuthGate, AuthGatePanel } from '../components/AuthGateModal';
+import { useSeo, seoTitle, seoDescription, robotsFor } from '../lib/seo';
+import { trackGuestView } from '../lib/metrika';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -65,6 +68,12 @@ export default function UserProfilePage() {
   const queryClient = useQueryClient();
   const me = useAuthStore(s => s.user);
   const onlineUsers = usePresenceStore(s => s.onlineUsers);
+  const gate = useAuthGate();
+  const [searchParams] = useSearchParams();
+  // «Как видят гости» (карточка в своём профиле): ?as=guest на своём профиле
+  // рендерит гостевой вид своими данными — без контактов и всего, что скрыто гостю.
+  const asGuest = searchParams.get('as') === 'guest' && !!me && me.id === userId;
+  const isGuestView = !me || asGuest;
 
   const [showConnModal, setShowConnModal] = useState(false);
   const [viewConn, setViewConn] = useState<any>(null);
@@ -80,12 +89,29 @@ export default function UserProfilePage() {
     queryKey: ['user', userId],
     queryFn: async () => { const { data } = await userAPI.getUser(userId!); return data; },
     enabled: !!userId,
+    // 404 (нет согласия / заблокирован / не существует) — окончательный ответ.
+    retry: (count, e: any) => e?.response?.status !== 404 && count < 1,
   });
 
+  // Связи — приватный запрос; гостю список связей не показываем (план, раздел A).
   const { data: userConnections = [] } = useQuery({
     queryKey: ['user-connections', userId],
     queryFn: async () => { const { data } = await connectionAPI.getUserConnections(userId!); return data; },
-    enabled: !!userId,
+    enabled: !!userId && !!me,
+  });
+
+  useEffect(() => { if (userId) trackGuestView('profile', userId); }, [userId]);
+
+  const seoName = user ? `${user.firstName ?? ''} ${user.lastName ?? ''}`.trim() || user.displayName : null;
+  const seoProfession = user?.userProfessions?.[0]?.profession?.name ?? null;
+  useSeo({
+    title: user ? seoTitle(seoName, [seoProfession, user.city].filter(Boolean).join(', ')) : seoTitle('Профиль'),
+    description: user
+      ? seoDescription(user.bio) || seoDescription(`${seoName}${seoProfession ? ` — ${seoProfession}` : ''}${user.city ? `, ${user.city}` : ''}. Профиль на Moooza.`)
+      : null,
+    canonical: `/profile/${userId}`,
+    // Индексируется только настоящий гостевой ответ; заглушка и предпросмотр — нет.
+    robots: robotsFor(user, !asGuest && !user?.searchIndexingOptOut),
   });
 
   const { data: conn } = useQuery({
@@ -182,6 +208,22 @@ export default function UserProfilePage() {
   }
 
   if (!user) {
+    // Гостю — одна и та же заглушка для «нет согласия», «заблокирован» и «нет
+    // такого»: сервер отвечает одинаковым 404, наличие аккаунта не раскрываем.
+    if (!me) {
+      return (
+        <div className="min-h-[70vh] flex items-center justify-center px-4 py-10">
+          <div className="w-full max-w-sm bg-slate-900/80 border border-slate-800 rounded-3xl shadow-xl overflow-hidden">
+            <div className="flex justify-center pt-7">
+              <div className="w-12 h-12 rounded-2xl bg-primary-500/15 border border-primary-500/30 flex items-center justify-center">
+                <Lock size={22} className="text-primary-400" />
+              </div>
+            </div>
+            <AuthGatePanel reason="page" text="Профиль доступен после входа" variant="page" />
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col items-center justify-center min-h-screen min-h-[100dvh] bg-slate-950 gap-3">
         <p className="text-slate-400 text-sm">Пользователь не найден</p>
@@ -205,7 +247,14 @@ export default function UserProfilePage() {
   const hasContactLinks = CONTACT_KEYS.some(k => socialLinksMap[k]);
   const hasSocialNetworkLinks = SOCIAL_KEYS.some(k => socialLinksMap[k]);
   const bUrl = user.bannerImage ? getAvatarUrl(user.bannerImage) : null;
-  const isMe = me?.id === user.id;
+  const isMe = me?.id === user.id && !asGuest;
+  // Гостю сервер вместо контактов отдаёт флаг contactsAvailable; в предпросмотре
+  // «как видят гости» считаем его по своим данным.
+  const guestContactsAvailable: boolean = asGuest || user.contactsAvailable === undefined
+    ? hasContactLinks || hasSocialNetworkLinks
+    : !!user.contactsAvailable;
+  // Предпросмотр своего гостевого вида — кнопки только показываем.
+  const previewOnly = () => toast.info('Так кнопки видят гости — действие откроет вход');
 
   return (
     <>
@@ -219,6 +268,20 @@ export default function UserProfilePage() {
       )}
 
       <div className="max-w-2xl mx-auto pb-28">
+
+        {/* ── Предпросмотр «Как видят гости» ── */}
+        {asGuest && (
+          <div className="mx-4 mt-3 mb-1 p-3 rounded-2xl bg-primary-500/10 border border-primary-500/30 flex items-start gap-2.5">
+            <Eye size={16} className="text-primary-300 flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0 text-xs text-slate-300 leading-relaxed">
+              <p className="text-sm font-semibold text-white mb-0.5">Так ваш профиль видят гости</p>
+              {me?.publicConsentAt
+                ? <p>Контакты, дата рождения, онлайн-статус и связи гостям не показываются.</p>
+                : <p>Сейчас профиль не публичный: гости видят заглушку «Профиль доступен после входа». Сделать его публичным можно в карточке профиля.</p>}
+            </div>
+            <Link to="/profile" className="text-xs text-primary-300 hover:text-white font-semibold flex-shrink-0">Выйти</Link>
+          </div>
+        )}
 
         {/* ── HERO ── */}
         <div className="relative">
@@ -269,7 +332,7 @@ export default function UserProfilePage() {
                 {[user.city, user.country].filter(Boolean).join(', ')}
               </span>
             )}
-            {user.birthDate && (() => {
+            {!isGuestView && user.birthDate && (() => {
               const age = Math.floor((Date.now() - new Date(user.birthDate).getTime()) / (365.25 * 24 * 3600 * 1000));
               return (
                 <span className="flex items-center gap-1">
@@ -278,14 +341,14 @@ export default function UserProfilePage() {
                 </span>
               );
             })()}
-            {!isMe && (
+            {!isMe && !isGuestView && (
               onlineUsers.has(user.id)
                 ? <span className="flex items-center gap-1 text-emerald-400 text-xs"><span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />В сети</span>
                 : user.lastSeenAt
                   ? <span className="text-xs text-slate-600">{formatLastSeen(user.lastSeenAt)}</span>
                   : null
             )}
-            {!isMe && user.avgResponseMinutes != null && (
+            {!isMe && !isGuestView && user.avgResponseMinutes != null && (
               <span className="text-xs text-slate-500 flex items-center gap-1">
                 <Clock size={11} />
                 Обычно отвечает за {user.avgResponseMinutes < 60
@@ -308,8 +371,70 @@ export default function UserProfilePage() {
             </span>
           )}
 
+          {/* ── Гостю — те же действия, каждое через AuthGate («Поделиться» — без входа) ── */}
+          {isGuestView && (
+            <div className="flex items-stretch gap-2 mb-5">
+              <button
+                onClick={() => (asGuest ? previewOnly() : gate.ensure('message', { type: 'profile' }))}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-500 text-white text-sm font-semibold rounded-xl transition-all shadow-lg shadow-primary-500/20"
+              >
+                <MessageCircle size={17} /> Написать
+              </button>
+              <button
+                onClick={() => (asGuest ? previewOnly() : gate.ensure('connect', { type: 'profile' }))}
+                className="flex items-center justify-center px-3.5 py-2.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-primary-400 rounded-xl transition-all"
+                title="Создать связь"
+              >
+                <Link2 size={18} />
+              </button>
+              <button
+                onClick={() => (asGuest ? previewOnly() : gate.ensure('friend', { type: 'profile' }))}
+                className="flex items-center justify-center px-3.5 py-2.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-300 hover:text-primary-400 rounded-xl transition-all"
+                title="Добавить в друзья"
+              >
+                <UserPlus size={18} />
+              </button>
+              <div className="relative">
+                <button
+                  onClick={() => setShowMenu(v => !v)}
+                  className="flex items-center justify-center h-full px-3 py-2.5 bg-slate-800/80 hover:bg-slate-700 border border-slate-700/60 text-slate-400 hover:text-white rounded-xl transition-all"
+                  title="Ещё"
+                >
+                  <MoreHorizontal size={18} />
+                </button>
+                {showMenu && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                    <div className="absolute right-0 top-full mt-2 w-52 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden z-50 py-1">
+                      <button
+                        onClick={() => { setShowMenu(false); if (asGuest) previewOnly(); else gate.ensure('favorite', { type: 'profile' }); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-amber-400 transition-colors"
+                      >
+                        <Star size={16} /> В избранное
+                      </button>
+                      <button
+                        onClick={handleShareProfile}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-800 hover:text-white transition-colors"
+                      >
+                        {shareCopied ? <Check size={16} className="text-emerald-400" /> : <Share2 size={16} />}
+                        {shareCopied ? 'Ссылка скопирована' : 'Поделиться'}
+                      </button>
+                      <div className="my-1 border-t border-slate-800" />
+                      <button
+                        onClick={() => { setShowMenu(false); if (asGuest) previewOnly(); else gate.ensure('complaint', { type: 'profile' }); }}
+                        className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-red-500/8 transition-colors"
+                      >
+                        <Flag size={16} /> Пожаловаться
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── Action buttons ── */}
-          {me && !isMe && (
+          {me && !isMe && !asGuest && (
             <div className="flex items-stretch gap-2 mb-5">
               {/* Primary: Message */}
               <button
@@ -463,7 +588,8 @@ export default function UserProfilePage() {
             </div>
           )}
 
-          {/* ── Stats row ── («Сделки» скрыты до включения DEALS_ENABLED) */}
+          {/* ── Stats row ── («Сделки» скрыты до включения DEALS_ENABLED; гостю связи не показываем) */}
+          {!isGuestView && (
           <div className={`grid ${DEALS_ENABLED ? 'grid-cols-2' : 'grid-cols-1'} divide-x divide-slate-800 mb-5 bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden`}>
             <button
               onClick={() => navigate(`/profile/${userId}/connections`)}
@@ -479,6 +605,7 @@ export default function UserProfilePage() {
               </div>
             )}
           </div>
+          )}
 
           <div className="space-y-3">
 
@@ -508,9 +635,9 @@ export default function UserProfilePage() {
                     {user.userArtists.filter((ua: any) => ua.artist?.name).map((ua: any) => {
                       const role = ua.profession?.name ?? (ua.isOwner ? 'Основатель' : null);
                       return (
-                        <button
+                        <Link
                           key={ua.artistId ?? ua.artist?.id}
-                          onClick={() => navigate('/artist/' + (ua.artist?.id ?? ua.artistId))}
+                          to={'/artist/' + (ua.artist?.id ?? ua.artistId)}
                           className="flex flex-col gap-1.5 flex-shrink-0 text-left group"
                           style={{ width: 'calc((100% - 24px) / 3.5)' }}
                         >
@@ -524,7 +651,7 @@ export default function UserProfilePage() {
                             <p className="text-[10px] font-semibold text-white leading-tight line-clamp-2">{ua.artist?.name}</p>
                             {role && <p className="text-[9px] text-slate-500 leading-tight mt-0.5 truncate">{role}</p>}
                           </div>
-                        </button>
+                        </Link>
                       );
                     })}
                   </div>
@@ -553,9 +680,9 @@ export default function UserProfilePage() {
                       const cfvs: any[] = up.selectedCustomFilterValues || [];
                       const dirName = up.profession?.direction?.name || '';
                       return (
-                        <button
+                        <Link
                           key={up.professionId ?? i}
-                          onClick={() => navigate(`/professions/${user.id}/${up.professionId}`)}
+                          to={`/professions/${user.id}/${up.professionId}`}
                           className="w-full flex items-center gap-3 py-2.5 text-left hover:bg-slate-800/20 -mx-1 px-1 rounded-lg transition-colors"
                         >
                           <div className="w-1 self-stretch rounded-full bg-fuchsia-500/60 flex-shrink-0" />
@@ -566,7 +693,7 @@ export default function UserProfilePage() {
                             </p>
                           </div>
                           <span className="text-slate-600 flex-shrink-0">›</span>
-                        </button>
+                        </Link>
                       );
                     })}
                   </div>
@@ -596,9 +723,9 @@ export default function UserProfilePage() {
                         ? [us.priceFrom != null ? `от ${us.priceFrom} ₽` : null, us.priceTo != null ? `до ${us.priceTo} ₽` : null].filter(Boolean).join(' ')
                         : 'По договорённости';
                       return (
-                        <button
+                        <Link
                           key={us.id}
-                          onClick={() => navigate(`/services/${us.id}`)}
+                          to={`/services/${us.id}`}
                           className="w-full flex items-center gap-3 py-2.5 text-left hover:bg-slate-800/20 -mx-1 px-1 rounded-lg transition-colors"
                         >
                           <div className="w-1 self-stretch rounded-full bg-primary-500/60 flex-shrink-0" />
@@ -609,7 +736,7 @@ export default function UserProfilePage() {
                             </p>
                           </div>
                           <span className="text-slate-600 flex-shrink-0">›</span>
-                        </button>
+                        </Link>
                       );
                     })}
                   </div>
@@ -698,8 +825,8 @@ export default function UserProfilePage() {
               </div>
             )}
 
-            {/* ── Connections ── */}
-            {userConnections.length > 0 && (
+            {/* ── Connections ── (гостю список связей не показываем) */}
+            {!isGuestView && userConnections.length > 0 && (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                   <Link2 size={14} className="text-primary-400" />
@@ -736,8 +863,32 @@ export default function UserProfilePage() {
               </div>
             )}
 
+            {/* ── Гостю контакты и личные соцсети спрятаны за «Показать контакты» → AuthGate ── */}
+            {isGuestView && guestContactsAvailable && (
+              <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
+                <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
+                  <Phone size={14} className="text-primary-400" />
+                  <span className="text-sm font-semibold text-white">Контакты</span>
+                </div>
+                <div className="p-4 flex flex-wrap gap-2">
+                  <button
+                    onClick={() => (asGuest ? previewOnly() : gate.ensure('contacts', { type: 'profile' }))}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 transition-colors"
+                  >
+                    <Lock size={12} className="text-slate-400" /> Показать контакты
+                  </button>
+                  <button
+                    onClick={() => (asGuest ? previewOnly() : gate.ensure('contacts', { type: 'profile_socials' }))}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs text-slate-200 transition-colors"
+                  >
+                    <Globe size={12} className="text-slate-400" /> Показать соцсети
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* ── Contacts — visible only to users with a filled profile ── */}
-            {hasContactLinks && (
+            {!isGuestView && hasContactLinks && (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                   <Phone size={14} className="text-primary-400" />
@@ -752,7 +903,7 @@ export default function UserProfilePage() {
             )}
 
             {/* ── Social networks ── */}
-            {hasSocialNetworkLinks && (
+            {!isGuestView && hasSocialNetworkLinks && (
               <div className="bg-slate-900/60 border border-slate-800/60 rounded-2xl overflow-hidden">
                 <div className="flex items-center gap-2 px-4 py-3 border-b border-slate-800/60">
                   <Globe size={14} className="text-primary-400" />

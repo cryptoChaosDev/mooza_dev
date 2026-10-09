@@ -6,6 +6,9 @@ import { useAuthStore } from '../stores/authStore';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { isTourDone } from '../lib/authHelpers';
+import { consumeReturnTo } from '../lib/authReturn';
+import { reachGoal } from '../lib/metrika';
+import { useSeo, ROBOTS_NOINDEX } from '../lib/seo';
 import VkLoginButton from '../components/VkLoginButton';
 
 // Temporarily hide VK login/registration. Set back to true to restore.
@@ -16,8 +19,22 @@ const SHOW_VK = false;
 
 const TG_POLL_TIMEOUT_MS = 120_000;
 
+// Куда вести после успешного входа: онбординг (если не пройден) — он сам
+// вернёт на сохранённую страницу в конце; иначе — сразу на возврат или главную.
+// Возврат забирается ДО setAuth (одноразово, см. lib/authReturn).
+function afterLoginTarget(user: any): string {
+  const tourDone = isTourDone(user);
+  if (tourDone) localStorage.setItem('mooza_tour_done', '1');
+  return tourDone ? (consumeReturnTo() ?? '/') : '/onboarding';
+}
+
+// VK: незавершённая настройка → /vk-setup (оттуда — онбординг/возврат).
+function afterVkTarget(user: any, isNew?: boolean): string {
+  return (isNew || !user?.onboardingCompletedAt) ? '/vk-setup' : (consumeReturnTo() ?? '/');
+}
+
 export default function LoginPage() {
-  useEffect(() => { document.title = 'Вход — Moooza'; }, []);
+  useSeo({ title: 'Вход — Moooza', robots: ROBOTS_NOINDEX });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -66,10 +83,12 @@ export default function LoginPage() {
           return body;
         })
         .then(u => {
+          const target = afterVkTarget(u, isNew);
           setAuth(u, vkToken);
           setUser(u);
           localStorage.setItem('termsAgreed', '1');
-          navigate((isNew || !u?.onboardingCompletedAt) ? '/vk-setup' : '/');
+          reachGoal('login_success', { source: 'vk' });
+          navigate(target);
         })
         .catch((e: any) => toast.error(e?.message || 'Ошибка авторизации через ВКонтакте'));
     } else if (vkError) {
@@ -89,9 +108,11 @@ export default function LoginPage() {
   }, []);
 
 const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolean) => {
+    const target = afterVkTarget(user, isNew);
     setAuth(user, token);
     localStorage.setItem('termsAgreed', '1');
-    navigate((isNew || !user?.onboardingCompletedAt) ? '/vk-setup' : '/');
+    reachGoal('login_success', { source: 'vk' });
+    navigate(target);
   }, [setAuth, navigate]);
 
   const handleSocialError = (msg: string) => {
@@ -104,11 +125,11 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
   const tgInFlightRef = useRef(false);
   useEffect(() => () => { if (tgTimerRef.current) clearInterval(tgTimerRef.current); }, []);
   const finishLogin = useCallback((user: any, token: string) => {
+    const target = afterLoginTarget(user);
     setAuth(user, token);
     localStorage.setItem('termsAgreed', '1');
-    const tourDone = isTourDone(user);
-    if (tourDone) localStorage.setItem('mooza_tour_done', '1');
-    navigate(tourDone ? '/' : '/onboarding');
+    reachGoal('login_success', { source: 'telegram' });
+    navigate(target);
   }, [setAuth, navigate]);
 
   const stopTgPoll = () => {
@@ -164,13 +185,12 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
 
     try {
       const { data } = await authAPI.login(email, password);
+      // Show onboarding on first login — server-side flag is the source of truth
+      const target = afterLoginTarget(data.user);
       setAuth(data.user, data.token);
       localStorage.setItem('termsAgreed', '1');
-
-      // Show onboarding on first login — server-side flag is the source of truth
-      const tourDone = isTourDone(data.user);
-      if (tourDone) localStorage.setItem('mooza_tour_done', '1');
-      navigate(tourDone ? '/' : '/onboarding');
+      reachGoal('login_success', { source: 'email' });
+      navigate(target);
     } catch (err: any) {
       const errData = err.response?.data;
       if (errData?.error === 'EMAIL_NOT_VERIFIED' && errData?.email) {
@@ -191,17 +211,20 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
     setLoading(true);
     try {
       const { data } = await authAPI.verifyEmail(pendingEmail, verifyCode.trim());
-      setAuth(data.user, data.token);
-      localStorage.setItem('termsAgreed', '1');
       // Fresh email verification → trust ONLY the server flag.
       // localStorage may hold stale 'mooza_tour_done' from a previous account on the same device.
-      // Hard navigation to bypass React Router concurrent-mode race condition
+      let target = '/onboarding';
       if (data.user?.onboardingCompletedAt) {
         localStorage.setItem('mooza_tour_done', '1');
-        window.location.href = '/';
-      } else {
-        window.location.href = '/onboarding';
+        target = consumeReturnTo() ?? '/';
       }
+      setAuth(data.user, data.token);
+      localStorage.setItem('termsAgreed', '1');
+      reachGoal('login_success', { source: 'email_verify' });
+      // Раньше здесь был жёсткий переход (window.location.href) — обход гонки
+      // двух деревьев маршрутов. Дерево теперь одно: setAuth и navigate попадают
+      // в один рендер, а жёсткий переход конфликтовал бы с редиректом GuestOnly.
+      navigate(target, { replace: true });
     } catch (err: any) {
       toast.error(getApiError(err, 'Неверный код'));
     } finally {

@@ -1,7 +1,9 @@
-import { Link, useLocation } from 'react-router-dom';
-import { Home, Search, Users, User, MessageCircle } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Home, Search, Users, User, MessageCircle, Zap, LogIn } from 'lucide-react';
 import { useBadgeStore } from '../stores/badgeStore';
+import { useAuthStore } from '../stores/authStore';
 import { useKeyboardViewport } from '../lib/viewport';
+import { saveReturnTo } from '../lib/authReturn';
 
 function Badge({ count }: { count: number }) {
   if (count <= 0) return null;
@@ -19,8 +21,51 @@ export default function BottomNav() {
   // «прыгает» над/под клавиатурой, на Android (resizes-content) отъедает место
   // у поля ввода чата.
   const keyboard = useKeyboardViewport();
+  const navigate = useNavigate();
+  const isGuest = !useAuthStore((s) => s.token);
 
   const isActive = (path: string) => location.pathname === path;
+
+  if (keyboard.open) return null;
+
+  // Гостю — Поток / Каталог / Войти (без чатов, отношений и бейджей).
+  if (isGuest) {
+    const guestItems = [
+      { path: '/feed',   icon: Zap,    label: 'Поток' },
+      { path: '/search', icon: Search, label: 'Каталог' },
+    ];
+    return (
+      <nav className="fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/50 z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+        <div className="max-w-lg mx-auto px-1 flex items-center justify-around h-[60px]">
+          {guestItems.map(({ path, icon: Icon, label }) => {
+            const active = isActive(path);
+            return (
+              <Link
+                key={path}
+                to={path}
+                aria-label={label}
+                className={`relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl transition-all duration-200 touch-manipulation ${
+                  active ? 'text-primary-400' : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                <Icon size={20} strokeWidth={active ? 2.5 : 2} />
+                <span className="text-[10px] font-medium leading-none">{label}</span>
+              </Link>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => { saveReturnTo(undefined, 'page'); navigate('/login'); }}
+            aria-label="Войти"
+            className="relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full rounded-xl text-primary-300 hover:text-white transition-all duration-200 touch-manipulation"
+          >
+            <LogIn size={20} strokeWidth={2.25} />
+            <span className="text-[10px] font-semibold leading-none">Войти</span>
+          </button>
+        </div>
+      </nav>
+    );
+  }
 
   const navItems = [
     { path: '/',         icon: Home,          label: 'Главная',  badge: 0 },
@@ -29,8 +74,6 @@ export default function BottomNav() {
     { path: '/friends',  icon: Users,         label: 'Отношения', badge: pendingFriendRequests },
     { path: '/profile',  icon: User,          label: 'Профиль',  badge: 0 },
   ];
-
-  if (keyboard.open) return null;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/50 z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>

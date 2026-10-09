@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowRight, ArrowLeft, X } from 'lucide-react';
 import { userAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
+import { consumeReturnTo } from '../lib/authReturn';
 
 interface Slide {
   emoji: string;
@@ -86,7 +87,8 @@ export default function OnboardingPage() {
         .catch(() => new Promise((r) => setTimeout(r, 2000)).then(markDone))
         .catch(() => {});
     }
-    navigate(toProfile ? '/profile' : '/');
+    // Пришёл из AuthGate (нажал действие гостем) — возвращаем на ту страницу.
+    navigate(consumeReturnTo() ?? (toProfile ? '/profile' : '/'));
   };
 
   const next = () => {

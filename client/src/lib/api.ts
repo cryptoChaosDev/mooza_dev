@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { useAuthStore } from '../stores/authStore';
+import { saveReturnTo } from './authReturn';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
@@ -23,6 +24,9 @@ api.interceptors.request.use((config) => {
 // blocked account). Never for /auth/* — there 401/403 mean «wrong password»,
 // «wrong code», etc., and a logout + full reload used to swallow the message.
 // Other 401s without a token code (e.g. a route-level check) don't log out either.
+// И только если запрос шёл С токеном (заголовок Authorization): гость на
+// публичной странице, получивший 401 на приватный запрос, остаётся на месте —
+// раньше его выкидывало на /login (план, блокер 0.1 №9).
 export const SESSION_DEAD_CODES = new Set([
   'TOKEN_EXPIRED', 'TOKEN_INVALID', 'TOKEN_NOT_ACTIVE', 'TOKEN_MISSING', 'AUTH_FAILED', 'ACCOUNT_BLOCKED',
 ]);
@@ -37,17 +41,27 @@ api.interceptors.response.use(
     const url: string = error.config?.url || '';
     const isAuthEndpoint = url.startsWith('/auth/') || url.includes('/api/auth/');
     if (!isAuthEndpoint && (status === 401 || status === 403) && SESSION_DEAD_CODES.has(data?.code)) {
-      const hadToken = !!localStorage.getItem('token');
-      useAuthStore.getState().logout();
-      if (hadToken) {
-        try {
-          const msg = typeof data?.error === 'string' && data.code !== 'TOKEN_MISSING'
-            ? data.error
-            : 'Сессия завершена. Войдите снова.';
-          sessionStorage.setItem(AUTH_NOTICE_KEY, msg);
-        } catch { /* storage unavailable — just redirect */ }
+      const headers = error.config?.headers;
+      const sentAuth = !!(headers && (typeof headers.get === 'function' ? headers.get('Authorization') : headers.Authorization));
+      if (sentAuth) {
+        const hadToken = !!localStorage.getItem('token');
+        useAuthStore.getState().logout();
+        if (hadToken) {
+          try {
+            const msg = typeof data?.error === 'string' && data.code !== 'TOKEN_MISSING'
+              ? data.error
+              : 'Сессия завершена. Войдите снова.';
+            sessionStorage.setItem(AUTH_NOTICE_KEY, msg);
+          } catch { /* storage unavailable — just redirect */ }
+          // После повторного входа — обратно на ту же страницу.
+          saveReturnTo();
+        }
+        if (window.location.pathname !== '/login') window.location.href = '/login';
+      } else if (useAuthStore.getState().token) {
+        // Стор считает, что вход есть, а токена в localStorage нет (очищен в
+        // другой вкладке) — синхронизируем без редиректа: гостю страница доступна.
+        useAuthStore.getState().logout();
       }
-      if (window.location.pathname !== '/login') window.location.href = '/login';
     }
     return Promise.reject(error);
   }
@@ -104,7 +118,20 @@ export const authAPI = {
 export const userAPI = {
   getMe: () => api.get('/users/me'),
   updateMe: (data: any) => api.put('/users/me', data),
-  givePublicConsent: () => api.post('/users/me/public-consent'),
+  // source — откуда выдано согласие (журнал ConsentEvent на сервере).
+  givePublicConsent: (source?: 'profile' | 'prompt' | 'onboarding') =>
+    api.post('/users/me/public-consent', source ? { source } : undefined),
+  // Отзыв согласия: профиль сразу пропадает для гостей и из поисковиков.
+  // Ответ: { ok, publicConsentAt: null, publicConsentRevokedAt, contactsVisibility,
+  // avatar, bannerImage } — файлы аватара/обложки переименовываются.
+  revokePublicConsent: () => api.delete<{
+    ok: boolean; publicConsentAt: null; publicConsentRevokedAt?: string | null;
+    contactsVisibility?: string; avatar?: string | null; bannerImage?: string | null;
+  }>('/users/me/public-consent'),
+  // Разовое окно согласия показано (сервер считает показы: раз в 30 дней, ≤ 3).
+  markPublicConsentPromptShown: () => api.post('/users/me/public-consent/prompt-shown'),
+  // «Не показывать мой профиль в поисковиках».
+  setSearchIndexingOptOut: (optOut: boolean) => api.patch('/users/me/search-indexing', { optOut }),
   updateServices: (services: Array<{
     // id существующей UserService — сервер сопоставляет по нему (иначе по serviceId).
     id?: string;
@@ -709,6 +736,12 @@ export const referralAPI = {
   renameLink: (id: string, label: string) => api.patch(`/referrals/links/${id}`, { label }),
   deleteLink: (id: string) => api.delete(`/referrals/links/${id}`),
   resolve: (code: string) => api.post('/referrals/resolve', { code }),
+};
+
+// Лист ожидания (закрытая регистрация). Схема: server/src/routes/waitlist.ts.
+export const waitlistAPI = {
+  submit: (data: { email: string; type: 'resident_waitlist' | 'listener' | 'customer' | 'company'; consentPd: true; consentMarketing: true }) =>
+    api.post('/waitlist', data),
 };
 
 export const siteSettingsAPI = {

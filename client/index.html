@@ -3,6 +3,16 @@
   <head>
     <meta charset="UTF-8" />
 
+    <!--
+      Вошедшему пользователю серверный снимок страницы (Ф4: <div data-ssr> внутри
+      #root) не показываем — иначе до загрузки бандла мелькнёт гостевой вид.
+      Скрипт синхронный и стоит первым: класс ставится до первой отрисовки.
+    -->
+    <script>
+      try { if (localStorage.getItem('token')) document.documentElement.classList.add('authed'); } catch (e) {}
+    </script>
+    <style>.authed #root > [data-ssr] { display: none; }</style>
+
     <!-- Yandex.Metrika counter -->
     <script type="text/javascript">
         (function(m,e,t,r,i,k,a){

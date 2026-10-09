@@ -1,7 +1,7 @@
-import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, ExternalLink, Edit3, Trash2, Loader2, Calendar, Check, X, Heart, ListMusic } from 'lucide-react';
+import { ArrowLeft, ExternalLink, Edit3, Trash2, Loader2, Calendar, Check, X, Heart, ListMusic, Lock } from 'lucide-react';
 import { releaseAPI, clipAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import AvatarComponent from '../components/Avatar';
@@ -12,11 +12,19 @@ import { getApiError } from '../lib/apiError';
 import { MEDIA_PLATFORM_LABELS } from '../lib/mediaPlatforms';
 import { ymGenreLabel, RELEASE_TYPE_LABELS } from '../lib/ymGenres';
 import { safeHref, formatReleaseDate } from '../lib/artistUtils';
+import { personName, personHref } from '../lib/publicPerson';
+import { openAuthGate } from '../components/AuthGateModal';
+import { useSeo, seoTitle, seoDescription, robotsFor } from '../lib/seo';
+import { trackGuestView } from '../lib/metrika';
 
 interface ItemDetail extends MediaItemInitial {
   artistId: string;
+  artist?: { id: string; name: string; avatar?: string | null; status?: string } | null;
+  indexable?: boolean;
   createdAt?: string;
   viewerIsAdmin?: boolean;
+  // Гостю — только участники с согласием на публичность + число остальных.
+  hiddenParticipantsCount?: number;
   // Метаданные с Яндекс.Музыки (есть только у импортированных релизов):
   releaseType?: string | null;
   label?: string | null;
@@ -28,6 +36,8 @@ interface ItemDetail extends MediaItemInitial {
     id: string;
     userId: string;
     confirmStatus: string;
+    // Гостю обезличенный участник приходит без id/имени (toPublicPerson) —
+    // рендер идёт через personName/personHref, которые это учитывают.
     user: { id: string; firstName: string; lastName: string; avatar?: string | null };
     roles: { id: string; name: string }[];
   }[];
@@ -53,6 +63,20 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
     enabled: !!id,
     // 404 — ответ окончательный, повторять незачем.
     retry: (count, e: any) => e?.response?.status !== 404 && count < 1,
+  });
+
+  useEffect(() => { if (id) trackGuestView(kind, id); }, [kind, id]);
+  const artistName = item?.artist?.name ?? null;
+  const typeLabel = isRelease
+    ? (item?.releaseType ? (RELEASE_TYPE_LABELS[item.releaseType] ?? 'релиз') : 'релиз').toLowerCase()
+    : 'клип';
+  useSeo({
+    title: item ? seoTitle(item.title, artistName, typeLabel) : seoTitle(isRelease ? 'Релиз' : 'Клип'),
+    description: item
+      ? seoDescription(`${item.title}${artistName ? ` — ${artistName}` : ''}: ${typeLabel}${isRelease && item.releaseDate ? `, ${formatReleaseDate(item.releaseDate)}` : ''}. Участники и ссылки на площадки на Moooza.`)
+      : null,
+    canonical: `/${isRelease ? 'releases' : 'clips'}/${id}`,
+    robots: robotsFor(item),
   });
 
   const removeMut = useMutation({
@@ -135,6 +159,7 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
   const myPending = currentUser
     ? participants.find((p) => p.userId === currentUser.id && p.confirmStatus === 'PENDING')
     : null;
+  const hiddenParticipants = item.hiddenParticipantsCount ?? 0;
   const openHref = safeHref(item.url);
 
   return (
@@ -182,6 +207,11 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
 
         {/* Title */}
         <h1 className="text-2xl font-bold text-white text-center mb-1 break-words [overflow-wrap:anywhere]">{item.title}</h1>
+        {item.artist?.name && (
+          <p className="text-center text-sm mb-1">
+            <Link to={`/artist/${item.artist.id ?? item.artistId}`} className="text-primary-300 hover:text-primary-200 transition-colors">{item.artist.name}</Link>
+          </p>
+        )}
 
         {/* Release date */}
         {isRelease && item.releaseDate && (
@@ -319,7 +349,7 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
         )}
 
         {/* Participants */}
-        {participants.length > 0 && (
+        {(participants.length > 0 || hiddenParticipants > 0) && (
           <div>
             <div className="flex items-center gap-2 mb-3">
               <span className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Участники</span>
@@ -327,14 +357,12 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
             </div>
             <div className="space-y-2">
               {participants.map((p) => {
-                const name = `${p.user.lastName ?? ''} ${p.user.firstName ?? ''}`.trim();
+                const name = personName(p.user, { surnameFirst: true });
+                const href = personHref(p.user);
                 const roleList = p.roles ?? [];
-                return (
-                  <div
-                    key={p.id}
-                    className="flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 border border-slate-800 cursor-pointer hover:border-slate-700 transition-colors"
-                    onClick={() => navigate(`/profile/${p.user.id}`)}
-                  >
+                const rowCls = 'flex items-center gap-3 p-2.5 rounded-xl bg-slate-900 border border-slate-800';
+                const body = (
+                  <>
                     <AvatarComponent src={p.user.avatar} name={name} size={40} />
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-white truncate">{name}</p>
@@ -355,9 +383,22 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
                         ожидает
                       </span>
                     )}
-                  </div>
+                  </>
                 );
+                // <Link> вместо onClick-navigate: ссылка видна краулеру; обезличенному — без ссылки.
+                return href
+                  ? <Link key={p.id} to={href} className={`${rowCls} hover:border-slate-700 transition-colors`}>{body}</Link>
+                  : <div key={p.id} className={rowCls}>{body}</div>;
               })}
+              {hiddenParticipants > 0 && (
+                <button
+                  onClick={() => openAuthGate('page', { type: `${kind}_participants` }, 'Все участники видны после входа')}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 text-xs text-slate-400 hover:text-white transition-colors"
+                >
+                  <Lock size={12} />
+                  {participants.length > 0 ? 'и ещё' : 'Участников:'} {hiddenParticipants} — после входа
+                </button>
+              )}
             </div>
           </div>
         )}

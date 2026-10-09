@@ -17,6 +17,8 @@ export default function OnboardingPrompt() {
   );
   const [showHint, setShowHint] = useState(false);
 
+  // Гостю онбординг не предлагаем (план, блокер 0.1 №13).
+  if (!user) return null;
   // Don't show if onboarding already done or dismissed this session
   if (isOnboardingDone(user) || dismissed) return null;
 

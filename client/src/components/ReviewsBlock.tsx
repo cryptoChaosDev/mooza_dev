@@ -8,6 +8,10 @@ import ComplaintModal from './ComplaintModal';
 import ConfirmDialog from './ConfirmDialog';
 import { useAuthStore } from '../stores/authStore';
 import { avatarUrl as getAvatarUrl } from '../lib/avatar';
+import { personName } from '../lib/publicPerson';
+
+// Автор отзыва без согласия на публичность приходит гостю обезличенным.
+const reviewAuthorName = (a: any) => personName(a, { fallback: 'Пользователь Moooza' });
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { useScrollLock } from '../lib/scrollLock';
@@ -21,7 +25,7 @@ interface Review {
   reply: string | null;
   type: string;
   createdAt: string;
-  author: { id: string; firstName: string; lastName: string; avatar: string | null };
+  author: { id: string | null; firstName?: string; lastName?: string; displayName?: string | null; avatar: string | null };
   service: { id: string; name: string } | null;
   deal: { id: string; createdAt: string; updatedAt: string; status: string } | null;
 }
@@ -121,7 +125,7 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
             >
               <div className="w-1 self-stretch rounded-full bg-amber-400/60 flex-shrink-0" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-white truncate">{r.author.firstName} {r.author.lastName}</p>
+                <p className="text-sm font-semibold text-white truncate">{reviewAuthorName(r.author)}</p>
                 <p className="text-xs text-slate-500 truncate">
                   {r.text || [
                     r.service?.name || TYPE_LABELS[r.type] || null,
@@ -174,10 +178,10 @@ export default function ReviewsBlock({ userId, isOwner }: { userId: string; isOw
               <div className="flex items-center gap-3">
                 {selected.author.avatar
                   ? <img src={getAvatarUrl(selected.author.avatar) ?? ''} alt="" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
-                  : <div className="w-9 h-9 rounded-full bg-primary-800 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">{selected.author.firstName[0]}</div>
+                  : <div className="w-9 h-9 rounded-full bg-primary-800 flex items-center justify-center text-sm font-bold text-white flex-shrink-0">{reviewAuthorName(selected.author)[0]}</div>
                 }
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-white break-words [overflow-wrap:anywhere]">{selected.author.firstName} {selected.author.lastName}</p>
+                  <p className="text-sm font-semibold text-white break-words [overflow-wrap:anywhere]">{reviewAuthorName(selected.author)}</p>
                   <p className="text-[11px] text-slate-500">
                     {new Date(selected.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
                   </p>

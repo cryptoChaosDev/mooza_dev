@@ -6,6 +6,7 @@ import { userAPI, authAPI, referenceAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { isValidEmail, isTourDone } from '../lib/authHelpers';
+import { consumeReturnTo } from '../lib/authReturn';
 import CityPicker from '../components/CityPicker';
 
 interface SelectedProfession {
@@ -149,7 +150,9 @@ export default function VkSetupPage() {
   const [error, setError] = useState('');
 
   // Skip onboarding if user already completed it (server-side flag is the source of truth)
-  const nextAfterSetup = isTourDone(user) ? '/' : '/onboarding';
+  // Онбординг пройден — сразу на сохранённый возврат (гость нажал действие и
+  // вошёл через VK), иначе онбординг: он заберёт возврат в конце.
+  const goNext = () => navigate(isTourDone(user) ? (consumeReturnTo() ?? '/') : '/onboarding');
 
   // Step 0: Name
   const [firstName, setFirstName] = useState(user?.firstName || '');
@@ -336,7 +339,7 @@ export default function VkSetupPage() {
         toast.success(`Код отправлен на ${data.pendingEmail}`);
         return;
       }
-      navigate(nextAfterSetup);
+      goNext();
     } catch (err: any) {
       toast.error(getApiError(err, 'Не удалось сохранить данные'));
     } finally { setLoading(false); }
@@ -349,7 +352,7 @@ export default function VkSetupPage() {
       const { data } = await userAPI.confirmEmailChange(emailCode.trim());
       setUser(data);
       toast.success('Email подтверждён');
-      navigate(nextAfterSetup);
+      goNext();
     } catch (err: any) {
       toast.error(getApiError(err, 'Неверный код'));
     } finally { setLoading(false); }
@@ -604,7 +607,7 @@ export default function VkSetupPage() {
           className="w-full py-2 text-sm text-slate-500 hover:text-slate-300 transition-colors">
           Изменить email
         </button>
-        <button onClick={() => navigate(nextAfterSetup)}
+        <button onClick={goNext}
           className="w-full py-2 text-xs text-slate-600 hover:text-slate-400 transition-colors">
           Подтвердить позже — в профиле
         </button>
