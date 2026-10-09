@@ -2139,9 +2139,9 @@ function ArtistModerationTab() {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-white text-sm">{artist.name}</p>
                     {artist.city && <p className="text-xs text-slate-400">{artist.city}</p>}
-                    {artist.submittedByUser && (
+                    {(artist.verificationRequestedBy ?? artist.submittedByUser) && (
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Отправил: {artist.submittedByUser.firstName} {artist.submittedByUser.lastName}
+                        Запросил верификацию: {(artist.verificationRequestedBy ?? artist.submittedByUser).firstName} {(artist.verificationRequestedBy ?? artist.submittedByUser).lastName}
                       </p>
                     )}
                     {(artist.genres ?? []).length > 0 && (

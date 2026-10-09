@@ -7,6 +7,7 @@ import { notify, notifyMany } from '../utils/notify';
 import { yoNorm } from '../utils/search';
 import { grantProMonth, isProActive } from '../utils/pro';
 import logger from '../utils/logger';
+import { artistAdminIds } from '../lib/artistAccess';
 import * as socketModule from '../socket';
 
 const router = Router();
@@ -781,20 +782,28 @@ async function duplicatesByArtist(
   return map;
 }
 
+// Who is shown in the moderation queue: verificationRequestedBy (who asked for
+// THIS verification) with a fallback to submittedByUser (legacy rows / creator).
+const MODERATION_USER_SELECT = { id: true, firstName: true, lastName: true, avatar: true } as const;
+
 // GET /admin/artists/pending — list artists awaiting moderation
 router.get('/artists/pending', authenticate, requireAdmin, async (_req, res) => {
   try {
     const artists = await prisma.artist.findMany({
       where: { status: 'PENDING' },
       include: {
-        submittedByUser: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+        submittedByUser: { select: MODERATION_USER_SELECT },
+        verificationRequestedBy: { select: MODERATION_USER_SELECT },
         genres: { include: { genre: true } },
         _count: { select: { followers: true } },
       },
       orderBy: { updatedAt: 'asc' },
     });
     const dupMap = await duplicatesByArtist(artists);
-    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre), followersCount: a._count.followers, duplicates: dupMap.get(a.id) || [] })));
+    res.json(artists.map(a => ({
+      ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre), followersCount: a._count.followers, duplicates: dupMap.get(a.id) || [],
+      verificationRequestedBy: a.verificationRequestedBy ?? a.submittedByUser,
+    })));
   } catch (e: any) { return adminError(res, 'GET /artists/pending', e, 500); }
 });
 
@@ -804,22 +813,30 @@ router.get('/artists/verification', authenticate, requireAdmin, async (_req, res
     const artists = await prisma.artist.findMany({
       where: { status: 'PENDING', verificationProofUrl: { not: null } },
       include: {
-        submittedByUser: { select: { id: true, firstName: true, lastName: true, avatar: true } },
+        submittedByUser: { select: MODERATION_USER_SELECT },
+        verificationRequestedBy: { select: MODERATION_USER_SELECT },
         genres: { include: { genre: true } },
       },
       orderBy: { updatedAt: 'asc' },
     });
     const dupMap = await duplicatesByArtist(artists);
-    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre), duplicates: dupMap.get(a.id) || [] })));
+    res.json(artists.map(a => ({
+      ...a, listeners: Number(a.listeners), genres: a.genres.map(ag => ag.genre), duplicates: dupMap.get(a.id) || [],
+      verificationRequestedBy: a.verificationRequestedBy ?? a.submittedByUser,
+    })));
   } catch (e: any) { return adminError(res, 'GET /artists/verification', e, 500); }
 });
 
-// Helper: recipients to notify about an artist moderation result (owner, submitter, fallback admins).
-async function artistNotifyRecipients(artistId: string, submittedById: string | null): Promise<string[]> {
-  const ids = new Set<string>();
-  const owner = await prisma.userArtist.findFirst({ where: { artistId, isOwner: true }, select: { userId: true } });
-  if (owner) ids.add(owner.userId);
-  if (submittedById) ids.add(submittedById);
+// Recipients of an artist moderation result: the artist's current ACCEPTED owners
+// and admins (rights live only in UserArtist — lib/artistAccess) plus whoever
+// requested this verification. submittedById (the original creator, who may have
+// left the artist long ago) is only a fallback when there is nobody else.
+async function artistNotifyRecipients(artist: {
+  id: string; submittedById: string | null; verificationRequestedById: string | null;
+}): Promise<string[]> {
+  const ids = new Set(await artistAdminIds(artist.id));
+  if (artist.verificationRequestedById) ids.add(artist.verificationRequestedById);
+  if (!ids.size && artist.submittedById) ids.add(artist.submittedById);
   return [...ids];
 }
 
@@ -836,7 +853,7 @@ router.patch('/artists/:id/reject', authenticate, requireAdmin, async (req: Auth
       },
     });
 
-    const recipients = await artistNotifyRecipients(artist.id, artist.submittedById);
+    const recipients = await artistNotifyRecipients(artist);
     const reasonText = reason ? ` Причина: ${reason}.` : '';
     await notifyMany(recipients, {
       actorId: req.userId, type: 'artist_rejected',
@@ -857,7 +874,7 @@ router.patch('/artists/:id/verify', authenticate, requireAdmin, async (req: Auth
       data: { status: 'VERIFIED', moderatedAt: new Date() },
     });
 
-    const recipients = await artistNotifyRecipients(artist.id, artist.submittedById);
+    const recipients = await artistNotifyRecipients(artist);
     await notifyMany(recipients, {
       actorId: req.userId, type: 'artist_verified',
       title: 'Артист верифицирован',
