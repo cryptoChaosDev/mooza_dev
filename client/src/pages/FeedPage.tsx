@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { useQuery, useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useQuery, useInfiniteQuery, useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Send, Heart, MessageCircle, Trash2, Loader2, X,
@@ -8,11 +8,12 @@ import {
   Plus, FileText, Briefcase, Calendar, CheckSquare, Lightbulb, Wrench,
   Zap, BarChart3, Star, WifiOff, RefreshCw, HelpCircle, Repeat2,
   ExternalLink, MessageSquare, HandshakeIcon, Loader2 as Spinner,
-  ArrowUpDown, ChevronDown, ChevronUp, Megaphone,
+  ArrowUpDown, ChevronDown, ChevronUp, Megaphone, Flag,
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import ShareButton from '../components/ShareButton';
-import { postAPI, messageAPI } from '../lib/api';
+import ComplaintModal from '../components/ComplaintModal';
+import { api, postAPI, messageAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { useAuthStore } from '../stores/authStore';
@@ -50,13 +51,84 @@ function Avatar({ user, size = 10 }: { user: { firstName: string; lastName: stri
   return <AvatarComponent src={user.avatar} name={`${user.firstName} ${user.lastName}`} size={size * 4} />;
 }
 
+// ─── Feed cache helpers ────────────────────────────────────────────────────────
+
+type CursorPage<T = any> = { items: T[]; nextCursor: string | null };
+
+// Все кэши, где может лежать карточка поста: лента (любые фильтры),
+// «Сохранённые», пост по deep link (?post=).
+const POST_CACHE_KEYS = [['feed'], ['feed-saved'], ['feed-post']];
+
+function mapPostInData(data: any, postId: string, fn: (p: any) => any): any {
+  if (!data) return data;
+  const mapPost = (p: any) => (p && p.id === postId ? fn(p) : p);
+  if (Array.isArray(data.pages)) {
+    return {
+      ...data,
+      pages: data.pages.map((pg: any) =>
+        Array.isArray(pg) ? pg.map(mapPost)
+        : pg && Array.isArray(pg.items) ? { ...pg, items: pg.items.map(mapPost) }
+        : pg),
+    };
+  }
+  if (Array.isArray(data)) return data.map(mapPost);
+  if (data.id) return mapPost(data);
+  return data;
+}
+
+/** Оптимистично меняет пост во всех кэшах (лента/сохранённые/deep link). */
+function patchPostEverywhere(qc: QueryClient, postId: string, fn: (p: any) => any) {
+  for (const queryKey of POST_CACHE_KEYS) qc.setQueriesData({ queryKey }, (d: any) => mapPostInData(d, postId, fn));
+}
+
+function invalidatePostCaches(qc: QueryClient) {
+  for (const queryKey of POST_CACHE_KEYS) qc.invalidateQueries({ queryKey });
+  qc.invalidateQueries({ queryKey: ['saved-posts'] }); // FriendsPage
+}
+
+function withMyReaction(p: any, emoji: string | null) {
+  const prev: string | null = p.myReaction ?? null;
+  let summary: { emoji: string; count: number }[] = (p.reactionSummary ?? []).map((s: any) => ({ ...s }));
+  if (prev) summary = summary.map((s) => (s.emoji === prev ? { ...s, count: s.count - 1 } : s));
+  if (emoji) {
+    const found = summary.find((s) => s.emoji === emoji);
+    if (found) found.count += 1;
+    else summary.push({ emoji, count: 1 });
+  }
+  return { ...p, myReaction: emoji, reactionSummary: summary.filter((s) => s.count > 0) };
+}
+
+/** Текст без HTML-тегов (для подписи при «Поделиться»). DOMParser не исполняет скрипты. */
+function htmlToText(html?: string | null): string {
+  if (!html) return '';
+  try {
+    return (new DOMParser().parseFromString(html, 'text/html').body.textContent || '').replace(/\s+/g, ' ').trim();
+  } catch {
+    return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+}
+
+function dedupeById<T extends { id: string }>(items: T[]): T[] {
+  const seen = new Set<string>();
+  return items.filter((it) => (it && !seen.has(it.id) ? (seen.add(it.id), true) : false));
+}
+
+function toCursorPage(data: any): CursorPage {
+  // Совместимость со старым сервером, который отдаёт массив.
+  if (Array.isArray(data)) return { items: data, nextCursor: null };
+  return { items: Array.isArray(data?.items) ? data.items : [], nextCursor: data?.nextCursor ?? null };
+}
+
 // ─── Comment Item ──────────────────────────────────────────────────────────────
 
-function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], isReply = false }: {
-  comment: any; postId: string; postAuthorId?: string; currentUserId: string; feedQueryKey?: string[]; isReply?: boolean;
+function CommentItem({ comment, postId, postAuthorId, currentUserId, isReply = false }: {
+  comment: any; postId: string; postAuthorId?: string; currentUserId: string; isReply?: boolean;
 }) {
   const queryClient = useQueryClient();
-  const isOwner = comment.author.id === currentUserId;
+  const isOwner = !!currentUserId && comment.author.id === currentUserId;
+  // Автор поста может удалять чужие комментарии под своим постом (сервер это разрешает).
+  const canDelete = isOwner || (!!currentUserId && postAuthorId === currentUserId);
+  const refreshComments = () => queryClient.invalidateQueries({ queryKey: ['post-comments', postId] });
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [editText, setEditText] = useState(comment.content);
@@ -81,31 +153,35 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
 
   const deleteMut = useMutation({
     mutationFn: () => postAPI.deleteComment(postId, comment.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }),
+    onSuccess: () => { refreshComments(); invalidatePostCaches(queryClient); },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить комментарий')),
   });
 
   const editMut = useMutation({
     mutationFn: () => postAPI.editComment(postId, comment.id, editText),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setEditing(false); },
+    onSuccess: () => { refreshComments(); setEditing(false); },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить комментарий')),
   });
 
   const reactMut = useMutation({
     mutationFn: (emoji: string) => postAPI.reactComment(postId, comment.id, emoji),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }),
+    onSuccess: refreshComments,
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось поставить реакцию')),
   });
 
   const unreactMut = useMutation({
     mutationFn: () => postAPI.unreactComment(postId, comment.id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }),
+    onSuccess: refreshComments,
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось убрать реакцию')),
   });
 
   const replyMut = useMutation({
     mutationFn: (content: string) => postAPI.commentPost(postId, content, comment.id),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setReplyText(''); setShowReplyInput(false); },
+    onSuccess: () => {
+      refreshComments();
+      patchPostEverywhere(queryClient, postId, (p) => ({ ...p, _count: { ...p._count, comments: (p._count?.comments ?? 0) + 1 } }));
+      setReplyText(''); setShowReplyInput(false);
+    },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить ответ')),
   });
 
@@ -127,13 +203,16 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
                 <Link to={`/profile/${comment.author.id}`} className="text-xs font-semibold text-white hover:text-primary-400 transition-colors truncate">
                   {comment.author.firstName} {comment.author.lastName}
                 </Link>
-                {isOwner && !editing && (
-                  <div className="flex items-center gap-0.5 opacity-0 group-hover/comment:opacity-100 transition-all flex-shrink-0">
-                    <button onClick={() => { setEditText(comment.content); setEditing(true); }} className="text-slate-500 hover:text-slate-300 p-0.5 transition-colors">
-                      <Pencil size={11} />
-                    </button>
-                    <button onClick={() => setConfirmDelete(true)} disabled={deleteMut.isPending} className="text-slate-500 hover:text-red-400 p-0.5 transition-colors">
-                      {deleteMut.isPending ? <Loader2 size={11} className="animate-spin" /> : <X size={11} />}
+                {canDelete && !editing && (
+                  // На устройствах без hover (телефоны) кнопки видны всегда; с мышью — по наведению.
+                  <div className="flex items-center gap-0.5 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover/comment:opacity-100 focus-within:opacity-100 transition-all flex-shrink-0">
+                    {isOwner && (
+                      <button type="button" onClick={() => { setEditText(comment.content); setEditing(true); }} aria-label="Изменить комментарий" className="text-slate-500 hover:text-slate-300 p-1 transition-colors">
+                        <Pencil size={12} />
+                      </button>
+                    )}
+                    <button type="button" onClick={() => setConfirmDelete(true)} disabled={deleteMut.isPending} aria-label="Удалить комментарий" className="text-slate-500 hover:text-red-400 p-1 transition-colors">
+                      {deleteMut.isPending ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
                     </button>
                   </div>
                 )}
@@ -146,6 +225,7 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
                     onChange={e => { setEditText(e.target.value); const el = e.target; el.style.height = 'auto'; el.style.height = `${el.scrollHeight}px`; }}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); if (editText.trim()) editMut.mutate(); } if (e.key === 'Escape') setEditing(false); }}
                     className="w-full bg-slate-700/60 border border-slate-600 focus:border-primary-500 rounded-lg px-2 py-1 text-xs text-white placeholder-slate-500 focus:outline-none resize-none transition-colors"
+                    maxLength={2000}
                     rows={1}
                   />
                   <div className="flex gap-1.5 justify-end">
@@ -160,7 +240,7 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
                 <>
                   {comment.content && <p className="text-xs text-slate-300 leading-relaxed mt-0.5 break-words">{comment.content}</p>}
                   {comment.imageUrl && (
-                    <img src={comment.imageUrl} alt="" loading="lazy" className="mt-1.5 max-h-56 rounded-lg border border-slate-700 object-cover" />
+                    <img src={`${API_URL}${comment.imageUrl}`} alt="" loading="lazy" className="mt-1.5 max-h-56 rounded-lg border border-slate-700 object-cover" />
                   )}
                 </>
               )}
@@ -195,6 +275,7 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
                 onChange={e => setReplyText(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Escape') setShowReplyInput(false); }}
                 placeholder={`Ответить ${comment.author.firstName}...`}
+                maxLength={2000}
                 className="flex-1 min-w-0 bg-slate-800/60 border border-slate-700/60 focus:border-primary-500/60 rounded-xl px-3 py-1.5 text-xs text-white placeholder-slate-500 focus:outline-none transition-colors"
               />
               <button type="submit" disabled={!replyText.trim() || replyMut.isPending} className="p-1.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 text-white rounded-lg transition-colors flex-shrink-0">
@@ -217,7 +298,7 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
       {!isReply && comment.replies?.length > 0 && (
         <div className="mt-2 space-y-2">
           {comment.replies.map((reply: any) => (
-            <CommentItem key={reply.id} comment={reply} postId={postId} currentUserId={currentUserId} feedQueryKey={feedQueryKey} isReply />
+            <CommentItem key={reply.id} comment={reply} postId={postId} postAuthorId={postAuthorId} currentUserId={currentUserId} isReply />
           ))}
         </div>
       )}
@@ -227,7 +308,9 @@ function CommentItem({ comment, postId, currentUserId, feedQueryKey = ['feed'], 
 
 // ─── Post Card ─────────────────────────────────────────────────────────────────
 
-function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = false }: { post: any; currentUserId: string; feedQueryKey?: string[]; highlight?: boolean }) {
+const MAX_POST_IMAGES = 10;
+
+function PostCard({ post, currentUserId, highlight = false }: { post: any; currentUserId: string; highlight?: boolean }) {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const [showComments, setShowComments] = useState(false);
@@ -242,6 +325,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showRepost, setShowRepost] = useState(false);
   const [repostComment, setRepostComment] = useState('');
+  const [showComplaint, setShowComplaint] = useState(false);
   useScrollLock(showRepost);
   useScrollLock(showComments);
 
@@ -270,17 +354,25 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
     action();
   };
   const [editContent, setEditContent] = useState(post.content);
-  const [editImagePreview, setEditImagePreview] = useState<{ url: string; serverUrl: string } | null>(
-    post.imageUrl ? { url: `${API_URL}${post.imageUrl}`, serverUrl: post.imageUrl } : null
-  );
+  // Фото поста при редактировании: новые посты хранят images[], легаси — imageUrl.
+  const originalImages: string[] = Array.isArray(post.images) && post.images.length > 0
+    ? post.images
+    : post.imageUrl ? [post.imageUrl] : [];
+  const [editImages, setEditImages] = useState<{ url: string; serverUrl: string }[]>([]);
   const [editUploading, setEditUploading] = useState(false);
   const editImageRef = useRef<HTMLInputElement>(null);
   const commentInputRef = useRef<HTMLTextAreaElement>(null);
   const commentImageRef = useRef<HTMLInputElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  const isOwner = post.author.id === currentUserId;
+  const isOwner = !!currentUserId && post.author.id === currentUserId;
   const isLongContent = !editing && post.content.length > 280;
+
+  const startEditing = () => {
+    setEditContent(post.content);
+    setEditImages(originalImages.map((u) => ({ url: `${API_URL}${u}`, serverUrl: u })));
+    setEditing(true);
+  };
 
   useEffect(() => {
     const handler = (e: MouseEvent) => { if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowMenu(false); };
@@ -288,40 +380,147 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // После публикации коммента — проскроллить к нему и подсветить (лента уже перезапросилась)
+  // ── Комментарии — отдельный постраничный запрос при открытии шторки ──
+  const commentsQuery = useInfiniteQuery({
+    queryKey: ['post-comments', post.id],
+    queryFn: async ({ pageParam }) => {
+      const { data } = await api.get(`/posts/${post.id}/comments`, { params: { cursor: pageParam || undefined, limit: 20 } });
+      return toCursorPage(data);
+    },
+    initialPageParam: '',
+    getNextPageParam: (last) => last.nextCursor ?? undefined,
+    enabled: showComments,
+  });
+  const comments = useMemo(
+    () => dedupeById((commentsQuery.data?.pages ?? []).flatMap((p) => p.items)),
+    [commentsQuery.data],
+  );
+
+  // После публикации коммента — проскроллить к нему (список уже перезапросился)
   useEffect(() => {
     if (!newCommentId) return;
     const el = document.getElementById(`comment-${newCommentId}`);
-    if (!el) return; // ещё не отрендерился — сработает при следующем обновлении post.comments
+    if (!el) return; // ещё не отрендерился — сработает при следующем обновлении списка
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     setNewCommentId(null);
-  }, [post.comments, newCommentId]);
+  }, [comments, newCommentId]);
 
+  const bumpComments = (delta: number) =>
+    patchPostEverywhere(queryClient, post.id, (p) => ({ ...p, _count: { ...p._count, comments: Math.max(0, (p._count?.comments ?? 0) + delta) } }));
 
-  const likeMut = useMutation({ mutationFn: () => post.isLiked ? postAPI.unlikePost(post.id) : postAPI.likePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось поставить лайк')) });
-  const commentMut = useMutation({ mutationFn: () => postAPI.commentPost(post.id, commentText.trim(), undefined, commentImage?.serverUrl), onSuccess: (res: any) => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setCommentText(''); setCommentImage(null); setShowEmoji(false); if (res?.data?.id) setNewCommentId(res.data.id); }, onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить комментарий')) });
-  const editMut = useMutation({ mutationFn: () => postAPI.editPost(post.id, { content: editContent, imageUrl: editImagePreview?.serverUrl ?? null, audioUrl: null, audioName: null }), onSuccess: () => { queryClient.invalidateQueries({ queryKey: feedQueryKey }); setEditing(false); }, onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')) });
-  const deleteMut = useMutation({ mutationFn: () => postAPI.deletePost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить пост')) });
-  const reactMut = useMutation({ mutationFn: (emoji: string) => postAPI.reactPost(post.id, emoji), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось поставить реакцию')) });
-  const unreactMut = useMutation({ mutationFn: () => postAPI.unreactPost(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось убрать реакцию')) });
-  const voteMut = useMutation({ mutationFn: (optionIndex: number) => postAPI.votePoll(post.id, optionIndex), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось проголосовать')) });
-  const saveMut = useMutation({ mutationFn: () => postAPI.toggleSave(post.id), onSuccess: () => queryClient.invalidateQueries({ queryKey: feedQueryKey }), onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить пост')) });
+  // Лайк/сохранение — оптимистично (кнопка сразу в новом состоянии, повторный
+  // клик заблокирован до ответа), сервер идемпотентен.
+  const likeMut = useMutation({
+    mutationFn: (like: boolean) => (like ? postAPI.likePost(post.id) : postAPI.unlikePost(post.id)),
+    onMutate: (like: boolean) => patchPostEverywhere(queryClient, post.id, (p) => ({
+      ...p,
+      isLiked: like,
+      _count: { ...p._count, likes: Math.max(0, (p._count?.likes ?? 0) + (p.isLiked === like ? 0 : like ? 1 : -1)) },
+    })),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось поставить лайк')),
+    onSettled: () => invalidatePostCaches(queryClient),
+  });
+  const commentMut = useMutation({
+    mutationFn: () => postAPI.commentPost(post.id, commentText.trim(), undefined, commentImage?.serverUrl),
+    onSuccess: (res: any) => {
+      queryClient.invalidateQueries({ queryKey: ['post-comments', post.id] });
+      bumpComments(1);
+      setCommentText(''); setCommentImage(null); setShowEmoji(false);
+      if (res?.data?.id) setNewCommentId(res.data.id);
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось отправить комментарий')),
+  });
+  // Правка шлёт только изменённое: аудио и нетронутые фото не затираются.
+  const editMut = useMutation({
+    mutationFn: () => {
+      const body: Record<string, unknown> = {};
+      if (editContent !== post.content) body.content = editContent;
+      const nextImages = editImages.map((i) => i.serverUrl);
+      if (nextImages.join('\n') !== originalImages.join('\n')) body.images = nextImages;
+      return api.put(`/posts/${post.id}`, body);
+    },
+    onSuccess: () => { invalidatePostCaches(queryClient); setEditing(false); },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
+  });
+  const deleteMut = useMutation({ mutationFn: () => postAPI.deletePost(post.id), onSuccess: () => invalidatePostCaches(queryClient), onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить пост')) });
+  const reactMut = useMutation({
+    mutationFn: (emoji: string) => postAPI.reactPost(post.id, emoji),
+    onMutate: (emoji: string) => patchPostEverywhere(queryClient, post.id, (p) => withMyReaction(p, emoji)),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось поставить реакцию')),
+    onSettled: () => invalidatePostCaches(queryClient),
+  });
+  const unreactMut = useMutation({
+    mutationFn: () => postAPI.unreactPost(post.id),
+    onMutate: () => patchPostEverywhere(queryClient, post.id, (p) => withMyReaction(p, null)),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось убрать реакцию')),
+    onSettled: () => invalidatePostCaches(queryClient),
+  });
+  const voteMut = useMutation({
+    mutationFn: (optionIndex: number) => postAPI.votePoll(post.id, optionIndex),
+    onSuccess: ({ data }: any) => {
+      patchPostEverywhere(queryClient, post.id, (p) => ({
+        ...p,
+        ...(Array.isArray(data?.options) ? { pollOptions: data.options } : {}),
+        myVote: data?.myVote ?? null,
+        pollVotes: [{ userId: currentUserId, optionIndex: data?.myVote }],
+      }));
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось проголосовать')),
+  });
+  const saveMut = useMutation({
+    mutationFn: (saved: boolean) => api.post(`/posts/${post.id}/save`, { saved }),
+    onMutate: (saved: boolean) => patchPostEverywhere(queryClient, post.id, (p) => ({
+      ...p,
+      isSaved: saved,
+      _count: { ...p._count, savedBy: Math.max(0, (p._count?.savedBy ?? 0) + (p.isSaved === saved ? 0 : saved ? 1 : -1)) },
+    })),
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить пост')),
+    onSettled: () => invalidatePostCaches(queryClient),
+  });
   const repostMut = useMutation({
     mutationFn: (comment: string) => postAPI.repostPost(post.id, comment.trim() || undefined),
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['feed'] }); setShowRepost(false); setRepostComment(''); },
+    onSuccess: () => { invalidatePostCaches(queryClient); setShowRepost(false); setRepostComment(''); },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось поделиться постом')),
   });
 
-  const uploadEditFile = async (file: File) => {
+  // Несколько фото: грузим по очереди, ошибка одного не обрывает остальные.
+  const uploadEditFiles = async (files: File[]) => {
+    const room = MAX_POST_IMAGES - editImages.length;
+    const toUpload = files.slice(0, Math.max(0, room));
+    if (toUpload.length === 0) return;
     setEditUploading(true);
+    const failed: string[] = [];
+    let lastError: any = null;
     try {
-      const fd = new FormData();
-      fd.append('file', file);
-      const { data } = await postAPI.uploadMedia(fd);
-      setEditImagePreview({ url: URL.createObjectURL(file), serverUrl: data.url });
-    } catch {
-      alert('Не удалось загрузить файл. Проверьте формат и размер (до 20 МБ).');
+      for (const file of toUpload) {
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          const { data } = await postAPI.uploadMedia(fd);
+          setEditImages((prev) => (prev.length >= MAX_POST_IMAGES ? prev : [...prev, { url: URL.createObjectURL(file), serverUrl: data.url }]));
+        } catch (e) {
+          failed.push(file.name);
+          lastError = e;
+        }
+      }
     } finally { setEditUploading(false); }
+    if (failed.length) {
+      toast.error(`${getApiError(lastError, 'Не удалось загрузить фото')}: ${failed.join(', ')}`);
+    }
+  };
+
+  // Эмодзи — в позицию курсора, а не в конец
+  const insertCommentEmoji = (em: string) => {
+    const el = commentInputRef.current;
+    const start = el?.selectionStart ?? commentText.length;
+    const end = el?.selectionEnd ?? start;
+    setCommentText((t) => t.slice(0, start) + em + t.slice(end));
+    requestAnimationFrame(() => {
+      const node = commentInputRef.current;
+      if (!node) return;
+      const pos = start + em.length;
+      try { node.setSelectionRange(pos, pos); } catch {}
+    });
   };
 
   const uploadCommentFile = async (file: File) => {
@@ -390,35 +589,47 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
             </p>
           </div>
         </div>
-        {isOwner && (
-          <div className="relative flex-shrink-0" ref={menuRef}>
-            <button onClick={() => setShowMenu(m => !m)} className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"><MoreHorizontal size={16} /></button>
-            {showMenu && (
-              <div className="absolute right-0 top-8 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-10 overflow-hidden min-w-[150px]">
-                <button onClick={() => { setShowMenu(false); setEditing(true); setEditContent(post.content); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 transition-colors"><Pencil size={14} /> Редактировать</button>
-                <button onClick={() => { setShowMenu(false); setConfirmDelete(true); }} disabled={deleteMut.isPending} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-slate-700 transition-colors border-t border-slate-700">
-                  {deleteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}Удалить пост
+        <div className="relative flex-shrink-0" ref={menuRef}>
+          <button type="button" onClick={() => setShowMenu(m => !m)} aria-label="Действия с постом" className="p-1.5 text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"><MoreHorizontal size={16} /></button>
+          {showMenu && (
+            <div className="absolute right-0 top-8 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-10 overflow-hidden min-w-[170px]">
+              {isOwner ? (
+                <>
+                  {!isRepost && (
+                    <button type="button" onClick={() => { setShowMenu(false); startEditing(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-slate-300 hover:bg-slate-700 transition-colors"><Pencil size={14} /> Редактировать</button>
+                  )}
+                  <button type="button" onClick={() => { setShowMenu(false); setConfirmDelete(true); }} disabled={deleteMut.isPending} className={`w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-slate-700 transition-colors ${!isRepost ? 'border-t border-slate-700' : ''}`}>
+                    {deleteMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}Удалить пост
+                  </button>
+                </>
+              ) : (
+                <button type="button" onClick={() => { setShowMenu(false); requireAuth(() => setShowComplaint(true)); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-400 hover:bg-slate-700 transition-colors">
+                  <Flag size={14} /> Пожаловаться
                 </button>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="mb-3 ml-[52px]">
         {editing ? (
           <div className="space-y-2">
             <RichTextEditor value={editContent} onChange={setEditContent} autoFocus minHeight={80} />
-            {editImagePreview && (
-              <div className="relative inline-block">
-                <img src={editImagePreview.url} alt="preview" className="max-h-48 rounded-xl object-cover border border-slate-700" />
-                <button type="button" onClick={() => setEditImagePreview(null)} className="absolute top-1.5 right-1.5 p-1 bg-slate-900/80 hover:bg-slate-900 rounded-full text-white"><X size={12} /></button>
+            {editImages.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {editImages.map((img, i) => (
+                  <div key={`${img.serverUrl}-${i}`} className="relative flex-shrink-0">
+                    <img src={img.url} alt={`Фото ${i + 1}`} className="h-24 w-24 rounded-xl object-cover border border-slate-700" />
+                    <button type="button" onClick={() => setEditImages(prev => prev.filter((_, idx) => idx !== i))} aria-label="Убрать фото" className="absolute top-1 right-1 p-1 bg-slate-900/80 hover:bg-slate-900 rounded-full text-white"><X size={12} /></button>
+                  </div>
+                ))}
               </div>
             )}
             <div className="flex items-center justify-between">
               <div className="flex gap-1">
-                <input ref={editImageRef} type="file" accept="image/*,.gif" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadEditFile(f); e.target.value = ''; }} />
-                <button type="button" onClick={() => editImageRef.current?.click()} disabled={editUploading || !!editImagePreview} className="p-1.5 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-40">
+                <input ref={editImageRef} type="file" accept="image/*,.gif" multiple className="hidden" onChange={e => { const fs = Array.from(e.target.files || []); if (fs.length) uploadEditFiles(fs); e.target.value = ''; }} />
+                <button type="button" onClick={() => editImageRef.current?.click()} disabled={editUploading || editImages.length >= MAX_POST_IMAGES} aria-label="Добавить фото" title={editImages.length >= MAX_POST_IMAGES ? `Максимум ${MAX_POST_IMAGES} фото` : 'Добавить фото'} className="p-1.5 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-40">
                   {editUploading ? <Loader2 size={14} className="animate-spin" /> : <Image size={14} />}
                 </button>
               </div>
@@ -431,7 +642,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
             </div>
           </div>
         ) : (
-          <DoubleTapReactWrapper reactions={post.reactions ?? []} currentUserId={currentUserId} onReact={(emoji) => requireAuth(() => reactMut.mutate(emoji))} onUnreact={() => requireAuth(() => unreactMut.mutate())}>
+          <DoubleTapReactWrapper myEmoji={post.myReaction ?? null} currentUserId={currentUserId} onReact={(emoji) => requireAuth(() => reactMut.mutate(emoji))} onUnreact={() => requireAuth(() => unreactMut.mutate())}>
             <>
               {isRepost && (
                 <>
@@ -478,7 +689,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                 const opts = post.pollOptions as Array<{text: string; votes: number}>;
                 const total = opts.reduce((s, o) => s + (o.votes || 0), 0);
                 const ended = post.pollEndsAt && new Date(post.pollEndsAt) < new Date();
-                const myVoteIdx = post.pollVotes?.find((v: any) => v.userId === currentUserId)?.optionIndex;
+                const myVoteIdx = post.myVote ?? post.pollVotes?.find((v: any) => v.userId === currentUserId)?.optionIndex;
                 return (
                   <div className="space-y-2 mb-2">
                     {opts.map((opt, idx) => {
@@ -762,11 +973,11 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
             </>
           </DoubleTapReactWrapper>
         )}
-        {!editing && <ReactionBar reactions={post.reactions ?? []} currentUserId={currentUserId} onReact={(emoji) => requireAuth(() => reactMut.mutate(emoji))} onUnreact={() => requireAuth(() => unreactMut.mutate())} />}
+        {!editing && <ReactionBar summary={post.reactionSummary ?? []} myEmoji={post.myReaction ?? null} currentUserId={currentUserId} onReact={(emoji) => requireAuth(() => { if (!reactMut.isPending && !unreactMut.isPending) reactMut.mutate(emoji); })} onUnreact={() => requireAuth(() => { if (!reactMut.isPending && !unreactMut.isPending) unreactMut.mutate(); })} />}
       </div>
 
       <div className="flex items-center gap-1 ml-[52px]">
-        <button onClick={() => requireAuth(() => { if (!isOwner) likeMut.mutate(); })} disabled={likeMut.isPending || (!!currentUserId && isOwner)} title={currentUserId && isOwner ? 'Нельзя лайкать свой пост' : undefined}
+        <button type="button" onClick={() => requireAuth(() => { if (!isOwner && !likeMut.isPending) likeMut.mutate(!post.isLiked); })} disabled={likeMut.isPending || isOwner} title={isOwner ? 'Нельзя лайкать свой пост' : undefined} aria-label={post.isLiked ? 'Убрать лайк' : 'Лайк'} aria-pressed={!!post.isLiked}
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all ${currentUserId && isOwner ? 'cursor-default text-slate-600' : post.isLiked ? 'text-red-400 hover:bg-red-400/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}>
           <Heart size={15} className={post.isLiked ? 'fill-red-400 text-red-400' : ''} />
           {!!post._count?.likes && <span className="text-xs font-medium">{post._count.likes}</span>}
@@ -779,8 +990,8 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
           <Repeat2 size={15} />
           {!!post._count?.reposts && <span className="text-xs font-medium">{post._count.reposts}</span>}
         </button>
-        <ShareButton url={`/post/${post.id}`} title={`Пост от ${post.author.firstName} ${post.author.lastName}`} text={post.content?.slice(0, 100)} iconSize={15} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all" />
-        <button onClick={() => requireAuth(() => saveMut.mutate())} disabled={saveMut.isPending}
+        <ShareButton url={`/feed?post=${post.id}`} title={`Пост от ${post.author.firstName} ${post.author.lastName}`} text={htmlToText(post.content || post.repostComment).slice(0, 100) || undefined} iconSize={15} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all" />
+        <button type="button" onClick={() => requireAuth(() => { if (!saveMut.isPending) saveMut.mutate(!post.isSaved); })} disabled={saveMut.isPending} aria-pressed={!!post.isSaved}
           className={`ml-auto flex items-center gap-1 px-3 py-1.5 rounded-lg text-sm transition-all ${post.isSaved ? 'text-amber-400 hover:bg-amber-400/10' : 'text-slate-400 hover:text-white hover:bg-slate-800/60'}`}
           title={post.isSaved ? 'Убрать из сохранённого' : 'Сохранить'}>
           <Star size={15} fill={post.isSaved ? 'currentColor' : 'none'} />
@@ -796,16 +1007,36 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
             <div className="relative flex items-center justify-between px-4 py-3 border-b border-slate-800 flex-shrink-0">
               <div className="w-10 h-1 bg-slate-700 rounded-full absolute left-1/2 -translate-x-1/2 top-1.5 sm:hidden" />
               <h3 className="text-base font-bold text-white">Комментарии{!!post._count?.comments && ` · ${post._count.comments}`}</h3>
-              <button onClick={() => setShowComments(false)} className="p-2 -mr-2 text-slate-400 hover:text-white rounded-lg transition-colors"><X size={18} /></button>
+              <button type="button" onClick={() => setShowComments(false)} aria-label="Закрыть" className="p-2 -mr-2 text-slate-400 hover:text-white rounded-lg transition-colors"><X size={18} /></button>
             </div>
             {/* Список: самый верхний комментарий сверху, скролл до последнего */}
             <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
-              {post.comments && post.comments.length > 0 ? (
-                post.comments.map((comment: any) => (
-                  <div key={comment.id} id={`comment-${comment.id}`}>
-                    <CommentItem comment={comment} postId={post.id} postAuthorId={post.author.id} currentUserId={currentUserId} feedQueryKey={feedQueryKey} />
-                  </div>
-                ))
+              {commentsQuery.isLoading ? (
+                <div className="flex justify-center py-10"><Loader2 size={20} className="animate-spin text-slate-500" /></div>
+              ) : commentsQuery.isError && comments.length === 0 ? (
+                <div className="text-center py-10">
+                  <p className="text-sm text-slate-500 mb-2">Не удалось загрузить комментарии</p>
+                  <button type="button" onClick={() => commentsQuery.refetch()} className="text-sm text-primary-400 hover:text-primary-300">Повторить</button>
+                </div>
+              ) : comments.length > 0 ? (
+                <>
+                  {comments.map((comment: any) => (
+                    <div key={comment.id} id={`comment-${comment.id}`}>
+                      <CommentItem comment={comment} postId={post.id} postAuthorId={post.author.id} currentUserId={currentUserId} />
+                    </div>
+                  ))}
+                  {commentsQuery.hasNextPage && (
+                    <button
+                      type="button"
+                      onClick={() => commentsQuery.fetchNextPage()}
+                      disabled={commentsQuery.isFetchingNextPage}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 text-sm text-primary-400 hover:text-primary-300 disabled:opacity-60"
+                    >
+                      {commentsQuery.isFetchingNextPage && <Loader2 size={14} className="animate-spin" />}
+                      Показать ещё
+                    </button>
+                  )}
+                </>
               ) : (
                 <p className="text-center text-sm text-slate-500 py-10">Пока нет комментариев.<br />Будьте первым!</p>
               )}
@@ -820,8 +1051,8 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
               )}
               <div className="flex items-end gap-1.5">
                 <div className="relative flex-shrink-0">
-                  <button type="button" onClick={() => setShowEmoji(v => !v)} className="p-2 text-slate-400 hover:text-primary-400 rounded-lg transition-colors" title="Эмодзи"><Smile size={19} /></button>
-                  {showEmoji && <EmojiPicker position="up" onSelect={(em) => setCommentText(t => t + em)} onClose={() => setShowEmoji(false)} />}
+                  <button type="button" onClick={() => setShowEmoji(v => !v)} className="p-2 text-slate-400 hover:text-primary-400 rounded-lg transition-colors" title="Эмодзи" aria-label="Эмодзи"><Smile size={19} /></button>
+                  {showEmoji && <EmojiPicker position="up" onSelect={insertCommentEmoji} onClose={() => setShowEmoji(false)} />}
                 </div>
                 <input ref={commentImageRef} type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) uploadCommentFile(f); e.target.value = ''; }} />
                 <button type="button" onClick={() => commentImageRef.current?.click()} disabled={commentUploading || !!commentImage} className="p-2 text-slate-400 hover:text-primary-400 rounded-lg transition-colors disabled:opacity-40 flex-shrink-0" title="Картинка (до 5 МБ)">
@@ -832,10 +1063,12 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
                   value={commentText}
                   onChange={e => { setCommentText(e.target.value); const el = e.target; el.style.height = 'auto'; el.style.height = `${Math.min(el.scrollHeight, 120)}px`; }}
                   placeholder="Написать комментарий..."
+                  aria-label="Текст комментария"
+                  maxLength={2000}
                   rows={1}
                   className="flex-1 min-w-0 resize-none max-h-[120px] bg-slate-800/60 border border-slate-700 rounded-2xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-primary-600 transition-colors"
                 />
-                <button type="button" onClick={() => requireAuth(() => { if (commentText.trim() || commentImage) commentMut.mutate(); })} disabled={(!commentText.trim() && !commentImage) || commentMut.isPending || commentUploading} className="p-2.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-full transition-colors flex-shrink-0">
+                <button type="button" aria-label="Отправить комментарий" onClick={() => requireAuth(() => { if ((commentText.trim() || commentImage) && !commentMut.isPending) commentMut.mutate(); })} disabled={(!commentText.trim() && !commentImage) || commentMut.isPending || commentUploading} className="p-2.5 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white rounded-full transition-colors flex-shrink-0">
                   {commentMut.isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
                 </button>
               </div>
@@ -857,7 +1090,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
         <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center" onClick={() => setShowRepost(false)}>
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
           <div
-            className="relative w-full max-w-lg bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-5 pb-8 shadow-2xl"
+            className="relative w-full max-w-lg max-h-[85dvh] overflow-y-auto overscroll-contain bg-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-800 p-5 pb-8 shadow-2xl"
             style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}
             onClick={e => e.stopPropagation()}
           >
@@ -870,6 +1103,7 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
               value={repostComment}
               onChange={e => setRepostComment(e.target.value)}
               placeholder="Добавьте комментарий (необязательно)..."
+              maxLength={1000}
               rows={3}
               className="w-full bg-slate-800/60 border border-slate-700 focus:border-primary-500 rounded-xl px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none resize-none transition-colors"
             />
@@ -899,6 +1133,9 @@ function PostCard({ post, currentUserId, feedQueryKey = ['feed'], highlight = fa
           serviceName={svc.name || svc.service?.name}
           onClose={() => setShowDeal(false)}
         />
+      )}
+      {showComplaint && (
+        <ComplaintModal targetType="post" targetId={post.id} onClose={() => setShowComplaint(false)} />
       )}
       {authGateModal}
     </div>
@@ -941,7 +1178,7 @@ function PostTypePicker({ onClose, onPickOrder, onPickVacancy }: { onClose: () =
     <div className="fixed inset-0 z-[60] flex items-end justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative w-full max-w-lg bg-slate-900 rounded-t-3xl border-t border-slate-800 p-2 pb-8 shadow-2xl"
+        className="relative w-full max-w-lg max-h-[85dvh] overflow-y-auto overscroll-contain bg-slate-900 rounded-t-3xl border-t border-slate-800 p-2 pb-8 shadow-2xl"
         style={{ paddingBottom: 'max(2rem, env(safe-area-inset-bottom, 0px))' }}
         onClick={e => e.stopPropagation()}
       >
@@ -1131,57 +1368,82 @@ export default function FeedPage() {
   const sortParam = filters.sort && filters.sort !== 'new' ? filters.sort : undefined;
 
   // ── Main feed — infinite scroll ───────────────────────────────────────────
+  // Курсорная пагинация: для «Новые» — (createdAt,id), для ранжированных
+  // сортировок — снапшот порядка на сервере. refetch не даёт дублей/пропусков.
   const feed = useInfiniteQuery({
     queryKey: ['feed', typeFilter, authorKindFilter, periodFilter, cityFilter, employmentFilter, artistTypeFilter, genreFilter, sortParam],
-    queryFn: async ({ pageParam = 0 }) => {
-      const { data } = await postAPI.getFeed({ type: typeFilter, authorKind: authorKindFilter, period: periodFilter, city: cityFilter, employment: employmentFilter, artistType: artistTypeFilter, genre: genreFilter, sort: sortParam, offset: pageParam, limit: PAGE_SIZE });
-      return data as any[];
+    queryFn: async ({ pageParam }) => {
+      const { data } = await api.get('/posts/feed', {
+        params: { type: typeFilter, authorKind: authorKindFilter, period: periodFilter, city: cityFilter, employment: employmentFilter, artistType: artistTypeFilter, genre: genreFilter, sort: sortParam, cursor: pageParam, limit: PAGE_SIZE },
+      });
+      return toCursorPage(data);
     },
-    initialPageParam: 0,
-    // A page may include up to 7 pinned team posts for brand-new users, so use >=.
-    getNextPageParam: (lastPage, allPages) => lastPage.length >= PAGE_SIZE ? allPages.length * PAGE_SIZE : undefined,
+    initialPageParam: '',
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: !showSavedOnly,
     refetchInterval: showSavedOnly ? false : 60000,
   });
 
   // ── Saved posts (separate view) ───────────────────────────────────────────
-  const saved = useQuery({
+  const saved = useInfiniteQuery({
     queryKey: ['feed-saved'],
-    queryFn: async () => { const { data } = await postAPI.getSavedPosts(); return data as any[]; },
+    queryFn: async ({ pageParam }) => {
+      const { data } = await api.get('/posts/saved/list', { params: { cursor: pageParam, limit: PAGE_SIZE } });
+      return toCursorPage(data);
+    },
+    initialPageParam: '',
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
     enabled: showSavedOnly,
   });
 
-  const posts = showSavedOnly ? (saved.data ?? []) : (feed.data?.pages.flat() ?? []);
+  const active = showSavedOnly ? saved : feed;
+  // Склейка страниц с дедупом по id (страховка от повторов между страницами).
+  const posts = useMemo(
+    () => dedupeById((active.data?.pages ?? []).flatMap((p) => p.items)),
+    [active.data],
+  );
 
-  const isLoading = showSavedOnly ? saved.isLoading : feed.isLoading;
-  const isError = showSavedOnly ? saved.isError : feed.isError;
-  const retry = () => { if (showSavedOnly) saved.refetch(); else feed.refetch(); };
+  const isLoading = active.isLoading;
+  const isError = active.isError;
+  const retry = () => { active.refetch(); };
 
   // ── Infinite-scroll sentinel ──────────────────────────────────────────────
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const { hasNextPage, isFetchingNextPage, fetchNextPage } = active;
   useEffect(() => {
-    if (showSavedOnly) return;
     const el = sentinelRef.current;
     if (!el) return;
     const io = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting && feed.hasNextPage && !feed.isFetchingNextPage) {
-        feed.fetchNextPage();
+      if (entries[0].isIntersecting && hasNextPage && !isFetchingNextPage) {
+        fetchNextPage();
       }
     }, { rootMargin: '600px' });
     io.observe(el);
     return () => io.disconnect();
-  }, [showSavedOnly, feed.hasNextPage, feed.isFetchingNextPage, feed.fetchNextPage]);
+  }, [showSavedOnly, hasNextPage, isFetchingNextPage, fetchNextPage, posts.length]);
+
+  // ── Deep link ?post=<id> — пост грузится отдельно по id (не выкачиваем ленту до конца)
+  const targetPost = useQuery({
+    queryKey: ['feed-post', targetPostId],
+    queryFn: async () => { const { data } = await api.get(`/posts/${targetPostId}`); return data as any; },
+    enabled: !!targetPostId,
+    retry: false,
+    staleTime: 30_000,
+  });
+  const targetInFeed = !!targetPostId && posts.some((p: any) => p.id === targetPostId);
+  const showTargetSeparately = !showSavedOnly && !!targetPost.data && !targetInFeed;
+
+  const notFoundToastRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!targetPostId || !targetPost.isError || notFoundToastRef.current === targetPostId) return;
+    notFoundToastRef.current = targetPostId;
+    toast.error(getApiError(targetPost.error, 'Пост не найден или удалён'));
+  }, [targetPostId, targetPost.isError, targetPost.error]);
 
   const scrolledPostRef = useRef<string | null>(null);
   useEffect(() => {
-    if (!targetPostId || posts.length === 0) return;
-    if (scrolledPostRef.current === targetPostId) return;
-    if (!document.getElementById(`post-${targetPostId}`)) {
-      // Not in a loaded page yet (deep-linked to an older post) — keep pulling pages
-      // until it appears or the feed runs out, then this effect re-runs and centres it.
-      if (feed.hasNextPage && !feed.isFetchingNextPage) feed.fetchNextPage();
-      return;
-    }
+    if (!targetPostId || scrolledPostRef.current === targetPostId) return;
+    if (!document.getElementById(`post-${targetPostId}`)) return; // ещё не отрисован
     scrolledPostRef.current = targetPostId;
     // Centre the post in the viewport. Re-centre a few times: lazy-loaded images above
     // it shift the layout after the first scroll, otherwise leaving it near the bottom.
@@ -1191,7 +1453,7 @@ export default function FeedPage() {
     const t1 = setTimeout(center, 350);
     const t2 = setTimeout(center, 800);
     return () => { clearTimeout(t1); clearTimeout(t2); };
-  }, [targetPostId, posts, feed.hasNextPage, feed.isFetchingNextPage, feed.fetchNextPage]);
+  }, [targetPostId, posts, targetPost.data]);
 
   const activeFilterCount = countActiveFilters(filters);
 
@@ -1261,19 +1523,21 @@ export default function FeedPage() {
             <div className="divide-y divide-slate-800/60">
               {[1, 2, 3].map(i => <PostSkeleton key={i} />)}
             </div>
-          ) : posts.length > 0 ? (
+          ) : posts.length > 0 || showTargetSeparately ? (
             <>
               <div className="divide-y divide-slate-800/60">
+                {/* Пост по ссылке, которого нет в загруженных страницах — сверху */}
+                {showTargetSeparately && (
+                  <PostCard key={`target-${targetPost.data.id}`} post={targetPost.data} currentUserId={currentUser?.id ?? ''} highlight />
+                )}
                 {posts.map((post: any) => (
                   <PostCard key={post.id} post={post} currentUserId={currentUser?.id ?? ''} highlight={post.id === targetPostId} />
                 ))}
               </div>
               {/* Infinite-scroll sentinel + loader */}
-              {!showSavedOnly && (
-                <div ref={sentinelRef} className="py-6 flex justify-center">
-                  {feed.isFetchingNextPage && <Loader2 size={22} className="animate-spin text-slate-500" />}
-                </div>
-              )}
+              <div ref={sentinelRef} className="py-6 flex justify-center">
+                {isFetchingNextPage && <Loader2 size={22} className="animate-spin text-slate-500" />}
+              </div>
             </>
           ) : (
             <div className="flex flex-col items-center py-16 px-6 text-center">
@@ -1296,7 +1560,7 @@ export default function FeedPage() {
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           aria-label="Наверх"
           title="Наверх"
-          className={`fixed bottom-36 right-6 lg:bottom-24 lg:right-10 w-10 h-10 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white border border-slate-700 rounded-full shadow-xl backdrop-blur flex items-center justify-center transition-all z-40 ${showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}
+          className={`fixed bottom-[calc(9rem_+_env(safe-area-inset-bottom,0px))] right-6 lg:bottom-24 lg:right-10 w-10 h-10 bg-slate-800/90 hover:bg-slate-700 active:scale-95 text-slate-300 hover:text-white border border-slate-700 rounded-full shadow-xl backdrop-blur flex items-center justify-center transition-all z-40 ${showScrollTop ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'}`}
         >
           <ChevronUp size={20} />
         </button>
@@ -1304,7 +1568,9 @@ export default function FeedPage() {
         {/* FAB — create post */}
         <button
           onClick={() => setShowPostTypePicker(true)}
-          className="fixed bottom-20 right-4 lg:bottom-8 lg:right-8 w-14 h-14 bg-primary-600 hover:bg-primary-500 active:scale-95 text-white rounded-2xl shadow-2xl shadow-primary-900/50 flex items-center justify-center transition-all z-40"
+          aria-label="Создать пост"
+          title="Создать пост"
+          className="fixed bottom-[calc(5rem_+_env(safe-area-inset-bottom,0px))] right-4 lg:bottom-8 lg:right-8 w-14 h-14 bg-primary-600 hover:bg-primary-500 active:scale-95 text-white rounded-2xl shadow-2xl shadow-primary-900/50 flex items-center justify-center transition-all z-40"
         >
           <Plus size={26} />
         </button>

@@ -3,9 +3,48 @@ import { useNavigate } from 'react-router-dom';
 import DOMPurify from 'dompurify';
 
 // Whitelist matching what RichTextEditor can produce (formatting + mention spans).
+// Сервер санитизирует тем же списком (server/src/routes/posts.ts).
 const ALLOWED_TAGS = ['p', 'br', 'strong', 'b', 'em', 'i', 's', 'strike', 'del', 'u', 'ul', 'ol', 'li', 'blockquote', 'a', 'span'];
-const ALLOWED_ATTR = ['href', 'target', 'rel', 'class', 'data-id', 'data-type', 'data-label', 'data-mention-id'];
+const ALLOWED_ATTR = ['href', 'target', 'rel', 'class', 'data-id', 'data-type', 'data-label', 'data-mention-id', 'data-mention-suggestion-char'];
+// class разрешён ТОЛЬКО для упоминаний: произвольные Tailwind-классы
+// (`fixed inset-0 z-[100]`) позволяли ссылке из поста перекрыть весь экран.
+const ALLOWED_CLASSES = new Set(['post-mention']);
 const URL_RE = /(https?:\/\/[^\s<]+)/g;
+const MENTION_ID_RE = /^[\w-]{1,64}$/;
+
+function isSafeHref(href: string): boolean {
+  if (/^https?:\/\//i.test(href) || /^mailto:/i.test(href)) return true;
+  // относительные внутренние ссылки, но не protocol-relative `//evil.com` / `/\evil.com`
+  return href.startsWith('/') && !href.startsWith('//') && !href.startsWith('/\\');
+}
+
+// Отдельный экземпляр DOMPurify — хуки не влияют на остальные места приложения.
+const purifier = typeof window !== 'undefined' ? DOMPurify(window) : null;
+purifier?.addHook('afterSanitizeAttributes', (node) => {
+  const el = node as Element;
+  if (typeof el.getAttribute !== 'function') return;
+  if (el.hasAttribute('class')) {
+    const keep = el.tagName === 'SPAN'
+      ? (el.getAttribute('class') || '').split(/\s+/).filter((c) => ALLOWED_CLASSES.has(c))
+      : [];
+    if (keep.length) el.setAttribute('class', keep.join(' '));
+    else el.removeAttribute('class');
+  }
+  if (el.tagName === 'SPAN' && el.getAttribute('data-type') === 'mention' && MENTION_ID_RE.test(el.getAttribute('data-id') || '')) {
+    el.setAttribute('class', 'post-mention');
+  }
+  if (el.tagName === 'A') {
+    const href = (el.getAttribute('href') || '').trim();
+    if (href && !isSafeHref(href)) el.removeAttribute('href');
+    if (/^(https?:|mailto:)/i.test(href)) {
+      el.setAttribute('target', '_blank');
+      el.setAttribute('rel', 'noopener noreferrer nofollow');
+    } else {
+      el.removeAttribute('target');
+      el.setAttribute('rel', 'nofollow');
+    }
+  }
+});
 
 function looksLikeHtml(s: string): boolean {
   return /<\/?[a-z][\s\S]*>/i.test(s);
@@ -53,8 +92,8 @@ export default function PostContent({ content, className = '' }: { content?: str
   const isHtml = !!content && looksLikeHtml(content);
 
   const safeHtml = useMemo(() => {
-    if (!isHtml || !content) return '';
-    return linkifyHtml(DOMPurify.sanitize(content, { ALLOWED_TAGS, ALLOWED_ATTR }));
+    if (!isHtml || !content || !purifier) return '';
+    return linkifyHtml(purifier.sanitize(content, { ALLOWED_TAGS, ALLOWED_ATTR, ALLOW_DATA_ATTR: false }) as string);
   }, [content, isHtml]);
 
   if (!content) return null;
@@ -79,7 +118,7 @@ export default function PostContent({ content, className = '' }: { content?: str
     const mention = (e.target as HTMLElement).closest('.post-mention') as HTMLElement | null;
     if (mention) {
       const id = mention.getAttribute('data-id') || mention.getAttribute('data-mention-id');
-      if (id) { e.preventDefault(); navigate(`/profile/${id}`); }
+      if (id && MENTION_ID_RE.test(id)) { e.preventDefault(); e.stopPropagation(); navigate(`/profile/${id}`); }
     }
   };
 

@@ -4,6 +4,9 @@ import { ArrowLeft, SlidersHorizontal, Search, Loader2, X, MapPin, Bookmark, Plu
 import { feedPresetAPI } from '../lib/api';
 import { useAuthStore } from '../stores/authStore';
 import { isProActive, limitsFor } from '../lib/proLimits';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { toast } from '../stores/toastStore';
+import { getApiError } from '../lib/apiError';
 
 export interface FlowFilters {
   postType: string[];
@@ -262,7 +265,7 @@ export default function FlowSettingsPage() {
   const [presets, setPresets] = useState<FeedPreset[]>([]);
   const [presetsLoading, setPresetsLoading] = useState(true);
   const [savingPreset, setSavingPreset] = useState(false);
-  const [presetError, setPresetError] = useState<string | null>(null);
+  const [presetToDelete, setPresetToDelete] = useState<FeedPreset | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -291,12 +294,11 @@ export default function FlowSettingsPage() {
     const name = window.prompt('Название пресета')?.trim();
     if (!name) return;
     setSavingPreset(true);
-    setPresetError(null);
     try {
       const res = await feedPresetAPI.create(name, filters as unknown as Record<string, unknown>);
       setPresets(prev => [...prev, res.data]);
     } catch (e: any) {
-      setPresetError(e?.response?.data?.error || 'Не удалось сохранить пресет');
+      toast.error(getApiError(e, 'Не удалось сохранить пресет'));
     } finally {
       setSavingPreset(false);
     }
@@ -307,7 +309,7 @@ export default function FlowSettingsPage() {
       await feedPresetAPI.remove(id);
       setPresets(prev => prev.filter(p => p.id !== id));
     } catch (e: any) {
-      setPresetError(e?.response?.data?.error || 'Не удалось удалить пресет');
+      toast.error(getApiError(e, 'Не удалось удалить пресет'));
     }
   };
 
@@ -399,7 +401,7 @@ export default function FlowSettingsPage() {
                           {preset.name}
                         </button>
                         <button
-                          onClick={() => deletePreset(preset.id)}
+                          onClick={() => setPresetToDelete(preset)}
                           aria-label="Удалить пресет"
                           className="p-2.5 rounded-2xl bg-slate-800/70 text-slate-500 hover:text-red-400 hover:bg-slate-700 transition-colors flex-shrink-0"
                         >
@@ -437,10 +439,6 @@ export default function FlowSettingsPage() {
                     <Crown size={13} />
                     Несколько пресетов — в Pro
                   </button>
-                )}
-
-                {presetError && (
-                  <p className="mt-2 text-[13px] text-red-400">{presetError}</p>
                 )}
               </>
             )}
@@ -517,6 +515,14 @@ export default function FlowSettingsPage() {
           )}
 
         </div>
+
+        <ConfirmDialog
+          open={!!presetToDelete}
+          message={presetToDelete ? `Удалить пресет «${presetToDelete.name}»?` : ''}
+          confirmLabel="Удалить"
+          onConfirm={() => { if (presetToDelete) deletePreset(presetToDelete.id); }}
+          onCancel={() => setPresetToDelete(null)}
+        />
 
         {/* Apply button */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-slate-950/95 border-t border-slate-800 backdrop-blur lg:pb-4" style={{ paddingBottom: 'calc(1rem + 56px + env(safe-area-inset-bottom, 0px))' }}>

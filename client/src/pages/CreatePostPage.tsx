@@ -133,17 +133,27 @@ export default function CreatePostPage() {
     const toUpload = files.slice(0, Math.max(0, room));
     if (toUpload.length === 0) return;
     setUploading(true);
+    // Грузим по очереди; ошибка одного файла не обрывает остальные —
+    // в конце показываем, какие не загрузились.
+    const failed: string[] = [];
+    let lastError: unknown = null;
     try {
       for (const file of toUpload) {
-        const fd = new FormData();
-        fd.append('file', file);
-        const { data } = await postAPI.uploadMedia(fd);
-        setImages(prev => prev.length >= MAX_IMAGES ? prev : [...prev, { url: URL.createObjectURL(file), serverUrl: data.url }]);
+        try {
+          const fd = new FormData();
+          fd.append('file', file);
+          const { data } = await postAPI.uploadMedia(fd);
+          setImages(prev => prev.length >= MAX_IMAGES ? prev : [...prev, { url: URL.createObjectURL(file), serverUrl: data.url }]);
+        } catch (e) {
+          failed.push(file.name || 'фото');
+          lastError = e;
+        }
       }
-    } catch {
-      alert('Не удалось загрузить файл. Проверьте формат и размер (до 20 МБ).');
     } finally {
       setUploading(false);
+    }
+    if (failed.length) {
+      toast.error(`${getApiError(lastError, 'Не удалось загрузить фото (формат JPG/PNG/GIF/WebP, до 20 МБ)')}: ${failed.join(', ')}`);
     }
   };
 
@@ -200,7 +210,7 @@ export default function CreatePostPage() {
   ) && !uploading;
 
   const handlePublish = () => {
-    if (!canPost) return;
+    if (!canPost || createMut.isPending) return;
     const serverUrls = images.map(i => i.serverUrl);
 
     // Structured «Услуга» post — title is the service name, content is the short
@@ -259,6 +269,7 @@ export default function CreatePostPage() {
         <div className="sticky top-0 z-10 bg-slate-950/95 backdrop-blur border-b border-slate-800 px-4 py-3 flex items-center gap-2">
           <button
             onClick={handleCancel}
+            aria-label="Назад"
             className="p-2 -ml-2 text-slate-400 hover:text-white rounded-xl hover:bg-slate-800 transition-colors flex-shrink-0"
           >
             <ArrowLeft size={20} />
@@ -276,6 +287,7 @@ export default function CreatePostPage() {
             onClick={() => imageInputRef.current?.click()}
             disabled={uploading || images.length >= MAX_IMAGES}
             title={images.length >= MAX_IMAGES ? 'Максимум 10 фото' : 'Фото / GIF'}
+            aria-label="Добавить фото"
             className="p-2 text-slate-400 hover:text-primary-400 hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-40 flex-shrink-0"
           >
             {uploading ? <Loader2 size={18} className="animate-spin" /> : <Image size={18} />}
@@ -285,6 +297,7 @@ export default function CreatePostPage() {
               type="button"
               onClick={() => setShowEmoji(e => !e)}
               title="Эмодзи"
+              aria-label="Эмодзи"
               className={`p-2 rounded-xl transition-colors ${showEmoji ? 'text-primary-400 bg-slate-800' : 'text-slate-400 hover:text-primary-400 hover:bg-slate-800'}`}
             >
               <Smile size={18} />
@@ -297,6 +310,8 @@ export default function CreatePostPage() {
           <button
             onClick={handlePublish}
             disabled={!canPost || createMut.isPending}
+            aria-label="Опубликовать"
+            title="Опубликовать"
             className="flex items-center gap-1.5 px-3 py-2 bg-primary-600 hover:bg-primary-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-sm font-semibold rounded-xl transition-colors flex-shrink-0"
           >
             {createMut.isPending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
