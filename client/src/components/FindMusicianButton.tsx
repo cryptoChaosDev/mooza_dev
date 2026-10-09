@@ -33,7 +33,7 @@ export default function FindMusicianButton({ variant = 'pill' }: { variant?: 'pi
       className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-primary-300 bg-primary-500/10 hover:bg-primary-500/20 border border-primary-500/20 transition-colors"
     >
       <UserSearch size={15} />
-      <span className="hidden min-[380px]:inline">Ищу музыканта</span>
+      <span className="hidden sm:inline">Ищу музыканта</span>
     </Link>
   );
 }
