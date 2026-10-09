@@ -9,6 +9,7 @@ import { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail } from 
 import { tgLog, tgEvent, escTg } from '../utils/telegram';
 import { applyReferralProGrants } from '../utils/pro';
 import { yoNorm } from '../utils/search';
+import { recordConsentEvent, requestMeta } from '../lib/consentEvents';
 
 // ─── Telegram bot-based auth (deep link + polling) ───────────────────────────
 // Map: token → { telegramId, firstName, lastName, username, photoUrl, resolvedAt }
@@ -22,20 +23,21 @@ interface TgPendingEntry {
 }
 const tgPending = new Map<string, TgPendingEntry>();
 
-// Clean up entries older than 10 minutes
+// Clean up entries older than 10 minutes.
+// unref(): фоновая уборка не должна держать процесс (graceful shutdown, тесты).
 setInterval(() => {
   const cutoff = Date.now() - 10 * 60 * 1000;
   for (const [k, v] of tgPending) {
     if (v.resolvedAt < cutoff) tgPending.delete(k);
   }
-}, 60_000);
+}, 60_000).unref();
 
 // Drop expired pending registrations (never-completed signups) every 5 minutes.
 setInterval(() => {
   prisma.pendingRegistration
     .deleteMany({ where: { expiresAt: { lt: new Date() } } })
     .catch(() => {});
-}, 5 * 60 * 1000);
+}, 5 * 60 * 1000).unref();
 
 // ─── Webhook-based bot (Telegram pushes updates to us) ───────────────────────
 // No outbound connection to Telegram needed — Telegram calls our endpoint.
@@ -124,6 +126,11 @@ const registerSchema = z.object({
   artistInviteToken: z.string().optional(),
   // Age verification
   birthDate: z.string().optional(),
+  // Согласия с формы регистрации (чекбоксы «обработка ПДн + соглашение» и
+  // «рекламные рассылки»). Необязательные — старый клиент их не шлёт; если
+  // пришли true — пишутся в журнал ConsentEvent при создании аккаунта.
+  consentPd: z.boolean().optional(),
+  consentMarketing: z.boolean().optional(),
 });
 
 const loginSchema = z.object({
@@ -230,7 +237,9 @@ router.post('/register', registerLimiter, async (req, res) => {
     // We stash the signup payload in PendingRegistration until then. Re-registering
     // the same email overwrites the previous pending entry and issues a fresh code.
     // Referral-link resolution/burning is also deferred to verification time.
-    const { password: _password, ...payload } = data;
+    const { password: _password, ...signup } = data;
+    // IP/UA момента, когда человек отметил согласия (для журнала ConsentEvent).
+    const payload = { ...signup, _consentMeta: requestMeta(req) };
     await prisma.pendingRegistration.upsert({
       where: { email: normalizedEmail },
       update: {
@@ -377,6 +386,22 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
         }
         return created;
       });
+
+      // Журнал согласий, данных на форме регистрации. Best-effort: сбой записи
+      // не ломает регистрацию (recordConsentEvent сам ловит ошибки).
+      {
+        const meta = p._consentMeta && typeof p._consentMeta === 'object' ? p._consentMeta : {};
+        const fallback = requestMeta(req);
+        const ip = typeof meta.ip === 'string' ? meta.ip : fallback.ip;
+        const userAgent = typeof meta.userAgent === 'string' ? meta.userAgent : fallback.userAgent;
+        if (p.consentPd === true) {
+          await recordConsentEvent({ userId: user.id, type: 'pd', action: 'grant', source: 'register', ip, userAgent });
+          await recordConsentEvent({ userId: user.id, type: 'terms', action: 'grant', source: 'register', ip, userAgent });
+        }
+        if (p.consentMarketing === true) {
+          await recordConsentEvent({ userId: user.id, type: 'marketing', action: 'grant', source: 'register', ip, userAgent });
+        }
+      }
 
       // Consume a role-bound artist invite link, if one was provided at signup.
       // Creates an already-ACCEPTED membership (no separate confirmation needed).
@@ -791,7 +816,7 @@ router.post('/telegram/miniapp', authLimiter, async (req, res) => {
 
 // ─── VK OAuth 2.0 (standard, oauth.vk.com) ───────────────────────────────────
 const vkStateSet = new Set<string>();
-setInterval(() => { if (vkStateSet.size > 1000) vkStateSet.clear(); }, 60_000);
+setInterval(() => { if (vkStateSet.size > 1000) vkStateSet.clear(); }, 60_000).unref();
 
 router.get('/vk/login', (req, res) => {
   const appUrl = process.env.APP_URL || 'https://moooza.ru';

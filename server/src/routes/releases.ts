@@ -5,6 +5,9 @@ import { StreamingPlatform } from '@prisma/client';
 import { detectReleasePlatform } from '../lib/mediaPlatforms';
 import { fetchStreamMetadata } from '../utils/streamMetadata';
 import { notify } from '../utils/notify';
+import { guestReadLimiter } from '../middleware/rateLimiter';
+import { sendPublic } from '../middleware/guest';
+import { getPublicArtistReleases, getPublicRelease } from '../lib/publicData';
 
 const router = Router();
 
@@ -203,8 +206,12 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // ── GET /api/releases/artist/:artistId — list (tiles) ─────────────────────────
-router.get('/artist/:artistId', optionalAuthenticate, async (req: AuthRequest, res: Response) => {
+router.get('/artist/:artistId', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res: Response) => {
   try {
+    // Гость: только если артист не REJECTED (иначе 404), белый список полей.
+    if (!req.userId) {
+      return sendPublic(res, await getPublicArtistReleases(req.params.artistId), 'Артист не найден');
+    }
     const releases = await prisma.release.findMany({
       where: { artistId: req.params.artistId },
       orderBy: [{ releaseDate: 'desc' }, { createdAt: 'desc' }],
@@ -218,8 +225,12 @@ router.get('/artist/:artistId', optionalAuthenticate, async (req: AuthRequest, r
 });
 
 // ── GET /api/releases/:id — detail ────────────────────────────────────────────
-router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res: Response) => {
   try {
+    // Гость: артист не REJECTED, титры — только люди с согласием + «ещё N».
+    if (!req.userId) {
+      return sendPublic(res, await getPublicRelease(req.params.id), 'Релиз не найден');
+    }
     const release = await prisma.release.findUnique({
       where: { id: req.params.id },
       include: { participants: { include: participantInclude } },

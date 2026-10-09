@@ -2,6 +2,9 @@ import { Router } from 'express';
 import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { tgEvent } from '../utils/telegram';
+import { guestReadLimiter } from '../middleware/rateLimiter';
+import { sendPublic } from '../middleware/guest';
+import { getPublicReviews } from '../lib/publicData';
 
 const router = Router();
 
@@ -12,9 +15,14 @@ const reviewInclude = {
 } as const;
 
 // GET /api/reviews/user/:userId — all reviews for a user
-router.get('/user/:userId', optionalAuthenticate, async (req: AuthRequest, res) => {
+router.get('/user/:userId', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
     const { sort = 'date' } = req.query as { sort?: string };
+    // Гость: только отзывы о человеке с согласием (иначе 404, как профиль);
+    // авторы без согласия — «Пользователь Moooza», id не отдаётся.
+    if (!req.userId) {
+      return sendPublic(res, await getPublicReviews(req.params.userId, String(sort)), 'User not found');
+    }
     const orderBy: any =
       sort === 'positive' ? [{ rating: 'desc' }, { createdAt: 'desc' }] :
       sort === 'negative' ? [{ rating: 'asc'  }, { createdAt: 'desc' }] :

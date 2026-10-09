@@ -9,6 +9,9 @@ import { classifyUrl, BLOCK_MESSAGE } from '../utils/socialPlatforms';
 import { yoNorm } from '../utils/search';
 import { notify, notifyMany } from '../utils/notify';
 import { extractYmArtistId } from '../utils/yandexMusicSync';
+import { guestReadLimiter } from '../middleware/rateLimiter';
+import { sendPublic } from '../middleware/guest';
+import { getPublicArtist } from '../lib/publicData';
 
 const router = Router();
 
@@ -241,10 +244,16 @@ router.get('/join-requests', authenticate, async (req: AuthRequest, res: Respons
 });
 
 // ── GET /api/artists/:id ─────────────────────────────────────────────────────
-router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const currentUserId = req.userId;
+
+    // Гость: белый список (без кодов верификации, причины отказа, submittedById),
+    // REJECTED → 404, состав — только ACCEPTED с согласием + «ещё N».
+    if (!currentUserId) {
+      return sendPublic(res, await getPublicArtist(id), 'Артист не найден');
+    }
 
     const artist = await prisma.artist.findUnique({
       where: { id },
@@ -270,7 +279,7 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
       return res.status(404).json({ error: 'Артист не найден' });
     }
 
-    const { genres, _count, followers, userArtists, ...rest } = artist;
+    const { genres, _count, followers, userArtists, ...artistRest } = artist;
 
     // Is the requester an admin/owner of this artist (or a system admin)?
     let viewerIsOwner = false;
@@ -301,8 +310,19 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
       roles: ua.roles.map((r: any) => ({ id: r.role.id, name: r.role.name })),
     });
 
+    // Модерационные поля артиста (код верификации, ссылка-доказательство, причина
+    // отказа) видят только его владелец/админы — остальным они не отдаются.
+    const canModerate = viewerIsOwner || viewerIsAdmin;
+    const { verificationCode, verificationProofUrl, rejectionReason, ...publicRest } = artistRest as any;
+    const rest: any = canModerate
+      ? { ...publicRest, verificationCode, verificationProofUrl, rejectionReason }
+      : publicRest;
+
     // Back-compat flat member shape (legacy consumers read `members[].id`, profession, etc).
-    const legacyMembers = userArtists.map((ua: any) => ({
+    // PENDING/DECLINED/ARCHIVED участия видят только владелец/админы и сам приглашённый.
+    const legacyMembers = userArtists
+      .filter((ua: any) => canModerate || ua.inviteStatus === 'ACCEPTED' || ua.userId === currentUserId)
+      .map((ua: any) => ({
       membershipId: ua.id,
       id: ua.user.id,
       firstName: ua.user.firstName,

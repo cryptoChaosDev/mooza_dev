@@ -1044,11 +1044,15 @@ router.post('/users/:id/grant-pro-month', async (req, res) => {
 });
 
 // ── Site Settings ──────────────────────────────────────────────────────────────
-import { updateSiteSettings } from './site-settings';
+import { updateSiteSettings, sanitizeSiteSettingsUpdate } from './site-settings';
 
 router.put('/site-settings', async (req, res) => {
   try {
-    await updateSiteSettings(req.body as Record<string, string>);
+    // Allowlist ключей (loginEnabled, registrationEnabled, referralRegistrationEnabled,
+    // guestBrowsingEnabled) и значений 'true'|'false' — произвольные ключи не пишутся.
+    const parsed = sanitizeSiteSettingsUpdate(req.body);
+    if ('error' in parsed) return res.status(400).json({ error: parsed.error });
+    await updateSiteSettings(parsed.updates);
     res.json({ ok: true });
   } catch (e: any) {
     res.status(400).json({ error: e.message });

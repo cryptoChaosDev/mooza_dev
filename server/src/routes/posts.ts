@@ -3,7 +3,11 @@ import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { emitToUser, notifyUser } from '../socket';
 import { uploadPostMedia } from '../middleware/upload';
+import { guestReadLimiter } from '../middleware/rateLimiter';
+import { requireAuthUnlessGuestBrowsing, sendPublic } from '../middleware/guest';
 import { tgLog, tgEvent } from '../utils/telegram';
+import { buildFeedWhere, diversifyByAuthor, clampInt, TEAM_EMAIL } from '../lib/feedQuery';
+import { getPublicFeedPage, getPublicPost } from '../lib/publicData';
 
 const router = Router();
 
@@ -150,42 +154,28 @@ const buildFeedInclude = (userId: string | undefined) => {
   };
 };
 
-// System team account — its posts are pinned to the top of the feed for brand-new users.
-// See server/prisma/seeds/welcome-posts.ts
-const TEAM_EMAIL = 'team@moooza.ru';
-
 // ── Smart feed («Для вас») ───────────────────────────────────────────────────
 // Per-(viewer+filters) ranked id list, cached briefly; paginated by index.
 const SMART_TTL_MS = 3 * 60 * 1000;
 const smartCache = new Map<string, { ids: string[]; at: number }>();
-
-// Greedy author-diversity pass: avoid the same author within `window` slots.
-function diversifyByAuthor<T extends { authorId: string }>(items: T[], window = 4): T[] {
-  const out: T[] = [];
-  const recent: string[] = [];
-  const pool = items.slice();
-  while (pool.length) {
-    let i = pool.findIndex((p) => !recent.includes(p.authorId));
-    if (i === -1) i = 0;
-    const [picked] = pool.splice(i, 1);
-    out.push(picked);
-    recent.push(picked.authorId);
-    if (recent.length > window) recent.shift();
-  }
-  return out;
-}
 
 // Get feed (all posts from the social network). Supports:
 //   type       — post type (blog | question | poll | service | employment | …)
 //   authorKind — all | resident (profile) | channel | artist | mine
 //   sort       — new (default) | popular | discussed | smart («Для вас»)
 //   limit/offset — pagination for infinite scroll
-router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
+router.get('/feed', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
+    // Гость: белый список полей, только публичные авторы/артисты/заказы/вакансии,
+    // limit ≤ 20, глубина ≤ 200, без комментариев, реакции агрегатом.
+    if (!req.userId) {
+      return sendPublic(res, await getPublicFeedPage(req.query as any));
+    }
+
     const { limit = 20, offset = 0, type, authorKind, period, city, employment, artistType, genre, sort } = req.query;
-    const offsetNum = Number(offset);
-    const limitNum = Number(limit);
-    const kind = authorKind ? String(authorKind) : 'all';
+    // Пагинация с потолком: limit 1..50, offset ≥ 0 (раньше без ограничений).
+    const offsetNum = clampInt(offset, 0, 0, Number.MAX_SAFE_INTEGER);
+    const limitNum = clampInt(limit, 20, 1, 50);
 
     const include = buildFeedInclude(req.userId) as any;
 
@@ -197,76 +187,11 @@ router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
     });
     const teamUserId = teamUser?.id ?? null;
 
-    // Build the where clause from filters.
-    const where: any = {};
-    if (type && type !== 'all') {
-      const types = String(type).split(',').map(t => t.trim()).filter(Boolean);
-      if (types.length) where.type = types.length > 1 ? { in: types } : types[0];
-    }
-    if (kind === 'resident') { where.channelId = null; where.artistId = null; }
-    else if (kind === 'channel') where.channelId = { not: null };
-    else if (kind === 'artist') where.artistId = { not: null };
-    else if (kind === 'mine') where.authorId = req.userId;
-    else if (teamUserId) where.authorId = { not: teamUserId }; // exclude team from default/other views
-
-    // Hide «Услуга» posts whose offering is no longer active (archived/draft) — an
-    // archived/unpublished service must not show in the feed. Also hide degenerate
-    // structured service posts whose linked offering was deleted (serviceId null):
-    // those would render as an empty «Услуга» card with no data. Non-service posts
-    // are unaffected.
-    where.NOT = [
-      { type: 'service', service: { status: { not: 'active' } } },
-      { type: 'service', serviceId: null },
-    ];
-
-    // period — date lower bound on createdAt (server-computed)
-    const periodStr = period ? String(period) : 'all';
-    if (periodStr && periodStr !== 'all') {
-      const now = new Date();
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      if (periodStr === 'today') {
-        where.createdAt = { gte: startOfToday };
-      } else if (periodStr === 'yesterday') {
-        const startOfYesterday = new Date(startOfToday);
-        startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-        where.createdAt = { gte: startOfYesterday, lt: startOfToday };
-      } else {
-        const since = new Date(now);
-        switch (periodStr) {
-          case '3days': since.setDate(since.getDate() - 3); break;
-          case 'week': since.setDate(since.getDate() - 7); break;
-          case 'month': since.setMonth(since.getMonth() - 1); break;
-          case '3months': since.setMonth(since.getMonth() - 3); break;
-          case 'year': since.setFullYear(since.getFullYear() - 1); break;
-          default: break;
-        }
-        where.createdAt = { gte: since };
-      }
-    }
-
-    // city — comma-separated list, exact match on stored names
-    if (city) {
-      const cityNames = String(city)
-        .split(',')
-        .map(c => c.trim())
-        .filter(Boolean);
-      if (cityNames.length > 0) where.city = { in: cityNames };
-    }
-
-    // ── Contextual filters (E4) ──────────────────────────────────────────────
-    // Employment status — filter by the post author's occupancy status
-    // (shown in UI for «Резидент» author or «Апдейт занятости» type).
-    if (employment && employment !== 'all') {
-      where.author = { ...(where.author || {}), occupancyStatus: String(employment) };
-    }
-    // Artist type — only artist posts have an artist relation (shown for «Артист»).
-    if (artistType && artistType !== 'all') {
-      where.artist = { ...(where.artist || {}), type: String(artistType) };
-    }
-    // Genre — artist posts whose artist is tagged with the given genre.
-    if (genre && genre !== 'all') {
-      where.artist = { ...(where.artist || {}), genres: { some: { genre: { name: String(genre) } } } };
-    }
+    // Build the where clause from filters (shared with the guest feed / SEO).
+    const { where, kind, periodStr } = buildFeedWhere(
+      { type, authorKind, period, city, employment, artistType, genre },
+      { viewerId: req.userId, teamUserId },
+    );
 
     // ── Smart feed («Для вас») ──────────────────────────────────────────────
     if (String(sort) === 'smart') {
@@ -702,9 +627,14 @@ router.post('/:id/vote', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
-// Get post by ID
-router.get('/:id', authenticate, async (req: AuthRequest, res) => {
+// Get post by ID. Гостю (при включённом guestBrowsingEnabled) — гостевая версия
+// по тем же правилам видимости, что и в ленте; при выключенном — 401, как раньше.
+router.get('/:id', optionalAuthenticate, requireAuthUnlessGuestBrowsing, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
+    if (!req.userId) {
+      return sendPublic(res, await getPublicPost(req.params.id), 'Post not found');
+    }
+
     const post = await prisma.post.findUnique({
       where: { id: req.params.id },
       include: {
