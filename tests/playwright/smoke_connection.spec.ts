@@ -3,7 +3,7 @@
  * Report: test-results/smoke/<project>-connection.json
  */
 import { test, expect, Page } from '@playwright/test';
-import { createTestUser, apiCall, TestUser } from './helpers';
+import { createTestUser, apiCall, runSqlStrict, TestUser } from './helpers';
 import { Journey, injectSession } from './journey';
 
 test('smoke: business connection request → accept → rate; /pro; /settings/privacy', async ({ page, browser }, testInfo) => {
@@ -71,6 +71,38 @@ test('smoke: business connection request → accept → rate; /pro; /settings/pr
     await page.getByRole('button', { name: /^Уведомления$/ }).first().click();
     await expect(page.getByText(/Telegram/).first()).toBeVisible({ timeout: 10_000 });
     await j.checkOverflow('/settings/privacy (notifications)');
+  });
+
+  // Since the audit: after a refusal the requester gets 429 for 7 days (no request spam).
+  await j.step('C6 reject (UI) → repeated request within 7 days → 429', async () => {
+    const req = await apiCall('POST', '/connections', { receiverId: a.id, serviceIds: [], needsDeal: false }, b.token);
+    expect(req.status, `B → A request → ${JSON.stringify(req.data)}`).toBe(201);
+    await page.goto('/connections/requests');
+    await expect(page.getByRole('heading', { name: 'Запросы связи' })).toBeVisible({ timeout: 10_000 });
+    await page.getByRole('button', { name: 'Просмотреть' }).first().click();
+    await page.getByRole('button', { name: /^Отклонить$/ }).click();
+    await expect.poll(async () => {
+      const r = await apiCall('GET', '/connections/sent', undefined, b.token);
+      return (Array.isArray(r.data) ? r.data : []).some((c: any) => c.id === req.data.id);
+    }, { timeout: 10_000, message: 'request gone from B\'s sent list' }).toBe(false);
+    expect(runSqlStrict(`SELECT status FROM "Connection" WHERE id = '${req.data.id}';`).trim(), 'status after reject').toBe('REJECTED');
+    const again = await apiCall('POST', '/connections', { receiverId: a.id, serviceIds: [], needsDeal: true }, b.token);
+    expect(again.status, `repeat after refusal → ${JSON.stringify(again.data)}`).toBe(429);
+    expect(String(again.data?.error || '')).toMatch(/Повторить можно через 7 дн/);
+  });
+
+  // Horizontal-scroll sweep over pages the other journeys do not visit.
+  await j.step('C7 overflow sweep (friends, requests, connections, flow settings, notifications…)', async () => {
+    for (const route of ['/friends', '/friends?tab=connections', '/friends/requests', `/profile/${b.id}/connections`,
+      '/flow-settings', '/feed', `/profile/${a.id}/reviews`, '/orders', '/deals']) {
+      await page.goto(route);
+      await page.waitForLoadState('domcontentloaded');
+      await page.waitForTimeout(1200);
+      await j.checkOverflow(route);
+    }
+    await page.goto('/');
+    await page.locator('button[aria-label="Уведомления"]:visible').click();
+    await j.checkOverflow('notifications panel');
   });
 
   await ctxB.close();

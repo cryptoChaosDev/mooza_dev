@@ -7,7 +7,7 @@
  */
 import { test, expect, Page } from '@playwright/test';
 import zlib from 'node:zlib';
-import { createTestUser, apiCall, runSqlStrict, TestUser } from './helpers';
+import { createTestUser, apiCall, runSqlStrict, TestUser, createTestArtist, collectiveRoleId } from './helpers';
 import { Journey, injectSession } from './journey';
 
 function solidPng(w: number, h: number, rgb = [120, 60, 200]): Buffer {
@@ -76,11 +76,17 @@ test('smoke: artist — create, edit, genres, contacts, members, release, clip, 
     expect(av.data?.avatar || av.data?.avatarUrl, 'avatar uploaded').toBeTruthy();
   });
   if (!artistId) {
-    // Fallback seed so the remaining steps can still run.
-    const r = await apiCall('POST', '/artists', { name: artistName, type: 'GROUP' }, a.token);
-    artistId = r.data?.id || '';
+    // Fallback seed so the remaining steps can still run (role + type are mandatory now).
+    artistId = await createTestArtist(a, artistName).catch(() => '');
     extra.artistSeededViaApi = true;
   }
+
+  await j.step('A1b API: create without role / without type → 400', async () => {
+    const noRole = await apiCall('POST', '/artists', { name: `${artistName} x`, type: 'GROUP' }, a.token);
+    expect(noRole.status, `no role → ${JSON.stringify(noRole.data)}`).toBe(400);
+    const noType = await apiCall('POST', '/artists', { name: `${artistName} y`, submitterRoleIds: [collectiveRoleId()] }, a.token);
+    expect(noType.status, `no type → ${JSON.stringify(noType.data)}`).toBe(400);
+  });
   extra.artistId = artistId;
 
   await j.step('A2 artist page', async () => {
@@ -142,6 +148,32 @@ test('smoke: artist — create, edit, genres, contacts, members, release, clip, 
     await B.p.waitForURL(new RegExp(`/artist/${artistId}`), { timeout: 15_000 });
     await expect.poll(() => memberStatus(b), { timeout: 10_000 }).toBe('ACCEPTED');
     expect(new URL(link).host, 'invite link host should be the DEV stand').toBe(new URL(B.p.url()).host);
+    // Invite links now expire after 30 days.
+    const days = Number(runSqlStrict(`SELECT round(extract(epoch FROM ("expiresAt" - "createdAt")) / 86400) FROM "ArtistInvite" WHERE token = '${token}';`).trim());
+    expect(days, 'invite TTL (days)').toBe(30);
+  });
+
+  // Regression of the previous run: a non-owner member got 403 on GET /memberships/pending
+  // (console error on every artist page view). Also: only owner/admin may edit the artist.
+  const pendingProbe = (p: Page) => {
+    const hits: string[] = [];
+    const h = (r: any) => { if (/\/api\/artists\/[^/]+\/memberships\/pending/.test(r.url())) hits.push(`${r.request().method()} ${r.status()}`); };
+    p.on('response', h);
+    return { hits, stop: () => p.off('response', h) };
+  };
+  await j.step('A6b member B (non-admin): artist page w/o 403 memberships/pending, no edit rights', async () => {
+    needArtist();
+    const probe = pendingProbe(B.p);
+    const consoleBefore = j.consoleErrors.length;
+    await B.p.goto(`/artist/${artistId}`);
+    await expect(B.p.getByRole('heading', { level: 1, name: artistName })).toBeVisible({ timeout: 15_000 });
+    await B.p.waitForTimeout(2500);
+    probe.stop();
+    expect(probe.hits.filter((s) => s.endsWith(' 403')), 'GET /memberships/pending → 403 for a member').toEqual([]);
+    expect(j.consoleErrors.slice(consoleBefore).filter((e) => /403/.test(e.text)), 'console 403 errors on the artist page').toEqual([]);
+    await expect(B.p.locator('button[title="Редактировать основную информацию"]')).toHaveCount(0);
+    const put = await apiCall('PUT', `/artists/${artistId}`, { tourReady: 'hack' }, b.token);
+    expect(put.status, `PUT /artists/:id as a plain member → ${JSON.stringify(put.data)}`).toBe(403);
   });
 
   await j.step('A7 add existing user C (owner UI) → C accepts on artist page (UI)', async () => {
@@ -154,9 +186,15 @@ test('smoke: artist — create, edit, genres, contacts, members, release, clip, 
     await j.checkOverflow('/artist/:id/members/add');
     await page.getByRole('button', { name: /^Добавить$/ }).click();
     await expect.poll(() => memberStatus(c), { timeout: 10_000 }).toBe('PENDING');
+    const probe = pendingProbe(C.p);
     await C.p.goto(`/artist/${artistId}`);
     await C.p.getByRole('button', { name: 'Подтвердить' }).click();
     await expect.poll(() => memberStatus(c), { timeout: 10_000 }).toBe('ACCEPTED');
+    await C.p.reload();
+    await expect(C.p.getByRole('heading', { level: 1, name: artistName })).toBeVisible({ timeout: 15_000 });
+    await C.p.waitForTimeout(2000);
+    probe.stop();
+    expect(probe.hits.filter((s) => s.endsWith(' 403')), 'GET /memberships/pending → 403 for an invited member').toEqual([]);
   });
 
   // Click the member-card button (by title) that belongs to the given user.
@@ -190,27 +228,44 @@ test('smoke: artist — create, edit, genres, contacts, members, release, clip, 
     await expect.poll(() => memberStatus(b), { timeout: 10_000 }).toBe('');
   });
 
-  await j.step('A10 member C leaves the artist (API only — no UI)', async () => {
+  // The legacy mutating /api/groups/* routes were removed in the audit; leaving an artist
+  // has no UI (known, expected). Check the old back door is really closed and the member stays.
+  await j.step('A10 legacy /api/groups mutations removed (leave → 404), membership intact', async () => {
     needArtist();
     const r = await apiCall('DELETE', `/groups/${artistId}/leave`, undefined, c.token);
-    expect(r.status, `DELETE /groups/:id/leave → ${JSON.stringify(r.data)}`).toBeLessThan(300);
-    await expect.poll(() => memberStatus(c), { timeout: 10_000 }).toBe('');
-    throw new Error('Leave works via legacy API only: there is no «Выйти из артиста» control in the UI');
+    expect(r.status, `DELETE /groups/:id/leave → ${JSON.stringify(r.data)}`).toBe(404);
+    const r2 = await apiCall('POST', `/groups/${artistId}/members`, { userId: b.id }, c.token);
+    expect(r2.status, `POST /groups/:id/members → ${JSON.stringify(r2.data)}`).toBe(404);
+    expect(memberStatus(c), 'C is still a member').toBe('ACCEPTED');
+    await C.p.goto(`/artist/${artistId}`);
+    await expect(C.p.getByRole('heading', { level: 1, name: artistName })).toBeVisible({ timeout: 15_000 });
+    expect(await C.p.getByRole('button', { name: /Выйти из артиста|Покинуть/ }).count(), 'leave control in UI').toBe(0);
   });
+  j.skip('A10b member leaves the artist (UI)', 'Ожидаемо: выхода из артиста нет ни в UI, ни в API (после аудита удалены /api/groups/*; участника может убрать только владелец/админ)', 'NOT RUN');
 
   for (const kind of ['release', 'clip'] as const) {
     const label = kind === 'release' ? 'релиз' : 'клип';
     await j.step(`A11 ${label}: create → open → delete (UI)`, async () => {
       needArtist();
       const title = `PW ${label} ${stamp}`;
-      await page.goto(`/artist/${artistId}/${kind}s/new`);
+      // Real in-app flow: artist page → «+ Добавить» on the rail (SPA) → form → «Сохранить»
+      // → navigate(-1) back to the artist page. (Opening the form by a direct URL and going
+      // back lands on a separate, possibly bfcache-restored document — checked in A11b.)
+      await page.goto(`/artist/${artistId}`);
+      const railTitle = kind === 'release' ? 'Релизы' : 'Клипы';
+      const rail = page.locator('div.rounded-2xl').filter({ has: page.getByText(railTitle, { exact: true }) })
+        .filter({ has: page.getByRole('button', { name: '+ Добавить' }) }).last();
+      await rail.getByRole('button', { name: '+ Добавить' }).click();
+      await page.waitForURL(new RegExp(`/artist/${artistId}/${kind}s/new$`), { timeout: 15_000 });
       await page.getByPlaceholder('https://...').first().fill(kind === 'release' ? 'https://music.yandex.ru/album/123456' : 'https://www.youtube.com/watch?v=dQw4w9WgXcQ');
       await page.getByPlaceholder(kind === 'release' ? 'Название релиза' : 'Название трека').fill(title);
       await j.checkOverflow(`/artist/:id/${kind}s/new`);
       await page.getByRole('button', { name: 'Сохранить' }).last().click();
       await page.waitForURL(new RegExp(`/artist/${artistId}$`), { timeout: 15_000 });
-      if (!(await page.getByText(title).first().isVisible({ timeout: 6_000 }).catch(() => false))) {
-        notes.push(`${kind}: после сохранения и возврата на страницу артиста новый ${label} не виден в ленте до перезагрузки страницы`);
+      // Regression of the previous run: the new entry only appeared after a page reload.
+      const visibleNow = await page.getByText(title).first().waitFor({ state: 'visible', timeout: 8_000 }).then(() => true, () => false);
+      if (!visibleNow) {
+        notes.push(`${kind}: после сохранения и возврата на страницу артиста новый ${label} не виден до перезагрузки страницы`);
         await page.reload();
       }
       await page.getByText(title).first().click();
@@ -223,8 +278,31 @@ test('smoke: artist — create, edit, genres, contacts, members, release, clip, 
       await page.waitForURL(new RegExp(`/artist/${artistId}`), { timeout: 15_000 });
       const left = runSqlStrict(`SELECT count(*) FROM "${kind === 'release' ? 'Release' : 'Clip'}" WHERE id = '${id}';`).trim();
       expect(left, `${kind} row deleted`).toBe('0');
+      expect(visibleNow, `new ${label} visible on the artist page right after saving (without reload)`).toBe(true);
     });
   }
+
+  // Edge case (how the previous run created releases): the form is opened by a direct URL,
+  // so «Сохранить» → navigate(-1) returns to the PREVIOUS DOCUMENT (history/bfcache), whose
+  // React Query cache never saw the new release. Recorded as a note, not a step failure.
+  await j.step('A11b release via direct form URL → back to artist page (informational)', async () => {
+    needArtist();
+    const title = `PW релиз-deeplink ${stamp}`;
+    await page.goto(`/artist/${artistId}`);
+    await page.goto(`/artist/${artistId}/releases/new`);
+    await page.getByPlaceholder('https://...').first().fill('https://music.yandex.ru/album/654321');
+    await page.getByPlaceholder('Название релиза').fill(title);
+    await page.getByRole('button', { name: 'Сохранить' }).last().click();
+    await page.waitForURL(new RegExp(`/artist/${artistId}$`), { timeout: 15_000 });
+    const seen = await page.getByText(title).first().waitFor({ state: 'visible', timeout: 8_000 }).then(() => true, () => false);
+    extra.releaseVisibleAfterDirectUrlForm = seen;
+    if (!seen) {
+      notes.push('release (форма открыта прямым URL): после «Сохранить» navigate(-1) возвращает на прежний документ страницы артиста — новый релиз не виден до перезагрузки');
+      await page.reload();
+      await expect(page.getByText(title).first(), 'release exists after reload').toBeVisible({ timeout: 10_000 });
+    }
+    runSqlStrict(`DELETE FROM "Release" WHERE "artistId" = '${artistId}' AND title = '${title.replace(/'/g, "''")}';`);
+  });
 
   let vacancyId = '';
   await j.step('A12 vacancy: create & publish (owner UI)', async () => {

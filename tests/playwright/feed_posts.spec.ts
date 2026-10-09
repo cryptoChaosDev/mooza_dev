@@ -40,7 +40,7 @@ test.describe('Feed page', () => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     // Either at least one post card OR the empty-state copy
     const hasPosts = await page.locator('[id^="post-"]').count();
@@ -84,7 +84,7 @@ test.describe('Feed page', () => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     // The FAB is a fixed button at bottom-right containing a Plus SVG
     const fab = page.locator('button.fixed.w-14.h-14');
@@ -153,7 +153,7 @@ test.describe('Post interactions', () => {
     } else {
       await page.goto('/');
     }
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
   });
 
   test('our test post is visible in feed', async ({ page }) => {
@@ -237,11 +237,18 @@ test.describe('Post interactions', () => {
     const postEl = page.locator(`#post-${postId}`);
     await expect(postEl).toBeVisible({ timeout: 10000 });
 
-    // ShareButton is the third action button
-    const actionRow = postEl.locator('div.flex.items-center.gap-1').first();
-    const shareBtn = actionRow.locator('button').nth(2);
-    await shareBtn.click({ force: true });
-    await page.waitForTimeout(500);
+    // Updated: the action row was reworked (ReactionBar) — target ShareButton by its title.
+    // Stub the share/clipboard APIs so the link it hands out can be checked.
+    await page.evaluate(() => {
+      (window as any).__pwShared = '';
+      const grab = (u: string) => { (window as any).__pwShared = u; };
+      try { Object.defineProperty(navigator, 'share', { configurable: true, value: async (d: any) => grab(d?.url || '') }); } catch { /* ignore */ }
+      try { Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async (t: string) => grab(t) } }); } catch { /* ignore */ }
+    });
+    const shareBtn = postEl.locator('button[title="Поделиться"]').first();
+    await shareBtn.click();
+    // Since the audit the shared link is /feed?post=<id> (the old /post/<id> route never existed).
+    await expect.poll(() => page.evaluate(() => (window as any).__pwShared), { timeout: 5000 }).toContain(`/feed?post=${postId}`);
 
     // Page should still be alive
     await expect(postEl).toBeVisible();
@@ -279,7 +286,7 @@ test.describe('Poll post interactions', () => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto(`/?post=${pollPostId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     const pollEl = page.locator(`#post-${pollPostId}`);
     await expect(pollEl).toBeVisible({ timeout: 10000 });
@@ -297,7 +304,7 @@ test.describe('Poll post interactions', () => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto(`/?post=${pollPostId}`);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     const pollEl = page.locator(`#post-${pollPostId}`);
     await expect(pollEl).toBeVisible({ timeout: 10000 });
@@ -331,7 +338,7 @@ test.describe('Profile page', () => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto('/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     expect(page.url()).toContain('/profile');
     // User's firstName starts with "PWFP"
@@ -342,7 +349,7 @@ test.describe('Profile page', () => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto('/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     // Avatar is an img or a rounded initials element
     // Updated: first match was in the hidden (lg:hidden) mobile header on desktop.
@@ -354,7 +361,7 @@ test.describe('Profile page', () => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto('/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     // createTestUser('fp') → firstName = 'PWFP'
     await expect(page.getByText(/PWFP/i).first()).toBeVisible({ timeout: 8000 });
@@ -364,7 +371,7 @@ test.describe('Profile page', () => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto('/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     const buttons = page.locator('button');
     const count = await buttons.count();
@@ -375,7 +382,7 @@ test.describe('Profile page', () => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto('/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     // Updated: profile edit is an icon button title="Редактировать" (→ «Закрыть» when open).
     await page.locator('button[title="Редактировать"]').click();
@@ -387,7 +394,7 @@ test.describe('Profile page', () => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto('/profile');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('networkidle', { timeout: 10_000 }).catch(() => {}); // live polling may keep the network busy
 
     const audioTab = page.getByRole('button', { name: /аудио/i }).first();
     const imagesTab = page.getByRole('button', { name: /фото|изображения/i }).first();
