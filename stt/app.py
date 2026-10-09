@@ -32,27 +32,40 @@ def health():
     return 'ok'
 
 
+def _limit_seconds():
+    # Необязательное поле max_seconds (голосовой ввод — 30 с): длиннее — 413,
+    # без распознавания. Без поля — прежний предел MAX_SECONDS.
+    try:
+        v = float(request.form.get('max_seconds') or 0)
+    except ValueError:
+        v = 0
+    return min(v, MAX_SECONDS) if v > 0 else None
+
+
 @app.route('/transcribe', methods=['POST'])
 def transcribe():
     f = request.files.get('file')
     if not f:
         return jsonify({'error': 'no file'}), 400
+    limit = _limit_seconds()
     if not _slots.acquire(timeout=QUEUE_WAIT_SECONDS):
         return jsonify({'error': 'busy'}), 503
     try:
-        return _transcribe_file(f)
+        return _transcribe_file(f, limit)
     finally:
         _slots.release()
 
 
-def _transcribe_file(f):
+def _transcribe_file(f, limit=None):
     with tempfile.TemporaryDirectory() as td:
         src = os.path.join(td, 'src')
         wav = os.path.join(td, 'audio.wav')
         f.save(src)
+        # С пределом декодируем на секунду больше: так видно, что запись длиннее.
+        max_t = min(limit + 1, MAX_SECONDS) if limit else MAX_SECONDS
         try:
             r = subprocess.run(
-                ['ffmpeg', '-y', '-i', src, '-t', str(MAX_SECONDS),
+                ['ffmpeg', '-y', '-i', src, '-t', str(max_t),
                  '-ar', '16000', '-ac', '1', '-f', 'wav', wav],
                 capture_output=True, timeout=180,
             )
@@ -63,6 +76,9 @@ def _transcribe_file(f):
 
         parts = []
         with wave.open(wav, 'rb') as wf:
+            duration = round(wf.getnframes() / float(wf.getframerate() or 16000), 2)
+            if limit and duration > limit + 0.5:
+                return jsonify({'error': 'too long', 'duration': duration}), 413
             rec = KaldiRecognizer(model, wf.getframerate())
             while True:
                 data = wf.readframes(4000)
@@ -75,7 +91,7 @@ def _transcribe_file(f):
         final = json.loads(rec.FinalResult())
         if final.get('text'):
             parts.append(final['text'])
-        return jsonify({'text': ' '.join(parts).strip()})
+        return jsonify({'text': ' '.join(parts).strip(), 'duration': duration})
 
 
 if __name__ == '__main__':

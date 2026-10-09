@@ -7,7 +7,9 @@
  *
  * Решение владельца: без внешних AI-API и без новых зависимостей. Поэтому —
  * детерминированный разбор:
- *   1. нормализация (нижний регистр, ё→е, тире/неразрывные пробелы);
+ *   1. нормализация (нижний регистр, ё→е, тире/неразрывные пробелы) и числа
+ *      словами → цифры («двадцатого ноября» → «20 ноября», «десять тысяч» →
+ *      «10 тысяч») — для голосового ввода (Vosk пишет строчными, без пунктуации);
  *   2. регулярками вырезаются бюджет и даты (с маскировкой найденного, чтобы
  *      «20 ноября» не стало бюджетом, а «10к» — датой);
  *   3. остаток бьётся на слова и сопоставляется со словарями фраз:
@@ -83,12 +85,249 @@ export function normalize(s: string): string {
     .replace(/[‐‑‒–—―−]/g, '-');
 }
 
-/** Название из справочника → слова фразы («Санкт-Петербург» → [санкт, петербург]). */
+/**
+ * Название из справочника → слова фразы («Санкт-Петербург» → [санкт, петербург]).
+ * Числа словами нормализуются так же, как в тексте запроса («второго» → «2»),
+ * чтобы название с числительным совпадало с разобранной фразой.
+ */
 function phraseWords(s: string): string[] {
-  return normalize(s).match(TOKEN_RE_G) ?? [];
+  return normalizeNumberWords(s).match(TOKEN_RE_G) ?? [];
 }
 
 const TOKEN_RE_G = /[a-zа-я0-9]+(?:&[a-zа-я0-9]+)*/g;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Числа словами → цифры
+// Голосовой ввод (Vosk) пишет всё словами: «двадцатого ноября», «бюджет десять
+// тысяч»; так же иногда печатают. Переводим числительные в цифры ДО разбора,
+// дальше работают обычные правила дат и бюджета:
+//   «двадцатого ноября»        → «20 ноября»
+//   «тридцать первого декабря» → «31 декабря»
+//   «десять тысяч»             → «10 тысяч»   (множитель остаётся словом, чтобы
+//   «от пяти до пятнадцати тысяч» → «от 5 до 15 тысяч» разобралось как диапазон)
+//   «полторы тысячи»           → «1,5 тысяч»;  «две с половиной тысячи» → «2,5 тысяч»
+//   «пять штук» / «пять косарей» → «5 тысяч»;  «тысяча пятьсот» → «1 500»
+// Только целые слова (границы слов), падежи — полными формами. Одиночные
+// «один/одна/одну…», «семью» (= семья), «с нуля» не трогаем: это чаще не число.
+// ─────────────────────────────────────────────────────────────────────────────
+
+type NumKind = 'unit' | 'teen' | 'ten' | 'hundred' | 'mult' | 'frac';
+interface NumWord {
+  kind: NumKind;
+  value: number;
+  /** Порядковое («двадцатого») — завершает число. */
+  ord?: boolean;
+  /** Одно такое слово само по себе числом не считаем («одна песня», «всю семью»). */
+  ambiguous?: boolean;
+  /** Множитель без числа перед ним: «за тысячу», «бюджет косарь». */
+  standalone?: boolean;
+  /** «полтысячи» — множитель со своим коэффициентом. */
+  coef?: number;
+}
+
+const NUM_WORDS = new Map<string, NumWord>();
+const addNum = (forms: string[], w: NumWord) => { for (const f of forms) NUM_WORDS.set(f, w); };
+
+// Окончания порядковых: «двадцатый/ого/ому/ым/ом», «двадцатая/ой/ую», «двадцатое», «двадцатые/ых/ыми».
+const ORD_ENDINGS = ['ый', 'ой', 'ого', 'ому', 'ым', 'ом', 'ая', 'ую', 'ое', 'ые', 'ых', 'ыми'];
+const addOrd = (stemWord: string, kind: NumKind, value: number) =>
+  addNum(ORD_ENDINGS.map((e) => stemWord + e), { kind, value, ord: true });
+
+addNum(['ноль', 'нуль'], { kind: 'unit', value: 0 });
+addNum(['ноля', 'нолю', 'нолем', 'ноле', 'нуля', 'нулю', 'нулем', 'нуле'], { kind: 'unit', value: 0, ambiguous: true });
+addNum(['один', 'одна', 'одно', 'одни', 'одного', 'одной', 'одному', 'одним', 'одном', 'одну', 'одною', 'одних', 'одними'],
+  { kind: 'unit', value: 1, ambiguous: true });
+addNum(['два', 'две', 'двух', 'двум', 'двумя'], { kind: 'unit', value: 2 });
+addNum(['три', 'трех', 'трем', 'тремя'], { kind: 'unit', value: 3 });
+addNum(['четыре', 'четырех', 'четырем', 'четырьмя'], { kind: 'unit', value: 4 });
+addNum(['пять', 'пяти', 'пятью'], { kind: 'unit', value: 5 });
+addNum(['шесть', 'шести', 'шестью'], { kind: 'unit', value: 6 });
+addNum(['семь', 'семи'], { kind: 'unit', value: 7 });
+addNum(['семью'], { kind: 'unit', value: 7, ambiguous: true });
+addNum(['восемь', 'восьми', 'восемью', 'восьмью'], { kind: 'unit', value: 8 });
+addNum(['девять', 'девяти', 'девятью'], { kind: 'unit', value: 9 });
+NUM_WORDS.set('третий', { kind: 'unit', value: 3, ord: true });
+addNum(['ьего', 'ьему', 'ьим', 'ьем', 'ья', 'ьей', 'ью', 'ье', 'ьи', 'ьих', 'ьими'].map((e) => `трет${e}`),
+  { kind: 'unit', value: 3, ord: true });
+([[1, 'перв'], [2, 'втор'], [4, 'четверт'], [5, 'пят'], [6, 'шест'], [7, 'седьм'], [8, 'восьм'], [9, 'девят']] as Array<[number, string]>)
+  .forEach(([n, s]) => addOrd(s, 'unit', n));
+
+// 10–19 и 20, 30: «пятнадцать / пятнадцати / пятнадцатью / пятнадцатый»
+([[10, 'десят'], [11, 'одиннадцат'], [12, 'двенадцат'], [13, 'тринадцат'], [14, 'четырнадцат'], [15, 'пятнадцат'],
+  [16, 'шестнадцат'], [17, 'семнадцат'], [18, 'восемнадцат'], [19, 'девятнадцат'], [20, 'двадцат'], [30, 'тридцат']] as Array<[number, string]>)
+  .forEach(([n, s]) => {
+    const kind: NumKind = n >= 20 ? 'ten' : 'teen';
+    addNum([`${s}ь`, `${s}и`, `${s}ью`], { kind, value: n });
+    addOrd(s, kind, n);
+  });
+addNum(['сорок', 'сорока'], { kind: 'ten', value: 40 });
+addOrd('сороков', 'ten', 40);
+addNum(['девяносто', 'девяноста'], { kind: 'ten', value: 90 });
+addOrd('девяност', 'ten', 90);
+
+// Формы 5–9 (им., род., твор.) — основа для 50–80 и 500–900.
+const UNIT_FORMS: Array<[number, string, string, string]> = [
+  [5, 'пять', 'пяти', 'пятью'], [6, 'шесть', 'шести', 'шестью'], [7, 'семь', 'семи', 'семью'],
+  [8, 'восемь', 'восьми', 'восемью'], [9, 'девять', 'девяти', 'девятью'],
+];
+for (const [n, nom, gen, ins] of UNIT_FORMS) {
+  if (n < 9) {
+    // «пятьдесят / пятидесяти / пятьюдесятью / пятидесятый»
+    addNum([`${nom}десят`, `${gen}десяти`, `${ins}десятью`], { kind: 'ten', value: n * 10 });
+    addOrd(`${gen}десят`, 'ten', n * 10);
+  }
+  // «пятьсот / пятисот / пятистам / пятьюстами / пятистах / пятисотый»
+  addNum([`${nom}сот`, `${gen}сот`, `${gen}стам`, `${ins}стами`, `${gen}стах`], { kind: 'hundred', value: n * 100 });
+  addOrd(`${gen}сот`, 'hundred', n * 100);
+}
+addNum(['сто', 'ста'], { kind: 'hundred', value: 100 });
+addOrd('сот', 'hundred', 100);
+addNum(['двести', 'двухсот', 'двумстам', 'двумястами', 'двухстах'], { kind: 'hundred', value: 200 });
+addOrd('двухсот', 'hundred', 200);
+addNum(['триста', 'трехсот', 'тремстам', 'тремястами', 'трехстах'], { kind: 'hundred', value: 300 });
+addOrd('трехсот', 'hundred', 300);
+addNum(['четыреста', 'четырехсот', 'четыремстам', 'четырьмястами', 'четырехстах'], { kind: 'hundred', value: 400 });
+addOrd('четырехсот', 'hundred', 400);
+
+// Множители. Единственное число («тысячу», «около тысячи») может стоять без
+// числа; «тысяч», «штук», «кусков» — только после числа («пять штук» = 5 000).
+addNum(['тысяча', 'тысячи', 'тысяче', 'тысячу', 'тысячей', 'тысячею', 'тыща', 'тыщи', 'тыще', 'тыщу', 'тыщей',
+  'косарь', 'косаря', 'косарю', 'косарем'], { kind: 'mult', value: 1000, standalone: true });
+addNum(['тысяч', 'тысячам', 'тысячами', 'тысячах', 'тыщ', 'тыщам', 'тыщами', 'косари', 'косарей', 'косарям', 'косарями',
+  'штука', 'штуки', 'штук', 'штуку', 'штукой', 'штукам', 'штуками', 'кусок', 'куска', 'кусков', 'куском'],
+  { kind: 'mult', value: 1000 });
+addNum(['миллион', 'миллиона', 'миллиону', 'миллионом', 'миллионе', 'лям', 'ляма'], { kind: 'mult', value: 1_000_000, standalone: true });
+addNum(['миллионы', 'миллионов', 'миллионам', 'миллионами', 'миллионах', 'лямов', 'лямы'], { kind: 'mult', value: 1_000_000 });
+addNum(['полтысячи'], { kind: 'mult', value: 1000, coef: 0.5, standalone: true });
+addNum(['полмиллиона'], { kind: 'mult', value: 1_000_000, coef: 0.5, standalone: true });
+addNum(['полтора', 'полторы', 'полутора'], { kind: 'frac', value: 1.5 });
+addNum(['пол'], { kind: 'frac', value: 0.5 });
+
+const NUM_WORD_RE = /[a-zа-я0-9]+/g;
+const YEAR_WORD_RE = /^год(?:а|у|ом|е)?$/;
+
+function groupDigits(n: number): string {
+  return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+}
+
+interface NumTok { t: string; start: number; end: number }
+
+/**
+ * Число словами, начиная с toks[i]: «сто пятьдесят тысяч», «тридцать первого»,
+ * «две с половиной тысячи». Возвращает индекс за последним словом и замену.
+ */
+function readSpokenNumber(s: string, toks: NumTok[], i: number): { end: number; text: string } | null {
+  const first = NUM_WORDS.get(toks[i].t);
+  if (!first) return null;
+  // Слова числа разделены только пробелами: «двадцать-тридцать» — два числа.
+  const joined = (k: number) => k < toks.length && /^\s+$/.test(s.slice(toks[k - 1].end, toks[k].start));
+  const isMultAt = (k: number) => {
+    const w = joined(k) ? NUM_WORDS.get(toks[k].t) : undefined;
+    return !!w && w.kind === 'mult' && !w.ord && w.coef == null;
+  };
+
+  let total = 0;          // набранные тысячи/миллионы
+  let small = 0;          // текущая часть < 1000
+  let slot = 0;           // 0 — пусто; 1 — сотни; 2 — десятки; 3 — единицы или 10–19
+  let frac: number | null = null;
+  let lastMult = Infinity;
+  let hasMult = false;
+  let endsWithMult = false;
+  let ord = false;
+  let j = i;
+
+  while (j < toks.length) {
+    if (j > i && !joined(j)) break;
+    const t = toks[j].t;
+    const w = NUM_WORDS.get(t);
+    if (!w) {
+      // «две с половиной тысячи»
+      if (t === 'с' && slot > 0 && joined(j + 1) && toks[j + 1].t === 'половиной' && isMultAt(j + 2)) {
+        small += 0.5;
+        slot = 3;
+        j += 2;
+        continue;
+      }
+      break;
+    }
+    if (w.kind === 'frac') {
+      if (j !== i || !isMultAt(j + 1)) break;
+      frac = w.value;
+      j++;
+      continue;
+    }
+    if (w.kind === 'mult') {
+      if (w.ord || w.value >= lastMult) break;
+      let coef: number;
+      if (w.coef != null) {
+        if (j !== i) break;
+        coef = w.coef;
+      } else if (frac != null) coef = frac;
+      else if (slot > 0) coef = small;
+      else {
+        if (!w.standalone) break;
+        // «10 тысяч», «2 тыщи» — число уже цифрами, множитель разберут правила бюджета.
+        if (j === i && /\d[\s.,]*$/.test(s.slice(0, toks[i].start))) break;
+        coef = 1;
+      }
+      total += coef * w.value;
+      small = 0;
+      slot = 0;
+      frac = null;
+      lastMult = w.value;
+      hasMult = true;
+      endsWithMult = true;
+      j++;
+      continue;
+    }
+    // Порядок разрядов: сотни → десятки → единицы («сто двадцать пять»), 10–19 — вместо десятков и единиц.
+    const maxSlotBefore = w.kind === 'hundred' ? 0 : w.kind === 'unit' ? 2 : 1;
+    if (frac != null || slot > maxSlotBefore) break;
+    small += w.value;
+    slot = w.kind === 'hundred' ? 1 : w.kind === 'ten' ? 2 : 3;
+    endsWithMult = false;
+    j++;
+    if (w.ord) { ord = true; break; }
+  }
+
+  if (j === i) return null;
+  if (j - i === 1 && first.ambiguous) return null;
+
+  let value = total + small;
+  if (ord) {
+    // «двадцать шестого года» → 2026
+    if (!hasMult && value >= 20 && value < 50 && joined(j) && YEAR_WORD_RE.test(toks[j].t)) value += 2000;
+    return { end: j, text: String(value) };
+  }
+  if (endsWithMult) {
+    const coef = Math.round((total / lastMult) * 1000) / 1000;
+    return { end: j, text: `${String(coef).replace('.', ',')} ${lastMult === 1000 ? 'тысяч' : 'млн'}` };
+  }
+  return { end: j, text: hasMult ? groupDigits(value) : String(value) };
+}
+
+/**
+ * Числительные словами → цифры (результат нормализован, как normalize()).
+ * Экспортируется для тестов; разбор применяет её к тексту и к названиям из справочников.
+ */
+export function normalizeNumberWords(text: string): string {
+  const s = normalize(text);
+  const re = new RegExp(NUM_WORD_RE.source, 'g');
+  const toks: NumTok[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(s))) toks.push({ t: m[0], start: m.index, end: m.index + m[0].length });
+
+  let out = '';
+  let last = 0;
+  for (let i = 0; i < toks.length;) {
+    const hit = NUM_WORDS.has(toks[i].t) ? readSpokenNumber(s, toks, i) : null;
+    if (!hit) { i++; continue; }
+    out += s.slice(last, toks[i].start) + hit.text;
+    last = toks[hit.end - 1].end;
+    i = hit.end;
+  }
+  return out + s.slice(last);
+}
 
 // Окончания — от длинных к коротким. Основа после обрезки — не короче MIN_STEM.
 const ENDINGS = [
@@ -317,6 +556,10 @@ const STOP_WORDS = new Set([
   'формате', 'игры', 'игра', 'играет', 'играющий', 'играющего', 'умеющий', 'умеющего', 'желательно', 'обязательно',
   'можно', 'спасибо', 'бесплатно', 'подходящего', 'подходящий', 'исполнителя', 'заказ', 'заказа', 'запрос',
   'заказать', 'сделает', 'сделать', 'раза', 'раз', 'урок', 'уроки', 'уроков', 'занятия', 'человек', 'людей',
+  // Голосовой ввод: местоимения и слова-паразиты, которые распознавание вставляет
+  // на месте невнятных слов («ещё звукорежиссёр и она сведения» = «ищу … на сведение»).
+  'она', 'оно', 'они', 'его', 'ему', 'ней', 'нее', 'них', 'ним', 'вот', 'так', 'тоже', 'просто', 'короче',
+  'значит', 'типа', 'кстати', 'половиной', 'млн',
 ]);
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -823,7 +1066,8 @@ export function parseRequestText(text: string, dict: RequestDictionaries, now: D
   const raw = String(text ?? '').slice(0, MAX_REQUEST_TEXT);
   const result = emptyParsed(raw);
   const cd = compile(dict);
-  const w = new Work(normalize(raw));
+  // Числа словами («двадцатого ноября», «десять тысяч») → цифры, дальше — обычные правила.
+  const w = new Work(normalizeNumberWords(raw));
 
   // Контакты не разбираем: телефон — не бюджет, «drummer@mail.ru» — не профессия.
   w.each(/(?:\+7|(?<!\d)8)[\s(-]*\d{3}[\s)-]*\d{3}[\s-]*\d{2}[\s-]*\d{2}(?!\d)/g, () => true);

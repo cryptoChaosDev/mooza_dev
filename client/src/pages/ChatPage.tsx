@@ -51,20 +51,14 @@ import { groupReactions } from '../components/ReactionBar';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+// Голосовые: AAC/MP4 (играет везде, включая старые iOS), webm — запасной вариант.
+import { pickVoiceMime } from '../lib/voiceRecording';
 
 const API_URL = import.meta.env.VITE_API_URL || '';
 
 // Лимит вложения чата — как на сервере (uploadChatAttachment, 20 МБ)
 const MAX_ATTACHMENT_MB = 20;
 const MAX_ATTACHMENT_BYTES = MAX_ATTACHMENT_MB * 1024 * 1024;
-
-// Голосовые: AAC/MP4 воспроизводится везде, включая старые iOS (webm там не
-// играет); webm — запасной вариант, если браузер не пишет mp4.
-const VOICE_MIME_CANDIDATES = ['audio/mp4;codecs=mp4a.40.2', 'audio/mp4', 'audio/webm;codecs=opus', 'audio/webm'];
-function pickVoiceMime(): string {
-  if (typeof MediaRecorder === 'undefined' || typeof MediaRecorder.isTypeSupported !== 'function') return '';
-  return VOICE_MIME_CANDIDATES.find((t) => MediaRecorder.isTypeSupported(t)) ?? '';
-}
 
 const isTabVisible = () => document.visibilityState === 'visible';
 

@@ -11,6 +11,7 @@ import { messageLimiter } from '../middleware/rateLimiter';
 import { yoNorm } from '../utils/search';
 import { tgLog } from '../utils/telegram';
 import { notify, isNotificationEnabled } from '../utils/notify';
+import { transcribeAudio, SttBusyError } from '../lib/sttClient';
 
 const router = Router();
 // Lazy proxy — avoids circular-import TDZ when this module loads before prisma is initialized
@@ -644,26 +645,12 @@ const transcribeLimiter = rateLimit({
   },
 });
 
-class SttBusyError extends Error {}
 const transcribeInFlight = new Map<string, Promise<string>>();
 
 async function runTranscription(filePath: string): Promise<string> {
-  const sttUrl = process.env.STT_URL || 'http://stt:5005';
   // Асинхронное чтение — readFileSync файла до 20МБ блокировал event loop.
   const buf = await fs.promises.readFile(filePath);
-  const fd = new FormData();
-  fd.append('file', new Blob([buf]), 'audio');
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 120_000);
-  try {
-    const resp = await fetch(`${sttUrl}/transcribe`, { method: 'POST', body: fd, signal: ctrl.signal });
-    if (resp.status === 503) throw new SttBusyError('stt busy');
-    if (!resp.ok) throw new Error(`stt ${resp.status}`);
-    const data: any = await resp.json();
-    return String(data?.text ?? '').trim();
-  } finally {
-    clearTimeout(timer);
-  }
+  return (await transcribeAudio(buf, { timeoutMs: 120_000 })).text;
 }
 
 router.post('/messages/:id/transcribe', authenticate, transcribeLimiter, async (req: AuthRequest, res) => {
