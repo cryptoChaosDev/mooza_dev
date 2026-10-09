@@ -50,6 +50,10 @@ interface User {
   searchIndexingOptOut?: boolean;
   // Сервер просит показать разовое окно согласия (не чаще раза в 30 дней, ≤ 3 раз).
   shouldPromptPublicConsent?: boolean;
+  publicConsentPromptAt?: string | null;
+  publicConsentPromptCount?: number;
+  bannerImage?: string | null;
+  contactsVisibility?: string;
 }
 
 interface AuthState {

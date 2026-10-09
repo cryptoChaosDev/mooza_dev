@@ -118,9 +118,16 @@ export const authAPI = {
 export const userAPI = {
   getMe: () => api.get('/users/me'),
   updateMe: (data: any) => api.put('/users/me', data),
-  givePublicConsent: () => api.post('/users/me/public-consent'),
+  // source — откуда выдано согласие (журнал ConsentEvent на сервере).
+  givePublicConsent: (source?: 'profile' | 'prompt' | 'onboarding') =>
+    api.post('/users/me/public-consent', source ? { source } : undefined),
   // Отзыв согласия: профиль сразу пропадает для гостей и из поисковиков.
-  revokePublicConsent: () => api.delete('/users/me/public-consent'),
+  // Ответ: { ok, publicConsentAt: null, publicConsentRevokedAt, contactsVisibility,
+  // avatar, bannerImage } — файлы аватара/обложки переименовываются.
+  revokePublicConsent: () => api.delete<{
+    ok: boolean; publicConsentAt: null; publicConsentRevokedAt?: string | null;
+    contactsVisibility?: string; avatar?: string | null; bannerImage?: string | null;
+  }>('/users/me/public-consent'),
   // Разовое окно согласия показано (сервер считает показы: раз в 30 дней, ≤ 3).
   markPublicConsentPromptShown: () => api.post('/users/me/public-consent/prompt-shown'),
   // «Не показывать мой профиль в поисковиках».

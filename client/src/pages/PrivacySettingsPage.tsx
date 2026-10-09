@@ -60,13 +60,28 @@ export default function PrivacySettingsPage() {
   const isPublic = hasPublicConsent && !locallyRevoked;
   const revokeMut = useMutation({
     mutationFn: () => userAPI.revokePublicConsent(),
-    onSuccess: () => {
+    onSuccess: ({ data }) => {
       setLocallyRevoked(true);
       setLocallyConsented(false);
+      // Сервер переименовывает файлы аватара/обложки (старые URL могли попасть
+      // во внешние кэши) и понижает контакты «Все» → «Зарегистрированные».
       const u = useAuthStore.getState().user;
-      if (u) useAuthStore.getState().setUser({ ...u, publicConsentAt: null, publicConsentRevokedAt: new Date().toISOString() });
+      if (u) {
+        useAuthStore.getState().setUser({
+          ...u,
+          publicConsentAt: null,
+          publicConsentRevokedAt: data?.publicConsentRevokedAt ?? new Date().toISOString(),
+          ...(data && 'avatar' in data ? { avatar: data.avatar ?? undefined } : {}),
+          ...(data && 'bannerImage' in data ? { bannerImage: data.bannerImage ?? null } : {}),
+          ...(data?.contactsVisibility ? { contactsVisibility: data.contactsVisibility } : {}),
+        });
+      }
+      // Перечитать «я» и всё, где лежат мой аватар/профиль.
       queryClient.invalidateQueries({ queryKey: ['profile'] });
+      queryClient.invalidateQueries({ queryKey: ['profession-gate-me'] });
       if (u?.id) queryClient.invalidateQueries({ queryKey: ['user', u.id] });
+      queryClient.invalidateQueries({ queryKey: ['feed'] });
+      userAPI.getMe().then(({ data: me }) => useAuthStore.getState().setUser(me)).catch(() => {});
       toast.success('Профиль больше не публичный');
     },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось отозвать согласие')),

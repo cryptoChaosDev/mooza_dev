@@ -17,7 +17,7 @@ import { api, postAPI, messageAPI } from '../lib/api';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { useAuthStore } from '../stores/authStore';
-import { useAuthGate, AuthGatePanel } from '../components/AuthGateModal';
+import { useAuthGate, AuthGatePanel, openAuthGate } from '../components/AuthGateModal';
 import { personName, personHref } from '../lib/publicPerson';
 import { useSeo, seoTitle } from '../lib/seo';
 import { trackGuestView } from '../lib/metrika';
@@ -540,7 +540,8 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
   const TypeIcon = typeMeta.icon;
   const showTypeBadge = post.type && post.type !== 'blog';
 
-  const isRepost = !!post.repostOfId || !!post.repostOf || !!post.repostDeleted;
+  // Гостю оригинал автора без согласия не отдаётся: repostOf: null + repostHidden: true.
+  const isRepost = !!post.repostOfId || !!post.repostOf || !!post.repostDeleted || !!post.repostHidden;
   const original = post.repostOf;
 
   return (
@@ -662,6 +663,14 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
                     <div className="rounded-xl border border-slate-800 bg-slate-900/40 px-4 py-5 text-center">
                       <p className="text-sm text-slate-500">Пост удалён</p>
                     </div>
+                  ) : post.repostHidden && !original ? (
+                    <button
+                      type="button"
+                      onClick={() => openAuthGate('page', { type: 'repost_original' }, 'Оригинал публикации доступен после входа')}
+                      className="w-full rounded-xl border border-slate-800 bg-slate-900/40 hover:bg-slate-900/70 px-4 py-5 text-center transition-colors"
+                    >
+                      <p className="text-sm text-slate-400">Оригинал доступен после входа</p>
+                    </button>
                   ) : original ? (
                     <button
                       type="button"
@@ -827,7 +836,7 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
                           <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
                             ✓ Выполнен
                           </span>
-                        ) : order.executorId ? (
+                        ) : (order.executorId || order.hasExecutor) ? (
                           <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/30">
                             В работе
                           </span>
@@ -1424,11 +1433,17 @@ export default function FeedPage() {
   const isError = active.isError;
   const retry = () => { active.refetch(); };
 
-  // Стена для гостя: лимит глубины или отказ сервера на следующей странице.
+  // Стена для гостя: лимит глубины, отказ сервера на следующей странице или
+  // исчерпанная гостевая глубина (сервер отдаёт пустую страницу / курсор без
+  // nextCursor после offset 200). Короткая лента, честно закончившаяся раньше
+  // лимита, стеной не считается.
   const nextPageStatus = (feed.error as any)?.response?.status;
+  const feedPages = feed.data?.pages ?? [];
+  const lastFeedPageEmpty = feedPages.length > 1 && (feedPages[feedPages.length - 1]?.items.length ?? 0) === 0;
   const guestWall = isGuest && !showSavedOnly && posts.length > 0 && (
     posts.length >= GUEST_FEED_MAX
     || (feed.isFetchNextPageError && (nextPageStatus === 401 || nextPageStatus === 403))
+    || (!feed.hasNextPage && !feed.isFetchingNextPage && (lastFeedPageEmpty || posts.length >= GUEST_FEED_MAX - PAGE_SIZE))
   );
 
   // ── Infinite-scroll sentinel ──────────────────────────────────────────────
@@ -1461,6 +1476,11 @@ export default function FeedPage() {
   useEffect(() => {
     if (!targetPostId || !targetPost.isError || notFoundToastRef.current === targetPostId) return;
     notFoundToastRef.current = targetPostId;
+    // Гостю при выключенном гостевом режиме сервер отвечает 401 — это не «удалён».
+    if (isGuest && (targetPost.error as any)?.response?.status === 401) {
+      toast.info('Пост доступен после входа');
+      return;
+    }
     toast.error(getApiError(targetPost.error, 'Пост не найден или удалён'));
   }, [targetPostId, targetPost.isError, targetPost.error]);
 

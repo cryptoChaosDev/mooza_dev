@@ -30,7 +30,7 @@ import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { canPreviewInline, openInNewTab } from '../lib/docPreview';
 import { useAuthGate, AuthGatePanel } from '../components/AuthGateModal';
-import { useSeo, seoTitle, seoDescription, ROBOTS_INDEX, ROBOTS_NOINDEX } from '../lib/seo';
+import { useSeo, seoTitle, seoDescription, robotsFor } from '../lib/seo';
 import { trackGuestView } from '../lib/metrika';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
@@ -111,7 +111,7 @@ export default function UserProfilePage() {
       : null,
     canonical: `/profile/${userId}`,
     // Индексируется только настоящий гостевой ответ; заглушка и предпросмотр — нет.
-    robots: user && !asGuest && !user.searchIndexingOptOut ? ROBOTS_INDEX : ROBOTS_NOINDEX,
+    robots: robotsFor(user, !asGuest && !user?.searchIndexingOptOut),
   });
 
   const { data: conn } = useQuery({

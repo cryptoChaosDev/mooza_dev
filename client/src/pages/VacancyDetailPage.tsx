@@ -25,7 +25,8 @@ import { useAuthStore } from '../stores/authStore';
 import { useAuthGate, openAuthGate } from '../components/AuthGateModal';
 import ShareButton from '../components/ShareButton';
 import { plural } from '../lib/plural';
-import { useSeo, seoTitle, seoDescription, ROBOTS_INDEX, ROBOTS_NOINDEX } from '../lib/seo';
+import { useSeo, seoTitle, seoDescription, robotsFor } from '../lib/seo';
+import { hiddenMaterialsCount } from '../lib/publicPerson';
 import { trackGuestView } from '../lib/metrika';
 
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp)$/i;
@@ -86,7 +87,7 @@ export default function VacancyDetailPage() {
       : null,
     canonical: `/vacancies/${vacancyId}`,
     // Архивные — 200 + noindex (план, раздел A).
-    robots: vacancy && vacancy.status === 'active' ? ROBOTS_INDEX : ROBOTS_NOINDEX,
+    robots: robotsFor(vacancy, vacancy?.status === 'active'),
   });
 
   // Seed «Предложено» marks from the persisted offers (owner view).
@@ -473,8 +474,8 @@ export default function VacancyDetailPage() {
 
           {/* Гостю материалы вакансии не отдаются — только их число */}
           {!vacancy.referenceFiles?.length && !vacancy.referenceLinks?.length
-            && ((vacancy.referenceFilesCount ?? 0) + (vacancy.referenceLinksCount ?? 0)) > 0 && (() => {
-            const n = (vacancy.referenceFilesCount ?? 0) + (vacancy.referenceLinksCount ?? 0);
+            && hiddenMaterialsCount(vacancy) > 0 && (() => {
+            const n = hiddenMaterialsCount(vacancy);
             return (
               <button
                 onClick={() => openAuthGate('page', { type: 'vacancy_materials' }, 'Материалы вакансии доступны после входа')}

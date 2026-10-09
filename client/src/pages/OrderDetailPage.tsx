@@ -19,8 +19,8 @@ import { formatDateMsk, maskDateInput, maskedToMskEndOfDayIso, isMaskedDatePast,
 import { useAuthStore } from '../stores/authStore';
 import { useAuthGate, openAuthGate } from '../components/AuthGateModal';
 import ShareButton from '../components/ShareButton';
-import { personName } from '../lib/publicPerson';
-import { useSeo, seoTitle, seoDescription, ROBOTS_INDEX, ROBOTS_NOINDEX } from '../lib/seo';
+import { personName, hiddenMaterialsCount } from '../lib/publicPerson';
+import { useSeo, seoTitle, seoDescription, robotsFor } from '../lib/seo';
 import { trackGuestView } from '../lib/metrika';
 import { plural } from '../lib/plural';
 
@@ -72,7 +72,7 @@ export default function OrderDetailPage() {
       : null,
     canonical: `/orders/${orderId}`,
     // Закрытые заказы — 200 + noindex (план, раздел A).
-    robots: order && order.status === 'active' ? ROBOTS_INDEX : ROBOTS_NOINDEX,
+    robots: robotsFor(order, order?.status === 'active'),
   });
 
   // «Предложено» переживает перезагрузку: сервер отдаёт, кому автор уже предлагал заказ.
@@ -371,8 +371,8 @@ export default function OrderDetailPage() {
 
           {/* Гостю материалы заказа не отдаются — только их число */}
           {!order.referenceFiles?.length && !order.referenceLinks?.length
-            && ((order.referenceFilesCount ?? 0) + (order.referenceLinksCount ?? 0)) > 0 && (() => {
-            const n = (order.referenceFilesCount ?? 0) + (order.referenceLinksCount ?? 0);
+            && hiddenMaterialsCount(order) > 0 && (() => {
+            const n = hiddenMaterialsCount(order);
             return (
               <button
                 onClick={() => openAuthGate('page', { type: 'order_materials' }, 'Материалы заказа доступны после входа')}
@@ -659,7 +659,8 @@ export default function OrderDetailPage() {
         ) : (
           /* ── NON-OWNER ── */
           <div className="space-y-2">
-            {order.executorId ? (
+            {/* Гостю вместо executorId — hasExecutor + обезличенная персона executor */}
+            {(order.executorId || order.hasExecutor) ? (
               <div className="flex items-center gap-3 px-4 py-3.5 rounded-2xl bg-emerald-500/5 border border-emerald-500/25">
                 <span className="text-emerald-400 text-lg flex-shrink-0">✓</span>
                 <div className="min-w-0">

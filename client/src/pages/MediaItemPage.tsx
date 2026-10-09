@@ -14,12 +14,13 @@ import { ymGenreLabel, RELEASE_TYPE_LABELS } from '../lib/ymGenres';
 import { safeHref, formatReleaseDate } from '../lib/artistUtils';
 import { personName, personHref } from '../lib/publicPerson';
 import { openAuthGate } from '../components/AuthGateModal';
-import { useSeo, seoTitle, seoDescription, ROBOTS_INDEX, ROBOTS_NOINDEX } from '../lib/seo';
+import { useSeo, seoTitle, seoDescription, robotsFor } from '../lib/seo';
 import { trackGuestView } from '../lib/metrika';
 
 interface ItemDetail extends MediaItemInitial {
   artistId: string;
-  artist?: { id: string; name: string } | null;
+  artist?: { id: string; name: string; avatar?: string | null; status?: string } | null;
+  indexable?: boolean;
   createdAt?: string;
   viewerIsAdmin?: boolean;
   // Гостю — только участники с согласием на публичность + число остальных.
@@ -75,7 +76,7 @@ export default function MediaItemPage({ kind }: { kind: 'release' | 'clip' }) {
       ? seoDescription(`${item.title}${artistName ? ` — ${artistName}` : ''}: ${typeLabel}${isRelease && item.releaseDate ? `, ${formatReleaseDate(item.releaseDate)}` : ''}. Участники и ссылки на площадки на Moooza.`)
       : null,
     canonical: `/${isRelease ? 'releases' : 'clips'}/${id}`,
-    robots: item ? ROBOTS_INDEX : ROBOTS_NOINDEX,
+    robots: robotsFor(item),
   });
 
   const removeMut = useMutation({

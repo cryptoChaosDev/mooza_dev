@@ -21,7 +21,7 @@ import { getApiError } from '../lib/apiError';
 import { useScrollLock } from '../lib/scrollLock';
 import ShareButton from '../components/ShareButton';
 import { personName, personHref } from '../lib/publicPerson';
-import { useSeo, seoTitle, seoDescription, ROBOTS_INDEX, ROBOTS_NOINDEX } from '../lib/seo';
+import { useSeo, seoTitle, seoDescription, robotsFor } from '../lib/seo';
 import { trackGuestView } from '../lib/metrika';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -73,7 +73,7 @@ export default function ServicePage() {
       ? seoDescription(us.description) || seoDescription(`${seoServiceTitle}${seoProvider ? ` — ${seoProvider}` : ''}. Цена и условия на Moooza.`)
       : null,
     canonical: `/services/${serviceId}`,
-    robots: us && (us.status ?? 'active') === 'active' ? ROBOTS_INDEX : ROBOTS_NOINDEX,
+    robots: robotsFor(us, (us?.status ?? 'active') === 'active'),
   });
 
   // «Подходящие заказы» — открытые заказы по той же каталожной услуге (владельцу).

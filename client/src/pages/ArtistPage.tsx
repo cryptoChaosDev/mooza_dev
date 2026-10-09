@@ -30,7 +30,7 @@ import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
 import { useAuthGate, openAuthGate } from '../components/AuthGateModal';
 import { personName, personHref } from '../lib/publicPerson';
-import { useSeo, seoTitle, seoDescription, ROBOTS_INDEX, ROBOTS_NOINDEX } from '../lib/seo';
+import { useSeo, seoTitle, seoDescription, robotsFor } from '../lib/seo';
 import { trackGuestView } from '../lib/metrika';
 
 const ACTIVITY_OPTIONS = [
@@ -148,7 +148,7 @@ export default function ArtistPage() {
       : null,
     canonical: `/artist/${id}`,
     // DRAFT/PENDING — с бейджем, но noindex (план, раздел A).
-    robots: artist && artistIndexable ? ROBOTS_INDEX : ROBOTS_NOINDEX,
+    robots: robotsFor(artist, artistIndexable),
   });
 
   // ── Phase 6b: releases & clips lists ──────────────────────────────────────

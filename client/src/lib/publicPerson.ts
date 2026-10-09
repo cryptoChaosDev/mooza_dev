@@ -30,6 +30,15 @@ export function personName(p: PersonLike | null | undefined, opts: { surnameFirs
   return full || (p.displayName ?? '').trim() || fallback;
 }
 
+/**
+ * Число материалов заказа/вакансии, скрытых от гостя: сервер отдаёт
+ * materialsCount (старый вариант контракта — referenceFilesCount/LinksCount).
+ */
+export function hiddenMaterialsCount(x: { materialsCount?: number; referenceFilesCount?: number; referenceLinksCount?: number } | null | undefined): number {
+  if (!x) return 0;
+  return x.materialsCount ?? ((x.referenceFilesCount ?? 0) + (x.referenceLinksCount ?? 0));
+}
+
 /** Ссылка на профиль или null (обезличенному ссылки нет). */
 export function personHref(p: PersonLike | null | undefined): string | null {
   return p?.id && p.isPublic !== false ? `/profile/${p.id}` : null;

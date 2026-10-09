@@ -39,6 +39,16 @@ export function seoDescription(text: string | null | undefined, max = 160): stri
   return `${(sp > max * 0.6 ? cut.slice(0, sp) : cut).trim()}…`;
 }
 
+/**
+ * robots для детальной страницы: сервер в гостевых ответах отдаёт indexable
+ * (false → noindex: закрытые заказы, DRAFT/PENDING-артисты, запрет индексации
+ * профиля и т.п.). `extra` — клиентские условия поверх (предпросмотр и др.).
+ * Нет данных (404/загрузка) — noindex.
+ */
+export function robotsFor(data: { indexable?: boolean } | null | undefined, extra = true): string {
+  return data && data.indexable !== false && extra ? ROBOTS_INDEX : ROBOTS_NOINDEX;
+}
+
 function upsertMeta(attr: 'name' | 'property', key: string, content: string | null) {
   let el = document.head.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`);
   if (content == null) { el?.remove(); return; }

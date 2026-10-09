@@ -34,10 +34,10 @@ export function PublicProfileIntro({ userId }: { userId?: string }) {
 }
 
 /** Выдать согласие: сервер + локальный стор + кэш профиля. */
-export function useGivePublicConsent() {
+export function useGivePublicConsent(source: 'profile' | 'prompt' | 'onboarding' = 'profile') {
   const queryClient = useQueryClient();
   return async () => {
-    await userAPI.givePublicConsent();
+    await userAPI.givePublicConsent(source);
     const u = useAuthStore.getState().user;
     if (u) useAuthStore.getState().setUser({ ...u, publicConsentAt: new Date().toISOString(), publicConsentRevokedAt: null, shouldPromptPublicConsent: false });
     queryClient.invalidateQueries({ queryKey: ['profile'] });
@@ -51,7 +51,7 @@ const BLOCKED = /^\/(onboarding|vk-setup|professions|login|register|forgot-passw
 export default function PublicConsentPrompt() {
   const user = useAuthStore((s) => s.user);
   const location = useLocation();
-  const give = useGivePublicConsent();
+  const give = useGivePublicConsent('prompt');
   const [open, setOpen] = useState(false);
   const shownRef = useRef(false);
 
