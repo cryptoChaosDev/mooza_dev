@@ -240,6 +240,9 @@ export default function RegisterPage() {
 
   // Resolve the artist-invite token → preview (artist name + roles) for the banner.
   const [artistInvitePreview, setArtistInvitePreview] = useState<{ artist: { name: string }; roles: { id: string; name: string }[] } | null>(null);
+  // Приглашение в артиста не действует: 404 — ссылки нет, 410 — истекла или
+  // исчерпана. Текст причины — от сервера.
+  const [artistInviteError, setArtistInviteError] = useState('');
 
   // Registration may be closed site-wide. In referral-only mode a valid referral
   // link (or an artist invite) still lets people register; otherwise → login.
@@ -266,16 +269,22 @@ export default function RegisterPage() {
         }
       }
       let inviteOk = false;
+      let inviteErr = '';
       if (artistInvite) {
         try {
           const { data } = await artistAPI.getInvite(artistInvite);
           inviteOk = true;
           if (!cancelled) setArtistInvitePreview(data);
-        } catch {
-          if (!cancelled) setArtistInvitePreview(null);
+        } catch (e) {
+          inviteErr = getApiError(e, 'Приглашение в артиста не найдено — попросите новую ссылку');
+          if (!cancelled) {
+            setArtistInvitePreview(null);
+            setArtistInviteError(inviteErr);
+          }
         }
       }
       if (isAuthed) return; // залогиненным — только экран принятия приглашения
+      let leaving = false; // экран «ссылка не действует» или уход на /login
       try {
         const { data } = await siteSettingsAPI.get();
         const s = data as Record<string, string>;
@@ -288,12 +297,16 @@ export default function RegisterPage() {
           const refOk = !!ownerId && !used && !legacy;
           const invited = s?.referralRegistrationEnabled === 'true' && (refOk || inviteOk);
           if (!invited && !cancelled) {
+            leaving = true;
             const brokenInvite = refBroken || legacy || (!!artistInvite && !inviteOk);
             if (brokenInvite && s?.referralRegistrationEnabled === 'true') setInviteBroken(true);
             else navigate('/login', { replace: true });
           }
         }
       } catch { /* on error, don't hard-block */ }
+      // Регистрация открыта — зарегистрироваться можно и без приглашения,
+      // но человек должен знать, что в артиста он так не попадёт.
+      if (inviteErr && !leaving && !cancelled) toast.error(inviteErr);
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -584,6 +597,14 @@ export default function RegisterPage() {
         return;
       }
       toast.error(getApiError(err, 'Ошибка регистрации'));
+      // 410 — ссылка-приглашение в артиста истекла/исчерпана, пока заполняли
+      // форму (регистрация только по приглашениям) — тот же экран-объяснение.
+      if (err?.response?.status === 410 && (body?.code === 'EXPIRED' || body?.code === 'EXHAUSTED')) {
+        setArtistInvitePreview(null);
+        setArtistInviteError(getApiError(err, 'Ссылка-приглашение больше не действует — попросите новую'));
+        setInviteBroken(true);
+        return;
+      }
       // Ошибка относится к полю другого шага — переводим туда, где её можно исправить.
       const field = typeof body?.field === 'string' ? body.field : '';
       if (Object.prototype.hasOwnProperty.call(FIELD_STEP, field)) setStep(FIELD_STEP[field]);
@@ -697,12 +718,12 @@ export default function RegisterPage() {
                 ? <> в роли <span className="text-white font-medium">{artistInvitePreview.roles.map(r => r.name).join(', ')}</span></>
                 : null}.
             </p>
-          ) : (
+          ) : artistInviteError ? null : (
             <p className="text-slate-500 text-sm mb-6">Загрузка приглашения…</p>
           )}
-          {acceptError && (
+          {(acceptError || artistInviteError) && (
             <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-xl mb-4 text-red-400 text-sm">
-              <AlertCircle size={15} className="flex-shrink-0" />{acceptError}
+              <AlertCircle size={15} className="flex-shrink-0" />{acceptError || artistInviteError}
             </div>
           )}
           <button onClick={handleAcceptInvite} disabled={accepting || !artistInvitePreview}
@@ -793,6 +814,12 @@ export default function RegisterPage() {
           <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs leading-relaxed">
             <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
             <span>Эта пригласительная ссылка уже использована. Вы можете зарегистрироваться, но она не будет засчитана пригласившему.</span>
+          </div>
+        )}
+        {artistInviteError && (
+          <div className="flex items-start gap-2.5 px-3.5 py-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 text-amber-300 text-xs leading-relaxed">
+            <AlertCircle size={15} className="flex-shrink-0 mt-0.5" />
+            <span>Приглашение в артиста не действует: {artistInviteError}. Зарегистрироваться можно, но участником артиста вы не станете.</span>
           </div>
         )}
         {artistInvitePreview && (
@@ -1044,10 +1071,17 @@ export default function RegisterPage() {
             <AlertCircle size={26} className="text-amber-400" />
           </div>
           <h1 className="text-lg font-bold text-white">Ссылка-приглашение не действует</h1>
-          <p className="text-sm text-slate-400 leading-relaxed">
-            Похоже, ссылку удалил пригласивший, приглашение отозвано, либо в ссылке опечатка. Регистрация сейчас — только по приглашениям:
-            попросите у пригласившего <b className="text-slate-200">новую ссылку</b> (Профиль → 🎁 Пригласить).
-          </p>
+          {artistInviteError ? (
+            <p className="text-sm text-slate-400 leading-relaxed">
+              {artistInviteError}. Регистрация сейчас — только по приглашениям,
+              <b className="text-slate-200"> новую ссылку</b> выдаёт администратор артиста.
+            </p>
+          ) : (
+            <p className="text-sm text-slate-400 leading-relaxed">
+              Похоже, ссылку удалил пригласивший, приглашение отозвано, либо в ссылке опечатка. Регистрация сейчас — только по приглашениям:
+              попросите у пригласившего <b className="text-slate-200">новую ссылку</b> (Профиль → 🎁 Пригласить).
+            </p>
+          )}
           <button onClick={() => navigate('/login')} className="w-full py-3 bg-primary-600 hover:bg-primary-500 text-white font-semibold rounded-2xl transition-colors">
             У меня уже есть аккаунт — войти
           </button>

@@ -12,6 +12,7 @@ import { applyReferralProGrants } from '../utils/pro';
 import { findSelfUser } from '../utils/selfUser';
 import { yoNorm } from '../utils/search';
 import { disconnectUserSockets } from '../socket';
+import { validateArtistInvite, acceptArtistInvite, type ArtistInviteCheck } from '../lib/artistInvites';
 
 // ─── Telegram bot-based auth (deep link + polling) ───────────────────────────
 // Map: token → { telegramId, firstName, lastName, username, photoUrl, resolvedAt }
@@ -108,13 +109,13 @@ async function referralLinkOpensRegistration(referralCode?: string | null): Prom
   return !!link && (link.multiUse || !link.usedById);
 }
 
-// Artist invite (ArtistInvite.token). Its expiry/limit belong to the artists zone —
-// here we only require that the invite exists.
-async function artistInviteValid(token?: string | null): Promise<boolean> {
+// Artist invite (ArtistInvite.token): exists, not expired, not exhausted — the same
+// check as the public preview / accept endpoints (lib/artistInvites).
+// null = no token supplied.
+async function checkArtistInvite(token?: string | null): Promise<ArtistInviteCheck | null> {
   const t = (token ?? '').trim();
-  if (!t) return false;
-  const inv = await prisma.artistInvite.findUnique({ where: { token: t }, select: { id: true } });
-  return !!inv;
+  if (!t) return null;
+  return validateArtistInvite(t);
 }
 
 // Legacy referral attribution only (no effect on the registration gate or Pro):
@@ -275,9 +276,15 @@ router.post('/register', registerLimiter, async (req, res) => {
 
     // Registration switch — closed to the public, but in referral-only mode a
     // valid ReferralLink OR an artist invite still lets people sign up.
+    const artistInvite = await checkArtistInvite(data.artistInviteToken);
     const invited = (await referralLinkOpensRegistration(data.referralCode))
-      || (await artistInviteValid(data.artistInviteToken));
+      || !!artistInvite?.ok;
     if (!(await registrationAllowed(invited))) {
+      // Invite-only mode and the artist link has expired / run out of uses —
+      // say exactly that instead of the generic «только по приглашению».
+      if (artistInvite && !artistInvite.ok && artistInvite.status === 410 && (await registrationAllowed(true))) {
+        return res.status(410).json({ error: artistInvite.error, code: artistInvite.code });
+      }
       return res.status(403).json(REGISTRATION_CLOSED);
     }
     // Login switched off — the account couldn't be signed into after the code anyway.
@@ -588,36 +595,16 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
       }
       const user = created.user;
 
-      // Consume a role-bound artist invite link, if one was provided at signup.
-      // Creates an already-ACCEPTED membership (no separate confirmation needed:
-      // the invite itself was issued by the artist's admins). No referral bonus.
-      // Guard against a pre-existing membership.
+      // Consume a role-bound artist invite link, if one was provided at signup:
+      // lib/artistInvites atomically spends one use (expiry/limit checked),
+      // creates the ACCEPTED membership and notifies the artist's admins.
+      // No referral bonus. The account is already created — an invite that
+      // expired / ran out / was deleted meanwhile only skips the membership.
       if (p.artistInviteToken) {
         try {
-          const invite = await prisma.artistInvite.findUnique({
-            where: { token: p.artistInviteToken },
-          });
-          if (invite) {
-            const existing = await prisma.userArtist.findFirst({
-              where: { artistId: invite.artistId, userId: user.id },
-              select: { id: true },
-            });
-            if (!existing) {
-              await prisma.userArtist.create({
-                data: {
-                  userId: user.id,
-                  artistId: invite.artistId,
-                  professionId: null,
-                  isOwner: false,
-                  isAdmin: false,
-                  inviteStatus: 'ACCEPTED',
-                  participationStatus: invite.participationStatus,
-                  roles: invite.roleIds.length
-                    ? { create: invite.roleIds.map((roleId: string) => ({ roleId })) }
-                    : undefined,
-                },
-              });
-            }
+          const joined = await acceptArtistInvite(p.artistInviteToken, user.id);
+          if (!joined.ok) {
+            console.warn(`[verify-email] artist invite not consumed (user ${user.id}): ${joined.code}`);
           }
         } catch (inviteErr) {
           console.error('[verify-email] artist invite consume failed:', inviteErr);
