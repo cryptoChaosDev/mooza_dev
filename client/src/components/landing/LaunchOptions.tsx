@@ -94,7 +94,7 @@ export default function LaunchOptions({ apkEnabled }: { apkEnabled: boolean }) {
       <Eyebrow>Открыть или установить</Eyebrow>
 
       {/* Телефон: пять плиток в один ряд — все варианты на первом экране */}
-      <div className="mt-4 grid grid-cols-5 gap-1 max-w-sm mx-auto sm:hidden">
+      <div className="mt-3 grid grid-cols-5 gap-1 max-w-sm mx-auto sm:hidden">
         {items.map(({ soon, active, ...o }) => {
           const inner = (
             <>

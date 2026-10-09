@@ -169,7 +169,7 @@ export default function LandingPage() {
   // Способы запуска (веб, PWA iPhone/Android, APK, RuStore) — сразу под главными
   // кнопками, чтобы были на первом экране. В установленном приложении не нужны.
   const launchOptions = !isInstalledApp() && (
-    <div className="mt-8 sm:mt-10">
+    <div className="mt-6 sm:mt-10">
       <LaunchOptions apkEnabled={settings?.androidApkEnabled === 'true'} />
     </div>
   );
