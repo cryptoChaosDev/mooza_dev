@@ -61,7 +61,7 @@ export default function UserProfessionsPage() {
                 return (
                   <button
                     key={up.professionId ?? i}
-                    onClick={() => navigate(`/professions/${userId}/${up.professionId}`)}
+                    onClick={() => navigate(`/professions/${userId}/${up.professionId ?? up.profession?.id}`)}
                     className="w-full flex items-center gap-3 py-2.5 text-left hover:bg-slate-800/20 -mx-1 px-1 rounded-lg transition-colors"
                   >
                     <div className="w-1 self-stretch rounded-full bg-fuchsia-500/60 flex-shrink-0" />

@@ -430,6 +430,7 @@ const PROFILE_SELECT = {
   userProfessions: {
     select: {
       id: true,
+      professionId: true,
       features: true,
       profession: {
         select: { id: true, name: true, directionId: true, direction: ID_NAME },
@@ -549,6 +550,8 @@ export async function getPublicProfile(key: string, opts: { byHandle?: boolean }
     fieldOfActivity: idName(user.fieldOfActivity),
     userProfessions: (user.userProfessions ?? []).map((up: any) => ({
       id: up.id,
+      // клиент строит ссылку /professions/:userId/:professionId по этому полю
+      professionId: up.professionId ?? up.profession?.id ?? null,
       features: up.features ?? [],
       profession: up.profession
         ? {

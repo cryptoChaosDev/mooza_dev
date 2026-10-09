@@ -65,7 +65,7 @@ export default function ProfessionPage() {
     );
   }
 
-  const up = (user.userProfessions ?? []).find((p: any) => p.professionId === professionId);
+  const up = (user.userProfessions ?? []).find((p: any) => (p.professionId ?? p.profession?.id) === professionId);
   if (!up) {
     return (
       <div className="min-h-screen min-h-[100dvh] bg-slate-950 flex flex-col items-center justify-center gap-3 px-6 text-center">

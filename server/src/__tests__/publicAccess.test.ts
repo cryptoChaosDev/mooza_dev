@@ -168,6 +168,8 @@ describe('GET /api/users/:id (guest)', () => {
     expect(res.body.userServices.map((s: any) => s.id)).toEqual(['svc-active']);
     expect(res.body.userArtists.map((a: any) => a.artist.id)).toEqual(['a-1']);
     expect(res.body.dealsCount).toBe(3);
+    // ссылка /professions/:userId/:professionId строится по professionId (был баг: undefined)
+    expect(res.body.userProfessions[0].professionId).toBe('prof-1');
     expect(res.body.indexable).toBe(true);
     expect(res.body).not.toHaveProperty('_count.sentRequests');
     // запрос к БД ограничен согласием
