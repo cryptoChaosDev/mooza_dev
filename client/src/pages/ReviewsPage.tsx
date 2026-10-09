@@ -17,8 +17,10 @@ function Stars({ rating }: { rating: number }) {
   );
 }
 
+// Подписи типов отзыва. Неизвестный тип (мусор из БД) не выводим «сырым».
 const TYPE_LABELS: Record<string, string> = {
   connection: 'Связь',
+  deal: 'Сделка',
   service: 'Услуга',
   collaboration: 'Сотрудничество',
 };
@@ -133,8 +135,12 @@ export default function ReviewsPage() {
                     <span className="text-[11px] text-slate-500">
                       {new Date(r.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
                     </span>
-                    <span className="text-[11px] text-slate-600">·</span>
-                    <span className="text-[11px] text-slate-500">{TYPE_LABELS[r.type] ?? r.type}</span>
+                    {TYPE_LABELS[r.type] && (
+                      <>
+                        <span className="text-[11px] text-slate-600">·</span>
+                        <span className="text-[11px] text-slate-500">{TYPE_LABELS[r.type]}</span>
+                      </>
+                    )}
                     {r.service && (
                       <>
                         <span className="text-[11px] text-slate-600">·</span>

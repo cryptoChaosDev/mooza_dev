@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { userAPI, connectionAPI, groupAPI, dealAPI, authAPI, orderAPI } from '../lib/api';
+import { api, userAPI, connectionAPI, groupAPI, dealAPI, authAPI, orderAPI } from '../lib/api';
 import { DEALS_ENABLED } from '../lib/features';
 import { useAuthStore } from '../stores/authStore';
 import AudioPlayer from '../components/AudioPlayer';
@@ -31,9 +31,15 @@ import ProfileProgressBar, { profileCompletion } from '../components/ProfileProg
 import PublicConsentGate from '../components/PublicConsentGate';
 import { toast } from '../stores/toastStore';
 import { getApiError } from '../lib/apiError';
+import { canPreviewInline, openInNewTab } from '../lib/docPreview';
 
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
+
+// HEIC/HEIF (фото iPhone, часть Android) сервер не принимает, а браузер не может
+// его обрезать (canvas) — сообщаем об этом до загрузки.
+const isHeic = (f: File) => /^image\/hei[cf]/i.test(f.type) || /\.(heic|heif)$/i.test(f.name);
+const HEIC_ERROR = 'HEIC не поддерживается, выберите JPEG/PNG';
 
 
 function formatBytes(n?: number): string {
@@ -75,9 +81,7 @@ function stripProfessions<T extends { userProfessions?: unknown }>(data: T): Omi
 
 export default function ProfilePage() {
   const navigate = useNavigate();
-  const { logout, user } = useAuthStore();
-  const isPro = isProActive(user);
-  const proLimits = limitsFor(isPro);
+  const { logout } = useAuthStore();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -89,7 +93,6 @@ export default function ProfilePage() {
     socialLinks: {} as Record<string, string>,
     fieldOfActivityId: '',
     userProfessions: [] as { professionId: string; features: string[] }[],
-    artistIds: [] as string[],
     birthDate: '',
     birthDateVisible: false,
     contactsVisible: true,
@@ -171,7 +174,6 @@ export default function ProfilePage() {
           professionId: up.professionId || up.profession?.id,
           features: up.features || [],
         })) || [],
-        artistIds: data.userArtists?.map((ua: any) => ua.artistId || ua.artist?.id) || [],
         birthDate: data.birthDate ? new Date(data.birthDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '',
         birthDateVisible: !!data.birthDateVisible,
         contactsVisible: data.contactsVisible !== false,
@@ -189,6 +191,40 @@ export default function ProfilePage() {
       return data;
     },
   });
+
+  // Pro-статус — из свежего ответа /users/me, а не из zustand-копии, снятой при
+  // входе (Pro, выданный после логина донатом/админом, там не виден).
+  const isPro = isProActive(profile);
+  const proLimits = limitsFor(isPro);
+
+  // ── Подтверждение нового email (pendingEmail) кодом из письма ──────────────
+  const [emailCode, setEmailCode] = useState('');
+  const [emailBusy, setEmailBusy] = useState(false);
+  const runEmailAction = async (action: () => Promise<unknown>, fallback: string, success?: string) => {
+    setEmailBusy(true);
+    try {
+      await action();
+      if (success) toast.success(success);
+      setEmailCode('');
+      queryClient.invalidateQueries({ queryKey: ['profile'] });
+    } catch (e: any) {
+      toast.error(getApiError(e, fallback));
+    } finally {
+      setEmailBusy(false);
+    }
+  };
+  const confirmEmail = () => runEmailAction(
+    () => api.post('/users/me/email/confirm', { code: emailCode.trim() }),
+    'Не удалось подтвердить email', 'Email подтверждён',
+  );
+  const resendEmailCode = () => runEmailAction(
+    () => api.post('/users/me/email/resend'),
+    'Не удалось отправить код', 'Код отправлен повторно',
+  );
+  const cancelEmailChange = () => runEmailAction(
+    () => api.delete('/users/me/email/pending'),
+    'Не удалось отменить смену email',
+  );
 
   // Live nickname-uniqueness check while editing the hero section.
   useEffect(() => {
@@ -394,6 +430,10 @@ export default function ProfilePage() {
     ensurePublicConsent(async () => {
       for (const file of Array.from(files)) {
         if (portfolioFiles.length >= proLimits.portfolioFiles) break;
+        if (isHeic(file)) {
+          toast.error(`«${file.name}»: ${HEIC_ERROR}`);
+          continue;
+        }
         // Photos & documents are capped at 10 MB; audio keeps the Pro-gated limit.
         const maxMb = file.type.startsWith('audio/') ? proLimits.portfolioFileMB : 10;
         if (file.size > maxMb * 1024 * 1024) {
@@ -512,7 +552,9 @@ export default function ProfilePage() {
           <input ref={bannerInputRef} type="file" accept="image/*" className="hidden"
             onChange={e => {
               const f = e.target.files?.[0];
-              if (f) {
+              if (f && isHeic(f)) {
+                toast.error(HEIC_ERROR);
+              } else if (f) {
                 // GIF cover is Pro-only; for Pro, skip cropping (would lose animation) and upload directly.
                 if (f.type === 'image/gif') {
                   if (isPro) uploadBannerMutation.mutate(f);
@@ -551,7 +593,9 @@ export default function ProfilePage() {
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
                 onChange={e => {
                   const f = e.target.files?.[0];
-                  if (f) {
+                  if (f && isHeic(f)) {
+                    toast.error(HEIC_ERROR);
+                  } else if (f) {
                     // GIF avatar is Pro-only; for Pro, skip cropping (would lose animation) and upload directly.
                     if (f.type === 'image/gif') {
                       if (isPro) uploadAvatarMutation.mutate(f);
@@ -736,6 +780,43 @@ export default function ProfilePage() {
             {/* Profile completion meter (own profile only) */}
             <ProfileProgressBar profile={profile} />
 
+            {/* Новый email ждёт подтверждения кодом из письма */}
+            {profile?.pendingEmail && (
+              <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 space-y-2.5">
+                <p className="text-sm text-slate-200 min-w-0 break-words [overflow-wrap:anywhere]">
+                  Подтвердите email <span className="font-semibold text-white">{profile.pendingEmail}</span> — введите код из письма.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={8}
+                    value={emailCode}
+                    onChange={e => setEmailCode(e.target.value.replace(/\D/g, ''))}
+                    onKeyDown={e => { if (e.key === 'Enter' && emailCode.trim() && !emailBusy) confirmEmail(); }}
+                    placeholder="Код из письма"
+                    className={`${inputCls} flex-1 tracking-widest`}
+                  />
+                  <button
+                    onClick={confirmEmail}
+                    disabled={!emailCode.trim() || emailBusy}
+                    className="px-4 py-2.5 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white font-semibold rounded-xl transition-colors flex items-center gap-1.5 flex-shrink-0"
+                  >
+                    {emailBusy ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}Подтвердить
+                  </button>
+                </div>
+                <div className="flex items-center gap-4 text-xs">
+                  <button onClick={resendEmailCode} disabled={emailBusy} className="text-primary-400 hover:text-primary-300 disabled:opacity-60 transition-colors">
+                    Отправить код ещё раз
+                  </button>
+                  <button onClick={cancelEmailChange} disabled={emailBusy} className="text-slate-500 hover:text-slate-300 disabled:opacity-60 transition-colors">
+                    Отменить
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* ── Moooza Pro ── */}
             <button
               onClick={() => navigate('/pro')}
@@ -752,8 +833,8 @@ export default function ProfilePage() {
                 <p className="text-sm font-bold text-white">{isPro ? 'Moooza Pro активен' : 'Moooza Pro'}</p>
                 <p className="text-xs text-slate-400 truncate">
                   {isPro
-                    ? (user?.proUntil
-                        ? `до ${new Date(user.proUntil).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}`
+                    ? (profile?.proUntil
+                        ? `до ${new Date(profile.proUntil).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}`
                         : 'Спасибо, что поддерживаешь Moooza 🎵')
                     : 'Больше портфолио, расширенный профиль, GIF-аватар, пресеты ленты'}
                 </p>
@@ -1153,7 +1234,7 @@ export default function ProfilePage() {
                     <label className={`aspect-square rounded-xl border-2 border-dashed border-slate-700 flex flex-col items-center justify-center gap-1 transition-all ${portfolioFull ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer hover:border-primary-500/50 hover:bg-primary-500/5'}`}>
                       {isUploadingPortfolio ? <Loader2 size={16} className="text-slate-500 animate-spin" /> : <Plus size={18} className="text-slate-500" />}
                       <span className="text-[10px] text-slate-500">Добавить</span>
-                      <input type="file" accept="image/*" multiple className="hidden" disabled={isUploadingPortfolio || portfolioFull} onChange={e => handlePortfolioUpload(e.target.files)} />
+                      <input type="file" accept="image/jpeg,image/png,image/gif,image/webp" multiple className="hidden" disabled={isUploadingPortfolio || portfolioFull} onChange={e => handlePortfolioUpload(e.target.files)} />
                     </label>
                     {imageFiles.map((f: any, i: number) => (
                       <div key={f.id} className="relative group aspect-square">
@@ -1195,7 +1276,14 @@ export default function ProfilePage() {
                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
                                   <Icon size={18} className={meta.color} />
                                 </div>
-                                <button onClick={() => setDocFullscreen({ url: `${API_URL}${f.url}`, name: f.title || f.originalName })} className="flex-1 min-w-0 text-left">
+                                <button
+                                  onClick={() => {
+                                    const url = `${API_URL}${f.url}`;
+                                    if (canPreviewInline(f)) setDocFullscreen({ url, name: f.title || f.originalName });
+                                    else openInNewTab(url);
+                                  }}
+                                  className="flex-1 min-w-0 text-left"
+                                >
                                   <p className="text-sm text-slate-200 truncate">{f.title || f.originalName}</p>
                                   <p className="text-[11px] text-slate-500">{meta.label}{f.size ? ` · ${formatBytes(f.size)}` : ''}</p>
                                 </button>

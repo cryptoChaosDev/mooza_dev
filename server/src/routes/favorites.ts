@@ -6,6 +6,9 @@ import { tgEvent } from '../utils/telegram';
 
 const router = Router();
 
+// Повторное «добавил(а) вас в Избранное» от того же пользователя — не чаще раза в 30 дней.
+const FAVORITE_RENOTIFY_MS = 30 * 24 * 60 * 60 * 1000;
+
 const TARGET_SELECT = {
   id: true, firstName: true, lastName: true, avatar: true,
   role: true, city: true, isPremium: true, isVerified: true,
@@ -53,8 +56,19 @@ router.post('/:targetId', authenticate, async (req: AuthRequest, res: Response) 
       create: { userId: meId, targetId },
       update: {},
     });
-    // Notify only on first add (not on re-add)
-    if (!existing) {
+    // Notify only on first add (not on re-add). Цикл «добавить → удалить →
+    // добавить» не должен каждый раз слать уведомление и событие в TG: если
+    // такое уведомление от этого пользователя уже было недавно — молчим.
+    const recentlyNotified = !existing && await prisma.notification.findFirst({
+      where: {
+        userId: targetId,
+        actorId: meId,
+        type: 'favorite_added',
+        createdAt: { gte: new Date(Date.now() - FAVORITE_RENOTIFY_MS) },
+      },
+      select: { id: true },
+    });
+    if (!existing && !recentlyNotified) {
       try {
         const me = await prisma.user.findUnique({ where: { id: meId }, select: { firstName: true, lastName: true } });
         const target = await prisma.user.findUnique({ where: { id: targetId }, select: { firstName: true, lastName: true } });

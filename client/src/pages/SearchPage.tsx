@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import {
   Search, ChevronRight, ChevronDown, ChevronUp,
   Crown, BadgeCheck, Ban, Users, Music2, Loader2, X,
@@ -10,12 +10,21 @@ import { createPortal } from 'react-dom';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { usePresenceStore } from '../stores/presenceStore';
-import { referenceAPI, userAPI, artistAPI, favoriteAPI } from '../lib/api';
+import { api, referenceAPI, artistAPI, favoriteAPI } from '../lib/api';
 import AvatarComponent from '../components/Avatar';
 import { plural } from '../lib/plural';
 import { useScrollLock } from '../lib/scrollLock';
 
 type CatalogTab = 'services' | 'artists' | 'people';
+
+// Страница выдачи каталога (услуги / люди): сервер отдаёт по 20 и общий счётчик.
+const CATALOG_PAGE_SIZE = 20;
+type CatalogPage = {
+  results: any[];
+  pagination?: { page: number; limit: number; totalCount: number; totalPages: number };
+};
+const nextCatalogPage = (last: CatalogPage) =>
+  last.pagination && last.pagination.page < last.pagination.totalPages ? last.pagination.page + 1 : undefined;
 
 const ARTIST_TYPES = [
   { value: 'ALL', label: 'Все' },
@@ -39,6 +48,21 @@ function Chip({ label, active, onClick }: { label: string; active: boolean; onCl
   );
 }
 
+// ─── ShowMoreButton ──────────────────────────────────────────────────────────
+// Догрузка следующей страницы каталога (услуги / люди).
+function ShowMoreButton({ loading, onClick }: { loading: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading}
+      className="w-full mt-3 py-2.5 flex items-center justify-center gap-2 rounded-xl border border-slate-700/60 bg-slate-900 text-sm font-medium text-slate-300 hover:text-white hover:border-slate-600 disabled:opacity-60 transition-colors"
+    >
+      {loading && <Loader2 size={14} className="animate-spin" />}
+      Показать ещё
+    </button>
+  );
+}
+
 // ─── ExpandableUserRow ───────────────────────────────────────────────────────
 // `user` is a flat user object (People tab / userAPI.catalog).
 // `searchProfile` is the optional searchMusicians payload that carries
@@ -49,10 +73,13 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
   // Connections: catalog now returns a flat `connectionsCount`; fall back to _count.
   const connCount = user.connectionsCount
     ?? ((user._count?.sentConnections ?? 0) + (user._count?.receivedConnections ?? 0));
-  // Professions: prefer searchMusicians.searchProfile, fall back to userServices.
+  // Professions: prefer searchMusicians.searchProfile, fall back to userServices +
+  // профессии профиля (у пользователя может быть профессия без услуги).
   const professions: string[] = (searchProfile?.professions?.map((p: any) => p?.name).filter(Boolean))
-    ?? user.userServices?.map((us: any) => us.profession?.name).filter(Boolean)
-    ?? [];
+    ?? [...new Set<string>([
+      ...(user.userServices ?? []).map((us: any) => us.profession?.name),
+      ...(user.userProfessions ?? []).map((up: any) => up.profession?.name),
+    ].filter(Boolean))];
   // Rating aggregates (only shown if there are reviews).
   const reviewsCount: number = user.reviewsCount ?? 0;
   const ratingAvg: number | null = user.ratingAvg ?? null;
@@ -129,7 +156,7 @@ function ExpandableUserRow({ user, searchProfile, onNavigate }: { user: any; sea
               <p className="text-[11px] text-slate-500 mb-1.5 font-medium uppercase tracking-wider">Профессии</p>
               <div className="flex flex-wrap gap-1.5">
                 {professions.map((p, i) => (
-                  <span key={i} className="px-2.5 py-1 rounded-lg text-xs bg-slate-800 text-slate-300">{p}</span>
+                  <span key={i} className="max-w-full px-2.5 py-1 rounded-lg text-xs bg-slate-800 text-slate-300 break-words [overflow-wrap:anywhere]">{p}</span>
                 ))}
               </div>
             </div>
@@ -372,15 +399,21 @@ export default function SearchPage() {
     sort: sortMode,
   };
 
-  const { data: serviceCards, isLoading: catalogLoading } = useQuery({
+  // Постранично (раньше — только первые 20): «Показать ещё» догружает следующую страницу.
+  const serviceCardsQuery = useInfiniteQuery({
     queryKey: ['service-card-search', serviceSearchParams],
-    queryFn: async () => {
-      const { data } = await referenceAPI.searchServiceCards(serviceSearchParams);
+    queryFn: async ({ pageParam }) => {
+      const { data } = await referenceAPI.searchServiceCards({ ...serviceSearchParams, page: pageParam, limit: CATALOG_PAGE_SIZE });
       // Catalog of services — show all created offerings, including the user's own.
-      return ((data as any)?.results ?? []) as any[];
+      return data as CatalogPage;
     },
+    initialPageParam: 1,
+    getNextPageParam: nextCatalogPage,
     enabled: activeTab === 'services',
   });
+  const serviceCards = serviceCardsQuery.data?.pages.flatMap(p => p.results ?? []);
+  const serviceCardsTotal = serviceCardsQuery.data?.pages[0]?.pagination?.totalCount ?? serviceCards?.length ?? 0;
+  const catalogLoading = serviceCardsQuery.isLoading;
 
   // ── Artists ────────────────────────────────────────────────────────────────
   // Verified artists only (server-enforced). Search + type + genres + sort are
@@ -411,22 +444,35 @@ export default function SearchPage() {
   });
 
   // ── People ────────────────────────────────────────────────────────────────
-  const { data: peopleUsers, isLoading: peopleLoading } = useQuery({
+  // Постранично: сортировка по оценке/связям и «с отзывами» считаются на сервере
+  // по всей выдаче, а не по первым 500.
+  const peopleQueryResult = useInfiniteQuery({
     queryKey: ['catalog-people', debouncedPeopleQuery, peopleLocation, peopleProfession, peopleOccupancy, peopleWithReviews, peopleSort, peopleAlphaDir],
-    queryFn: async () => {
-      const { data } = await userAPI.catalog({
-        query: debouncedPeopleQuery || undefined,
-        location: peopleLocation.length ? peopleLocation.join(',') : undefined,
-        profession: peopleProfession.length ? peopleProfession.join(',') : undefined,
-        occupancy: peopleOccupancy.length ? peopleOccupancy.join(',') : undefined,
-        withReviews: peopleWithReviews ? '1' : undefined,
-        sort: peopleSort,
-        alphaDir: peopleSort === 'alpha' ? peopleAlphaDir : undefined,
+    queryFn: async ({ pageParam }) => {
+      const { data } = await api.get('/users/catalog', {
+        params: {
+          query: debouncedPeopleQuery || undefined,
+          location: peopleLocation.length ? peopleLocation.join(',') : undefined,
+          profession: peopleProfession.length ? peopleProfession.join(',') : undefined,
+          occupancy: peopleOccupancy.length ? peopleOccupancy.join(',') : undefined,
+          withReviews: peopleWithReviews ? '1' : undefined,
+          sort: peopleSort,
+          alphaDir: peopleSort === 'alpha' ? peopleAlphaDir : undefined,
+          page: pageParam,
+          limit: CATALOG_PAGE_SIZE,
+        },
       });
-      return (data as any[]).filter((u: any) => u.id !== currentUser?.id);
+      return data as CatalogPage;
     },
+    initialPageParam: 1,
+    getNextPageParam: nextCatalogPage,
     enabled: activeTab === 'people',
   });
+  const peopleUsers = peopleQueryResult.data?.pages
+    .flatMap(p => p.results ?? [])
+    .filter((u: any) => u.id !== currentUser?.id);
+  const peopleTotal = peopleQueryResult.data?.pages[0]?.pagination?.totalCount ?? peopleUsers?.length ?? 0;
+  const peopleLoading = peopleQueryResult.isLoading;
 
   // People filter reference data (only while the People tab is active).
   const { data: peopleLocationOptions } = useQuery({
@@ -480,6 +526,7 @@ export default function SearchPage() {
   const displayArtistsLoading = showFavorites ? favArtistsLoading : artistsLoading;
   const displayPeople = showFavorites ? (favPeople ?? []) : (peopleUsers ?? []);
   const displayPeopleLoading = showFavorites ? favPeopleLoading : peopleLoading;
+  const displayPeopleTotal = showFavorites ? displayPeople.length : peopleTotal;
 
   // ── Navigation helpers ─────────────────────────────────────────────────────
   // Open a section to reveal its services.
@@ -674,7 +721,7 @@ export default function SearchPage() {
                     <AvatarComponent src={u.avatar} name={`${u.lastName ?? ''} ${u.firstName ?? ''}`} size={24} className="rounded-lg flex-shrink-0" />
                     <span className="text-sm text-white truncate">{u.lastName} {u.firstName}</span>
                     <span className="text-xs text-slate-500 truncate ml-auto flex-shrink-0">
-                      {u.userServices?.[0]?.profession?.name ?? u.city ?? ''}
+                      {u.userServices?.[0]?.profession?.name ?? u.userProfessions?.[0]?.profession?.name ?? u.city ?? ''}
                     </span>
                   </button>
                 )) : (
@@ -955,12 +1002,14 @@ export default function SearchPage() {
             {/* ── Results: service cards ── */}
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider min-w-0 truncate">
                   {selectedService ? selectedService.name
                     : selectedSection ? selectedSection.name
                     : 'Все услуги'}
                 </p>
-                {catalogLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
+                {catalogLoading
+                  ? <Loader2 size={12} className="text-primary-400 animate-spin flex-shrink-0" />
+                  : <span className="text-xs text-slate-500 flex-shrink-0">Найдено {serviceCardsTotal}</span>}
               </div>
 
               {catalogLoading ? (
@@ -1035,6 +1084,12 @@ export default function SearchPage() {
                   </div>
                   <p className="text-slate-400 text-sm">Такая услуга не найдена</p>
                 </div>
+              )}
+              {!catalogLoading && serviceCardsQuery.hasNextPage && (
+                <ShowMoreButton
+                  loading={serviceCardsQuery.isFetchingNextPage}
+                  onClick={() => serviceCardsQuery.fetchNextPage()}
+                />
               )}
             </div>
           </>
@@ -1143,7 +1198,9 @@ export default function SearchPage() {
           <div className="mt-4">
             <div className="flex items-center gap-2 mb-3">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Все участники</p>
-              {displayPeopleLoading && <Loader2 size={12} className="text-primary-400 animate-spin" />}
+              {displayPeopleLoading
+                ? <Loader2 size={12} className="text-primary-400 animate-spin" />
+                : <span className="text-xs text-slate-500">Найдено {displayPeopleTotal}</span>}
             </div>
 
             {displayPeopleLoading ? (
@@ -1175,6 +1232,12 @@ export default function SearchPage() {
                 </div>
                 <p className="text-slate-400 text-sm">Такой пользователь не найден</p>
               </div>
+            )}
+            {!showFavorites && !peopleLoading && peopleQueryResult.hasNextPage && (
+              <ShowMoreButton
+                loading={peopleQueryResult.isFetchingNextPage}
+                onClick={() => peopleQueryResult.fetchNextPage()}
+              />
             )}
           </div>
         )}
