@@ -20,7 +20,7 @@ export type NotifCategory = 'messages' | 'orders' | 'vacancies' | 'social';
 export function categoryOfNotification(type: string): NotifCategory | null {
   if (type === 'message') return 'messages';
   if (type.startsWith('order') || type.startsWith('service')) return 'orders';
-  if (type.startsWith('vacancy') || type.startsWith('release_') || type.startsWith('clip_')) return 'vacancies';
+  if (type.startsWith('vacancy') || type.startsWith('release_') || type.startsWith('clip_') || type.startsWith('lineup')) return 'vacancies';
   // «Социальное» в настройках = «Друзья, связи, ответы на посты, отзывы»
   if (
     type === 'social' || type === 'post_reply' || type === 'saved' || type.startsWith('review') ||

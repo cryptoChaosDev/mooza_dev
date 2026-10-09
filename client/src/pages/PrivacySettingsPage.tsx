@@ -354,7 +354,7 @@ export default function PrivacySettingsPage() {
               {([
                 { key: 'messages' as const, label: 'Сообщения', desc: 'Личные и групповые чаты' },
                 { key: 'orders' as const, label: 'Заказы и услуги', desc: 'Отклики, выбор исполнителя, подходящие вам заказы, интерес к услугам' },
-                { key: 'vacancies' as const, label: 'Вакансии и приглашения', desc: 'Отклики на вакансии, приглашения в релизы и клипы' },
+                { key: 'vacancies' as const, label: 'Вакансии и приглашения', desc: 'Отклики на вакансии, приглашения в релизы, клипы и на концерты (лайнапы)' },
                 { key: 'social' as const, label: 'Социальное', desc: 'Друзья, связи, ответы на посты, отзывы' },
               ]).map(row => {
                 const enabled = prefs[row.key] !== false;
