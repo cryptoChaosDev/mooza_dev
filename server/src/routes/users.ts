@@ -90,7 +90,11 @@ const userSelect = {
       },
     },
   },
+  // Только подтверждённые участия: PENDING-заявки/приглашения и DECLINED в
+  // профиле не показываются (клиент свои PENDING из профиля не использует —
+  // «Мои артисты» берёт groupAPI.getMyGroups).
   userArtists: {
+    where: { inviteStatus: 'ACCEPTED' as const },
     include: { artist: { select: { id: true, name: true, avatar: true } } },
   },
   socialLinks: true,
@@ -166,7 +170,9 @@ const publicUserSelect = {
       },
     },
   },
+  // Чужой профиль — только подтверждённые участия (не PENDING/DECLINED).
   userArtists: {
+    where: { inviteStatus: 'ACCEPTED' as const },
     include: { artist: { select: { id: true, name: true, avatar: true } } },
   },
   socialLinks: true,
@@ -1139,8 +1145,8 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
             { userServices: { some: { geographies: { some: { nameNorm: { contains: w } } } } } },
             // Custom filter values
             { userServices: { some: { selectedCustomFilterValues: { some: { valueNorm: { contains: w } } } } } },
-            // Collectives
-            { userArtists: { some: { artist: { nameNorm: { contains: w } } } } },
+            // Collectives (confirmed memberships only — not pending requests)
+            { userArtists: { some: { inviteStatus: 'ACCEPTED', artist: { nameNorm: { contains: w } } } } },
           ],
         };
       });
