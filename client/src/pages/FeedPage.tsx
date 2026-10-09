@@ -91,6 +91,10 @@ function patchPostEverywhere(qc: QueryClient, postId: string, fn: (p: any) => an
   for (const queryKey of POST_CACHE_KEYS) qc.setQueriesData({ queryKey }, (d: any) => mapPostInData(d, postId, fn));
 }
 
+// Посты, удалённые в этой вкладке: deep link на них не перезапрашиваем и не показываем
+// тост «Пост не найден» (иначе сразу после удаления — лишний 404 и ошибка).
+const deletedPostIds = new Set<string>();
+
 function invalidatePostCaches(qc: QueryClient) {
   for (const queryKey of POST_CACHE_KEYS) qc.invalidateQueries({ queryKey });
   qc.invalidateQueries({ queryKey: ['saved-posts'] }); // FriendsPage
@@ -442,7 +446,14 @@ function PostCard({ post, currentUserId, highlight = false }: { post: any; curre
     onSuccess: () => { invalidatePostCaches(queryClient); setEditing(false); },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось сохранить изменения')),
   });
-  const deleteMut = useMutation({ mutationFn: () => postAPI.deletePost(post.id), onSuccess: () => invalidatePostCaches(queryClient), onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить пост')) });
+  const deleteMut = useMutation({
+    mutationFn: () => postAPI.deletePost(post.id),
+    onSuccess: () => {
+      deletedPostIds.add(post.id);
+      queryClient.setQueryData(['feed-post', post.id], null);
+      for (const queryKey of [['feed'], ['feed-saved'], ['saved-posts']]) queryClient.invalidateQueries({ queryKey });
+    },
+    onError: (e: any) => toast.error(getApiError(e, 'Не удалось удалить пост')) });
   const reactMut = useMutation({
     mutationFn: (emoji: string) => postAPI.reactPost(post.id, emoji),
     onMutate: (emoji: string) => patchPostEverywhere(queryClient, post.id, (p) => withMyReaction(p, emoji)),
@@ -1466,7 +1477,7 @@ export default function FeedPage() {
   const targetPost = useQuery({
     queryKey: ['feed-post', targetPostId],
     queryFn: async () => { const { data } = await api.get(`/posts/${targetPostId}`); return data as any; },
-    enabled: !!targetPostId,
+    enabled: !!targetPostId && !deletedPostIds.has(targetPostId),
     retry: false,
     staleTime: 30_000,
   });
@@ -1476,6 +1487,7 @@ export default function FeedPage() {
   const notFoundToastRef = useRef<string | null>(null);
   useEffect(() => {
     if (!targetPostId || !targetPost.isError || notFoundToastRef.current === targetPostId) return;
+    if (deletedPostIds.has(targetPostId)) return;
     notFoundToastRef.current = targetPostId;
     // Гостю при выключенном гостевом режиме сервер отвечает 401 — это не «удалён».
     if (isGuest && (targetPost.error as any)?.response?.status === 401) {

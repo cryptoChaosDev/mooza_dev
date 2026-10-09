@@ -32,6 +32,8 @@ export type TestUser = {
   token: string;
   firstName: string;
   lastName: string;
+  /** The `user` object POST /auth/verify-email answered with (SELF_USER_SELECT). */
+  verifiedUser?: Record<string, any>;
 };
 
 export async function apiCall(
@@ -44,11 +46,21 @@ export async function apiCall(
   if (token) headers['Authorization'] = `Bearer ${token}`;
   if (body) headers['Content-Type'] = 'application/json';
 
-  const res = await fetch(`${API}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  // The local network occasionally drops a connection ("fetch failed"). Retry reads,
+  // and writes only when the failure happened while connecting (request never sent).
+  const connectPhase = /ECONNREFUSED|UND_ERR_CONNECT_TIMEOUT|ENOTFOUND|EAI_AGAIN/;
+  let res!: Response;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      res = await fetch(`${API}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
+      break;
+    } catch (e: any) {
+      const code = String(e?.cause?.code || e?.code || '');
+      const retriable = method === 'GET' || connectPhase.test(code);
+      if (!retriable || attempt >= 3) throw e;
+      await new Promise((r) => setTimeout(r, 700 * attempt));
+    }
+  }
   let data: any;
   try {
     data = await res.json();
@@ -126,7 +138,17 @@ export async function createTestUser(prefix: string, extra: Record<string, unkno
   // Users registered after 2026-07-16 without a profession are locked behind the
   // full-screen ProfessionGate overlay (client/src/components/ProfessionGate.tsx).
   // Give every test user a profession unless the caller opts out ({ userProfessions: [] }).
-  const payload: Record<string, unknown> = { email, firstName, lastName, city: 'Москва', country: 'Россия', ...extra };
+  // Mirror what POST /auth/register now stashes in PendingRegistration.payload:
+  // birthDate (ISO, 16+ is mandatory), PD consent timestamp + version (consentPd:true
+  // is mandatory; verify-email turns it into consentPdAt/termsAgreedAt).
+  const nowIso = new Date().toISOString();
+  const adult = new Date(); adult.setFullYear(adult.getFullYear() - 25);
+  const payload: Record<string, unknown> = {
+    email, firstName, lastName, city: 'Москва', country: 'Россия',
+    birthDate: adult.toISOString().split('T')[0], // parseBirthDate() stores YYYY-MM-DD
+    consentPdAt: nowIso, consentPdVersion: '2026-05-31', consentMarketingAt: null,
+    ...extra,
+  };
   if (!('userProfessions' in extra)) {
     payload.userProfessions = [{ professionId: defaultProfessionId(), features: [], selectedCustomFilterValueIds: [] }];
   }
@@ -147,7 +169,34 @@ export async function createTestUser(prefix: string, extra: Record<string, unkno
   // Skip onboarding tour (individual tests can reset it via SQL)
   await apiCall('PATCH', '/users/me/complete-onboarding', undefined, token);
 
-  return { id: userId, email, password, token, firstName, lastName };
+  return { id: userId, email, password, token, firstName, lastName, verifiedUser: verify.data.user };
+}
+
+let cachedCollectiveRoleId: string | null = null;
+/** Any artist-membership role (Role.context = COLLECTIVE) — POST /artists requires one. */
+export function collectiveRoleId(): string {
+  if (cachedCollectiveRoleId) return cachedCollectiveRoleId;
+  const id = runSqlStrict(`SELECT id FROM "Role" WHERE context = 'COLLECTIVE' ORDER BY "sortOrder", name LIMIT 1;`).trim();
+  if (!id) throw new Error('No COLLECTIVE roles on target DB');
+  cachedCollectiveRoleId = id;
+  return id;
+}
+
+/**
+ * Create an artist via the API. Since the audit, POST /artists requires a type
+ * and the creator's role (submitterRoleIds); without them it answers 400.
+ */
+export async function createTestArtist(owner: TestUser, name: string, type = 'GROUP'): Promise<string> {
+  const r = await apiCall('POST', '/artists', { name, type, submitterRoleIds: [collectiveRoleId()] }, owner.token);
+  if (r.status !== 201 || !r.data?.id) throw new Error(`createTestArtist failed (${r.status}): ${JSON.stringify(r.data)}`);
+  return r.data.id as string;
+}
+
+/** Role-bound invite link for an artist (opens /register in invite-only mode). */
+export async function createArtistInvite(owner: TestUser, artistId: string): Promise<{ token: string; url: string; expiresAt: string }> {
+  const r = await apiCall('POST', `/artists/${artistId}/invite-link`, { roleIds: [collectiveRoleId()] }, owner.token);
+  if (r.status !== 201 || !r.data?.token) throw new Error(`invite-link failed (${r.status}): ${JSON.stringify(r.data)}`);
+  return r.data;
 }
 
 /**
@@ -174,6 +223,12 @@ CREATE TEMP TABLE pw_c AS
 CREATE TEMP TABLE pw_a AS SELECT id FROM "Artist" WHERE "submittedById" IN (SELECT id FROM pw_u)
   OR id IN (SELECT "artistId" FROM "UserArtist" WHERE "isOwner" AND "userId" IN (SELECT id FROM pw_u));
 DELETE FROM "Artist" WHERE id IN (SELECT id FROM pw_a);
+-- Notification.actorId is SET NULL on user delete: drop what E2E actors sent to anyone
+-- (e.g. admin notifications about complaints filed by test accounts).
+DELETE FROM "Notification" WHERE "actorId" IN (SELECT id FROM pw_u);
+-- Complaint.targetId is not a FK: drop complaints ABOUT test users / their posts too.
+DELETE FROM "Complaint" WHERE ("targetType" = 'user' AND "targetId" IN (SELECT id FROM pw_u))
+  OR ("targetType" = 'post' AND "targetId" IN (SELECT id FROM "Post" WHERE "authorId" IN (SELECT id FROM pw_u)));
 DELETE FROM "User" WHERE id IN (SELECT id FROM pw_u);
 DELETE FROM "Conversation" WHERE id IN (SELECT id FROM pw_c);
 DELETE FROM "PendingRegistration" WHERE email LIKE '%@${TEST_EMAIL_DOMAIN}';
@@ -197,6 +252,15 @@ export async function loginUI(page: Page, userOrEmail: TestUser | string, _passw
   } else {
     user = userOrEmail;
   }
+  // Diagnostics: if the app falls into its ErrorBoundary («Что-то пошло не так»), surface
+  // the error it logged instead of a bare «nav not found» timeout.
+  const boundaryLogs: string[] = [];
+  page.on('console', (m) => {
+    if (!m.text().includes('[ErrorBoundary]')) return;
+    boundaryLogs.push(m.text().slice(0, 600));
+    console.log(`[app ErrorBoundary @ ${page.url()}] ${m.text().slice(0, 600)}`); // ends up in the test's stdout
+  });
+  page.on('pageerror', (e) => boundaryLogs.push(`pageerror: ${String(e?.message || e).slice(0, 300)}`));
   // Set token directly in localStorage to bypass login form
   await page.goto('/');
   await page.evaluate(({ token, u }) => {
@@ -209,7 +273,11 @@ export async function loginUI(page: Page, userOrEmail: TestUser | string, _passw
   await page.reload();
   // Bottom nav (nav.fixed) is lg:hidden — on desktop only the sidebar is visible,
   // so wait for the app shell to be attached rather than for a visible nav.fixed.
-  await page.locator('nav').first().waitFor({ state: 'attached', timeout: 20_000 });
+  const crashed = page.getByText('Что-то пошло не так');
+  await page.locator('nav').first().or(crashed).first().waitFor({ state: 'attached', timeout: 20_000 });
+  if (await crashed.isVisible().catch(() => false)) {
+    throw new Error(`App ErrorBoundary after login at ${page.url()}: ${boundaryLogs.filter((l) => l.includes('ErrorBoundary') || !/access control checks|mc\.yandex/.test(l)).join(' || ') || '(no console output)'}`);
+  }
   try {
     const consent = page.locator('button:has-text("Принять"), button:has-text("OK")');
     if (await consent.count() > 0) await consent.first().click();

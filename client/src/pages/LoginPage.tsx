@@ -50,7 +50,8 @@ export default function LoginPage() {
   const { setAuth, setUser } = useAuthStore();
 
   // Registration may be closed site-wide — hide the "Зарегистрироваться" link.
-  const [registrationEnabled, setRegistrationEnabled] = useState(true);
+  // null — настройки ещё не загружены: ничего не показываем, чтобы ссылка не мигала.
+  const [registrationEnabled, setRegistrationEnabled] = useState<boolean | null>(null);
   useEffect(() => {
     siteSettingsAPI.get()
       .then(({ data }) => setRegistrationEnabled((data as Record<string, string>)?.registrationEnabled !== 'false'))
@@ -431,7 +432,7 @@ const handleVkAuth = useCallback(async (user: any, token: string, isNew?: boolea
             <a href="/forgot-password" className="text-sm text-slate-500 hover:text-slate-300 transition-colors">
               Забыли пароль?
             </a>
-            {registrationEnabled ? (
+            {registrationEnabled === null ? null : registrationEnabled ? (
               <p className="text-slate-400 text-sm">
                 Нет аккаунта?{' '}
                 <a href="/register" className="text-primary-400 hover:text-primary-300 font-medium transition-colors">

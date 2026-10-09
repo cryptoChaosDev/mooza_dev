@@ -101,13 +101,24 @@ test('smoke: login → onboarding → profile → catalog → chat → order →
     createTestUser('smkb', { birthDate, userProfessions: [] }), // no profession → ProfessionGate
   ]);
   await apiCall('PUT', '/users/me', { userProfessions: [{ professionId: profId, features: [], selectedCustomFilterValueIds: [] }] }, alice.token);
-  const svc = await apiCall('PUT', '/users/me/services', [{ professionId: profId, serviceId, priceFrom: 1000, priceTo: 5000, name: 'PW вокал' }] as any, alice.token);
+  const svcBody = [{ professionId: profId, serviceId, priceFrom: 1000, priceTo: 5000, name: 'PW вокал' }] as any;
+  // Since the audit an ACTIVE (public) service needs the 152-ФЗ ст.10.1 consent first.
+  const noConsent = await apiCall('PUT', '/users/me/services', svcBody, alice.token);
+  const consentGate = `${noConsent.status} ${noConsent.data?.code || ''}`;
+  await apiCall('POST', '/users/me/public-consent', undefined, alice.token);
+  const svc = await apiCall('PUT', '/users/me/services', svcBody, alice.token);
   const aliceUserServiceId: string | undefined = svc.data?.[0]?.id;
   // Bob must see the onboarding tour on his first UI login.
   runSqlStrict(`UPDATE "User" SET "onboardingCompletedAt" = NULL WHERE id = '${bob.id}';`);
 
   await page.addInitScript(() => {
     try { localStorage.setItem('mooza_cookie_consent', 'necessary'); } catch { /* ignore */ }
+  });
+
+  await step('0 setup: active service requires public consent (403 → consent → 200)', async () => {
+    expect(consentGate, 'PUT /users/me/services (active) without publicConsentAt').toBe('403 PUBLIC_CONSENT_REQUIRED');
+    expect(svc.status, `PUT /users/me/services after consent → ${JSON.stringify(svc.data)}`).toBe(200);
+    expect(aliceUserServiceId, 'executor service id').toBeTruthy();
   });
 
   // 1. Login via the real form
@@ -132,15 +143,24 @@ test('smoke: login → onboarding → profile → catalog → chat → order →
     await page.getByRole('button', { name: /Вокалист/ }).first().click();
     await checkOverflow('/professions/new');
     await page.getByRole('button', { name: /^Сохранить$/ }).click();
-    await page.waitForURL(/\/profile$/, { timeout: 15_000 });
-    const me = await apiCall('GET', '/users/me', undefined, bob.token);
-    expect((me.data?.userProfessions || []).length, 'profession saved').toBeGreaterThan(0);
+    await page.waitForURL((u) => !u.pathname.startsWith('/professions'), { timeout: 15_000 });
+    await expect.poll(async () => ((await apiCall('GET', '/users/me', undefined, bob.token)).data?.userProfessions || []).length,
+      { timeout: 10_000, message: 'profession saved' }).toBeGreaterThan(0);
     await expect(page.getByText('Укажите вашу профессию')).toHaveCount(0);
   });
 
-  // 3. Onboarding, part 2: the slide tour (/onboarding) → «Перейти в профиль»
-  await step('3 onboarding: slide tour', async () => {
-    await page.goto('/onboarding');
+  // 3. Onboarding, part 2: since the audit the gate itself leads to the slide tour
+  //    (/onboarding) right after the profession is saved — no manual navigation.
+  await step('3 onboarding: slides shown automatically after the gate → «Перейти в профиль»', async () => {
+    let auto = true;
+    try {
+      await page.waitForURL(/\/onboarding$/, { timeout: 15_000 });
+      await expect(page.getByRole('button', { name: /далее/i })).toBeVisible({ timeout: 10_000 });
+    } catch {
+      auto = false;
+    }
+    const landedOn = page.url().replace(/^https?:\/\/[^/]+/, '');
+    if (!auto) await page.goto('/onboarding'); // keep the journey going, but report below
     await checkOverflow('/onboarding');
     for (let i = 0; i < 10; i++) {
       const toProfile = page.getByRole('button', { name: /перейти в профиль/i });
@@ -150,6 +170,7 @@ test('smoke: login → onboarding → profile → catalog → chat → order →
     await page.waitForURL(/\/profile$/, { timeout: 15_000 });
     await expect.poll(async () => (await apiCall('GET', '/users/me', undefined, bob.token)).data?.onboardingCompletedAt,
       { timeout: 10_000, message: 'onboardingCompletedAt set on server' }).toBeTruthy();
+    expect(auto, `after saving the profession from the gate the app stayed on ${landedOn} instead of the /onboarding slides`).toBe(true);
   });
 
   // 4. Own profile renders with the chosen profession
@@ -182,9 +203,18 @@ test('smoke: login → onboarding → profile → catalog → chat → order →
     if (!page.url().includes(`/profile/${alice.id}`)) await page.goto(`/profile/${alice.id}`);
     await page.locator('button[title="Написать сообщение"]').click();
     await page.waitForURL(/\/(messages|chat)\//, { timeout: 15_000 });
+    // Since the audit /messages/:userId is replaced by /messages/:conversationId.
+    await expect.poll(() => page.url().split('/').pop() || '', { timeout: 10_000, message: 'URL switched to the conversation id' })
+      .not.toBe(alice.id);
+    const convId = page.url().split('/').pop()!.split('?')[0];
+    expect(convId, 'conversation id in URL').toMatch(/^[0-9a-f-]{36}$/);
     const box = page.getByPlaceholder('Сообщение...');
+    // Enter must NOT send (it inserts a newline); sending is only via the button.
     await box.fill(chatText);
-    // Enter inserts a newline (no keyboard submit) — send with the button.
+    await box.press('Enter');
+    await page.waitForTimeout(800);
+    await expect(box, 'Enter keeps the text in the box').toHaveValue(new RegExp(`^${chatText}\\n?$`));
+    await box.fill(chatText);
     await page.locator('form button[type="submit"]').last().click();
     await expect(box).toHaveValue('', { timeout: 10_000 });
     await expect(page.locator('div,p,span').filter({ hasText: chatText }).last()).toBeVisible({ timeout: 10_000 });
@@ -197,25 +227,65 @@ test('smoke: login → onboarding → profile → catalog → chat → order →
       if (!got) await page.waitForTimeout(500);
     }
     expect(got, 'executor sees the message in conversations').toBeTruthy();
+    // Exactly one copy was sent (the Enter press above must not have produced a message).
+    const hist = await apiCall('GET', `/messages/conversations/${convId}?limit=50&markRead=0`, undefined, alice.token);
+    const list = hist.data?.messages || [];
+    expect(list.filter((m: any) => String(m.content || '').includes(chatText)).length, 'messages with the text').toBe(1);
   });
 
   // 7. Publish an order through the UI form
   const orderTitle = `PW заказ ${Date.now().toString(36)}`;
+  const deadlineYear = new Date().getFullYear() + 1;
+  let orderId = '';
   await step('7 create order (UI)', async () => {
     await page.goto('/orders/new');
     await page.getByPlaceholder('Например: Нужно свести трек').fill(orderTitle);
     await page.getByPlaceholder('Поиск услуги в каталоге...').fill('Запись вокальных');
     await page.getByRole('button', { name: /Запись вокальных партий/ }).first().click();
     await page.getByPlaceholder('Опишите, что нужно сделать...').fill('Smoke-тест Playwright');
+    // Deadline: masked ДД.ММ.ГГГГ input, stored as the END of that day in Moscow.
+    await page.getByText('Указать срок').click();
+    const dl = page.getByPlaceholder('ДД.ММ.ГГГГ');
+    await dl.pressSequentially(`3112${deadlineYear}`);
+    await expect(dl, 'mask inserts the dots').toHaveValue(`31.12.${deadlineYear}`);
+    await expect(page.getByText('Срок — до конца этого дня (23:59 по Москве).')).toBeVisible();
     await checkOverflow('/orders/new');
     await page.getByRole('button', { name: /^Опубликовать$/ }).click();
-    let found = false;
+    let found: any = null;
     for (let i = 0; i < 10 && !found; i++) {
       const mine = await apiCall('GET', '/orders/mine', undefined, bob.token);
-      found = JSON.stringify(mine.data || '').includes(orderTitle);
+      found = (Array.isArray(mine.data) ? mine.data : []).find((o: any) => o.title === orderTitle) || null;
       if (!found) await page.waitForTimeout(700);
     }
     expect(found, 'order published').toBeTruthy();
+    orderId = found.id;
+    const full = await apiCall('GET', `/orders/${orderId}`, undefined, bob.token);
+    expect(full.data?.deadline, 'deadline = 31.12 23:59:59.999 MSK').toBe(`${deadlineYear}-12-31T20:59:59.999Z`);
+  });
+
+  // 7b. Executor responds (API) → customer picks her and marks the order «Выполнен» (UI, with confirmation)
+  await step('7b order: response → choose executor → «Выполнен» via ConfirmDialog (UI)', async () => {
+    expect(orderId, 'order exists').toBeTruthy();
+    const resp = await apiCall('POST', `/orders/${orderId}/responses`, { price: 2000, comment: 'PW отклик' }, alice.token);
+    expect(resp.status, `respond → ${JSON.stringify(resp.data)}`).toBe(201);
+    await page.goto(`/orders/${orderId}`);
+    await page.getByRole('button', { name: /Выбрать исполнителем/ }).click();
+    await page.locator('div.fixed.z-\\[81\\]').getByRole('button', { name: 'Выбрать', exact: true }).click();
+    await expect.poll(async () => (await apiCall('GET', `/orders/${orderId}`, undefined, bob.token)).data?.executorId, { timeout: 10_000 }).toBe(alice.id);
+    await checkOverflow('/orders/:id (executor chosen)');
+    await page.getByRole('button', { name: /^✓\s*Выполнен$/ }).first().click();
+    const dlg = page.locator('div.fixed.z-\\[81\\]');
+    await expect(dlg.getByText(/Отметить заказ выполненным\?/)).toBeVisible({ timeout: 5_000 });
+    // Cancel first: nothing must change without the confirmation.
+    await dlg.getByRole('button', { name: 'Отмена' }).click();
+    await page.waitForTimeout(800);
+    expect((await apiCall('GET', `/orders/${orderId}`, undefined, bob.token)).data?.status, 'cancel keeps the order active').toBe('active');
+    await page.getByRole('button', { name: /^✓\s*Выполнен$/ }).first().click();
+    await dlg.getByRole('button', { name: 'Выполнен', exact: true }).click();
+    await expect.poll(async () => (await apiCall('GET', `/orders/${orderId}`, undefined, bob.token)).data?.status, { timeout: 10_000 }).toBe('done');
+    // Author's view: status chip «✓ Выполнен» (OrderStatusChip), the «Выполнен» action is gone.
+    await expect(page.getByText('✓ Выполнен').first()).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByRole('button', { name: /^✓\s*Выполнен$/ })).toHaveCount(0);
   });
 
   // 8. Deal creation (API — UI entry points are disabled by DEALS_ENABLED=false)

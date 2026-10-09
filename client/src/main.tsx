@@ -5,6 +5,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import { queryClient } from './lib/queryClient';
 import { YM_ID } from './lib/metrika';
+import { reloadOnceForChunkError } from './lib/chunkReload';
 import './index.css';
 
 // Prevent browser from restoring scroll position on navigation
@@ -34,6 +35,12 @@ if ('serviceWorker' in navigator) {
     window.location.reload();
   });
 }
+
+// Vite сообщает о неудачной загрузке динамического импорта (чанк lazy-страницы).
+// Пробуем один раз перезагрузиться; если уже пробовали — пусть ошибку покажет ErrorBoundary.
+window.addEventListener('vite:preloadError', (event) => {
+  if (reloadOnceForChunkError()) event.preventDefault();
+});
 
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },

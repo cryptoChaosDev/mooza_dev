@@ -1,4 +1,5 @@
 import { Component, ErrorInfo, ReactNode } from 'react';
+import { isChunkLoadError, reloadOnceForChunkError } from '../lib/chunkReload';
 
 interface Props { children: ReactNode; }
 interface State { hasError: boolean; error: Error | null; }
@@ -12,6 +13,8 @@ export default class ErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('[ErrorBoundary]', error, info.componentStack);
+    // Не загрузился чанк страницы (старая вкладка после деплоя / сбой сети) — одна автоперезагрузка.
+    if (isChunkLoadError(error)) reloadOnceForChunkError();
   }
 
   render() {
