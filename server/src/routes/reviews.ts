@@ -31,32 +31,52 @@ router.get('/user/:userId', optionalAuthenticate, async (req: AuthRequest, res) 
   }
 });
 
+// Допустимые типы отзыва. Свободная строка позволяла накручивать отзывы
+// (type: "x1", "x2", … — каждый проходил мимо уникальности author+target+type).
+const REVIEW_TYPES = ['connection', 'deal'] as const;
+
 // POST /api/reviews — create review (auth required)
 router.post('/', authenticate, async (req: AuthRequest, res) => {
   try {
-    const { targetId, rating, text, type = 'connection', serviceId } = req.body;
+    const { targetId, rating, text, type = 'connection', serviceId, dealId } = req.body;
     if (!targetId || !rating) return res.status(400).json({ error: 'targetId and rating required' });
     if (targetId === req.userId) return res.status(400).json({ error: 'Cannot review yourself' });
-    if (rating < 1 || rating > 10) return res.status(400).json({ error: 'Rating must be 1-10' });
+    if (!(REVIEW_TYPES as readonly string[]).includes(type)) {
+      return res.status(400).json({ error: 'Некорректный тип отзыва' });
+    }
+    const ratingNum = Number(rating);
+    if (!Number.isInteger(ratingNum) || ratingNum < 1 || ratingNum > 10) {
+      return res.status(400).json({ error: 'Rating must be 1-10' });
+    }
 
     // A review must be backed by a real interaction between the two users —
     // otherwise anyone could spin up accounts and mass-post fake reviews to tank
     // a competitor's rating. Validate the relationship server-side (UI gating is
     // not a security control).
+    let reviewDealId: string | null = null;
+    let reviewServiceId: string | null = serviceId || null;
     if (type === 'deal') {
+      // Отзыв по сделке привязан к КОНКРЕТНОЙ завершённой сделке, где автор и
+      // адресат — её участники.
+      if (!dealId || typeof dealId !== 'string') {
+        return res.status(400).json({ error: 'Не указана сделка' });
+      }
       const deal = await prisma.deal.findFirst({
         where: {
+          id: dealId,
           status: 'COMPLETED',
           OR: [
             { customerId: req.userId!, executorId: targetId },
             { customerId: targetId, executorId: req.userId! },
           ],
         },
-        select: { id: true },
+        select: { id: true, serviceId: true },
       });
       if (!deal) return res.status(403).json({ error: 'Отзыв можно оставить только по завершённой сделке' });
+      reviewDealId = deal.id;
+      reviewServiceId = deal.serviceId ?? null;
     } else {
-      // Default 'connection' type — requires an established (or breaking) connection.
+      // 'connection' — requires an established (or breaking) connection.
       const conn = await prisma.connection.findFirst({
         where: {
           status: { in: ['ACCEPTED', 'BREAK_REQUESTED'] },
@@ -70,30 +90,44 @@ router.post('/', authenticate, async (req: AuthRequest, res) => {
       if (!conn) return res.status(403).json({ error: 'Отзыв можно оставить только при установленной связи' });
     }
 
+    const key = { authorId_targetId_type: { authorId: req.userId!, targetId, type } };
+    if (type === 'deal') {
+      // Один отзыв на сделку от автора. Отзыв по ДРУГОЙ сделке с тем же
+      // человеком не должен молча перезаписывать прежний (уникальный ключ
+      // author+target+type допускает один deal-отзыв на пару).
+      const existing = await prisma.review.findUnique({ where: key, select: { dealId: true } });
+      if (existing && existing.dealId && existing.dealId !== reviewDealId) {
+        return res.status(409).json({ error: 'Вы уже оставили отзыв этому пользователю по другой сделке' });
+      }
+    }
+
     const review = await prisma.review.upsert({
-      where: { authorId_targetId_type: { authorId: req.userId!, targetId, type } },
+      where: key,
       create: {
         authorId: req.userId!,
         targetId,
-        rating: Number(rating),
+        rating: ratingNum,
         text: text?.trim() || null,
         type,
-        serviceId: serviceId || null,
+        serviceId: reviewServiceId,
+        dealId: reviewDealId,
       },
       update: {
-        rating: Number(rating),
+        rating: ratingNum,
         text: text?.trim() || null,
-        serviceId: serviceId || null,
+        serviceId: reviewServiceId,
+        dealId: reviewDealId,
       },
       include: reviewInclude,
     });
     try {
       const target = await prisma.user.findUnique({ where: { id: targetId }, select: { firstName: true, lastName: true } });
-      tgEvent.review(`${review.author.firstName} ${review.author.lastName}`, `${target?.firstName} ${target?.lastName}`, Number(rating));
+      tgEvent.review(`${review.author.firstName} ${review.author.lastName}`, `${target?.firstName} ${target?.lastName}`, ratingNum);
     } catch {}
     res.json(review);
   } catch (e: any) {
-    res.status(400).json({ error: e.message });
+    console.error('[reviews] POST /', e);
+    res.status(400).json({ error: 'Не удалось сохранить отзыв' });
   }
 });
 
