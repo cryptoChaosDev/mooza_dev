@@ -4,9 +4,11 @@
  *
  *   SEO_SNAPSHOTS    — снимки включены (по умолчанию ВЫКЛ: /seo/render отдаёт
  *                      шаблон index.html без изменений).
- *   SEO_INDEXABLE    — сайт можно индексировать (по умолчанию false: на всех
- *                      снимках meta robots noindex,nofollow + X-Robots-Tag,
- *                      sitemap — 404). На DEV всегда false.
+ *   SEO_INDEXABLE    — открытый режим индексации (по умолчанию false —
+ *                      ЛЕГАСИ-режим «как сейчас на PROD»: индексируются только
+ *                      /, /privacy, /terms, /login, /register; остальные публичные
+ *                      страницы — noindex; прежние robots.txt и sitemap из 3 URL,
+ *                      см. seo/robots.ts). true — полный sitemap и открытый robots.
  *   APP_URL          — origin сайта для абсолютных URL (canonical, og:url, sitemap).
  *   SPA_TEMPLATE_URL — откуда брать собранный index.html (web-контейнер).
  */

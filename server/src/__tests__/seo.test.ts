@@ -168,6 +168,22 @@ function expectWellFormedXml(xml: string) {
 
 const ARTIST_ID = '11111111-2222-4333-8444-555555555555';
 
+// Прежние статические файлы клиента (до Ф4) — легаси-режим отдаёт их же.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const nodePath = require('path');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const nodeFs = require('fs');
+const CLIENT_ROBOTS_TXT: string = nodeFs.readFileSync(nodePath.resolve(__dirname, '../../../client/public/robots.txt'), 'utf8');
+const LEGACY_SITEMAP = [
+  '<?xml version="1.0" encoding="UTF-8"?>',
+  '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+  '  <url>', '    <loc>https://moooza.test/</loc>', '    <lastmod>2026-06-04</lastmod>', '    <changefreq>daily</changefreq>', '    <priority>1.0</priority>', '  </url>',
+  '  <url>', '    <loc>https://moooza.test/login</loc>', '    <lastmod>2026-06-04</lastmod>', '    <changefreq>monthly</changefreq>', '    <priority>0.5</priority>', '  </url>',
+  '  <url>', '    <loc>https://moooza.test/register</loc>', '    <lastmod>2026-06-04</lastmod>', '    <changefreq>monthly</changefreq>', '    <priority>0.7</priority>', '  </url>',
+  '</urlset>',
+  '',
+].join('\n');
+
 function artistRow(over: Record<string, unknown> = {}) {
   return {
     id: ARTIST_ID,
@@ -566,7 +582,7 @@ describe('GET /seo/render — профиль, заказ, прочее', () => {
     expect(m('artist').findUnique).not.toHaveBeenCalled();
   });
 
-  it('гостевой режим выключен (аварийный выключатель) → шаблон без изменений + noindex, sitemap 404', async () => {
+  it('гостевой режим выключен (аварийный выключатель) → шаблон без изменений + noindex, легаси-sitemap', async () => {
     setGuestBrowsing(false);
     mockArtist(artistRow());
     const res = await request(app).get('/seo/render/artist/gruppa');
@@ -574,7 +590,10 @@ describe('GET /seo/render — профиль, заказ, прочее', () => {
     expect(res.text).toBe(TEMPLATE);
     expect(res.headers['x-robots-tag']).toBe('noindex, nofollow');
     expect(m('artist').findUnique).not.toHaveBeenCalled();
-    expect((await request(app).get('/seo/sitemap.xml')).status).toBe(404);
+    const sm = await request(app).get('/seo/sitemap.xml');
+    expect(sm.status).toBe(200);
+    expect(sm.text).toBe(LEGACY_SITEMAP);
+    expect((await request(app).get('/seo/sitemap-artists.xml')).status).toBe(404);
   });
 
   it('getPublicArtist: прежний слаг → данные с текущим slug (клиент заменит адрес)', async () => {
@@ -613,6 +632,109 @@ describe('GET /seo/render — профиль, заказ, прочее', () => {
   it('API за /seo — со своим CSP (helmet после роутера)', async () => {
     const res = await request(app).get('/api/x');
     expect(res.headers['content-security-policy']).toBeDefined();
+  });
+});
+
+// ── Режимы индексации: легаси (SEO_INDEXABLE=false) и открытый ─────────────
+
+describe('режим индексации', () => {
+  const legacy = () => { process.env.SEO_INDEXABLE = 'false'; };
+
+  it('легаси, снимки выключены: / — шаблон как есть, без noindex (как сейчас на PROD)', async () => {
+    legacy();
+    process.env.SEO_SNAPSHOTS = 'false';
+    const res = await request(app).get('/seo/render/');
+    expect(res.status).toBe(200);
+    expect(res.text).toBe(TEMPLATE);
+    expect(res.headers['x-robots-tag']).toBeUndefined();
+    expect(metaRobots(res.text)).toBe('index, follow');
+  });
+
+  it('легаси, снимки включены: / — снимок главной с index, follow и без X-Robots-Tag', async () => {
+    legacy();
+    const res = await request(app).get('/seo/render/');
+    expect(res.status).toBe(200);
+    expect(res.headers['x-robots-tag']).toBeUndefined();
+    expect(metaRobots(res.text)).toMatch(/^index, follow/);
+    expect(res.text).toContain('<link rel="canonical" href="https://moooza.test/" />');
+  });
+
+  it('легаси: /privacy, /terms, /login, /register — без noindex; /feed, /search, артист — noindex', async () => {
+    legacy();
+    for (const path of ['/privacy', '/terms']) {
+      const res = await request(app).get(`/seo/render${path}`);
+      expect(res.status).toBe(200);
+      expect(res.headers['x-robots-tag']).toBeUndefined();
+      expect(metaRobots(res.text)).toMatch(/^index, follow/);
+    }
+    for (const path of ['/login', '/register']) {
+      const res = await request(app).get(`/seo/render${path}`);
+      expect(res.status).toBe(200);
+      expect(res.text).toBe(TEMPLATE);
+      expect(res.headers['x-robots-tag']).toBeUndefined();
+    }
+    mockArtist(artistRow());
+    for (const path of ['/feed', '/search', '/artist/gruppa']) {
+      const res = await request(app).get(`/seo/render${path}`);
+      expect(res.status).toBe(200);
+      expect(res.headers['x-robots-tag']).toBe('noindex, nofollow');
+      expect(metaRobots(res.text)).toBe('noindex, nofollow');
+    }
+  });
+
+  it('открытый режим: /login и /register — noindex, nofollow; / — index', async () => {
+    for (const path of ['/login', '/register']) {
+      const res = await request(app).get(`/seo/render${path}`);
+      expect(res.headers['x-robots-tag']).toBe('noindex, nofollow');
+    }
+    const home = await request(app).get('/seo/render/');
+    expect(home.headers['x-robots-tag']).toBeUndefined();
+    expect(metaRobots(home.text)).toMatch(/^index, follow/);
+  });
+
+  it('robots.txt в легаси-режиме — побайтно прежний (= client/public/robots.txt, фолбэк nginx)', async () => {
+    legacy();
+    const res = await request(app).get('/seo/robots.txt');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/text\/plain/);
+    expect(res.text).toBe(CLIENT_ROBOTS_TXT);
+    expect(res.text).toContain('Disallow: /artist\n');
+    expect(res.text).toContain('Host: moooza.ru');
+  });
+
+  it('robots.txt в открытом режиме — открытый вариант плана (Disallow приватного, Clean-param, без Host)', async () => {
+    const res = await request(app).get('/seo/robots.txt');
+    expect(res.status).toBe(200);
+    expect(res.text).not.toBe(CLIENT_ROBOTS_TXT);
+    expect(res.text).toContain('Allow: /\n');
+    expect(res.text).toContain('Disallow: /messages');
+    expect(res.text).toContain('Disallow: /artist/*/edit');
+    expect(res.text).toContain('Clean-param: post /feed');
+    expect(res.text).toContain('Sitemap: https://moooza.test/sitemap.xml');
+    expect(res.text).not.toMatch(/^Host:/m);
+    expect(res.text).not.toMatch(/^Disallow: \/(artist|releases|clips|services|search)$/m);
+    expect(res.text).not.toMatch(/GPTBot|ClaudeBot/); // AI-краулеры не запрещены
+  });
+
+  it('SEO_INDEXABLE=true, но гостевой режим выключен → легаси robots.txt', async () => {
+    setGuestBrowsing(false);
+    const res = await request(app).get('/seo/robots.txt');
+    expect(res.text).toBe(CLIENT_ROBOTS_TXT);
+  });
+
+  it('GET /api/site-settings отдаёт вычисляемый seoIndexable (env + гостевой режим)', async () => {
+    const api = express();
+    api.use('/api/site-settings', siteSettings.default);
+    let res = await request(api).get('/api/site-settings');
+    expect(res.body.seoIndexable).toBe('true');
+    legacy();
+    siteSettings.clearSiteSettingsCache();
+    res = await request(api).get('/api/site-settings');
+    expect(res.body.seoIndexable).toBe('false');
+    process.env.SEO_INDEXABLE = 'true';
+    setGuestBrowsing(false);
+    res = await request(api).get('/api/site-settings');
+    expect(res.body.seoIndexable).toBe('false');
   });
 });
 
@@ -691,10 +813,18 @@ describe('sitemap', () => {
     ]);
   }
 
-  it('SEO_INDEXABLE=false → 404 на индекс и дочерние', async () => {
+  it('SEO_INDEXABLE=false → легаси-sitemap (/, /login, /register), дочерние — 404', async () => {
     process.env.SEO_INDEXABLE = 'false';
-    expect((await request(app).get('/seo/sitemap.xml')).status).toBe(404);
+    mockSitemapData();
+    const res = await request(app).get('/seo/sitemap.xml');
+    expect(res.status).toBe(200);
+    expect(res.headers['content-type']).toMatch(/application\/xml/);
+    expectWellFormedXml(res.text);
+    expect(res.text).toBe(LEGACY_SITEMAP);
     expect((await request(app).get('/seo/sitemap-artists.xml')).status).toBe(404);
+    expect((await request(app).get('/seo/sitemap-static.xml')).status).toBe(404);
+    // в легаси-режиме БД не трогаем
+    expect(m('artist').findMany).not.toHaveBeenCalled();
   });
 
   it('индекс: корректный XML, только непустые типы', async () => {

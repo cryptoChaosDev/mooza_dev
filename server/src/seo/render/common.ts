@@ -70,6 +70,11 @@ export interface PageSpec {
   indexable: boolean;
   /** Явное значение robots для индексируемого env (например, noindex,follow для /search?q=). */
   robots?: string;
+  /**
+   * Страница индексируется и в легаси-режиме (SEO_INDEXABLE=false) — как сейчас
+   * на PROD: главная, /privacy, /terms (seo/robots.ts LEGACY_INDEXABLE_PATHS).
+   */
+  legacyIndexable?: boolean;
   ogType?: string;
   /** Абсолютный URL картинки (ogImageUrl) или null → логотип. */
   image?: string | null;
@@ -93,16 +98,19 @@ function crumbsHtml(crumbs: Crumb[]): string {
   return `<nav class="ssr-crumbs" aria-label="Навигация">${parts.join('<span class="ssr-sep" aria-hidden="true">›</span>')}</nav>`;
 }
 
-/** Итоговое значение meta robots с учётом SEO_INDEXABLE. */
-export function effectiveRobots(spec: { indexable: boolean; robots?: string; status?: number }): string {
-  if (!seoIndexable() || spec.status === 404) return ROBOTS_NOINDEX;
-  if (!spec.indexable) return ROBOTS_NOINDEX;
+/**
+ * Итоговое значение meta robots с учётом режима: в легаси-режиме
+ * (SEO_INDEXABLE=false) индексируются только legacyIndexable-страницы.
+ */
+export function effectiveRobots(spec: { indexable: boolean; robots?: string; status?: number; legacyIndexable?: boolean }): string {
+  if (spec.status === 404 || !spec.indexable) return ROBOTS_NOINDEX;
+  if (!seoIndexable()) return spec.legacyIndexable ? ROBOTS_INDEX : ROBOTS_NOINDEX;
   return spec.robots ?? ROBOTS_INDEX;
 }
 
 export function buildSnapshot(spec: PageSpec): RenderOutcome {
   const status = spec.status ?? 200;
-  const robots = effectiveRobots({ indexable: spec.indexable, robots: spec.robots, status });
+  const robots = effectiveRobots({ indexable: spec.indexable, robots: spec.robots, status, legacyIndexable: spec.legacyIndexable });
   const canonical = spec.canonicalPath ? siteUrl(spec.canonicalPath) : null;
   const image = spec.image ?? siteUrl(DEFAULT_OG_IMAGE.path);
   const isDefaultImage = !spec.image;

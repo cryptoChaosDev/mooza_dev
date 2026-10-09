@@ -16,7 +16,8 @@ const SHOW_VK = false;
 import { useAuthStore } from '../stores/authStore';
 import { consumeReturnTo } from '../lib/authReturn';
 import { reachGoal } from '../lib/metrika';
-import { useSeo, ROBOTS_NOINDEX } from '../lib/seo';
+import { useSeo, authPageRobots } from '../lib/seo';
+import { useSiteSettings } from '../lib/siteSettings';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -228,7 +229,8 @@ export default function RegisterPage() {
   // Already-logged-in visitors get an accept screen instead of the signup form.
   const isAuthed = !!localStorage.getItem('token');
 
-  useSeo({ title: 'Регистрация — Moooza', robots: ROBOTS_NOINDEX });
+  const { seoIndexable } = useSiteSettings();
+  useSeo({ title: 'Регистрация — Moooza', robots: authPageRobots(seoIndexable) });
 
   // Черновик шагов (без пароля) — читаем один раз при монтировании.
   const [draft] = useState(() => (isAuthed ? null : loadDraft(refCode, artistInvite)));

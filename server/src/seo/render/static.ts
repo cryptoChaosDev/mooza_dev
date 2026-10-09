@@ -73,6 +73,7 @@ export async function renderStaticDoc(doc: StaticDoc): Promise<RenderOutcome> {
     description,
     canonicalPath: meta.path,
     indexable: true,
+    legacyIndexable: true,
     crumbs: [{ name: SITE_NAME, url: '/' }, { name: meta.title }],
     bodyHtml,
   });

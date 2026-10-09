@@ -92,6 +92,7 @@ export async function renderHome(): Promise<RenderOutcome> {
     description: DEFAULT_DESCRIPTION,
     canonicalPath: '/',
     indexable: true,
+    legacyIndexable: true,
     jsonLd: [collectionPageLd({
       url: siteUrl('/'),
       name: HOME_TITLE,

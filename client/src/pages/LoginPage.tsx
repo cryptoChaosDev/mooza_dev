@@ -8,7 +8,8 @@ import { getApiError } from '../lib/apiError';
 import { isTourDone } from '../lib/authHelpers';
 import { consumeReturnTo } from '../lib/authReturn';
 import { reachGoal } from '../lib/metrika';
-import { useSeo, ROBOTS_NOINDEX } from '../lib/seo';
+import { useSeo, authPageRobots } from '../lib/seo';
+import { useSiteSettings } from '../lib/siteSettings';
 import VkLoginButton from '../components/VkLoginButton';
 
 // Temporarily hide VK login/registration. Set back to true to restore.
@@ -34,7 +35,8 @@ function afterVkTarget(user: any, isNew?: boolean): string {
 }
 
 export default function LoginPage() {
-  useSeo({ title: 'Вход — Moooza', robots: ROBOTS_NOINDEX });
+  const { seoIndexable } = useSiteSettings();
+  useSeo({ title: 'Вход — Moooza', robots: authPageRobots(seoIndexable) });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);

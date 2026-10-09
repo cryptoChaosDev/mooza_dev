@@ -45,6 +45,16 @@ export function seoDescription(text: string | null | undefined, max = 160): stri
  * профиля и т.п.). `extra` — клиентские условия поверх (предпросмотр и др.).
  * Нет данных (404/загрузка) — noindex.
  */
+/**
+ * robots для /login и /register: в открытом режиме индексации — noindex
+ * (матрица маршрутов, план раздел A), в легаси-режиме — index, как сейчас на
+ * PROD (они в прежних robots.txt и sitemap). Пока настройки не загружены — index
+ * (заголовок X-Robots-Tag сервера всё равно главнее).
+ */
+export function authPageRobots(seoIndexable: boolean): string {
+  return seoIndexable ? ROBOTS_NOINDEX : ROBOTS_INDEX;
+}
+
 export function robotsFor(data: { indexable?: boolean } | null | undefined, extra = true): string {
   return data && data.indexable !== false && extra ? ROBOTS_INDEX : ROBOTS_NOINDEX;
 }
