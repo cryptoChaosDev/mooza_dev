@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { Home, Search, Users, User, MessageCircle } from 'lucide-react';
 import { useBadgeStore } from '../stores/badgeStore';
+import { useKeyboardViewport } from '../lib/viewport';
 
 function Badge({ count }: { count: number }) {
   if (count <= 0) return null;
@@ -14,6 +15,10 @@ function Badge({ count }: { count: number }) {
 export default function BottomNav() {
   const location = useLocation();
   const { unreadMessages, pendingFriendRequests } = useBadgeStore();
+  // Пока открыта экранная клавиатура, нижняя навигация прячется: на iOS она
+  // «прыгает» над/под клавиатурой, на Android (resizes-content) отъедает место
+  // у поля ввода чата.
+  const keyboard = useKeyboardViewport();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -24,6 +29,8 @@ export default function BottomNav() {
     { path: '/friends',  icon: Users,         label: 'Отношения', badge: pendingFriendRequests },
     { path: '/profile',  icon: User,          label: 'Профиль',  badge: 0 },
   ];
+
+  if (keyboard.open) return null;
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur-xl border-t border-slate-800/50 z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
