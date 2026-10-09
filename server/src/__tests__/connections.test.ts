@@ -24,8 +24,12 @@ jest.mock('../middleware/auth', () => ({
   optionalAuthenticate: (_req: Request, _res: Response, next: NextFunction) => next(),
 }));
 
-// Silence telegram log
-jest.mock('../utils/telegram', () => ({ tgLog: jest.fn() }));
+// Silence telegram log (routes call both tgLog and typed tgEvent.* helpers)
+jest.mock('../utils/telegram', () => ({
+  tgLog: jest.fn(),
+  escTg: (s: unknown) => String(s ?? ''),
+  tgEvent: new Proxy({}, { get: () => jest.fn() }),
+}));
 
 // Silence socket helpers
 jest.mock('../socket', () => ({
@@ -103,6 +107,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockPrisma.user.findUnique.mockResolvedValue({ passwordChangedAt: null, isBlocked: false });
   mockPrisma.notification.create.mockResolvedValue({ id: 'notif-1' });
+  // POST / checks my existing PENDING requests via findMany (exact-duplicate guard).
+  mockPrisma.connection.findMany.mockResolvedValue([]);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -130,13 +136,16 @@ describe('POST /api/connections', () => {
     expect(res.body.partner.id).toBe(USER_B);
   });
 
-  it('returns 409 when a PENDING connection already exists', async () => {
-    mockPrisma.connection.findFirst.mockResolvedValue(makeConn()); // existing PENDING
+  it('returns 409 when the exact same PENDING request already exists', async () => {
+    // Multiple pending requests are allowed; only an exact duplicate (same roles
+    // and services) from me is rejected.
+    mockPrisma.user.findUnique.mockResolvedValue({ isBlocked: false });
+    mockPrisma.connection.findMany.mockResolvedValue([makeConn()]); // existing PENDING
 
     const res = await request(app)
       .post('/api/connections')
       .set(asUser(USER_A))
-      .send({ receiverId: USER_B, serviceIds: [] });
+      .send({ receiverId: USER_B, serviceIds: [], requesterRole: 'CUSTOMER', receiverRole: 'EXECUTOR' });
 
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/уже отправлен/i);

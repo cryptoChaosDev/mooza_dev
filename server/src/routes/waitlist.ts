@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import { prisma } from '../index';
 import { waitlistLimiter } from '../middleware/rateLimiter';
-import { tgLog, escTg } from '../utils/telegram';
+import { tgEvent } from '../utils/telegram';
 
 const router = Router();
 
@@ -36,9 +36,7 @@ router.post('/', waitlistLimiter, async (req, res) => {
     if (entry.createdAt.getTime() === entry.updatedAt.getTime()) {
       try {
         const total = await prisma.waitlistEntry.count();
-        tgLog(`📋 <b>Заявка (waitlist)</b>
-📌 ${escTg(entry.type)}
-🔢 Всего заявок: ${total}`);
+        tgEvent.waitlist(entry.type, total);
       } catch {}
     }
     return res.json({ ok: true });

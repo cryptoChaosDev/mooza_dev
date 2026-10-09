@@ -178,6 +178,21 @@ export default function VkSetupPage() {
   // Step 3: Email (required) + phone (optional)
   const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState(user?.phone ? formatPhone(user.phone) : '');
+  // Email не меняется напрямую: сервер кладёт его в pendingEmail и шлёт код на
+  // новый адрес — здесь ждём ввода этого кода.
+  const [emailCodeFor, setEmailCodeFor] = useState<string | null>(null);
+  const [emailCode, setEmailCode] = useState('');
+  const [emailCooldown, setEmailCooldown] = useState(0);
+  const emailCooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => () => { if (emailCooldownRef.current) clearInterval(emailCooldownRef.current); }, []);
+  const startEmailCooldown = () => {
+    if (emailCooldownRef.current) clearInterval(emailCooldownRef.current);
+    setEmailCooldown(60);
+    emailCooldownRef.current = setInterval(() => setEmailCooldown(c => {
+      if (c <= 1) { if (emailCooldownRef.current) clearInterval(emailCooldownRef.current); emailCooldownRef.current = null; return 0; }
+      return c - 1;
+    }), 1000);
+  };
 
   // Nickname check
   useEffect(() => {
@@ -313,10 +328,52 @@ export default function VkSetupPage() {
       if (digits.length >= 11) payload.phone = '+' + digits;
       const { data } = await userAPI.updateMe(payload);
       setUser(data);
+      // Новый адрес ждёт подтверждения кодом (pendingEmail) — показываем ввод кода.
+      if (data?.pendingEmail && data.pendingEmail === payload.email && data.email !== payload.email) {
+        setEmailCode('');
+        setEmailCodeFor(data.pendingEmail);
+        startEmailCooldown();
+        toast.success(`Код отправлен на ${data.pendingEmail}`);
+        return;
+      }
       navigate(nextAfterSetup);
     } catch (err: any) {
       toast.error(getApiError(err, 'Не удалось сохранить данные'));
     } finally { setLoading(false); }
+  };
+
+  const confirmEmail = async () => {
+    if (emailCode.trim().length < 8 || loading) return;
+    setLoading(true);
+    try {
+      const { data } = await userAPI.confirmEmailChange(emailCode.trim());
+      setUser(data);
+      toast.success('Email подтверждён');
+      navigate(nextAfterSetup);
+    } catch (err: any) {
+      toast.error(getApiError(err, 'Неверный код'));
+    } finally { setLoading(false); }
+  };
+
+  const resendEmailCode = async () => {
+    if (emailCooldown > 0) return;
+    try {
+      await userAPI.resendEmailChange();
+      toast.success('Код отправлен повторно');
+      startEmailCooldown();
+    } catch (err: any) {
+      toast.error(getApiError(err, 'Не удалось отправить код'));
+    }
+  };
+
+  // Опечатка в адресе — отменяем ожидающую смену и возвращаемся к полю email.
+  const changeEmail = async () => {
+    try {
+      const { data } = await userAPI.cancelEmailChange();
+      setUser(data);
+    } catch { /* не критично: новый PUT всё равно перезапишет pendingEmail */ }
+    setEmailCodeFor(null);
+    setEmailCode('');
   };
 
   const errorBox = error && (
@@ -504,6 +561,52 @@ export default function VkSetupPage() {
           className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 text-white font-semibold flex items-center justify-center gap-2 transition-colors"
         >
           <ArrowRight size={18} /> Далее
+        </button>
+      </div>
+    </Shell>
+  );
+
+  // Step 3b — код подтверждения нового email
+  if (emailCodeFor) return (
+    <Shell step={step} onBack={changeEmail}>
+      <div className="mb-6">
+        <div className="text-4xl mb-3">📬</div>
+        <h1 className="text-2xl font-bold text-white mb-2 leading-tight">Подтвердите email</h1>
+        <p className="text-sm text-slate-400">
+          Мы отправили 8-значный код на <span className="text-white font-medium">{emailCodeFor}</span>.
+          Email сменится только после подтверждения.
+        </p>
+      </div>
+
+      <input
+        type="text" inputMode="numeric" maxLength={8} autoComplete="one-time-code"
+        value={emailCode}
+        onChange={e => setEmailCode(e.target.value.replace(/\D/g, ''))}
+        onKeyDown={e => e.key === 'Enter' && confirmEmail()}
+        placeholder="00000000" autoFocus
+        className="w-full text-center text-3xl font-bold tracking-[8px] bg-slate-800 border border-slate-700 rounded-2xl px-4 py-5 text-white placeholder-slate-700 focus:outline-none focus:border-primary-500"
+      />
+
+      <div className="mt-6 space-y-3">
+        <button
+          onClick={confirmEmail}
+          disabled={emailCode.length < 8 || loading}
+          className="w-full py-4 rounded-2xl bg-primary-600 hover:bg-primary-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold flex items-center justify-center gap-2 transition-colors"
+        >
+          {loading ? <Loader2 size={18} className="animate-spin" /> : <Check size={18} />}
+          Подтвердить
+        </button>
+        <button onClick={resendEmailCode} disabled={emailCooldown > 0}
+          className="w-full py-2.5 text-sm text-slate-500 hover:text-slate-300 disabled:opacity-50 transition-colors">
+          {emailCooldown > 0 ? `Повторный код через ${emailCooldown} с` : 'Отправить код повторно'}
+        </button>
+        <button onClick={changeEmail}
+          className="w-full py-2 text-sm text-slate-500 hover:text-slate-300 transition-colors">
+          Изменить email
+        </button>
+        <button onClick={() => navigate(nextAfterSetup)}
+          className="w-full py-2 text-xs text-slate-600 hover:text-slate-400 transition-colors">
+          Подтвердить позже — в профиле
         </button>
       </div>
     </Shell>

@@ -7,7 +7,7 @@ import { codeLimiter } from '../middleware/rateLimiter';
 import { yoNorm } from '../utils/search';
 import { isProActive, limitsFor } from '../utils/pro';
 import { getJwtSecret } from '../utils/jwt';
-import { sendVerificationEmail } from '../utils/mailer';
+import { sendEmailChangeCode as sendEmailChangeMail } from '../utils/mailer';
 import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -478,10 +478,9 @@ function hashEmailCode(userId: string, email: string, code: string): string {
 }
 
 function sendEmailChangeCode(to: string, code: string) {
-  // Отдельного шаблона «смена email» в mailer пока нет — используем письмо
-  // с кодом подтверждения адреса. Ошибку SMTP не пробрасываем: код можно
+  // Письмо «Подтверждение нового email». Ошибку SMTP не пробрасываем: код можно
   // запросить повторно (POST /me/email/resend).
-  sendVerificationEmail(to, code).catch((err) => console.error('[users] email change code send failed:', err));
+  sendEmailChangeMail(to, code).catch((err) => console.error('[users] email change code send failed:', err));
 }
 
 // Update current user

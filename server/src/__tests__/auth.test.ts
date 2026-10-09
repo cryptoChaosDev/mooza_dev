@@ -24,7 +24,11 @@ jest.mock('../utils/mailer', () => ({
   sendPasswordResetEmail: jest.fn().mockResolvedValue(undefined),
   sendWelcomeEmail: jest.fn().mockResolvedValue(undefined),
 }));
-jest.mock('../utils/telegram', () => ({ tgLog: jest.fn(), escTg: (s: any) => String(s ?? '') }));
+jest.mock('../utils/telegram', () => ({
+  tgLog: jest.fn(),
+  escTg: (s: any) => String(s ?? ''),
+  tgEvent: new Proxy({}, { get: () => jest.fn() }),
+}));
 jest.mock('../utils/notify', () => ({ notify: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../utils/logger', () => ({
   __esModule: true,
@@ -100,6 +104,13 @@ describe('POST /api/auth/register', () => {
     expect(data.payload.consentPdAt).toBeTruthy();
     expect(data.payload.consentPdVersion).toBeTruthy();
     expect(data.payload.consentMarketingAt).toBeNull();
+  });
+
+  it('ignores artistIds — no self-granted artist membership at signup', async () => {
+    const res = await request(buildApp()).post('/api/auth/register').send(validBody({ artistIds: ['artist-1'] }));
+    expect(res.status).toBe(201);
+    const data = mockPrisma.pendingRegistration.create.mock.calls[0][0].data;
+    expect(data.payload).not.toHaveProperty('artistIds');
   });
 
   it('requires PD consent and a profession; zod error is a plain string', async () => {
@@ -211,6 +222,23 @@ describe('POST /api/auth/login', () => {
     mockPrisma.user.findUnique.mockResolvedValue(await makeUser({ blockedUntil: new Date(Date.now() + 3600_000) }));
     const temp = await request(buildApp()).post('/api/auth/login').send({ email: 'a@mail.ru', password: PW });
     expect(temp.status).toBe(403);
+  });
+
+  it('responds with the whitelisted self user, never secrets', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { SELF_USER_SELECT } = require('../utils/selfUser');
+    for (const secret of ['password', 'emailVerificationCode', 'emailVerificationExpires', 'passwordResetCode',
+      'passwordResetExpires', 'pendingEmailCodeHash', 'pendingEmailExpires', 'lastCodeSentAt', 'passwordChangedAt']) {
+      expect(SELF_USER_SELECT).not.toHaveProperty(secret);
+    }
+    const full = await makeUser({ passwordResetCode: '12345678', pendingEmailCodeHash: 'abc' });
+    mockPrisma.user.findUnique.mockImplementation(({ select }: any) => {
+      if (select === SELF_USER_SELECT) return Promise.resolve({ id: 'u1', email: 'a@mail.ru', firstName: 'A' });
+      return Promise.resolve(full);
+    });
+    const res = await request(buildApp()).post('/api/auth/login').send({ email: 'a@mail.ru', password: PW });
+    expect(res.status).toBe(200);
+    expect(res.body.user).toEqual({ id: 'u1', email: 'a@mail.ru', firstName: 'A' });
   });
 
   it('loginEnabled=false blocks regular users but not admins', async () => {

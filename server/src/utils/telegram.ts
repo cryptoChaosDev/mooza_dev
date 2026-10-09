@@ -35,18 +35,21 @@ export async function tgLog(text: string): Promise<void> {
 
 /**
  * Typed helpers for major platform events.
- * Every interpolated argument is user-controlled (names, emails, post/message
- * text, service/artist titles, …) so each is wrapped in escTg() — the static
- * <b> labels stay as real formatting.
+ * Every interpolated argument is user-controlled (names, post/message text,
+ * service/artist titles, …) so each is wrapped in escTg() — the static <b>
+ * labels stay as real formatting.
+ *
+ * Аккаунтные события (регистрация, вход, сброс пароля, waitlist) — БЕЗ email и
+ * ФИО: в мониторинговый чат уходят только событие и id/счётчик (ПДн не логируем).
  */
 const e = escTg;
 export const tgEvent = {
-  register: (name: string, email: string, city?: string | null) =>
-    tgLog(`🆕 <b>Регистрация</b>\n👤 ${e(name)}\n📧 ${e(email)}\n🌍 ${e(city || '—')}`),
-  login: (name: string, email: string) =>
-    tgLog(`🔑 <b>Вход</b>\n👤 ${e(name)}\n📧 ${e(email)}`),
-  passwordReset: (email: string) =>
-    tgLog(`🔓 <b>Сброс пароля</b>\n📧 ${e(email)}`),
+  register: (userId: string) =>
+    tgLog(`🆕 <b>Новый пользователь</b>\n🆔 ${e(userId)}`),
+  login: (userId: string) =>
+    tgLog(`🔑 <b>Вход в аккаунт</b>\n🆔 ${e(userId)}`),
+  passwordReset: (userId: string) =>
+    tgLog(`🔓 <b>Сброс пароля</b>\n🆔 ${e(userId)}`),
   post: (author: string, type: string, preview: string) =>
     tgLog(`📝 <b>Пост</b> (${e(type)})\n👤 ${e(author)}\n${e(preview)}`),
   postLike: (liker: string, author: string) =>
@@ -82,8 +85,8 @@ export const tgEvent = {
     tgLog(`🚨 <b>Жалоба</b> (риск ${risk}/100)\n${e(reporter)} → ${e(targetType)}\n📋 ${e(category)}`),
   block: (admin: string, target: string, until: string) =>
     tgLog(`🚫 <b>Блокировка</b>\nАдмин: ${e(admin)}\nКого: ${e(target)}\nДо: ${e(until)}`),
-  waitlist: (email: string, type: string) =>
-    tgLog(`📋 <b>Заявка (waitlist)</b>\n📧 ${e(email)}\n📌 ${e(type)}`),
+  waitlist: (type: string, total: number) =>
+    tgLog(`📋 <b>Заявка (waitlist)</b>\n📌 ${e(type)}\n🔢 Всего заявок: ${total}`),
   professionRequest: (user: string, profession: string, comment?: string) =>
     tgLog(`➕ <b>Запрос на добавление профессии</b>\n👤 ${e(user)}\n🧩 «${e(profession)}»${comment ? `\n💬 ${e(comment)}` : ''}`),
 };

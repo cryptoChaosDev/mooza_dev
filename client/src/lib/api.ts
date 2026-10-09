@@ -81,7 +81,6 @@ export const authAPI = {
     city?: string;
     fieldOfActivityId?: string;
     userProfessions: { professionId: string; features?: string[]; selectedCustomFilterValueIds?: string[] }[];
-    artistIds?: string[];
     birthDate: string;                 // ГГГГ-ММ-ДД (сервер принимает и ДД.ММ.ГГГГ)
     consentPd: true;                   // согласие на обработку ПДн — обязательно
     consentMarketing?: boolean;
@@ -177,6 +176,10 @@ export const userAPI = {
   updateNotificationPrefs: (prefs: { messages?: boolean; orders?: boolean; vacancies?: boolean; social?: boolean }) =>
     api.patch('/users/me/notification-prefs', prefs),
   completeOnboarding: () => api.patch('/users/me/complete-onboarding'),
+  // Смена email: PUT /users/me кладёт новый адрес в pendingEmail и шлёт на него код.
+  confirmEmailChange: (code: string) => api.post('/users/me/email/confirm', { code }),
+  resendEmailChange: () => api.post('/users/me/email/resend'),
+  cancelEmailChange: () => api.delete('/users/me/email/pending'),
 };
 
 // Reference API

@@ -7,8 +7,9 @@ import { authLimiter, registerLimiter, codeLimiter, lookupLimiter, tgPollLimiter
 import { accountBlockMessage } from '../middleware/auth';
 import { generateToken } from '../utils/jwt';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail } from '../utils/mailer';
-import { tgLog } from '../utils/telegram';
+import { tgEvent } from '../utils/telegram';
 import { applyReferralProGrants } from '../utils/pro';
+import { findSelfUser } from '../utils/selfUser';
 import { yoNorm } from '../utils/search';
 
 // ─── Telegram bot-based auth (deep link + polling) ───────────────────────────
@@ -218,8 +219,10 @@ const registerSchema = z.object({
   }), { required_error: 'Выберите хотя бы одну профессию' })
     .min(1, 'Выберите хотя бы одну профессию')
     .max(10, 'Не более 10 профессий'),
-  // Step 6: Artist/Group + Employer
-  artistIds: z.array(z.string()).optional(),
+  // Step 6 (artistIds) intentionally NOT accepted: it used to create an ACCEPTED
+  // membership in any artist at verify time — a bypass of the join approval.
+  // Joining an artist goes through the artist section (request → approval) or a
+  // role-bound artistInviteToken issued by the artist's admins.
   // Step 7: Password — min 8 chars and must contain a digit and a special char
   password: passwordSchema,
   // Referral
@@ -347,12 +350,6 @@ router.post('/register', registerLimiter, async (req, res) => {
         }
       }
     }
-    if (data.artistIds?.length) {
-      const known = new Set((await prisma.artist.findMany({
-        where: { id: { in: data.artistIds } }, select: { id: true },
-      })).map((a) => a.id));
-      data.artistIds = [...new Set(data.artistIds)].filter((id) => known.has(id));
-    }
     if (data.fieldOfActivityId) {
       const foa = await prisma.fieldOfActivity.findUnique({ where: { id: data.fieldOfActivityId }, select: { id: true } });
       if (!foa) data.fieldOfActivityId = undefined;
@@ -456,14 +453,8 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
     const codeStr = String(code).trim();
     const ALREADY_VERIFIED = { error: 'Email уже подтверждён. Войдите в систему.', code: 'ALREADY_VERIFIED' };
 
-    const userInclude = {
-      fieldOfActivity: { select: { id: true, name: true } },
-      userProfessions: {
-        include: { profession: { include: { direction: { select: { id: true, name: true } } } } },
-      },
-      userArtists: { include: { artist: { select: { id: true, name: true } } } },
-      employer: { select: { id: true, name: true, inn: true, ogrn: true } },
-    } as const;
+    // Only what's needed below; the response is built from SELF_USER_SELECT.
+    const createdSelect = { id: true, email: true, firstName: true, lastName: true } as const;
 
     // ── New flow: account is created from the pending registration on success ──
     const pending = await prisma.pendingRegistration.findUnique({ where: { email: normalizedEmail } });
@@ -519,7 +510,7 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
       // (one $transaction): either both commit or neither does, so one link can
       // never be credited to two accounts and a failed burn can't leave a
       // dangling user. Email is already verified at this point.
-      let created: { user: any; burnedSingleUse: boolean };
+      let created: { user: { id: string; email: string | null; firstName: string; lastName: string }; burnedSingleUse: boolean };
       try {
         created = await prisma.$transaction(async (tx) => {
           const newUser = await tx.user.create({
@@ -553,11 +544,10 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
                     },
                   })) }
                 : undefined,
-              userArtists: p.artistIds && p.artistIds.length > 0
-                ? { create: p.artistIds.map((artistId: string) => ({ artistId })) }
-                : undefined,
+              // p.artistIds (older pending entries) is ignored on purpose — no
+              // self-granted ACCEPTED memberships (see registerSchema).
             },
-            include: userInclude,
+            select: createdSelect,
           });
           // `usedById: null` guard makes the claim atomic against a concurrent
           // signup; if the link was already taken we keep the account but strip
@@ -577,7 +567,7 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
               const stripped = await tx.user.update({
                 where: { id: newUser.id },
                 data: { referrerId: legacyReferrerId || null, referralLinkUsed: null },
-                include: userInclude,
+                select: createdSelect,
               });
               return { user: stripped, burnedSingleUse: false };
             }
@@ -598,9 +588,9 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
       const user = created.user;
 
       // Consume a role-bound artist invite link, if one was provided at signup.
-      // Creates an already-ACCEPTED membership (no separate confirmation needed).
-      // No referral bonus. Guard against a pre-existing membership (e.g. the
-      // artistIds[] step above already added this artist).
+      // Creates an already-ACCEPTED membership (no separate confirmation needed:
+      // the invite itself was issued by the artist's admins). No referral bonus.
+      // Guard against a pre-existing membership.
       if (p.artistInviteToken) {
         try {
           const invite = await prisma.artistInvite.findUnique({
@@ -645,22 +635,24 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
       await prisma.pendingRegistration.delete({ where: { email: normalizedEmail } }).catch(() => {});
 
       // No email / full name in the monitoring chat — event + id only.
-      tgLog(`🆕 <b>Новый пользователь</b>\n🆔 ${user.id}`);
+      tgEvent.register(user.id);
 
       const token = generateToken({ userId: user.id });
-      const { password: _, ...safe } = user as any;
 
       sendWelcomeEmail(user.email!, user.firstName, user.lastName).catch(err =>
         console.error('[verify-email] welcome email failed:', err)
       );
 
-      return res.json({ user: safe, token });
+      return res.json({ user: await findSelfUser(user.id), token });
     }
 
     // ── Legacy flow: users created by the old register (pre-PendingRegistration) ──
     const user = await prisma.user.findUnique({
       where: { email: normalizedEmail },
-      include: userInclude,
+      select: {
+        id: true, email: true, firstName: true, lastName: true, isAdmin: true, isBlocked: true, blockedUntil: true,
+        emailVerified: true, emailVerificationCode: true, emailVerificationExpires: true,
+      },
     });
 
     if (!user) return res.status(404).json({ error: 'Заявка не найдена. Зарегистрируйтесь заново.' });
@@ -682,13 +674,12 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
     });
 
     const token = generateToken({ userId: user.id });
-    const { password: _, emailVerificationCode: __, emailVerificationExpires: ___, ...safe } = user as any;
 
     sendWelcomeEmail(user.email!, user.firstName, user.lastName).catch(err =>
       console.error('[verify-email] welcome email failed:', err)
     );
 
-    return res.json({ user: safe, token });
+    return res.json({ user: await findSelfUser(user.id), token });
   } catch (err) {
     console.error('[verify-email]', err);
     return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
@@ -767,21 +758,12 @@ router.post('/login', authLimiter, async (req, res) => {
 
     // Find user — email is stored lowercase (the schema normalizes the input), so
     // an uppercase letter can't make a valid account look non-existent.
+    // Only the fields the checks need; the response is built from SELF_USER_SELECT.
     const user = await prisma.user.findUnique({
       where: { email: data.email },
-      include: {
-        fieldOfActivity: { select: { id: true, name: true } },
-        userProfessions: {
-          include: {
-            profession: {
-              include: { direction: { select: { id: true, name: true } } },
-            },
-          },
-        },
-        userArtists: {
-          include: { artist: { select: { id: true, name: true } } },
-        },
-        employer: { select: { id: true, name: true, inn: true, ogrn: true } },
+      select: {
+        id: true, email: true, password: true, isAdmin: true, isBlocked: true, blockedUntil: true,
+        emailVerified: true, emailVerificationCode: true,
       },
     });
 
@@ -806,11 +788,9 @@ router.post('/login', authLimiter, async (req, res) => {
     // Generate token
     const token = generateToken({ userId: user.id });
 
-    const { password: _, ...userWithoutPassword } = user;
-
     // No email / full name in the monitoring chat — event + id only.
-    tgLog(`🔑 <b>Вход в аккаунт</b>\n🆔 ${user.id}`);
-    res.json({ user: userWithoutPassword, token });
+    tgEvent.login(user.id);
+    res.json({ user: await findSelfUser(user.id), token });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return res.status(400).json(zodErrorBody(error));
@@ -877,8 +857,7 @@ router.get('/telegram/poll/:token', tgPollLimiter, async (req, res) => {
     }
     tgPending.delete(req.params.token);
     const token = generateToken({ userId: user.id });
-    const { password: _, ...safe } = user as any;
-    res.json({ status: 'ok', user: safe, token });
+    res.json({ status: 'ok', user: await findSelfUser(user.id), token });
   } catch (e) {
     console.error('[Telegram poll]', e);
     res.status(500).json({ error: 'Ошибка авторизации' });
@@ -1026,8 +1005,7 @@ router.post('/telegram/miniapp', authLimiter, async (req, res) => {
     }
 
     const token = generateToken({ userId: user.id });
-    const { password: _, ...safe } = user as any;
-    res.json({ user: safe, token });
+    res.json({ user: await findSelfUser(user.id), token });
   } catch (e) {
     console.error('[TMA auth]', e);
     res.status(500).json({ error: 'Ошибка авторизации' });
@@ -1191,8 +1169,7 @@ router.post('/vk/token', authLimiter, async (req, res) => {
     }
 
     const token = generateToken({ userId: user.id });
-    const { password: _, ...safe } = user as any;
-    res.json({ user: safe, token, isNew });
+    res.json({ user: await findSelfUser(user.id), token, isNew });
   } catch (e) {
     console.error('[VK token] Error:', e);
     res.status(500).json({ error: 'Ошибка авторизации через ВКонтакте' });
@@ -1286,8 +1263,7 @@ router.post('/vk/exchange', authLimiter, async (req, res) => {
     }
 
     const token = generateToken({ userId: user.id });
-    const { password: _, ...safe } = user as any;
-    res.json({ user: safe, token, isNew });
+    res.json({ user: await findSelfUser(user.id), token, isNew });
   } catch (e) {
     console.error('[VK exchange] Error:', e);
     res.status(500).json({ error: 'Ошибка авторизации через ВКонтакте' });
@@ -1361,8 +1337,7 @@ router.post('/telegram', authLimiter, async (req, res) => {
     }
 
     const token = generateToken({ userId: user.id });
-    const { password: _, ...userWithoutPassword } = user as any;
-    res.json({ user: userWithoutPassword, token });
+    res.json({ user: await findSelfUser(user.id), token });
   } catch (error) {
     console.error('Telegram auth error:', error);
     res.status(500).json({ error: 'Ошибка авторизации через Telegram' });
@@ -1437,7 +1412,7 @@ router.post('/reset-password', codeLimiter, authLimiter, async (req, res) => {
     });
 
     // No email in the monitoring chat — event + id only.
-    tgLog(`🔓 <b>Сброс пароля</b>\n🆔 ${user.id}`);
+    tgEvent.passwordReset(user.id);
     return res.json({ ok: true });
   } catch (err) {
     console.error('[reset-password]', err);
