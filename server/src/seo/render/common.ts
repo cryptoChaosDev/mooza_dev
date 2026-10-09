@@ -106,9 +106,10 @@ export function buildSnapshot(spec: PageSpec): RenderOutcome {
   const canonical = spec.canonicalPath ? siteUrl(spec.canonicalPath) : null;
   const image = spec.image ?? siteUrl(DEFAULT_OG_IMAGE.path);
   const isDefaultImage = !spec.image;
-  const crumbs = spec.crumbs.map((c) => ({ ...c, url: c.url ? siteUrl(c.url) : null }));
+  // В JSON-LD — абсолютные адреса, в HTML — пути от корня (как остальные ссылки).
+  const ldCrumbs = spec.crumbs.map((c) => ({ ...c, url: c.url ? siteUrl(c.url) : null }));
 
-  const ld = graph(...(spec.jsonLd ?? []), breadcrumbList(crumbs));
+  const ld = graph(...(spec.jsonLd ?? []), breadcrumbList(ldCrumbs));
   const hasLd = Array.isArray(ld['@graph']) && (ld['@graph'] as unknown[]).length > 0;
 
   const meta: string[] = [
@@ -134,7 +135,7 @@ export function buildSnapshot(spec: PageSpec): RenderOutcome {
     `<style>${SSR_STYLE}</style>`,
   ];
 
-  const body = `<div data-ssr class="ssr">${crumbsHtml(crumbs)}${spec.bodyHtml}</div>`;
+  const body = `<div data-ssr class="ssr">${crumbsHtml(spec.crumbs)}${spec.bodyHtml}</div>`;
   return {
     kind: 'snapshot',
     status,
