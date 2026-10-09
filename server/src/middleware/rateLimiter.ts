@@ -197,7 +197,9 @@ export const guestReadLimiter = rateLimit({
  */
 export const seoLimiter = rateLimit({
   windowMs: 60 * 1000,
-  max: 120,
+  // Снимки кэшируются (LRU), так что запрос дешёвый; 120/мин резал обход
+  // поисковыми роботами (429 замедляет индексацию). 600/мин ≈ 10 rps с одного IP.
+  max: 600,
   standardHeaders: true,
   legacyHeaders: false,
   handler: (_req, res) => {
