@@ -170,6 +170,41 @@ export const supportLimiter = rateLimit({
   },
 });
 
+/**
+ * Гостевой режим: лимит на публичные GET для НЕавторизованных — 300 запросов
+ * за 5 минут с IP. Ставится ПОСЛЕ optionalAuthenticate: авторизованные
+ * (req.userId) этим лимитом не считаются (их покрывает общий apiLimiter).
+ */
+export const guestReadLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req: any) => !!req.userId,
+  handler: (req, res) => {
+    logSecurity(`Guest read rate limit exceeded for IP ${req.ip}`, { ip: req.ip, url: req.url });
+    res.status(429).json({
+      error: 'Слишком много запросов',
+      message: 'Подождите несколько минут или войдите в аккаунт.',
+      retryAfter: '5 minutes',
+    });
+  },
+});
+
+/**
+ * Лимит для SEO-снимков и sitemap (Ф4): 120 запросов в минуту с IP.
+ * Подключается к роутеру /seo, когда он появится.
+ */
+export const seoLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  handler: (_req, res) => {
+    res.status(429).type('text/plain').send('Too Many Requests');
+  },
+});
+
 export const messageLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 минута
   max: 120, // 120 сообщений в минуту с одного IP (несколько активных чатов за NAT)

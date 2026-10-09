@@ -6,24 +6,76 @@ export interface AuthRequest extends Request {
   userId?: string;
 }
 
+// ── Кэш состояния пользователя для optionalAuthenticate ─────────────────────
+// optionalAuthenticate висит на публичных GET (профили, лента, артисты…), которые
+// теперь открыты гостям — без кэша каждый такой запрос авторизованного ходил бы
+// в БД. Кэшируем ровно те поля, что проверяет authenticate, на ~60 с.
+type AuthState = { passwordChangedAt: Date | null; isBlocked: boolean; blockedUntil: Date | null } | null;
+const AUTH_CACHE_TTL_MS = 60 * 1000;
+const AUTH_CACHE_MAX = 5000;
+const authStateCache = new Map<string, { at: number; state: AuthState }>();
+
+async function loadAuthState(userId: string): Promise<AuthState> {
+  const now = Date.now();
+  const hit = authStateCache.get(userId);
+  if (hit && now - hit.at < AUTH_CACHE_TTL_MS) return hit.state;
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { passwordChangedAt: true, isBlocked: true, blockedUntil: true },
+  });
+  const state: AuthState = user
+    ? { passwordChangedAt: user.passwordChangedAt ?? null, isBlocked: !!user.isBlocked, blockedUntil: user.blockedUntil ?? null }
+    : null;
+  if (authStateCache.size >= AUTH_CACHE_MAX) authStateCache.clear();
+  authStateCache.set(userId, { at: now, state });
+  return state;
+}
+
+/** Сбросить кэш optionalAuthenticate (после блокировки / смены пароля / в тестах). */
+export function invalidateAuthCache(userId?: string) {
+  if (userId) authStateCache.delete(userId);
+  else authStateCache.clear();
+}
+
 /**
- * Middleware для аутентификации пользователей через JWT
- * Проверяет наличие и валидность токена в заголовке Authorization
+ * Те же правила, что в authenticate: несуществующий пользователь, блокировка
+ * (isBlocked — бессрочная; blockedUntil в будущем — временная, см.
+ * accountBlockMessage) и токен, выданный до смены пароля, — недействительны.
  */
-// Optional auth — sets userId if token present, continues without it
-export const optionalAuthenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
+function isTokenUsable(state: AuthState, iat: number): boolean {
+  if (!state) return false;
+  if (accountBlockMessage(state)) return false;
+  if (state.passwordChangedAt && iat < Math.floor(new Date(state.passwordChangedAt).getTime() / 1000)) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Optional auth — ставит req.userId, если токен валиден И пользователь проходит
+ * ту же проверку в БД, что и в authenticate (блокировка, смена пароля).
+ * Невалидный/просроченный токен или заблокированный пользователь — запрос
+ * продолжается как гостевой (без 401): гостевая ветка обработчика отдаст
+ * публичную версию данных.
+ */
+export const optionalAuthenticate = async (req: AuthRequest, _res: Response, next: NextFunction) => {
   try {
     const token = extractTokenFromHeader(req.headers.authorization);
     if (token) {
       const decoded = verifyToken(token);
-      req.userId = decoded.userId;
+      const state = await loadAuthState(decoded.userId);
+      if (isTokenUsable(state, decoded.iat)) req.userId = decoded.userId;
     }
   } catch {
-    // ignore — unauthenticated access allowed
+    // ignore — продолжаем как гость
   }
   next();
 };
 
+/**
+ * Middleware для аутентификации пользователей через JWT
+ * Проверяет наличие и валидность токена в заголовке Authorization
+ */
 export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     // Извлекаем токен из заголовка Authorization

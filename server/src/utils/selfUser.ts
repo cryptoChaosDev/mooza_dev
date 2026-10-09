@@ -56,6 +56,8 @@ export const SELF_USER_SELECT = {
   termsAgreedAt: true,
   publicConsentAt: true,
   publicConsentVersion: true,
+  publicConsentRevokedAt: true,
+  searchIndexingOptOut: true,
   consentPdAt: true,
   consentPdVersion: true,
   consentMarketingAt: true,

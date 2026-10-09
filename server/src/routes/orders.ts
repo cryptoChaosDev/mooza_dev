@@ -8,6 +8,9 @@ import { uploadOrderMedia } from '../middleware/upload';
 import { matchesLinkSource } from '../lib/materialLinks';
 import { parseDeadlineField } from '../lib/mskDate';
 import { checkDealParticipantsAge, withAdvisoryLock } from '../lib/dealHelpers';
+import { guestReadLimiter } from '../middleware/rateLimiter';
+import { sendPublic } from '../middleware/guest';
+import { getPublicOrder } from '../lib/publicData';
 
 const router = Router();
 
@@ -378,8 +381,13 @@ router.get('/responses/incoming', authenticate, async (req: AuthRequest, res) =>
 });
 
 // ── GET /api/orders/:id — full order ──────────────────────────────────────────
-router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
+router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
+    // Гость: draft / без поста → 404; материалы — только количество; отклики и
+    // контакты не отдаются; автор без согласия — «Заказчик на Moooza».
+    if (!req.userId) {
+      return sendPublic(res, await getPublicOrder(req.params.id), 'Not found');
+    }
     const meId = req.userId ?? null;
     const order = await prisma.order.findUnique({
       where: { id: req.params.id },
@@ -427,13 +435,16 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
 });
 
 // ── GET /api/orders/:id/matches — matching executors (fallback cascade) ───────
-router.get('/:id/matches', optionalAuthenticate, async (req: AuthRequest, res) => {
+// Только автор заказа: это подборка пользователей под его бриф (раньше стоял
+// optionalAuthenticate — список людей утекал кому угодно).
+router.get('/:id/matches', authenticate, async (req: AuthRequest, res) => {
   try {
     const order = await prisma.order.findUnique({
       where: { id: req.params.id },
       include: { selectedCustomFilterValues: { select: { id: true, filterId: true, filter: { select: { name: true } } } } },
     });
     if (!order) return res.status(404).json({ error: 'Not found' });
+    if (order.authorId !== req.userId) return res.status(403).json({ error: 'Forbidden' });
 
     const pageNum = parseInt(String(req.query.page ?? '1'), 10) || 1;
     const limitNum = parseInt(String(req.query.limit ?? '20'), 10) || 20;

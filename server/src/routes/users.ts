@@ -3,7 +3,14 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../index';
 import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/auth';
 import { upload, uploadBanner, uploadPortfolio } from '../middleware/upload';
-import { codeLimiter } from '../middleware/rateLimiter';
+import { codeLimiter, guestReadLimiter } from '../middleware/rateLimiter';
+import { requireAuthUnlessGuestBrowsing, sendPublic, setGuestCacheHeaders } from '../middleware/guest';
+import {
+  getPublicProfile, getPublicUserServices, getPublicService,
+  publicPersonWhere, notifyPublicDataChanged,
+} from '../lib/publicData';
+import { recordConsentEvent, requestMeta, sanitizeConsentSource, CONSENT_VERSIONS } from '../lib/consentEvents';
+import { maskContacts } from '../lib/maskContacts';
 import { yoNorm } from '../utils/search';
 import { notify } from '../utils/notify';
 import { isProActive, limitsFor } from '../utils/pro';
@@ -120,6 +127,10 @@ const userSelect = {
   termsAgreedAt: true,
   publicConsentAt: true,
   publicConsentVersion: true,
+  publicConsentRevokedAt: true,
+  searchIndexingOptOut: true,
+  publicConsentPromptAt: true,
+  publicConsentPromptCount: true,
   onboardingCompletedAt: true,
   createdAt: true,
   portfolioFiles: { select: { id: true, url: true, originalName: true, title: true, size: true, mimeType: true, sortOrder: true, createdAt: true }, orderBy: { sortOrder: 'asc' as const } },
@@ -290,9 +301,13 @@ async function toPublicUser(user: any, viewerId: string | null | undefined) {
 }
 
 // Public: resolve user by nickname or UUID — no auth required
-router.get('/handle/:handle', optionalAuthenticate, async (req: AuthRequest, res) => {
+router.get('/handle/:handle', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
     const { handle } = req.params;
+    // Гость: только профили с согласием (иначе одинаковый 404), белый список полей.
+    if (!req.userId) {
+      return sendPublic(res, await getPublicProfile(handle, { byHandle: true }), 'Пользователь не найден');
+    }
     // Try nickname first (strip leading @ if present)
     const cleanHandle = (handle.startsWith('@') ? handle.slice(1) : handle).trim();
     if (!cleanHandle) return res.status(404).json({ error: 'Пользователь не найден' });
@@ -331,7 +346,8 @@ router.get('/me', authenticate, async (req: AuthRequest, res) => {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    res.json(user);
+    const shouldPromptPublicConsent = await computeShouldPromptPublicConsent(user as any);
+    res.json({ ...user, shouldPromptPublicConsent });
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user' });
@@ -370,7 +386,42 @@ router.patch('/me/notification-prefs', authenticate, async (req: AuthRequest, re
 
 // Record consent to processing personal data allowed for public distribution
 // (152-ФЗ ст. 10.1). One-time: keeps the original timestamp if already given.
-const PUBLIC_CONSENT_VERSION = '2026-05-31';
+const PUBLIC_CONSENT_VERSION = CONSENT_VERSIONS.pd_public;
+const PUBLIC_CONSENT_PROMPT_MAX = 3;
+const PUBLIC_CONSENT_PROMPT_INTERVAL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Показывать ли окно «Сделайте профиль публичным»: нет согласия, согласие не
+ * отзывалось сознательно, показов < 3, последний показ > 30 дней назад (или не
+ * было), и человеку есть что показать — активная услуга, ACCEPTED-участие в
+ * артисте или подтверждённые титры в релизах/клипах.
+ */
+async function computeShouldPromptPublicConsent(user: {
+  id: string;
+  publicConsentAt?: Date | null;
+  publicConsentRevokedAt?: Date | null;
+  publicConsentPromptAt?: Date | null;
+  publicConsentPromptCount?: number | null;
+}): Promise<boolean> {
+  if (user.publicConsentAt) return false;
+  if (user.publicConsentRevokedAt) return false; // отозвал сам — не навязываемся
+  if ((user.publicConsentPromptCount ?? 0) >= PUBLIC_CONSENT_PROMPT_MAX) return false;
+  if (user.publicConsentPromptAt && Date.now() - new Date(user.publicConsentPromptAt).getTime() < PUBLIC_CONSENT_PROMPT_INTERVAL_MS) {
+    return false;
+  }
+  try {
+    const [services, artists, releases, clips] = await Promise.all([
+      prisma.userService.count({ where: { userId: user.id, status: 'active' } }),
+      prisma.userArtist.count({ where: { userId: user.id, inviteStatus: 'ACCEPTED' } }),
+      prisma.releaseParticipant.count({ where: { userId: user.id, confirmStatus: 'ACCEPTED' } }),
+      prisma.clipParticipant.count({ where: { userId: user.id, confirmStatus: 'ACCEPTED' } }),
+    ]);
+    return services + artists + releases + clips > 0;
+  } catch {
+    return false;
+  }
+}
+
 router.post('/me/public-consent', authenticate, async (req: AuthRequest, res) => {
   try {
     const me = await prisma.user.findUnique({
@@ -382,11 +433,119 @@ router.post('/me/public-consent', authenticate, async (req: AuthRequest, res) =>
         where: { id: req.userId },
         data: { publicConsentAt: new Date(), publicConsentVersion: PUBLIC_CONSENT_VERSION },
       });
+      await recordConsentEvent({
+        userId: req.userId!,
+        type: 'pd_public',
+        action: 'grant',
+        version: PUBLIC_CONSENT_VERSION,
+        source: sanitizeConsentSource(req.body?.source, 'profile'),
+        ...requestMeta(req),
+      });
+      notifyPublicDataChanged({ type: 'user', id: req.userId!, reason: 'consent_granted' });
     }
     res.json({ ok: true });
   } catch (error) {
     console.error('Public consent error:', error);
     res.status(500).json({ error: 'Failed to record consent' });
+  }
+});
+
+// Переименовать файл аватара/обложки при отзыве согласия: старые URL, которые
+// могли разойтись по внешним кэшам/поисковикам, перестают работать.
+function rotateUploadFile(url: string | null | undefined, folder: 'avatars' | 'covers'): string | null {
+  if (!url || !url.startsWith(`/uploads/${folder}/`)) return null;
+  try {
+    const dir = path.join(process.cwd(), 'uploads', folder);
+    const oldName = path.basename(url);
+    const oldPath = path.join(dir, oldName);
+    if (!fs.existsSync(oldPath)) return null;
+    const newName = `${crypto.randomBytes(16).toString('hex')}${path.extname(oldName)}`;
+    fs.renameSync(oldPath, path.join(dir, newName));
+    return `/uploads/${folder}/${newName}`;
+  } catch {
+    return null;
+  }
+}
+
+// ── DELETE /api/users/me/public-consent — отзыв согласия (152-ФЗ ст. 10.1) ──
+// Профиль сразу пропадает у гостей (404), контакты «для всех» → «для
+// зарегистрированных», файлы аватара/обложки переименовываются, событие — в журнал,
+// кэши публичных данных/снимков сбрасываются (onPublicDataChanged).
+router.delete('/me/public-consent', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const me = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: { publicConsentAt: true, contactsVisibility: true, avatar: true, bannerImage: true },
+    });
+    if (!me) return res.status(404).json({ error: 'User not found' });
+
+    const data: any = { publicConsentAt: null, publicConsentRevokedAt: new Date() };
+    if (me.contactsVisibility === 'ALL') {
+      data.contactsVisibility = 'REGISTERED';
+      data.contactsVisible = false;
+    }
+    if (me.publicConsentAt) {
+      const newAvatar = rotateUploadFile(me.avatar, 'avatars');
+      if (newAvatar) data.avatar = newAvatar;
+      const newBanner = rotateUploadFile(me.bannerImage, 'covers');
+      if (newBanner) data.bannerImage = newBanner;
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: req.userId },
+      data,
+      select: {
+        publicConsentAt: true, publicConsentRevokedAt: true, contactsVisibility: true,
+        avatar: true, bannerImage: true,
+      },
+    });
+    await recordConsentEvent({
+      userId: req.userId!,
+      type: 'pd_public',
+      action: 'revoke',
+      version: PUBLIC_CONSENT_VERSION,
+      source: sanitizeConsentSource(req.body?.source, 'settings'),
+      ...requestMeta(req),
+    });
+    notifyPublicDataChanged({ type: 'user', id: req.userId!, reason: 'consent_revoked' });
+    res.json({ ok: true, ...updated });
+  } catch (error) {
+    console.error('Public consent revoke error:', error);
+    res.status(500).json({ error: 'Failed to revoke consent' });
+  }
+});
+
+// ── POST /api/users/me/public-consent/prompt-shown — окно согласия показано ──
+router.post('/me/public-consent/prompt-shown', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const updated = await prisma.user.update({
+      where: { id: req.userId },
+      data: { publicConsentPromptAt: new Date(), publicConsentPromptCount: { increment: 1 } },
+      select: { publicConsentPromptAt: true, publicConsentPromptCount: true },
+    });
+    res.json({ ok: true, ...updated });
+  } catch (error) {
+    console.error('Public consent prompt-shown error:', error);
+    res.status(500).json({ error: 'Failed to record prompt' });
+  }
+});
+
+// ── PATCH /api/users/me/search-indexing — запрет индексации профиля ──────────
+// { optOut: boolean }. На видимость гостям не влияет — только noindex/sitemap.
+router.patch('/me/search-indexing', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { optOut } = req.body ?? {};
+    if (typeof optOut !== 'boolean') return res.status(400).json({ error: 'optOut (boolean) required' });
+    const updated = await prisma.user.update({
+      where: { id: req.userId },
+      data: { searchIndexingOptOut: optOut },
+      select: { searchIndexingOptOut: true },
+    });
+    notifyPublicDataChanged({ type: 'user', id: req.userId!, reason: 'search_indexing' });
+    res.json({ ok: true, ...updated });
+  } catch (error) {
+    console.error('Search indexing opt-out error:', error);
+    res.status(500).json({ error: 'Failed to update search indexing' });
   }
 });
 
@@ -1071,8 +1230,13 @@ router.delete('/me/services/:serviceId', authenticate, async (req: AuthRequest, 
 // ─── GET /catalog — all users with filters, for catalog page ─────────────────
 // Пагинация: ?page=N[&limit=M] → { results, pagination }. Без page — прежний
 // контракт (массив первых 100) для мест, где нужен быстрый поиск людей (чат).
-router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
+// Гость (при guestBrowsingEnabled): только люди с согласием (PUBLIC_PERSON_WHERE),
+// не глубже GUEST_CATALOG_PAGE_MAX страниц, без связей, белый список полей;
+// при выключенном флаге — 401, как раньше.
+const GUEST_CATALOG_PAGE_MAX = 10;
+router.get('/catalog', optionalAuthenticate, requireAuthUnlessGuestBrowsing, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
+    const isGuest = !req.userId;
     const { query, fieldOfActivityId, directionId, professionId, serviceId, customFilterValueIds: customFilterValueIdsRaw } = req.query;
     const customFilterValueIds = customFilterValueIdsRaw
       ? (customFilterValueIdsRaw as string).split(',').map(s => s.trim()).filter(Boolean)
@@ -1086,11 +1250,15 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
     const occupancy = splitList(req.query.occupancy).filter(o => ['open', 'considering', 'closed'].includes(o));
     const withReviews = req.query.withReviews === '1' || req.query.withReviews === 'true';
     const sortRaw = String(req.query.sort ?? 'date');
-    const sort = ['date', 'rating', 'connections', 'alpha'].includes(sortRaw) ? sortRaw : 'date';
+    // Гостю связи не показываются — и сортировка по ним не раскрывается.
+    const sort = ['date', 'rating', 'connections', 'alpha'].includes(sortRaw) && !(isGuest && sortRaw === 'connections')
+      ? sortRaw : 'date';
     const alphaDir = String(req.query.alphaDir ?? 'asc') === 'desc' ? 'desc' : 'asc';
 
     const paginated = req.query.page !== undefined;
-    const pageNum = paginated ? Math.max(1, parseInt(String(req.query.page), 10) || 1) : 1;
+    const pageNum = paginated
+      ? Math.min(isGuest ? GUEST_CATALOG_PAGE_MAX : Number.MAX_SAFE_INTEGER, Math.max(1, parseInt(String(req.query.page), 10) || 1))
+      : 1;
     const limitNum = paginated
       ? Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? '20'), 10) || 20))
       : 100;
@@ -1100,6 +1268,8 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
 
     // Заблокированные (навсегда или до даты в будущем) в каталоге не показываются.
     const andClauses: any[] = [visibleUserWhere()];
+    // Гость видит только людей с согласием на публичное распространение ПДн.
+    if (isGuest) andClauses.push(publicPersonWhere());
 
     // Профессия у пользователя может быть и без услуги (UserProfession) — такие
     // тоже должны находиться и поиском, и фильтрами.
@@ -1314,6 +1484,40 @@ router.get('/catalog', authenticate, async (req: AuthRequest, res) => {
         return { ...u, ratingAvg, reviewsCount, connectionsCount };
       });
 
+    if (isGuest) {
+      // Белый список полей (без связей и служебного), контакты в био — маскируются.
+      setGuestCacheHeaders(res);
+      const guestResults = results.map((u: any) => ({
+        id: u.id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        nickname: u.nickname ?? null,
+        avatar: u.avatar ?? null,
+        bio: maskContacts(u.bio ?? null),
+        city: u.city ?? null,
+        country: u.country ?? null,
+        occupancyStatus: u.occupancyStatus ?? null,
+        isPremium: !!u.isPremium,
+        isVerified: !!u.isVerified,
+        createdAt: u.createdAt,
+        fieldOfActivity: u.fieldOfActivity ? { id: u.fieldOfActivity.id, name: u.fieldOfActivity.name } : null,
+        userServices: (u.userServices ?? []).map((us: any) => ({
+          profession: us.profession ? { id: us.profession.id, name: us.profession.name } : null,
+        })),
+        userProfessions: (u.userProfessions ?? []).map((up: any) => ({
+          profession: up.profession ? { id: up.profession.id, name: up.profession.name } : null,
+        })),
+        ratingAvg: u.ratingAvg,
+        reviewsCount: u.reviewsCount,
+        isPublic: true,
+      }));
+      if (!paginated) return res.json(guestResults);
+      return res.json({
+        results: guestResults,
+        pagination: { page: pageNum, limit: limitNum, totalCount, totalPages: Math.ceil(totalCount / limitNum) },
+      });
+    }
+
     if (!paginated) return res.json(results);
     res.json({
       results,
@@ -1399,8 +1603,12 @@ router.get('/search', authenticate, async (req: AuthRequest, res) => {
 
 // Get user by ID — public (no sensitive fields)
 // ── GET /api/users/:id/services ──────────────────────────────────────────────
-router.get('/:id/services', optionalAuthenticate, async (req: AuthRequest, res) => {
+router.get('/:id/services', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
+    // Гость: только активные услуги и только у человека с согласием (иначе 404).
+    if (!req.userId) {
+      return sendPublic(res, await getPublicUserServices(req.params.id), 'Not found');
+    }
     // Черновики и архив видит только владелец.
     const isOwner = !!req.userId && req.userId === req.params.id;
     const services = await prisma.userService.findMany({
@@ -1419,8 +1627,12 @@ router.get('/:id/services', optionalAuthenticate, async (req: AuthRequest, res) 
 });
 
 // ── GET /api/users/user-service/:serviceId ────────────────────────────────────
-router.get('/user-service/:serviceId', optionalAuthenticate, async (req: AuthRequest, res) => {
+router.get('/user-service/:serviceId', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
+    // Гость: только active-услуга исполнителя с согласием (иначе 404).
+    if (!req.userId) {
+      return sendPublic(res, await getPublicService(req.params.serviceId), 'Not found');
+    }
     const us = await prisma.userService.findUnique({
       where: { id: req.params.serviceId },
       include: {
@@ -1439,8 +1651,15 @@ router.get('/user-service/:serviceId', optionalAuthenticate, async (req: AuthReq
   }
 });
 
-router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
+router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
+    // Гость: профиль только при согласии на публичное распространение ПДн;
+    // без согласия / заблокирован / не существует — одинаковый 404. Белый список:
+    // без ДР, онлайна, времени ответа, связей; контакты — только contactsAvailable.
+    if (!req.userId) {
+      return sendPublic(res, await getPublicProfile(req.params.id), 'User not found');
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: req.params.id },
       select: publicUserSelect,
@@ -1683,6 +1902,9 @@ router.post('/me/agree-terms', authenticate, async (req: AuthRequest, res) => {
       where: { id: req.userId },
       data: { termsAgreedAt: new Date() },
       select: userSelect,
+    });
+    await recordConsentEvent({
+      userId: req.userId!, type: 'terms', action: 'grant', source: 'agree-terms', ...requestMeta(req),
     });
     res.json(user);
   } catch (error) {

@@ -9,6 +9,9 @@ import { matchesLinkSource, detectLinkSource, isAllowedLinkUrl } from '../lib/ma
 import { parseCalendarDay, endOfDayMsk } from '../lib/mskDate';
 import { withAdvisoryLock } from '../lib/dealHelpers';
 import { artistAdminIds, isArtistAdmin } from '../lib/artistAccess';
+import { guestReadLimiter } from '../middleware/rateLimiter';
+import { sendPublic } from '../middleware/guest';
+import { getPublicVacancy } from '../lib/publicData';
 
 const router = Router();
 
@@ -423,8 +426,13 @@ router.get('/responses/incoming', authenticate, async (req: AuthRequest, res) =>
 });
 
 // ── GET /api/vacancies/:id — full vacancy ──────────────────────────────────────
-router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
+router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
+    // Гость: draft / без поста / артист REJECTED → 404; материалы, отклики и
+    // контакт (contactUserId) скрыты, автором показывается артист.
+    if (!req.userId) {
+      return sendPublic(res, await getPublicVacancy(req.params.id), 'Not found');
+    }
     const meId = req.userId ?? null;
     const vacancy = await prisma.vacancy.findUnique({
       where: { id: req.params.id },
@@ -482,13 +490,16 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
 });
 
 // ── GET /api/vacancies/:id/matches — matching candidates (residents) ──────────
-router.get('/:id/matches', optionalAuthenticate, async (req: AuthRequest, res) => {
+// Только владелец/админ артиста (как isOwner в GET /:id) — раньше стоял
+// optionalAuthenticate, и подборка кандидатов утекала кому угодно.
+router.get('/:id/matches', authenticate, async (req: AuthRequest, res) => {
   try {
     const vacancy = await prisma.vacancy.findUnique({
       where: { id: req.params.id },
       include: { selectedCustomFilterValues: { select: { id: true, filterId: true } } },
     });
     if (!vacancy) return res.status(404).json({ error: 'Not found' });
+    if (!(await assertArtistOwner(req.userId!, vacancy.artistId))) return res.status(403).json({ error: 'Forbidden' });
 
     const pageNum = parseInt(String(req.query.page ?? '1'), 10) || 1;
     const limitNum = parseInt(String(req.query.limit ?? '5'), 10) || 5;

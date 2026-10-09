@@ -1,6 +1,15 @@
 import { Router } from 'express';
 import { prisma } from '../index';
 import { yoNorm } from '../utils/search';
+import { optionalAuthenticate, AuthRequest } from '../middleware/auth';
+import { guestReadLimiter } from '../middleware/rateLimiter';
+import { setGuestCacheHeaders } from '../middleware/guest';
+import { maskContacts, maskContactsDeep } from '../lib/maskContacts';
+
+// Гостевой режим: поиск открыт без входа, но неглубоко (защита от выкачивания
+// базы) и с белым списком полей; контакты в свободном тексте маскируются.
+const GUEST_SEARCH_PAGE_MAX = 10;
+const GUEST_ARTISTS_TAKE = 100;
 
 const router = Router();
 
@@ -475,8 +484,9 @@ router.get('/price-ranges', async (_req, res) => {
 });
 
 // Search users by service filters
-router.get('/search', async (req, res) => {
+router.get('/search', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
+    const isGuest = !req.userId;
     const {
       professionId,
       serviceId,
@@ -491,7 +501,10 @@ router.get('/search', async (req, res) => {
       query,
     } = req.query;
 
-    const { pageNum, limitNum, skip } = parsePaging(req.query.page, req.query.limit);
+    const { pageNum, limitNum, skip } = parsePaging(
+      isGuest ? Math.min(GUEST_SEARCH_PAGE_MAX, Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1)) : req.query.page,
+      req.query.limit,
+    );
 
     // Custom filter value ids (comma-separated); OR внутри группы, AND между группами.
     const cfvIds = String(req.query.customFilterValueIds || '')
@@ -599,9 +612,20 @@ router.get('/search', async (req, res) => {
 
     const results = users.map(user => {
       const { userServices, userProfessions, ...userData } = user;
+      // Гостю — явный белый список (не полагаемся только на select).
+      const u: any = user;
+      const guestUser = {
+        id: u.id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        nickname: u.nickname ?? null,
+        avatar: u.avatar ?? null,
+        city: u.city ?? null,
+        fieldOfActivity: u.fieldOfActivity ? { id: u.fieldOfActivity.id, name: u.fieldOfActivity.name } : null,
+      };
       return {
         id: user.id,
-        user: userData,
+        user: isGuest ? guestUser : userData,
         searchProfile: {
           professions: dedup(userProfessions.map(up => up.profession)),
           services: dedup(userServices.map(us => us.service)),
@@ -615,6 +639,7 @@ router.get('/search', async (req, res) => {
       };
     });
 
+    if (isGuest) setGuestCacheHeaders(res);
     res.json({
       results,
       pagination: { page: pageNum, limit: limitNum, totalCount, totalPages: Math.ceil(totalCount / limitNum) },
@@ -635,13 +660,17 @@ router.get('/search', async (req, res) => {
 //   location         — comma-separated city names; offering provider must be in one of them
 //   priceMin/priceMax — numeric price range (rub); overlaps the offering's [priceFrom, priceTo]
 //   sort             — date (default, newest first) | price_asc | price_desc | rating
-router.get('/service-search', async (req, res) => {
+router.get('/service-search', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
+    const isGuest = !req.userId;
     const {
       serviceId, sectionId, customFilterValueIds, query, location, priceMin, priceMax,
       deadlineMax, ratingMin, sort,
     } = req.query;
-    const { pageNum, limitNum, skip } = parsePaging(req.query.page, req.query.limit);
+    const { pageNum, limitNum, skip } = parsePaging(
+      isGuest ? Math.min(GUEST_SEARCH_PAGE_MAX, Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1)) : req.query.page,
+      req.query.limit,
+    );
     const cfvIds = String(customFilterValueIds || '').split(',').map(s => s.trim()).filter(Boolean);
     const cities = String(location || '').split(',').map(s => s.trim()).filter(Boolean).map(c => yoNorm(c));
     const priceMinNum = priceMin != null && priceMin !== '' ? parseInt(priceMin as string, 10) : null;
@@ -651,7 +680,8 @@ router.get('/service-search', async (req, res) => {
     const sortMode = ['date', 'price_asc', 'price_desc', 'rating'].includes(String(sort)) ? String(sort) : 'date';
 
     // Show every created/submitted offering — only hide unfinished drafts and archived ones.
-    const where: any = { status: { notIn: ['draft', 'archived'] } };
+    // Гостю — строго active.
+    const where: any = isGuest ? { status: 'active' } : { status: { notIn: ['draft', 'archived'] } };
     // Исполнитель не заблокирован и дал согласие на публичное размещение (152-ФЗ).
     const andConds: any[] = [{ user: publicProviderWhere() }];
     if (serviceId) where.serviceId = String(serviceId);
@@ -782,6 +812,39 @@ router.get('/service-search', async (req, res) => {
       results = await attachRatings(items);
     }
 
+    if (isGuest) {
+      // Белый список уже задан select'ом; дублируем явно + маскируем контакты в тексте.
+      setGuestCacheHeaders(res);
+      results = results.map((r: any) => ({
+        id: r.id,
+        name: maskContacts(r.name ?? null),
+        priceFrom: r.priceFrom ?? null,
+        priceTo: r.priceTo ?? null,
+        priceItems: r.priceItems != null ? maskContactsDeep(r.priceItems) : null,
+        description: maskContacts(r.description ?? null),
+        createdAt: r.createdAt,
+        user: r.user
+          ? {
+              id: r.user.id,
+              firstName: r.user.firstName,
+              lastName: r.user.lastName,
+              avatar: r.user.avatar ?? null,
+              city: r.user.city ?? null,
+              isPremium: !!r.user.isPremium,
+              isVerified: !!r.user.isVerified,
+              rating: r.user.rating ?? null,
+            }
+          : null,
+        service: r.service
+          ? { id: r.service.id, name: r.service.name, section: r.service.section ? { id: r.service.section.id, name: r.service.section.name } : null }
+          : null,
+        profession: r.profession ? { id: r.profession.id, name: r.profession.name } : null,
+        selectedCustomFilterValues: (r.selectedCustomFilterValues ?? []).map((v: any) => ({
+          id: v.id, value: v.value, filter: v.filter ? { id: v.filter.id, name: v.filter.name } : null,
+        })),
+      }));
+    }
+
     res.json({
       results,
       pagination: { page: pageNum, limit: limitNum, totalCount, totalPages: Math.ceil(totalCount / limitNum) },
@@ -895,8 +958,9 @@ router.get('/profession-features', async (_req, res) => {
 });
 
 // Get artists (with search, type filter, genres)
-router.get('/artists', async (req, res) => {
+router.get('/artists', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
+    const isGuest = !req.userId;
     const { search, type, genre, city, sort } = req.query;
     // Only verified artists are listed in the catalog.
     const where: any = { status: 'VERIFIED' };
@@ -931,7 +995,7 @@ router.get('/artists', async (req, res) => {
     const artists = await prisma.artist.findMany({
       where,
       orderBy,
-      take: 200,
+      take: isGuest ? GUEST_ARTISTS_TAKE : 200,
       select: {
         id: true,
         name: true,
@@ -945,6 +1009,21 @@ router.get('/artists', async (req, res) => {
         genres: { select: { genre: { select: { id: true, name: true } } } },
       },
     });
+    if (isGuest) {
+      setGuestCacheHeaders(res);
+      return res.json(artists.map((a: any) => ({
+        id: a.id,
+        name: a.name,
+        type: a.type ?? null,
+        city: a.city ?? null,
+        avatar: a.avatar ?? null,
+        listeners: Number(a.listeners ?? 0),
+        status: a.status,
+        activityStatus: a.activityStatus,
+        createdAt: a.createdAt,
+        genres: (a.genres ?? []).map((g: any) => ({ genre: g.genre ? { id: g.genre.id, name: g.genre.name } : null })),
+      })));
+    }
     res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners) })));
   } catch (error) {
     console.error('Get artists error:', error);

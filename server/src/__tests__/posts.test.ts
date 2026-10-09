@@ -173,7 +173,8 @@ describe('GET /api/posts/feed', () => {
       id: `p${i}`, createdAt: new Date(Date.UTC(2026, 0, 3 - i)), likes: [], savedBy: [], pollVotes: [], reactions: [],
     }));
     mockPrisma.post.findMany.mockResolvedValue(rows);
-    const res = await request(buildApp()).get('/api/posts/feed?limit=2&cursor=');
+    // Авторизованная лента (у гостя своя ветка lib/publicData с курсором `g<глубина>:…`).
+    const res = await request(buildApp()).get('/api/posts/feed?limit=2&cursor=').set(asUser(ME));
     expect(res.status).toBe(200);
     expect(res.body.items).toHaveLength(2);
     expect(res.body.nextCursor).toBe(`${rows[1].createdAt.toISOString()}|p1`);

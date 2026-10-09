@@ -18,6 +18,9 @@ import {
   isFkViolation,
 } from '../lib/artistAccess';
 import { validateArtistInvite, acceptArtistInvite, ARTIST_INVITE_TTL_MS } from '../lib/artistInvites';
+import { guestReadLimiter } from '../middleware/rateLimiter';
+import { sendPublic } from '../middleware/guest';
+import { getPublicArtist } from '../lib/publicData';
 
 const router = Router();
 
@@ -343,10 +346,16 @@ router.get('/join-requests', authenticate, async (req: AuthRequest, res: Respons
 });
 
 // ── GET /api/artists/:id ─────────────────────────────────────────────────────
-router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res: Response) => {
   try {
     const { id } = req.params;
     const currentUserId = req.userId;
+
+    // Гость: белый список (без служебных полей верификации и submittedById),
+    // REJECTED → 404, состав — только ACCEPTED с согласием + «ещё N».
+    if (!currentUserId) {
+      return sendPublic(res, await getPublicArtist(id), 'Артист не найден');
+    }
 
     const artist = await prisma.artist.findUnique({
       where: { id },

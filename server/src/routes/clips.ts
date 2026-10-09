@@ -14,6 +14,9 @@ import {
   clipExternalKey,
   MAX_MEDIA_PARTICIPANTS,
 } from '../lib/mediaItems';
+import { guestReadLimiter } from '../middleware/rateLimiter';
+import { sendPublic } from '../middleware/guest';
+import { getPublicArtistClips, getPublicClip } from '../lib/publicData';
 
 const router = Router();
 
@@ -203,8 +206,12 @@ router.post('/', authenticate, async (req: AuthRequest, res: Response) => {
 });
 
 // ── GET /api/clips/artist/:artistId — list (tiles) ─────────────────────────
-router.get('/artist/:artistId', optionalAuthenticate, async (req: AuthRequest, res: Response) => {
+router.get('/artist/:artistId', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res: Response) => {
   try {
+    // Гость: только если артист не REJECTED (иначе 404), белый список полей.
+    if (!req.userId) {
+      return sendPublic(res, await getPublicArtistClips(req.params.artistId), 'Артист не найден');
+    }
     const clips = await prisma.clip.findMany({
       where: { artistId: req.params.artistId },
       orderBy: { createdAt: 'desc' },
@@ -218,8 +225,12 @@ router.get('/artist/:artistId', optionalAuthenticate, async (req: AuthRequest, r
 });
 
 // ── GET /api/clips/:id — detail ────────────────────────────────────────────
-router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response) => {
+router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res: Response) => {
   try {
+    // Гость: артист не REJECTED, титры — только люди с согласием + «ещё N».
+    if (!req.userId) {
+      return sendPublic(res, await getPublicClip(req.params.id), 'Клип не найден');
+    }
     const clip = await prisma.clip.findUnique({
       where: { id: req.params.id },
       include: { participants: { include: participantInclude } },

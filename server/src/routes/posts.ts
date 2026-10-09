@@ -10,6 +10,9 @@ import { authenticate, optionalAuthenticate, AuthRequest } from '../middleware/a
 import { emitToUser } from '../socket';
 import { notify, isNotificationEnabled } from '../utils/notify';
 import { tgLog, tgEvent, escTg } from '../utils/telegram';
+import { guestReadLimiter } from '../middleware/rateLimiter';
+import { sendPublic, setGuestCacheHeaders } from '../middleware/guest';
+import { getPublicFeedPage, getPublicPost } from '../lib/publicData';
 
 const router = Router();
 
@@ -609,8 +612,14 @@ async function computeRankedIds(ctx: RankCtx): Promise<string[]> {
 //   sort       — new (default) | popular | discussed | smart («Для вас»)
 //   cursor     — курсорная пагинация (ответ `{ items, nextCursor }`); '' — первая страница
 //   limit/offset — легаси-пагинация (ответ — массив), для старых клиентов
-router.get('/feed', optionalAuthenticate, async (req: AuthRequest, res) => {
+router.get('/feed', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
+    // Гость: та же форма ответа (массив / { items, nextCursor }) и та же форма
+    // поста, но по белому списку: только публичные авторы / артисты / заказы /
+    // вакансии, limit ≤ 20, глубина ≤ 200, без комментариев, реакции агрегатом.
+    if (!req.userId) {
+      return sendPublic(res, await getPublicFeedPage(req.query as any));
+    }
     const { type, authorKind, period, city, employment, artistType, genre } = req.query;
     const limitNum = parseLimit(req.query.limit);
     const offsetNum = parseOffset(req.query.offset);
@@ -1220,8 +1229,14 @@ router.post('/:id/vote', authenticate, async (req: AuthRequest, res) => {
 
 // GET /api/posts/:id/comments — комментарии поста постранично (шторка комментариев).
 // Верхний уровень — от старых к новым, курсор `<createdAt>|<id>`; ответы — вложенно.
-router.get('/:id/comments', optionalAuthenticate, async (req: AuthRequest, res) => {
+router.get('/:id/comments', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
+    // Гостю комментарии не показываются (только их число в посте) — пустая
+    // страница той же формы; клиент показывает «Войдите, чтобы читать комментарии».
+    if (!req.userId) {
+      setGuestCacheHeaders(res);
+      return res.json({ items: [], nextCursor: null, guestHidden: true });
+    }
     const postId = req.params.id;
     const limitNum = parseLimit(req.query.limit, 20);
     const post = await prisma.post.findUnique({ where: { id: postId }, select: { id: true } });
@@ -1262,8 +1277,12 @@ router.get('/:id/comments', optionalAuthenticate, async (req: AuthRequest, res) 
 });
 
 // Get post by ID (deep link ?post=… — доступно и гостю, как лента)
-router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res) => {
+router.get('/:id', optionalAuthenticate, guestReadLimiter, async (req: AuthRequest, res) => {
   try {
+    // Гость: те же правила видимости и та же форма, что в гостевой ленте.
+    if (!req.userId) {
+      return sendPublic(res, await getPublicPost(req.params.id), 'Post not found');
+    }
     const post = await prisma.post.findFirst({
       where: { id: req.params.id, author: visibleAuthorWhere() },
       include: buildFeedInclude(req.userId),

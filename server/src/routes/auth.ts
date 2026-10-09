@@ -13,6 +13,7 @@ import { findSelfUser } from '../utils/selfUser';
 import { yoNorm } from '../utils/search';
 import { disconnectUserSockets } from '../socket';
 import { validateArtistInvite, acceptArtistInvite, type ArtistInviteCheck } from '../lib/artistInvites';
+import { recordConsentEvent, requestMeta } from '../lib/consentEvents';
 
 // ─── Telegram bot-based auth (deep link + polling) ───────────────────────────
 // Map: token → { telegramId, firstName, lastName, username, photoUrl, resolvedAt }
@@ -26,20 +27,21 @@ interface TgPendingEntry {
 }
 const tgPending = new Map<string, TgPendingEntry>();
 
-// Clean up entries older than 10 minutes
+// Clean up entries older than 10 minutes.
+// unref(): фоновая уборка не должна держать процесс (graceful shutdown, тесты).
 setInterval(() => {
   const cutoff = Date.now() - 10 * 60 * 1000;
   for (const [k, v] of tgPending) {
     if (v.resolvedAt < cutoff) tgPending.delete(k);
   }
-}, 60_000);
+}, 60_000).unref();
 
 // Drop expired pending registrations (never-completed signups) every 5 minutes.
 setInterval(() => {
   prisma.pendingRegistration
     .deleteMany({ where: { expiresAt: { lt: new Date() } } })
     .catch(() => {});
-}, 5 * 60 * 1000);
+}, 5 * 60 * 1000).unref();
 
 // ─── Webhook-based bot (Telegram pushes updates to us) ───────────────────────
 // No outbound connection to Telegram needed — Telegram calls our endpoint.
@@ -376,6 +378,8 @@ router.post('/register', registerLimiter, async (req, res) => {
       consentPdAt: now.toISOString(),
       consentPdVersion: REGISTRATION_CONSENT_VERSION,
       consentMarketingAt: consentMarketing ? now.toISOString() : null,
+      // IP/UA момента, когда человек отметил согласия, — для журнала ConsentEvent.
+      _consentMeta: requestMeta(req),
     };
 
     // An ACTIVE pending registration is never overwritten: otherwise anyone who
@@ -594,6 +598,24 @@ router.post('/verify-email', codeLimiter, async (req, res) => {
         throw e;
       }
       const user = created.user;
+
+      // Журнал согласий (ConsentEvent), данных на форме регистрации: ПДн +
+      // соглашение (обязательные) и реклама (если отмечена). Best-effort —
+      // recordConsentEvent сам ловит ошибки и не ломает регистрацию.
+      {
+        const meta = p._consentMeta && typeof p._consentMeta === 'object' ? p._consentMeta : {};
+        const fallback = requestMeta(req);
+        const ip = typeof meta.ip === 'string' ? meta.ip : fallback.ip;
+        const userAgent = typeof meta.userAgent === 'string' ? meta.userAgent : fallback.userAgent;
+        if (consentPdAt) {
+          const version = p.consentPdVersion || REGISTRATION_CONSENT_VERSION;
+          await recordConsentEvent({ userId: user.id, type: 'pd', action: 'grant', version, source: 'register', ip, userAgent });
+          await recordConsentEvent({ userId: user.id, type: 'terms', action: 'grant', version, source: 'register', ip, userAgent });
+        }
+        if (toDate(p.consentMarketingAt)) {
+          await recordConsentEvent({ userId: user.id, type: 'marketing', action: 'grant', version: REGISTRATION_CONSENT_VERSION, source: 'register', ip, userAgent });
+        }
+      }
 
       // Consume a role-bound artist invite link, if one was provided at signup:
       // lib/artistInvites atomically spends one use (expiry/limit checked),
@@ -1002,7 +1024,7 @@ router.post('/telegram/miniapp', authLimiter, async (req, res) => {
 
 // ─── VK OAuth 2.0 (standard, oauth.vk.com) ───────────────────────────────────
 const vkStateSet = new Set<string>();
-setInterval(() => { if (vkStateSet.size > 1000) vkStateSet.clear(); }, 60_000);
+setInterval(() => { if (vkStateSet.size > 1000) vkStateSet.clear(); }, 60_000).unref();
 
 router.get('/vk/login', (req, res) => {
   const appUrl = process.env.APP_URL || 'https://moooza.ru';

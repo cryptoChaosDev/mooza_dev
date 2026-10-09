@@ -13,6 +13,7 @@ import { scheduleYandexMusicSync } from './utils/yandexMusicSync';
 
 // Import rate limiters
 import { apiLimiter } from './middleware/rateLimiter';
+import { apiRobotsHeaders, legacyOgProfileRedirect } from './middleware/guest';
 
 // Import JWT utilities
 import { getJwtSecret } from './utils/jwt';
@@ -173,6 +174,11 @@ app.get(['/health', '/api/health'], (req, res) => {
 // Apply rate limiting to all API routes
 app.use('/api/', apiLimiter);
 
+// API — не страницы для поисковиков: noindex на всех ответах /api/*. Ответы
+// зависят от того, кто спрашивает (гость получает урезанную версию), поэтому
+// Vary: Authorization — чтобы кэш не отдал гостевой ответ вошедшему и наоборот.
+app.use('/api', apiRobotsHeaders);
+
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -204,52 +210,11 @@ app.use('/api/vacancies', vacancyRoutes);
 app.use('/api/artist-lookup', artistLookupRoutes);
 app.use('/api/support', supportRoutes);
 
-// ── OG tags for social bots ────────────────────────────────────────────────
-// HTML-entity-encode every interpolated value: firstName/lastName/bio/city are
-// user-controlled and must never reach raw HTML (otherwise `bio` like
-// `"><script>…` would inject markup / spoof OG tags). encodeURI keeps the URL
-// usable while neutralising quotes/angle brackets.
-const escapeHtml = (s: string): string =>
-  String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
-app.get('/api/og/profile/:userId', async (req: express.Request, res: express.Response) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.params.userId },
-      select: { firstName: true, lastName: true, avatar: true, bio: true, city: true },
-    });
-    if (!user) return res.status(404).send('Not found');
-    const name = escapeHtml(`${user.firstName} ${user.lastName}`.trim());
-    const desc = escapeHtml(user.bio || `${user.city ? user.city + ' · ' : ''}Музыкант на Moooza`);
-    // Avatar filename comes from our own upload pipeline; still encode for the
-    // attribute context. The full URL is percent-encoded so stray quotes/spaces
-    // cannot break out of the attribute.
-    const img = user.avatar
-      ? escapeHtml(`https://moooza.ru/uploads/${encodeURI(user.avatar)}`)
-      : 'https://moooza.ru/logo.png';
-    const url = escapeHtml(`https://moooza.ru/profile/${encodeURIComponent(req.params.userId)}`);
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.send(`<!DOCTYPE html><html><head>
-      <meta charset="utf-8">
-      <title>${name} — Moooza</title>
-      <meta property="og:type" content="profile">
-      <meta property="og:title" content="${name} — Moooza">
-      <meta property="og:description" content="${desc}">
-      <meta property="og:image" content="${img}">
-      <meta property="og:url" content="${url}">
-      <meta property="og:site_name" content="Moooza">
-      <meta name="twitter:card" content="summary">
-      <meta name="twitter:title" content="${name} — Moooza">
-      <meta name="twitter:description" content="${desc}">
-      <meta http-equiv="refresh" content="0; url=${url}">
-    </head><body><a href="${url}">${name}</a></body></html>`);
-  } catch { res.status(500).send('Error'); }
-});
+// ── Старый OG-эндпоинт профиля ─────────────────────────────────────────────
+// Раньше отдавал HTML с именем/био/аватаром любого пользователя (ПДн без
+// согласия). Теперь — постоянный редирект на страницу профиля: OG/SEO-разметку
+// для людей с согласием отдают SEO-снимки (Ф4), для остальных — 404-заглушка.
+app.get('/api/og/profile/:userId', legacyOgProfileRedirect);
 
 // Слишком большой файл/тело запроса — понятный 413 вместо «Внутренняя ошибка
 // сервера» 500 (MulterError не несёт status). Прочие ошибки multer — 400.
