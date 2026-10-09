@@ -17,6 +17,8 @@ import AvatarComponent from '../components/Avatar';
 import { plural } from '../lib/plural';
 import { useScrollLock } from '../lib/scrollLock';
 import { artistHref } from '../lib/artistUtils';
+import CatalogDemoButton from '../components/CatalogDemoButton';
+import CatalogCardSignals from '../components/CatalogCardSignals';
 
 type CatalogTab = 'services' | 'artists' | 'people';
 const CATALOG_TABS: CatalogTab[] = ['services', 'artists', 'people'];
@@ -105,17 +107,22 @@ function ExpandableUserRow({ user, searchProfile }: { user: any; searchProfile?:
     <div className="border-b border-slate-800/50 last:border-0">
       {/* ── Collapsed row (always visible) ── */}
       <div className="flex items-center gap-3 px-4 py-3 hover:bg-slate-800/30 transition-colors">
-        {/* Avatar — click navigates to profile */}
-        <Link
-          to={profileTo}
-          state={linkState}
-          className="relative flex-shrink-0 cursor-pointer"
-        >
-          <AvatarComponent src={user.avatar} name={`${user.lastName ?? ''} ${user.firstName ?? ''}`} size={44} className="rounded-xl" />
-          {isOnline && (
-            <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-slate-950 rounded-full" />
+        {/* Avatar — click navigates to profile; ▶ демо — рядом со ссылкой, не внутри неё */}
+        <div className="relative flex-shrink-0">
+          <Link
+            to={profileTo}
+            state={linkState}
+            className="relative block cursor-pointer"
+          >
+            <AvatarComponent src={user.avatar} name={`${user.lastName ?? ''} ${user.firstName ?? ''}`} size={44} className="rounded-xl" />
+            {isOnline && (
+              <span className={`absolute ${user.demo ? 'top-0' : 'bottom-0'} right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-slate-950 rounded-full`} />
+            )}
+          </Link>
+          {user.demo?.url && (
+            <CatalogDemoButton playerKey={`people:${user.id}`} demo={user.demo} className="absolute -bottom-1.5 -right-1.5" />
           )}
-        </Link>
+        </div>
 
         {/* Info — click navigates to profile. Surname first per spec. */}
         <Link to={profileTo} state={linkState} className="flex-1 min-w-0 cursor-pointer">
@@ -124,6 +131,7 @@ function ExpandableUserRow({ user, searchProfile }: { user: any; searchProfile?:
               {user.lastName} {user.firstName}
             </span>
             {user.isBlocked && <span title="Заблокирован"><Ban size={12} className="text-red-400 flex-shrink-0" /></span>}
+            <CatalogCardSignals releasesCount={user.releasesCount} responseBadge={user.responseBadge} />
           </div>
 
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
@@ -1084,42 +1092,55 @@ export default function SearchPage() {
                     // <Link> — ссылка на услугу видна краулеру (фолбэк — профиль исполнителя).
                     const cardHref = card?.id ? `/services/${card.id}` : cardUser?.id ? `/profile/${cardUser.id}` : null;
                     if (!cardHref) return null;
+                    // ▶ демо исполнителя — рядом со ссылкой карточки (не внутри <a>).
+                    const avatarEl = (
+                      <AvatarComponent
+                        src={cardUser.avatar}
+                        name={`${cardUser.firstName ?? ''} ${cardUser.lastName ?? ''}`}
+                        size={44}
+                        className="rounded-xl flex-shrink-0"
+                      />
+                    );
                     return (
-                      <Link
-                        key={card.id}
-                        to={cardHref}
-                        state={{ from: location.pathname }}
-                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors text-left"
-                      >
-                        <AvatarComponent
-                          src={cardUser.avatar}
-                          name={`${cardUser.firstName ?? ''} ${cardUser.lastName ?? ''}`}
-                          size={44}
-                          className="rounded-xl flex-shrink-0"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="text-sm font-semibold text-white truncate">{title}</span>
-                            {card.service?.section?.name && (
-                              <span className="text-[10px] px-1.5 py-0.5 bg-primary-500/20 text-primary-300 rounded-md flex-shrink-0">
-                                {card.service.section.name}
-                              </span>
-                            )}
-                            {cardUser.isPremium && <span title="Premium"><Crown size={12} className="text-amber-400 flex-shrink-0" /></span>}
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                            <span className="text-xs text-slate-500 truncate">{cardUser.firstName} {cardUser.lastName}</span>
-                            {cardUser.city && <span className="text-xs text-slate-600">· {cardUser.city}</span>}
-                            {rating && (
-                              <span className="flex items-center gap-0.5 text-xs text-amber-400 font-medium">
-                                · <Star size={11} fill="currentColor" />{Number(rating.avg).toFixed(1)}
-                              </span>
-                            )}
-                          </div>
+                      <div key={card.id} className="w-full flex items-center gap-3 px-4 py-3 hover:bg-slate-800/40 transition-colors">
+                        <div className="relative flex-shrink-0">
+                          <Link to={cardHref} state={{ from: location.pathname }} className="block" tabIndex={-1} aria-hidden="true">
+                            {avatarEl}
+                          </Link>
+                          {cardUser.demo?.url && (
+                            <CatalogDemoButton playerKey={`service:${card.id}`} demo={cardUser.demo} className="absolute -bottom-1.5 -right-1.5" />
+                          )}
                         </div>
-                        <span className="text-xs font-semibold text-primary-300 flex-shrink-0 whitespace-nowrap">{priceLabel}</span>
-                        <ChevronRight size={16} className="text-slate-600 flex-shrink-0" />
-                      </Link>
+                        <Link
+                          to={cardHref}
+                          state={{ from: location.pathname }}
+                          className="flex-1 min-w-0 flex items-center gap-3 text-left"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-sm font-semibold text-white truncate">{title}</span>
+                              {card.service?.section?.name && (
+                                <span className="text-[10px] px-1.5 py-0.5 bg-primary-500/20 text-primary-300 rounded-md flex-shrink-0">
+                                  {card.service.section.name}
+                                </span>
+                              )}
+                              {cardUser.isPremium && <span title="Premium"><Crown size={12} className="text-amber-400 flex-shrink-0" /></span>}
+                              <CatalogCardSignals releasesCount={cardUser.releasesCount} responseBadge={cardUser.responseBadge} />
+                            </div>
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                              <span className="text-xs text-slate-500 truncate">{cardUser.firstName} {cardUser.lastName}</span>
+                              {cardUser.city && <span className="text-xs text-slate-600">· {cardUser.city}</span>}
+                              {rating && (
+                                <span className="flex items-center gap-0.5 text-xs text-amber-400 font-medium">
+                                  · <Star size={11} fill="currentColor" />{Number(rating.avg).toFixed(1)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <span className="text-xs font-semibold text-primary-300 flex-shrink-0 whitespace-nowrap">{priceLabel}</span>
+                          <ChevronRight size={16} className="text-slate-600 flex-shrink-0" />
+                        </Link>
+                      </div>
                     );
                   })}
                 </div>
