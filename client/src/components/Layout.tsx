@@ -5,6 +5,7 @@ import { APP_VERSION } from '../lib/changelog';
 import BottomNav from './BottomNav';
 import NotificationBell from './NotificationBell';
 import InfoModal from './InfoModal';
+import MobileMenu from './MobileMenu';
 import ProfessionGate from './ProfessionGate';
 import PublicConsentPrompt from './PublicConsentPrompt';
 import { useAuthStore } from '../stores/authStore';
@@ -163,31 +164,10 @@ export default function Layout({ children }: LayoutProps) {
               <LogIn size={17} strokeWidth={2.25} /> Войти
             </button>
           ) : (
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1">
             <NotificationBell />
-            {user?.isAdmin && (
-              <button
-                onClick={() => navigate('/admin')}
-                className={`transition-colors ${isActive('/admin') ? 'text-primary-400' : 'text-slate-500 hover:text-slate-300'}`}
-                aria-label="Администрирование"
-              >
-                <ShieldCheck size={20} strokeWidth={2} />
-              </button>
-            )}
-            <button
-              onClick={() => setShowInfo(true)}
-              className="text-slate-500 hover:text-slate-300 transition-colors"
-              aria-label="Информация"
-            >
-              <Info size={20} strokeWidth={2} />
-            </button>
-            <button
-              onClick={() => navigate('/invite')}
-              className="text-slate-500 hover:text-slate-300 transition-colors"
-              aria-label="Реферальная программа"
-            >
-              <Gift size={20} strokeWidth={2} />
-            </button>
+            {/* Админка, «Информация», «Пригласить» и др. — в бургер-меню */}
+            <MobileMenu isAdmin={!!user?.isAdmin} />
           </div>
           )}
           {showInfo && <InfoModal onClose={() => setShowInfo(false)} />}
