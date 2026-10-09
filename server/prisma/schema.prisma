@@ -1785,3 +1785,35 @@ model VacancyResponseLink {
   response   VacancyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
   @@index([responseId])
 }
+
+// ============ «ИЩУ МУЗЫКАНТА» (routes/requests.ts) ============
+// Внешние ключи заданы только в SQL-миграции 20261012030000_request_find_musician
+// (userId → User CASCADE, orderId → Order), без Prisma-relation: так не нужно
+// трогать модели User/Order (параллельные правки). Связи в коде — по id.
+
+// Журнал запросов «Ищу музыканта»: лимит 5 в сутки на заказчика и аналитика
+// (сколько исполнителей уведомлено). Текст запроса не храним — он в описании заказа.
+model MusicianRequest {
+  id            String   @id @default(uuid())
+  userId        String
+  orderId       String?  // SET NULL при удалении заказа — лимит считается и после удаления
+  professionIds String[] @default([])
+  notifiedCount Int      @default(0)
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([orderId])
+}
+
+// Кому разослано уведомление order_match по заказу: без повторов по заказу
+// (orderId+userId) и не больше 5 в сутки одному исполнителю.
+model OrderMatchNotification {
+  id        String   @id @default(uuid())
+  orderId   String
+  userId    String
+  score     Float?
+  createdAt DateTime @default(now())
+
+  @@unique([orderId, userId])
+  @@index([userId, createdAt])
+}
