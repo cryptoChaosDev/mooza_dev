@@ -989,7 +989,8 @@ export function buildChips(p: ParsedRequest, dict: RequestDictionaries, service:
   if (service) chips.push({ kind: 'service', id: service.id, label: `Раздел: ${service.name}`, removable: false });
   for (const id of p.genreIds) {
     const g = dict.genres.find((x) => x.id === id);
-    if (g) chips.push({ kind: 'genre', id, label: `Жанр: ${g.name}`, removable: true });
+    // «Метал, Metal» → «Метал»: в БД жанры двуязычные, в чипе — русский вариант
+    if (g) chips.push({ kind: 'genre', id, label: `Жанр: ${g.name.split(',')[0].trim() || g.name}`, removable: true });
   }
   if (p.cityName) chips.push({ kind: 'city', label: `Город: ${p.cityName}`, removable: true });
   if (p.isRemote) chips.push({ kind: 'remote', label: 'Онлайн / удалённо', removable: true });
