@@ -37,6 +37,16 @@ export async function artistAdminIds(artistId: string): Promise<string[]> {
   return [...new Set(rows.map((r) => r.userId))];
 }
 
+/** id артистов, которыми пользователь управляет (ACCEPTED owner/admin). */
+export async function managedArtistIds(userId: string | undefined | null): Promise<string[]> {
+  if (!userId) return [];
+  const rows = await prisma.userArtist.findMany({
+    where: { userId, inviteStatus: 'ACCEPTED', OR: [{ isAdmin: true }, { isOwner: true }] },
+    select: { artistId: true },
+  });
+  return [...new Set(rows.map((r) => r.artistId))];
+}
+
 /** id подтверждённых владельцев артиста. */
 export async function artistOwnerIds(artistId: string): Promise<string[]> {
   const rows = await prisma.userArtist.findMany({

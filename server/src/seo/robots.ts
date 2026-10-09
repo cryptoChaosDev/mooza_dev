@@ -112,6 +112,8 @@ export function openRobotsTxt(): string {
     'Disallow: /orders/edit/',
     'Disallow: /professions/new',
     'Disallow: /professions/edit/',
+    'Disallow: /lineups/new',
+    'Disallow: /lineups/*/edit',
     '',
     '# Яндекс: параметры, не меняющие содержимое страницы',
     'Clean-param: utm_source&utm_medium&utm_campaign&utm_content&utm_term&utm_referrer',

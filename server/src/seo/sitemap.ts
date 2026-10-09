@@ -1,7 +1,7 @@
 /**
  * Динамический sitemap (план, раздел E): /sitemap.xml — индекс, дочерние по
  * типам: sitemap-static, -artists, -releases, -clips, -profiles, -services,
- * -vacancies, -orders. Не больше 45 000 URL в файле: продолжение —
+ * -vacancies, -orders, -lineups. Не больше 45 000 URL в файле: продолжение —
  * sitemap-<тип>-2.xml, -3.xml…
  *
  * Отбор — загрузчики lib/publicData (listSitemap*): только индексируемое
@@ -13,7 +13,7 @@
 
 import {
   listSitemapArtists, listSitemapReleases, listSitemapClips, listSitemapProfiles,
-  listSitemapServices, listSitemapVacancies, listSitemapOrders, SitemapEntry,
+  listSitemapServices, listSitemapVacancies, listSitemapOrders, listSitemapLineups, SitemapEntry,
 } from '../lib/publicData';
 import { cached, SEO_TTL } from './cache';
 import { escapeXml, isoDateTime } from './html';
@@ -21,7 +21,7 @@ import { siteUrl } from './render/common';
 
 export const SITEMAP_CHUNK_SIZE = 45_000;
 
-export const SITEMAP_TYPES = ['static', 'artists', 'releases', 'clips', 'profiles', 'services', 'vacancies', 'orders'] as const;
+export const SITEMAP_TYPES = ['static', 'artists', 'releases', 'clips', 'profiles', 'services', 'vacancies', 'orders', 'lineups'] as const;
 export type SitemapType = (typeof SITEMAP_TYPES)[number];
 
 /** Публичные страницы без БД. */
@@ -37,6 +37,7 @@ const LOADERS: Record<Exclude<SitemapType, 'static'>, () => Promise<SitemapEntry
   services: listSitemapServices,
   vacancies: listSitemapVacancies,
   orders: listSitemapOrders,
+  lineups: () => listSitemapLineups(),
 };
 
 export function isSitemapType(v: string): v is SitemapType {

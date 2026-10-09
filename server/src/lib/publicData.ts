@@ -25,6 +25,7 @@ import { prisma } from '../index';
 import { maskContacts, maskContactsDeep, stripLinksForGuest, CONTACT_MASK } from './maskContacts';
 import { buildFeedWhere, diversifyByAuthor, clampInt, TEAM_EMAIL, FeedFilterQuery } from './feedQuery';
 import { artistKeyWhere, findArtistIdBySlugHistory } from './artistSlug';
+import { buildLineupListWhere, lineupListOrderBy, LineupListFilters, LINEUP_LIVE_STATUS_LIST, LINEUP_GUEST_MAX_DEPTH } from './lineupQuery';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Результат загрузчика
@@ -1919,4 +1920,114 @@ export async function listSitemapOrders(): Promise<SitemapEntry[]> {
     ...cursorArgs(cursor),
   }));
   return rows.map((o) => ({ path: `/orders/${encodeURIComponent(o.id)}`, lastmod: o.updatedAt ?? null }));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Биржа лайнапов (/lineups) — запросы на выступление
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// Гостю: только active/closed (черновик — 404), автор заблокирован — 404, автор
+// без согласия — «Организатор на Moooza». Отклики не отдаются — только число
+// (живые: pending + accepted) и сколько мест уже занято. Текст — maskContacts.
+// active и событие впереди → индексируется; закрытый/прошедший → noindex.
+
+export const ANON_ORGANIZER_NAME = 'Организатор на Moooza';
+
+export const PUBLIC_LINEUP_SELECT = {
+  id: true,
+  title: true,
+  eventDate: true,
+  cityName: true,
+  venue: true,
+  slots: true,
+  slotType: true,
+  feeType: true,
+  feeAmount: true,
+  description: true,
+  requirements: true,
+  status: true,
+  closedAt: true,
+  createdAt: true,
+  updatedAt: true,
+  genres: { select: { genre: ID_NAME } },
+  author: { select: PERSON_SELECT },
+  _count: { select: { responses: { where: { status: { in: LINEUP_LIVE_STATUS_LIST } } } } },
+} as const;
+
+/** Запрос для гостя — белый список; acceptedCount — сколько мест уже занято. */
+export function serializePublicLineup(l: any, acceptedCount = 0, now: Date = new Date()) {
+  const indexable = l.status === 'active' && new Date(l.eventDate).getTime() > now.getTime();
+  return {
+    id: l.id,
+    title: maskContacts(l.title),
+    eventDate: l.eventDate,
+    cityName: l.cityName,
+    venue: maskContacts(l.venue ?? null),
+    slots: l.slots,
+    slotType: l.slotType,
+    feeType: l.feeType,
+    feeAmount: l.feeAmount ?? null,
+    description: maskContacts(l.description ?? null),
+    requirements: maskContacts(l.requirements ?? null),
+    status: l.status,
+    closedAt: l.closedAt ?? null,
+    createdAt: l.createdAt,
+    updatedAt: l.updatedAt,
+    genres: (l.genres ?? []).map((g: any) => idName(g.genre)).filter(Boolean),
+    author: toPublicPerson(l.author, ANON_ORGANIZER_NAME),
+    responsesCount: l._count?.responses ?? 0,
+    acceptedCount,
+    isAuthor: false,
+    indexable,
+  };
+}
+
+/** Один запрос для гостя: черновик / нет / автор заблокирован → not_found. */
+export async function getPublicLineup(lineupId: string, now: Date = new Date()): Promise<PublicResult<any>> {
+  if (!lineupId) return notFound();
+  const l: any = await prisma.lineupRequest.findUnique({ where: { id: String(lineupId) }, select: PUBLIC_LINEUP_SELECT });
+  if (!l || (l.status !== 'active' && l.status !== 'closed') || isBlockedNow(l.author, now)) return notFound();
+  const acceptedCount = await prisma.lineupResponse.count({ where: { requestId: l.id, status: 'accepted' } });
+  const data = serializePublicLineup(l, acceptedCount ?? 0, now);
+  return found(data, l.updatedAt ?? null, data.indexable);
+}
+
+/** Лента запросов для гостя (только active и будущие, авторы не заблокированы). */
+export async function getPublicLineupsPage(f: LineupListFilters, now: Date = new Date()): Promise<PublicResult<any>> {
+  const where = buildLineupListWhere(f, notBlockedWhere(now), now);
+  const skip = (f.page - 1) * f.limit;
+  const [total, rows] = await Promise.all([
+    prisma.lineupRequest.count({ where }),
+    prisma.lineupRequest.findMany({ where, select: PUBLIC_LINEUP_SELECT, orderBy: lineupListOrderBy(f.sort), skip, take: f.limit }),
+  ]);
+  const visible = ((rows ?? []) as any[]).filter((r) => r && r.status === 'active' && !isBlockedNow(r.author, now));
+  const ids = visible.map((r) => r.id);
+  const grouped = ids.length
+    ? await prisma.lineupResponse.groupBy({
+        by: ['requestId'],
+        where: { requestId: { in: ids }, status: 'accepted' },
+        _count: { _all: true },
+      })
+    : [];
+  const accepted: any[] = (grouped as any[]) ?? [];
+  const acceptedBy = new Map<string, number>(accepted.map((a) => [a.requestId, Number(a?._count?._all ?? 0)]));
+  const items = visible.map((r) => serializePublicLineup(r, acceptedBy.get(r.id) ?? 0, now));
+  const depth = f.page * f.limit;
+  return found(
+    { items, page: f.page, limit: f.limit, total: total ?? 0, hasMore: depth < (total ?? 0) && depth < LINEUP_GUEST_MAX_DEPTH },
+    null,
+    false,
+  );
+}
+
+/** Sitemap: активные запросы с событием впереди, автор не заблокирован. */
+export async function listSitemapLineups(now: Date = new Date()): Promise<SitemapEntry[]> {
+  const rows = await pagedFindMany<any>((cursor, take) => prisma.lineupRequest.findMany({
+    where: { status: 'active', eventDate: { gt: now }, author: notBlockedWhere(now) },
+    select: { id: true, updatedAt: true },
+    orderBy: { id: 'asc' },
+    take,
+    ...cursorArgs(cursor),
+  }));
+  return rows.map((l) => ({ path: `/lineups/${encodeURIComponent(l.id)}`, lastmod: l.updatedAt ?? null }));
 }

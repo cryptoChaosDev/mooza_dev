@@ -117,6 +117,7 @@ export async function cached<T>(key: string, ttlMs: number, compute: () => Promi
 export const SEO_WATCHED_MODELS: ReadonlySet<string> = new Set([
   'Artist', 'Release', 'Clip', 'User', 'UserService', 'Order', 'Vacancy', 'Post',
   'UserArtist', 'ReleaseParticipant', 'ClipParticipant', 'Review',
+  'LineupRequest', 'LineupResponse',
 ]);
 
 const WRITE_ACTIONS: ReadonlySet<string> = new Set([

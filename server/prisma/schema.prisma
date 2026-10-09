@@ -112,6 +112,7 @@ model Genre {
 
   userServices UserService[]
   artists      ArtistGenre[]
+  lineupRequests LineupRequestGenre[]
 
   createdAt DateTime @default(now())
 }
@@ -189,6 +190,8 @@ model City {
   country   String   @default("Россия")
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
+
+  lineupRequests LineupRequest[]
 
   @@index([sortOrder])
 }
@@ -423,6 +426,8 @@ model Artist {
   listenersSnapshots ArtistListenersSnapshot[]
   dismissedMedia     DismissedMediaItem[]
   slugHistory        ArtistSlugHistory[]
+  lineupResponses    LineupResponse[]
+  lineupMatches      LineupMatch[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -674,6 +679,10 @@ model User {
   vacancyResponses VacancyResponse[] @relation("VacancyApplicant")
   vacancyOffers    VacancyOffer[]    @relation("VacancyOfferApplicant")
   vacancyCandidateOffers VacancyCandidateOffer[] @relation("VacancyCandidateOffer")
+
+  // Биржа лайнапов — см. модель LineupRequest
+  lineupRequests          LineupRequest[]  @relation("LineupRequestAuthor")
+  lineupResponsesSubmitted LineupResponse[] @relation("LineupResponseSubmitter")
 
   occupancyStatus  String?  // 'closed' | 'considering' | 'open'
 
@@ -1784,4 +1793,90 @@ model VacancyResponseLink {
   createdAt  DateTime @default(now())
   response   VacancyResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
   @@index([responseId])
+}
+
+// ============ БИРЖА ЛАЙНАПОВ ============
+// Запрос «нужен артист на концерт»: публикует любой авторизованный пользователь
+// (промоутер, клуб, организатор); откликается админ артиста ОТ ИМЕНИ артиста
+// (права — только lib/artistAccess: ACCEPTED owner/admin). Статусы — строки,
+// переходы — условные updateMany по статусу (гонки двойного клика/вкладок).
+model LineupRequest {
+  id           String    @id @default(uuid())
+  authorId     String
+  title        String
+  // Дата и время НАЧАЛА события — момент UTC (ввод и показ — по МСК).
+  eventDate    DateTime
+  // Город — из каталога City: cityId (если найден) + каноническое имя (для
+  // фильтра и матчинга с Artist.city, который тоже хранит имя).
+  cityId       String?
+  cityName     String
+  venue        String?
+  slots        Int                             // сколько артистов нужно, 1..10
+  slotType     String    @default("any")        // opener | headliner | any
+  feeType      String    @default("negotiable") // fixed | percent | free | negotiable
+  feeAmount    Int?                            // ₽ для fixed, % для percent; иначе null
+  description  String
+  requirements String?                         // бэклайн, длительность сета и т.п.
+  status       String    @default("active")     // active | closed | draft
+  closedAt     DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  author    User                 @relation("LineupRequestAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  city      City?                @relation(fields: [cityId], references: [id], onDelete: SetNull)
+  genres    LineupRequestGenre[]
+  responses LineupResponse[]
+  matches   LineupMatch[]
+
+  @@index([authorId])
+  @@index([status, eventDate])
+  @@index([cityName])
+}
+
+model LineupRequestGenre {
+  requestId String
+  genreId   String
+  request   LineupRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  genre     Genre         @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([requestId, genreId])
+  @@index([genreId])
+}
+
+// Отклик артиста на запрос (один на пару запрос–артист). submittedById — админ,
+// отправивший отклик (с ним «Написать»); прав не даёт.
+model LineupResponse {
+  id            String   @id @default(uuid())
+  requestId     String
+  artistId      String
+  submittedById String?
+  message       String
+  status        String   @default("pending") // pending | accepted | declined | withdrawn
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  request     LineupRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  artist      Artist        @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  submittedBy User?         @relation("LineupResponseSubmitter", fields: [submittedById], references: [id], onDelete: SetNull)
+
+  @@unique([requestId, artistId])
+  @@index([artistId])
+  @@index([requestId, status])
+}
+
+// Кому из артистов уже ушло уведомление о запросе: матчинг при публикации
+// (kind=match) или персональное приглашение (kind=invite). Не даёт повторно
+// уведомлять при редактировании и считает суточный лимит на артиста.
+model LineupMatch {
+  id        String   @id @default(uuid())
+  requestId String
+  artistId  String
+  kind      String   @default("match") // match | invite
+  createdAt DateTime @default(now())
+
+  request LineupRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  artist  Artist        @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, artistId])
+  @@index([artistId, createdAt])
 }
