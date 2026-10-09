@@ -116,7 +116,15 @@ export default function ArtistContactsPage() {
             Отмена
           </button>
           <button
-            onClick={() => saveMut.mutate()}
+            onClick={() => {
+              // Сервер принимает только http(s) — подскажем до запроса.
+              const bl = bandLink.trim();
+              if (bl && !/^https?:\/\/[^\s]+$/i.test(bl)) {
+                toast.error('Ссылка на страницу группы должна начинаться с http:// или https://');
+                return;
+              }
+              saveMut.mutate();
+            }}
             disabled={saveMut.isPending}
             className="flex-1 py-3 text-sm bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white font-semibold rounded-2xl transition-colors flex items-center justify-center gap-1.5"
           >

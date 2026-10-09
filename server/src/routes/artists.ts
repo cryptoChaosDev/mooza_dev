@@ -394,8 +394,9 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
       viewerIsAdmin = viewerIsOwner || mine.some((ua: any) => ua.isAdmin);
     }
 
+    // id строки участия нужен только для действий админа (и самому участнику).
     const serializeMember = (ua: any) => ({
-      membershipId: ua.id,
+      ...(viewerIsAdmin || ua.userId === currentUserId ? { membershipId: ua.id } : {}),
       isOwner: ua.isOwner,
       isAdmin: ua.isAdmin,
       participationStatus: ua.participationStatus,

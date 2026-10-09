@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import ImageLightbox from './ImageLightbox';
 import { toast } from '../stores/toastStore';
+import { safeHref, copyText } from '../lib/artistUtils';
 
 /**
  * Блоки карточки Артиста с данными Яндекс.Музыки (Artist.ymData из ночного
@@ -158,10 +159,10 @@ export default function ArtistYandexBlocks({
               </a>
             ))}
           </div>
-          {ymData.bestPlaylist?.url && (
+          {ymData.bestPlaylist && safeHref(ymData.bestPlaylist.url) && (
             <div className="px-4 pb-3 pt-1">
               <a
-                href={ymData.bestPlaylist.url}
+                href={safeHref(ymData.bestPlaylist.url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 w-full py-2 rounded-xl border border-slate-700 text-slate-300 hover:text-white hover:border-slate-600 text-xs font-semibold transition-colors"
@@ -191,11 +192,10 @@ export default function ArtistYandexBlocks({
                 const text = `Приглашаю «${s.name}» на Moooza — соцсеть для музыкантов. Создайте карточку артиста: ${window.location.origin}/register`;
                 if (navigator.share) {
                   try { await navigator.share({ text }); } catch { /* отменено */ }
+                } else if (await copyText(text)) {
+                  toast.success('Приглашение скопировано — отправьте артисту');
                 } else {
-                  try {
-                    await navigator.clipboard.writeText(text);
-                    toast.success('Приглашение скопировано — отправьте артисту');
-                  } catch { /* ignore */ }
+                  toast.error('Не удалось скопировать приглашение');
                 }
               };
               const avatar = (
@@ -286,7 +286,8 @@ export default function ArtistYandexBlocks({
               const title = c?.concertTitle || c?.title || 'Концерт';
               const date = c?.datetime || c?.date;
               const place = [c?.city, c?.place || c?.address].filter(Boolean).join(', ');
-              const href = c?.afishaUrl || c?.url;
+              // Только http(s): ссылка приходит из внешних данных (javascript: недопустим).
+              const href = safeHref(c?.afishaUrl) ?? safeHref(c?.url);
               const body = (
                 <div className="py-1.5">
                   <p className="text-sm text-white">{title}</p>
