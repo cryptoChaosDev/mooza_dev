@@ -7,6 +7,7 @@ import NotificationBell from './NotificationBell';
 import InfoModal from './InfoModal';
 import ProfessionGate from './ProfessionGate';
 import { useAuthStore } from '../stores/authStore';
+import { enablePush } from '../lib/push';
 
 interface LayoutProps {
   children: ReactNode;
@@ -24,8 +25,11 @@ export default function Layout({ children }: LayoutProps) {
   const isChatThread = /^\/(messages|chat)\/[^/]+/.test(location.pathname);
   const notifPending = 'Notification' in window && Notification.permission === 'default' && !notifDismissed && !isChatThread;
 
+  // Вызывается из клика (жест пользователя) — только так iOS/Safari/Firefox
+  // показывают запрос разрешения. После «Разрешить» сразу подписываемся на
+  // push (раньше разрешение выдавалось, а подписка не создавалась).
   function requestNotifications() {
-    Notification.requestPermission().then(() => setNotifDismissed(true));
+    void enablePush().finally(() => setNotifDismissed(true));
   }
 
   // Scroll to top on route change
