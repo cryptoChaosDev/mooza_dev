@@ -925,15 +925,27 @@ router.get('/artists', async (req, res) => {
       : sort === 'listeners'
       ? { listeners: 'desc' as const }
       : { createdAt: 'desc' as const };
+    // Public catalog — explicit card fields only. Never verificationCode /
+    // verificationProofUrl / rejectionReason / submittedById /
+    // verificationRequestedById / ymData (moderation data and a heavy snapshot).
     const artists = await prisma.artist.findMany({
       where,
       orderBy,
       take: 200,
-      include: {
-        genres: { include: { genre: { select: { id: true, name: true } } } },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        city: true,
+        avatar: true,
+        listeners: true,
+        status: true,
+        activityStatus: true,
+        createdAt: true,
+        genres: { select: { genre: { select: { id: true, name: true } } } },
       },
     });
-    res.json(artists.map(a => ({ ...a, listeners: a.listeners !== undefined && a.listeners !== null ? Number(a.listeners) : a.listeners })));
+    res.json(artists.map(a => ({ ...a, listeners: Number(a.listeners) })));
   } catch (error) {
     console.error('Get artists error:', error);
     res.status(500).json({ error: 'Failed to get artists' });
