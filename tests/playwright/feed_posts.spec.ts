@@ -48,44 +48,36 @@ test.describe('Feed page', () => {
     expect(hasPosts + hasEmpty).toBeGreaterThan(0);
   });
 
-  test('tab filters are present: По новизне, Популярное, Сохранённые', async ({ page }) => {
+  // Updated: the tabs «По новизне / Популярное / Сохранённые» were replaced by a
+  // «Сортировка» dropdown (Для вас / Новые / Популярные / Обсуждаемые) and a
+  // «Сохранённые» star toggle in the «Поток» header.
+  test('feed header: Поток, sort dropdown, saved toggle, filters', async ({ page }) => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
-
-    await expect(page.getByRole('button', { name: /по новизне/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /популярное/i })).toBeVisible();
-    await expect(page.getByRole('button', { name: /сохранённые/i })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Поток' })).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('button[title="Сортировка"]')).toBeVisible();
+    await expect(page.locator('button[title="Сохранённые"]')).toBeVisible();
+    await expect(page.locator('button[title="Фильтры"]')).toBeVisible();
   });
 
-  test('switching to Популярное does not crash', async ({ page }) => {
+  test('switching sort to Популярные does not crash', async ({ page }) => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
-
-    await page.getByRole('button', { name: /популярное/i }).click();
-    await page.waitForLoadState('networkidle');
-
-    // Tabs still present — page did not crash
-    await expect(page.getByRole('button', { name: /популярное/i })).toBeVisible();
+    await page.locator('button[title="Сортировка"]').click();
+    await page.getByRole('button', { name: /^Популярные/ }).click();
+    await expect(page.locator('button[title="Сортировка"]')).toContainText(/Популярные/);
+    await expect(page.getByRole('heading', { name: 'Поток' })).toBeVisible();
   });
 
-  test('switching to Сохранённые shows tab content without crash', async ({ page }) => {
+  test('Сохранённые toggle shows saved view without crash', async ({ page }) => {
     await loginUI(page, user);
     await skipOnboarding(page);
     await page.goto('/');
-    await page.waitForLoadState('networkidle');
-
-    await page.getByRole('button', { name: /сохранённые/i }).click();
-    await page.waitForLoadState('networkidle');
-
-    // Just confirm no JS crash — the tab is now active (the Saved button has active classes)
-    const savedBtn = page.getByRole('button', { name: /сохранённые/i });
-    await expect(savedBtn).toBeVisible();
-    // Page still renders the header
-    await expect(page.getByRole('button', { name: /по новизне/i })).toBeVisible();
+    await page.locator('button[title="Сохранённые"]').click();
+    await expect(page.getByText('Нет сохранённых').or(page.locator('[id^="post-"]').first())).toBeVisible({ timeout: 10000 });
+    await expect(page.getByRole('heading', { name: 'Поток' })).toBeVisible();
   });
 
   test('FAB (+) opens post-type picker or navigates to /create-post', async ({ page }) => {
@@ -95,7 +87,7 @@ test.describe('Feed page', () => {
     await page.waitForLoadState('networkidle');
 
     // The FAB is a fixed button at bottom-right containing a Plus SVG
-    const fab = page.locator('button.fixed, button[class*="fixed"]').last();
+    const fab = page.locator('button.fixed.w-14.h-14');
     await expect(fab).toBeVisible({ timeout: 5000 });
     await fab.click();
 
@@ -111,83 +103,40 @@ test.describe('Feed page', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 test.describe('Create post page', () => {
-  test('page opens at /create-post', async ({ page }) => {
+  // Updated: the composer is a TipTap/ProseMirror contenteditable, not a <textarea>;
+  // the publish button is icon-only (<640px the «Опубликовать» label is hidden).
+  const editor = (page: import('@playwright/test').Page) => page.locator('.ProseMirror[contenteditable="true"]');
+  const publishBtn = (page: import('@playwright/test').Page) => page.locator('div.sticky button:has(svg.lucide-send)');
+  test.beforeEach(async ({ page }) => {
     await loginUI(page, user);
     await skipOnboarding(page);
+    await page.evaluate(() => { for (const k of Object.keys(localStorage)) if (k.startsWith('mooza_draft_')) localStorage.removeItem(k); });
     await page.goto('/create-post?type=blog');
-    await page.waitForLoadState('networkidle');
-
-    // The textarea should be present
-    await expect(page.locator('textarea').first()).toBeVisible({ timeout: 8000 });
   });
 
-  test('text area is present', async ({ page }) => {
-    await loginUI(page, user);
-    await skipOnboarding(page);
-    await page.goto('/create-post?type=blog');
-    await page.waitForLoadState('networkidle');
-
-    await expect(page.locator('textarea').first()).toBeVisible({ timeout: 5000 });
+  test('page opens at /create-post with editor', async ({ page }) => {
+    await expect(editor(page)).toBeVisible({ timeout: 8000 });
   });
 
-  test('publish button is disabled when textarea is empty', async ({ page }) => {
-    await loginUI(page, user);
-    await skipOnboarding(page);
-    await page.goto('/create-post?type=blog');
-    await page.waitForLoadState('networkidle');
-
-    // Clear any draft that might have been saved previously
-    const textarea = page.locator('textarea').first();
-    await textarea.clear();
-    await expect(textarea).toHaveValue('');
-
-    // The publish button must be disabled when nothing is typed
-    const publishBtn = page.locator('button[disabled]').filter({ has: page.locator('svg') });
-    await expect(publishBtn.first()).toBeVisible({ timeout: 3000 });
+  test('publish button is disabled when editor is empty', async ({ page }) => {
+    await expect(editor(page)).toBeVisible({ timeout: 8000 });
+    await expect(publishBtn(page)).toBeDisabled();
   });
 
   test('entering text makes publish button enabled', async ({ page }) => {
-    await loginUI(page, user);
-    await skipOnboarding(page);
-    await page.goto('/create-post?type=blog');
-    await page.waitForLoadState('networkidle');
-
-    const textarea = page.locator('textarea').first();
-    await textarea.fill('Hello from Playwright test');
-    await page.waitForTimeout(300);
-
-    // After filling, textarea should have our text
-    await expect(textarea).toHaveValue('Hello from Playwright test');
-    // Page should not have crashed
-    await expect(textarea).toBeVisible();
+    await editor(page).click();
+    await page.keyboard.type('Hello from Playwright test');
+    await expect(editor(page)).toContainText('Hello from Playwright test');
+    await expect(publishBtn(page)).toBeEnabled();
   });
 
   test('publishing a post redirects to /', async ({ page }) => {
-    await loginUI(page, user);
-    await skipOnboarding(page);
-    await page.goto('/create-post?type=blog');
-    await page.waitForLoadState('networkidle');
-
-    const textarea = page.locator('textarea').first();
     const content = 'Playwright auto-published post ' + Date.now();
-    await textarea.fill(content);
-    await page.waitForTimeout(300);
-
-    // The publish button is in the sticky header — it has a Send icon and "Опубликовать" text
-    // On mobile, text is hidden (hidden sm:inline) so we locate by the disabled state change
-    // Strategy: wait for a button that was disabled to become enabled after typing
-    // The publish button is: bg-primary-600 + disabled:bg-slate-700 + has Send icon
-    const publishBtn = page.locator('div.sticky button.bg-primary-600, div.sticky button[class*="bg-primary-6"]').first();
-
-    // If bg-primary-600 button not found, fall back to the last non-disabled button
-    const isVisible = await publishBtn.isVisible({ timeout: 2000 }).catch(() => false);
-    const btnToClick = isVisible ? publishBtn : page.locator('div.sticky button:not([disabled])').last();
-
-    await btnToClick.click();
-
-    // Should redirect to / after success (createMut.onSuccess calls navigate('/'))
+    await editor(page).click();
+    await page.keyboard.type(content);
+    await publishBtn(page).click();
     await page.waitForURL(url => url.pathname === '/', { timeout: 20000 });
-    expect(page.url()).toMatch(/\/$/);
+    await expect(page.getByText(content).first()).toBeVisible({ timeout: 10000 });
   });
 });
 
@@ -240,13 +189,9 @@ test.describe('Post interactions', () => {
     const postEl = page.locator(`#post-${postId}`);
     await expect(postEl).toBeVisible({ timeout: 10000 });
 
-    // Comment button is the second in the action row
-    const actionRow = postEl.locator('div.flex.items-center.gap-1').first();
-    await actionRow.locator('button').nth(1).click();
-
-    // Comment input should appear
-    const commentInput = postEl.locator('input[placeholder*="комментари"]');
-    await expect(commentInput).toBeVisible({ timeout: 5000 });
+    // Updated: comments open in a portal modal with a <textarea>.
+    await postEl.locator('button:has(svg.lucide-message-circle)').first().click();
+    await expect(page.getByPlaceholder('Написать комментарий...')).toBeVisible({ timeout: 5000 });
   });
 
   test('typing a comment and submitting makes it appear', async ({ page }) => {
@@ -257,19 +202,14 @@ test.describe('Post interactions', () => {
     const postEl = page.locator(`#post-${postId}`);
     await expect(postEl).toBeVisible({ timeout: 10000 });
 
-    // Open comments
-    const actionRow = postEl.locator('div.flex.items-center.gap-1').first();
-    await actionRow.locator('button').nth(1).click();
-
-    const commentInput = postEl.locator('input[placeholder*="комментари"]');
+    // Updated: comments modal (portal) — textarea + icon send button.
+    await postEl.locator('button:has(svg.lucide-message-circle)').first().click();
+    const commentInput = page.getByPlaceholder('Написать комментарий...');
     await expect(commentInput).toBeVisible({ timeout: 5000 });
-
     const commentText = 'PW comment ' + Date.now();
     await commentInput.fill(commentText);
-    await commentInput.press('Enter');
-    await page.waitForTimeout(2000);
-
-    await expect(postEl.getByText(commentText)).toBeVisible({ timeout: 8000 });
+    await commentInput.locator('xpath=following-sibling::button[1]').click();
+    await expect(page.getByText(commentText)).toBeVisible({ timeout: 8000 });
   });
 
   test('save (star) button is visible and clickable', async ({ page }) => {
@@ -405,7 +345,8 @@ test.describe('Profile page', () => {
     await page.waitForLoadState('networkidle');
 
     // Avatar is an img or a rounded initials element
-    const avatar = page.locator('img[alt], [class*="rounded-full"]').first();
+    // Updated: first match was in the hidden (lg:hidden) mobile header on desktop.
+    const avatar = page.locator('main img[alt]:visible, main [class*="rounded-full"]:visible').first();
     await expect(avatar).toBeVisible({ timeout: 8000 });
   });
 
@@ -436,13 +377,10 @@ test.describe('Profile page', () => {
     await page.goto('/profile');
     await page.waitForLoadState('networkidle');
 
-    const buttons = page.locator('button');
-    const count = await buttons.count();
-    if (count > 0) {
-      await buttons.first().click();
-      await page.waitForTimeout(500);
-      expect(page.url()).toMatch(/profile|edit/);
-    }
+    // Updated: profile edit is an icon button title="Редактировать" (→ «Закрыть» when open).
+    await page.locator('button[title="Редактировать"]').click();
+    await expect(page.locator('button[title="Закрыть"]')).toBeVisible({ timeout: 5000 });
+    expect(page.url()).toContain('/profile');
   });
 
   test('portfolio tab buttons switch without crash (if present)', async ({ page }) => {

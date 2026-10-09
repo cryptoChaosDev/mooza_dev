@@ -213,15 +213,16 @@ test.describe('Chat page', () => {
 // ─── Friends page (/friends) ──────────────────────────────────────────────────
 
 test.describe('Friends page', () => {
-  test('page header "Друзья и связи" visible', async ({ page }) => {
+  // Updated: page renamed to «Отношения»; tabs are Друзья / Связи / Запросы / Избранное (no «Группы»).
+  test('page header "Отношения" visible', async ({ page }) => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/friends');
     await page.waitForLoadState('networkidle');
-    await expect(page.locator('h2').filter({ hasText: 'Друзья и связи' })).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('h2').filter({ hasText: 'Отношения' })).toBeVisible({ timeout: 10000 });
   });
 
-  test('tabs Друзья / Связи / Группы / Избранное present', async ({ page }) => {
+  test('tabs Друзья / Связи / Запросы / Избранное present', async ({ page }) => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/friends');
@@ -229,7 +230,7 @@ test.describe('Friends page', () => {
 
     await expect(page.locator('button', { hasText: 'Друзья' }).first()).toBeVisible({ timeout: 8000 });
     await expect(page.locator('button', { hasText: 'Связи' }).first()).toBeVisible();
-    await expect(page.locator('button', { hasText: 'Группы' }).first()).toBeVisible();
+    await expect(page.locator('button', { hasText: 'Запросы' }).first()).toBeVisible();
     await expect(page.locator('button', { hasText: 'Избранное' }).first()).toBeVisible();
   });
 
@@ -244,20 +245,13 @@ test.describe('Friends page', () => {
     await expect(page.locator('text=Запросы связи').first()).toBeVisible({ timeout: 5000 });
   });
 
-  test('Группы tab switch renders without crash', async ({ page }) => {
+  test('Запросы tab switch renders without crash', async ({ page }) => {
     await loginUI(page, alice);
     await skipOnboarding(page);
     await page.goto('/friends');
-    await page.waitForLoadState('networkidle');
-
-    await page.locator('button', { hasText: 'Группы' }).first().click();
-    await page.waitForTimeout(1000);
-
-    // Группы tab shows empty state "Нет групп" OR "Мои группы" section OR create button
-    const noGroups  = await page.locator('text=Нет групп').isVisible({ timeout: 3000 }).catch(() => false);
-    const myGroups  = await page.locator('text=Мои группы').isVisible({ timeout: 1000 }).catch(() => false);
-    const createBtn = await page.locator('button', { hasText: /Создать группу/ }).isVisible({ timeout: 1000 }).catch(() => false);
-    expect(noGroups || myGroups || createBtn).toBe(true);
+    await page.locator('button', { hasText: 'Запросы' }).first().click();
+    await expect(page).toHaveURL(/tab=requests/, { timeout: 5000 });
+    await expect(page.locator('h2').filter({ hasText: 'Отношения' })).toBeVisible();
   });
 
   test('friend request flow: bob → alice (API), Accept button works', async ({ page }) => {
