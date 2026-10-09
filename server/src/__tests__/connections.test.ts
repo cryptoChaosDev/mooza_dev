@@ -115,6 +115,7 @@ describe('POST /api/connections', () => {
 
   it('creates a PENDING connection and returns 201', async () => {
     mockPrisma.connection.findFirst.mockResolvedValue(null);        // no existing PENDING
+    mockPrisma.connection.findMany.mockResolvedValue([]);           // no own pending duplicates
     const created = makeConn();
     mockPrisma.connection.create.mockResolvedValue(created);
     mockPrisma.user.findUnique.mockResolvedValue({ firstName: 'Alice', lastName: 'A' });
@@ -132,6 +133,8 @@ describe('POST /api/connections', () => {
 
   it('returns 409 when a PENDING connection already exists', async () => {
     mockPrisma.connection.findFirst.mockResolvedValue(makeConn()); // existing PENDING
+    // The route now blocks only an EXACT duplicate from me (same roles + same services).
+    mockPrisma.connection.findMany.mockResolvedValue([makeConn({ requesterRole: null, receiverRole: null })]);
 
     const res = await request(app)
       .post('/api/connections')
@@ -145,6 +148,7 @@ describe('POST /api/connections', () => {
   it('allows a new PENDING request even when an ACCEPTED connection exists', async () => {
     // findFirst for PENDING → null (no pending between them)
     mockPrisma.connection.findFirst.mockResolvedValue(null);
+    mockPrisma.connection.findMany.mockResolvedValue([]);
     const created = makeConn();
     mockPrisma.connection.create.mockResolvedValue(created);
     mockPrisma.user.findUnique.mockResolvedValue({ firstName: 'Alice', lastName: 'A' });
