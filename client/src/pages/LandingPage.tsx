@@ -14,6 +14,8 @@ import { openAuthGate } from '../components/AuthGateModal';
 import Bento from '../components/landing/Bento';
 import HowItWorks from '../components/landing/HowItWorks';
 import TelegramBlock from '../components/landing/TelegramBlock';
+import LaunchOptions from '../components/landing/LaunchOptions';
+import { isInstalledApp } from '../lib/pwaInstall';
 import { EASE, GlassCard, Glow, Grad, TELEGRAM_CHANNEL_URL, fadeUp } from '../components/landing/ui';
 import '../components/landing/landing.css';
 
@@ -285,15 +287,6 @@ export default function LandingPage() {
                     <button type="button" onClick={() => navigate('/login')} className={textLink}>У&nbsp;меня есть аккаунт</button>
                   )}
                 </div>
-                {offerApk && (
-                  <a
-                    href={ANDROID_APK_URL}
-                    onClick={() => reachGoal('android_apk_click', { from: 'landing_hero' })}
-                    className="mt-3 inline-flex items-center gap-1.5 min-h-[44px] px-3 text-sm font-medium text-slate-300 hover:text-white transition-colors"
-                  >
-                    <Smartphone size={16} /> Приложение для Android
-                  </a>
-                )}
                 {!registrationEnabled && (
                   <p className="mt-2 text-[13px] leading-relaxed text-slate-500 max-w-xs sm:max-w-sm mx-auto">
                     Вход пока по&nbsp;приглашениям&nbsp;— ленту, артистов и&nbsp;исполнителей можно смотреть уже сейчас.
@@ -321,6 +314,14 @@ export default function LandingPage() {
             {!guestBrowsingEnabled && (
               <m.div {...fadeUp(0.3)} className="mt-3 flex justify-center text-sm">
                 <Link to="/feed" className={textLinkAccent}>Смотреть ленту</Link>
+              </m.div>
+            )}
+
+            {/* Способы запуска: веб, PWA iPhone/Android, APK, RuStore (скоро). В уже
+                установленном приложении не нужны. */}
+            {!isInstalledApp() && (
+              <m.div {...fadeUp(0.32)} className="mt-10 sm:mt-12">
+                <LaunchOptions apkEnabled={settings?.androidApkEnabled === 'true'} />
               </m.div>
             )}
           </div>

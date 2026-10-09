@@ -14,7 +14,7 @@ export function enableMetrika(): void {
 export type MetrikaGoal =
   | 'guest_view' | 'gate_open' | 'gate_login_click' | 'gate_access_click'
   | 'waitlist_submit' | 'invite_code_submit' | 'login_success' | 'register_success'
-  | 'android_apk_click';
+  | 'android_apk_click' | 'launch_option_click';
 
 type Ym = (id: number, method: string, ...args: unknown[]) => void;
 

@@ -7,6 +7,7 @@ import { queryClient } from './lib/queryClient';
 import { YM_ID } from './lib/metrika';
 import { reloadOnceForChunkError } from './lib/chunkReload';
 import { detectAndroidApp } from './lib/androidApp';
+import { capturePwaInstallPrompt } from './lib/pwaInstall';
 import './index.css';
 
 // Prevent browser from restoring scroll position on navigation
@@ -16,6 +17,8 @@ if ('scrollRestoration' in history) {
 
 // Android-приложение (TWA) стартует с /?app=android — запоминаем до роутера.
 detectAndroidApp();
+// beforeinstallprompt приходит до открытия лендинга — ловим сразу (кнопка «Android · PWA»).
+capturePwaInstallPrompt();
 
 // Android Chrome (Adreno/Mali GPU, особенно Xiaomi/MIUI) рендерит «мусорные пиксели»
 // вместо областей под backdrop-filter: blur — известный баг Chromium-композитинга.
