@@ -241,8 +241,17 @@ const uploadPostMedia = multer({
   limits: { fileSize: 20 * 1024 * 1024 }, // 20MB
 });
 
-// Upload post media (image, gif, audio)
-router.post('/upload', authenticate, uploadPostMedia.single('file'), async (req: AuthRequest, res) => {
+// Upload post media (image, gif, audio).
+// Ошибки multer (формат/размер) — понятный 400, а не «Внутренняя ошибка сервера».
+router.post('/upload', authenticate, (req, res, next) => {
+  uploadPostMedia.single('file')(req, res, (err: unknown) => {
+    if (!err) return next();
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: 'Файл больше 20 МБ' });
+    }
+    return res.status(400).json({ error: 'Неподдерживаемый формат файла (JPG, PNG, GIF, WebP или аудио)' });
+  });
+}, async (req: AuthRequest, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
     const isAudio = req.file.mimetype.startsWith('audio/');
