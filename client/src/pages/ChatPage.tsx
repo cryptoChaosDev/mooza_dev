@@ -68,6 +68,13 @@ function pickVoiceMime(): string {
 
 const isTabVisible = () => document.visibilityState === 'visible';
 
+// URL вложения — только файлы с нашего сервера (/uploads/...). Защита для уже
+// сохранённых в БД записей вида `@evil.com/x.png` (→ https://moooza.ru@evil.com).
+const SAFE_UPLOAD_RE = /^\/uploads\/[\w.\-/]+$/;
+function attachmentSrc(url?: string | null): string {
+  return url && SAFE_UPLOAD_RE.test(url) && !url.includes('..') ? `${API_URL}${url}` : '';
+}
+
 interface MsgSender {
   id: string;
   firstName: string;
@@ -1440,10 +1447,10 @@ export default function ChatPage() {
                       <button
                         key={a.id}
                         type="button"
-                        onClick={() => setViewImage({ src: `${API_URL}${a.attachmentUrl}`, name: a.attachmentName ?? null })}
+                        onClick={() => setViewImage({ src: attachmentSrc(a.attachmentUrl), name: a.attachmentName ?? null })}
                         className="aspect-square rounded-lg overflow-hidden bg-slate-700 block"
                       >
-                        <img src={`${API_URL}${a.attachmentUrl}`} alt={a.attachmentName || ''} className="w-full h-full object-cover hover:opacity-80 transition-opacity" />
+                        <img src={attachmentSrc(a.attachmentUrl)} alt={a.attachmentName || ''} className="w-full h-full object-cover hover:opacity-80 transition-opacity" />
                       </button>
                     ))}
                   </div>
@@ -1452,7 +1459,7 @@ export default function ChatPage() {
                 return (
                   <div className="space-y-2">
                     {items.map((a: any) => (
-                      <a key={a.id} href={`${API_URL}${a.attachmentUrl}`} target="_blank" rel="noreferrer" download={a.attachmentName || true} className="flex items-center gap-3 p-3 bg-slate-700/40 hover:bg-slate-700/60 rounded-xl transition-colors">
+                      <a key={a.id} href={attachmentSrc(a.attachmentUrl)} target="_blank" rel="noreferrer" download={a.attachmentName || true} className="flex items-center gap-3 p-3 bg-slate-700/40 hover:bg-slate-700/60 rounded-xl transition-colors">
                         <div className="w-10 h-10 rounded-lg bg-slate-600 flex items-center justify-center flex-shrink-0">
                           <FileText size={18} className="text-slate-300" />
                         </div>
@@ -1595,7 +1602,7 @@ export default function ChatPage() {
                             <p className="text-sm italic opacity-70">Сообщение удалено</p>
                           ) : (
                             <>
-                              {msg.attachmentUrl && (() => {
+                              {attachmentSrc(msg.attachmentUrl) && (() => {
                                 const isImage = msg.attachmentType?.startsWith('image/');
                                 const isAudio = msg.attachmentType?.startsWith('audio/');
                                 if (isAudio) {
@@ -1603,7 +1610,7 @@ export default function ChatPage() {
                                     <div className="mb-1 min-w-[220px] max-w-[280px]">
                                       <div className="flex items-center gap-1.5">
                                         <div className="flex-1 min-w-0">
-                                          <AudioPlayer src={`${API_URL}${msg.attachmentUrl}`} name={msg.attachmentName || 'Аудио'} />
+                                          <AudioPlayer src={attachmentSrc(msg.attachmentUrl)} name={msg.attachmentName || 'Аудио'} />
                                         </div>
                                         {/* Голос → текст */}
                                         <button
@@ -1632,13 +1639,13 @@ export default function ChatPage() {
                                 return isImage ? (
                                   <button
                                     type="button"
-                                    onClick={() => setViewImage({ src: `${API_URL}${msg.attachmentUrl}`, name: msg.attachmentName ?? null })}
+                                    onClick={() => setViewImage({ src: attachmentSrc(msg.attachmentUrl), name: msg.attachmentName ?? null })}
                                     className="block mb-1"
                                   >
-                                    <img src={`${API_URL}${msg.attachmentUrl}`} alt={msg.attachmentName || 'image'} className="rounded-lg max-w-full max-h-60 object-cover" />
+                                    <img src={attachmentSrc(msg.attachmentUrl)} alt={msg.attachmentName || 'image'} className="rounded-lg max-w-full max-h-60 object-cover" />
                                   </button>
                                 ) : (
-                                  <a href={`${API_URL}${msg.attachmentUrl}`} target="_blank" rel="noreferrer" download={msg.attachmentName || true} className={`flex items-center gap-2 mb-1 px-3 py-2 rounded-lg ${isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-slate-600/50 hover:bg-slate-600'} transition-colors`}>
+                                  <a href={attachmentSrc(msg.attachmentUrl)} target="_blank" rel="noreferrer" download={msg.attachmentName || true} className={`flex items-center gap-2 mb-1 px-3 py-2 rounded-lg ${isMine ? 'bg-white/10 hover:bg-white/20' : 'bg-slate-600/50 hover:bg-slate-600'} transition-colors`}>
                                     <FileText size={16} className="flex-shrink-0" />
                                     <span className="text-xs truncate flex-1 min-w-0">{msg.attachmentName || 'Файл'}</span>
                                     <Download size={14} className="flex-shrink-0 opacity-60" />
@@ -1807,7 +1814,7 @@ export default function ChatPage() {
               { label: 'Переслать', icon: '📤', action: () => { const m = contextMenu.msg; setContextMenu(null); setForwardMsg(m); } },
               contextMenu.msg.content ? { label: 'Скопировать', icon: '📋', action: () => copyText(contextMenu.msg.content) } : null,
               contextMenu.msg.attachmentUrl && contextMenu.msg.attachmentType?.startsWith('image/')
-                ? { label: 'Сохранить фото', icon: '🖼️', action: () => { const a = document.createElement('a'); a.href = `${API_URL}${contextMenu.msg.attachmentUrl}`; a.download = contextMenu.msg.attachmentName || 'photo'; a.click(); setContextMenu(null); } }
+                ? { label: 'Сохранить фото', icon: '🖼️', action: () => { const a = document.createElement('a'); a.href = attachmentSrc(contextMenu.msg.attachmentUrl); a.download = contextMenu.msg.attachmentName || 'photo'; a.click(); setContextMenu(null); } }
                 : null,
               contextMenu.msg.senderId === me?.id
                 ? { label: 'Редактировать', icon: '✏️', action: () => { startEdit(contextMenu.msg); setContextMenu(null); } }
