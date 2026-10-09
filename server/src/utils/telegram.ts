@@ -61,16 +61,17 @@ export const tgEvent = {
   pollVote: (voter: string, option: string) =>
     tgLog(`📊 <b>Голос в опросе</b>\n${e(voter)} → «${e(option)}»`),
   postSave: (saver: string) => tgLog(`⭐ <b>Сохранён пост</b>\n${e(saver)}`),
-  message: (from: string, to: string, preview: string) =>
-    tgLog(`💬 <b>Сообщение</b>\n${e(from)} → ${e(to)}\n«${e(preview.slice(0, 80))}»`),
-  friendRequest: (from: string, to: string) =>
-    tgLog(`👋 <b>Запрос дружбы</b>\n${e(from)} → ${e(to)}`),
-  friendAccept: (a: string, b: string) =>
-    tgLog(`🤝 <b>Подружились</b>\n${e(a)} ↔ ${e(b)}`),
-  connectionRequest: (from: string, to: string, services: string) =>
-    tgLog(`🔗 <b>Запрос связи</b>\n${e(from)} → ${e(to)}\n📋 ${e(services)}`),
-  connectionAccept: (a: string, b: string) =>
-    tgLog(`✅ <b>Связь установлена</b>\n${e(a)} ↔ ${e(b)}`),
+  // Переписка (личная и групповая) в лог команды НЕ уходит вообще — ни текст,
+  // ни ФИО участников (тайна переписки / 152-ФЗ). Социальные события ниже —
+  // только факт события без ПДн: кто с кем дружит/связан — тоже персональные данные.
+  friendRequest: () =>
+    tgLog(`👋 <b>Запрос дружбы</b>`),
+  friendAccept: () =>
+    tgLog(`🤝 <b>Подружились</b>`),
+  connectionRequest: (services: string) =>
+    tgLog(`🔗 <b>Запрос связи</b>${services ? `\n📋 ${e(services)}` : ''}`),
+  connectionAccept: () =>
+    tgLog(`✅ <b>Связь установлена</b>`),
   favorite: (from: string, to: string) =>
     tgLog(`💛 <b>В избранное</b>\n${e(from)} → ${e(to)}`),
   service: (action: string, owner: string, name: string) =>

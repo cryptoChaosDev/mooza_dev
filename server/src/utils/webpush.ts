@@ -21,6 +21,10 @@ export interface PushPayload {
   body: string;
   icon?: string;
   link?: string;
+  // Группировка баннеров: push с тем же tag заменяет предыдущий (одна беседа —
+  // один баннер), renotify — заново звенит/вибрирует при замене.
+  tag?: string;
+  renotify?: boolean;
 }
 
 // ── Delivery stats (in-memory; resets on restart) ────────────────────────────

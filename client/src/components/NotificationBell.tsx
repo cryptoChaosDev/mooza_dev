@@ -67,6 +67,7 @@ function typeIcon(type: string) {
     case 'connection_request':    return <Link2         size={13} className="text-primary-400" />;
     case 'connection_accepted':   return <Link2         size={13} className="text-emerald-400" />;
     case 'connection_break':      return <UserX         size={13} className="text-red-400" />;
+    case 'connection_rejected':   return <UserX         size={13} className="text-red-400" />;
     case 'group_invite':          return <Users         size={13} className="text-amber-400" />;
     case 'group_invite_accepted': return <Users         size={13} className="text-green-400" />;
     // ── Artist membership ──────────────────────────────────────────────────
@@ -197,16 +198,20 @@ export default function NotificationBell() {
   const [open, setOpen] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { unreadNotifications, setUnreadNotifications, clearNotifications } = useBadgeStore();
+  const { unreadNotifications, refreshNotifications, clearNotifications } = useBadgeStore();
 
-  const { data: notifications = EMPTY } = useQuery({
+  const { data: notifications = EMPTY, dataUpdatedAt } = useQuery({
     queryKey: ['notifications'],
     queryFn: fetchNotifications,
     refetchInterval: 60_000,
   });
 
+  // Бейдж — только серверный счётчик (/notifications/unread/count). Раньше он
+  // пересчитывался по последним 50 записям списка и перетирал серверное
+  // значение (непрочитанные за пределами 50 «пропадали»). При обновлении
+  // списка просто сверяемся с сервером.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { setUnreadNotifications(notifications.filter(n => !n.read).length); }, [notifications]);
+  useEffect(() => { if (dataUpdatedAt) void refreshNotifications(); }, [dataUpdatedAt]);
 
   useEffect(() => {
     if (open) lockScroll();
@@ -249,7 +254,10 @@ export default function NotificationBell() {
 
   const readOneMutation = useMutation({
     mutationFn: markRead,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['notifications'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      void refreshNotifications();
+    },
     onError: (e: any) => toast.error(getApiError(e, 'Не удалось отметить уведомление прочитанным')),
   });
 

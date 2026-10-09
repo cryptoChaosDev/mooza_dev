@@ -19,31 +19,30 @@ cleanupOutdatedCaches();
 self.addEventListener('push', (event) => {
   if (!event.data) return;
 
-  let payload: { title: string; body: string; icon?: string; link?: string };
+  let payload: { title: string; body: string; icon?: string; link?: string; tag?: string; renotify?: boolean };
   try {
     payload = event.data.json();
   } catch {
     payload = { title: 'Moooza', body: event.data.text() };
   }
 
-  event.waitUntil(
-    (async () => {
-      // If a window is focused/visible, the user is actively in the app and the live
-      // socket update already surfaces this — skip the redundant banner. Backgrounded
-      // and offline users (no visible window) still get the push.
-      const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      const active = wins.some((c) => (c as WindowClient).focused || c.visibilityState === 'visible');
-      if (active) return;
-      await self.registration.showNotification(payload.title, {
-        body: payload.body,
-        icon: payload.icon || '/pwa-192x192.png',
-        // badge: Android рисует ТОЛЬКО альфа-силуэт — нужен монохромный глиф
-        // на прозрачном фоне. Непрозрачная иконка давала белый квадрат в шторке.
-        badge: '/badge-96.png',
-        data: { link: payload.link || '/' },
-      });
-    })(),
-  );
+  // Каждый push ОБЯЗАТЕЛЬНО показывает уведомление: «тихий» push (получен, но
+  // ничего не показано) нарушает политику Apple (Safari/iOS отзывает
+  // подписку) и в Chrome даёт системное «сайт обновлён в фоне». Дубли при
+  // открытом окне исключает сервер: он не шлёт push, если видимое окно
+  // подтвердило доставку по сокету. tag группирует баннеры одной беседы.
+  const tag = typeof payload.tag === 'string' && payload.tag ? payload.tag : undefined;
+  const options: NotificationOptions & { renotify?: boolean } = {
+    body: payload.body,
+    icon: payload.icon || '/pwa-192x192.png',
+    // badge: Android рисует ТОЛЬКО альфа-силуэт — нужен монохромный глиф
+    // на прозрачном фоне. Непрозрачная иконка давала белый квадрат в шторке.
+    badge: '/badge-96.png',
+    data: { link: payload.link || '/' },
+    ...(tag ? { tag, renotify: payload.renotify !== false } : {}),
+  };
+
+  event.waitUntil(self.registration.showNotification(payload.title || 'Moooza', options));
 });
 
 function urlBase64ToUint8Array(base64String: string): Uint8Array {

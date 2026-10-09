@@ -37,6 +37,12 @@ jest.mock('../socket', () => ({
   notifyUser: jest.fn(),
 }));
 
+// notify() — единая точка уведомлений (запись + сокет + push)
+const mockNotify = jest.fn();
+jest.mock('../utils/notify', () => ({
+  notify: (...args: unknown[]) => mockNotify(...args),
+}));
+
 // Prisma mock — all used methods are replaced with jest.fn()
 const mockPrisma = {
   connection: {
@@ -45,7 +51,15 @@ const mockPrisma = {
     findUnique: jest.fn(),
     create: jest.fn(),
     update: jest.fn(),
+    updateMany: jest.fn(),
     delete: jest.fn(),
+    deleteMany: jest.fn(),
+  },
+  connectionService: {
+    createMany: jest.fn(),
+  },
+  service: {
+    findMany: jest.fn(),
   },
   user: {
     findUnique: jest.fn(),
@@ -107,8 +121,11 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockPrisma.user.findUnique.mockResolvedValue({ passwordChangedAt: null, isBlocked: false });
   mockPrisma.notification.create.mockResolvedValue({ id: 'notif-1' });
-  // POST / checks my existing PENDING requests via findMany (exact-duplicate guard).
-  mockPrisma.connection.findMany.mockResolvedValue([]);
+  mockPrisma.connection.findFirst.mockResolvedValue(null);   // нет недавнего отказа (кулдаун)
+  mockPrisma.connection.findMany.mockResolvedValue([]);      // нет моих PENDING-запросов
+  mockPrisma.connection.updateMany.mockResolvedValue({ count: 1 });
+  mockPrisma.connection.deleteMany.mockResolvedValue({ count: 1 });
+  mockNotify.mockResolvedValue(undefined);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -120,7 +137,6 @@ describe('POST /api/connections', () => {
   beforeAll(() => { app = buildApp(); });
 
   it('creates a PENDING connection and returns 201', async () => {
-    mockPrisma.connection.findFirst.mockResolvedValue(null);        // no existing PENDING
     const created = makeConn();
     mockPrisma.connection.create.mockResolvedValue(created);
     mockPrisma.user.findUnique.mockResolvedValue({ firstName: 'Alice', lastName: 'A' });
@@ -134,26 +150,28 @@ describe('POST /api/connections', () => {
     expect(res.body.status).toBe('PENDING');
     expect(res.body.iAmRequester).toBe(true);
     expect(res.body.partner.id).toBe(USER_B);
+
+    // Уведомление получателю — через notify() и со ссылкой (клик не ведёт на «/»)
+    expect(mockNotify).toHaveBeenCalledTimes(1);
+    expect(mockNotify).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: USER_B, type: 'connection_request', link: '/connections/requests' })
+    );
   });
 
-  it('returns 409 when the exact same PENDING request already exists', async () => {
-    // Multiple pending requests are allowed; only an exact duplicate (same roles
-    // and services) from me is rejected.
-    mockPrisma.user.findUnique.mockResolvedValue({ isBlocked: false });
-    mockPrisma.connection.findMany.mockResolvedValue([makeConn()]); // existing PENDING
+  it('returns 409 when an identical PENDING connection already exists', async () => {
+    // existing PENDING from me with the same roles and services
+    mockPrisma.connection.findMany.mockResolvedValue([makeConn({ requesterRole: null, receiverRole: null, services: [] })]);
 
     const res = await request(app)
       .post('/api/connections')
       .set(asUser(USER_A))
-      .send({ receiverId: USER_B, serviceIds: [], requesterRole: 'CUSTOMER', receiverRole: 'EXECUTOR' });
+      .send({ receiverId: USER_B, serviceIds: [] });
 
     expect(res.status).toBe(409);
     expect(res.body.error).toMatch(/уже отправлен/i);
   });
 
   it('allows a new PENDING request even when an ACCEPTED connection exists', async () => {
-    // findFirst for PENDING → null (no pending between them)
-    mockPrisma.connection.findFirst.mockResolvedValue(null);
     const created = makeConn();
     mockPrisma.connection.create.mockResolvedValue(created);
     mockPrisma.user.findUnique.mockResolvedValue({ firstName: 'Alice', lastName: 'A' });
@@ -166,6 +184,30 @@ describe('POST /api/connections', () => {
     // Should succeed — the ACCEPTED connection does not block a new PENDING
     expect(res.status).toBe(201);
     expect(res.body.status).toBe('PENDING');
+  });
+
+  it('returns 429 while the reject cooldown is active', async () => {
+    mockPrisma.connection.findFirst.mockResolvedValue({ id: 'conn-old', updatedAt: new Date() }); // rejected just now
+
+    const res = await request(app)
+      .post('/api/connections')
+      .set(asUser(USER_A))
+      .send({ receiverId: USER_B, serviceIds: [] });
+
+    expect(res.status).toBe(429);
+    expect(mockPrisma.connection.create).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for unknown serviceIds instead of 500', async () => {
+    mockPrisma.service.findMany.mockResolvedValue([]); // ни одна услуга не найдена
+
+    const res = await request(app)
+      .post('/api/connections')
+      .set(asUser(USER_A))
+      .send({ receiverId: USER_B, serviceIds: ['nope'] });
+
+    expect(res.status).toBe(400);
+    expect(mockPrisma.connection.create).not.toHaveBeenCalled();
   });
 
   it('returns 400 when receiverId is missing', async () => {
@@ -198,8 +240,9 @@ describe('PATCH /api/connections/:id/accept', () => {
   it('accepts an incoming PENDING request and returns ACCEPTED status', async () => {
     const pending = makeConn({ receiverId: USER_B });       // USER_B is the receiver
     const accepted = makeConn({ status: 'ACCEPTED', receiverId: USER_B });
-    mockPrisma.connection.findUnique.mockResolvedValue(pending);
-    mockPrisma.connection.update.mockResolvedValue(accepted);
+    mockPrisma.connection.findUnique
+      .mockResolvedValueOnce(pending)     // проверка прав/статуса
+      .mockResolvedValueOnce(accepted);   // перечитывание после записи
     mockPrisma.user.findUnique.mockResolvedValue({ firstName: 'Bob', lastName: 'B' });
 
     const res = await request(app)
@@ -208,6 +251,28 @@ describe('PATCH /api/connections/:id/accept', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('ACCEPTED');
+    // Условная запись по статусу (защита от гонки accept/reject)
+    expect(mockPrisma.connection.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: 'conn-1', status: 'PENDING' }),
+        data: { status: 'ACCEPTED' },
+      })
+    );
+    expect(mockNotify).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: USER_A, type: 'connection_accepted' })
+    );
+  });
+
+  it('returns 409 when the status changed concurrently', async () => {
+    mockPrisma.connection.findUnique.mockResolvedValue(makeConn({ receiverId: USER_B }));
+    mockPrisma.connection.updateMany.mockResolvedValue({ count: 0 }); // кто-то успел раньше
+
+    const res = await request(app)
+      .patch('/api/connections/conn-1/accept')
+      .set(asUser(USER_B));
+
+    expect(res.status).toBe(409);
+    expect(mockNotify).not.toHaveBeenCalled();
   });
 
   it('returns 403 when the requester tries to accept their own request', async () => {
@@ -255,7 +320,6 @@ describe('PATCH /api/connections/:id/reject', () => {
   it('sets status to REJECTED (does not delete), returns { ok: true }', async () => {
     const pending = makeConn({ receiverId: USER_B });
     mockPrisma.connection.findUnique.mockResolvedValue(pending);
-    mockPrisma.connection.update.mockResolvedValue({ ...pending, status: 'REJECTED' });
     mockPrisma.user.findUnique.mockResolvedValue({ firstName: 'Bob', lastName: 'B' });
 
     const res = await request(app)
@@ -265,17 +329,19 @@ describe('PATCH /api/connections/:id/reject', () => {
     expect(res.status).toBe(200);
     expect(res.body.ok).toBe(true);
 
-    // Must update to REJECTED, not delete
-    expect(mockPrisma.connection.update).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { status: 'REJECTED' } })
+    // Must update to REJECTED (conditionally on PENDING), not delete
+    expect(mockPrisma.connection.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: 'PENDING' }),
+        data: { status: 'REJECTED' },
+      })
     );
     expect(mockPrisma.connection.delete).not.toHaveBeenCalled();
+    expect(mockPrisma.connection.deleteMany).not.toHaveBeenCalled();
 
-    // Requester must be notified
-    expect(mockPrisma.notification.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ userId: USER_A, type: 'connection_rejected' }),
-      })
+    // Requester must be notified (через notify — с учётом настроек)
+    expect(mockNotify).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: USER_A, type: 'connection_rejected' })
     );
   });
 
@@ -288,7 +354,7 @@ describe('PATCH /api/connections/:id/reject', () => {
       .set(asUser(USER_A));
 
     expect(res.status).toBe(403);
-    expect(mockPrisma.connection.update).not.toHaveBeenCalled();
+    expect(mockPrisma.connection.updateMany).not.toHaveBeenCalled();
   });
 
   it('returns 400 when connection is not PENDING', async () => {
@@ -300,7 +366,40 @@ describe('PATCH /api/connections/:id/reject', () => {
       .set(asUser(USER_B));
 
     expect(res.status).toBe(400);
-    expect(mockPrisma.connection.update).not.toHaveBeenCalled();
+    expect(mockPrisma.connection.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PATCH /api/connections/:id/add-services
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('PATCH /api/connections/:id/add-services', () => {
+  let app: express.Application;
+  beforeAll(() => { app = buildApp(); });
+
+  it('refuses to change an ACCEPTED connection one-sidedly (409)', async () => {
+    mockPrisma.service.findMany.mockResolvedValue([{ id: 'svc-1' }]);
+    mockPrisma.connection.findUnique.mockResolvedValue(makeConn({ status: 'ACCEPTED' }));
+
+    const res = await request(app)
+      .patch('/api/connections/conn-1/add-services')
+      .set(asUser(USER_A))
+      .send({ serviceIds: ['svc-1'] });
+
+    expect(res.status).toBe(409);
+    expect(mockPrisma.connectionService.createMany).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for unknown serviceIds', async () => {
+    mockPrisma.service.findMany.mockResolvedValue([]);
+
+    const res = await request(app)
+      .patch('/api/connections/conn-1/add-services')
+      .set(asUser(USER_A))
+      .send({ serviceIds: ['missing'] });
+
+    expect(res.status).toBe(400);
   });
 });
 

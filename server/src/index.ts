@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import dotenv from 'dotenv';
 import path from 'path';
+import multer from 'multer';
 import { PrismaClient } from '@prisma/client';
 import { initSocket } from './socket';
 import { startScheduler } from './scheduler';
@@ -248,6 +249,23 @@ app.get('/api/og/profile/:userId', async (req: express.Request, res: express.Res
       <meta http-equiv="refresh" content="0; url=${url}">
     </head><body><a href="${url}">${name}</a></body></html>`);
   } catch { res.status(500).send('Error'); }
+});
+
+// Слишком большой файл/тело запроса — понятный 413 вместо «Внутренняя ошибка
+// сервера» 500 (MulterError не несёт status). Прочие ошибки multer — 400.
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err instanceof multer.MulterError) {
+    logger.warn(`Upload rejected: ${err.code} ${req.method} ${req.url}`);
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ error: 'Файл слишком большой', code: err.code });
+    }
+    return res.status(400).json({ error: 'Не удалось загрузить файл', code: err.code });
+  }
+  if (err?.type === 'entity.too.large' || err?.status === 413 || err?.statusCode === 413) {
+    logger.warn(`Request entity too large: ${req.method} ${req.url}`);
+    return res.status(413).json({ error: 'Слишком большой запрос' });
+  }
+  next(err);
 });
 
 // Error handling middleware

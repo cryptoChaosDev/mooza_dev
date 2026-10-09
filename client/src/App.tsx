@@ -11,6 +11,7 @@ import CookieConsent from './components/CookieConsent';
 import Toaster from './components/Toaster';
 import { IS_TMA, initTelegramApp, twa } from './lib/telegram';
 import { authAPI, messageAPI, userAPI } from './lib/api';
+import { subscribePush } from './lib/push';
 
 
 const LandingPage        = lazy(() => import('./pages/LandingPage'));
@@ -66,15 +67,6 @@ const VkSetupPage        = lazy(() => import('./pages/VkSetupPage'));
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000';
 
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
-  const raw = atob(base64);
-  const output = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
-  return output;
-}
-
 function PageLoader() {
   return (
     <div className="min-h-screen min-h-[100dvh] flex items-center justify-center bg-slate-900">
@@ -88,9 +80,15 @@ function resolveIcon(icon?: string): string {
   return icon.startsWith('http') ? icon : `${API_URL}${icon}`;
 }
 
-async function showNotification(title: string, body: string, icon?: string, link?: string) {
+// Локальный системный баннер — ТОЛЬКО когда вкладка видима (пользователь в
+// приложении, но на другой странице). Свёрнутую вкладку/PWA покрывает push с
+// сервера: сервер шлёт его, только если видимое окно не подтвердило событие,
+// поэтому двух баннеров на одно событие не бывает. tag совпадает с tag push.
+async function showNotification(title: string, body: string, icon?: string, link?: string, tag?: string) {
   if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+  if (document.visibilityState !== 'visible') return;
   const iconUrl = resolveIcon(icon);
+  const notifTag = tag || link || title;
   // Use service worker notification — works on mobile (new Notification() does not)
   if ('serviceWorker' in navigator) {
     try {
@@ -98,15 +96,31 @@ async function showNotification(title: string, body: string, icon?: string, link
       await reg.showNotification(title, {
         body,
         icon: iconUrl,
-        badge: '/pwa-192x192.png',
-        tag: link || title,
+        badge: '/badge-96.png',
+        tag: notifTag,
         data: { link: link || '/' },
       });
       return;
     } catch { /* fall through to legacy */ }
   }
-  const n = new Notification(title, { body, icon: iconUrl, badge: '/pwa-192x192.png', tag: link || title });
+  const n = new Notification(title, { body, icon: iconUrl, badge: '/badge-96.png', tag: notifTag });
   n.onclick = () => { window.focus(); n.close(); if (link) window.location.href = link; };
+}
+
+// Ответ на emit с подтверждением (см. server/src/socket.ts): видимое окно
+// сообщает, что событие показано в приложении — тогда сервер не шлёт push.
+function ackVisible(ack: unknown) {
+  if (typeof ack !== 'function') return;
+  try { (ack as (r: unknown) => void)({ visible: document.visibilityState === 'visible' }); } catch { /* ignore */ }
+}
+
+// Открыта ли сейчас эта беседа. ChatPage публикует id беседы в badgeStore
+// (после /messages/:userId URL ещё может содержать userId).
+function isViewingConversation(convId: string | undefined | null): boolean {
+  if (!convId) return false;
+  if (useBadgeStore.getState().activeConversationId === convId) return true;
+  const path = window.location.pathname;
+  return path === `/messages/${convId}` || path === `/chat/${convId}`;
 }
 
 async function apiFetch(path: string, token: string) {
@@ -123,19 +137,18 @@ function GroupRedirect() {
   return <Navigate to={`/artist/${id}`} replace />;
 }
 
-// ─── Clears badge counts when user navigates to relevant pages ───────────────
+// ─── Sync badge counts with the server when user navigates to relevant pages ─
+// Раньше бейджи просто обнулялись на /messages и /friends, даже когда
+// непрочитанные/заявки оставались. Теперь — сверка с серверным счётчиком.
 function BadgeClearer() {
   const location = useLocation();
-  const { clearMessages, clearFriendRequests } = useBadgeStore();
+  const refreshMessages = useBadgeStore((s) => s.refreshMessages);
 
   useEffect(() => {
-    if (location.pathname.startsWith('/messages') || location.pathname.startsWith('/chat')) {
-      clearMessages();
+    if (location.pathname === '/messages') {
+      void refreshMessages();
     }
-    if (location.pathname === '/friends') {
-      clearFriendRequests();
-    }
-  }, [location.pathname, clearMessages, clearFriendRequests]);
+  }, [location.pathname, refreshMessages]);
 
   return null;
 }
@@ -280,175 +293,199 @@ function App() {
       .catch(() => { /* network error — keep cached user; 401 handled by interceptor */ });
   }, [token]);
 
+  // Бейдж заявок в друзья = реальное число входящих заявок: как только любой
+  // экран (Отношения, Запросы дружбы) загрузил список ['friend-requests'] —
+  // в том числе после принятия/отклонения — бейдж берёт его длину.
+  useEffect(() => {
+    const unsub = queryClient.getQueryCache().subscribe((event) => {
+      if (event.type !== 'updated' || event.action.type !== 'success') return;
+      const q = event.query;
+      if (q.queryKey.length === 1 && q.queryKey[0] === 'friend-requests' && Array.isArray(q.state.data)) {
+        useBadgeStore.getState().setPendingFriendRequests(q.state.data.length);
+      }
+    });
+    return unsub;
+  }, [queryClient]);
+
   useEffect(() => {
     if (!token) {
       disconnectSocket();
       return;
     }
 
-    // Request push permission and subscribe
-    if (typeof Notification !== 'undefined' && 'serviceWorker' in navigator) {
-      const setupPush = async () => {
-        try {
-          if (Notification.permission === 'default') {
-            await Notification.requestPermission();
-          }
-          if (Notification.permission !== 'granted') return;
-
-          const reg = await navigator.serviceWorker.ready;
-          if (!reg.pushManager) return;
-
-          // Get VAPID public key from server
-          const keyRes = await fetch(`${API_URL}/api/push/vapid-public-key`);
-          if (!keyRes.ok) return;
-          const { key } = await keyRes.json();
-
-          // Subscribe to push
-          const sub = await reg.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: urlBase64ToUint8Array(key) as unknown as ArrayBuffer,
-          });
-
-          // Send subscription to server
-          await fetch(`${API_URL}/api/push/subscribe`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify(sub.toJSON()),
-          });
-        } catch {
-          // Push not supported or blocked — silent fail
-        }
-      };
-      setupPush();
+    // Push: разрешение здесь НЕ запрашиваем (вне жеста iOS/Safari/Firefox его
+    // отклоняют) — это делает кнопка баннера в Layout. Если разрешение уже
+    // выдано — молча (пере)подписываем устройство на текущий аккаунт.
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      void subscribePush(token);
     }
 
     // ── Connect socket ──────────────────────────────────────────────────────
     const socket = connectSocket(token);
 
-    // ── Initial badge counts ────────────────────────────────────────────────
+    // ── Badge counts — только серверные счётчики ────────────────────────────
     const fetchCounts = () => {
-      Promise.allSettled([
-        apiFetch('/api/messages/unread/count', token),
-        apiFetch('/api/notifications/unread/count', token),
-        apiFetch('/api/friendships/requests', token),
-      ]).then(([msgs, notifs, reqs]) => {
-        if (msgs.status    === 'fulfilled') bs().setUnreadMessages(msgs.value.count ?? 0);
-        if (notifs.status  === 'fulfilled') bs().setUnreadNotifications(notifs.value.count ?? 0);
-        if (reqs.status    === 'fulfilled') {
-          const arr = Array.isArray(reqs.value) ? reqs.value : [];
-          bs().setPendingFriendRequests(arr.length);
-        }
-      });
+      void bs().refreshMessages();
+      void bs().refreshNotifications();
+      apiFetch('/api/friendships/requests', token)
+        .then((reqs) => bs().setPendingFriendRequests(Array.isArray(reqs) ? reqs.length : 0))
+        .catch(() => {});
     };
     fetchCounts();
 
-    // ── Socket error → logout on auth failure ───────────────────────────────
-    socket.on('connect_error', (err: any) => {
-      const msg: string = err?.message ?? '';
-      if (msg.includes('Unauthorized') || msg.includes('401') || msg.includes('TOKEN')) {
-        useAuthStore.getState().logout();
-      }
-    });
+    let notifCountTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleNotifCount = () => {
+      if (notifCountTimer) clearTimeout(notifCountTimer);
+      notifCountTimer = setTimeout(() => { void bs().refreshNotifications(); }, 300);
+    };
 
-    // ── Socket handlers ─────────────────────────────────────────────────────
-
-    socket.on('new_notification', (notif: any) => {
-      // If this is a message notification for the chat we're already viewing,
-      // we're reading it live — mark it read and don't badge or list it.
-      if (notif?.type === 'message' && typeof notif.link === 'string') {
-        const path = window.location.pathname;
-        const chatPath = notif.link.replace('/messages/', '/chat/');
-        if (path === notif.link || path === chatPath) {
-          const convId = notif.link.split('/').pop();
-          if (convId) messageAPI.markRead(convId).catch(() => {});
-          return;
-        }
-      }
-      // Instant prepend to cached list — no waiting for server round-trip
-      queryClient.setQueryData<any[]>(['notifications'], (prev) =>
-        prev ? [notif, ...prev] : [notif]
-      );
-      bs().incrementNotifications();
-    });
-
-    // When notifications were marked read elsewhere (e.g. reading a chat),
-    // refresh the badge count and the cached list so they stop showing on top.
-    socket.on('notifications_read', () => {
+    // Пересинхронизация после реконнекта сокета / возврата из фона: события,
+    // пришедшие пока сокет был отключён, иначе теряются.
+    let lastResync = Date.now(); // fetchCounts() только что выполнен
+    const resync = () => {
+      const now = Date.now();
+      if (now - lastResync < 1000) return;
+      lastResync = now;
       fetchCounts();
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
-    });
+    };
 
-    socket.on('new_message', (message: any) => {
-      const convId = message.conversationId;
-      const inThisChat = window.location.pathname === `/messages/${convId}` ||
-                         window.location.pathname === `/chat/${convId}`;
-      if (!inThisChat) {
+    const invalidateConnections = () => {
+      for (const key of [
+        'connections-requests', 'connections-sent', 'connections-rejected', 'connections-accepted',
+        'connections-break-requests', 'connections-my-break-requests', 'connections-history',
+        'connections-all', 'connection-with', 'user-connections',
+      ]) {
+        queryClient.invalidateQueries({ queryKey: [key] });
+      }
+    };
+
+    // ── Socket handlers (с явными ссылками — cleanup снимает только свои) ────
+    const handlers: Record<string, (...args: any[]) => void> = {
+      // Socket error → logout on auth failure. Сервер отвечает 'Unauthorized: …'
+      // (старый сервер — 'Invalid token'/'No token'); сбой сети/БД — другой текст,
+      // тогда socket.io просто переподключается.
+      connect_error: (err: any) => {
+        const msg: string = err?.message ?? '';
+        if (/unauthori|401|token/i.test(msg)) {
+          useAuthStore.getState().logout();
+        }
+      },
+
+      connect: () => resync(),
+
+      // Сессия отозвана сервером (блокировка, смена пароля)
+      session_revoked: () => {
+        useAuthStore.getState().logout();
+      },
+
+      new_notification: (notif: any, ack?: unknown) => {
+        ackVisible(ack);
+        // If this is a message notification for the chat we're already viewing,
+        // we're reading it live — mark it read (only if the tab is visible) and
+        // don't badge or list it.
+        if (notif?.type === 'message' && typeof notif.link === 'string') {
+          const convId = notif.link.split('/').pop();
+          if (isViewingConversation(convId)) {
+            if (convId && document.visibilityState === 'visible') messageAPI.markRead(convId).catch(() => {});
+            return;
+          }
+        }
+        // Instant prepend to cached list (одна запись на беседу может прийти
+        // повторно с тем же id — заменяем, а не дублируем)
+        queryClient.setQueryData<any[]>(['notifications'], (prev) =>
+          prev ? [notif, ...prev.filter((n) => n?.id !== notif?.id)] : [notif]
+        );
+        // Бейдж — серверный счётчик (повторное обновление той же записи не
+        // должно его увеличивать)
+        scheduleNotifCount();
+      },
+
+      // When notifications were marked read elsewhere (e.g. reading a chat),
+      // refresh the badge count and the cached list so they stop showing on top.
+      notifications_read: () => {
+        void bs().refreshNotifications();
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      },
+
+      new_message: (message: any, ack?: unknown) => {
+        ackVisible(ack);
+        const convId = message?.conversationId;
+        if (isViewingConversation(convId)) return;
         bs().incrementMessages();
         const senderName = message.sender
           ? `${message.sender.firstName} ${message.sender.lastName}`
           : 'Новое сообщение';
         const preview = message.content?.trim() ||
           (message.attachmentName ? `📎 ${message.attachmentName}` : '📎 Вложение');
-        showNotification(senderName, preview, message.sender?.avatar, `/messages/${convId}`);
-      }
-    });
+        showNotification(senderName, preview, message.sender?.avatar, `/messages/${convId}`, `conv-${convId}`);
+      },
 
-    socket.on('message_edited', () => {
-      // handled locally in ChatPage
-    });
+      connection_request: () => invalidateConnections(),
+      connection_rejected: () => invalidateConnections(),
+      connection_updated: () => invalidateConnections(),
 
-    socket.on('message_deleted', () => {
-      // handled locally in ChatPage
-    });
+      friend_request: ({ requester }: any = {}) => {
+        queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
+        bs().incrementFriendRequests();
+        if (!requester) return;
+        showNotification(
+          'Заявка в друзья',
+          `${requester.firstName} ${requester.lastName} хочет добавить вас в друзья`,
+          requester.avatar,
+          '/friends/requests',
+        );
+      },
 
-    socket.on('connection_request', () => {
-      queryClient.invalidateQueries({ queryKey: ['connections-requests'] });
-    });
+      friend_accepted: ({ friendship }: any = {}) => {
+        queryClient.invalidateQueries({ queryKey: ['friends'] });
+        queryClient.invalidateQueries({ queryKey: ['friend-requests-sent'] });
+        const other = friendship?.receiver ?? friendship?.requester;
+        if (!other) return;
+        showNotification(
+          'Заявка принята',
+          `${other.firstName} ${other.lastName} принял(а) вашу заявку в друзья`,
+          other.avatar,
+          '/friends',
+        );
+      },
 
-    socket.on('connection_rejected', () => {
-      queryClient.invalidateQueries({ queryKey: ['connections-sent'] });
-      queryClient.invalidateQueries({ queryKey: ['connections-rejected'] });
-    });
+      // Заявку отозвали / из друзей удалили — обновить списки и бейдж
+      friendship_removed: () => {
+        queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
+        queryClient.invalidateQueries({ queryKey: ['friend-requests-sent'] });
+        queryClient.invalidateQueries({ queryKey: ['friends'] });
+        apiFetch('/api/friendships/requests', token)
+          .then((reqs) => bs().setPendingFriendRequests(Array.isArray(reqs) ? reqs.length : 0))
+          .catch(() => {});
+      },
 
-    socket.on('friend_request', ({ requester }: any) => {
-      queryClient.invalidateQueries({ queryKey: ['friend-requests'] });
-      bs().incrementFriendRequests();
-      if (!requester) return;
-      showNotification(
-        'Заявка в друзья',
-        `${requester.firstName} ${requester.lastName} хочет добавить вас в друзья`,
-        requester.avatar,
-        '/friends',
-      );
-    });
+      'user:online_list': (userIds: string[]) => {
+        presence().setOnlineUsers(userIds);
+      },
 
-    socket.on('friend_accepted', ({ friendship }: any) => {
-      queryClient.invalidateQueries({ queryKey: ['friends'] });
-      queryClient.invalidateQueries({ queryKey: ['friend-requests-sent'] });
-      const other = friendship?.receiver ?? friendship?.requester;
-      if (!other) return;
-      showNotification(
-        'Заявка принята',
-        `${other.firstName} ${other.lastName} принял(а) вашу заявку в друзья`,
-        other.avatar,
-        '/friends',
-      );
-    });
+      'user:online': ({ userId }: { userId: string }) => {
+        presence().addOnline(userId);
+      },
 
-    socket.on('user:online_list', (userIds: string[]) => {
-      presence().setOnlineUsers(userIds);
-    });
+      'user:offline': ({ userId }: { userId: string }) => {
+        presence().removeOnline(userId);
+      },
 
-    socket.on('user:online', ({ userId }: { userId: string }) => {
-      presence().addOnline(userId);
-    });
+      post_reply: ({ comment }: any = {}) => {
+        queryClient.invalidateQueries({ queryKey: ['posts'] });
+        const commenter = comment?.author;
+        if (!commenter) return;
+        showNotification(
+          'Новый комментарий',
+          `${commenter.firstName} ${commenter.lastName} прокомментировал(а) вашу запись`,
+          commenter.avatar,
+          '/',
+        );
+      },
+    };
 
-    socket.on('user:offline', ({ userId }: { userId: string }) => {
-      presence().removeOnline(userId);
-    });
+    for (const [event, handler] of Object.entries(handlers)) socket.on(event, handler);
 
     // Heartbeat every 30s to keep lastSeenAt fresh
     const heartbeat = setInterval(() => {
@@ -456,45 +493,19 @@ function App() {
       if (s?.connected) s.emit('ping');
     }, 30_000);
 
-    socket.on('post_reply', ({ comment }: any) => {
-      queryClient.invalidateQueries({ queryKey: ['posts'] });
-      const commenter = comment?.author;
-      if (!commenter) return;
-      showNotification(
-        'Новый комментарий',
-        `${commenter.firstName} ${commenter.lastName} прокомментировал(а) вашу запись`,
-        commenter.avatar,
-        '/',
-      );
-    });
-
-    // Re-sync counts when tab regains focus (catches missed events)
-    const handleFocus = () => {
-      fetchCounts();
-      queryClient.invalidateQueries({ queryKey: ['notifications'] });
-    };
+    // Re-sync counts when tab regains focus / returns from background
+    // (iOS PWA при возврате из фона не всегда шлёт focus).
+    const handleFocus = () => resync();
+    const handleVisibility = () => { if (document.visibilityState === 'visible') resync(); };
     window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibility);
 
     return () => {
-      const s = getSocket();
-      if (s) {
-        s.off('connect_error');
-        s.off('new_notification');
-        s.off('notifications_read');
-        s.off('new_message');
-        s.off('message_edited');
-        s.off('message_deleted');
-        s.off('connection_request');
-        s.off('connection_rejected');
-        s.off('friend_request');
-        s.off('friend_accepted');
-        s.off('post_reply');
-        s.off('user:online_list');
-        s.off('user:online');
-        s.off('user:offline');
-      }
+      for (const [event, handler] of Object.entries(handlers)) socket.off(event, handler);
       clearInterval(heartbeat);
+      if (notifCountTimer) clearTimeout(notifCountTimer);
       window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibility);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, queryClient]);
