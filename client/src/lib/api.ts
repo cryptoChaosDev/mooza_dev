@@ -19,13 +19,35 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
-// Auto-logout on 401 (expired or invalid token)
+// Auto-logout ONLY when the session itself is dead (expired/invalid/missing token,
+// blocked account). Never for /auth/* — there 401/403 mean «wrong password»,
+// «wrong code», etc., and a logout + full reload used to swallow the message.
+// Other 401s without a token code (e.g. a route-level check) don't log out either.
+export const SESSION_DEAD_CODES = new Set([
+  'TOKEN_EXPIRED', 'TOKEN_INVALID', 'TOKEN_NOT_ACTIVE', 'TOKEN_MISSING', 'AUTH_FAILED', 'ACCOUNT_BLOCKED',
+]);
+// Message to show on /login after a forced logout (the page reloads, a toast wouldn't survive).
+export const AUTH_NOTICE_KEY = 'mooza_auth_notice';
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    const data = error.response?.data;
+    const url: string = error.config?.url || '';
+    const isAuthEndpoint = url.startsWith('/auth/') || url.includes('/api/auth/');
+    if (!isAuthEndpoint && (status === 401 || status === 403) && SESSION_DEAD_CODES.has(data?.code)) {
+      const hadToken = !!localStorage.getItem('token');
       useAuthStore.getState().logout();
-      window.location.href = '/login';
+      if (hadToken) {
+        try {
+          const msg = typeof data?.error === 'string' && data.code !== 'TOKEN_MISSING'
+            ? data.error
+            : 'Сессия завершена. Войдите снова.';
+          sessionStorage.setItem(AUTH_NOTICE_KEY, msg);
+        } catch { /* storage unavailable — just redirect */ }
+      }
+      if (window.location.pathname !== '/login') window.location.href = '/login';
     }
     return Promise.reject(error);
   }
@@ -44,7 +66,8 @@ export const authAPI = {
   checkEmail: (email: string) =>
     api.get('/auth/check-email', { params: { email } }),
   telegramToken: () => api.post('/auth/telegram/token'),
-  telegramPoll: (token: string) => api.get(`/auth/telegram/poll/${token}`),
+  // Short per-request timeout: a hung poll must not stack up behind the 2.5 s interval.
+  telegramPoll: (token: string) => api.get(`/auth/telegram/poll/${token}`, { timeout: 8000 }),
   vkToken: (accessToken: string) =>
     api.post('/auth/vk/token', { access_token: accessToken }),
   register: (data: {
@@ -57,13 +80,21 @@ export const authAPI = {
     country?: string;
     city?: string;
     fieldOfActivityId?: string;
-    userProfessions?: { professionId: string; features?: string[] }[];
+    userProfessions: { professionId: string; features?: string[]; selectedCustomFilterValueIds?: string[] }[];
     artistIds?: string[];
+    birthDate: string;                 // ГГГГ-ММ-ДД (сервер принимает и ДД.ММ.ГГГГ)
+    consentPd: true;                   // согласие на обработку ПДн — обязательно
+    consentMarketing?: boolean;
+    referrerId?: string;
+    referralCode?: string;
+    artistInviteToken?: string;
   }) => api.post('/auth/register', data),
   verifyEmail: (email: string, code: string) =>
     api.post('/auth/verify-email', { email, code }),
-  resendVerification: (email: string) =>
-    api.post('/auth/resend-verification', { email }),
+  // `password` — продолжение начатой регистрации с шага email: сервер пустит к
+  // вводу кода, только если пароль совпадает с паролем этой заявки.
+  resendVerification: (email: string, password?: string) =>
+    api.post('/auth/resend-verification', password !== undefined ? { email, password } : { email }),
   forgotPassword: (email: string) =>
     api.post('/auth/forgot-password', { email }),
   resetPassword: (email: string, code: string, password: string) =>
