@@ -25,6 +25,11 @@ import { prisma } from '../index';
 import { maskContacts, maskContactsDeep, stripLinksForGuest, CONTACT_MASK } from './maskContacts';
 import { buildFeedWhere, diversifyByAuthor, clampInt, TEAM_EMAIL, FeedFilterQuery } from './feedQuery';
 import { artistKeyWhere, findArtistIdBySlugHistory } from './artistSlug';
+import { effectiveResponseBadge, type ResponseBadge } from './responseBadge';
+import {
+  getCreditsSummary, isUploadsPath,
+  type CatalogExtra, type CreditsSummary, type CreditItem,
+} from './profileSignals';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Результат загрузчика
@@ -84,8 +89,8 @@ export const GUEST_FORBIDDEN_KEYS: readonly string[] = [
   'publicConsentPromptAt', 'publicConsentPromptCount',
   // рефералы и Pro-служебное
   'referrerId', 'referralLinkUsed', 'proUntil', 'proMonthsFromReferrals',
-  // метрики и связи
-  'avgResponseMinutes', 'viewerProfileComplete', 'isFriend',
+  // метрики и связи (скорость ответа — по чужой переписке: гостю только категория responseBadge)
+  'avgResponseMinutes', 'responseMedianMinutes', 'responseBadgeAt', 'viewerProfileComplete', 'isFriend',
   // отклики и материалы
   'responses', 'myResponse', 'offeredCandidateIds',
   // идентификаторы людей вне объекта персоны (userId в реакциях и т.п.)
@@ -424,6 +429,9 @@ const PROFILE_SELECT = {
   publicConsentAt: true, // повторная проверка в памяти (defense in depth), не выдаётся
   isBlocked: true,
   blockedUntil: true,
+  // «Отвечает быстро»: наружу — только категория (минуты гостю не отдаются)
+  responseBadge: true,
+  responseBadgeAt: true,
   createdAt: true,
   updatedAt: true,
   fieldOfActivity: ID_NAME,
@@ -597,6 +605,8 @@ export async function getPublicProfile(key: string, opts: { byHandle?: boolean }
     })),
     _count: { posts: user._count?.posts ?? 0 },
     dealsCount,
+    // Категория скорости ответа ('fast' | 'day' | null) — без минут.
+    responseBadge: effectiveResponseBadge(user),
     isPublic: true,
     indexable,
   };
@@ -648,6 +658,87 @@ export async function getPublicService(serviceId: string): Promise<PublicResult<
     indexable,
   };
   return found(data, us.updatedAt ?? null, indexable);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// «Подтверждённый опыт» (кредиты из релизов/клипов) и сигналы каталога
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Потолки списков в ответе (сводные счётчики — по всем кредитам). */
+export const PUBLIC_CREDITS_ARTISTS_LIMIT = 50;
+export const PUBLIC_CREDITS_ROLES_LIMIT = 20;
+export const PUBLIC_CREDITS_LIST_LIMIT = 100;
+
+function serializeCreditItem(c: CreditItem) {
+  return {
+    id: c.id,
+    title: c.title,
+    coverUrl: c.coverUrl ?? null,
+    releaseDate: c.releaseDate ?? null,
+    artist: { id: c.artist.id, slug: c.artist.slug ?? null, name: c.artist.name },
+    roles: (c.roles ?? []).map((r) => String(r)),
+  };
+}
+
+/**
+ * Сводка кредитов — белый список. Только подтверждённые участия и артисты не
+ * REJECTED (отбор — в lib/profileSignals). Людей (соучастников) здесь нет —
+ * только сам пользователь, артисты и релизы/клипы, которые и так публичны.
+ */
+export function toPublicCredits(s: CreditsSummary) {
+  return {
+    releasesCount: s.releasesCount,
+    clipsCount: s.clipsCount,
+    artistsCount: s.artists.length,
+    artists: s.artists.slice(0, PUBLIC_CREDITS_ARTISTS_LIMIT).map((a) => ({
+      id: a.id, slug: a.slug ?? null, name: a.name, avatar: a.avatar ?? null, listeners: a.listeners,
+    })),
+    roles: s.roles.slice(0, PUBLIC_CREDITS_ROLES_LIMIT),
+    listenersTotal: s.listenersTotal,
+    releases: s.releases.slice(0, PUBLIC_CREDITS_LIST_LIMIT).map(serializeCreditItem),
+    clips: s.clips.slice(0, PUBLIC_CREDITS_LIST_LIMIT).map(serializeCreditItem),
+  };
+}
+
+/**
+ * Кредиты пользователя для гостя: только при согласии (иначе not_found — как
+ * профиль). `skipPersonCheck` — вызывающий уже проверил человека (SEO-снимок
+ * профиля после getPublicProfile).
+ */
+export async function getPublicCredits(userId: string, opts: { skipPersonCheck?: boolean } = {}): Promise<PublicResult<ReturnType<typeof toPublicCredits>>> {
+  let indexable = true;
+  if (!opts.skipPersonCheck) {
+    const owner = await findPublicPersonRow(userId);
+    if (!owner) return notFound();
+    indexable = !owner.searchIndexingOptOut;
+  }
+  const summary = await getCreditsSummary(String(userId));
+  return found(toPublicCredits(summary), null, indexable);
+}
+
+export interface PublicCatalogSignals {
+  releasesCount: number;
+  demo: { url: string; title: string } | null;
+  responseBadge: ResponseBadge | null;
+}
+
+/**
+ * Сигналы карточки каталога («Люди», «Услуги») — белый список, одинаковый для
+ * гостя и вошедшего: число подтверждённых релизов, аудиодемо (только наш
+ * /uploads/ аудиофайл портфолио; название — с маскировкой контактов) и
+ * категория скорости ответа (без минут).
+ */
+export function toPublicCatalogSignals(
+  extra: CatalogExtra | null | undefined,
+  badgeRow?: { responseBadge?: string | null; responseBadgeAt?: Date | string | null } | null,
+): PublicCatalogSignals {
+  const d = extra?.demo;
+  const releasesCount = Number(extra?.releasesCount ?? 0);
+  return {
+    releasesCount: Number.isFinite(releasesCount) && releasesCount > 0 ? Math.floor(releasesCount) : 0,
+    demo: d && isUploadsPath(d.url) ? { url: d.url, title: maskContacts(String(d.title || 'Демо')) } : null,
+    responseBadge: effectiveResponseBadge(badgeRow),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

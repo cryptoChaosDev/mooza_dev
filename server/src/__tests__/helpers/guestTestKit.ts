@@ -34,6 +34,9 @@ export const SENSITIVE_USER_FIELDS = {
   publicConsentVersion: '2026-05-31',
   searchIndexingOptOut: false,
   publicConsentPromptCount: 1,
+  // кэш «Отвечает быстро»: минуты и дата пересчёта гостю не уходят (только категория)
+  responseMedianMinutes: 7,
+  responseBadgeAt: NOW,
 };
 
 export function person(id: string, opts: { consent?: boolean; blocked?: boolean; blockedUntil?: Date | null } = {}) {
