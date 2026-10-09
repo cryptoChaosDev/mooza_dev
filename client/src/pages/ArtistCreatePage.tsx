@@ -127,7 +127,11 @@ export default function ArtistCreatePage() {
           const { data: blob } = await artistAPI.lookupAvatar(c.imageUrl);
           setAvatarFile(new File([blob], 'avatar.jpg', { type: (blob as any)?.type || 'image/jpeg' }));
           setAvatarPreview(URL.createObjectURL(blob));
-        } catch { /* avatar is best-effort */ }
+        } catch {
+          // Аватар обязателен для создания — не молчим, иначе непонятно, почему
+          // кнопка «Получить код» неактивна.
+          toast.error('Не удалось подставить фото артиста — загрузите его вручную');
+        }
       }
       if (c.itunesId || c.ymId) {
         try {

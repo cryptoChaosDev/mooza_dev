@@ -433,9 +433,14 @@ router.get('/:id', optionalAuthenticate, async (req: AuthRequest, res: Response)
       .filter((ua: any) => ua.inviteStatus === 'ACCEPTED')
       .map(serializeMember);
 
+    // «Ожидают подтверждения» — приглашения админов, ждущие ответа приглашённого.
+    // Собственные заявки пользователей (invitedById = null) отдаются отдельно —
+    // GET /:id/memberships/pending (там их можно одобрить/отклонить), без дублей.
     const pendingMembers =
       viewerIsOwner || viewerIsAdmin
-        ? userArtists.filter((ua: any) => ua.inviteStatus === 'PENDING').map(serializeMember)
+        ? userArtists
+            .filter((ua: any) => ua.inviteStatus === 'PENDING' && ua.invitedById)
+            .map(serializeMember)
         : [];
 
     // The viewer's OWN pending invitation — shown ONLY to a user who is not
